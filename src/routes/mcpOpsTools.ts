@@ -11,7 +11,7 @@
 //  agent làm sai một nhịp là phải gỡ cả chuỗi.
 // ═════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolError, ToolCtx } from '../lib/mcpTypes'
+import { Tool, ToolError, ToolCtx, canhBaoCat } from '../lib/mcpTypes'
 import { ganAnhDongHang } from '../lib/anhDongHang'
 import { tinhViecCanLam } from '../lib/viecCanLam'
 import { postExpenseJournal } from '../lib/autoJournalPurchase'
@@ -69,7 +69,10 @@ export const OPS_TOOLS: Tool[] = [
                     payable: true, paymentTermDays: true, status: true, totalValue: true,
                 },
             })
-            return { soKetQua: ds.length, nhaCungCap: ds }
+            return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'nhà cung cấp'),
+                soKetQua: ds.length, nhaCungCap: ds,
+            }
         },
     },
     {
@@ -265,6 +268,7 @@ export const OPS_TOOLS: Tool[] = [
                 }
             })
             return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'khoản tới hạn'),
                 soPhieu: rows.length,
                 tongConNo: rows.reduce((s: number, r: any) => s + r.conNo, 0),
                 soPhieuQuaHan: rows.filter((r: any) => r.soNgayQuaHan > 0).length,
@@ -289,6 +293,7 @@ export const OPS_TOOLS: Tool[] = [
                 select: { id: true, code: true, name: true, phone: true, debt: true, totalSpent: true, lastPurchaseDate: true },
             })
             return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'khách nợ'),
                 soKhachNo: ds.length,
                 tongNo: ds.reduce((s: number, c: any) => s + (c.debt || 0), 0),
                 khachHang: ds.map((c: any) => ({ ...c, lastPurchaseDate: ngayVN(c.lastPurchaseDate) })),
@@ -312,13 +317,15 @@ export const OPS_TOOLS: Tool[] = [
                 where: { OR: [{ id: q }, { code: q }, { phone: { contains: q } }, { name: { contains: q, mode: 'insensitive' } }] },
             })
             if (!kh) throw new ToolError(`Không tìm thấy khách "${q}"`)
+            const tranKQ = gioiHan(a.so_don, 5, 20)
             const don = await prisma.transaction.findMany({
                 where: { customerId: kh.id },
                 orderBy: { createdAt: 'desc' },
-                take: gioiHan(a.so_don, 5, 20),
+                take: tranKQ,
                 select: { receiptNumber: true, total: true, paidAmount: true, debtAmount: true, status: true, createdAt: true },
             }).catch(() => [])
             return {
+                ...canhBaoCat(don.length, tranKQ, 'đơn gần đây'),
                 khachHang: {
                     id: kh.id, ma: kh.code, ten: kh.name, dienThoai: kh.phone,
                     duNo: kh.debt, tongChiTieu: kh.totalSpent, hangThanhVien: (kh as any).tier ?? null,
@@ -359,6 +366,7 @@ export const OPS_TOOLS: Tool[] = [
                 },
             })
             return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'phiếu'),
                 soDon: ds.length,
                 tongTien: ds.reduce((s: number, t: any) => s + (t.total || 0), 0),
                 tongConNo: ds.reduce((s: number, t: any) => s + (t.debtAmount || 0), 0),
@@ -452,6 +460,7 @@ export const OPS_TOOLS: Tool[] = [
                 },
             })
             return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'dòng sao kê'),
                 soDong: ds.length,
                 tienVao: ds.filter((r: any) => r.type !== 'debit').reduce((s: number, r: any) => s + r.amount, 0),
                 tienRa: ds.filter((r: any) => r.type === 'debit').reduce((s: number, r: any) => s + r.amount, 0),
@@ -485,6 +494,7 @@ export const OPS_TOOLS: Tool[] = [
                 select: { id: true, description: true, amount: true, category: true, date: true, paidBy: true, invoiceNo: true, supplierName: true },
             })
             return {
+                ...canhBaoCat(ds.length, gioiHan(a.limit), 'phiếu chi'),
                 soPhieu: ds.length,
                 tongChi: ds.reduce((s: number, e: any) => s + (e.amount || 0), 0),
                 phieuChi: ds.map((e: any) => ({ ...e, date: ngayVN(e.date) })),
@@ -567,10 +577,12 @@ export const OPS_TOOLS: Tool[] = [
                 where.startDate = { lte: now }
                 where.endDate = { gte: now }
             }
+            const tranKQ = 50
             const ds = await prisma.promotion.findMany({
-                where, orderBy: { startDate: 'desc' }, take: 50,
+                where, orderBy: { startDate: 'desc' }, take: tranKQ,
             }).catch(() => [])
             return {
+                ...canhBaoCat(ds.length, tranKQ, 'chương trình'),
                 soChuongTrinh: ds.length,
                 khuyenMai: ds.map((p: any) => ({
                     id: p.id, ten: p.name, loai: p.type, giaTri: p.value,
@@ -585,13 +597,15 @@ export const OPS_TOOLS: Tool[] = [
         description: 'Danh sách nhân viên đang làm việc (tên, vai trò, chi nhánh) — KHÔNG bao gồm lương. Dùng để biết ai bán hàng, ai phụ trách khi phân công.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         run: async (_a, { prisma }) => {
+            const tranKQ = 200
             const ds = await prisma.user.findMany({
                 where: { isActive: true },
                 orderBy: { name: 'asc' },
-                take: 200,
+                take: tranKQ,
                 select: { id: true, name: true, email: true, role: true, branchId: true },
             }).catch(() => [])
-            return { soNhanVien: ds.length, nhanVien: ds }
+            return {
+                ...canhBaoCat(ds.length, tranKQ, 'nhân viên'),NhanVien: ds.length, nhanVien: ds }
         },
     },
 ]

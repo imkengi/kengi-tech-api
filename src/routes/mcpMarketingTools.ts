@@ -15,7 +15,7 @@
 //       luật quảng cáo, thiếu CTA, hook quá dài, trùng nội dung, trùng giờ.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 
 // ─── Hằng số nghiệp vụ ───────────────────────────────────────────────────────
 
@@ -430,12 +430,14 @@ export const MARKETING_TOOLS: Tool[] = [
         run: async (a, { prisma }: ToolCtx) => {
             const page = await chonPage(prisma, a?.page_id)
             const st = String(a?.status || 'pending')
+            const tranKQ = clamp(num(a?.limit, 20), 1, 100)
             const rows = await prisma.fbContentDraft.findMany({
                 where: { pageId: page.pageId, ...(st === 'all' ? {} : { status: st }) },
                 orderBy: [{ suggestedAt: 'asc' }, { createdAt: 'desc' }],
-                take: clamp(num(a?.limit, 20), 1, 100),
+                take: tranKQ,
             })
             return {
+                ...canhBaoCat(rows.length, tranKQ, 'bản nháp'),
                 fanpage: page.name,
                 locTheo: st,
                 soBai: rows.length,
@@ -465,13 +467,15 @@ export const MARKETING_TOOLS: Tool[] = [
         },
         run: async (a, { prisma }: ToolCtx) => {
             const page = await chonPage(prisma, a?.page_id)
+            const tranKQ = clamp(num(a?.limit, 10), 1, 50)
             const plans = await prisma.fbContentPlan.findMany({
                 where: { pageId: page.pageId },
                 orderBy: { createdAt: 'desc' },
-                take: clamp(num(a?.limit, 10), 1, 50),
+                take: tranKQ,
                 include: { drafts: { select: { status: true } } },
             })
             return {
+                ...canhBaoCat(plans.length, tranKQ, 'kế hoạch'),
                 fanpage: page.name,
                 soKeHoach: plans.length,
                 keHoach: plans.map((p: any) => {

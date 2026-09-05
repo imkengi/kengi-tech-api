@@ -7,7 +7,7 @@
 //  Token page nằm ở FbPage.accessToken (server giữ) — agent KHÔNG bao giờ thấy.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { FacebookService, FbGraphError } from '../services/platforms/facebook'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -268,12 +268,14 @@ export const FANPAGE_TOOLS: Tool[] = [
         inputSchema: { type: 'object', properties: { ...PAGE_ID_PROP }, additionalProperties: false },
         run: async (a, { prisma }: ToolCtx) => {
             const { page } = await resolvePage(prisma, a?.page_id)
+            const tranKQ = 100
             const rows = await prisma.fbScheduledPost.findMany({
                 where: { pageId: page.pageId, status: { in: ['scheduled', 'failed'] } },
                 orderBy: { scheduledAt: 'asc' },
-                take: 100,
+                take: tranKQ,
             })
             return {
+                ...canhBaoCat(rows.length, tranKQ, 'bài đã hẹn'),
                 fanpage: page.name,
                 soBaiChoDang: rows.filter((r: any) => r.status === 'scheduled').length,
                 soBaiLoi: rows.filter((r: any) => r.status === 'failed').length,
@@ -338,10 +340,12 @@ export const FANPAGE_TOOLS: Tool[] = [
         },
         run: async (a, { prisma }: ToolCtx) => {
             const { page } = await resolvePage(prisma, a?.page_id)
+            const tranKQ = clamp(num(a?.limit, 20), 1, 100)
             const logs = await prisma.fbAutoReplyLog.findMany({
-                where: { pageId: page.pageId }, orderBy: { createdAt: 'desc' }, take: clamp(num(a?.limit, 20), 1, 100),
+                where: { pageId: page.pageId }, orderBy: { createdAt: 'desc' }, take: tranKQ,
             })
             return {
+                ...canhBaoCat(logs.length, tranKQ, 'dòng nhật ký'),
                 fanpage: page.name,
                 soDong: logs.length,
                 nhatKy: logs.map((l: any) => ({

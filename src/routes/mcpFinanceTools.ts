@@ -4,7 +4,7 @@
 //  lãi bao nhiêu, chi hết bao nhiêu, còn nợ nhà cung cấp nào, kho nào còn hàng.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError, canhBaoCat, canhBaoMau } from '../lib/mcpTypes'
 import { conLaiPhieu, congNoHienThi } from '../lib/congNoNcc'
 import { tinhHanTraTheoQuyTac, quyTacTuSupplier, nhanQuyTac, mucHanTra } from '../lib/dieuKhoanThanhToan'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
@@ -382,6 +382,7 @@ export const FINANCE_TOOLS: Tool[] = [
                 prisma.importReceipt.aggregate({ where: dk, _sum: { totalCost: true }, _count: true }),
             ])
             return {
+                ...canhBaoMau(phieu.length, Math.min(num(a?.limit, 20), 100), 'phiếu nhập'),
                 khoang: moTa,
                 soPhieu: tong._count,
                 tongTienNhap: Math.round(Number(tong._sum.totalCost) || 0),
@@ -653,6 +654,7 @@ export const FINANCE_TOOLS: Tool[] = [
                 select: { id: true, name: true, sku: true, stock: true },
                 take: 20,
             })
+            const catMatHang = canhBaoCat(sp.length, 20, 'mat hang')
             if (!sp.length) throw new ToolError(`Không tìm thấy hàng nào khớp "${q}"`)
             const ton = await prisma.warehouseStock.findMany({
                 where: { productId: { in: sp.map((p: any) => p.id) } },
@@ -661,6 +663,7 @@ export const FINANCE_TOOLS: Tool[] = [
             })
             const tenKho = new Map(khos.map((k: any) => [k.id, k]))
             return {
+                ...catMatHang,
                 soMatHang: sp.length,
                 matHang: sp.map((p: any) => ({
                     ten: p.name, sku: p.sku, tonTong: p.stock,

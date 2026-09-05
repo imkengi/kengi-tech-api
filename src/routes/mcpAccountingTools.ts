@@ -11,7 +11,7 @@
 //  Có (tài sản/chi phí) hoặc ngược lại (nguồn vốn/doanh thu).
 // ═════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { accountName } from '../lib/chartOfAccounts'
 import { tinhB01, tinhB02, tinhB03 } from '../lib/baoCaoTaiChinh'
 
@@ -162,6 +162,9 @@ export const ACCOUNTING_TOOLS: Tool[] = [
                 select: { debitAccount: true, creditAccount: true, amount: true, date: true, description: true },
                 take: 50000,
             }).catch(() => [])
+            /* Chạm trần ở đây là SỐ DƯ ĐẦU KỲ sai, kéo sai mọi dòng phía sau —
+             * nặng hơn hẳn một danh sách bị cắt. */
+            const biCatDauKy = (truoc as But[]).length >= 50000
             const duDau = duNo(truoc as But[], tk)
 
             const bs = (await docBut(prisma, from, to)).filter(e => e.debitAccount?.startsWith(tk) || e.creditAccount?.startsWith(tk))
@@ -184,6 +187,7 @@ export const ACCOUNTING_TOOLS: Tool[] = [
                 }
             })
             return {
+                ...(biCatDauKy ? { canhBaoCat: 'SO DU DAU KY KHONG DANG TIN: chi doc duoc 50.000 but toan truoc ky, con nua chua doc — moi con so trong so cai nay deu lech theo. Thu hep khoang ngay roi goi lai.' } : {}),
                 taiKhoan: tk,
                 tenTaiKhoan: tenTK(tk),
                 kyBaoCao: { from, to },
@@ -237,6 +241,7 @@ export const ACCOUNTING_TOOLS: Tool[] = [
             })
             const gioiHan = Math.min(Math.max(Number(a.limit) || 100, 1), 500)
             return {
+                ...canhBaoCat(dong.length, 50000, 'dong so quy'),
                 so: tk === '111' ? 'Sổ quỹ tiền mặt (111)' : 'Sổ tiền gửi ngân hàng (112)',
                 kyBaoCao: { from, to },
                 tonDauKy: Math.round(tonDau),

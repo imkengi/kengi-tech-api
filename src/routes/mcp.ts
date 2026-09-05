@@ -3,7 +3,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { decrementSellableStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
-import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
 import { MARKETING_TOOLS } from './mcpMarketingTools'
@@ -170,6 +170,7 @@ export const TOOLS: Tool[] = [
             required: ['query'],
         },
         run: async (a, { prisma }) => {
+            const tranKQ = Math.min(num(a.limit, 10), 50)
             const products = await prisma.product.findMany({
                 where: {
                     OR: [
@@ -178,11 +179,12 @@ export const TOOLS: Tool[] = [
                         { barcode: { contains: String(a.query) } },
                     ],
                 },
-                take: Math.min(num(a.limit, 10), 50),
+                take: tranKQ,
                 orderBy: { updatedAt: 'desc' },
                 select: { id: true, sku: true, name: true, sellingPrice: true, costPrice: true, stock: true, baseUnit: true },
             })
-            return { soKetQua: products.length, hangHoa: products }
+            return {
+                ...canhBaoCat(products.length, tranKQ, 'mặt hàng'),KetQua: products.length, hangHoa: products }
         },
     },
     {
@@ -493,16 +495,18 @@ export const TOOLS: Tool[] = [
             },
         },
         run: async (a, { prisma }) => {
+            const tranKQ = Math.min(num(a?.limit, 10), 50)
             const orders = await prisma.transaction.findMany({
                 where: a?.channel ? { channel: String(a.channel) } : undefined,
                 orderBy: { createdAt: 'desc' },
-                take: Math.min(num(a?.limit, 10), 50),
+                take: tranKQ,
                 select: {
                     receiptNumber: true, customerName: true, total: true,
                     status: true, channel: true, createdAt: true,
                 },
             })
-            return { soDon: orders.length, donHang: orders }
+            return {
+                ...canhBaoCat(orders.length, tranKQ, 'đơn'),Don: orders.length, donHang: orders }
         },
     },
     {
@@ -516,16 +520,18 @@ export const TOOLS: Tool[] = [
             },
         },
         run: async (a, { prisma }) => {
+            const tranKQ = Math.min(num(a?.limit, 10), 50)
             const orders = await prisma.onlineOrder.findMany({
                 where: a?.status ? { status: String(a.status) } : undefined,
                 orderBy: { createdAt: 'desc' },
-                take: Math.min(num(a?.limit, 10), 50),
+                take: tranKQ,
                 select: {
                     orderNumber: true, platform: true, customerName: true,
                     total: true, status: true, createdAt: true,
                 },
             })
-            return { soDon: orders.length, donOnline: orders }
+            return {
+                ...canhBaoCat(orders.length, tranKQ, 'đơn sàn'),Don: orders.length, donOnline: orders }
         },
     },
     {
@@ -540,6 +546,7 @@ export const TOOLS: Tool[] = [
             required: ['query'],
         },
         run: async (a, { prisma }) => {
+            const tranKQ = Math.min(num(a.limit, 10), 50)
             const customers = await prisma.customer.findMany({
                 where: {
                     OR: [
@@ -548,10 +555,11 @@ export const TOOLS: Tool[] = [
                         { code: { contains: String(a.query), mode: 'insensitive' } },
                     ],
                 },
-                take: Math.min(num(a.limit, 10), 50),
+                take: tranKQ,
                 select: { code: true, name: true, phone: true, debt: true, totalOrders: true },
             })
-            return { soKetQua: customers.length, khachHang: customers }
+            return {
+                ...canhBaoCat(customers.length, tranKQ, 'khách'),KetQua: customers.length, khachHang: customers }
         },
     },
     {
