@@ -1464,6 +1464,8 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   isInstant: 'isInstant',
   shipByDate: 'shipByDate',
   stockDeducted: 'stockDeducted',
+  khongKhopSku: 'khongKhopSku',
+  khongKhopLuc: 'khongKhopLuc',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -2165,6 +2167,100 @@ exports.Prisma.FbContentDraftScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.MktAccountScalarFieldEnum = {
+  id: 'id',
+  platform: 'platform',
+  externalId: 'externalId',
+  name: 'name',
+  avatar: 'avatar',
+  category: 'category',
+  followers: 'followers',
+  accessToken: 'accessToken',
+  tokenExpiresAt: 'tokenExpiresAt',
+  status: 'status',
+  lastSyncAt: 'lastSyncAt',
+  connectedBy: 'connectedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MktCampaignScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  goal: 'goal',
+  status: 'status',
+  startAt: 'startAt',
+  endAt: 'endAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MktContentScalarFieldEnum = {
+  id: 'id',
+  campaignId: 'campaignId',
+  title: 'title',
+  body: 'body',
+  hashtags: 'hashtags',
+  linkUrl: 'linkUrl',
+  assetIds: 'assetIds',
+  productIds: 'productIds',
+  revision: 'revision',
+  approvedRevision: 'approvedRevision',
+  approvedAt: 'approvedAt',
+  approvedBy: 'approvedBy',
+  rejectReason: 'rejectReason',
+  status: 'status',
+  source: 'source',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MktPublicationScalarFieldEnum = {
+  id: 'id',
+  contentId: 'contentId',
+  accountId: 'accountId',
+  idempotencyKey: 'idempotencyKey',
+  scheduledAt: 'scheduledAt',
+  status: 'status',
+  leaseUntil: 'leaseUntil',
+  workerId: 'workerId',
+  remoteRef: 'remoteRef',
+  remotePostId: 'remotePostId',
+  attempts: 'attempts',
+  errorMessage: 'errorMessage',
+  errorCode: 'errorCode',
+  sentAt: 'sentAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MktAssetScalarFieldEnum = {
+  id: 'id',
+  localFile: 'localFile',
+  mime: 'mime',
+  bytes: 'bytes',
+  width: 'width',
+  height: 'height',
+  durationS: 'durationS',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MktMetricScalarFieldEnum = {
+  id: 'id',
+  accountId: 'accountId',
+  publicationId: 'publicationId',
+  snapshotAt: 'snapshotAt',
+  views: 'views',
+  likes: 'likes',
+  comments: 'comments',
+  shares: 'shares',
+  reach: 'reach',
+  clicks: 'clicks'
+};
+
 exports.Prisma.CrmTaskScalarFieldEnum = {
   id: 'id',
   title: 'title',
@@ -2651,6 +2747,12 @@ exports.Prisma.ModelName = {
   FbBrandProfile: 'FbBrandProfile',
   FbContentPlan: 'FbContentPlan',
   FbContentDraft: 'FbContentDraft',
+  MktAccount: 'MktAccount',
+  MktCampaign: 'MktCampaign',
+  MktContent: 'MktContent',
+  MktPublication: 'MktPublication',
+  MktAsset: 'MktAsset',
+  MktMetric: 'MktMetric',
   CrmTask: 'CrmTask',
   CrmDeal: 'CrmDeal',
   CrmActivity: 'CrmActivity',

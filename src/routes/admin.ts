@@ -2093,6 +2093,8 @@ router.post('/migrate', async (_req: Request, res: Response) => {
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasOnlineChannels" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasFanpages" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasAiJobs" BOOLEAN NOT NULL DEFAULT false`)
+        // mktWorker lọc theo cờ này; thiếu cột thì worker ném P2022 mỗi 60 giây.
+        await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasMarketing" BOOLEAN NOT NULL DEFAULT false`)
         /* Cửa hàng DEMO (2026-08-15): loại khỏi màn hình giám sát + báo cáo gộp,
          * KHÔNG xoá dữ liệu. KENGIONLINE có ngày 19/07 "bán" 31 iPhone = 1,005
          * tỷ — chủ shop xác nhận là demo; để lẫn thì bảng sức khoẻ kêu oan và

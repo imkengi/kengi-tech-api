@@ -29,7 +29,13 @@ import path from 'path'
 import { execSync } from 'child_process'
 
 const GOC = path.resolve(__dirname, '..')
-const DUONG_SCHEMA = 'prisma/schema-store.prisma'
+/* HAI schema, KHÔNG phải một.
+ *
+ * ĐIỂM MÙ TÌM RA 05/09/2026: bộ soát này chỉ đọc schema-store. Thêm
+ * `Store.hasMarketing` vào registry (`prisma/schema.prisma`) thì nó im lặng cho
+ * qua — trong khi hậu quả y hệt: cron lọc theo cột đó sẽ ném P2022 mỗi 60 giây.
+ * Một bộ soát có điểm mù còn nguy hơn không có, vì người ta tin nó. */
+const DUONG_SCHEMA = ['prisma/schema-store.prisma', 'prisma/schema.prisma']
 const ADMIN = path.join(GOC, 'src', 'routes', 'admin.ts')
 const MOC = process.argv[2] || 'HEAD~1'
 
@@ -53,16 +59,19 @@ function cotVoHuong(noiDung: string): Set<string> {
     return ra
 }
 
-function schemaTaiMoc(ref: string): string | null {
+function schemaTaiMoc(ref: string, duong: string): string | null {
     try {
-        return execSync(`git show ${ref}:${DUONG_SCHEMA}`, { cwd: GOC, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+        return execSync(`git show ${ref}:${duong}`, { cwd: GOC, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
     } catch {
         return null
     }
 }
 
-const nayNoiDung = fs.readFileSync(path.join(GOC, DUONG_SCHEMA), 'utf8')
-const cuNoiDung = schemaTaiMoc(MOC)
+const nayNoiDung = DUONG_SCHEMA.map(d => fs.readFileSync(path.join(GOC, d), 'utf8')).join('\n')
+const phanCu = DUONG_SCHEMA.map(d => schemaTaiMoc(MOC, d))
+/* Thiếu BẤT KỲ file nào ở mốc cũ thì không so được — nói ra rồi thoát,
+ * đừng so nửa vời rồi báo cả trăm cột "mới". */
+const cuNoiDung = phanCu.some(x => x === null) ? null : phanCu.join('\n')
 
 console.log('=== SOÁT: cột MỚI THÊM có dòng ALTER trong /admin/migrate chưa ===\n')
 

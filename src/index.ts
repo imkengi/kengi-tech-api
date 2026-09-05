@@ -97,6 +97,9 @@ import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startKiotVietNightlyCron, stopKiotVietNightlyCron } from './cron/kiotvietNightly'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
+import { startMktWorker, stopMktWorker } from './cron/mktWorker'
+import { khaiNenTang } from './services/mktDangBai'
+import { nenTangFacebook } from './services/mktNenTangFb'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startTaxAuditCron, stopTaxAuditCron } from './cron/taxAuditCron'
@@ -1545,6 +1548,8 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
                 startAutoSync()
                 startFanpageCron()
+                khaiNenTang('facebook', nenTangFacebook)
+                startMktWorker()
                 startAiAgentCron()
                 startWebhookCron()
                 startEmailReplyCron()
@@ -1575,6 +1580,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         await cacheDisconnect()
         await pubsubDisconnect()
         stopFanpageCron()
+        stopMktWorker()
         stopKiotVietNightlyCron()
         stopAiAgentCron()
         stopWebhookCron()

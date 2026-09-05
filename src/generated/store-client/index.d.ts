@@ -618,6 +618,36 @@ export type FbContentPlan = $Result.DefaultSelection<Prisma.$FbContentPlanPayloa
  */
 export type FbContentDraft = $Result.DefaultSelection<Prisma.$FbContentDraftPayload>
 /**
+ * Model MktAccount
+ * 
+ */
+export type MktAccount = $Result.DefaultSelection<Prisma.$MktAccountPayload>
+/**
+ * Model MktCampaign
+ * 
+ */
+export type MktCampaign = $Result.DefaultSelection<Prisma.$MktCampaignPayload>
+/**
+ * Model MktContent
+ * 
+ */
+export type MktContent = $Result.DefaultSelection<Prisma.$MktContentPayload>
+/**
+ * Model MktPublication
+ * 
+ */
+export type MktPublication = $Result.DefaultSelection<Prisma.$MktPublicationPayload>
+/**
+ * Model MktAsset
+ * 
+ */
+export type MktAsset = $Result.DefaultSelection<Prisma.$MktAssetPayload>
+/**
+ * Model MktMetric
+ * 
+ */
+export type MktMetric = $Result.DefaultSelection<Prisma.$MktMetricPayload>
+/**
  * Model CrmTask
  * 
  */
@@ -2037,6 +2067,66 @@ export class PrismaClient<
   get fbContentDraft(): Prisma.FbContentDraftDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.mktAccount`: Exposes CRUD operations for the **MktAccount** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktAccounts
+    * const mktAccounts = await prisma.mktAccount.findMany()
+    * ```
+    */
+  get mktAccount(): Prisma.MktAccountDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.mktCampaign`: Exposes CRUD operations for the **MktCampaign** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktCampaigns
+    * const mktCampaigns = await prisma.mktCampaign.findMany()
+    * ```
+    */
+  get mktCampaign(): Prisma.MktCampaignDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.mktContent`: Exposes CRUD operations for the **MktContent** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktContents
+    * const mktContents = await prisma.mktContent.findMany()
+    * ```
+    */
+  get mktContent(): Prisma.MktContentDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.mktPublication`: Exposes CRUD operations for the **MktPublication** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktPublications
+    * const mktPublications = await prisma.mktPublication.findMany()
+    * ```
+    */
+  get mktPublication(): Prisma.MktPublicationDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.mktAsset`: Exposes CRUD operations for the **MktAsset** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktAssets
+    * const mktAssets = await prisma.mktAsset.findMany()
+    * ```
+    */
+  get mktAsset(): Prisma.MktAssetDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.mktMetric`: Exposes CRUD operations for the **MktMetric** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktMetrics
+    * const mktMetrics = await prisma.mktMetric.findMany()
+    * ```
+    */
+  get mktMetric(): Prisma.MktMetricDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.crmTask`: Exposes CRUD operations for the **CrmTask** model.
     * Example usage:
     * ```ts
@@ -2804,6 +2894,12 @@ export namespace Prisma {
     FbBrandProfile: 'FbBrandProfile',
     FbContentPlan: 'FbContentPlan',
     FbContentDraft: 'FbContentDraft',
+    MktAccount: 'MktAccount',
+    MktCampaign: 'MktCampaign',
+    MktContent: 'MktContent',
+    MktPublication: 'MktPublication',
+    MktAsset: 'MktAsset',
+    MktMetric: 'MktMetric',
     CrmTask: 'CrmTask',
     CrmDeal: 'CrmDeal',
     CrmActivity: 'CrmActivity',
@@ -2843,7 +2939,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "mktAccount" | "mktCampaign" | "mktContent" | "mktPublication" | "mktAsset" | "mktMetric" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -11579,6 +11675,450 @@ export namespace Prisma {
           }
         }
       }
+      MktAccount: {
+        payload: Prisma.$MktAccountPayload<ExtArgs>
+        fields: Prisma.MktAccountFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktAccountFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktAccountFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          findFirst: {
+            args: Prisma.MktAccountFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktAccountFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          findMany: {
+            args: Prisma.MktAccountFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>[]
+          }
+          create: {
+            args: Prisma.MktAccountCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          createMany: {
+            args: Prisma.MktAccountCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktAccountCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>[]
+          }
+          delete: {
+            args: Prisma.MktAccountDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          update: {
+            args: Prisma.MktAccountUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktAccountDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktAccountUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktAccountUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktAccountUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAccountPayload>
+          }
+          aggregate: {
+            args: Prisma.MktAccountAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktAccount>
+          }
+          groupBy: {
+            args: Prisma.MktAccountGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktAccountGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktAccountCountArgs<ExtArgs>
+            result: $Utils.Optional<MktAccountCountAggregateOutputType> | number
+          }
+        }
+      }
+      MktCampaign: {
+        payload: Prisma.$MktCampaignPayload<ExtArgs>
+        fields: Prisma.MktCampaignFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktCampaignFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktCampaignFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          findFirst: {
+            args: Prisma.MktCampaignFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktCampaignFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          findMany: {
+            args: Prisma.MktCampaignFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>[]
+          }
+          create: {
+            args: Prisma.MktCampaignCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          createMany: {
+            args: Prisma.MktCampaignCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktCampaignCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>[]
+          }
+          delete: {
+            args: Prisma.MktCampaignDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          update: {
+            args: Prisma.MktCampaignUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktCampaignDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktCampaignUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktCampaignUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktCampaignUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktCampaignPayload>
+          }
+          aggregate: {
+            args: Prisma.MktCampaignAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktCampaign>
+          }
+          groupBy: {
+            args: Prisma.MktCampaignGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktCampaignGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktCampaignCountArgs<ExtArgs>
+            result: $Utils.Optional<MktCampaignCountAggregateOutputType> | number
+          }
+        }
+      }
+      MktContent: {
+        payload: Prisma.$MktContentPayload<ExtArgs>
+        fields: Prisma.MktContentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktContentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktContentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          findFirst: {
+            args: Prisma.MktContentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktContentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          findMany: {
+            args: Prisma.MktContentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>[]
+          }
+          create: {
+            args: Prisma.MktContentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          createMany: {
+            args: Prisma.MktContentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktContentCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>[]
+          }
+          delete: {
+            args: Prisma.MktContentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          update: {
+            args: Prisma.MktContentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktContentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktContentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktContentUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktContentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktContentPayload>
+          }
+          aggregate: {
+            args: Prisma.MktContentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktContent>
+          }
+          groupBy: {
+            args: Prisma.MktContentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktContentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktContentCountArgs<ExtArgs>
+            result: $Utils.Optional<MktContentCountAggregateOutputType> | number
+          }
+        }
+      }
+      MktPublication: {
+        payload: Prisma.$MktPublicationPayload<ExtArgs>
+        fields: Prisma.MktPublicationFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktPublicationFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktPublicationFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          findFirst: {
+            args: Prisma.MktPublicationFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktPublicationFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          findMany: {
+            args: Prisma.MktPublicationFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>[]
+          }
+          create: {
+            args: Prisma.MktPublicationCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          createMany: {
+            args: Prisma.MktPublicationCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktPublicationCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>[]
+          }
+          delete: {
+            args: Prisma.MktPublicationDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          update: {
+            args: Prisma.MktPublicationUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktPublicationDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktPublicationUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktPublicationUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktPublicationUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktPublicationPayload>
+          }
+          aggregate: {
+            args: Prisma.MktPublicationAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktPublication>
+          }
+          groupBy: {
+            args: Prisma.MktPublicationGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktPublicationGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktPublicationCountArgs<ExtArgs>
+            result: $Utils.Optional<MktPublicationCountAggregateOutputType> | number
+          }
+        }
+      }
+      MktAsset: {
+        payload: Prisma.$MktAssetPayload<ExtArgs>
+        fields: Prisma.MktAssetFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktAssetFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktAssetFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          findFirst: {
+            args: Prisma.MktAssetFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktAssetFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          findMany: {
+            args: Prisma.MktAssetFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>[]
+          }
+          create: {
+            args: Prisma.MktAssetCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          createMany: {
+            args: Prisma.MktAssetCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktAssetCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>[]
+          }
+          delete: {
+            args: Prisma.MktAssetDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          update: {
+            args: Prisma.MktAssetUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktAssetDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktAssetUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktAssetUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktAssetUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktAssetPayload>
+          }
+          aggregate: {
+            args: Prisma.MktAssetAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktAsset>
+          }
+          groupBy: {
+            args: Prisma.MktAssetGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktAssetGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktAssetCountArgs<ExtArgs>
+            result: $Utils.Optional<MktAssetCountAggregateOutputType> | number
+          }
+        }
+      }
+      MktMetric: {
+        payload: Prisma.$MktMetricPayload<ExtArgs>
+        fields: Prisma.MktMetricFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktMetricFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktMetricFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          findFirst: {
+            args: Prisma.MktMetricFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktMetricFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          findMany: {
+            args: Prisma.MktMetricFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>[]
+          }
+          create: {
+            args: Prisma.MktMetricCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          createMany: {
+            args: Prisma.MktMetricCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktMetricCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>[]
+          }
+          delete: {
+            args: Prisma.MktMetricDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          update: {
+            args: Prisma.MktMetricUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktMetricDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktMetricUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktMetricUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktMetricUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktMetricPayload>
+          }
+          aggregate: {
+            args: Prisma.MktMetricAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktMetric>
+          }
+          groupBy: {
+            args: Prisma.MktMetricGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktMetricGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktMetricCountArgs<ExtArgs>
+            result: $Utils.Optional<MktMetricCountAggregateOutputType> | number
+          }
+        }
+      }
       CrmTask: {
         payload: Prisma.$CrmTaskPayload<ExtArgs>
         fields: Prisma.CrmTaskFieldRefs
@@ -13347,6 +13887,12 @@ export namespace Prisma {
     fbBrandProfile?: FbBrandProfileOmit
     fbContentPlan?: FbContentPlanOmit
     fbContentDraft?: FbContentDraftOmit
+    mktAccount?: MktAccountOmit
+    mktCampaign?: MktCampaignOmit
+    mktContent?: MktContentOmit
+    mktPublication?: MktPublicationOmit
+    mktAsset?: MktAssetOmit
+    mktMetric?: MktMetricOmit
     crmTask?: CrmTaskOmit
     crmDeal?: CrmDealOmit
     crmActivity?: CrmActivityOmit
@@ -14693,6 +15239,108 @@ export namespace Prisma {
    */
   export type FbContentPlanCountOutputTypeCountDraftsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: FbContentDraftWhereInput
+  }
+
+
+  /**
+   * Count Type MktAccountCountOutputType
+   */
+
+  export type MktAccountCountOutputType = {
+    publications: number
+    metrics: number
+  }
+
+  export type MktAccountCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    publications?: boolean | MktAccountCountOutputTypeCountPublicationsArgs
+    metrics?: boolean | MktAccountCountOutputTypeCountMetricsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MktAccountCountOutputType without action
+   */
+  export type MktAccountCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccountCountOutputType
+     */
+    select?: MktAccountCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MktAccountCountOutputType without action
+   */
+  export type MktAccountCountOutputTypeCountPublicationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktPublicationWhereInput
+  }
+
+  /**
+   * MktAccountCountOutputType without action
+   */
+  export type MktAccountCountOutputTypeCountMetricsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktMetricWhereInput
+  }
+
+
+  /**
+   * Count Type MktCampaignCountOutputType
+   */
+
+  export type MktCampaignCountOutputType = {
+    contents: number
+  }
+
+  export type MktCampaignCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    contents?: boolean | MktCampaignCountOutputTypeCountContentsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MktCampaignCountOutputType without action
+   */
+  export type MktCampaignCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaignCountOutputType
+     */
+    select?: MktCampaignCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MktCampaignCountOutputType without action
+   */
+  export type MktCampaignCountOutputTypeCountContentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktContentWhereInput
+  }
+
+
+  /**
+   * Count Type MktContentCountOutputType
+   */
+
+  export type MktContentCountOutputType = {
+    publications: number
+  }
+
+  export type MktContentCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    publications?: boolean | MktContentCountOutputTypeCountPublicationsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MktContentCountOutputType without action
+   */
+  export type MktContentCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContentCountOutputType
+     */
+    select?: MktContentCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MktContentCountOutputType without action
+   */
+  export type MktContentCountOutputTypeCountPublicationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktPublicationWhereInput
   }
 
 
@@ -107209,6 +107857,8 @@ export namespace Prisma {
     isInstant: boolean | null
     shipByDate: Date | null
     stockDeducted: boolean | null
+    khongKhopSku: boolean | null
+    khongKhopLuc: Date | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -107247,6 +107897,8 @@ export namespace Prisma {
     isInstant: boolean | null
     shipByDate: Date | null
     stockDeducted: boolean | null
+    khongKhopSku: boolean | null
+    khongKhopLuc: Date | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -107285,6 +107937,8 @@ export namespace Prisma {
     isInstant: number
     shipByDate: number
     stockDeducted: number
+    khongKhopSku: number
+    khongKhopLuc: number
     syncedAt: number
     createdAt: number
     updatedAt: number
@@ -107347,6 +108001,8 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khongKhopSku?: true
+    khongKhopLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -107385,6 +108041,8 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khongKhopSku?: true
+    khongKhopLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -107423,6 +108081,8 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khongKhopSku?: true
+    khongKhopLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -107548,6 +108208,8 @@ export namespace Prisma {
     isInstant: boolean
     shipByDate: Date | null
     stockDeducted: boolean
+    khongKhopSku: boolean
+    khongKhopLuc: Date | null
     syncedAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -107605,6 +108267,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -107646,6 +108310,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -107685,6 +108351,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -107724,12 +108392,14 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
+  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "khongKhopSku" | "khongKhopLuc" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
   export type OnlineOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineOrder$channelArgs<ExtArgs>
     items?: boolean | OnlineOrder$itemsArgs<ExtArgs>
@@ -107781,6 +108451,8 @@ export namespace Prisma {
       isInstant: boolean
       shipByDate: Date | null
       stockDeducted: boolean
+      khongKhopSku: boolean
+      khongKhopLuc: Date | null
       syncedAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -108241,6 +108913,8 @@ export namespace Prisma {
     readonly isInstant: FieldRef<"OnlineOrder", 'Boolean'>
     readonly shipByDate: FieldRef<"OnlineOrder", 'DateTime'>
     readonly stockDeducted: FieldRef<"OnlineOrder", 'Boolean'>
+    readonly khongKhopSku: FieldRef<"OnlineOrder", 'Boolean'>
+    readonly khongKhopLuc: FieldRef<"OnlineOrder", 'DateTime'>
     readonly syncedAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly createdAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly updatedAt: FieldRef<"OnlineOrder", 'DateTime'>
@@ -156748,6 +157422,7204 @@ export namespace Prisma {
 
 
   /**
+   * Model MktAccount
+   */
+
+  export type AggregateMktAccount = {
+    _count: MktAccountCountAggregateOutputType | null
+    _avg: MktAccountAvgAggregateOutputType | null
+    _sum: MktAccountSumAggregateOutputType | null
+    _min: MktAccountMinAggregateOutputType | null
+    _max: MktAccountMaxAggregateOutputType | null
+  }
+
+  export type MktAccountAvgAggregateOutputType = {
+    followers: number | null
+  }
+
+  export type MktAccountSumAggregateOutputType = {
+    followers: number | null
+  }
+
+  export type MktAccountMinAggregateOutputType = {
+    id: string | null
+    platform: string | null
+    externalId: string | null
+    name: string | null
+    avatar: string | null
+    category: string | null
+    followers: number | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    status: string | null
+    lastSyncAt: Date | null
+    connectedBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktAccountMaxAggregateOutputType = {
+    id: string | null
+    platform: string | null
+    externalId: string | null
+    name: string | null
+    avatar: string | null
+    category: string | null
+    followers: number | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    status: string | null
+    lastSyncAt: Date | null
+    connectedBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktAccountCountAggregateOutputType = {
+    id: number
+    platform: number
+    externalId: number
+    name: number
+    avatar: number
+    category: number
+    followers: number
+    accessToken: number
+    tokenExpiresAt: number
+    status: number
+    lastSyncAt: number
+    connectedBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MktAccountAvgAggregateInputType = {
+    followers?: true
+  }
+
+  export type MktAccountSumAggregateInputType = {
+    followers?: true
+  }
+
+  export type MktAccountMinAggregateInputType = {
+    id?: true
+    platform?: true
+    externalId?: true
+    name?: true
+    avatar?: true
+    category?: true
+    followers?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    status?: true
+    lastSyncAt?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktAccountMaxAggregateInputType = {
+    id?: true
+    platform?: true
+    externalId?: true
+    name?: true
+    avatar?: true
+    category?: true
+    followers?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    status?: true
+    lastSyncAt?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktAccountCountAggregateInputType = {
+    id?: true
+    platform?: true
+    externalId?: true
+    name?: true
+    avatar?: true
+    category?: true
+    followers?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    status?: true
+    lastSyncAt?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MktAccountAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktAccount to aggregate.
+     */
+    where?: MktAccountWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAccounts to fetch.
+     */
+    orderBy?: MktAccountOrderByWithRelationInput | MktAccountOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktAccountWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAccounts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAccounts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktAccounts
+    **/
+    _count?: true | MktAccountCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MktAccountAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MktAccountSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktAccountMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktAccountMaxAggregateInputType
+  }
+
+  export type GetMktAccountAggregateType<T extends MktAccountAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktAccount]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktAccount[P]>
+      : GetScalarType<T[P], AggregateMktAccount[P]>
+  }
+
+
+
+
+  export type MktAccountGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktAccountWhereInput
+    orderBy?: MktAccountOrderByWithAggregationInput | MktAccountOrderByWithAggregationInput[]
+    by: MktAccountScalarFieldEnum[] | MktAccountScalarFieldEnum
+    having?: MktAccountScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktAccountCountAggregateInputType | true
+    _avg?: MktAccountAvgAggregateInputType
+    _sum?: MktAccountSumAggregateInputType
+    _min?: MktAccountMinAggregateInputType
+    _max?: MktAccountMaxAggregateInputType
+  }
+
+  export type MktAccountGroupByOutputType = {
+    id: string
+    platform: string
+    externalId: string
+    name: string
+    avatar: string | null
+    category: string | null
+    followers: number | null
+    accessToken: string
+    tokenExpiresAt: Date | null
+    status: string
+    lastSyncAt: Date | null
+    connectedBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MktAccountCountAggregateOutputType | null
+    _avg: MktAccountAvgAggregateOutputType | null
+    _sum: MktAccountSumAggregateOutputType | null
+    _min: MktAccountMinAggregateOutputType | null
+    _max: MktAccountMaxAggregateOutputType | null
+  }
+
+  type GetMktAccountGroupByPayload<T extends MktAccountGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktAccountGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktAccountGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktAccountGroupByOutputType[P]>
+            : GetScalarType<T[P], MktAccountGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktAccountSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platform?: boolean
+    externalId?: boolean
+    name?: boolean
+    avatar?: boolean
+    category?: boolean
+    followers?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    status?: boolean
+    lastSyncAt?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    publications?: boolean | MktAccount$publicationsArgs<ExtArgs>
+    metrics?: boolean | MktAccount$metricsArgs<ExtArgs>
+    _count?: boolean | MktAccountCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktAccount"]>
+
+  export type MktAccountSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platform?: boolean
+    externalId?: boolean
+    name?: boolean
+    avatar?: boolean
+    category?: boolean
+    followers?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    status?: boolean
+    lastSyncAt?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktAccount"]>
+
+  export type MktAccountSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platform?: boolean
+    externalId?: boolean
+    name?: boolean
+    avatar?: boolean
+    category?: boolean
+    followers?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    status?: boolean
+    lastSyncAt?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktAccount"]>
+
+  export type MktAccountSelectScalar = {
+    id?: boolean
+    platform?: boolean
+    externalId?: boolean
+    name?: boolean
+    avatar?: boolean
+    category?: boolean
+    followers?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    status?: boolean
+    lastSyncAt?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MktAccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "platform" | "externalId" | "name" | "avatar" | "category" | "followers" | "accessToken" | "tokenExpiresAt" | "status" | "lastSyncAt" | "connectedBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktAccount"]>
+  export type MktAccountInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    publications?: boolean | MktAccount$publicationsArgs<ExtArgs>
+    metrics?: boolean | MktAccount$metricsArgs<ExtArgs>
+    _count?: boolean | MktAccountCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MktAccountIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type MktAccountIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $MktAccountPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktAccount"
+    objects: {
+      publications: Prisma.$MktPublicationPayload<ExtArgs>[]
+      metrics: Prisma.$MktMetricPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      platform: string
+      externalId: string
+      name: string
+      avatar: string | null
+      category: string | null
+      followers: number | null
+      accessToken: string
+      tokenExpiresAt: Date | null
+      status: string
+      lastSyncAt: Date | null
+      connectedBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["mktAccount"]>
+    composites: {}
+  }
+
+  type MktAccountGetPayload<S extends boolean | null | undefined | MktAccountDefaultArgs> = $Result.GetResult<Prisma.$MktAccountPayload, S>
+
+  type MktAccountCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktAccountFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktAccountCountAggregateInputType | true
+    }
+
+  export interface MktAccountDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktAccount'], meta: { name: 'MktAccount' } }
+    /**
+     * Find zero or one MktAccount that matches the filter.
+     * @param {MktAccountFindUniqueArgs} args - Arguments to find a MktAccount
+     * @example
+     * // Get one MktAccount
+     * const mktAccount = await prisma.mktAccount.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktAccountFindUniqueArgs>(args: SelectSubset<T, MktAccountFindUniqueArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktAccount that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktAccountFindUniqueOrThrowArgs} args - Arguments to find a MktAccount
+     * @example
+     * // Get one MktAccount
+     * const mktAccount = await prisma.mktAccount.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktAccountFindUniqueOrThrowArgs>(args: SelectSubset<T, MktAccountFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktAccount that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountFindFirstArgs} args - Arguments to find a MktAccount
+     * @example
+     * // Get one MktAccount
+     * const mktAccount = await prisma.mktAccount.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktAccountFindFirstArgs>(args?: SelectSubset<T, MktAccountFindFirstArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktAccount that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountFindFirstOrThrowArgs} args - Arguments to find a MktAccount
+     * @example
+     * // Get one MktAccount
+     * const mktAccount = await prisma.mktAccount.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktAccountFindFirstOrThrowArgs>(args?: SelectSubset<T, MktAccountFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktAccounts that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktAccounts
+     * const mktAccounts = await prisma.mktAccount.findMany()
+     * 
+     * // Get first 10 MktAccounts
+     * const mktAccounts = await prisma.mktAccount.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktAccountWithIdOnly = await prisma.mktAccount.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktAccountFindManyArgs>(args?: SelectSubset<T, MktAccountFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktAccount.
+     * @param {MktAccountCreateArgs} args - Arguments to create a MktAccount.
+     * @example
+     * // Create one MktAccount
+     * const MktAccount = await prisma.mktAccount.create({
+     *   data: {
+     *     // ... data to create a MktAccount
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktAccountCreateArgs>(args: SelectSubset<T, MktAccountCreateArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktAccounts.
+     * @param {MktAccountCreateManyArgs} args - Arguments to create many MktAccounts.
+     * @example
+     * // Create many MktAccounts
+     * const mktAccount = await prisma.mktAccount.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktAccountCreateManyArgs>(args?: SelectSubset<T, MktAccountCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktAccounts and returns the data saved in the database.
+     * @param {MktAccountCreateManyAndReturnArgs} args - Arguments to create many MktAccounts.
+     * @example
+     * // Create many MktAccounts
+     * const mktAccount = await prisma.mktAccount.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktAccounts and only return the `id`
+     * const mktAccountWithIdOnly = await prisma.mktAccount.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktAccountCreateManyAndReturnArgs>(args?: SelectSubset<T, MktAccountCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktAccount.
+     * @param {MktAccountDeleteArgs} args - Arguments to delete one MktAccount.
+     * @example
+     * // Delete one MktAccount
+     * const MktAccount = await prisma.mktAccount.delete({
+     *   where: {
+     *     // ... filter to delete one MktAccount
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktAccountDeleteArgs>(args: SelectSubset<T, MktAccountDeleteArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktAccount.
+     * @param {MktAccountUpdateArgs} args - Arguments to update one MktAccount.
+     * @example
+     * // Update one MktAccount
+     * const mktAccount = await prisma.mktAccount.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktAccountUpdateArgs>(args: SelectSubset<T, MktAccountUpdateArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktAccounts.
+     * @param {MktAccountDeleteManyArgs} args - Arguments to filter MktAccounts to delete.
+     * @example
+     * // Delete a few MktAccounts
+     * const { count } = await prisma.mktAccount.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktAccountDeleteManyArgs>(args?: SelectSubset<T, MktAccountDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktAccounts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktAccounts
+     * const mktAccount = await prisma.mktAccount.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktAccountUpdateManyArgs>(args: SelectSubset<T, MktAccountUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktAccounts and returns the data updated in the database.
+     * @param {MktAccountUpdateManyAndReturnArgs} args - Arguments to update many MktAccounts.
+     * @example
+     * // Update many MktAccounts
+     * const mktAccount = await prisma.mktAccount.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktAccounts and only return the `id`
+     * const mktAccountWithIdOnly = await prisma.mktAccount.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktAccountUpdateManyAndReturnArgs>(args: SelectSubset<T, MktAccountUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktAccount.
+     * @param {MktAccountUpsertArgs} args - Arguments to update or create a MktAccount.
+     * @example
+     * // Update or create a MktAccount
+     * const mktAccount = await prisma.mktAccount.upsert({
+     *   create: {
+     *     // ... data to create a MktAccount
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktAccount we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktAccountUpsertArgs>(args: SelectSubset<T, MktAccountUpsertArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktAccounts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountCountArgs} args - Arguments to filter MktAccounts to count.
+     * @example
+     * // Count the number of MktAccounts
+     * const count = await prisma.mktAccount.count({
+     *   where: {
+     *     // ... the filter for the MktAccounts we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktAccountCountArgs>(
+      args?: Subset<T, MktAccountCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktAccountCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktAccount.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktAccountAggregateArgs>(args: Subset<T, MktAccountAggregateArgs>): Prisma.PrismaPromise<GetMktAccountAggregateType<T>>
+
+    /**
+     * Group by MktAccount.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAccountGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktAccountGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktAccountGroupByArgs['orderBy'] }
+        : { orderBy?: MktAccountGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktAccountGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktAccountGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktAccount model
+   */
+  readonly fields: MktAccountFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktAccount.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktAccountClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    publications<T extends MktAccount$publicationsArgs<ExtArgs> = {}>(args?: Subset<T, MktAccount$publicationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    metrics<T extends MktAccount$metricsArgs<ExtArgs> = {}>(args?: Subset<T, MktAccount$metricsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktAccount model
+   */
+  interface MktAccountFieldRefs {
+    readonly id: FieldRef<"MktAccount", 'String'>
+    readonly platform: FieldRef<"MktAccount", 'String'>
+    readonly externalId: FieldRef<"MktAccount", 'String'>
+    readonly name: FieldRef<"MktAccount", 'String'>
+    readonly avatar: FieldRef<"MktAccount", 'String'>
+    readonly category: FieldRef<"MktAccount", 'String'>
+    readonly followers: FieldRef<"MktAccount", 'Int'>
+    readonly accessToken: FieldRef<"MktAccount", 'String'>
+    readonly tokenExpiresAt: FieldRef<"MktAccount", 'DateTime'>
+    readonly status: FieldRef<"MktAccount", 'String'>
+    readonly lastSyncAt: FieldRef<"MktAccount", 'DateTime'>
+    readonly connectedBy: FieldRef<"MktAccount", 'String'>
+    readonly createdAt: FieldRef<"MktAccount", 'DateTime'>
+    readonly updatedAt: FieldRef<"MktAccount", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktAccount findUnique
+   */
+  export type MktAccountFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter, which MktAccount to fetch.
+     */
+    where: MktAccountWhereUniqueInput
+  }
+
+  /**
+   * MktAccount findUniqueOrThrow
+   */
+  export type MktAccountFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter, which MktAccount to fetch.
+     */
+    where: MktAccountWhereUniqueInput
+  }
+
+  /**
+   * MktAccount findFirst
+   */
+  export type MktAccountFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter, which MktAccount to fetch.
+     */
+    where?: MktAccountWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAccounts to fetch.
+     */
+    orderBy?: MktAccountOrderByWithRelationInput | MktAccountOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktAccounts.
+     */
+    cursor?: MktAccountWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAccounts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAccounts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktAccounts.
+     */
+    distinct?: MktAccountScalarFieldEnum | MktAccountScalarFieldEnum[]
+  }
+
+  /**
+   * MktAccount findFirstOrThrow
+   */
+  export type MktAccountFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter, which MktAccount to fetch.
+     */
+    where?: MktAccountWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAccounts to fetch.
+     */
+    orderBy?: MktAccountOrderByWithRelationInput | MktAccountOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktAccounts.
+     */
+    cursor?: MktAccountWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAccounts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAccounts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktAccounts.
+     */
+    distinct?: MktAccountScalarFieldEnum | MktAccountScalarFieldEnum[]
+  }
+
+  /**
+   * MktAccount findMany
+   */
+  export type MktAccountFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter, which MktAccounts to fetch.
+     */
+    where?: MktAccountWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAccounts to fetch.
+     */
+    orderBy?: MktAccountOrderByWithRelationInput | MktAccountOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktAccounts.
+     */
+    cursor?: MktAccountWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAccounts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAccounts.
+     */
+    skip?: number
+    distinct?: MktAccountScalarFieldEnum | MktAccountScalarFieldEnum[]
+  }
+
+  /**
+   * MktAccount create
+   */
+  export type MktAccountCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MktAccount.
+     */
+    data: XOR<MktAccountCreateInput, MktAccountUncheckedCreateInput>
+  }
+
+  /**
+   * MktAccount createMany
+   */
+  export type MktAccountCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktAccounts.
+     */
+    data: MktAccountCreateManyInput | MktAccountCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktAccount createManyAndReturn
+   */
+  export type MktAccountCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktAccounts.
+     */
+    data: MktAccountCreateManyInput | MktAccountCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktAccount update
+   */
+  export type MktAccountUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MktAccount.
+     */
+    data: XOR<MktAccountUpdateInput, MktAccountUncheckedUpdateInput>
+    /**
+     * Choose, which MktAccount to update.
+     */
+    where: MktAccountWhereUniqueInput
+  }
+
+  /**
+   * MktAccount updateMany
+   */
+  export type MktAccountUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktAccounts.
+     */
+    data: XOR<MktAccountUpdateManyMutationInput, MktAccountUncheckedUpdateManyInput>
+    /**
+     * Filter which MktAccounts to update
+     */
+    where?: MktAccountWhereInput
+    /**
+     * Limit how many MktAccounts to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAccount updateManyAndReturn
+   */
+  export type MktAccountUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * The data used to update MktAccounts.
+     */
+    data: XOR<MktAccountUpdateManyMutationInput, MktAccountUncheckedUpdateManyInput>
+    /**
+     * Filter which MktAccounts to update
+     */
+    where?: MktAccountWhereInput
+    /**
+     * Limit how many MktAccounts to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAccount upsert
+   */
+  export type MktAccountUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MktAccount to update in case it exists.
+     */
+    where: MktAccountWhereUniqueInput
+    /**
+     * In case the MktAccount found by the `where` argument doesn't exist, create a new MktAccount with this data.
+     */
+    create: XOR<MktAccountCreateInput, MktAccountUncheckedCreateInput>
+    /**
+     * In case the MktAccount was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktAccountUpdateInput, MktAccountUncheckedUpdateInput>
+  }
+
+  /**
+   * MktAccount delete
+   */
+  export type MktAccountDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+    /**
+     * Filter which MktAccount to delete.
+     */
+    where: MktAccountWhereUniqueInput
+  }
+
+  /**
+   * MktAccount deleteMany
+   */
+  export type MktAccountDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktAccounts to delete
+     */
+    where?: MktAccountWhereInput
+    /**
+     * Limit how many MktAccounts to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAccount.publications
+   */
+  export type MktAccount$publicationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    where?: MktPublicationWhereInput
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    cursor?: MktPublicationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MktPublicationScalarFieldEnum | MktPublicationScalarFieldEnum[]
+  }
+
+  /**
+   * MktAccount.metrics
+   */
+  export type MktAccount$metricsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    where?: MktMetricWhereInput
+    orderBy?: MktMetricOrderByWithRelationInput | MktMetricOrderByWithRelationInput[]
+    cursor?: MktMetricWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MktMetricScalarFieldEnum | MktMetricScalarFieldEnum[]
+  }
+
+  /**
+   * MktAccount without action
+   */
+  export type MktAccountDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAccount
+     */
+    select?: MktAccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAccount
+     */
+    omit?: MktAccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktAccountInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MktCampaign
+   */
+
+  export type AggregateMktCampaign = {
+    _count: MktCampaignCountAggregateOutputType | null
+    _min: MktCampaignMinAggregateOutputType | null
+    _max: MktCampaignMaxAggregateOutputType | null
+  }
+
+  export type MktCampaignMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    goal: string | null
+    status: string | null
+    startAt: Date | null
+    endAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktCampaignMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    goal: string | null
+    status: string | null
+    startAt: Date | null
+    endAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktCampaignCountAggregateOutputType = {
+    id: number
+    name: number
+    goal: number
+    status: number
+    startAt: number
+    endAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MktCampaignMinAggregateInputType = {
+    id?: true
+    name?: true
+    goal?: true
+    status?: true
+    startAt?: true
+    endAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktCampaignMaxAggregateInputType = {
+    id?: true
+    name?: true
+    goal?: true
+    status?: true
+    startAt?: true
+    endAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktCampaignCountAggregateInputType = {
+    id?: true
+    name?: true
+    goal?: true
+    status?: true
+    startAt?: true
+    endAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MktCampaignAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktCampaign to aggregate.
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktCampaigns to fetch.
+     */
+    orderBy?: MktCampaignOrderByWithRelationInput | MktCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktCampaigns
+    **/
+    _count?: true | MktCampaignCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktCampaignMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktCampaignMaxAggregateInputType
+  }
+
+  export type GetMktCampaignAggregateType<T extends MktCampaignAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktCampaign]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktCampaign[P]>
+      : GetScalarType<T[P], AggregateMktCampaign[P]>
+  }
+
+
+
+
+  export type MktCampaignGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktCampaignWhereInput
+    orderBy?: MktCampaignOrderByWithAggregationInput | MktCampaignOrderByWithAggregationInput[]
+    by: MktCampaignScalarFieldEnum[] | MktCampaignScalarFieldEnum
+    having?: MktCampaignScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktCampaignCountAggregateInputType | true
+    _min?: MktCampaignMinAggregateInputType
+    _max?: MktCampaignMaxAggregateInputType
+  }
+
+  export type MktCampaignGroupByOutputType = {
+    id: string
+    name: string
+    goal: string
+    status: string
+    startAt: Date | null
+    endAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MktCampaignCountAggregateOutputType | null
+    _min: MktCampaignMinAggregateOutputType | null
+    _max: MktCampaignMaxAggregateOutputType | null
+  }
+
+  type GetMktCampaignGroupByPayload<T extends MktCampaignGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktCampaignGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktCampaignGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktCampaignGroupByOutputType[P]>
+            : GetScalarType<T[P], MktCampaignGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktCampaignSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    goal?: boolean
+    status?: boolean
+    startAt?: boolean
+    endAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    contents?: boolean | MktCampaign$contentsArgs<ExtArgs>
+    _count?: boolean | MktCampaignCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktCampaign"]>
+
+  export type MktCampaignSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    goal?: boolean
+    status?: boolean
+    startAt?: boolean
+    endAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktCampaign"]>
+
+  export type MktCampaignSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    goal?: boolean
+    status?: boolean
+    startAt?: boolean
+    endAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktCampaign"]>
+
+  export type MktCampaignSelectScalar = {
+    id?: boolean
+    name?: boolean
+    goal?: boolean
+    status?: boolean
+    startAt?: boolean
+    endAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MktCampaignOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "goal" | "status" | "startAt" | "endAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktCampaign"]>
+  export type MktCampaignInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    contents?: boolean | MktCampaign$contentsArgs<ExtArgs>
+    _count?: boolean | MktCampaignCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MktCampaignIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type MktCampaignIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $MktCampaignPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktCampaign"
+    objects: {
+      contents: Prisma.$MktContentPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      name: string
+      goal: string
+      status: string
+      startAt: Date | null
+      endAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["mktCampaign"]>
+    composites: {}
+  }
+
+  type MktCampaignGetPayload<S extends boolean | null | undefined | MktCampaignDefaultArgs> = $Result.GetResult<Prisma.$MktCampaignPayload, S>
+
+  type MktCampaignCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktCampaignFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktCampaignCountAggregateInputType | true
+    }
+
+  export interface MktCampaignDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktCampaign'], meta: { name: 'MktCampaign' } }
+    /**
+     * Find zero or one MktCampaign that matches the filter.
+     * @param {MktCampaignFindUniqueArgs} args - Arguments to find a MktCampaign
+     * @example
+     * // Get one MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktCampaignFindUniqueArgs>(args: SelectSubset<T, MktCampaignFindUniqueArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktCampaign that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktCampaignFindUniqueOrThrowArgs} args - Arguments to find a MktCampaign
+     * @example
+     * // Get one MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktCampaignFindUniqueOrThrowArgs>(args: SelectSubset<T, MktCampaignFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktCampaign that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignFindFirstArgs} args - Arguments to find a MktCampaign
+     * @example
+     * // Get one MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktCampaignFindFirstArgs>(args?: SelectSubset<T, MktCampaignFindFirstArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktCampaign that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignFindFirstOrThrowArgs} args - Arguments to find a MktCampaign
+     * @example
+     * // Get one MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktCampaignFindFirstOrThrowArgs>(args?: SelectSubset<T, MktCampaignFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktCampaigns that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktCampaigns
+     * const mktCampaigns = await prisma.mktCampaign.findMany()
+     * 
+     * // Get first 10 MktCampaigns
+     * const mktCampaigns = await prisma.mktCampaign.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktCampaignWithIdOnly = await prisma.mktCampaign.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktCampaignFindManyArgs>(args?: SelectSubset<T, MktCampaignFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktCampaign.
+     * @param {MktCampaignCreateArgs} args - Arguments to create a MktCampaign.
+     * @example
+     * // Create one MktCampaign
+     * const MktCampaign = await prisma.mktCampaign.create({
+     *   data: {
+     *     // ... data to create a MktCampaign
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktCampaignCreateArgs>(args: SelectSubset<T, MktCampaignCreateArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktCampaigns.
+     * @param {MktCampaignCreateManyArgs} args - Arguments to create many MktCampaigns.
+     * @example
+     * // Create many MktCampaigns
+     * const mktCampaign = await prisma.mktCampaign.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktCampaignCreateManyArgs>(args?: SelectSubset<T, MktCampaignCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktCampaigns and returns the data saved in the database.
+     * @param {MktCampaignCreateManyAndReturnArgs} args - Arguments to create many MktCampaigns.
+     * @example
+     * // Create many MktCampaigns
+     * const mktCampaign = await prisma.mktCampaign.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktCampaigns and only return the `id`
+     * const mktCampaignWithIdOnly = await prisma.mktCampaign.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktCampaignCreateManyAndReturnArgs>(args?: SelectSubset<T, MktCampaignCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktCampaign.
+     * @param {MktCampaignDeleteArgs} args - Arguments to delete one MktCampaign.
+     * @example
+     * // Delete one MktCampaign
+     * const MktCampaign = await prisma.mktCampaign.delete({
+     *   where: {
+     *     // ... filter to delete one MktCampaign
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktCampaignDeleteArgs>(args: SelectSubset<T, MktCampaignDeleteArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktCampaign.
+     * @param {MktCampaignUpdateArgs} args - Arguments to update one MktCampaign.
+     * @example
+     * // Update one MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktCampaignUpdateArgs>(args: SelectSubset<T, MktCampaignUpdateArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktCampaigns.
+     * @param {MktCampaignDeleteManyArgs} args - Arguments to filter MktCampaigns to delete.
+     * @example
+     * // Delete a few MktCampaigns
+     * const { count } = await prisma.mktCampaign.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktCampaignDeleteManyArgs>(args?: SelectSubset<T, MktCampaignDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktCampaigns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktCampaigns
+     * const mktCampaign = await prisma.mktCampaign.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktCampaignUpdateManyArgs>(args: SelectSubset<T, MktCampaignUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktCampaigns and returns the data updated in the database.
+     * @param {MktCampaignUpdateManyAndReturnArgs} args - Arguments to update many MktCampaigns.
+     * @example
+     * // Update many MktCampaigns
+     * const mktCampaign = await prisma.mktCampaign.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktCampaigns and only return the `id`
+     * const mktCampaignWithIdOnly = await prisma.mktCampaign.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktCampaignUpdateManyAndReturnArgs>(args: SelectSubset<T, MktCampaignUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktCampaign.
+     * @param {MktCampaignUpsertArgs} args - Arguments to update or create a MktCampaign.
+     * @example
+     * // Update or create a MktCampaign
+     * const mktCampaign = await prisma.mktCampaign.upsert({
+     *   create: {
+     *     // ... data to create a MktCampaign
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktCampaign we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktCampaignUpsertArgs>(args: SelectSubset<T, MktCampaignUpsertArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktCampaigns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignCountArgs} args - Arguments to filter MktCampaigns to count.
+     * @example
+     * // Count the number of MktCampaigns
+     * const count = await prisma.mktCampaign.count({
+     *   where: {
+     *     // ... the filter for the MktCampaigns we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktCampaignCountArgs>(
+      args?: Subset<T, MktCampaignCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktCampaignCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktCampaign.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktCampaignAggregateArgs>(args: Subset<T, MktCampaignAggregateArgs>): Prisma.PrismaPromise<GetMktCampaignAggregateType<T>>
+
+    /**
+     * Group by MktCampaign.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktCampaignGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktCampaignGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktCampaignGroupByArgs['orderBy'] }
+        : { orderBy?: MktCampaignGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktCampaignGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktCampaignGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktCampaign model
+   */
+  readonly fields: MktCampaignFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktCampaign.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktCampaignClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    contents<T extends MktCampaign$contentsArgs<ExtArgs> = {}>(args?: Subset<T, MktCampaign$contentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktCampaign model
+   */
+  interface MktCampaignFieldRefs {
+    readonly id: FieldRef<"MktCampaign", 'String'>
+    readonly name: FieldRef<"MktCampaign", 'String'>
+    readonly goal: FieldRef<"MktCampaign", 'String'>
+    readonly status: FieldRef<"MktCampaign", 'String'>
+    readonly startAt: FieldRef<"MktCampaign", 'DateTime'>
+    readonly endAt: FieldRef<"MktCampaign", 'DateTime'>
+    readonly createdBy: FieldRef<"MktCampaign", 'String'>
+    readonly createdAt: FieldRef<"MktCampaign", 'DateTime'>
+    readonly updatedAt: FieldRef<"MktCampaign", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktCampaign findUnique
+   */
+  export type MktCampaignFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter, which MktCampaign to fetch.
+     */
+    where: MktCampaignWhereUniqueInput
+  }
+
+  /**
+   * MktCampaign findUniqueOrThrow
+   */
+  export type MktCampaignFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter, which MktCampaign to fetch.
+     */
+    where: MktCampaignWhereUniqueInput
+  }
+
+  /**
+   * MktCampaign findFirst
+   */
+  export type MktCampaignFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter, which MktCampaign to fetch.
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktCampaigns to fetch.
+     */
+    orderBy?: MktCampaignOrderByWithRelationInput | MktCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktCampaigns.
+     */
+    cursor?: MktCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktCampaigns.
+     */
+    distinct?: MktCampaignScalarFieldEnum | MktCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * MktCampaign findFirstOrThrow
+   */
+  export type MktCampaignFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter, which MktCampaign to fetch.
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktCampaigns to fetch.
+     */
+    orderBy?: MktCampaignOrderByWithRelationInput | MktCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktCampaigns.
+     */
+    cursor?: MktCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktCampaigns.
+     */
+    distinct?: MktCampaignScalarFieldEnum | MktCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * MktCampaign findMany
+   */
+  export type MktCampaignFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter, which MktCampaigns to fetch.
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktCampaigns to fetch.
+     */
+    orderBy?: MktCampaignOrderByWithRelationInput | MktCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktCampaigns.
+     */
+    cursor?: MktCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktCampaigns.
+     */
+    skip?: number
+    distinct?: MktCampaignScalarFieldEnum | MktCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * MktCampaign create
+   */
+  export type MktCampaignCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MktCampaign.
+     */
+    data: XOR<MktCampaignCreateInput, MktCampaignUncheckedCreateInput>
+  }
+
+  /**
+   * MktCampaign createMany
+   */
+  export type MktCampaignCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktCampaigns.
+     */
+    data: MktCampaignCreateManyInput | MktCampaignCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktCampaign createManyAndReturn
+   */
+  export type MktCampaignCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktCampaigns.
+     */
+    data: MktCampaignCreateManyInput | MktCampaignCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktCampaign update
+   */
+  export type MktCampaignUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MktCampaign.
+     */
+    data: XOR<MktCampaignUpdateInput, MktCampaignUncheckedUpdateInput>
+    /**
+     * Choose, which MktCampaign to update.
+     */
+    where: MktCampaignWhereUniqueInput
+  }
+
+  /**
+   * MktCampaign updateMany
+   */
+  export type MktCampaignUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktCampaigns.
+     */
+    data: XOR<MktCampaignUpdateManyMutationInput, MktCampaignUncheckedUpdateManyInput>
+    /**
+     * Filter which MktCampaigns to update
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * Limit how many MktCampaigns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktCampaign updateManyAndReturn
+   */
+  export type MktCampaignUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * The data used to update MktCampaigns.
+     */
+    data: XOR<MktCampaignUpdateManyMutationInput, MktCampaignUncheckedUpdateManyInput>
+    /**
+     * Filter which MktCampaigns to update
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * Limit how many MktCampaigns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktCampaign upsert
+   */
+  export type MktCampaignUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MktCampaign to update in case it exists.
+     */
+    where: MktCampaignWhereUniqueInput
+    /**
+     * In case the MktCampaign found by the `where` argument doesn't exist, create a new MktCampaign with this data.
+     */
+    create: XOR<MktCampaignCreateInput, MktCampaignUncheckedCreateInput>
+    /**
+     * In case the MktCampaign was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktCampaignUpdateInput, MktCampaignUncheckedUpdateInput>
+  }
+
+  /**
+   * MktCampaign delete
+   */
+  export type MktCampaignDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    /**
+     * Filter which MktCampaign to delete.
+     */
+    where: MktCampaignWhereUniqueInput
+  }
+
+  /**
+   * MktCampaign deleteMany
+   */
+  export type MktCampaignDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktCampaigns to delete
+     */
+    where?: MktCampaignWhereInput
+    /**
+     * Limit how many MktCampaigns to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktCampaign.contents
+   */
+  export type MktCampaign$contentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    where?: MktContentWhereInput
+    orderBy?: MktContentOrderByWithRelationInput | MktContentOrderByWithRelationInput[]
+    cursor?: MktContentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MktContentScalarFieldEnum | MktContentScalarFieldEnum[]
+  }
+
+  /**
+   * MktCampaign without action
+   */
+  export type MktCampaignDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MktContent
+   */
+
+  export type AggregateMktContent = {
+    _count: MktContentCountAggregateOutputType | null
+    _avg: MktContentAvgAggregateOutputType | null
+    _sum: MktContentSumAggregateOutputType | null
+    _min: MktContentMinAggregateOutputType | null
+    _max: MktContentMaxAggregateOutputType | null
+  }
+
+  export type MktContentAvgAggregateOutputType = {
+    revision: number | null
+    approvedRevision: number | null
+  }
+
+  export type MktContentSumAggregateOutputType = {
+    revision: number | null
+    approvedRevision: number | null
+  }
+
+  export type MktContentMinAggregateOutputType = {
+    id: string | null
+    campaignId: string | null
+    title: string | null
+    body: string | null
+    hashtags: string | null
+    linkUrl: string | null
+    assetIds: string | null
+    productIds: string | null
+    revision: number | null
+    approvedRevision: number | null
+    approvedAt: Date | null
+    approvedBy: string | null
+    rejectReason: string | null
+    status: string | null
+    source: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktContentMaxAggregateOutputType = {
+    id: string | null
+    campaignId: string | null
+    title: string | null
+    body: string | null
+    hashtags: string | null
+    linkUrl: string | null
+    assetIds: string | null
+    productIds: string | null
+    revision: number | null
+    approvedRevision: number | null
+    approvedAt: Date | null
+    approvedBy: string | null
+    rejectReason: string | null
+    status: string | null
+    source: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktContentCountAggregateOutputType = {
+    id: number
+    campaignId: number
+    title: number
+    body: number
+    hashtags: number
+    linkUrl: number
+    assetIds: number
+    productIds: number
+    revision: number
+    approvedRevision: number
+    approvedAt: number
+    approvedBy: number
+    rejectReason: number
+    status: number
+    source: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MktContentAvgAggregateInputType = {
+    revision?: true
+    approvedRevision?: true
+  }
+
+  export type MktContentSumAggregateInputType = {
+    revision?: true
+    approvedRevision?: true
+  }
+
+  export type MktContentMinAggregateInputType = {
+    id?: true
+    campaignId?: true
+    title?: true
+    body?: true
+    hashtags?: true
+    linkUrl?: true
+    assetIds?: true
+    productIds?: true
+    revision?: true
+    approvedRevision?: true
+    approvedAt?: true
+    approvedBy?: true
+    rejectReason?: true
+    status?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktContentMaxAggregateInputType = {
+    id?: true
+    campaignId?: true
+    title?: true
+    body?: true
+    hashtags?: true
+    linkUrl?: true
+    assetIds?: true
+    productIds?: true
+    revision?: true
+    approvedRevision?: true
+    approvedAt?: true
+    approvedBy?: true
+    rejectReason?: true
+    status?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktContentCountAggregateInputType = {
+    id?: true
+    campaignId?: true
+    title?: true
+    body?: true
+    hashtags?: true
+    linkUrl?: true
+    assetIds?: true
+    productIds?: true
+    revision?: true
+    approvedRevision?: true
+    approvedAt?: true
+    approvedBy?: true
+    rejectReason?: true
+    status?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MktContentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktContent to aggregate.
+     */
+    where?: MktContentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktContents to fetch.
+     */
+    orderBy?: MktContentOrderByWithRelationInput | MktContentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktContentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktContents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktContents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktContents
+    **/
+    _count?: true | MktContentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MktContentAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MktContentSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktContentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktContentMaxAggregateInputType
+  }
+
+  export type GetMktContentAggregateType<T extends MktContentAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktContent]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktContent[P]>
+      : GetScalarType<T[P], AggregateMktContent[P]>
+  }
+
+
+
+
+  export type MktContentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktContentWhereInput
+    orderBy?: MktContentOrderByWithAggregationInput | MktContentOrderByWithAggregationInput[]
+    by: MktContentScalarFieldEnum[] | MktContentScalarFieldEnum
+    having?: MktContentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktContentCountAggregateInputType | true
+    _avg?: MktContentAvgAggregateInputType
+    _sum?: MktContentSumAggregateInputType
+    _min?: MktContentMinAggregateInputType
+    _max?: MktContentMaxAggregateInputType
+  }
+
+  export type MktContentGroupByOutputType = {
+    id: string
+    campaignId: string | null
+    title: string
+    body: string
+    hashtags: string
+    linkUrl: string | null
+    assetIds: string
+    productIds: string
+    revision: number
+    approvedRevision: number | null
+    approvedAt: Date | null
+    approvedBy: string | null
+    rejectReason: string | null
+    status: string
+    source: string
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MktContentCountAggregateOutputType | null
+    _avg: MktContentAvgAggregateOutputType | null
+    _sum: MktContentSumAggregateOutputType | null
+    _min: MktContentMinAggregateOutputType | null
+    _max: MktContentMaxAggregateOutputType | null
+  }
+
+  type GetMktContentGroupByPayload<T extends MktContentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktContentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktContentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktContentGroupByOutputType[P]>
+            : GetScalarType<T[P], MktContentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktContentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    campaignId?: boolean
+    title?: boolean
+    body?: boolean
+    hashtags?: boolean
+    linkUrl?: boolean
+    assetIds?: boolean
+    productIds?: boolean
+    revision?: boolean
+    approvedRevision?: boolean
+    approvedAt?: boolean
+    approvedBy?: boolean
+    rejectReason?: boolean
+    status?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+    publications?: boolean | MktContent$publicationsArgs<ExtArgs>
+    _count?: boolean | MktContentCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktContent"]>
+
+  export type MktContentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    campaignId?: boolean
+    title?: boolean
+    body?: boolean
+    hashtags?: boolean
+    linkUrl?: boolean
+    assetIds?: boolean
+    productIds?: boolean
+    revision?: boolean
+    approvedRevision?: boolean
+    approvedAt?: boolean
+    approvedBy?: boolean
+    rejectReason?: boolean
+    status?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+  }, ExtArgs["result"]["mktContent"]>
+
+  export type MktContentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    campaignId?: boolean
+    title?: boolean
+    body?: boolean
+    hashtags?: boolean
+    linkUrl?: boolean
+    assetIds?: boolean
+    productIds?: boolean
+    revision?: boolean
+    approvedRevision?: boolean
+    approvedAt?: boolean
+    approvedBy?: boolean
+    rejectReason?: boolean
+    status?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+  }, ExtArgs["result"]["mktContent"]>
+
+  export type MktContentSelectScalar = {
+    id?: boolean
+    campaignId?: boolean
+    title?: boolean
+    body?: boolean
+    hashtags?: boolean
+    linkUrl?: boolean
+    assetIds?: boolean
+    productIds?: boolean
+    revision?: boolean
+    approvedRevision?: boolean
+    approvedAt?: boolean
+    approvedBy?: boolean
+    rejectReason?: boolean
+    status?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MktContentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "campaignId" | "title" | "body" | "hashtags" | "linkUrl" | "assetIds" | "productIds" | "revision" | "approvedRevision" | "approvedAt" | "approvedBy" | "rejectReason" | "status" | "source" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktContent"]>
+  export type MktContentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+    publications?: boolean | MktContent$publicationsArgs<ExtArgs>
+    _count?: boolean | MktContentCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MktContentIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+  }
+  export type MktContentIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    campaign?: boolean | MktContent$campaignArgs<ExtArgs>
+  }
+
+  export type $MktContentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktContent"
+    objects: {
+      campaign: Prisma.$MktCampaignPayload<ExtArgs> | null
+      publications: Prisma.$MktPublicationPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      campaignId: string | null
+      title: string
+      body: string
+      hashtags: string
+      linkUrl: string | null
+      assetIds: string
+      productIds: string
+      revision: number
+      approvedRevision: number | null
+      approvedAt: Date | null
+      approvedBy: string | null
+      rejectReason: string | null
+      status: string
+      source: string
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["mktContent"]>
+    composites: {}
+  }
+
+  type MktContentGetPayload<S extends boolean | null | undefined | MktContentDefaultArgs> = $Result.GetResult<Prisma.$MktContentPayload, S>
+
+  type MktContentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktContentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktContentCountAggregateInputType | true
+    }
+
+  export interface MktContentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktContent'], meta: { name: 'MktContent' } }
+    /**
+     * Find zero or one MktContent that matches the filter.
+     * @param {MktContentFindUniqueArgs} args - Arguments to find a MktContent
+     * @example
+     * // Get one MktContent
+     * const mktContent = await prisma.mktContent.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktContentFindUniqueArgs>(args: SelectSubset<T, MktContentFindUniqueArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktContent that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktContentFindUniqueOrThrowArgs} args - Arguments to find a MktContent
+     * @example
+     * // Get one MktContent
+     * const mktContent = await prisma.mktContent.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktContentFindUniqueOrThrowArgs>(args: SelectSubset<T, MktContentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktContent that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentFindFirstArgs} args - Arguments to find a MktContent
+     * @example
+     * // Get one MktContent
+     * const mktContent = await prisma.mktContent.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktContentFindFirstArgs>(args?: SelectSubset<T, MktContentFindFirstArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktContent that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentFindFirstOrThrowArgs} args - Arguments to find a MktContent
+     * @example
+     * // Get one MktContent
+     * const mktContent = await prisma.mktContent.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktContentFindFirstOrThrowArgs>(args?: SelectSubset<T, MktContentFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktContents that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktContents
+     * const mktContents = await prisma.mktContent.findMany()
+     * 
+     * // Get first 10 MktContents
+     * const mktContents = await prisma.mktContent.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktContentWithIdOnly = await prisma.mktContent.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktContentFindManyArgs>(args?: SelectSubset<T, MktContentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktContent.
+     * @param {MktContentCreateArgs} args - Arguments to create a MktContent.
+     * @example
+     * // Create one MktContent
+     * const MktContent = await prisma.mktContent.create({
+     *   data: {
+     *     // ... data to create a MktContent
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktContentCreateArgs>(args: SelectSubset<T, MktContentCreateArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktContents.
+     * @param {MktContentCreateManyArgs} args - Arguments to create many MktContents.
+     * @example
+     * // Create many MktContents
+     * const mktContent = await prisma.mktContent.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktContentCreateManyArgs>(args?: SelectSubset<T, MktContentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktContents and returns the data saved in the database.
+     * @param {MktContentCreateManyAndReturnArgs} args - Arguments to create many MktContents.
+     * @example
+     * // Create many MktContents
+     * const mktContent = await prisma.mktContent.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktContents and only return the `id`
+     * const mktContentWithIdOnly = await prisma.mktContent.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktContentCreateManyAndReturnArgs>(args?: SelectSubset<T, MktContentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktContent.
+     * @param {MktContentDeleteArgs} args - Arguments to delete one MktContent.
+     * @example
+     * // Delete one MktContent
+     * const MktContent = await prisma.mktContent.delete({
+     *   where: {
+     *     // ... filter to delete one MktContent
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktContentDeleteArgs>(args: SelectSubset<T, MktContentDeleteArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktContent.
+     * @param {MktContentUpdateArgs} args - Arguments to update one MktContent.
+     * @example
+     * // Update one MktContent
+     * const mktContent = await prisma.mktContent.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktContentUpdateArgs>(args: SelectSubset<T, MktContentUpdateArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktContents.
+     * @param {MktContentDeleteManyArgs} args - Arguments to filter MktContents to delete.
+     * @example
+     * // Delete a few MktContents
+     * const { count } = await prisma.mktContent.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktContentDeleteManyArgs>(args?: SelectSubset<T, MktContentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktContents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktContents
+     * const mktContent = await prisma.mktContent.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktContentUpdateManyArgs>(args: SelectSubset<T, MktContentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktContents and returns the data updated in the database.
+     * @param {MktContentUpdateManyAndReturnArgs} args - Arguments to update many MktContents.
+     * @example
+     * // Update many MktContents
+     * const mktContent = await prisma.mktContent.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktContents and only return the `id`
+     * const mktContentWithIdOnly = await prisma.mktContent.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktContentUpdateManyAndReturnArgs>(args: SelectSubset<T, MktContentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktContent.
+     * @param {MktContentUpsertArgs} args - Arguments to update or create a MktContent.
+     * @example
+     * // Update or create a MktContent
+     * const mktContent = await prisma.mktContent.upsert({
+     *   create: {
+     *     // ... data to create a MktContent
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktContent we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktContentUpsertArgs>(args: SelectSubset<T, MktContentUpsertArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktContents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentCountArgs} args - Arguments to filter MktContents to count.
+     * @example
+     * // Count the number of MktContents
+     * const count = await prisma.mktContent.count({
+     *   where: {
+     *     // ... the filter for the MktContents we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktContentCountArgs>(
+      args?: Subset<T, MktContentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktContentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktContent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktContentAggregateArgs>(args: Subset<T, MktContentAggregateArgs>): Prisma.PrismaPromise<GetMktContentAggregateType<T>>
+
+    /**
+     * Group by MktContent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktContentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktContentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktContentGroupByArgs['orderBy'] }
+        : { orderBy?: MktContentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktContentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktContentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktContent model
+   */
+  readonly fields: MktContentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktContent.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktContentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    campaign<T extends MktContent$campaignArgs<ExtArgs> = {}>(args?: Subset<T, MktContent$campaignArgs<ExtArgs>>): Prisma__MktCampaignClient<$Result.GetResult<Prisma.$MktCampaignPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    publications<T extends MktContent$publicationsArgs<ExtArgs> = {}>(args?: Subset<T, MktContent$publicationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktContent model
+   */
+  interface MktContentFieldRefs {
+    readonly id: FieldRef<"MktContent", 'String'>
+    readonly campaignId: FieldRef<"MktContent", 'String'>
+    readonly title: FieldRef<"MktContent", 'String'>
+    readonly body: FieldRef<"MktContent", 'String'>
+    readonly hashtags: FieldRef<"MktContent", 'String'>
+    readonly linkUrl: FieldRef<"MktContent", 'String'>
+    readonly assetIds: FieldRef<"MktContent", 'String'>
+    readonly productIds: FieldRef<"MktContent", 'String'>
+    readonly revision: FieldRef<"MktContent", 'Int'>
+    readonly approvedRevision: FieldRef<"MktContent", 'Int'>
+    readonly approvedAt: FieldRef<"MktContent", 'DateTime'>
+    readonly approvedBy: FieldRef<"MktContent", 'String'>
+    readonly rejectReason: FieldRef<"MktContent", 'String'>
+    readonly status: FieldRef<"MktContent", 'String'>
+    readonly source: FieldRef<"MktContent", 'String'>
+    readonly createdBy: FieldRef<"MktContent", 'String'>
+    readonly createdAt: FieldRef<"MktContent", 'DateTime'>
+    readonly updatedAt: FieldRef<"MktContent", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktContent findUnique
+   */
+  export type MktContentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter, which MktContent to fetch.
+     */
+    where: MktContentWhereUniqueInput
+  }
+
+  /**
+   * MktContent findUniqueOrThrow
+   */
+  export type MktContentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter, which MktContent to fetch.
+     */
+    where: MktContentWhereUniqueInput
+  }
+
+  /**
+   * MktContent findFirst
+   */
+  export type MktContentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter, which MktContent to fetch.
+     */
+    where?: MktContentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktContents to fetch.
+     */
+    orderBy?: MktContentOrderByWithRelationInput | MktContentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktContents.
+     */
+    cursor?: MktContentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktContents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktContents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktContents.
+     */
+    distinct?: MktContentScalarFieldEnum | MktContentScalarFieldEnum[]
+  }
+
+  /**
+   * MktContent findFirstOrThrow
+   */
+  export type MktContentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter, which MktContent to fetch.
+     */
+    where?: MktContentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktContents to fetch.
+     */
+    orderBy?: MktContentOrderByWithRelationInput | MktContentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktContents.
+     */
+    cursor?: MktContentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktContents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktContents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktContents.
+     */
+    distinct?: MktContentScalarFieldEnum | MktContentScalarFieldEnum[]
+  }
+
+  /**
+   * MktContent findMany
+   */
+  export type MktContentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter, which MktContents to fetch.
+     */
+    where?: MktContentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktContents to fetch.
+     */
+    orderBy?: MktContentOrderByWithRelationInput | MktContentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktContents.
+     */
+    cursor?: MktContentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktContents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktContents.
+     */
+    skip?: number
+    distinct?: MktContentScalarFieldEnum | MktContentScalarFieldEnum[]
+  }
+
+  /**
+   * MktContent create
+   */
+  export type MktContentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MktContent.
+     */
+    data: XOR<MktContentCreateInput, MktContentUncheckedCreateInput>
+  }
+
+  /**
+   * MktContent createMany
+   */
+  export type MktContentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktContents.
+     */
+    data: MktContentCreateManyInput | MktContentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktContent createManyAndReturn
+   */
+  export type MktContentCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktContents.
+     */
+    data: MktContentCreateManyInput | MktContentCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktContent update
+   */
+  export type MktContentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MktContent.
+     */
+    data: XOR<MktContentUpdateInput, MktContentUncheckedUpdateInput>
+    /**
+     * Choose, which MktContent to update.
+     */
+    where: MktContentWhereUniqueInput
+  }
+
+  /**
+   * MktContent updateMany
+   */
+  export type MktContentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktContents.
+     */
+    data: XOR<MktContentUpdateManyMutationInput, MktContentUncheckedUpdateManyInput>
+    /**
+     * Filter which MktContents to update
+     */
+    where?: MktContentWhereInput
+    /**
+     * Limit how many MktContents to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktContent updateManyAndReturn
+   */
+  export type MktContentUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * The data used to update MktContents.
+     */
+    data: XOR<MktContentUpdateManyMutationInput, MktContentUncheckedUpdateManyInput>
+    /**
+     * Filter which MktContents to update
+     */
+    where?: MktContentWhereInput
+    /**
+     * Limit how many MktContents to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktContent upsert
+   */
+  export type MktContentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MktContent to update in case it exists.
+     */
+    where: MktContentWhereUniqueInput
+    /**
+     * In case the MktContent found by the `where` argument doesn't exist, create a new MktContent with this data.
+     */
+    create: XOR<MktContentCreateInput, MktContentUncheckedCreateInput>
+    /**
+     * In case the MktContent was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktContentUpdateInput, MktContentUncheckedUpdateInput>
+  }
+
+  /**
+   * MktContent delete
+   */
+  export type MktContentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+    /**
+     * Filter which MktContent to delete.
+     */
+    where: MktContentWhereUniqueInput
+  }
+
+  /**
+   * MktContent deleteMany
+   */
+  export type MktContentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktContents to delete
+     */
+    where?: MktContentWhereInput
+    /**
+     * Limit how many MktContents to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktContent.campaign
+   */
+  export type MktContent$campaignArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktCampaign
+     */
+    select?: MktCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktCampaign
+     */
+    omit?: MktCampaignOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktCampaignInclude<ExtArgs> | null
+    where?: MktCampaignWhereInput
+  }
+
+  /**
+   * MktContent.publications
+   */
+  export type MktContent$publicationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    where?: MktPublicationWhereInput
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    cursor?: MktPublicationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MktPublicationScalarFieldEnum | MktPublicationScalarFieldEnum[]
+  }
+
+  /**
+   * MktContent without action
+   */
+  export type MktContentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktContent
+     */
+    select?: MktContentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktContent
+     */
+    omit?: MktContentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktContentInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MktPublication
+   */
+
+  export type AggregateMktPublication = {
+    _count: MktPublicationCountAggregateOutputType | null
+    _avg: MktPublicationAvgAggregateOutputType | null
+    _sum: MktPublicationSumAggregateOutputType | null
+    _min: MktPublicationMinAggregateOutputType | null
+    _max: MktPublicationMaxAggregateOutputType | null
+  }
+
+  export type MktPublicationAvgAggregateOutputType = {
+    attempts: number | null
+  }
+
+  export type MktPublicationSumAggregateOutputType = {
+    attempts: number | null
+  }
+
+  export type MktPublicationMinAggregateOutputType = {
+    id: string | null
+    contentId: string | null
+    accountId: string | null
+    idempotencyKey: string | null
+    scheduledAt: Date | null
+    status: string | null
+    leaseUntil: Date | null
+    workerId: string | null
+    remoteRef: string | null
+    remotePostId: string | null
+    attempts: number | null
+    errorMessage: string | null
+    errorCode: string | null
+    sentAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktPublicationMaxAggregateOutputType = {
+    id: string | null
+    contentId: string | null
+    accountId: string | null
+    idempotencyKey: string | null
+    scheduledAt: Date | null
+    status: string | null
+    leaseUntil: Date | null
+    workerId: string | null
+    remoteRef: string | null
+    remotePostId: string | null
+    attempts: number | null
+    errorMessage: string | null
+    errorCode: string | null
+    sentAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktPublicationCountAggregateOutputType = {
+    id: number
+    contentId: number
+    accountId: number
+    idempotencyKey: number
+    scheduledAt: number
+    status: number
+    leaseUntil: number
+    workerId: number
+    remoteRef: number
+    remotePostId: number
+    attempts: number
+    errorMessage: number
+    errorCode: number
+    sentAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MktPublicationAvgAggregateInputType = {
+    attempts?: true
+  }
+
+  export type MktPublicationSumAggregateInputType = {
+    attempts?: true
+  }
+
+  export type MktPublicationMinAggregateInputType = {
+    id?: true
+    contentId?: true
+    accountId?: true
+    idempotencyKey?: true
+    scheduledAt?: true
+    status?: true
+    leaseUntil?: true
+    workerId?: true
+    remoteRef?: true
+    remotePostId?: true
+    attempts?: true
+    errorMessage?: true
+    errorCode?: true
+    sentAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktPublicationMaxAggregateInputType = {
+    id?: true
+    contentId?: true
+    accountId?: true
+    idempotencyKey?: true
+    scheduledAt?: true
+    status?: true
+    leaseUntil?: true
+    workerId?: true
+    remoteRef?: true
+    remotePostId?: true
+    attempts?: true
+    errorMessage?: true
+    errorCode?: true
+    sentAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktPublicationCountAggregateInputType = {
+    id?: true
+    contentId?: true
+    accountId?: true
+    idempotencyKey?: true
+    scheduledAt?: true
+    status?: true
+    leaseUntil?: true
+    workerId?: true
+    remoteRef?: true
+    remotePostId?: true
+    attempts?: true
+    errorMessage?: true
+    errorCode?: true
+    sentAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MktPublicationAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktPublication to aggregate.
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktPublications to fetch.
+     */
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktPublicationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktPublications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktPublications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktPublications
+    **/
+    _count?: true | MktPublicationCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MktPublicationAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MktPublicationSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktPublicationMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktPublicationMaxAggregateInputType
+  }
+
+  export type GetMktPublicationAggregateType<T extends MktPublicationAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktPublication]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktPublication[P]>
+      : GetScalarType<T[P], AggregateMktPublication[P]>
+  }
+
+
+
+
+  export type MktPublicationGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktPublicationWhereInput
+    orderBy?: MktPublicationOrderByWithAggregationInput | MktPublicationOrderByWithAggregationInput[]
+    by: MktPublicationScalarFieldEnum[] | MktPublicationScalarFieldEnum
+    having?: MktPublicationScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktPublicationCountAggregateInputType | true
+    _avg?: MktPublicationAvgAggregateInputType
+    _sum?: MktPublicationSumAggregateInputType
+    _min?: MktPublicationMinAggregateInputType
+    _max?: MktPublicationMaxAggregateInputType
+  }
+
+  export type MktPublicationGroupByOutputType = {
+    id: string
+    contentId: string
+    accountId: string
+    idempotencyKey: string
+    scheduledAt: Date
+    status: string
+    leaseUntil: Date | null
+    workerId: string | null
+    remoteRef: string | null
+    remotePostId: string | null
+    attempts: number
+    errorMessage: string | null
+    errorCode: string | null
+    sentAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MktPublicationCountAggregateOutputType | null
+    _avg: MktPublicationAvgAggregateOutputType | null
+    _sum: MktPublicationSumAggregateOutputType | null
+    _min: MktPublicationMinAggregateOutputType | null
+    _max: MktPublicationMaxAggregateOutputType | null
+  }
+
+  type GetMktPublicationGroupByPayload<T extends MktPublicationGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktPublicationGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktPublicationGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktPublicationGroupByOutputType[P]>
+            : GetScalarType<T[P], MktPublicationGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktPublicationSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    contentId?: boolean
+    accountId?: boolean
+    idempotencyKey?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    leaseUntil?: boolean
+    workerId?: boolean
+    remoteRef?: boolean
+    remotePostId?: boolean
+    attempts?: boolean
+    errorMessage?: boolean
+    errorCode?: boolean
+    sentAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktPublication"]>
+
+  export type MktPublicationSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    contentId?: boolean
+    accountId?: boolean
+    idempotencyKey?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    leaseUntil?: boolean
+    workerId?: boolean
+    remoteRef?: boolean
+    remotePostId?: boolean
+    attempts?: boolean
+    errorMessage?: boolean
+    errorCode?: boolean
+    sentAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktPublication"]>
+
+  export type MktPublicationSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    contentId?: boolean
+    accountId?: boolean
+    idempotencyKey?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    leaseUntil?: boolean
+    workerId?: boolean
+    remoteRef?: boolean
+    remotePostId?: boolean
+    attempts?: boolean
+    errorMessage?: boolean
+    errorCode?: boolean
+    sentAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktPublication"]>
+
+  export type MktPublicationSelectScalar = {
+    id?: boolean
+    contentId?: boolean
+    accountId?: boolean
+    idempotencyKey?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    leaseUntil?: boolean
+    workerId?: boolean
+    remoteRef?: boolean
+    remotePostId?: boolean
+    attempts?: boolean
+    errorMessage?: boolean
+    errorCode?: boolean
+    sentAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MktPublicationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contentId" | "accountId" | "idempotencyKey" | "scheduledAt" | "status" | "leaseUntil" | "workerId" | "remoteRef" | "remotePostId" | "attempts" | "errorMessage" | "errorCode" | "sentAt" | "createdAt" | "updatedAt", ExtArgs["result"]["mktPublication"]>
+  export type MktPublicationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+  export type MktPublicationIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+  export type MktPublicationIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    content?: boolean | MktContentDefaultArgs<ExtArgs>
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+
+  export type $MktPublicationPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktPublication"
+    objects: {
+      content: Prisma.$MktContentPayload<ExtArgs>
+      account: Prisma.$MktAccountPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      contentId: string
+      accountId: string
+      idempotencyKey: string
+      scheduledAt: Date
+      status: string
+      leaseUntil: Date | null
+      workerId: string | null
+      remoteRef: string | null
+      remotePostId: string | null
+      attempts: number
+      errorMessage: string | null
+      errorCode: string | null
+      sentAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["mktPublication"]>
+    composites: {}
+  }
+
+  type MktPublicationGetPayload<S extends boolean | null | undefined | MktPublicationDefaultArgs> = $Result.GetResult<Prisma.$MktPublicationPayload, S>
+
+  type MktPublicationCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktPublicationFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktPublicationCountAggregateInputType | true
+    }
+
+  export interface MktPublicationDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktPublication'], meta: { name: 'MktPublication' } }
+    /**
+     * Find zero or one MktPublication that matches the filter.
+     * @param {MktPublicationFindUniqueArgs} args - Arguments to find a MktPublication
+     * @example
+     * // Get one MktPublication
+     * const mktPublication = await prisma.mktPublication.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktPublicationFindUniqueArgs>(args: SelectSubset<T, MktPublicationFindUniqueArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktPublication that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktPublicationFindUniqueOrThrowArgs} args - Arguments to find a MktPublication
+     * @example
+     * // Get one MktPublication
+     * const mktPublication = await prisma.mktPublication.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktPublicationFindUniqueOrThrowArgs>(args: SelectSubset<T, MktPublicationFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktPublication that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationFindFirstArgs} args - Arguments to find a MktPublication
+     * @example
+     * // Get one MktPublication
+     * const mktPublication = await prisma.mktPublication.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktPublicationFindFirstArgs>(args?: SelectSubset<T, MktPublicationFindFirstArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktPublication that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationFindFirstOrThrowArgs} args - Arguments to find a MktPublication
+     * @example
+     * // Get one MktPublication
+     * const mktPublication = await prisma.mktPublication.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktPublicationFindFirstOrThrowArgs>(args?: SelectSubset<T, MktPublicationFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktPublications that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktPublications
+     * const mktPublications = await prisma.mktPublication.findMany()
+     * 
+     * // Get first 10 MktPublications
+     * const mktPublications = await prisma.mktPublication.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktPublicationWithIdOnly = await prisma.mktPublication.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktPublicationFindManyArgs>(args?: SelectSubset<T, MktPublicationFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktPublication.
+     * @param {MktPublicationCreateArgs} args - Arguments to create a MktPublication.
+     * @example
+     * // Create one MktPublication
+     * const MktPublication = await prisma.mktPublication.create({
+     *   data: {
+     *     // ... data to create a MktPublication
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktPublicationCreateArgs>(args: SelectSubset<T, MktPublicationCreateArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktPublications.
+     * @param {MktPublicationCreateManyArgs} args - Arguments to create many MktPublications.
+     * @example
+     * // Create many MktPublications
+     * const mktPublication = await prisma.mktPublication.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktPublicationCreateManyArgs>(args?: SelectSubset<T, MktPublicationCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktPublications and returns the data saved in the database.
+     * @param {MktPublicationCreateManyAndReturnArgs} args - Arguments to create many MktPublications.
+     * @example
+     * // Create many MktPublications
+     * const mktPublication = await prisma.mktPublication.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktPublications and only return the `id`
+     * const mktPublicationWithIdOnly = await prisma.mktPublication.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktPublicationCreateManyAndReturnArgs>(args?: SelectSubset<T, MktPublicationCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktPublication.
+     * @param {MktPublicationDeleteArgs} args - Arguments to delete one MktPublication.
+     * @example
+     * // Delete one MktPublication
+     * const MktPublication = await prisma.mktPublication.delete({
+     *   where: {
+     *     // ... filter to delete one MktPublication
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktPublicationDeleteArgs>(args: SelectSubset<T, MktPublicationDeleteArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktPublication.
+     * @param {MktPublicationUpdateArgs} args - Arguments to update one MktPublication.
+     * @example
+     * // Update one MktPublication
+     * const mktPublication = await prisma.mktPublication.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktPublicationUpdateArgs>(args: SelectSubset<T, MktPublicationUpdateArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktPublications.
+     * @param {MktPublicationDeleteManyArgs} args - Arguments to filter MktPublications to delete.
+     * @example
+     * // Delete a few MktPublications
+     * const { count } = await prisma.mktPublication.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktPublicationDeleteManyArgs>(args?: SelectSubset<T, MktPublicationDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktPublications.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktPublications
+     * const mktPublication = await prisma.mktPublication.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktPublicationUpdateManyArgs>(args: SelectSubset<T, MktPublicationUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktPublications and returns the data updated in the database.
+     * @param {MktPublicationUpdateManyAndReturnArgs} args - Arguments to update many MktPublications.
+     * @example
+     * // Update many MktPublications
+     * const mktPublication = await prisma.mktPublication.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktPublications and only return the `id`
+     * const mktPublicationWithIdOnly = await prisma.mktPublication.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktPublicationUpdateManyAndReturnArgs>(args: SelectSubset<T, MktPublicationUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktPublication.
+     * @param {MktPublicationUpsertArgs} args - Arguments to update or create a MktPublication.
+     * @example
+     * // Update or create a MktPublication
+     * const mktPublication = await prisma.mktPublication.upsert({
+     *   create: {
+     *     // ... data to create a MktPublication
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktPublication we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktPublicationUpsertArgs>(args: SelectSubset<T, MktPublicationUpsertArgs<ExtArgs>>): Prisma__MktPublicationClient<$Result.GetResult<Prisma.$MktPublicationPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktPublications.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationCountArgs} args - Arguments to filter MktPublications to count.
+     * @example
+     * // Count the number of MktPublications
+     * const count = await prisma.mktPublication.count({
+     *   where: {
+     *     // ... the filter for the MktPublications we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktPublicationCountArgs>(
+      args?: Subset<T, MktPublicationCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktPublicationCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktPublication.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktPublicationAggregateArgs>(args: Subset<T, MktPublicationAggregateArgs>): Prisma.PrismaPromise<GetMktPublicationAggregateType<T>>
+
+    /**
+     * Group by MktPublication.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktPublicationGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktPublicationGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktPublicationGroupByArgs['orderBy'] }
+        : { orderBy?: MktPublicationGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktPublicationGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktPublicationGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktPublication model
+   */
+  readonly fields: MktPublicationFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktPublication.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktPublicationClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    content<T extends MktContentDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MktContentDefaultArgs<ExtArgs>>): Prisma__MktContentClient<$Result.GetResult<Prisma.$MktContentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    account<T extends MktAccountDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MktAccountDefaultArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktPublication model
+   */
+  interface MktPublicationFieldRefs {
+    readonly id: FieldRef<"MktPublication", 'String'>
+    readonly contentId: FieldRef<"MktPublication", 'String'>
+    readonly accountId: FieldRef<"MktPublication", 'String'>
+    readonly idempotencyKey: FieldRef<"MktPublication", 'String'>
+    readonly scheduledAt: FieldRef<"MktPublication", 'DateTime'>
+    readonly status: FieldRef<"MktPublication", 'String'>
+    readonly leaseUntil: FieldRef<"MktPublication", 'DateTime'>
+    readonly workerId: FieldRef<"MktPublication", 'String'>
+    readonly remoteRef: FieldRef<"MktPublication", 'String'>
+    readonly remotePostId: FieldRef<"MktPublication", 'String'>
+    readonly attempts: FieldRef<"MktPublication", 'Int'>
+    readonly errorMessage: FieldRef<"MktPublication", 'String'>
+    readonly errorCode: FieldRef<"MktPublication", 'String'>
+    readonly sentAt: FieldRef<"MktPublication", 'DateTime'>
+    readonly createdAt: FieldRef<"MktPublication", 'DateTime'>
+    readonly updatedAt: FieldRef<"MktPublication", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktPublication findUnique
+   */
+  export type MktPublicationFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter, which MktPublication to fetch.
+     */
+    where: MktPublicationWhereUniqueInput
+  }
+
+  /**
+   * MktPublication findUniqueOrThrow
+   */
+  export type MktPublicationFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter, which MktPublication to fetch.
+     */
+    where: MktPublicationWhereUniqueInput
+  }
+
+  /**
+   * MktPublication findFirst
+   */
+  export type MktPublicationFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter, which MktPublication to fetch.
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktPublications to fetch.
+     */
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktPublications.
+     */
+    cursor?: MktPublicationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktPublications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktPublications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktPublications.
+     */
+    distinct?: MktPublicationScalarFieldEnum | MktPublicationScalarFieldEnum[]
+  }
+
+  /**
+   * MktPublication findFirstOrThrow
+   */
+  export type MktPublicationFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter, which MktPublication to fetch.
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktPublications to fetch.
+     */
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktPublications.
+     */
+    cursor?: MktPublicationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktPublications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktPublications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktPublications.
+     */
+    distinct?: MktPublicationScalarFieldEnum | MktPublicationScalarFieldEnum[]
+  }
+
+  /**
+   * MktPublication findMany
+   */
+  export type MktPublicationFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter, which MktPublications to fetch.
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktPublications to fetch.
+     */
+    orderBy?: MktPublicationOrderByWithRelationInput | MktPublicationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktPublications.
+     */
+    cursor?: MktPublicationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktPublications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktPublications.
+     */
+    skip?: number
+    distinct?: MktPublicationScalarFieldEnum | MktPublicationScalarFieldEnum[]
+  }
+
+  /**
+   * MktPublication create
+   */
+  export type MktPublicationCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MktPublication.
+     */
+    data: XOR<MktPublicationCreateInput, MktPublicationUncheckedCreateInput>
+  }
+
+  /**
+   * MktPublication createMany
+   */
+  export type MktPublicationCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktPublications.
+     */
+    data: MktPublicationCreateManyInput | MktPublicationCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktPublication createManyAndReturn
+   */
+  export type MktPublicationCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktPublications.
+     */
+    data: MktPublicationCreateManyInput | MktPublicationCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktPublication update
+   */
+  export type MktPublicationUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MktPublication.
+     */
+    data: XOR<MktPublicationUpdateInput, MktPublicationUncheckedUpdateInput>
+    /**
+     * Choose, which MktPublication to update.
+     */
+    where: MktPublicationWhereUniqueInput
+  }
+
+  /**
+   * MktPublication updateMany
+   */
+  export type MktPublicationUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktPublications.
+     */
+    data: XOR<MktPublicationUpdateManyMutationInput, MktPublicationUncheckedUpdateManyInput>
+    /**
+     * Filter which MktPublications to update
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * Limit how many MktPublications to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktPublication updateManyAndReturn
+   */
+  export type MktPublicationUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * The data used to update MktPublications.
+     */
+    data: XOR<MktPublicationUpdateManyMutationInput, MktPublicationUncheckedUpdateManyInput>
+    /**
+     * Filter which MktPublications to update
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * Limit how many MktPublications to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktPublication upsert
+   */
+  export type MktPublicationUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MktPublication to update in case it exists.
+     */
+    where: MktPublicationWhereUniqueInput
+    /**
+     * In case the MktPublication found by the `where` argument doesn't exist, create a new MktPublication with this data.
+     */
+    create: XOR<MktPublicationCreateInput, MktPublicationUncheckedCreateInput>
+    /**
+     * In case the MktPublication was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktPublicationUpdateInput, MktPublicationUncheckedUpdateInput>
+  }
+
+  /**
+   * MktPublication delete
+   */
+  export type MktPublicationDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+    /**
+     * Filter which MktPublication to delete.
+     */
+    where: MktPublicationWhereUniqueInput
+  }
+
+  /**
+   * MktPublication deleteMany
+   */
+  export type MktPublicationDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktPublications to delete
+     */
+    where?: MktPublicationWhereInput
+    /**
+     * Limit how many MktPublications to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktPublication without action
+   */
+  export type MktPublicationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktPublication
+     */
+    select?: MktPublicationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktPublication
+     */
+    omit?: MktPublicationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktPublicationInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MktAsset
+   */
+
+  export type AggregateMktAsset = {
+    _count: MktAssetCountAggregateOutputType | null
+    _avg: MktAssetAvgAggregateOutputType | null
+    _sum: MktAssetSumAggregateOutputType | null
+    _min: MktAssetMinAggregateOutputType | null
+    _max: MktAssetMaxAggregateOutputType | null
+  }
+
+  export type MktAssetAvgAggregateOutputType = {
+    bytes: number | null
+    width: number | null
+    height: number | null
+    durationS: number | null
+  }
+
+  export type MktAssetSumAggregateOutputType = {
+    bytes: number | null
+    width: number | null
+    height: number | null
+    durationS: number | null
+  }
+
+  export type MktAssetMinAggregateOutputType = {
+    id: string | null
+    localFile: string | null
+    mime: string | null
+    bytes: number | null
+    width: number | null
+    height: number | null
+    durationS: number | null
+    createdBy: string | null
+    createdAt: Date | null
+  }
+
+  export type MktAssetMaxAggregateOutputType = {
+    id: string | null
+    localFile: string | null
+    mime: string | null
+    bytes: number | null
+    width: number | null
+    height: number | null
+    durationS: number | null
+    createdBy: string | null
+    createdAt: Date | null
+  }
+
+  export type MktAssetCountAggregateOutputType = {
+    id: number
+    localFile: number
+    mime: number
+    bytes: number
+    width: number
+    height: number
+    durationS: number
+    createdBy: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type MktAssetAvgAggregateInputType = {
+    bytes?: true
+    width?: true
+    height?: true
+    durationS?: true
+  }
+
+  export type MktAssetSumAggregateInputType = {
+    bytes?: true
+    width?: true
+    height?: true
+    durationS?: true
+  }
+
+  export type MktAssetMinAggregateInputType = {
+    id?: true
+    localFile?: true
+    mime?: true
+    bytes?: true
+    width?: true
+    height?: true
+    durationS?: true
+    createdBy?: true
+    createdAt?: true
+  }
+
+  export type MktAssetMaxAggregateInputType = {
+    id?: true
+    localFile?: true
+    mime?: true
+    bytes?: true
+    width?: true
+    height?: true
+    durationS?: true
+    createdBy?: true
+    createdAt?: true
+  }
+
+  export type MktAssetCountAggregateInputType = {
+    id?: true
+    localFile?: true
+    mime?: true
+    bytes?: true
+    width?: true
+    height?: true
+    durationS?: true
+    createdBy?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type MktAssetAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktAsset to aggregate.
+     */
+    where?: MktAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAssets to fetch.
+     */
+    orderBy?: MktAssetOrderByWithRelationInput | MktAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktAssets
+    **/
+    _count?: true | MktAssetCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MktAssetAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MktAssetSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktAssetMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktAssetMaxAggregateInputType
+  }
+
+  export type GetMktAssetAggregateType<T extends MktAssetAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktAsset]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktAsset[P]>
+      : GetScalarType<T[P], AggregateMktAsset[P]>
+  }
+
+
+
+
+  export type MktAssetGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktAssetWhereInput
+    orderBy?: MktAssetOrderByWithAggregationInput | MktAssetOrderByWithAggregationInput[]
+    by: MktAssetScalarFieldEnum[] | MktAssetScalarFieldEnum
+    having?: MktAssetScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktAssetCountAggregateInputType | true
+    _avg?: MktAssetAvgAggregateInputType
+    _sum?: MktAssetSumAggregateInputType
+    _min?: MktAssetMinAggregateInputType
+    _max?: MktAssetMaxAggregateInputType
+  }
+
+  export type MktAssetGroupByOutputType = {
+    id: string
+    localFile: string
+    mime: string
+    bytes: number
+    width: number | null
+    height: number | null
+    durationS: number | null
+    createdBy: string | null
+    createdAt: Date
+    _count: MktAssetCountAggregateOutputType | null
+    _avg: MktAssetAvgAggregateOutputType | null
+    _sum: MktAssetSumAggregateOutputType | null
+    _min: MktAssetMinAggregateOutputType | null
+    _max: MktAssetMaxAggregateOutputType | null
+  }
+
+  type GetMktAssetGroupByPayload<T extends MktAssetGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktAssetGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktAssetGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktAssetGroupByOutputType[P]>
+            : GetScalarType<T[P], MktAssetGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktAssetSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    localFile?: boolean
+    mime?: boolean
+    bytes?: boolean
+    width?: boolean
+    height?: boolean
+    durationS?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["mktAsset"]>
+
+  export type MktAssetSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    localFile?: boolean
+    mime?: boolean
+    bytes?: boolean
+    width?: boolean
+    height?: boolean
+    durationS?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["mktAsset"]>
+
+  export type MktAssetSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    localFile?: boolean
+    mime?: boolean
+    bytes?: boolean
+    width?: boolean
+    height?: boolean
+    durationS?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["mktAsset"]>
+
+  export type MktAssetSelectScalar = {
+    id?: boolean
+    localFile?: boolean
+    mime?: boolean
+    bytes?: boolean
+    width?: boolean
+    height?: boolean
+    durationS?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+  }
+
+  export type MktAssetOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "localFile" | "mime" | "bytes" | "width" | "height" | "durationS" | "createdBy" | "createdAt", ExtArgs["result"]["mktAsset"]>
+
+  export type $MktAssetPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktAsset"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      localFile: string
+      mime: string
+      bytes: number
+      width: number | null
+      height: number | null
+      durationS: number | null
+      createdBy: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["mktAsset"]>
+    composites: {}
+  }
+
+  type MktAssetGetPayload<S extends boolean | null | undefined | MktAssetDefaultArgs> = $Result.GetResult<Prisma.$MktAssetPayload, S>
+
+  type MktAssetCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktAssetFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktAssetCountAggregateInputType | true
+    }
+
+  export interface MktAssetDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktAsset'], meta: { name: 'MktAsset' } }
+    /**
+     * Find zero or one MktAsset that matches the filter.
+     * @param {MktAssetFindUniqueArgs} args - Arguments to find a MktAsset
+     * @example
+     * // Get one MktAsset
+     * const mktAsset = await prisma.mktAsset.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktAssetFindUniqueArgs>(args: SelectSubset<T, MktAssetFindUniqueArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktAsset that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktAssetFindUniqueOrThrowArgs} args - Arguments to find a MktAsset
+     * @example
+     * // Get one MktAsset
+     * const mktAsset = await prisma.mktAsset.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktAssetFindUniqueOrThrowArgs>(args: SelectSubset<T, MktAssetFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktAsset that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetFindFirstArgs} args - Arguments to find a MktAsset
+     * @example
+     * // Get one MktAsset
+     * const mktAsset = await prisma.mktAsset.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktAssetFindFirstArgs>(args?: SelectSubset<T, MktAssetFindFirstArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktAsset that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetFindFirstOrThrowArgs} args - Arguments to find a MktAsset
+     * @example
+     * // Get one MktAsset
+     * const mktAsset = await prisma.mktAsset.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktAssetFindFirstOrThrowArgs>(args?: SelectSubset<T, MktAssetFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktAssets that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktAssets
+     * const mktAssets = await prisma.mktAsset.findMany()
+     * 
+     * // Get first 10 MktAssets
+     * const mktAssets = await prisma.mktAsset.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktAssetWithIdOnly = await prisma.mktAsset.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktAssetFindManyArgs>(args?: SelectSubset<T, MktAssetFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktAsset.
+     * @param {MktAssetCreateArgs} args - Arguments to create a MktAsset.
+     * @example
+     * // Create one MktAsset
+     * const MktAsset = await prisma.mktAsset.create({
+     *   data: {
+     *     // ... data to create a MktAsset
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktAssetCreateArgs>(args: SelectSubset<T, MktAssetCreateArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktAssets.
+     * @param {MktAssetCreateManyArgs} args - Arguments to create many MktAssets.
+     * @example
+     * // Create many MktAssets
+     * const mktAsset = await prisma.mktAsset.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktAssetCreateManyArgs>(args?: SelectSubset<T, MktAssetCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktAssets and returns the data saved in the database.
+     * @param {MktAssetCreateManyAndReturnArgs} args - Arguments to create many MktAssets.
+     * @example
+     * // Create many MktAssets
+     * const mktAsset = await prisma.mktAsset.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktAssets and only return the `id`
+     * const mktAssetWithIdOnly = await prisma.mktAsset.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktAssetCreateManyAndReturnArgs>(args?: SelectSubset<T, MktAssetCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktAsset.
+     * @param {MktAssetDeleteArgs} args - Arguments to delete one MktAsset.
+     * @example
+     * // Delete one MktAsset
+     * const MktAsset = await prisma.mktAsset.delete({
+     *   where: {
+     *     // ... filter to delete one MktAsset
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktAssetDeleteArgs>(args: SelectSubset<T, MktAssetDeleteArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktAsset.
+     * @param {MktAssetUpdateArgs} args - Arguments to update one MktAsset.
+     * @example
+     * // Update one MktAsset
+     * const mktAsset = await prisma.mktAsset.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktAssetUpdateArgs>(args: SelectSubset<T, MktAssetUpdateArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktAssets.
+     * @param {MktAssetDeleteManyArgs} args - Arguments to filter MktAssets to delete.
+     * @example
+     * // Delete a few MktAssets
+     * const { count } = await prisma.mktAsset.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktAssetDeleteManyArgs>(args?: SelectSubset<T, MktAssetDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktAssets.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktAssets
+     * const mktAsset = await prisma.mktAsset.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktAssetUpdateManyArgs>(args: SelectSubset<T, MktAssetUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktAssets and returns the data updated in the database.
+     * @param {MktAssetUpdateManyAndReturnArgs} args - Arguments to update many MktAssets.
+     * @example
+     * // Update many MktAssets
+     * const mktAsset = await prisma.mktAsset.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktAssets and only return the `id`
+     * const mktAssetWithIdOnly = await prisma.mktAsset.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktAssetUpdateManyAndReturnArgs>(args: SelectSubset<T, MktAssetUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktAsset.
+     * @param {MktAssetUpsertArgs} args - Arguments to update or create a MktAsset.
+     * @example
+     * // Update or create a MktAsset
+     * const mktAsset = await prisma.mktAsset.upsert({
+     *   create: {
+     *     // ... data to create a MktAsset
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktAsset we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktAssetUpsertArgs>(args: SelectSubset<T, MktAssetUpsertArgs<ExtArgs>>): Prisma__MktAssetClient<$Result.GetResult<Prisma.$MktAssetPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktAssets.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetCountArgs} args - Arguments to filter MktAssets to count.
+     * @example
+     * // Count the number of MktAssets
+     * const count = await prisma.mktAsset.count({
+     *   where: {
+     *     // ... the filter for the MktAssets we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktAssetCountArgs>(
+      args?: Subset<T, MktAssetCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktAssetCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktAsset.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktAssetAggregateArgs>(args: Subset<T, MktAssetAggregateArgs>): Prisma.PrismaPromise<GetMktAssetAggregateType<T>>
+
+    /**
+     * Group by MktAsset.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktAssetGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktAssetGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktAssetGroupByArgs['orderBy'] }
+        : { orderBy?: MktAssetGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktAssetGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktAssetGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktAsset model
+   */
+  readonly fields: MktAssetFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktAsset.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktAssetClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktAsset model
+   */
+  interface MktAssetFieldRefs {
+    readonly id: FieldRef<"MktAsset", 'String'>
+    readonly localFile: FieldRef<"MktAsset", 'String'>
+    readonly mime: FieldRef<"MktAsset", 'String'>
+    readonly bytes: FieldRef<"MktAsset", 'Int'>
+    readonly width: FieldRef<"MktAsset", 'Int'>
+    readonly height: FieldRef<"MktAsset", 'Int'>
+    readonly durationS: FieldRef<"MktAsset", 'Float'>
+    readonly createdBy: FieldRef<"MktAsset", 'String'>
+    readonly createdAt: FieldRef<"MktAsset", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktAsset findUnique
+   */
+  export type MktAssetFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter, which MktAsset to fetch.
+     */
+    where: MktAssetWhereUniqueInput
+  }
+
+  /**
+   * MktAsset findUniqueOrThrow
+   */
+  export type MktAssetFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter, which MktAsset to fetch.
+     */
+    where: MktAssetWhereUniqueInput
+  }
+
+  /**
+   * MktAsset findFirst
+   */
+  export type MktAssetFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter, which MktAsset to fetch.
+     */
+    where?: MktAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAssets to fetch.
+     */
+    orderBy?: MktAssetOrderByWithRelationInput | MktAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktAssets.
+     */
+    cursor?: MktAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktAssets.
+     */
+    distinct?: MktAssetScalarFieldEnum | MktAssetScalarFieldEnum[]
+  }
+
+  /**
+   * MktAsset findFirstOrThrow
+   */
+  export type MktAssetFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter, which MktAsset to fetch.
+     */
+    where?: MktAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAssets to fetch.
+     */
+    orderBy?: MktAssetOrderByWithRelationInput | MktAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktAssets.
+     */
+    cursor?: MktAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktAssets.
+     */
+    distinct?: MktAssetScalarFieldEnum | MktAssetScalarFieldEnum[]
+  }
+
+  /**
+   * MktAsset findMany
+   */
+  export type MktAssetFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter, which MktAssets to fetch.
+     */
+    where?: MktAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktAssets to fetch.
+     */
+    orderBy?: MktAssetOrderByWithRelationInput | MktAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktAssets.
+     */
+    cursor?: MktAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktAssets.
+     */
+    skip?: number
+    distinct?: MktAssetScalarFieldEnum | MktAssetScalarFieldEnum[]
+  }
+
+  /**
+   * MktAsset create
+   */
+  export type MktAssetCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MktAsset.
+     */
+    data: XOR<MktAssetCreateInput, MktAssetUncheckedCreateInput>
+  }
+
+  /**
+   * MktAsset createMany
+   */
+  export type MktAssetCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktAssets.
+     */
+    data: MktAssetCreateManyInput | MktAssetCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktAsset createManyAndReturn
+   */
+  export type MktAssetCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktAssets.
+     */
+    data: MktAssetCreateManyInput | MktAssetCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktAsset update
+   */
+  export type MktAssetUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MktAsset.
+     */
+    data: XOR<MktAssetUpdateInput, MktAssetUncheckedUpdateInput>
+    /**
+     * Choose, which MktAsset to update.
+     */
+    where: MktAssetWhereUniqueInput
+  }
+
+  /**
+   * MktAsset updateMany
+   */
+  export type MktAssetUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktAssets.
+     */
+    data: XOR<MktAssetUpdateManyMutationInput, MktAssetUncheckedUpdateManyInput>
+    /**
+     * Filter which MktAssets to update
+     */
+    where?: MktAssetWhereInput
+    /**
+     * Limit how many MktAssets to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAsset updateManyAndReturn
+   */
+  export type MktAssetUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * The data used to update MktAssets.
+     */
+    data: XOR<MktAssetUpdateManyMutationInput, MktAssetUncheckedUpdateManyInput>
+    /**
+     * Filter which MktAssets to update
+     */
+    where?: MktAssetWhereInput
+    /**
+     * Limit how many MktAssets to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAsset upsert
+   */
+  export type MktAssetUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MktAsset to update in case it exists.
+     */
+    where: MktAssetWhereUniqueInput
+    /**
+     * In case the MktAsset found by the `where` argument doesn't exist, create a new MktAsset with this data.
+     */
+    create: XOR<MktAssetCreateInput, MktAssetUncheckedCreateInput>
+    /**
+     * In case the MktAsset was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktAssetUpdateInput, MktAssetUncheckedUpdateInput>
+  }
+
+  /**
+   * MktAsset delete
+   */
+  export type MktAssetDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+    /**
+     * Filter which MktAsset to delete.
+     */
+    where: MktAssetWhereUniqueInput
+  }
+
+  /**
+   * MktAsset deleteMany
+   */
+  export type MktAssetDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktAssets to delete
+     */
+    where?: MktAssetWhereInput
+    /**
+     * Limit how many MktAssets to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktAsset without action
+   */
+  export type MktAssetDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktAsset
+     */
+    select?: MktAssetSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktAsset
+     */
+    omit?: MktAssetOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MktMetric
+   */
+
+  export type AggregateMktMetric = {
+    _count: MktMetricCountAggregateOutputType | null
+    _avg: MktMetricAvgAggregateOutputType | null
+    _sum: MktMetricSumAggregateOutputType | null
+    _min: MktMetricMinAggregateOutputType | null
+    _max: MktMetricMaxAggregateOutputType | null
+  }
+
+  export type MktMetricAvgAggregateOutputType = {
+    views: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    reach: number | null
+    clicks: number | null
+  }
+
+  export type MktMetricSumAggregateOutputType = {
+    views: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    reach: number | null
+    clicks: number | null
+  }
+
+  export type MktMetricMinAggregateOutputType = {
+    id: string | null
+    accountId: string | null
+    publicationId: string | null
+    snapshotAt: Date | null
+    views: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    reach: number | null
+    clicks: number | null
+  }
+
+  export type MktMetricMaxAggregateOutputType = {
+    id: string | null
+    accountId: string | null
+    publicationId: string | null
+    snapshotAt: Date | null
+    views: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    reach: number | null
+    clicks: number | null
+  }
+
+  export type MktMetricCountAggregateOutputType = {
+    id: number
+    accountId: number
+    publicationId: number
+    snapshotAt: number
+    views: number
+    likes: number
+    comments: number
+    shares: number
+    reach: number
+    clicks: number
+    _all: number
+  }
+
+
+  export type MktMetricAvgAggregateInputType = {
+    views?: true
+    likes?: true
+    comments?: true
+    shares?: true
+    reach?: true
+    clicks?: true
+  }
+
+  export type MktMetricSumAggregateInputType = {
+    views?: true
+    likes?: true
+    comments?: true
+    shares?: true
+    reach?: true
+    clicks?: true
+  }
+
+  export type MktMetricMinAggregateInputType = {
+    id?: true
+    accountId?: true
+    publicationId?: true
+    snapshotAt?: true
+    views?: true
+    likes?: true
+    comments?: true
+    shares?: true
+    reach?: true
+    clicks?: true
+  }
+
+  export type MktMetricMaxAggregateInputType = {
+    id?: true
+    accountId?: true
+    publicationId?: true
+    snapshotAt?: true
+    views?: true
+    likes?: true
+    comments?: true
+    shares?: true
+    reach?: true
+    clicks?: true
+  }
+
+  export type MktMetricCountAggregateInputType = {
+    id?: true
+    accountId?: true
+    publicationId?: true
+    snapshotAt?: true
+    views?: true
+    likes?: true
+    comments?: true
+    shares?: true
+    reach?: true
+    clicks?: true
+    _all?: true
+  }
+
+  export type MktMetricAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktMetric to aggregate.
+     */
+    where?: MktMetricWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktMetrics to fetch.
+     */
+    orderBy?: MktMetricOrderByWithRelationInput | MktMetricOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktMetricWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktMetrics from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktMetrics.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktMetrics
+    **/
+    _count?: true | MktMetricCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MktMetricAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MktMetricSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktMetricMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktMetricMaxAggregateInputType
+  }
+
+  export type GetMktMetricAggregateType<T extends MktMetricAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktMetric]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktMetric[P]>
+      : GetScalarType<T[P], AggregateMktMetric[P]>
+  }
+
+
+
+
+  export type MktMetricGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktMetricWhereInput
+    orderBy?: MktMetricOrderByWithAggregationInput | MktMetricOrderByWithAggregationInput[]
+    by: MktMetricScalarFieldEnum[] | MktMetricScalarFieldEnum
+    having?: MktMetricScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktMetricCountAggregateInputType | true
+    _avg?: MktMetricAvgAggregateInputType
+    _sum?: MktMetricSumAggregateInputType
+    _min?: MktMetricMinAggregateInputType
+    _max?: MktMetricMaxAggregateInputType
+  }
+
+  export type MktMetricGroupByOutputType = {
+    id: string
+    accountId: string
+    publicationId: string | null
+    snapshotAt: Date
+    views: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    reach: number | null
+    clicks: number | null
+    _count: MktMetricCountAggregateOutputType | null
+    _avg: MktMetricAvgAggregateOutputType | null
+    _sum: MktMetricSumAggregateOutputType | null
+    _min: MktMetricMinAggregateOutputType | null
+    _max: MktMetricMaxAggregateOutputType | null
+  }
+
+  type GetMktMetricGroupByPayload<T extends MktMetricGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktMetricGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktMetricGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktMetricGroupByOutputType[P]>
+            : GetScalarType<T[P], MktMetricGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktMetricSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    accountId?: boolean
+    publicationId?: boolean
+    snapshotAt?: boolean
+    views?: boolean
+    likes?: boolean
+    comments?: boolean
+    shares?: boolean
+    reach?: boolean
+    clicks?: boolean
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktMetric"]>
+
+  export type MktMetricSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    accountId?: boolean
+    publicationId?: boolean
+    snapshotAt?: boolean
+    views?: boolean
+    likes?: boolean
+    comments?: boolean
+    shares?: boolean
+    reach?: boolean
+    clicks?: boolean
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktMetric"]>
+
+  export type MktMetricSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    accountId?: boolean
+    publicationId?: boolean
+    snapshotAt?: boolean
+    views?: boolean
+    likes?: boolean
+    comments?: boolean
+    shares?: boolean
+    reach?: boolean
+    clicks?: boolean
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["mktMetric"]>
+
+  export type MktMetricSelectScalar = {
+    id?: boolean
+    accountId?: boolean
+    publicationId?: boolean
+    snapshotAt?: boolean
+    views?: boolean
+    likes?: boolean
+    comments?: boolean
+    shares?: boolean
+    reach?: boolean
+    clicks?: boolean
+  }
+
+  export type MktMetricOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "accountId" | "publicationId" | "snapshotAt" | "views" | "likes" | "comments" | "shares" | "reach" | "clicks", ExtArgs["result"]["mktMetric"]>
+  export type MktMetricInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+  export type MktMetricIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+  export type MktMetricIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | MktAccountDefaultArgs<ExtArgs>
+  }
+
+  export type $MktMetricPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktMetric"
+    objects: {
+      account: Prisma.$MktAccountPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      accountId: string
+      publicationId: string | null
+      snapshotAt: Date
+      views: number | null
+      likes: number | null
+      comments: number | null
+      shares: number | null
+      reach: number | null
+      clicks: number | null
+    }, ExtArgs["result"]["mktMetric"]>
+    composites: {}
+  }
+
+  type MktMetricGetPayload<S extends boolean | null | undefined | MktMetricDefaultArgs> = $Result.GetResult<Prisma.$MktMetricPayload, S>
+
+  type MktMetricCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktMetricFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktMetricCountAggregateInputType | true
+    }
+
+  export interface MktMetricDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktMetric'], meta: { name: 'MktMetric' } }
+    /**
+     * Find zero or one MktMetric that matches the filter.
+     * @param {MktMetricFindUniqueArgs} args - Arguments to find a MktMetric
+     * @example
+     * // Get one MktMetric
+     * const mktMetric = await prisma.mktMetric.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktMetricFindUniqueArgs>(args: SelectSubset<T, MktMetricFindUniqueArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktMetric that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktMetricFindUniqueOrThrowArgs} args - Arguments to find a MktMetric
+     * @example
+     * // Get one MktMetric
+     * const mktMetric = await prisma.mktMetric.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktMetricFindUniqueOrThrowArgs>(args: SelectSubset<T, MktMetricFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktMetric that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricFindFirstArgs} args - Arguments to find a MktMetric
+     * @example
+     * // Get one MktMetric
+     * const mktMetric = await prisma.mktMetric.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktMetricFindFirstArgs>(args?: SelectSubset<T, MktMetricFindFirstArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktMetric that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricFindFirstOrThrowArgs} args - Arguments to find a MktMetric
+     * @example
+     * // Get one MktMetric
+     * const mktMetric = await prisma.mktMetric.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktMetricFindFirstOrThrowArgs>(args?: SelectSubset<T, MktMetricFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktMetrics that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktMetrics
+     * const mktMetrics = await prisma.mktMetric.findMany()
+     * 
+     * // Get first 10 MktMetrics
+     * const mktMetrics = await prisma.mktMetric.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktMetricWithIdOnly = await prisma.mktMetric.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktMetricFindManyArgs>(args?: SelectSubset<T, MktMetricFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktMetric.
+     * @param {MktMetricCreateArgs} args - Arguments to create a MktMetric.
+     * @example
+     * // Create one MktMetric
+     * const MktMetric = await prisma.mktMetric.create({
+     *   data: {
+     *     // ... data to create a MktMetric
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktMetricCreateArgs>(args: SelectSubset<T, MktMetricCreateArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktMetrics.
+     * @param {MktMetricCreateManyArgs} args - Arguments to create many MktMetrics.
+     * @example
+     * // Create many MktMetrics
+     * const mktMetric = await prisma.mktMetric.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktMetricCreateManyArgs>(args?: SelectSubset<T, MktMetricCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktMetrics and returns the data saved in the database.
+     * @param {MktMetricCreateManyAndReturnArgs} args - Arguments to create many MktMetrics.
+     * @example
+     * // Create many MktMetrics
+     * const mktMetric = await prisma.mktMetric.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktMetrics and only return the `id`
+     * const mktMetricWithIdOnly = await prisma.mktMetric.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktMetricCreateManyAndReturnArgs>(args?: SelectSubset<T, MktMetricCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktMetric.
+     * @param {MktMetricDeleteArgs} args - Arguments to delete one MktMetric.
+     * @example
+     * // Delete one MktMetric
+     * const MktMetric = await prisma.mktMetric.delete({
+     *   where: {
+     *     // ... filter to delete one MktMetric
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktMetricDeleteArgs>(args: SelectSubset<T, MktMetricDeleteArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktMetric.
+     * @param {MktMetricUpdateArgs} args - Arguments to update one MktMetric.
+     * @example
+     * // Update one MktMetric
+     * const mktMetric = await prisma.mktMetric.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktMetricUpdateArgs>(args: SelectSubset<T, MktMetricUpdateArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktMetrics.
+     * @param {MktMetricDeleteManyArgs} args - Arguments to filter MktMetrics to delete.
+     * @example
+     * // Delete a few MktMetrics
+     * const { count } = await prisma.mktMetric.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktMetricDeleteManyArgs>(args?: SelectSubset<T, MktMetricDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktMetrics.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktMetrics
+     * const mktMetric = await prisma.mktMetric.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktMetricUpdateManyArgs>(args: SelectSubset<T, MktMetricUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktMetrics and returns the data updated in the database.
+     * @param {MktMetricUpdateManyAndReturnArgs} args - Arguments to update many MktMetrics.
+     * @example
+     * // Update many MktMetrics
+     * const mktMetric = await prisma.mktMetric.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktMetrics and only return the `id`
+     * const mktMetricWithIdOnly = await prisma.mktMetric.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktMetricUpdateManyAndReturnArgs>(args: SelectSubset<T, MktMetricUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktMetric.
+     * @param {MktMetricUpsertArgs} args - Arguments to update or create a MktMetric.
+     * @example
+     * // Update or create a MktMetric
+     * const mktMetric = await prisma.mktMetric.upsert({
+     *   create: {
+     *     // ... data to create a MktMetric
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktMetric we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktMetricUpsertArgs>(args: SelectSubset<T, MktMetricUpsertArgs<ExtArgs>>): Prisma__MktMetricClient<$Result.GetResult<Prisma.$MktMetricPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktMetrics.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricCountArgs} args - Arguments to filter MktMetrics to count.
+     * @example
+     * // Count the number of MktMetrics
+     * const count = await prisma.mktMetric.count({
+     *   where: {
+     *     // ... the filter for the MktMetrics we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktMetricCountArgs>(
+      args?: Subset<T, MktMetricCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktMetricCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktMetric.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktMetricAggregateArgs>(args: Subset<T, MktMetricAggregateArgs>): Prisma.PrismaPromise<GetMktMetricAggregateType<T>>
+
+    /**
+     * Group by MktMetric.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktMetricGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktMetricGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktMetricGroupByArgs['orderBy'] }
+        : { orderBy?: MktMetricGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktMetricGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktMetricGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktMetric model
+   */
+  readonly fields: MktMetricFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktMetric.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktMetricClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    account<T extends MktAccountDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MktAccountDefaultArgs<ExtArgs>>): Prisma__MktAccountClient<$Result.GetResult<Prisma.$MktAccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktMetric model
+   */
+  interface MktMetricFieldRefs {
+    readonly id: FieldRef<"MktMetric", 'String'>
+    readonly accountId: FieldRef<"MktMetric", 'String'>
+    readonly publicationId: FieldRef<"MktMetric", 'String'>
+    readonly snapshotAt: FieldRef<"MktMetric", 'DateTime'>
+    readonly views: FieldRef<"MktMetric", 'Int'>
+    readonly likes: FieldRef<"MktMetric", 'Int'>
+    readonly comments: FieldRef<"MktMetric", 'Int'>
+    readonly shares: FieldRef<"MktMetric", 'Int'>
+    readonly reach: FieldRef<"MktMetric", 'Int'>
+    readonly clicks: FieldRef<"MktMetric", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktMetric findUnique
+   */
+  export type MktMetricFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter, which MktMetric to fetch.
+     */
+    where: MktMetricWhereUniqueInput
+  }
+
+  /**
+   * MktMetric findUniqueOrThrow
+   */
+  export type MktMetricFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter, which MktMetric to fetch.
+     */
+    where: MktMetricWhereUniqueInput
+  }
+
+  /**
+   * MktMetric findFirst
+   */
+  export type MktMetricFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter, which MktMetric to fetch.
+     */
+    where?: MktMetricWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktMetrics to fetch.
+     */
+    orderBy?: MktMetricOrderByWithRelationInput | MktMetricOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktMetrics.
+     */
+    cursor?: MktMetricWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktMetrics from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktMetrics.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktMetrics.
+     */
+    distinct?: MktMetricScalarFieldEnum | MktMetricScalarFieldEnum[]
+  }
+
+  /**
+   * MktMetric findFirstOrThrow
+   */
+  export type MktMetricFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter, which MktMetric to fetch.
+     */
+    where?: MktMetricWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktMetrics to fetch.
+     */
+    orderBy?: MktMetricOrderByWithRelationInput | MktMetricOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktMetrics.
+     */
+    cursor?: MktMetricWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktMetrics from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktMetrics.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktMetrics.
+     */
+    distinct?: MktMetricScalarFieldEnum | MktMetricScalarFieldEnum[]
+  }
+
+  /**
+   * MktMetric findMany
+   */
+  export type MktMetricFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter, which MktMetrics to fetch.
+     */
+    where?: MktMetricWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktMetrics to fetch.
+     */
+    orderBy?: MktMetricOrderByWithRelationInput | MktMetricOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktMetrics.
+     */
+    cursor?: MktMetricWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktMetrics from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktMetrics.
+     */
+    skip?: number
+    distinct?: MktMetricScalarFieldEnum | MktMetricScalarFieldEnum[]
+  }
+
+  /**
+   * MktMetric create
+   */
+  export type MktMetricCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MktMetric.
+     */
+    data: XOR<MktMetricCreateInput, MktMetricUncheckedCreateInput>
+  }
+
+  /**
+   * MktMetric createMany
+   */
+  export type MktMetricCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktMetrics.
+     */
+    data: MktMetricCreateManyInput | MktMetricCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktMetric createManyAndReturn
+   */
+  export type MktMetricCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktMetrics.
+     */
+    data: MktMetricCreateManyInput | MktMetricCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktMetric update
+   */
+  export type MktMetricUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MktMetric.
+     */
+    data: XOR<MktMetricUpdateInput, MktMetricUncheckedUpdateInput>
+    /**
+     * Choose, which MktMetric to update.
+     */
+    where: MktMetricWhereUniqueInput
+  }
+
+  /**
+   * MktMetric updateMany
+   */
+  export type MktMetricUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktMetrics.
+     */
+    data: XOR<MktMetricUpdateManyMutationInput, MktMetricUncheckedUpdateManyInput>
+    /**
+     * Filter which MktMetrics to update
+     */
+    where?: MktMetricWhereInput
+    /**
+     * Limit how many MktMetrics to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktMetric updateManyAndReturn
+   */
+  export type MktMetricUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * The data used to update MktMetrics.
+     */
+    data: XOR<MktMetricUpdateManyMutationInput, MktMetricUncheckedUpdateManyInput>
+    /**
+     * Filter which MktMetrics to update
+     */
+    where?: MktMetricWhereInput
+    /**
+     * Limit how many MktMetrics to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MktMetric upsert
+   */
+  export type MktMetricUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MktMetric to update in case it exists.
+     */
+    where: MktMetricWhereUniqueInput
+    /**
+     * In case the MktMetric found by the `where` argument doesn't exist, create a new MktMetric with this data.
+     */
+    create: XOR<MktMetricCreateInput, MktMetricUncheckedCreateInput>
+    /**
+     * In case the MktMetric was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktMetricUpdateInput, MktMetricUncheckedUpdateInput>
+  }
+
+  /**
+   * MktMetric delete
+   */
+  export type MktMetricDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+    /**
+     * Filter which MktMetric to delete.
+     */
+    where: MktMetricWhereUniqueInput
+  }
+
+  /**
+   * MktMetric deleteMany
+   */
+  export type MktMetricDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktMetrics to delete
+     */
+    where?: MktMetricWhereInput
+    /**
+     * Limit how many MktMetrics to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktMetric without action
+   */
+  export type MktMetricDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktMetric
+     */
+    select?: MktMetricSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktMetric
+     */
+    omit?: MktMetricOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MktMetricInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Model CrmTask
    */
 
@@ -182851,6 +190723,8 @@ export namespace Prisma {
     isInstant: 'isInstant',
     shipByDate: 'shipByDate',
     stockDeducted: 'stockDeducted',
+    khongKhopSku: 'khongKhopSku',
+    khongKhopLuc: 'khongKhopLuc',
     syncedAt: 'syncedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -183673,6 +191547,118 @@ export namespace Prisma {
   };
 
   export type FbContentDraftScalarFieldEnum = (typeof FbContentDraftScalarFieldEnum)[keyof typeof FbContentDraftScalarFieldEnum]
+
+
+  export const MktAccountScalarFieldEnum: {
+    id: 'id',
+    platform: 'platform',
+    externalId: 'externalId',
+    name: 'name',
+    avatar: 'avatar',
+    category: 'category',
+    followers: 'followers',
+    accessToken: 'accessToken',
+    tokenExpiresAt: 'tokenExpiresAt',
+    status: 'status',
+    lastSyncAt: 'lastSyncAt',
+    connectedBy: 'connectedBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MktAccountScalarFieldEnum = (typeof MktAccountScalarFieldEnum)[keyof typeof MktAccountScalarFieldEnum]
+
+
+  export const MktCampaignScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    goal: 'goal',
+    status: 'status',
+    startAt: 'startAt',
+    endAt: 'endAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MktCampaignScalarFieldEnum = (typeof MktCampaignScalarFieldEnum)[keyof typeof MktCampaignScalarFieldEnum]
+
+
+  export const MktContentScalarFieldEnum: {
+    id: 'id',
+    campaignId: 'campaignId',
+    title: 'title',
+    body: 'body',
+    hashtags: 'hashtags',
+    linkUrl: 'linkUrl',
+    assetIds: 'assetIds',
+    productIds: 'productIds',
+    revision: 'revision',
+    approvedRevision: 'approvedRevision',
+    approvedAt: 'approvedAt',
+    approvedBy: 'approvedBy',
+    rejectReason: 'rejectReason',
+    status: 'status',
+    source: 'source',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MktContentScalarFieldEnum = (typeof MktContentScalarFieldEnum)[keyof typeof MktContentScalarFieldEnum]
+
+
+  export const MktPublicationScalarFieldEnum: {
+    id: 'id',
+    contentId: 'contentId',
+    accountId: 'accountId',
+    idempotencyKey: 'idempotencyKey',
+    scheduledAt: 'scheduledAt',
+    status: 'status',
+    leaseUntil: 'leaseUntil',
+    workerId: 'workerId',
+    remoteRef: 'remoteRef',
+    remotePostId: 'remotePostId',
+    attempts: 'attempts',
+    errorMessage: 'errorMessage',
+    errorCode: 'errorCode',
+    sentAt: 'sentAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MktPublicationScalarFieldEnum = (typeof MktPublicationScalarFieldEnum)[keyof typeof MktPublicationScalarFieldEnum]
+
+
+  export const MktAssetScalarFieldEnum: {
+    id: 'id',
+    localFile: 'localFile',
+    mime: 'mime',
+    bytes: 'bytes',
+    width: 'width',
+    height: 'height',
+    durationS: 'durationS',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt'
+  };
+
+  export type MktAssetScalarFieldEnum = (typeof MktAssetScalarFieldEnum)[keyof typeof MktAssetScalarFieldEnum]
+
+
+  export const MktMetricScalarFieldEnum: {
+    id: 'id',
+    accountId: 'accountId',
+    publicationId: 'publicationId',
+    snapshotAt: 'snapshotAt',
+    views: 'views',
+    likes: 'likes',
+    comments: 'comments',
+    shares: 'shares',
+    reach: 'reach',
+    clicks: 'clicks'
+  };
+
+  export type MktMetricScalarFieldEnum = (typeof MktMetricScalarFieldEnum)[keyof typeof MktMetricScalarFieldEnum]
 
 
   export const CrmTaskScalarFieldEnum: {
@@ -192065,6 +200051,8 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -192105,6 +200093,8 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
+    khongKhopSku?: SortOrder
+    khongKhopLuc?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -192148,6 +200138,8 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -192188,6 +200180,8 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
+    khongKhopSku?: SortOrder
+    khongKhopLuc?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -192234,6 +200228,8 @@ export namespace Prisma {
     isInstant?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
+    khongKhopSku?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
+    khongKhopLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
@@ -196377,6 +204373,583 @@ export namespace Prisma {
     createdBy?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"FbContentDraft"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"FbContentDraft"> | Date | string
+  }
+
+  export type MktAccountWhereInput = {
+    AND?: MktAccountWhereInput | MktAccountWhereInput[]
+    OR?: MktAccountWhereInput[]
+    NOT?: MktAccountWhereInput | MktAccountWhereInput[]
+    id?: StringFilter<"MktAccount"> | string
+    platform?: StringFilter<"MktAccount"> | string
+    externalId?: StringFilter<"MktAccount"> | string
+    name?: StringFilter<"MktAccount"> | string
+    avatar?: StringNullableFilter<"MktAccount"> | string | null
+    category?: StringNullableFilter<"MktAccount"> | string | null
+    followers?: IntNullableFilter<"MktAccount"> | number | null
+    accessToken?: StringFilter<"MktAccount"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    status?: StringFilter<"MktAccount"> | string
+    lastSyncAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    connectedBy?: StringNullableFilter<"MktAccount"> | string | null
+    createdAt?: DateTimeFilter<"MktAccount"> | Date | string
+    updatedAt?: DateTimeFilter<"MktAccount"> | Date | string
+    publications?: MktPublicationListRelationFilter
+    metrics?: MktMetricListRelationFilter
+  }
+
+  export type MktAccountOrderByWithRelationInput = {
+    id?: SortOrder
+    platform?: SortOrder
+    externalId?: SortOrder
+    name?: SortOrder
+    avatar?: SortOrderInput | SortOrder
+    category?: SortOrderInput | SortOrder
+    followers?: SortOrderInput | SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    publications?: MktPublicationOrderByRelationAggregateInput
+    metrics?: MktMetricOrderByRelationAggregateInput
+  }
+
+  export type MktAccountWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    platform_externalId?: MktAccountPlatformExternalIdCompoundUniqueInput
+    AND?: MktAccountWhereInput | MktAccountWhereInput[]
+    OR?: MktAccountWhereInput[]
+    NOT?: MktAccountWhereInput | MktAccountWhereInput[]
+    platform?: StringFilter<"MktAccount"> | string
+    externalId?: StringFilter<"MktAccount"> | string
+    name?: StringFilter<"MktAccount"> | string
+    avatar?: StringNullableFilter<"MktAccount"> | string | null
+    category?: StringNullableFilter<"MktAccount"> | string | null
+    followers?: IntNullableFilter<"MktAccount"> | number | null
+    accessToken?: StringFilter<"MktAccount"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    status?: StringFilter<"MktAccount"> | string
+    lastSyncAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    connectedBy?: StringNullableFilter<"MktAccount"> | string | null
+    createdAt?: DateTimeFilter<"MktAccount"> | Date | string
+    updatedAt?: DateTimeFilter<"MktAccount"> | Date | string
+    publications?: MktPublicationListRelationFilter
+    metrics?: MktMetricListRelationFilter
+  }, "id" | "platform_externalId">
+
+  export type MktAccountOrderByWithAggregationInput = {
+    id?: SortOrder
+    platform?: SortOrder
+    externalId?: SortOrder
+    name?: SortOrder
+    avatar?: SortOrderInput | SortOrder
+    category?: SortOrderInput | SortOrder
+    followers?: SortOrderInput | SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MktAccountCountOrderByAggregateInput
+    _avg?: MktAccountAvgOrderByAggregateInput
+    _max?: MktAccountMaxOrderByAggregateInput
+    _min?: MktAccountMinOrderByAggregateInput
+    _sum?: MktAccountSumOrderByAggregateInput
+  }
+
+  export type MktAccountScalarWhereWithAggregatesInput = {
+    AND?: MktAccountScalarWhereWithAggregatesInput | MktAccountScalarWhereWithAggregatesInput[]
+    OR?: MktAccountScalarWhereWithAggregatesInput[]
+    NOT?: MktAccountScalarWhereWithAggregatesInput | MktAccountScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktAccount"> | string
+    platform?: StringWithAggregatesFilter<"MktAccount"> | string
+    externalId?: StringWithAggregatesFilter<"MktAccount"> | string
+    name?: StringWithAggregatesFilter<"MktAccount"> | string
+    avatar?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
+    category?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
+    followers?: IntNullableWithAggregatesFilter<"MktAccount"> | number | null
+    accessToken?: StringWithAggregatesFilter<"MktAccount"> | string
+    tokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"MktAccount"> | Date | string | null
+    status?: StringWithAggregatesFilter<"MktAccount"> | string
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"MktAccount"> | Date | string | null
+    connectedBy?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktAccount"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MktAccount"> | Date | string
+  }
+
+  export type MktCampaignWhereInput = {
+    AND?: MktCampaignWhereInput | MktCampaignWhereInput[]
+    OR?: MktCampaignWhereInput[]
+    NOT?: MktCampaignWhereInput | MktCampaignWhereInput[]
+    id?: StringFilter<"MktCampaign"> | string
+    name?: StringFilter<"MktCampaign"> | string
+    goal?: StringFilter<"MktCampaign"> | string
+    status?: StringFilter<"MktCampaign"> | string
+    startAt?: DateTimeNullableFilter<"MktCampaign"> | Date | string | null
+    endAt?: DateTimeNullableFilter<"MktCampaign"> | Date | string | null
+    createdBy?: StringNullableFilter<"MktCampaign"> | string | null
+    createdAt?: DateTimeFilter<"MktCampaign"> | Date | string
+    updatedAt?: DateTimeFilter<"MktCampaign"> | Date | string
+    contents?: MktContentListRelationFilter
+  }
+
+  export type MktCampaignOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    goal?: SortOrder
+    status?: SortOrder
+    startAt?: SortOrderInput | SortOrder
+    endAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    contents?: MktContentOrderByRelationAggregateInput
+  }
+
+  export type MktCampaignWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MktCampaignWhereInput | MktCampaignWhereInput[]
+    OR?: MktCampaignWhereInput[]
+    NOT?: MktCampaignWhereInput | MktCampaignWhereInput[]
+    name?: StringFilter<"MktCampaign"> | string
+    goal?: StringFilter<"MktCampaign"> | string
+    status?: StringFilter<"MktCampaign"> | string
+    startAt?: DateTimeNullableFilter<"MktCampaign"> | Date | string | null
+    endAt?: DateTimeNullableFilter<"MktCampaign"> | Date | string | null
+    createdBy?: StringNullableFilter<"MktCampaign"> | string | null
+    createdAt?: DateTimeFilter<"MktCampaign"> | Date | string
+    updatedAt?: DateTimeFilter<"MktCampaign"> | Date | string
+    contents?: MktContentListRelationFilter
+  }, "id">
+
+  export type MktCampaignOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    goal?: SortOrder
+    status?: SortOrder
+    startAt?: SortOrderInput | SortOrder
+    endAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MktCampaignCountOrderByAggregateInput
+    _max?: MktCampaignMaxOrderByAggregateInput
+    _min?: MktCampaignMinOrderByAggregateInput
+  }
+
+  export type MktCampaignScalarWhereWithAggregatesInput = {
+    AND?: MktCampaignScalarWhereWithAggregatesInput | MktCampaignScalarWhereWithAggregatesInput[]
+    OR?: MktCampaignScalarWhereWithAggregatesInput[]
+    NOT?: MktCampaignScalarWhereWithAggregatesInput | MktCampaignScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktCampaign"> | string
+    name?: StringWithAggregatesFilter<"MktCampaign"> | string
+    goal?: StringWithAggregatesFilter<"MktCampaign"> | string
+    status?: StringWithAggregatesFilter<"MktCampaign"> | string
+    startAt?: DateTimeNullableWithAggregatesFilter<"MktCampaign"> | Date | string | null
+    endAt?: DateTimeNullableWithAggregatesFilter<"MktCampaign"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"MktCampaign"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktCampaign"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MktCampaign"> | Date | string
+  }
+
+  export type MktContentWhereInput = {
+    AND?: MktContentWhereInput | MktContentWhereInput[]
+    OR?: MktContentWhereInput[]
+    NOT?: MktContentWhereInput | MktContentWhereInput[]
+    id?: StringFilter<"MktContent"> | string
+    campaignId?: StringNullableFilter<"MktContent"> | string | null
+    title?: StringFilter<"MktContent"> | string
+    body?: StringFilter<"MktContent"> | string
+    hashtags?: StringFilter<"MktContent"> | string
+    linkUrl?: StringNullableFilter<"MktContent"> | string | null
+    assetIds?: StringFilter<"MktContent"> | string
+    productIds?: StringFilter<"MktContent"> | string
+    revision?: IntFilter<"MktContent"> | number
+    approvedRevision?: IntNullableFilter<"MktContent"> | number | null
+    approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
+    approvedBy?: StringNullableFilter<"MktContent"> | string | null
+    rejectReason?: StringNullableFilter<"MktContent"> | string | null
+    status?: StringFilter<"MktContent"> | string
+    source?: StringFilter<"MktContent"> | string
+    createdBy?: StringNullableFilter<"MktContent"> | string | null
+    createdAt?: DateTimeFilter<"MktContent"> | Date | string
+    updatedAt?: DateTimeFilter<"MktContent"> | Date | string
+    campaign?: XOR<MktCampaignNullableScalarRelationFilter, MktCampaignWhereInput> | null
+    publications?: MktPublicationListRelationFilter
+  }
+
+  export type MktContentOrderByWithRelationInput = {
+    id?: SortOrder
+    campaignId?: SortOrderInput | SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    hashtags?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    assetIds?: SortOrder
+    productIds?: SortOrder
+    revision?: SortOrder
+    approvedRevision?: SortOrderInput | SortOrder
+    approvedAt?: SortOrderInput | SortOrder
+    approvedBy?: SortOrderInput | SortOrder
+    rejectReason?: SortOrderInput | SortOrder
+    status?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    campaign?: MktCampaignOrderByWithRelationInput
+    publications?: MktPublicationOrderByRelationAggregateInput
+  }
+
+  export type MktContentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MktContentWhereInput | MktContentWhereInput[]
+    OR?: MktContentWhereInput[]
+    NOT?: MktContentWhereInput | MktContentWhereInput[]
+    campaignId?: StringNullableFilter<"MktContent"> | string | null
+    title?: StringFilter<"MktContent"> | string
+    body?: StringFilter<"MktContent"> | string
+    hashtags?: StringFilter<"MktContent"> | string
+    linkUrl?: StringNullableFilter<"MktContent"> | string | null
+    assetIds?: StringFilter<"MktContent"> | string
+    productIds?: StringFilter<"MktContent"> | string
+    revision?: IntFilter<"MktContent"> | number
+    approvedRevision?: IntNullableFilter<"MktContent"> | number | null
+    approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
+    approvedBy?: StringNullableFilter<"MktContent"> | string | null
+    rejectReason?: StringNullableFilter<"MktContent"> | string | null
+    status?: StringFilter<"MktContent"> | string
+    source?: StringFilter<"MktContent"> | string
+    createdBy?: StringNullableFilter<"MktContent"> | string | null
+    createdAt?: DateTimeFilter<"MktContent"> | Date | string
+    updatedAt?: DateTimeFilter<"MktContent"> | Date | string
+    campaign?: XOR<MktCampaignNullableScalarRelationFilter, MktCampaignWhereInput> | null
+    publications?: MktPublicationListRelationFilter
+  }, "id">
+
+  export type MktContentOrderByWithAggregationInput = {
+    id?: SortOrder
+    campaignId?: SortOrderInput | SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    hashtags?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    assetIds?: SortOrder
+    productIds?: SortOrder
+    revision?: SortOrder
+    approvedRevision?: SortOrderInput | SortOrder
+    approvedAt?: SortOrderInput | SortOrder
+    approvedBy?: SortOrderInput | SortOrder
+    rejectReason?: SortOrderInput | SortOrder
+    status?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MktContentCountOrderByAggregateInput
+    _avg?: MktContentAvgOrderByAggregateInput
+    _max?: MktContentMaxOrderByAggregateInput
+    _min?: MktContentMinOrderByAggregateInput
+    _sum?: MktContentSumOrderByAggregateInput
+  }
+
+  export type MktContentScalarWhereWithAggregatesInput = {
+    AND?: MktContentScalarWhereWithAggregatesInput | MktContentScalarWhereWithAggregatesInput[]
+    OR?: MktContentScalarWhereWithAggregatesInput[]
+    NOT?: MktContentScalarWhereWithAggregatesInput | MktContentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktContent"> | string
+    campaignId?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
+    title?: StringWithAggregatesFilter<"MktContent"> | string
+    body?: StringWithAggregatesFilter<"MktContent"> | string
+    hashtags?: StringWithAggregatesFilter<"MktContent"> | string
+    linkUrl?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
+    assetIds?: StringWithAggregatesFilter<"MktContent"> | string
+    productIds?: StringWithAggregatesFilter<"MktContent"> | string
+    revision?: IntWithAggregatesFilter<"MktContent"> | number
+    approvedRevision?: IntNullableWithAggregatesFilter<"MktContent"> | number | null
+    approvedAt?: DateTimeNullableWithAggregatesFilter<"MktContent"> | Date | string | null
+    approvedBy?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
+    rejectReason?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
+    status?: StringWithAggregatesFilter<"MktContent"> | string
+    source?: StringWithAggregatesFilter<"MktContent"> | string
+    createdBy?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktContent"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MktContent"> | Date | string
+  }
+
+  export type MktPublicationWhereInput = {
+    AND?: MktPublicationWhereInput | MktPublicationWhereInput[]
+    OR?: MktPublicationWhereInput[]
+    NOT?: MktPublicationWhereInput | MktPublicationWhereInput[]
+    id?: StringFilter<"MktPublication"> | string
+    contentId?: StringFilter<"MktPublication"> | string
+    accountId?: StringFilter<"MktPublication"> | string
+    idempotencyKey?: StringFilter<"MktPublication"> | string
+    scheduledAt?: DateTimeFilter<"MktPublication"> | Date | string
+    status?: StringFilter<"MktPublication"> | string
+    leaseUntil?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    workerId?: StringNullableFilter<"MktPublication"> | string | null
+    remoteRef?: StringNullableFilter<"MktPublication"> | string | null
+    remotePostId?: StringNullableFilter<"MktPublication"> | string | null
+    attempts?: IntFilter<"MktPublication"> | number
+    errorMessage?: StringNullableFilter<"MktPublication"> | string | null
+    errorCode?: StringNullableFilter<"MktPublication"> | string | null
+    sentAt?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    createdAt?: DateTimeFilter<"MktPublication"> | Date | string
+    updatedAt?: DateTimeFilter<"MktPublication"> | Date | string
+    content?: XOR<MktContentScalarRelationFilter, MktContentWhereInput>
+    account?: XOR<MktAccountScalarRelationFilter, MktAccountWhereInput>
+  }
+
+  export type MktPublicationOrderByWithRelationInput = {
+    id?: SortOrder
+    contentId?: SortOrder
+    accountId?: SortOrder
+    idempotencyKey?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    leaseUntil?: SortOrderInput | SortOrder
+    workerId?: SortOrderInput | SortOrder
+    remoteRef?: SortOrderInput | SortOrder
+    remotePostId?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    errorCode?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    content?: MktContentOrderByWithRelationInput
+    account?: MktAccountOrderByWithRelationInput
+  }
+
+  export type MktPublicationWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    idempotencyKey?: string
+    AND?: MktPublicationWhereInput | MktPublicationWhereInput[]
+    OR?: MktPublicationWhereInput[]
+    NOT?: MktPublicationWhereInput | MktPublicationWhereInput[]
+    contentId?: StringFilter<"MktPublication"> | string
+    accountId?: StringFilter<"MktPublication"> | string
+    scheduledAt?: DateTimeFilter<"MktPublication"> | Date | string
+    status?: StringFilter<"MktPublication"> | string
+    leaseUntil?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    workerId?: StringNullableFilter<"MktPublication"> | string | null
+    remoteRef?: StringNullableFilter<"MktPublication"> | string | null
+    remotePostId?: StringNullableFilter<"MktPublication"> | string | null
+    attempts?: IntFilter<"MktPublication"> | number
+    errorMessage?: StringNullableFilter<"MktPublication"> | string | null
+    errorCode?: StringNullableFilter<"MktPublication"> | string | null
+    sentAt?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    createdAt?: DateTimeFilter<"MktPublication"> | Date | string
+    updatedAt?: DateTimeFilter<"MktPublication"> | Date | string
+    content?: XOR<MktContentScalarRelationFilter, MktContentWhereInput>
+    account?: XOR<MktAccountScalarRelationFilter, MktAccountWhereInput>
+  }, "id" | "idempotencyKey">
+
+  export type MktPublicationOrderByWithAggregationInput = {
+    id?: SortOrder
+    contentId?: SortOrder
+    accountId?: SortOrder
+    idempotencyKey?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    leaseUntil?: SortOrderInput | SortOrder
+    workerId?: SortOrderInput | SortOrder
+    remoteRef?: SortOrderInput | SortOrder
+    remotePostId?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    errorCode?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MktPublicationCountOrderByAggregateInput
+    _avg?: MktPublicationAvgOrderByAggregateInput
+    _max?: MktPublicationMaxOrderByAggregateInput
+    _min?: MktPublicationMinOrderByAggregateInput
+    _sum?: MktPublicationSumOrderByAggregateInput
+  }
+
+  export type MktPublicationScalarWhereWithAggregatesInput = {
+    AND?: MktPublicationScalarWhereWithAggregatesInput | MktPublicationScalarWhereWithAggregatesInput[]
+    OR?: MktPublicationScalarWhereWithAggregatesInput[]
+    NOT?: MktPublicationScalarWhereWithAggregatesInput | MktPublicationScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktPublication"> | string
+    contentId?: StringWithAggregatesFilter<"MktPublication"> | string
+    accountId?: StringWithAggregatesFilter<"MktPublication"> | string
+    idempotencyKey?: StringWithAggregatesFilter<"MktPublication"> | string
+    scheduledAt?: DateTimeWithAggregatesFilter<"MktPublication"> | Date | string
+    status?: StringWithAggregatesFilter<"MktPublication"> | string
+    leaseUntil?: DateTimeNullableWithAggregatesFilter<"MktPublication"> | Date | string | null
+    workerId?: StringNullableWithAggregatesFilter<"MktPublication"> | string | null
+    remoteRef?: StringNullableWithAggregatesFilter<"MktPublication"> | string | null
+    remotePostId?: StringNullableWithAggregatesFilter<"MktPublication"> | string | null
+    attempts?: IntWithAggregatesFilter<"MktPublication"> | number
+    errorMessage?: StringNullableWithAggregatesFilter<"MktPublication"> | string | null
+    errorCode?: StringNullableWithAggregatesFilter<"MktPublication"> | string | null
+    sentAt?: DateTimeNullableWithAggregatesFilter<"MktPublication"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktPublication"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MktPublication"> | Date | string
+  }
+
+  export type MktAssetWhereInput = {
+    AND?: MktAssetWhereInput | MktAssetWhereInput[]
+    OR?: MktAssetWhereInput[]
+    NOT?: MktAssetWhereInput | MktAssetWhereInput[]
+    id?: StringFilter<"MktAsset"> | string
+    localFile?: StringFilter<"MktAsset"> | string
+    mime?: StringFilter<"MktAsset"> | string
+    bytes?: IntFilter<"MktAsset"> | number
+    width?: IntNullableFilter<"MktAsset"> | number | null
+    height?: IntNullableFilter<"MktAsset"> | number | null
+    durationS?: FloatNullableFilter<"MktAsset"> | number | null
+    createdBy?: StringNullableFilter<"MktAsset"> | string | null
+    createdAt?: DateTimeFilter<"MktAsset"> | Date | string
+  }
+
+  export type MktAssetOrderByWithRelationInput = {
+    id?: SortOrder
+    localFile?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    width?: SortOrderInput | SortOrder
+    height?: SortOrderInput | SortOrder
+    durationS?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MktAssetWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MktAssetWhereInput | MktAssetWhereInput[]
+    OR?: MktAssetWhereInput[]
+    NOT?: MktAssetWhereInput | MktAssetWhereInput[]
+    localFile?: StringFilter<"MktAsset"> | string
+    mime?: StringFilter<"MktAsset"> | string
+    bytes?: IntFilter<"MktAsset"> | number
+    width?: IntNullableFilter<"MktAsset"> | number | null
+    height?: IntNullableFilter<"MktAsset"> | number | null
+    durationS?: FloatNullableFilter<"MktAsset"> | number | null
+    createdBy?: StringNullableFilter<"MktAsset"> | string | null
+    createdAt?: DateTimeFilter<"MktAsset"> | Date | string
+  }, "id">
+
+  export type MktAssetOrderByWithAggregationInput = {
+    id?: SortOrder
+    localFile?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    width?: SortOrderInput | SortOrder
+    height?: SortOrderInput | SortOrder
+    durationS?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: MktAssetCountOrderByAggregateInput
+    _avg?: MktAssetAvgOrderByAggregateInput
+    _max?: MktAssetMaxOrderByAggregateInput
+    _min?: MktAssetMinOrderByAggregateInput
+    _sum?: MktAssetSumOrderByAggregateInput
+  }
+
+  export type MktAssetScalarWhereWithAggregatesInput = {
+    AND?: MktAssetScalarWhereWithAggregatesInput | MktAssetScalarWhereWithAggregatesInput[]
+    OR?: MktAssetScalarWhereWithAggregatesInput[]
+    NOT?: MktAssetScalarWhereWithAggregatesInput | MktAssetScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktAsset"> | string
+    localFile?: StringWithAggregatesFilter<"MktAsset"> | string
+    mime?: StringWithAggregatesFilter<"MktAsset"> | string
+    bytes?: IntWithAggregatesFilter<"MktAsset"> | number
+    width?: IntNullableWithAggregatesFilter<"MktAsset"> | number | null
+    height?: IntNullableWithAggregatesFilter<"MktAsset"> | number | null
+    durationS?: FloatNullableWithAggregatesFilter<"MktAsset"> | number | null
+    createdBy?: StringNullableWithAggregatesFilter<"MktAsset"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktAsset"> | Date | string
+  }
+
+  export type MktMetricWhereInput = {
+    AND?: MktMetricWhereInput | MktMetricWhereInput[]
+    OR?: MktMetricWhereInput[]
+    NOT?: MktMetricWhereInput | MktMetricWhereInput[]
+    id?: StringFilter<"MktMetric"> | string
+    accountId?: StringFilter<"MktMetric"> | string
+    publicationId?: StringNullableFilter<"MktMetric"> | string | null
+    snapshotAt?: DateTimeFilter<"MktMetric"> | Date | string
+    views?: IntNullableFilter<"MktMetric"> | number | null
+    likes?: IntNullableFilter<"MktMetric"> | number | null
+    comments?: IntNullableFilter<"MktMetric"> | number | null
+    shares?: IntNullableFilter<"MktMetric"> | number | null
+    reach?: IntNullableFilter<"MktMetric"> | number | null
+    clicks?: IntNullableFilter<"MktMetric"> | number | null
+    account?: XOR<MktAccountScalarRelationFilter, MktAccountWhereInput>
+  }
+
+  export type MktMetricOrderByWithRelationInput = {
+    id?: SortOrder
+    accountId?: SortOrder
+    publicationId?: SortOrderInput | SortOrder
+    snapshotAt?: SortOrder
+    views?: SortOrderInput | SortOrder
+    likes?: SortOrderInput | SortOrder
+    comments?: SortOrderInput | SortOrder
+    shares?: SortOrderInput | SortOrder
+    reach?: SortOrderInput | SortOrder
+    clicks?: SortOrderInput | SortOrder
+    account?: MktAccountOrderByWithRelationInput
+  }
+
+  export type MktMetricWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MktMetricWhereInput | MktMetricWhereInput[]
+    OR?: MktMetricWhereInput[]
+    NOT?: MktMetricWhereInput | MktMetricWhereInput[]
+    accountId?: StringFilter<"MktMetric"> | string
+    publicationId?: StringNullableFilter<"MktMetric"> | string | null
+    snapshotAt?: DateTimeFilter<"MktMetric"> | Date | string
+    views?: IntNullableFilter<"MktMetric"> | number | null
+    likes?: IntNullableFilter<"MktMetric"> | number | null
+    comments?: IntNullableFilter<"MktMetric"> | number | null
+    shares?: IntNullableFilter<"MktMetric"> | number | null
+    reach?: IntNullableFilter<"MktMetric"> | number | null
+    clicks?: IntNullableFilter<"MktMetric"> | number | null
+    account?: XOR<MktAccountScalarRelationFilter, MktAccountWhereInput>
+  }, "id">
+
+  export type MktMetricOrderByWithAggregationInput = {
+    id?: SortOrder
+    accountId?: SortOrder
+    publicationId?: SortOrderInput | SortOrder
+    snapshotAt?: SortOrder
+    views?: SortOrderInput | SortOrder
+    likes?: SortOrderInput | SortOrder
+    comments?: SortOrderInput | SortOrder
+    shares?: SortOrderInput | SortOrder
+    reach?: SortOrderInput | SortOrder
+    clicks?: SortOrderInput | SortOrder
+    _count?: MktMetricCountOrderByAggregateInput
+    _avg?: MktMetricAvgOrderByAggregateInput
+    _max?: MktMetricMaxOrderByAggregateInput
+    _min?: MktMetricMinOrderByAggregateInput
+    _sum?: MktMetricSumOrderByAggregateInput
+  }
+
+  export type MktMetricScalarWhereWithAggregatesInput = {
+    AND?: MktMetricScalarWhereWithAggregatesInput | MktMetricScalarWhereWithAggregatesInput[]
+    OR?: MktMetricScalarWhereWithAggregatesInput[]
+    NOT?: MktMetricScalarWhereWithAggregatesInput | MktMetricScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktMetric"> | string
+    accountId?: StringWithAggregatesFilter<"MktMetric"> | string
+    publicationId?: StringNullableWithAggregatesFilter<"MktMetric"> | string | null
+    snapshotAt?: DateTimeWithAggregatesFilter<"MktMetric"> | Date | string
+    views?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
+    likes?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
+    comments?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
+    shares?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
+    reach?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
+    clicks?: IntNullableWithAggregatesFilter<"MktMetric"> | number | null
   }
 
   export type CrmTaskWhereInput = {
@@ -207785,6 +216358,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -207825,6 +216400,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -207863,6 +216440,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -207903,6 +216482,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -207942,6 +216523,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -207979,6 +216562,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -208017,6 +216602,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -212934,6 +221521,676 @@ export namespace Prisma {
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAccountCreateInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationCreateNestedManyWithoutAccountInput
+    metrics?: MktMetricCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountUncheckedCreateInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationUncheckedCreateNestedManyWithoutAccountInput
+    metrics?: MktMetricUncheckedCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUpdateManyWithoutAccountNestedInput
+    metrics?: MktMetricUpdateManyWithoutAccountNestedInput
+  }
+
+  export type MktAccountUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUncheckedUpdateManyWithoutAccountNestedInput
+    metrics?: MktMetricUncheckedUpdateManyWithoutAccountNestedInput
+  }
+
+  export type MktAccountCreateManyInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktAccountUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAccountUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktCampaignCreateInput = {
+    id?: string
+    name: string
+    goal?: string
+    status?: string
+    startAt?: Date | string | null
+    endAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    contents?: MktContentCreateNestedManyWithoutCampaignInput
+  }
+
+  export type MktCampaignUncheckedCreateInput = {
+    id?: string
+    name: string
+    goal?: string
+    status?: string
+    startAt?: Date | string | null
+    endAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    contents?: MktContentUncheckedCreateNestedManyWithoutCampaignInput
+  }
+
+  export type MktCampaignUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    contents?: MktContentUpdateManyWithoutCampaignNestedInput
+  }
+
+  export type MktCampaignUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    contents?: MktContentUncheckedUpdateManyWithoutCampaignNestedInput
+  }
+
+  export type MktCampaignCreateManyInput = {
+    id?: string
+    name: string
+    goal?: string
+    status?: string
+    startAt?: Date | string | null
+    endAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktCampaignUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktCampaignUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktContentCreateInput = {
+    id?: string
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    campaign?: MktCampaignCreateNestedOneWithoutContentsInput
+    publications?: MktPublicationCreateNestedManyWithoutContentInput
+  }
+
+  export type MktContentUncheckedCreateInput = {
+    id?: string
+    campaignId?: string | null
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationUncheckedCreateNestedManyWithoutContentInput
+  }
+
+  export type MktContentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    campaign?: MktCampaignUpdateOneWithoutContentsNestedInput
+    publications?: MktPublicationUpdateManyWithoutContentNestedInput
+  }
+
+  export type MktContentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    campaignId?: NullableStringFieldUpdateOperationsInput | string | null
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUncheckedUpdateManyWithoutContentNestedInput
+  }
+
+  export type MktContentCreateManyInput = {
+    id?: string
+    campaignId?: string | null
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktContentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktContentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    campaignId?: NullableStringFieldUpdateOperationsInput | string | null
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationCreateInput = {
+    id?: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    content: MktContentCreateNestedOneWithoutPublicationsInput
+    account: MktAccountCreateNestedOneWithoutPublicationsInput
+  }
+
+  export type MktPublicationUncheckedCreateInput = {
+    id?: string
+    contentId: string
+    accountId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktPublicationUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    content?: MktContentUpdateOneRequiredWithoutPublicationsNestedInput
+    account?: MktAccountUpdateOneRequiredWithoutPublicationsNestedInput
+  }
+
+  export type MktPublicationUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    contentId?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationCreateManyInput = {
+    id?: string
+    contentId: string
+    accountId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktPublicationUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    contentId?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAssetCreateInput = {
+    id?: string
+    localFile: string
+    mime: string
+    bytes: number
+    width?: number | null
+    height?: number | null
+    durationS?: number | null
+    createdBy?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MktAssetUncheckedCreateInput = {
+    id?: string
+    localFile: string
+    mime: string
+    bytes: number
+    width?: number | null
+    height?: number | null
+    durationS?: number | null
+    createdBy?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MktAssetUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    localFile?: StringFieldUpdateOperationsInput | string
+    mime?: StringFieldUpdateOperationsInput | string
+    bytes?: IntFieldUpdateOperationsInput | number
+    width?: NullableIntFieldUpdateOperationsInput | number | null
+    height?: NullableIntFieldUpdateOperationsInput | number | null
+    durationS?: NullableFloatFieldUpdateOperationsInput | number | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAssetUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    localFile?: StringFieldUpdateOperationsInput | string
+    mime?: StringFieldUpdateOperationsInput | string
+    bytes?: IntFieldUpdateOperationsInput | number
+    width?: NullableIntFieldUpdateOperationsInput | number | null
+    height?: NullableIntFieldUpdateOperationsInput | number | null
+    durationS?: NullableFloatFieldUpdateOperationsInput | number | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAssetCreateManyInput = {
+    id?: string
+    localFile: string
+    mime: string
+    bytes: number
+    width?: number | null
+    height?: number | null
+    durationS?: number | null
+    createdBy?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MktAssetUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    localFile?: StringFieldUpdateOperationsInput | string
+    mime?: StringFieldUpdateOperationsInput | string
+    bytes?: IntFieldUpdateOperationsInput | number
+    width?: NullableIntFieldUpdateOperationsInput | number | null
+    height?: NullableIntFieldUpdateOperationsInput | number | null
+    durationS?: NullableFloatFieldUpdateOperationsInput | number | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAssetUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    localFile?: StringFieldUpdateOperationsInput | string
+    mime?: StringFieldUpdateOperationsInput | string
+    bytes?: IntFieldUpdateOperationsInput | number
+    width?: NullableIntFieldUpdateOperationsInput | number | null
+    height?: NullableIntFieldUpdateOperationsInput | number | null
+    durationS?: NullableFloatFieldUpdateOperationsInput | number | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktMetricCreateInput = {
+    id?: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+    account: MktAccountCreateNestedOneWithoutMetricsInput
+  }
+
+  export type MktMetricUncheckedCreateInput = {
+    id?: string
+    accountId: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+  }
+
+  export type MktMetricUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+    account?: MktAccountUpdateOneRequiredWithoutMetricsNestedInput
+  }
+
+  export type MktMetricUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MktMetricCreateManyInput = {
+    id?: string
+    accountId: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+  }
+
+  export type MktMetricUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MktMetricUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
   }
 
   export type CrmTaskCreateInput = {
@@ -220882,6 +230139,8 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khongKhopSku?: SortOrder
+    khongKhopLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -220931,6 +230190,8 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khongKhopSku?: SortOrder
+    khongKhopLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -220969,6 +230230,8 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khongKhopSku?: SortOrder
+    khongKhopLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -223695,6 +232958,396 @@ export namespace Prisma {
     createdBy?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type MktPublicationListRelationFilter = {
+    every?: MktPublicationWhereInput
+    some?: MktPublicationWhereInput
+    none?: MktPublicationWhereInput
+  }
+
+  export type MktMetricListRelationFilter = {
+    every?: MktMetricWhereInput
+    some?: MktMetricWhereInput
+    none?: MktMetricWhereInput
+  }
+
+  export type MktPublicationOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MktMetricOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MktAccountPlatformExternalIdCompoundUniqueInput = {
+    platform: string
+    externalId: string
+  }
+
+  export type MktAccountCountOrderByAggregateInput = {
+    id?: SortOrder
+    platform?: SortOrder
+    externalId?: SortOrder
+    name?: SortOrder
+    avatar?: SortOrder
+    category?: SortOrder
+    followers?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    status?: SortOrder
+    lastSyncAt?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktAccountAvgOrderByAggregateInput = {
+    followers?: SortOrder
+  }
+
+  export type MktAccountMaxOrderByAggregateInput = {
+    id?: SortOrder
+    platform?: SortOrder
+    externalId?: SortOrder
+    name?: SortOrder
+    avatar?: SortOrder
+    category?: SortOrder
+    followers?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    status?: SortOrder
+    lastSyncAt?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktAccountMinOrderByAggregateInput = {
+    id?: SortOrder
+    platform?: SortOrder
+    externalId?: SortOrder
+    name?: SortOrder
+    avatar?: SortOrder
+    category?: SortOrder
+    followers?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    status?: SortOrder
+    lastSyncAt?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktAccountSumOrderByAggregateInput = {
+    followers?: SortOrder
+  }
+
+  export type MktContentListRelationFilter = {
+    every?: MktContentWhereInput
+    some?: MktContentWhereInput
+    none?: MktContentWhereInput
+  }
+
+  export type MktContentOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MktCampaignCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    goal?: SortOrder
+    status?: SortOrder
+    startAt?: SortOrder
+    endAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktCampaignMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    goal?: SortOrder
+    status?: SortOrder
+    startAt?: SortOrder
+    endAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktCampaignMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    goal?: SortOrder
+    status?: SortOrder
+    startAt?: SortOrder
+    endAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktCampaignNullableScalarRelationFilter = {
+    is?: MktCampaignWhereInput | null
+    isNot?: MktCampaignWhereInput | null
+  }
+
+  export type MktContentCountOrderByAggregateInput = {
+    id?: SortOrder
+    campaignId?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    hashtags?: SortOrder
+    linkUrl?: SortOrder
+    assetIds?: SortOrder
+    productIds?: SortOrder
+    revision?: SortOrder
+    approvedRevision?: SortOrder
+    approvedAt?: SortOrder
+    approvedBy?: SortOrder
+    rejectReason?: SortOrder
+    status?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktContentAvgOrderByAggregateInput = {
+    revision?: SortOrder
+    approvedRevision?: SortOrder
+  }
+
+  export type MktContentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    campaignId?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    hashtags?: SortOrder
+    linkUrl?: SortOrder
+    assetIds?: SortOrder
+    productIds?: SortOrder
+    revision?: SortOrder
+    approvedRevision?: SortOrder
+    approvedAt?: SortOrder
+    approvedBy?: SortOrder
+    rejectReason?: SortOrder
+    status?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktContentMinOrderByAggregateInput = {
+    id?: SortOrder
+    campaignId?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    hashtags?: SortOrder
+    linkUrl?: SortOrder
+    assetIds?: SortOrder
+    productIds?: SortOrder
+    revision?: SortOrder
+    approvedRevision?: SortOrder
+    approvedAt?: SortOrder
+    approvedBy?: SortOrder
+    rejectReason?: SortOrder
+    status?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktContentSumOrderByAggregateInput = {
+    revision?: SortOrder
+    approvedRevision?: SortOrder
+  }
+
+  export type MktContentScalarRelationFilter = {
+    is?: MktContentWhereInput
+    isNot?: MktContentWhereInput
+  }
+
+  export type MktAccountScalarRelationFilter = {
+    is?: MktAccountWhereInput
+    isNot?: MktAccountWhereInput
+  }
+
+  export type MktPublicationCountOrderByAggregateInput = {
+    id?: SortOrder
+    contentId?: SortOrder
+    accountId?: SortOrder
+    idempotencyKey?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    leaseUntil?: SortOrder
+    workerId?: SortOrder
+    remoteRef?: SortOrder
+    remotePostId?: SortOrder
+    attempts?: SortOrder
+    errorMessage?: SortOrder
+    errorCode?: SortOrder
+    sentAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktPublicationAvgOrderByAggregateInput = {
+    attempts?: SortOrder
+  }
+
+  export type MktPublicationMaxOrderByAggregateInput = {
+    id?: SortOrder
+    contentId?: SortOrder
+    accountId?: SortOrder
+    idempotencyKey?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    leaseUntil?: SortOrder
+    workerId?: SortOrder
+    remoteRef?: SortOrder
+    remotePostId?: SortOrder
+    attempts?: SortOrder
+    errorMessage?: SortOrder
+    errorCode?: SortOrder
+    sentAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktPublicationMinOrderByAggregateInput = {
+    id?: SortOrder
+    contentId?: SortOrder
+    accountId?: SortOrder
+    idempotencyKey?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    leaseUntil?: SortOrder
+    workerId?: SortOrder
+    remoteRef?: SortOrder
+    remotePostId?: SortOrder
+    attempts?: SortOrder
+    errorMessage?: SortOrder
+    errorCode?: SortOrder
+    sentAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktPublicationSumOrderByAggregateInput = {
+    attempts?: SortOrder
+  }
+
+  export type MktAssetCountOrderByAggregateInput = {
+    id?: SortOrder
+    localFile?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    width?: SortOrder
+    height?: SortOrder
+    durationS?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MktAssetAvgOrderByAggregateInput = {
+    bytes?: SortOrder
+    width?: SortOrder
+    height?: SortOrder
+    durationS?: SortOrder
+  }
+
+  export type MktAssetMaxOrderByAggregateInput = {
+    id?: SortOrder
+    localFile?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    width?: SortOrder
+    height?: SortOrder
+    durationS?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MktAssetMinOrderByAggregateInput = {
+    id?: SortOrder
+    localFile?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    width?: SortOrder
+    height?: SortOrder
+    durationS?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MktAssetSumOrderByAggregateInput = {
+    bytes?: SortOrder
+    width?: SortOrder
+    height?: SortOrder
+    durationS?: SortOrder
+  }
+
+  export type MktMetricCountOrderByAggregateInput = {
+    id?: SortOrder
+    accountId?: SortOrder
+    publicationId?: SortOrder
+    snapshotAt?: SortOrder
+    views?: SortOrder
+    likes?: SortOrder
+    comments?: SortOrder
+    shares?: SortOrder
+    reach?: SortOrder
+    clicks?: SortOrder
+  }
+
+  export type MktMetricAvgOrderByAggregateInput = {
+    views?: SortOrder
+    likes?: SortOrder
+    comments?: SortOrder
+    shares?: SortOrder
+    reach?: SortOrder
+    clicks?: SortOrder
+  }
+
+  export type MktMetricMaxOrderByAggregateInput = {
+    id?: SortOrder
+    accountId?: SortOrder
+    publicationId?: SortOrder
+    snapshotAt?: SortOrder
+    views?: SortOrder
+    likes?: SortOrder
+    comments?: SortOrder
+    shares?: SortOrder
+    reach?: SortOrder
+    clicks?: SortOrder
+  }
+
+  export type MktMetricMinOrderByAggregateInput = {
+    id?: SortOrder
+    accountId?: SortOrder
+    publicationId?: SortOrder
+    snapshotAt?: SortOrder
+    views?: SortOrder
+    likes?: SortOrder
+    comments?: SortOrder
+    shares?: SortOrder
+    reach?: SortOrder
+    clicks?: SortOrder
+  }
+
+  export type MktMetricSumOrderByAggregateInput = {
+    views?: SortOrder
+    likes?: SortOrder
+    comments?: SortOrder
+    shares?: SortOrder
+    reach?: SortOrder
+    clicks?: SortOrder
   }
 
   export type CrmTaskCountOrderByAggregateInput = {
@@ -228568,6 +238221,232 @@ export namespace Prisma {
     delete?: FbContentPlanWhereInput | boolean
     connect?: FbContentPlanWhereUniqueInput
     update?: XOR<XOR<FbContentPlanUpdateToOneWithWhereWithoutDraftsInput, FbContentPlanUpdateWithoutDraftsInput>, FbContentPlanUncheckedUpdateWithoutDraftsInput>
+  }
+
+  export type MktPublicationCreateNestedManyWithoutAccountInput = {
+    create?: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput> | MktPublicationCreateWithoutAccountInput[] | MktPublicationUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutAccountInput | MktPublicationCreateOrConnectWithoutAccountInput[]
+    createMany?: MktPublicationCreateManyAccountInputEnvelope
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+  }
+
+  export type MktMetricCreateNestedManyWithoutAccountInput = {
+    create?: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput> | MktMetricCreateWithoutAccountInput[] | MktMetricUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktMetricCreateOrConnectWithoutAccountInput | MktMetricCreateOrConnectWithoutAccountInput[]
+    createMany?: MktMetricCreateManyAccountInputEnvelope
+    connect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+  }
+
+  export type MktPublicationUncheckedCreateNestedManyWithoutAccountInput = {
+    create?: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput> | MktPublicationCreateWithoutAccountInput[] | MktPublicationUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutAccountInput | MktPublicationCreateOrConnectWithoutAccountInput[]
+    createMany?: MktPublicationCreateManyAccountInputEnvelope
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+  }
+
+  export type MktMetricUncheckedCreateNestedManyWithoutAccountInput = {
+    create?: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput> | MktMetricCreateWithoutAccountInput[] | MktMetricUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktMetricCreateOrConnectWithoutAccountInput | MktMetricCreateOrConnectWithoutAccountInput[]
+    createMany?: MktMetricCreateManyAccountInputEnvelope
+    connect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+  }
+
+  export type MktPublicationUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput> | MktPublicationCreateWithoutAccountInput[] | MktPublicationUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutAccountInput | MktPublicationCreateOrConnectWithoutAccountInput[]
+    upsert?: MktPublicationUpsertWithWhereUniqueWithoutAccountInput | MktPublicationUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: MktPublicationCreateManyAccountInputEnvelope
+    set?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    disconnect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    delete?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    update?: MktPublicationUpdateWithWhereUniqueWithoutAccountInput | MktPublicationUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: MktPublicationUpdateManyWithWhereWithoutAccountInput | MktPublicationUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+  }
+
+  export type MktMetricUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput> | MktMetricCreateWithoutAccountInput[] | MktMetricUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktMetricCreateOrConnectWithoutAccountInput | MktMetricCreateOrConnectWithoutAccountInput[]
+    upsert?: MktMetricUpsertWithWhereUniqueWithoutAccountInput | MktMetricUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: MktMetricCreateManyAccountInputEnvelope
+    set?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    disconnect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    delete?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    connect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    update?: MktMetricUpdateWithWhereUniqueWithoutAccountInput | MktMetricUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: MktMetricUpdateManyWithWhereWithoutAccountInput | MktMetricUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: MktMetricScalarWhereInput | MktMetricScalarWhereInput[]
+  }
+
+  export type MktPublicationUncheckedUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput> | MktPublicationCreateWithoutAccountInput[] | MktPublicationUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutAccountInput | MktPublicationCreateOrConnectWithoutAccountInput[]
+    upsert?: MktPublicationUpsertWithWhereUniqueWithoutAccountInput | MktPublicationUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: MktPublicationCreateManyAccountInputEnvelope
+    set?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    disconnect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    delete?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    update?: MktPublicationUpdateWithWhereUniqueWithoutAccountInput | MktPublicationUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: MktPublicationUpdateManyWithWhereWithoutAccountInput | MktPublicationUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+  }
+
+  export type MktMetricUncheckedUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput> | MktMetricCreateWithoutAccountInput[] | MktMetricUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: MktMetricCreateOrConnectWithoutAccountInput | MktMetricCreateOrConnectWithoutAccountInput[]
+    upsert?: MktMetricUpsertWithWhereUniqueWithoutAccountInput | MktMetricUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: MktMetricCreateManyAccountInputEnvelope
+    set?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    disconnect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    delete?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    connect?: MktMetricWhereUniqueInput | MktMetricWhereUniqueInput[]
+    update?: MktMetricUpdateWithWhereUniqueWithoutAccountInput | MktMetricUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: MktMetricUpdateManyWithWhereWithoutAccountInput | MktMetricUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: MktMetricScalarWhereInput | MktMetricScalarWhereInput[]
+  }
+
+  export type MktContentCreateNestedManyWithoutCampaignInput = {
+    create?: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput> | MktContentCreateWithoutCampaignInput[] | MktContentUncheckedCreateWithoutCampaignInput[]
+    connectOrCreate?: MktContentCreateOrConnectWithoutCampaignInput | MktContentCreateOrConnectWithoutCampaignInput[]
+    createMany?: MktContentCreateManyCampaignInputEnvelope
+    connect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+  }
+
+  export type MktContentUncheckedCreateNestedManyWithoutCampaignInput = {
+    create?: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput> | MktContentCreateWithoutCampaignInput[] | MktContentUncheckedCreateWithoutCampaignInput[]
+    connectOrCreate?: MktContentCreateOrConnectWithoutCampaignInput | MktContentCreateOrConnectWithoutCampaignInput[]
+    createMany?: MktContentCreateManyCampaignInputEnvelope
+    connect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+  }
+
+  export type MktContentUpdateManyWithoutCampaignNestedInput = {
+    create?: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput> | MktContentCreateWithoutCampaignInput[] | MktContentUncheckedCreateWithoutCampaignInput[]
+    connectOrCreate?: MktContentCreateOrConnectWithoutCampaignInput | MktContentCreateOrConnectWithoutCampaignInput[]
+    upsert?: MktContentUpsertWithWhereUniqueWithoutCampaignInput | MktContentUpsertWithWhereUniqueWithoutCampaignInput[]
+    createMany?: MktContentCreateManyCampaignInputEnvelope
+    set?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    disconnect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    delete?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    connect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    update?: MktContentUpdateWithWhereUniqueWithoutCampaignInput | MktContentUpdateWithWhereUniqueWithoutCampaignInput[]
+    updateMany?: MktContentUpdateManyWithWhereWithoutCampaignInput | MktContentUpdateManyWithWhereWithoutCampaignInput[]
+    deleteMany?: MktContentScalarWhereInput | MktContentScalarWhereInput[]
+  }
+
+  export type MktContentUncheckedUpdateManyWithoutCampaignNestedInput = {
+    create?: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput> | MktContentCreateWithoutCampaignInput[] | MktContentUncheckedCreateWithoutCampaignInput[]
+    connectOrCreate?: MktContentCreateOrConnectWithoutCampaignInput | MktContentCreateOrConnectWithoutCampaignInput[]
+    upsert?: MktContentUpsertWithWhereUniqueWithoutCampaignInput | MktContentUpsertWithWhereUniqueWithoutCampaignInput[]
+    createMany?: MktContentCreateManyCampaignInputEnvelope
+    set?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    disconnect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    delete?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    connect?: MktContentWhereUniqueInput | MktContentWhereUniqueInput[]
+    update?: MktContentUpdateWithWhereUniqueWithoutCampaignInput | MktContentUpdateWithWhereUniqueWithoutCampaignInput[]
+    updateMany?: MktContentUpdateManyWithWhereWithoutCampaignInput | MktContentUpdateManyWithWhereWithoutCampaignInput[]
+    deleteMany?: MktContentScalarWhereInput | MktContentScalarWhereInput[]
+  }
+
+  export type MktCampaignCreateNestedOneWithoutContentsInput = {
+    create?: XOR<MktCampaignCreateWithoutContentsInput, MktCampaignUncheckedCreateWithoutContentsInput>
+    connectOrCreate?: MktCampaignCreateOrConnectWithoutContentsInput
+    connect?: MktCampaignWhereUniqueInput
+  }
+
+  export type MktPublicationCreateNestedManyWithoutContentInput = {
+    create?: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput> | MktPublicationCreateWithoutContentInput[] | MktPublicationUncheckedCreateWithoutContentInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutContentInput | MktPublicationCreateOrConnectWithoutContentInput[]
+    createMany?: MktPublicationCreateManyContentInputEnvelope
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+  }
+
+  export type MktPublicationUncheckedCreateNestedManyWithoutContentInput = {
+    create?: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput> | MktPublicationCreateWithoutContentInput[] | MktPublicationUncheckedCreateWithoutContentInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutContentInput | MktPublicationCreateOrConnectWithoutContentInput[]
+    createMany?: MktPublicationCreateManyContentInputEnvelope
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+  }
+
+  export type MktCampaignUpdateOneWithoutContentsNestedInput = {
+    create?: XOR<MktCampaignCreateWithoutContentsInput, MktCampaignUncheckedCreateWithoutContentsInput>
+    connectOrCreate?: MktCampaignCreateOrConnectWithoutContentsInput
+    upsert?: MktCampaignUpsertWithoutContentsInput
+    disconnect?: MktCampaignWhereInput | boolean
+    delete?: MktCampaignWhereInput | boolean
+    connect?: MktCampaignWhereUniqueInput
+    update?: XOR<XOR<MktCampaignUpdateToOneWithWhereWithoutContentsInput, MktCampaignUpdateWithoutContentsInput>, MktCampaignUncheckedUpdateWithoutContentsInput>
+  }
+
+  export type MktPublicationUpdateManyWithoutContentNestedInput = {
+    create?: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput> | MktPublicationCreateWithoutContentInput[] | MktPublicationUncheckedCreateWithoutContentInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutContentInput | MktPublicationCreateOrConnectWithoutContentInput[]
+    upsert?: MktPublicationUpsertWithWhereUniqueWithoutContentInput | MktPublicationUpsertWithWhereUniqueWithoutContentInput[]
+    createMany?: MktPublicationCreateManyContentInputEnvelope
+    set?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    disconnect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    delete?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    update?: MktPublicationUpdateWithWhereUniqueWithoutContentInput | MktPublicationUpdateWithWhereUniqueWithoutContentInput[]
+    updateMany?: MktPublicationUpdateManyWithWhereWithoutContentInput | MktPublicationUpdateManyWithWhereWithoutContentInput[]
+    deleteMany?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+  }
+
+  export type MktPublicationUncheckedUpdateManyWithoutContentNestedInput = {
+    create?: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput> | MktPublicationCreateWithoutContentInput[] | MktPublicationUncheckedCreateWithoutContentInput[]
+    connectOrCreate?: MktPublicationCreateOrConnectWithoutContentInput | MktPublicationCreateOrConnectWithoutContentInput[]
+    upsert?: MktPublicationUpsertWithWhereUniqueWithoutContentInput | MktPublicationUpsertWithWhereUniqueWithoutContentInput[]
+    createMany?: MktPublicationCreateManyContentInputEnvelope
+    set?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    disconnect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    delete?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    connect?: MktPublicationWhereUniqueInput | MktPublicationWhereUniqueInput[]
+    update?: MktPublicationUpdateWithWhereUniqueWithoutContentInput | MktPublicationUpdateWithWhereUniqueWithoutContentInput[]
+    updateMany?: MktPublicationUpdateManyWithWhereWithoutContentInput | MktPublicationUpdateManyWithWhereWithoutContentInput[]
+    deleteMany?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+  }
+
+  export type MktContentCreateNestedOneWithoutPublicationsInput = {
+    create?: XOR<MktContentCreateWithoutPublicationsInput, MktContentUncheckedCreateWithoutPublicationsInput>
+    connectOrCreate?: MktContentCreateOrConnectWithoutPublicationsInput
+    connect?: MktContentWhereUniqueInput
+  }
+
+  export type MktAccountCreateNestedOneWithoutPublicationsInput = {
+    create?: XOR<MktAccountCreateWithoutPublicationsInput, MktAccountUncheckedCreateWithoutPublicationsInput>
+    connectOrCreate?: MktAccountCreateOrConnectWithoutPublicationsInput
+    connect?: MktAccountWhereUniqueInput
+  }
+
+  export type MktContentUpdateOneRequiredWithoutPublicationsNestedInput = {
+    create?: XOR<MktContentCreateWithoutPublicationsInput, MktContentUncheckedCreateWithoutPublicationsInput>
+    connectOrCreate?: MktContentCreateOrConnectWithoutPublicationsInput
+    upsert?: MktContentUpsertWithoutPublicationsInput
+    connect?: MktContentWhereUniqueInput
+    update?: XOR<XOR<MktContentUpdateToOneWithWhereWithoutPublicationsInput, MktContentUpdateWithoutPublicationsInput>, MktContentUncheckedUpdateWithoutPublicationsInput>
+  }
+
+  export type MktAccountUpdateOneRequiredWithoutPublicationsNestedInput = {
+    create?: XOR<MktAccountCreateWithoutPublicationsInput, MktAccountUncheckedCreateWithoutPublicationsInput>
+    connectOrCreate?: MktAccountCreateOrConnectWithoutPublicationsInput
+    upsert?: MktAccountUpsertWithoutPublicationsInput
+    connect?: MktAccountWhereUniqueInput
+    update?: XOR<XOR<MktAccountUpdateToOneWithWhereWithoutPublicationsInput, MktAccountUpdateWithoutPublicationsInput>, MktAccountUncheckedUpdateWithoutPublicationsInput>
+  }
+
+  export type MktAccountCreateNestedOneWithoutMetricsInput = {
+    create?: XOR<MktAccountCreateWithoutMetricsInput, MktAccountUncheckedCreateWithoutMetricsInput>
+    connectOrCreate?: MktAccountCreateOrConnectWithoutMetricsInput
+    connect?: MktAccountWhereUniqueInput
+  }
+
+  export type MktAccountUpdateOneRequiredWithoutMetricsNestedInput = {
+    create?: XOR<MktAccountCreateWithoutMetricsInput, MktAccountUncheckedCreateWithoutMetricsInput>
+    connectOrCreate?: MktAccountCreateOrConnectWithoutMetricsInput
+    upsert?: MktAccountUpsertWithoutMetricsInput
+    connect?: MktAccountWhereUniqueInput
+    update?: XOR<XOR<MktAccountUpdateToOneWithWhereWithoutMetricsInput, MktAccountUpdateWithoutMetricsInput>, MktAccountUncheckedUpdateWithoutMetricsInput>
   }
 
   export type AiAgentRunCreateNestedManyWithoutJobInput = {
@@ -236794,6 +246673,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -236832,6 +246713,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -236946,6 +246829,8 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
+    khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -237433,6 +247318,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -237472,6 +247359,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -237598,6 +247487,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -237637,6 +247528,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -240798,6 +250691,650 @@ export namespace Prisma {
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationCreateWithoutAccountInput = {
+    id?: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    content: MktContentCreateNestedOneWithoutPublicationsInput
+  }
+
+  export type MktPublicationUncheckedCreateWithoutAccountInput = {
+    id?: string
+    contentId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktPublicationCreateOrConnectWithoutAccountInput = {
+    where: MktPublicationWhereUniqueInput
+    create: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput>
+  }
+
+  export type MktPublicationCreateManyAccountInputEnvelope = {
+    data: MktPublicationCreateManyAccountInput | MktPublicationCreateManyAccountInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MktMetricCreateWithoutAccountInput = {
+    id?: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+  }
+
+  export type MktMetricUncheckedCreateWithoutAccountInput = {
+    id?: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+  }
+
+  export type MktMetricCreateOrConnectWithoutAccountInput = {
+    where: MktMetricWhereUniqueInput
+    create: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput>
+  }
+
+  export type MktMetricCreateManyAccountInputEnvelope = {
+    data: MktMetricCreateManyAccountInput | MktMetricCreateManyAccountInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MktPublicationUpsertWithWhereUniqueWithoutAccountInput = {
+    where: MktPublicationWhereUniqueInput
+    update: XOR<MktPublicationUpdateWithoutAccountInput, MktPublicationUncheckedUpdateWithoutAccountInput>
+    create: XOR<MktPublicationCreateWithoutAccountInput, MktPublicationUncheckedCreateWithoutAccountInput>
+  }
+
+  export type MktPublicationUpdateWithWhereUniqueWithoutAccountInput = {
+    where: MktPublicationWhereUniqueInput
+    data: XOR<MktPublicationUpdateWithoutAccountInput, MktPublicationUncheckedUpdateWithoutAccountInput>
+  }
+
+  export type MktPublicationUpdateManyWithWhereWithoutAccountInput = {
+    where: MktPublicationScalarWhereInput
+    data: XOR<MktPublicationUpdateManyMutationInput, MktPublicationUncheckedUpdateManyWithoutAccountInput>
+  }
+
+  export type MktPublicationScalarWhereInput = {
+    AND?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+    OR?: MktPublicationScalarWhereInput[]
+    NOT?: MktPublicationScalarWhereInput | MktPublicationScalarWhereInput[]
+    id?: StringFilter<"MktPublication"> | string
+    contentId?: StringFilter<"MktPublication"> | string
+    accountId?: StringFilter<"MktPublication"> | string
+    idempotencyKey?: StringFilter<"MktPublication"> | string
+    scheduledAt?: DateTimeFilter<"MktPublication"> | Date | string
+    status?: StringFilter<"MktPublication"> | string
+    leaseUntil?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    workerId?: StringNullableFilter<"MktPublication"> | string | null
+    remoteRef?: StringNullableFilter<"MktPublication"> | string | null
+    remotePostId?: StringNullableFilter<"MktPublication"> | string | null
+    attempts?: IntFilter<"MktPublication"> | number
+    errorMessage?: StringNullableFilter<"MktPublication"> | string | null
+    errorCode?: StringNullableFilter<"MktPublication"> | string | null
+    sentAt?: DateTimeNullableFilter<"MktPublication"> | Date | string | null
+    createdAt?: DateTimeFilter<"MktPublication"> | Date | string
+    updatedAt?: DateTimeFilter<"MktPublication"> | Date | string
+  }
+
+  export type MktMetricUpsertWithWhereUniqueWithoutAccountInput = {
+    where: MktMetricWhereUniqueInput
+    update: XOR<MktMetricUpdateWithoutAccountInput, MktMetricUncheckedUpdateWithoutAccountInput>
+    create: XOR<MktMetricCreateWithoutAccountInput, MktMetricUncheckedCreateWithoutAccountInput>
+  }
+
+  export type MktMetricUpdateWithWhereUniqueWithoutAccountInput = {
+    where: MktMetricWhereUniqueInput
+    data: XOR<MktMetricUpdateWithoutAccountInput, MktMetricUncheckedUpdateWithoutAccountInput>
+  }
+
+  export type MktMetricUpdateManyWithWhereWithoutAccountInput = {
+    where: MktMetricScalarWhereInput
+    data: XOR<MktMetricUpdateManyMutationInput, MktMetricUncheckedUpdateManyWithoutAccountInput>
+  }
+
+  export type MktMetricScalarWhereInput = {
+    AND?: MktMetricScalarWhereInput | MktMetricScalarWhereInput[]
+    OR?: MktMetricScalarWhereInput[]
+    NOT?: MktMetricScalarWhereInput | MktMetricScalarWhereInput[]
+    id?: StringFilter<"MktMetric"> | string
+    accountId?: StringFilter<"MktMetric"> | string
+    publicationId?: StringNullableFilter<"MktMetric"> | string | null
+    snapshotAt?: DateTimeFilter<"MktMetric"> | Date | string
+    views?: IntNullableFilter<"MktMetric"> | number | null
+    likes?: IntNullableFilter<"MktMetric"> | number | null
+    comments?: IntNullableFilter<"MktMetric"> | number | null
+    shares?: IntNullableFilter<"MktMetric"> | number | null
+    reach?: IntNullableFilter<"MktMetric"> | number | null
+    clicks?: IntNullableFilter<"MktMetric"> | number | null
+  }
+
+  export type MktContentCreateWithoutCampaignInput = {
+    id?: string
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationCreateNestedManyWithoutContentInput
+  }
+
+  export type MktContentUncheckedCreateWithoutCampaignInput = {
+    id?: string
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationUncheckedCreateNestedManyWithoutContentInput
+  }
+
+  export type MktContentCreateOrConnectWithoutCampaignInput = {
+    where: MktContentWhereUniqueInput
+    create: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput>
+  }
+
+  export type MktContentCreateManyCampaignInputEnvelope = {
+    data: MktContentCreateManyCampaignInput | MktContentCreateManyCampaignInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MktContentUpsertWithWhereUniqueWithoutCampaignInput = {
+    where: MktContentWhereUniqueInput
+    update: XOR<MktContentUpdateWithoutCampaignInput, MktContentUncheckedUpdateWithoutCampaignInput>
+    create: XOR<MktContentCreateWithoutCampaignInput, MktContentUncheckedCreateWithoutCampaignInput>
+  }
+
+  export type MktContentUpdateWithWhereUniqueWithoutCampaignInput = {
+    where: MktContentWhereUniqueInput
+    data: XOR<MktContentUpdateWithoutCampaignInput, MktContentUncheckedUpdateWithoutCampaignInput>
+  }
+
+  export type MktContentUpdateManyWithWhereWithoutCampaignInput = {
+    where: MktContentScalarWhereInput
+    data: XOR<MktContentUpdateManyMutationInput, MktContentUncheckedUpdateManyWithoutCampaignInput>
+  }
+
+  export type MktContentScalarWhereInput = {
+    AND?: MktContentScalarWhereInput | MktContentScalarWhereInput[]
+    OR?: MktContentScalarWhereInput[]
+    NOT?: MktContentScalarWhereInput | MktContentScalarWhereInput[]
+    id?: StringFilter<"MktContent"> | string
+    campaignId?: StringNullableFilter<"MktContent"> | string | null
+    title?: StringFilter<"MktContent"> | string
+    body?: StringFilter<"MktContent"> | string
+    hashtags?: StringFilter<"MktContent"> | string
+    linkUrl?: StringNullableFilter<"MktContent"> | string | null
+    assetIds?: StringFilter<"MktContent"> | string
+    productIds?: StringFilter<"MktContent"> | string
+    revision?: IntFilter<"MktContent"> | number
+    approvedRevision?: IntNullableFilter<"MktContent"> | number | null
+    approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
+    approvedBy?: StringNullableFilter<"MktContent"> | string | null
+    rejectReason?: StringNullableFilter<"MktContent"> | string | null
+    status?: StringFilter<"MktContent"> | string
+    source?: StringFilter<"MktContent"> | string
+    createdBy?: StringNullableFilter<"MktContent"> | string | null
+    createdAt?: DateTimeFilter<"MktContent"> | Date | string
+    updatedAt?: DateTimeFilter<"MktContent"> | Date | string
+  }
+
+  export type MktCampaignCreateWithoutContentsInput = {
+    id?: string
+    name: string
+    goal?: string
+    status?: string
+    startAt?: Date | string | null
+    endAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktCampaignUncheckedCreateWithoutContentsInput = {
+    id?: string
+    name: string
+    goal?: string
+    status?: string
+    startAt?: Date | string | null
+    endAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktCampaignCreateOrConnectWithoutContentsInput = {
+    where: MktCampaignWhereUniqueInput
+    create: XOR<MktCampaignCreateWithoutContentsInput, MktCampaignUncheckedCreateWithoutContentsInput>
+  }
+
+  export type MktPublicationCreateWithoutContentInput = {
+    id?: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    account: MktAccountCreateNestedOneWithoutPublicationsInput
+  }
+
+  export type MktPublicationUncheckedCreateWithoutContentInput = {
+    id?: string
+    accountId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktPublicationCreateOrConnectWithoutContentInput = {
+    where: MktPublicationWhereUniqueInput
+    create: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput>
+  }
+
+  export type MktPublicationCreateManyContentInputEnvelope = {
+    data: MktPublicationCreateManyContentInput | MktPublicationCreateManyContentInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MktCampaignUpsertWithoutContentsInput = {
+    update: XOR<MktCampaignUpdateWithoutContentsInput, MktCampaignUncheckedUpdateWithoutContentsInput>
+    create: XOR<MktCampaignCreateWithoutContentsInput, MktCampaignUncheckedCreateWithoutContentsInput>
+    where?: MktCampaignWhereInput
+  }
+
+  export type MktCampaignUpdateToOneWithWhereWithoutContentsInput = {
+    where?: MktCampaignWhereInput
+    data: XOR<MktCampaignUpdateWithoutContentsInput, MktCampaignUncheckedUpdateWithoutContentsInput>
+  }
+
+  export type MktCampaignUpdateWithoutContentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktCampaignUncheckedUpdateWithoutContentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    startAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationUpsertWithWhereUniqueWithoutContentInput = {
+    where: MktPublicationWhereUniqueInput
+    update: XOR<MktPublicationUpdateWithoutContentInput, MktPublicationUncheckedUpdateWithoutContentInput>
+    create: XOR<MktPublicationCreateWithoutContentInput, MktPublicationUncheckedCreateWithoutContentInput>
+  }
+
+  export type MktPublicationUpdateWithWhereUniqueWithoutContentInput = {
+    where: MktPublicationWhereUniqueInput
+    data: XOR<MktPublicationUpdateWithoutContentInput, MktPublicationUncheckedUpdateWithoutContentInput>
+  }
+
+  export type MktPublicationUpdateManyWithWhereWithoutContentInput = {
+    where: MktPublicationScalarWhereInput
+    data: XOR<MktPublicationUpdateManyMutationInput, MktPublicationUncheckedUpdateManyWithoutContentInput>
+  }
+
+  export type MktContentCreateWithoutPublicationsInput = {
+    id?: string
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    campaign?: MktCampaignCreateNestedOneWithoutContentsInput
+  }
+
+  export type MktContentUncheckedCreateWithoutPublicationsInput = {
+    id?: string
+    campaignId?: string | null
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktContentCreateOrConnectWithoutPublicationsInput = {
+    where: MktContentWhereUniqueInput
+    create: XOR<MktContentCreateWithoutPublicationsInput, MktContentUncheckedCreateWithoutPublicationsInput>
+  }
+
+  export type MktAccountCreateWithoutPublicationsInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    metrics?: MktMetricCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountUncheckedCreateWithoutPublicationsInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    metrics?: MktMetricUncheckedCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountCreateOrConnectWithoutPublicationsInput = {
+    where: MktAccountWhereUniqueInput
+    create: XOR<MktAccountCreateWithoutPublicationsInput, MktAccountUncheckedCreateWithoutPublicationsInput>
+  }
+
+  export type MktContentUpsertWithoutPublicationsInput = {
+    update: XOR<MktContentUpdateWithoutPublicationsInput, MktContentUncheckedUpdateWithoutPublicationsInput>
+    create: XOR<MktContentCreateWithoutPublicationsInput, MktContentUncheckedCreateWithoutPublicationsInput>
+    where?: MktContentWhereInput
+  }
+
+  export type MktContentUpdateToOneWithWhereWithoutPublicationsInput = {
+    where?: MktContentWhereInput
+    data: XOR<MktContentUpdateWithoutPublicationsInput, MktContentUncheckedUpdateWithoutPublicationsInput>
+  }
+
+  export type MktContentUpdateWithoutPublicationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    campaign?: MktCampaignUpdateOneWithoutContentsNestedInput
+  }
+
+  export type MktContentUncheckedUpdateWithoutPublicationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    campaignId?: NullableStringFieldUpdateOperationsInput | string | null
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktAccountUpsertWithoutPublicationsInput = {
+    update: XOR<MktAccountUpdateWithoutPublicationsInput, MktAccountUncheckedUpdateWithoutPublicationsInput>
+    create: XOR<MktAccountCreateWithoutPublicationsInput, MktAccountUncheckedCreateWithoutPublicationsInput>
+    where?: MktAccountWhereInput
+  }
+
+  export type MktAccountUpdateToOneWithWhereWithoutPublicationsInput = {
+    where?: MktAccountWhereInput
+    data: XOR<MktAccountUpdateWithoutPublicationsInput, MktAccountUncheckedUpdateWithoutPublicationsInput>
+  }
+
+  export type MktAccountUpdateWithoutPublicationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    metrics?: MktMetricUpdateManyWithoutAccountNestedInput
+  }
+
+  export type MktAccountUncheckedUpdateWithoutPublicationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    metrics?: MktMetricUncheckedUpdateManyWithoutAccountNestedInput
+  }
+
+  export type MktAccountCreateWithoutMetricsInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountUncheckedCreateWithoutMetricsInput = {
+    id?: string
+    platform: string
+    externalId: string
+    name?: string
+    avatar?: string | null
+    category?: string | null
+    followers?: number | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    status?: string
+    lastSyncAt?: Date | string | null
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publications?: MktPublicationUncheckedCreateNestedManyWithoutAccountInput
+  }
+
+  export type MktAccountCreateOrConnectWithoutMetricsInput = {
+    where: MktAccountWhereUniqueInput
+    create: XOR<MktAccountCreateWithoutMetricsInput, MktAccountUncheckedCreateWithoutMetricsInput>
+  }
+
+  export type MktAccountUpsertWithoutMetricsInput = {
+    update: XOR<MktAccountUpdateWithoutMetricsInput, MktAccountUncheckedUpdateWithoutMetricsInput>
+    create: XOR<MktAccountCreateWithoutMetricsInput, MktAccountUncheckedCreateWithoutMetricsInput>
+    where?: MktAccountWhereInput
+  }
+
+  export type MktAccountUpdateToOneWithWhereWithoutMetricsInput = {
+    where?: MktAccountWhereInput
+    data: XOR<MktAccountUpdateWithoutMetricsInput, MktAccountUncheckedUpdateWithoutMetricsInput>
+  }
+
+  export type MktAccountUpdateWithoutMetricsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUpdateManyWithoutAccountNestedInput
+  }
+
+  export type MktAccountUncheckedUpdateWithoutMetricsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platform?: StringFieldUpdateOperationsInput | string
+    externalId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    followers?: NullableIntFieldUpdateOperationsInput | number | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUncheckedUpdateManyWithoutAccountNestedInput
   }
 
   export type AiAgentRunCreateWithoutJobInput = {
@@ -244456,6 +254993,8 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khongKhopSku?: boolean
+    khongKhopLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -244511,6 +255050,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -244549,6 +255090,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -244587,6 +255130,8 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
+    khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -245622,6 +256167,280 @@ export namespace Prisma {
     fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
     source?: StringFieldUpdateOperationsInput | string
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationCreateManyAccountInput = {
+    id?: string
+    contentId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktMetricCreateManyAccountInput = {
+    id?: string
+    publicationId?: string | null
+    snapshotAt?: Date | string
+    views?: number | null
+    likes?: number | null
+    comments?: number | null
+    shares?: number | null
+    reach?: number | null
+    clicks?: number | null
+  }
+
+  export type MktPublicationUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    content?: MktContentUpdateOneRequiredWithoutPublicationsNestedInput
+  }
+
+  export type MktPublicationUncheckedUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    contentId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationUncheckedUpdateManyWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    contentId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktMetricUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MktMetricUncheckedUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MktMetricUncheckedUpdateManyWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    publicationId?: NullableStringFieldUpdateOperationsInput | string | null
+    snapshotAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    views?: NullableIntFieldUpdateOperationsInput | number | null
+    likes?: NullableIntFieldUpdateOperationsInput | number | null
+    comments?: NullableIntFieldUpdateOperationsInput | number | null
+    shares?: NullableIntFieldUpdateOperationsInput | number | null
+    reach?: NullableIntFieldUpdateOperationsInput | number | null
+    clicks?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MktContentCreateManyCampaignInput = {
+    id?: string
+    title?: string
+    body?: string
+    hashtags?: string
+    linkUrl?: string | null
+    assetIds?: string
+    productIds?: string
+    revision?: number
+    approvedRevision?: number | null
+    approvedAt?: Date | string | null
+    approvedBy?: string | null
+    rejectReason?: string | null
+    status?: string
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktContentUpdateWithoutCampaignInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUpdateManyWithoutContentNestedInput
+  }
+
+  export type MktContentUncheckedUpdateWithoutCampaignInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publications?: MktPublicationUncheckedUpdateManyWithoutContentNestedInput
+  }
+
+  export type MktContentUncheckedUpdateManyWithoutCampaignInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    assetIds?: StringFieldUpdateOperationsInput | string
+    productIds?: StringFieldUpdateOperationsInput | string
+    revision?: IntFieldUpdateOperationsInput | number
+    approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
+    approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    approvedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationCreateManyContentInput = {
+    id?: string
+    accountId: string
+    idempotencyKey: string
+    scheduledAt: Date | string
+    status?: string
+    leaseUntil?: Date | string | null
+    workerId?: string | null
+    remoteRef?: string | null
+    remotePostId?: string | null
+    attempts?: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    sentAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktPublicationUpdateWithoutContentInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    account?: MktAccountUpdateOneRequiredWithoutPublicationsNestedInput
+  }
+
+  export type MktPublicationUncheckedUpdateWithoutContentInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktPublicationUncheckedUpdateManyWithoutContentInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    accountId?: StringFieldUpdateOperationsInput | string
+    idempotencyKey?: StringFieldUpdateOperationsInput | string
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    leaseUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workerId?: NullableStringFieldUpdateOperationsInput | string | null
+    remoteRef?: NullableStringFieldUpdateOperationsInput | string | null
+    remotePostId?: NullableStringFieldUpdateOperationsInput | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    errorCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
