@@ -273,6 +273,25 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
 
     if (transactionItems.length === 0) {
         console.log(`[OrderSync] No matching products for order ${order.orderNumber}, skipping`)
+        /* Đánh dấu để lượt đồng bộ sau KHÔNG quét lại đơn này nữa.
+         *
+         * Đo 05/09/2026 trên log prod: 1.033 đơn kẹt đúng nhánh này bị thử lại
+         * ~5 lần/ngày, mỗi lượt tốn ~4 truy vấn trước khi bỏ cuộc ⇒ ~20.000 truy
+         * vấn phí mỗi ngày, trên pool CHỈ CÓ 1 kết nối (cùng ngày: 819 lần cạn
+         * kết nối, 69 lần container sập /30 ngày).
+         *
+         * ⚠ Đây KHÔNG phải bỏ đơn. Đơn còn nguyên, chỉ thôi thử lại liên tục;
+         * `GET /admin/don-ket` vẫn liệt kê chúng, và cờ tự xoá khi chuyển được. */
+        try {
+            await prisma.onlineOrder.update({
+                where: { id: order.id },
+                data: { khongKhopSku: true, khongKhopLuc: new Date() },
+            })
+        } catch (err: any) {
+            /* Không đặt được cờ thì chỉ mất phần tiết kiệm — đơn vẫn nguyên vẹn và
+             * lượt sau quét lại như cũ. Nhưng phải NÓI RA, đừng nuốt lặng. */
+            console.warn(`[OrderSync] Không đặt được cờ khongKhopSku cho ${order.orderNumber}: ${moTaLoi(err)}`)
+        }
         return false
     }
 
@@ -377,6 +396,16 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         }
     }
 
+    /* Chuyển được rồi thì XOÁ cờ kẹt SKU (nếu trước đây từng kẹt). Không xoá thì
+     * đơn đã lên phiếu vẫn mang cờ, làm mọi bộ đếm "đơn kẹt" đọc sai về sau.
+     * `updateMany` để không ném lỗi nếu đơn vừa bị xoá xen giữa. */
+    if (order.khongKhopSku) {
+        await prisma.onlineOrder.updateMany({
+            where: { id: order.id },
+            data: { khongKhopSku: false, khongKhopLuc: null },
+        }).catch((err: any) => console.warn(`[OrderSync] Không xoá được cờ khongKhopSku cho ${order.orderNumber}: ${moTaLoi(err)}`))
+    }
+
     console.log(`[OrderSync] Converted order ${order.orderNumber} → Transaction + ${deducted} inventory updates`)
     return true
 }
@@ -386,6 +415,15 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
  */
 export async function processNewOrders(prisma: StorePrisma, channelId: string): Promise<number> {
     // Find orders that are confirmed/completed but not yet converted to transactions
+    /* Đơn đã thử mà không khớp được SKU nào thì CHỈ thử lại mỗi 24h, không phải
+     * mỗi lượt. Lý do đầy đủ ở chỗ đặt cờ trong convertOnlineOrderToTransaction.
+     *
+     * Vì sao vẫn thử lại 24h/lần thay vì loại hẳn: cờ chỉ được xoá qua
+     * POST /online-orders/reconvert. Nếu có đường sửa ánh xạ SKU nào tôi chưa nối
+     * vào (nhập hàng, đổi SKU sản phẩm, đồng bộ KiotViet…) thì đơn sẽ nằm chết
+     * vĩnh viễn mà không ai biết. Một lượt/ngày là giá rẻ để không bỏ sót doanh thu
+     * — "chưa khớp được" KHÔNG có nghĩa là "sẽ không bao giờ khớp". */
+    const hanThuLai = new Date(Date.now() - 24 * 3600_000)
     const orders = await prisma.onlineOrder.findMany({
         where: {
             channelId,
@@ -396,6 +434,11 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
                 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT',
                 'DELIVERED', // thiếu trước đây → đơn TikTok đã giao không bao giờ được chuyển
             ] },
+            OR: [
+                { khongKhopSku: false },
+                { khongKhopLuc: null },                  // cờ bật mà chưa có mốc → cứ thử
+                { khongKhopLuc: { lt: hanThuLai } },
+            ],
         },
         select: { id: true, orderNumber: true },
     })

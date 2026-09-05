@@ -1897,6 +1897,17 @@ model OnlineOrder {
   // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
   // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
   stockDeducted      Boolean   @default(false)
+  // Đã thử lên phiếu nhưng KHÔNG khớp được SKU nào sang hàng kho → ĐỪNG thử lại
+  // mỗi lượt đồng bộ. Đo 05/09/2026: 1.033 đơn như vậy bị quét lại ~5 lần/ngày,
+  // mỗi lượt tốn ~4 truy vấn (findUnique + transaction.findFirst + user.findFirst
+  // + tra sản phẩm) ⇒ ~20.000 truy vấn phí/ngày trên pool CHỈ CÓ 1 kết nối.
+  //
+  // KHÔNG phải "bỏ đơn": đơn vẫn còn nguyên, chỉ thôi thử lại liên tục. Ba đường
+  // mở lại: (1) POST /online-orders/reconvert xoá cờ rồi chạy lại — đây là nút
+  // chủ shop bấm sau khi Nối Listing; (2) tự thử lại mỗi 24h phòng khi có đường
+  // sửa SKU nào tôi chưa nối vào; (3) chuyển được thì cờ tự xoá.
+  khongKhopSku       Boolean   @default(false)
+  khongKhopLuc       DateTime? // lần thử gần nhất — mốc tính hạn thử lại 24h
   syncedAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

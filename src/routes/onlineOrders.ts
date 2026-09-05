@@ -1461,9 +1461,20 @@ router.post('/reconvert', skuAuth, requirePermission('online_orders.manage', 'or
     try {
         const prisma = req.storePrisma!
         const days = Math.min(365, Math.max(1, Number(req.body?.days) || 90))
+        const tuNgay = new Date(Date.now() - days * 86400_000)
+
+        /* XOÁ CỜ KẸT SKU trước khi quét — đây chính là nút "chạy lại sau khi vừa
+         * nối SKU", nên nó phải mở khoá đúng những đơn đang bị cờ chặn. Thiếu
+         * bước này thì processNewOrders lọc chúng ra và nút bấm thành vô tác dụng
+         * với đúng các đơn mà người ta bấm nút vì chúng. */
+        const daMoKhoa = await prisma.onlineOrder.updateMany({
+            where: { createdAt: { gte: tuNgay }, khongKhopSku: true },
+            data: { khongKhopSku: false, khongKhopLuc: null },
+        })
+
         const orders = await prisma.onlineOrder.findMany({
             where: {
-                createdAt: { gte: new Date(Date.now() - days * 86400_000) },
+                createdAt: { gte: tuNgay },
                 status: {
                     in: [
                         'confirmed', 'processing', 'shipping', 'completed', 'delivered',
@@ -1484,7 +1495,7 @@ router.post('/reconvert', skuAuth, requirePermission('online_orders.manage', 'or
                 if (ok) converted++; else skipped++
             } catch { failed++ }
         }
-        res.json({ success: true, data: { scanned: orders.length, converted, skipped, failed } })
+        res.json({ success: true, data: { scanned: orders.length, converted, skipped, failed, daMoKhoa: daMoKhoa.count } })
     } catch (err) {
         console.error('reconvert error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })

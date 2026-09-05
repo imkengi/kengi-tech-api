@@ -2674,6 +2674,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // hạn bàn giao ĐVVC riêng (trước đây ship_by_date bị map nhầm vào shippedAt)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "isInstant" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "shipByDate" TIMESTAMP(3)`)
+                // Cờ "đã thử lên phiếu mà không khớp SKU nào" — chặn quét lại mỗi lượt
+                // đồng bộ (05/09/2026: 1.033 đơn × ~5 lượt/ngày × ~4 truy vấn trên pool 1).
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khongKhopSku" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khongKhopLuc" TIMESTAMP(3)`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
