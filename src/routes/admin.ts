@@ -4348,6 +4348,66 @@ router.get('/do-dong-goi', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── TRỢ LÝ AI ĐÃ CẤU HÌNH CHƯA — GET /admin/do-tro-ly (05/09/2026)
+ *  CHỈ ĐỌC, và TUYỆT ĐỐI không trả về giá trị khoá.
+ *
+ *  Vì sao cần: trợ lý AI (/api/mcp-agent/chat) đọc `StoreSettings.geminiApiKey`
+ *  của TỪNG cửa hàng; thiếu là trả 503 "chưa cấu hình". Nhìn từ ngoài thì giống
+ *  hệt "trợ lý hỏng" — nên phải phân biệt được hai chuyện đó mà không cần ai đọc
+ *  khoá ra.
+ *
+ *  Chỉ trả CÓ/KHÔNG và độ dài khoá. Độ dài đủ để phát hiện dán thiếu/dán nhầm
+ *  (khoá Gemini ~39 ký tự) mà không lộ được ký tự nào. */
+router.get('/do-tro-ly', async (_req: Request, res: Response) => {
+    try {
+        const stores = await prisma.store.findMany({
+            where: { isActive: true } as any,
+            select: { code: true, name: true, schema: true, isDemo: true } as any,
+            orderBy: { code: 'asc' },
+        })
+        const ra: any[] = []
+        // TUẦN TỰ — pool prod = 1 kết nối, chạy song song là chúng tự xếp hàng
+        // sau nhau mà còn tốn thêm lượt xác thực.
+        for (const st of stores as any[]) {
+            let coKhoa: boolean | null = null
+            let doDai = 0
+            try {
+                const sp: any = getStorePrisma(st.schema)
+                const cf = await sp.storeSettings.findFirst({ select: { geminiApiKey: true } as any })
+                const k = String(cf?.geminiApiKey ?? '')
+                coKhoa = k.length > 0
+                doDai = k.length
+            } catch {
+                // Cột chưa migrate hoặc đọc hỏng — KHÔNG coi là "chưa cấu hình",
+                // vì đọc hỏng khác hẳn không có (null nói rõ là không đọc được).
+                coKhoa = null
+            }
+            ra.push({
+                cuaHang: st.code, ten: st.name, demo: !!st.isDemo,
+                daCauHinhTroLy: coKhoa,
+                doDaiKhoa: doDai,       // chỉ độ dài, không có ký tự nào
+                ghiChu: coKhoa === null ? 'KHÔNG ĐỌC ĐƯỢC (khác với chưa cấu hình)'
+                    : coKhoa ? (doDai < 30 ? 'Có khoá nhưng NGẮN BẤT THƯỜNG — nghi dán thiếu' : 'OK')
+                        : 'Chưa nhập khoá → /api/mcp-agent/chat sẽ trả 503',
+            })
+        }
+        res.json({
+            success: true,
+            data: {
+                soCuaHang: ra.length,
+                daCauHinh: ra.filter(x => x.daCauHinhTroLy === true).length,
+                chuaCauHinh: ra.filter(x => x.daCauHinhTroLy === false).length,
+                khongDocDuoc: ra.filter(x => x.daCauHinhTroLy === null).length,
+                chiTiet: ra,
+                ghiChu: 'Chỉ trả có/không và độ dài. Khoá KHÔNG bao giờ đi ra khỏi máy chủ.',
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/do-tro-ly lỗi:', err)
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
