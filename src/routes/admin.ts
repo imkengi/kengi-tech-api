@@ -2682,6 +2682,8 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // đồng bộ (05/09/2026: 1.033 đơn × ~5 lượt/ngày × ~4 truy vấn trên pool 1).
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khongKhopSku" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khongKhopLuc" TIMESTAMP(3)`)
+                // Cảnh báo lợi nhuận thấp chỉ báo MỘT lần mỗi đơn (06/09/2026)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "loiNhuanThapBaoLuc" TIMESTAMP(3)`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
@@ -4194,6 +4196,35 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
  *  Nhịp như cron: 2 luồng, nghỉ 350ms sau mỗi lời gọi, dừng ở 240s.
  *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
  * ───────────────────────────────────────────────────────────────────────────── */
+/* Có thiết bị nào nhận push không — GET /admin/do-thiet-bi?storeCode=  (CHỈ ĐỌC, không trả token) */
+router.get('/do-thiet-bi', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        let rows: any[] = []
+        try {
+            rows = await sp.$queryRawUnsafe(`SELECT "updatedAt" FROM "DeviceToken" ORDER BY "updatedAt" DESC LIMIT 100`)
+        } catch (e: any) {
+            res.json({ success: true, data: { cuaHang: store.name, soThietBi: 0, ghiChu: 'Bảng DeviceToken chưa có → chưa thiết bị nào đăng ký push.', loi: String(e?.message || '').slice(0, 120) } })
+            return
+        }
+        const daBao = await sp.onlineOrder.count({ where: { loiNhuanThapBaoLuc: { not: null } } }).catch(() => null)
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, soThietBi: rows.length,
+                capNhatGanNhat: rows[0]?.updatedAt ?? null,
+                donDaCanhBaoLoiNhuanThap: daBao,
+                nguong: Number(process.env.NGUONG_LOI_NHUAN_THAP || 5),
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || req.body?.storeCode || 'KENGISTORE').trim()
@@ -4221,10 +4252,15 @@ router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
                 createdAt: { gte: new Date(Date.now() - 45 * 86400_000) },
             }
             const tongCho = await sp.onlineOrder.count({ where: whereCho })
+            /* CŨ NHẤT TRƯỚC. Lượt đầu (06/09) quét mới-nhất-trước: 200/200 đơn đều
+             * chưa được TikTok chốt statement (175) hoặc bị chặn tốc độ (25) — đúng
+             * nhóm ít khả năng đã quyết toán nhất, nên không trả lời được câu
+             * "có lấy được không". Đơn cũ trong cửa sổ 45 ngày mới là thứ cần hỏi. */
             const orders: any[] = await sp.onlineOrder.findMany({
                 where: whereCho, select: { id: true, externalOrderId: true, orderNumber: true, createdAt: true },
-                orderBy: { createdAt: 'desc' }, take,
+                orderBy: { createdAt: 'asc' }, take,
             })
+            const idVuaDoiSoat: string[] = []
             const k = { kenh: ch.name, tongDangCho: tongCho, quet: orders.length, ok: 0, chuaQuyetToan: 0, biChanTocDo: 0, loiKhac: 0, dungVi240s: 0, loiMau: [] as string[], viDuOk: [] as any[], conCho: tongCho }
             await mapWithConcurrency(orders, async (o: any) => {
                 if (Date.now() - batDau > 240_000) { k.dungVi240s++; return }
@@ -4247,7 +4283,7 @@ router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
                             }
                             if (fee === 0 && revenue > settlement) fee = revenue - settlement
                             if (settlement > 0 || fee > 0) {
-                                if (!chiThu) await sp.onlineOrder.update({ where: { id: o.id }, data: { platformFee: Math.round(fee), netRevenue: Math.round(settlement) } })
+                                if (!chiThu) { await sp.onlineOrder.update({ where: { id: o.id }, data: { platformFee: Math.round(fee), netRevenue: Math.round(settlement) } }); idVuaDoiSoat.push(o.id) }
                                 k.ok++
                                 if (k.viDuOk.length < 3) k.viDuOk.push({ ma: o.orderNumber, phi: Math.round(fee), thucNhan: Math.round(settlement), revenueTikTok: Math.round(revenue) })
                             } else k.chuaQuyetToan++
@@ -4260,6 +4296,12 @@ router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
                 await new Promise(r => setTimeout(r, 350))
             }, 2)
             k.conCho = chiThu ? tongCho : await sp.onlineOrder.count({ where: whereCho })
+            if (idVuaDoiSoat.length) {
+                try {
+                    const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                    ;(k as any).canhBaoLoiNhuanThap = await canhBaoLoiNhuanThap(sp, idVuaDoiSoat)
+                } catch (e: any) { (k as any).canhBaoLoiNhuanThap = { loi: String(e?.message || e).slice(0, 120) } }
+            }
             ra.push(k)
         }
         res.json({
@@ -5635,6 +5677,7 @@ router.post('/sync-fees', async (req: Request, res: Response) => {
                 take: limit,
             })
             let ok = 0, chuaCo = 0, loi = 0
+            const idVuaDoiSoat: string[] = []
             // 6 LUỒNG song song: tuần tự thì mỗi đơn ~1 giây, 800 đơn không bao giờ
             // quét hết trong 230s. Giữ ở 6 (đúng mức lệnh đối soát bên giao diện đã
             // chạy ổn) — đẩy cao hơn có nguy cơ Shopee/CSF chặn IP như đợt livestream.
@@ -5650,10 +5693,18 @@ router.post('/sync-fees', async (req: Request, res: Response) => {
                             data: { platformFee: e.totalFees, netRevenue: e.escrowAmount },
                         })
                         ok++
+                        idVuaDoiSoat.push(o.id)
                     } else chuaCo++
                 } catch { loi++ }
             }, 6)
-            out.push({ kenh: ch.name, quet: orders.length, capNhat: ok, chuaCoDuLieu: chuaCo, loi })
+            let canhBao: any = null
+            if (idVuaDoiSoat.length) {
+                try {
+                    const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                    canhBao = await canhBaoLoiNhuanThap(sp, idVuaDoiSoat)
+                } catch (e: any) { console.warn('[admin sync-fees] cảnh báo lợi nhuận thấp hỏng:', e?.message) }
+            }
+            out.push({ kenh: ch.name, quet: orders.length, capNhat: ok, chuaCoDuLieu: chuaCo, loi, canhBaoLoiNhuanThap: canhBao })
         }
         res.json({ success: true, data: { kenh: out, giay: Math.round((Date.now() - batDau) / 1000) } })
     } catch (err: any) {

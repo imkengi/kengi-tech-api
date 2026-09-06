@@ -5428,6 +5428,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
 
         let updated = 0, unsettled = 0, failed = 0
         const errors: string[] = []
+        const idVuaDoiSoat: string[] = []
 
         // Chạy SONG SONG có giới hạn thay vì tuần tự + ngủ 250ms/đơn: bản cũ quét
         // 200 đơn mất ~220s (sát trần 300s Cloud Run → hay treo/timeout ở client).
@@ -5471,12 +5472,22 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 })
 
                 updated++
+                idVuaDoiSoat.push(order.id)
             } catch (e: any) {
                 failed++
                 errors.push(`${order.orderNumber}: ${e.message}`)
                 console.error(`[sync-fees] ${channel.name} ${order.orderNumber}:`, e.message)
             }
         }, 6)
+
+        /* Cảnh báo lợi nhuận thấp cho đơn vừa có phí thật — cùng luật với cron. */
+        let canhBao: any = null
+        if (idVuaDoiSoat.length) {
+            try {
+                const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                canhBao = await canhBaoLoiNhuanThap(prisma, idVuaDoiSoat)
+            } catch (e: any) { console.warn('[sync-fees] cảnh báo lợi nhuận thấp hỏng:', e?.message) }
+        }
 
         await prisma.syncLog.create({
             data: {
@@ -5488,7 +5499,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
             },
         }).catch(() => { })
 
-        res.json({ success: true, data: { scanned: orders.length, updated, unsettled, failed, errors } })
+        res.json({ success: true, data: { scanned: orders.length, updated, unsettled, failed, errors, canhBaoLoiNhuanThap: canhBao } })
     } catch (err: any) {
         console.error('Sync fees error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })

@@ -1466,6 +1466,7 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   stockDeducted: 'stockDeducted',
   khongKhopSku: 'khongKhopSku',
   khongKhopLuc: 'khongKhopLuc',
+  loiNhuanThapBaoLuc: 'loiNhuanThapBaoLuc',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

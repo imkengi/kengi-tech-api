@@ -1908,6 +1908,9 @@ model OnlineOrder {
   // sửa SKU nào tôi chưa nối vào; (3) chuyển được thì cờ tự xoá.
   khongKhopSku       Boolean   @default(false)
   khongKhopLuc       DateTime? // lần thử gần nhất — mốc tính hạn thử lại 24h
+  // Đã cảnh báo "lợi nhuận dưới ngưỡng" (push admin) lúc nào — chỉ báo MỘT lần
+  // mỗi đơn, đối soát lại không báo lại. null = chưa từng báo. (06/09/2026)
+  loiNhuanThapBaoLuc DateTime?
   syncedAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

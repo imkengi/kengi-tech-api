@@ -602,6 +602,7 @@ async function runFeeSync() {
                 if (orders.length === 0) continue
                 let ok = 0, loi = 0, chuaCo = 0
                 let loiDauTien = ''
+                const idVuaDoiSoat: string[] = []   // để cảnh báo lợi nhuận thấp sau mẻ
                 await mapWithConcurrency(orders, async (o: any) => {
                     if (Date.now() - batDau > FEE_DEADLINE_MS) return
                     const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
@@ -625,6 +626,7 @@ async function runFeeSync() {
                             data: { platformFee: phi, netRevenue: thucNhan },
                         })
                         ok++
+                        idVuaDoiSoat.push(o.id)
                     } catch (e: any) {
                         // `catch {}` trống trước đây giấu sạch lý do: sàn từ chối hay
                         // sai chữ ký đều im như nhau, chỉ thấy con số thấp mà không
@@ -639,6 +641,15 @@ async function runFeeSync() {
                 // TikTok chạy 2 luồng thay vì 6 — chậm hơn nhưng ăn được cả mẻ;
                 // 36009002 trả về null → đơn được vòng sau quét lại, không mất.
                 }, ch.platform === 'tiktok' ? 2 : 6)
+                /* Đơn vừa có phí THẬT → lợi nhuận vừa tính được → xét ngưỡng, push admin.
+                 * Một push cho cả mẻ; mỗi đơn chỉ báo một lần (cột loiNhuanThapBaoLuc). */
+                if (idVuaDoiSoat.length) {
+                    try {
+                        const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                        const cb = await canhBaoLoiNhuanThap(sp, idVuaDoiSoat)
+                        if (cb.thap) console.log(`[FeeSync] ${ch.name}: ${cb.thap} đơn lãi < ngưỡng → push ${cb.push} thiết bị`)
+                    } catch (e: any) { console.warn('[FeeSync] cảnh báo lợi nhuận thấp hỏng:', fmtErr(e)) }
+                }
                 if (ok > 0 || loi > 0) {
                     tongCapNhat += ok
                     console.log(`[FeeSync] ${store.code}/${ch.name} (${ch.platform}): +${ok} đơn có phí thật` +
