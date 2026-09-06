@@ -4199,6 +4199,64 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
  *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
  * ───────────────────────────────────────────────────────────────────────────── */
 /**
+ * ĐẾM ĐƠN TIKTOK THEO TÌNH TRẠNG HOÁ ĐƠN — GET /admin/do-hoa-don-don-tiktok?storeCode=
+ *
+ * Chạy thử bộ sửa giá trên 200 đơn cũ nhất cho thấy 142/200 đã xuất HĐĐT. Cần biết
+ * con số đó trên TOÀN BỘ đơn chứ không phải trên mẫu 200 — mẫu lấy từ đầu danh sách
+ * không đại diện cho cả tập. CHỈ ĐẾM, không gọi sàn, không ghi gì.
+ */
+router.get('/do-hoa-don-don-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const HUY = `('cancelled','CANCELLED','UNPAID','returned','TO_RETURN','IN_CANCEL','cancelling')`
+        const PHAT_HANH = `('ISSUING','issued','SIGNED','SENT')`
+        const mot = async (sql: string) => Number((await sp.$queryRawUnsafe(sql))?.[0]?.n) || 0
+
+        const tong = await mot(`SELECT COUNT(*)::int AS n FROM "OnlineOrder" WHERE "platform"='tiktok' AND "status" NOT IN ${HUY}`)
+        const daSua = await mot(`SELECT COUNT(*)::int AS n FROM "OnlineOrder" WHERE "platform"='tiktok' AND "status" NOT IN ${HUY} AND "giaSanSuaLuc" IS NOT NULL`)
+        const coPhieu = await mot(`
+            SELECT COUNT(*)::int AS n FROM "OnlineOrder" o
+            JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+            WHERE o."platform"='tiktok' AND o."status" NOT IN ${HUY}`)
+        const coHoaDon = await mot(`
+            SELECT COUNT(DISTINCT o.id)::int AS n FROM "OnlineOrder" o
+            JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+            JOIN "EInvoice" e ON e."transactionId" = t.id AND e.status IN ${PHAT_HANH}
+            WHERE o."platform"='tiktok' AND o."status" NOT IN ${HUY}`)
+        // Doanh thu đang ghi của nhóm ĐÃ xuất hoá đơn — để biết quy mô phần phải
+        // điều chỉnh nếu chủ shop quyết xuất hoá đơn điều chỉnh.
+        const tienCoHoaDon = Number((await sp.$queryRawUnsafe(`
+            SELECT COALESCE(SUM(o."subtotal"),0)::float8 AS n FROM (
+                SELECT DISTINCT o.id, o."subtotal" FROM "OnlineOrder" o
+                JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+                JOIN "EInvoice" e ON e."transactionId" = t.id AND e.status IN ${PHAT_HANH}
+                WHERE o."platform"='tiktok' AND o."status" NOT IN ${HUY}
+            ) o`))?.[0]?.n) || 0
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                tongDonTikTok: tong,
+                daSuaGia: daSua,
+                coPhieuBan: coPhieu,
+                daXuatHoaDon: coHoaDon,
+                chuaXuatHoaDon: tong - coHoaDon,
+                doanhThuDangGhiCuaNhomDaXuatHoaDon: Math.round(tienCoHoaDon),
+                yNghia: 'daXuatHoaDon = đơn KHÔNG được bộ sửa giá đụng tới. Muốn sửa nhóm này '
+                    + 'phải xuất HOÁ ĐƠN ĐIỀU CHỈNH — việc pháp lý, chủ shop quyết.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * DỰNG LẠI GIÁ BÁN TRÊN SÀN CHO ĐƠN TIKTOK CŨ — chủ shop duyệt 06/09/2026.
  *
  *   POST /admin/sua-gia-san-tiktok?storeCode=KENGISTORE&take=200
@@ -4215,6 +4273,10 @@ router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
         const apply = String(req.query.apply ?? req.body?.apply ?? '') === '1'
         const ghiSo = String(req.query.ghiSo ?? req.body?.ghiSo ?? '1') === '1'
         const keCaHoaDon = String(req.query.keCaHoaDon ?? req.body?.keCaHoaDon ?? '') === '1'
+        /* Don DA XUAT HOA DON khong duoc danh dau (con cho chu shop quyet) nen
+         * chung nam ly o dau danh sach va chan moi luot quet. `boQua` cho phep
+         * nhay qua chung de quet tiep phan con lai. */
+        const boQua = Math.max(0, Number(req.query.boQua ?? req.body?.boQua) || 0)
 
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
@@ -4236,7 +4298,7 @@ router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
                 accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
                 shopId: ch.shopId || undefined,
             })
-            const k = await suaGiaSanTikTok(sp, svc, { take, apply, keCaHoaDon, ghiSo, channelId: ch.id, hanChot })
+            const k = await suaGiaSanTikTok(sp, svc, { take, apply, keCaHoaDon, ghiSo, boQua, channelId: ch.id, hanChot })
             ra.push({ kenh: ch.name, ...k })
         }
 

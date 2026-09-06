@@ -87,6 +87,7 @@ export async function suaGiaSanTikTok(
         apply: boolean
         keCaHoaDon: boolean
         ghiSo: boolean
+        boQua: number
         channelId: string
         hanChot: number       // Date.now() phải nhỏ hơn mốc này
     },
@@ -118,6 +119,7 @@ export async function suaGiaSanTikTok(
     const orders: any[] = await sp.onlineOrder.findMany({
         where: whereCho,
         orderBy: { createdAt: 'asc' },
+        skip: opts.boQua,
         take: opts.take,
         select: {
             id: true, orderNumber: true, externalOrderId: true, status: true,
