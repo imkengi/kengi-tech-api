@@ -361,6 +361,8 @@ app.use('/api/ebanking', ebankingRoutes)
 
 import storageRoutes from './routes/storage'
 app.use('/api/storage', storageRoutes)
+import sanMediaRoutes from './routes/sanMedia'
+app.use('/api/san-media', sanMediaRoutes)   // Media ban hang: video cho Shopee Video / TikTok
 
 import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)

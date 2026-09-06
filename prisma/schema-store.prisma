@@ -34,11 +34,13 @@ model Branch {
 model User {
   id               String    @id @default(cuid())
   email            String    @unique
-  /* TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
+  /**
+   * TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
    * "nv.001@kengitech.vn". Cùng cửa hàng thì không trùng nhau; khác cửa hàng thì
    * thoải mái vì mỗi cửa hàng một schema riêng.
    * CẤM ký tự '@' (chặn ở tầng route): username chứa '@' sẽ đụng đường tra email,
-   * hai người khác nhau cùng đăng nhập được bằng một chuỗi. */
+   * hai người khác nhau cùng đăng nhập được bằng một chuỗi.
+   */
   username         String?   @unique
   name             String
   password         String
@@ -541,19 +543,19 @@ model SupplierGroup {
 }
 
 model Supplier {
-  id                     String   @id @default(cuid())
-  code                   String   @unique
+  id                     String         @id @default(cuid())
+  code                   String         @unique
   name                   String
   contactName            String?
   phone                  String?
   email                  String?
   address                String?
   taxCode                String?
-  totalOrders            Int      @default(0)
-  totalValue             Float    @default(0)
-  status                 String   @default("active")
+  totalOrders            Int            @default(0)
+  totalValue             Float          @default(0)
+  status                 String         @default("active")
   notes                  String?
-  payable                Float    @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
+  payable                Float          @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
   // ĐIỀU KHOẢN THANH TOÁN mặc định của NCC (thêm 18/08/2026). Phiếu nhập mới
   // không ghi dueDate thì tự suy = ngày nhập + paymentTermDays. Trước đây FE đã
   // gửi `paymentTerms` và schema zod đã nhận, nhưng route KHÔNG ghi và model
@@ -576,8 +578,8 @@ model Supplier {
   /// Nhóm dùng chung tài khoản nhận tiền; null = đứng riêng
   groupId                String?
   group                  SupplierGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   purchaseOrders PurchaseOrder[]
 }
@@ -1633,18 +1635,20 @@ model StoreSettings {
   dailyOrderTarget     Int?
 
   // Google Drive folder ID for packing/return-unbox videos
-  driveFolderId   String?
-  /* URL Apps Script của trang quay video đóng gói (/video-online/).
+  driveFolderId      String?
+  /**
+   * URL Apps Script của trang quay video đóng gói (/video-online/).
    * Trước 03/09/2026 URL này nằm trong localStorage TỪNG TRÌNH DUYỆT — mỗi máy
    * đóng gói phải tự dán lại, và xoá cache là mất. Nay lưu theo CỬA HÀNG: khai
-   * một lần, mọi máy dùng chung. */
+   * một lần, mọi máy dùng chung.
+   */
   driveAppsScriptUrl String?
   // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
   // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
   // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.
-  driveOauthToken String? // refresh_token (dài hạn)
-  driveOauthEmail String? // email tài khoản đã kết nối, để hiện trên giao diện
-  driveOauthAt    DateTime?
+  driveOauthToken    String? // refresh_token (dài hạn)
+  driveOauthEmail    String? // email tài khoản đã kết nối, để hiện trên giao diện
+  driveOauthAt       DateTime?
 
   updatedAt DateTime @updatedAt
 }
@@ -2335,43 +2339,43 @@ model HKDRevenueEntry {
 // phí sửa chữa lại đi thẳng vào giá vốn lúc nhập lại kho chính — không lưu vết thì
 // sau này không ai đối chiếu nổi vì sao giá vốn mã đó nhảy.
 model DamagedEntry {
-  id           String   @id @default(cuid())
-  warehouseId  String
-  loai         String // 'nhap' | 'xuat'
-  productId    String
-  productName  String
-  productSku   String?
-  quantity     Int
+  id            String   @id @default(cuid())
+  warehouseId   String
+  loai          String // 'nhap' | 'xuat'
+  productId     String
+  productName   String
+  productSku    String?
+  quantity      Int
   // nhap: 'tu-kho' (trừ tồn kho chính) | 'ngoai' (không đụng tồn kho chính)
-  nguon        String?
+  nguon         String?
   // xuat: 'ban-tiep' | 'sua-xong' | 'huy'
-  cachXuLy     String?
+  cachXuLy      String?
   /// Phí sửa chữa TỔNG của lượt xuất này; chia cho quantity ra phí mỗi cái
-  phiSuaChua   Float    @default(0)
+  phiSuaChua    Float    @default(0)
   /// Mã đích khi nhập lại kho chính — null nghĩa là về đúng mã cũ
   productDichId String?
   /// Giá vốn mỗi cái ĐÃ tính cả phí sửa, ghi lại để sau còn đối chiếu
-  giaVonMoi    Float?
-  /* ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
+  giaVonMoi     Float?
+  /**
+   * ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
    * Chủ shop: "mỗi hàng hư sẽ mỗi kiểu, không giống nhau được".
-   *
    * 5 cái Samsung hư không phải một cục: cái vỡ màn, cái vào nước, cái chỉ trầy
    * — lý do khác nhau, phí sửa khác nhau, cách xử lý khác nhau. Gom theo mã như
    * WarehouseStock thì mất sạch phần đó, và không cách nào sửa riêng một cái.
-   *
    * Nên MỖI LƯỢT NHẬP là một LÔ riêng, giữ lý do của chính nó. `conLai` là số
    * còn chưa xử của lô; xử một phần thì trừ dần, hết thì lô biến khỏi danh sách.
-   * Dòng XUẤT trỏ về lô nguồn qua `nguonEntryId` để lần lại được đường đi. */
+   * Dòng XUẤT trỏ về lô nguồn qua `nguonEntryId` để lần lại được đường đi.
+   */
   /// Chỉ có nghĩa với dòng NHẬP: còn bao nhiêu cái của lô này chưa xử
-  conLai       Int?
+  conLai        Int?
   /// Chỉ có nghĩa với dòng XUẤT: xử từ lô nào
-  nguonEntryId String?
-  lyDo         String?
-  ghiChu       String?
-  branchId     String?
-  userId       String?
-  userName     String?
-  createdAt    DateTime @default(now())
+  nguonEntryId  String?
+  lyDo          String?
+  ghiChu        String?
+  branchId      String?
+  userId        String?
+  userName      String?
+  createdAt     DateTime @default(now())
 
   @@index([warehouseId])
   @@index([productId])
@@ -2982,10 +2986,10 @@ model FbContentDraft {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model MktAccount {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   platform   String // facebook | instagram | tiktok | youtube
   externalId String // id trang/kênh phía nền tảng
-  name       String @default("")
+  name       String  @default("")
   avatar     String?
   category   String?
   followers  Int? // null = CHƯA ĐỌC ĐƯỢC, khác hẳn 0 = không có ai theo dõi
@@ -3011,16 +3015,16 @@ model MktAccount {
 }
 
 model MktCampaign {
-  id       String  @id @default(cuid())
-  name     String
-  goal     String  @default("")
+  id        String    @id @default(cuid())
+  name      String
+  goal      String    @default("")
   // paused = GIỮ cả hàng đợi: publication của chiến dịch tạm dừng không được gửi.
-  status   String  @default("active") // active | paused | done
-  startAt  DateTime?
-  endAt    DateTime?
+  status    String    @default("active") // active | paused | done
+  startAt   DateTime?
+  endAt     DateTime?
   createdBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   contents MktContent[]
 
@@ -3087,7 +3091,7 @@ model MktPublication {
 
   // Checkpoint: id phiên upload/container phía nền tảng. Resume phải DÙNG LẠI cái
   // này, không thì mỗi lần thử lại đẻ thêm một container nữa trên nền tảng.
-  remoteRef String?
+  remoteRef    String?
   // Id bài công khai sau khi đăng — KHÁC remoteRef. TikTok trả publish_id lúc gửi
   // và post_id công khai mãi về sau; lẫn hai cái là link tới bài không tồn tại.
   remotePostId String?
@@ -3108,7 +3112,7 @@ model MktPublication {
 }
 
 model MktAsset {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   // Tên file trên đĩa = id + đuôi từ DANH SÁCH TRẮNG (jpg/png/mp4). Không bao giờ
   // ghép tên người dùng nhập vào đường dẫn.
   localFile String
@@ -3124,8 +3128,8 @@ model MktAsset {
 }
 
 model MktMetric {
-  id        String @id @default(cuid())
-  accountId String
+  id            String   @id @default(cuid())
+  accountId     String
   // publicationId để trống = số liệu mức KÊNH; có = số liệu của MỘT bài.
   publicationId String?
   snapshotAt    DateTime @default(now())
@@ -3549,7 +3553,7 @@ model MisaImportBatch {
   userName  String?
   createdAt DateTime @default(now())
 
-  docs MisaSaleDoc[]
+  docs         MisaSaleDoc[]
   purchaseDocs MisaPurchaseDoc[]
 
   @@index([loai, createdAt])
@@ -3680,4 +3684,91 @@ model MisaPurchaseLine {
   @@index([docId])
   @@index([maHang])
   @@index([productId])
+}
+
+// ─── MEDIA BÁN HÀNG ────────────────────────────────────────────────────────────
+//
+//  Kho video cho kênh sàn: Shopee Video và video mua sắm TikTok.
+//  Tra cứu API 06/09/2026 (xem memory dang-video-len-san):
+//    · Shopee: v2.media.init_video_upload (business=3, scene=1) 1–180 giây, ≤1GB
+//      → v2.video.edit_video_info (caption, ảnh bìa, GẮN SẢN PHẨM, HẸN GIỜ ĐĂNG,
+//      cho phép stitch/duet) → v2.video.post_video. API kiểu USER: ký bằng user_id
+//      chứ không phải shop_id, app phải là loại Shopee Video Management.
+//    · TikTok: POST /affiliate_creator/*/videos/video_files → /videos với
+//      product_link_info {product_id, title ≤30 ký tự}. Scope creator.video.write,
+//      token CREATOR — không phải token shop đang có.
+//  ⇒ Cả hai đòi MỘT LUỒNG UỶ QUYỀN RIÊNG chưa có. Bảng này giữ kho media, sản phẩm
+//  gắn kèm và lịch đăng; `trangThai` chỉ chuyển 'da_dang' khi sàn TRẢ VỀ mã video.
+//
+//  Không lưu file vào đĩa: Cloud Run xoá sạch mỗi lần khởi động lại, và prod chưa
+//  bật GCS. Nguồn là Google Drive của chính cửa hàng (đã có OAuth sẵn) hoặc URL ngoài.
+model SanMedia {
+  id         String  @id @default(cuid())
+  ten        String
+  /// 'drive' = file trong Drive của cửa hàng · 'lien_ket' = URL ngoài
+  nguon      String  @default("drive")
+  /// fileId của Drive khi nguon='drive'
+  nguonId    String?
+  /// URL khi nguon='lien_ket'
+  lienKet    String?
+  mime       String?
+  bytes      Int?
+  thoiLuongS Float?
+  anhBia     String?
+
+  /// Lời dẫn sẽ đăng kèm video
+  caption String?
+
+  /// 'shopee' | 'tiktok' | null = chưa chọn kênh
+  kenh      String?
+  /// Gian hàng cụ thể (một cửa hàng có nhiều shop trên cùng một sàn)
+  channelId String?
+
+  /// HẸN GIỜ ĐĂNG. Shopee nhận thẳng post time trong edit_video_info; TikTok không
+  /// có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
+  henDangLuc DateTime?
+
+  /// nhap | da_len_lich | cho_dang | da_dang | loi
+  trangThai String    @default("nhap")
+  /// Mã video do SÀN trả về — chỉ có khi đăng THẬT thành công
+  maTrenSan String?
+  loiCuoi   String?
+  dangLuc   DateTime?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sanPham SanMediaSanPham[]
+
+  @@index([trangThai])
+  @@index([kenh])
+  @@index([henDangLuc])
+  @@index([createdAt])
+}
+
+/// Sản phẩm gắn vào video. BẢNG RIÊNG chứ không nhét JSON vào một cột chuỗi:
+/// Shopee cho gắn NHIỀU sản phẩm một video, TikTok chỉ một — và mã gắn lên sàn là
+/// `platformProductId` của gian hàng đó, KHÔNG phải id sản phẩm trong kho. Nhét JSON
+/// thì không truy vấn được "video nào đang gắn SKU này" và dễ trôi khỏi thực tế.
+model SanMediaSanPham {
+  id      String   @id @default(cuid())
+  mediaId String
+  media   SanMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  /// SKU trong kho — thứ chủ shop gõ vào và nhìn thấy
+  sku       String
+  /// Product trong kho, null nếu SKU chưa khớp hàng nào
+  productId String?
+  /// Mã sản phẩm TRÊN SÀN (OnlineProduct.platformProductId) — thứ thật sự gửi đi.
+  /// null = chưa tra ra listing trên gian hàng đang chọn ⇒ chưa đăng được.
+  maTrenSan String?
+  /// Nhãn hiện trên video. TikTok giới hạn 30 ký tự (mã lỗi 16011007).
+  nhan      String?
+  thuTu     Int     @default(0)
+
+  @@unique([mediaId, sku])
+  @@index([mediaId])
+  @@index([productId])
+  @@index([sku])
 }

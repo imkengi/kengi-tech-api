@@ -767,6 +767,19 @@ export type MisaPurchaseDoc = $Result.DefaultSelection<Prisma.$MisaPurchaseDocPa
  * 
  */
 export type MisaPurchaseLine = $Result.DefaultSelection<Prisma.$MisaPurchaseLinePayload>
+/**
+ * Model SanMedia
+ * 
+ */
+export type SanMedia = $Result.DefaultSelection<Prisma.$SanMediaPayload>
+/**
+ * Model SanMediaSanPham
+ * Sản phẩm gắn vào video. BẢNG RIÊNG chứ không nhét JSON vào một cột chuỗi:
+ * Shopee cho gắn NHIỀU sản phẩm một video, TikTok chỉ một — và mã gắn lên sàn là
+ * `platformProductId` của gian hàng đó, KHÔNG phải id sản phẩm trong kho. Nhét JSON
+ * thì không truy vấn được "video nào đang gắn SKU này" và dễ trôi khỏi thực tế.
+ */
+export type SanMediaSanPham = $Result.DefaultSelection<Prisma.$SanMediaSanPhamPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -2335,6 +2348,26 @@ export class PrismaClient<
     * ```
     */
   get misaPurchaseLine(): Prisma.MisaPurchaseLineDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.sanMedia`: Exposes CRUD operations for the **SanMedia** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more SanMedias
+    * const sanMedias = await prisma.sanMedia.findMany()
+    * ```
+    */
+  get sanMedia(): Prisma.SanMediaDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.sanMediaSanPham`: Exposes CRUD operations for the **SanMediaSanPham** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more SanMediaSanPhams
+    * const sanMediaSanPhams = await prisma.sanMediaSanPham.findMany()
+    * ```
+    */
+  get sanMediaSanPham(): Prisma.SanMediaSanPhamDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2920,7 +2953,9 @@ export namespace Prisma {
     MisaSaleDoc: 'MisaSaleDoc',
     MisaSaleLine: 'MisaSaleLine',
     MisaPurchaseDoc: 'MisaPurchaseDoc',
-    MisaPurchaseLine: 'MisaPurchaseLine'
+    MisaPurchaseLine: 'MisaPurchaseLine',
+    SanMedia: 'SanMedia',
+    SanMediaSanPham: 'SanMediaSanPham'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2939,7 +2974,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "mktAccount" | "mktCampaign" | "mktContent" | "mktPublication" | "mktAsset" | "mktMetric" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "mktAccount" | "mktCampaign" | "mktContent" | "mktPublication" | "mktAsset" | "mktMetric" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine" | "sanMedia" | "sanMediaSanPham"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -13673,6 +13708,154 @@ export namespace Prisma {
           }
         }
       }
+      SanMedia: {
+        payload: Prisma.$SanMediaPayload<ExtArgs>
+        fields: Prisma.SanMediaFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.SanMediaFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.SanMediaFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          findFirst: {
+            args: Prisma.SanMediaFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.SanMediaFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          findMany: {
+            args: Prisma.SanMediaFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>[]
+          }
+          create: {
+            args: Prisma.SanMediaCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          createMany: {
+            args: Prisma.SanMediaCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.SanMediaCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>[]
+          }
+          delete: {
+            args: Prisma.SanMediaDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          update: {
+            args: Prisma.SanMediaUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          deleteMany: {
+            args: Prisma.SanMediaDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.SanMediaUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.SanMediaUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>[]
+          }
+          upsert: {
+            args: Prisma.SanMediaUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaPayload>
+          }
+          aggregate: {
+            args: Prisma.SanMediaAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateSanMedia>
+          }
+          groupBy: {
+            args: Prisma.SanMediaGroupByArgs<ExtArgs>
+            result: $Utils.Optional<SanMediaGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.SanMediaCountArgs<ExtArgs>
+            result: $Utils.Optional<SanMediaCountAggregateOutputType> | number
+          }
+        }
+      }
+      SanMediaSanPham: {
+        payload: Prisma.$SanMediaSanPhamPayload<ExtArgs>
+        fields: Prisma.SanMediaSanPhamFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.SanMediaSanPhamFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.SanMediaSanPhamFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          findFirst: {
+            args: Prisma.SanMediaSanPhamFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.SanMediaSanPhamFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          findMany: {
+            args: Prisma.SanMediaSanPhamFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>[]
+          }
+          create: {
+            args: Prisma.SanMediaSanPhamCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          createMany: {
+            args: Prisma.SanMediaSanPhamCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.SanMediaSanPhamCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>[]
+          }
+          delete: {
+            args: Prisma.SanMediaSanPhamDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          update: {
+            args: Prisma.SanMediaSanPhamUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          deleteMany: {
+            args: Prisma.SanMediaSanPhamDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.SanMediaSanPhamUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.SanMediaSanPhamUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>[]
+          }
+          upsert: {
+            args: Prisma.SanMediaSanPhamUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SanMediaSanPhamPayload>
+          }
+          aggregate: {
+            args: Prisma.SanMediaSanPhamAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateSanMediaSanPham>
+          }
+          groupBy: {
+            args: Prisma.SanMediaSanPhamGroupByArgs<ExtArgs>
+            result: $Utils.Optional<SanMediaSanPhamGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.SanMediaSanPhamCountArgs<ExtArgs>
+            result: $Utils.Optional<SanMediaSanPhamCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -13914,6 +14097,8 @@ export namespace Prisma {
     misaSaleLine?: MisaSaleLineOmit
     misaPurchaseDoc?: MisaPurchaseDocOmit
     misaPurchaseLine?: MisaPurchaseLineOmit
+    sanMedia?: SanMediaOmit
+    sanMediaSanPham?: SanMediaSanPhamOmit
   }
 
   /* Types for Logging */
@@ -15474,6 +15659,37 @@ export namespace Prisma {
    */
   export type MisaPurchaseDocCountOutputTypeCountLinesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: MisaPurchaseLineWhereInput
+  }
+
+
+  /**
+   * Count Type SanMediaCountOutputType
+   */
+
+  export type SanMediaCountOutputType = {
+    sanPham: number
+  }
+
+  export type SanMediaCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    sanPham?: boolean | SanMediaCountOutputTypeCountSanPhamArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * SanMediaCountOutputType without action
+   */
+  export type SanMediaCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaCountOutputType
+     */
+    select?: SanMediaCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * SanMediaCountOutputType without action
+   */
+  export type SanMediaCountOutputTypeCountSanPhamArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: SanMediaSanPhamWhereInput
   }
 
 
@@ -17076,7 +17292,8 @@ export namespace Prisma {
       id: string
       email: string
       /**
-       * TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
+       * *
+       *    * TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
        *    * "nv.001@kengitech.vn". Cùng cửa hàng thì không trùng nhau; khác cửa hàng thì
        *    * thoải mái vì mỗi cửa hàng một schema riêng.
        *    * CẤM ký tự '@' (chặn ở tầng route): username chứa '@' sẽ đụng đường tra email,
@@ -97066,7 +97283,8 @@ export namespace Prisma {
       dailyOrderTarget: number | null
       driveFolderId: string | null
       /**
-       * URL Apps Script của trang quay video đóng gói (/video-online/).
+       * *
+       *    * URL Apps Script của trang quay video đóng gói (/video-online/).
        *    * Trước 03/09/2026 URL này nằm trong localStorage TỪNG TRÌNH DUYỆT — mỗi máy
        *    * đóng gói phải tự dán lại, và xoá cache là mất. Nay lưu theo CỬA HÀNG: khai
        *    * một lần, mọi máy dùng chung.
@@ -127239,13 +127457,12 @@ export namespace Prisma {
        */
       giaVonMoi: number | null
       /**
-       * ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
+       * *
+       *    * ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
        *    * Chủ shop: "mỗi hàng hư sẽ mỗi kiểu, không giống nhau được".
-       *    *
        *    * 5 cái Samsung hư không phải một cục: cái vỡ màn, cái vào nước, cái chỉ trầy
        *    * — lý do khác nhau, phí sửa khác nhau, cách xử lý khác nhau. Gom theo mã như
        *    * WarehouseStock thì mất sạch phần đó, và không cách nào sửa riêng một cái.
-       *    *
        *    * Nên MỖI LƯỢT NHẬP là một LÔ riêng, giữ lý do của chính nó. `conLai` là số
        *    * còn chưa xử của lô; xử một phần thì trừ dần, hết thì lô biến khỏi danh sách.
        *    * Dòng XUẤT trỏ về lô nguồn qua `nguonEntryId` để lần lại được đường đi.
@@ -189162,6 +189379,2468 @@ export namespace Prisma {
 
 
   /**
+   * Model SanMedia
+   */
+
+  export type AggregateSanMedia = {
+    _count: SanMediaCountAggregateOutputType | null
+    _avg: SanMediaAvgAggregateOutputType | null
+    _sum: SanMediaSumAggregateOutputType | null
+    _min: SanMediaMinAggregateOutputType | null
+    _max: SanMediaMaxAggregateOutputType | null
+  }
+
+  export type SanMediaAvgAggregateOutputType = {
+    bytes: number | null
+    thoiLuongS: number | null
+  }
+
+  export type SanMediaSumAggregateOutputType = {
+    bytes: number | null
+    thoiLuongS: number | null
+  }
+
+  export type SanMediaMinAggregateOutputType = {
+    id: string | null
+    ten: string | null
+    nguon: string | null
+    nguonId: string | null
+    lienKet: string | null
+    mime: string | null
+    bytes: number | null
+    thoiLuongS: number | null
+    anhBia: string | null
+    caption: string | null
+    kenh: string | null
+    channelId: string | null
+    henDangLuc: Date | null
+    trangThai: string | null
+    maTrenSan: string | null
+    loiCuoi: string | null
+    dangLuc: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SanMediaMaxAggregateOutputType = {
+    id: string | null
+    ten: string | null
+    nguon: string | null
+    nguonId: string | null
+    lienKet: string | null
+    mime: string | null
+    bytes: number | null
+    thoiLuongS: number | null
+    anhBia: string | null
+    caption: string | null
+    kenh: string | null
+    channelId: string | null
+    henDangLuc: Date | null
+    trangThai: string | null
+    maTrenSan: string | null
+    loiCuoi: string | null
+    dangLuc: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SanMediaCountAggregateOutputType = {
+    id: number
+    ten: number
+    nguon: number
+    nguonId: number
+    lienKet: number
+    mime: number
+    bytes: number
+    thoiLuongS: number
+    anhBia: number
+    caption: number
+    kenh: number
+    channelId: number
+    henDangLuc: number
+    trangThai: number
+    maTrenSan: number
+    loiCuoi: number
+    dangLuc: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type SanMediaAvgAggregateInputType = {
+    bytes?: true
+    thoiLuongS?: true
+  }
+
+  export type SanMediaSumAggregateInputType = {
+    bytes?: true
+    thoiLuongS?: true
+  }
+
+  export type SanMediaMinAggregateInputType = {
+    id?: true
+    ten?: true
+    nguon?: true
+    nguonId?: true
+    lienKet?: true
+    mime?: true
+    bytes?: true
+    thoiLuongS?: true
+    anhBia?: true
+    caption?: true
+    kenh?: true
+    channelId?: true
+    henDangLuc?: true
+    trangThai?: true
+    maTrenSan?: true
+    loiCuoi?: true
+    dangLuc?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SanMediaMaxAggregateInputType = {
+    id?: true
+    ten?: true
+    nguon?: true
+    nguonId?: true
+    lienKet?: true
+    mime?: true
+    bytes?: true
+    thoiLuongS?: true
+    anhBia?: true
+    caption?: true
+    kenh?: true
+    channelId?: true
+    henDangLuc?: true
+    trangThai?: true
+    maTrenSan?: true
+    loiCuoi?: true
+    dangLuc?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SanMediaCountAggregateInputType = {
+    id?: true
+    ten?: true
+    nguon?: true
+    nguonId?: true
+    lienKet?: true
+    mime?: true
+    bytes?: true
+    thoiLuongS?: true
+    anhBia?: true
+    caption?: true
+    kenh?: true
+    channelId?: true
+    henDangLuc?: true
+    trangThai?: true
+    maTrenSan?: true
+    loiCuoi?: true
+    dangLuc?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type SanMediaAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SanMedia to aggregate.
+     */
+    where?: SanMediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMedias to fetch.
+     */
+    orderBy?: SanMediaOrderByWithRelationInput | SanMediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: SanMediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned SanMedias
+    **/
+    _count?: true | SanMediaCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: SanMediaAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: SanMediaSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: SanMediaMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: SanMediaMaxAggregateInputType
+  }
+
+  export type GetSanMediaAggregateType<T extends SanMediaAggregateArgs> = {
+        [P in keyof T & keyof AggregateSanMedia]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateSanMedia[P]>
+      : GetScalarType<T[P], AggregateSanMedia[P]>
+  }
+
+
+
+
+  export type SanMediaGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: SanMediaWhereInput
+    orderBy?: SanMediaOrderByWithAggregationInput | SanMediaOrderByWithAggregationInput[]
+    by: SanMediaScalarFieldEnum[] | SanMediaScalarFieldEnum
+    having?: SanMediaScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: SanMediaCountAggregateInputType | true
+    _avg?: SanMediaAvgAggregateInputType
+    _sum?: SanMediaSumAggregateInputType
+    _min?: SanMediaMinAggregateInputType
+    _max?: SanMediaMaxAggregateInputType
+  }
+
+  export type SanMediaGroupByOutputType = {
+    id: string
+    ten: string
+    nguon: string
+    nguonId: string | null
+    lienKet: string | null
+    mime: string | null
+    bytes: number | null
+    thoiLuongS: number | null
+    anhBia: string | null
+    caption: string | null
+    kenh: string | null
+    channelId: string | null
+    henDangLuc: Date | null
+    trangThai: string
+    maTrenSan: string | null
+    loiCuoi: string | null
+    dangLuc: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: SanMediaCountAggregateOutputType | null
+    _avg: SanMediaAvgAggregateOutputType | null
+    _sum: SanMediaSumAggregateOutputType | null
+    _min: SanMediaMinAggregateOutputType | null
+    _max: SanMediaMaxAggregateOutputType | null
+  }
+
+  type GetSanMediaGroupByPayload<T extends SanMediaGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<SanMediaGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof SanMediaGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], SanMediaGroupByOutputType[P]>
+            : GetScalarType<T[P], SanMediaGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type SanMediaSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ten?: boolean
+    nguon?: boolean
+    nguonId?: boolean
+    lienKet?: boolean
+    mime?: boolean
+    bytes?: boolean
+    thoiLuongS?: boolean
+    anhBia?: boolean
+    caption?: boolean
+    kenh?: boolean
+    channelId?: boolean
+    henDangLuc?: boolean
+    trangThai?: boolean
+    maTrenSan?: boolean
+    loiCuoi?: boolean
+    dangLuc?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    sanPham?: boolean | SanMedia$sanPhamArgs<ExtArgs>
+    _count?: boolean | SanMediaCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["sanMedia"]>
+
+  export type SanMediaSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ten?: boolean
+    nguon?: boolean
+    nguonId?: boolean
+    lienKet?: boolean
+    mime?: boolean
+    bytes?: boolean
+    thoiLuongS?: boolean
+    anhBia?: boolean
+    caption?: boolean
+    kenh?: boolean
+    channelId?: boolean
+    henDangLuc?: boolean
+    trangThai?: boolean
+    maTrenSan?: boolean
+    loiCuoi?: boolean
+    dangLuc?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["sanMedia"]>
+
+  export type SanMediaSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ten?: boolean
+    nguon?: boolean
+    nguonId?: boolean
+    lienKet?: boolean
+    mime?: boolean
+    bytes?: boolean
+    thoiLuongS?: boolean
+    anhBia?: boolean
+    caption?: boolean
+    kenh?: boolean
+    channelId?: boolean
+    henDangLuc?: boolean
+    trangThai?: boolean
+    maTrenSan?: boolean
+    loiCuoi?: boolean
+    dangLuc?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["sanMedia"]>
+
+  export type SanMediaSelectScalar = {
+    id?: boolean
+    ten?: boolean
+    nguon?: boolean
+    nguonId?: boolean
+    lienKet?: boolean
+    mime?: boolean
+    bytes?: boolean
+    thoiLuongS?: boolean
+    anhBia?: boolean
+    caption?: boolean
+    kenh?: boolean
+    channelId?: boolean
+    henDangLuc?: boolean
+    trangThai?: boolean
+    maTrenSan?: boolean
+    loiCuoi?: boolean
+    dangLuc?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type SanMediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ten" | "nguon" | "nguonId" | "lienKet" | "mime" | "bytes" | "thoiLuongS" | "anhBia" | "caption" | "kenh" | "channelId" | "henDangLuc" | "trangThai" | "maTrenSan" | "loiCuoi" | "dangLuc" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["sanMedia"]>
+  export type SanMediaInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    sanPham?: boolean | SanMedia$sanPhamArgs<ExtArgs>
+    _count?: boolean | SanMediaCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type SanMediaIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type SanMediaIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $SanMediaPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "SanMedia"
+    objects: {
+      sanPham: Prisma.$SanMediaSanPhamPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      ten: string
+      /**
+       * 'drive' = file trong Drive của cửa hàng · 'lien_ket' = URL ngoài
+       */
+      nguon: string
+      /**
+       * fileId của Drive khi nguon='drive'
+       */
+      nguonId: string | null
+      /**
+       * URL khi nguon='lien_ket'
+       */
+      lienKet: string | null
+      mime: string | null
+      bytes: number | null
+      thoiLuongS: number | null
+      anhBia: string | null
+      /**
+       * Lời dẫn sẽ đăng kèm video
+       */
+      caption: string | null
+      /**
+       * 'shopee' | 'tiktok' | null = chưa chọn kênh
+       */
+      kenh: string | null
+      /**
+       * Gian hàng cụ thể (một cửa hàng có nhiều shop trên cùng một sàn)
+       */
+      channelId: string | null
+      /**
+       * HẸN GIỜ ĐĂNG. Shopee nhận thẳng post time trong edit_video_info; TikTok không
+       * có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
+       */
+      henDangLuc: Date | null
+      /**
+       * nhap | da_len_lich | cho_dang | da_dang | loi
+       */
+      trangThai: string
+      /**
+       * Mã video do SÀN trả về — chỉ có khi đăng THẬT thành công
+       */
+      maTrenSan: string | null
+      loiCuoi: string | null
+      dangLuc: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["sanMedia"]>
+    composites: {}
+  }
+
+  type SanMediaGetPayload<S extends boolean | null | undefined | SanMediaDefaultArgs> = $Result.GetResult<Prisma.$SanMediaPayload, S>
+
+  type SanMediaCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<SanMediaFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: SanMediaCountAggregateInputType | true
+    }
+
+  export interface SanMediaDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['SanMedia'], meta: { name: 'SanMedia' } }
+    /**
+     * Find zero or one SanMedia that matches the filter.
+     * @param {SanMediaFindUniqueArgs} args - Arguments to find a SanMedia
+     * @example
+     * // Get one SanMedia
+     * const sanMedia = await prisma.sanMedia.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends SanMediaFindUniqueArgs>(args: SelectSubset<T, SanMediaFindUniqueArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one SanMedia that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {SanMediaFindUniqueOrThrowArgs} args - Arguments to find a SanMedia
+     * @example
+     * // Get one SanMedia
+     * const sanMedia = await prisma.sanMedia.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends SanMediaFindUniqueOrThrowArgs>(args: SelectSubset<T, SanMediaFindUniqueOrThrowArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SanMedia that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaFindFirstArgs} args - Arguments to find a SanMedia
+     * @example
+     * // Get one SanMedia
+     * const sanMedia = await prisma.sanMedia.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends SanMediaFindFirstArgs>(args?: SelectSubset<T, SanMediaFindFirstArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SanMedia that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaFindFirstOrThrowArgs} args - Arguments to find a SanMedia
+     * @example
+     * // Get one SanMedia
+     * const sanMedia = await prisma.sanMedia.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends SanMediaFindFirstOrThrowArgs>(args?: SelectSubset<T, SanMediaFindFirstOrThrowArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more SanMedias that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all SanMedias
+     * const sanMedias = await prisma.sanMedia.findMany()
+     * 
+     * // Get first 10 SanMedias
+     * const sanMedias = await prisma.sanMedia.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const sanMediaWithIdOnly = await prisma.sanMedia.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends SanMediaFindManyArgs>(args?: SelectSubset<T, SanMediaFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a SanMedia.
+     * @param {SanMediaCreateArgs} args - Arguments to create a SanMedia.
+     * @example
+     * // Create one SanMedia
+     * const SanMedia = await prisma.sanMedia.create({
+     *   data: {
+     *     // ... data to create a SanMedia
+     *   }
+     * })
+     * 
+     */
+    create<T extends SanMediaCreateArgs>(args: SelectSubset<T, SanMediaCreateArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many SanMedias.
+     * @param {SanMediaCreateManyArgs} args - Arguments to create many SanMedias.
+     * @example
+     * // Create many SanMedias
+     * const sanMedia = await prisma.sanMedia.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends SanMediaCreateManyArgs>(args?: SelectSubset<T, SanMediaCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many SanMedias and returns the data saved in the database.
+     * @param {SanMediaCreateManyAndReturnArgs} args - Arguments to create many SanMedias.
+     * @example
+     * // Create many SanMedias
+     * const sanMedia = await prisma.sanMedia.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many SanMedias and only return the `id`
+     * const sanMediaWithIdOnly = await prisma.sanMedia.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends SanMediaCreateManyAndReturnArgs>(args?: SelectSubset<T, SanMediaCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a SanMedia.
+     * @param {SanMediaDeleteArgs} args - Arguments to delete one SanMedia.
+     * @example
+     * // Delete one SanMedia
+     * const SanMedia = await prisma.sanMedia.delete({
+     *   where: {
+     *     // ... filter to delete one SanMedia
+     *   }
+     * })
+     * 
+     */
+    delete<T extends SanMediaDeleteArgs>(args: SelectSubset<T, SanMediaDeleteArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one SanMedia.
+     * @param {SanMediaUpdateArgs} args - Arguments to update one SanMedia.
+     * @example
+     * // Update one SanMedia
+     * const sanMedia = await prisma.sanMedia.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends SanMediaUpdateArgs>(args: SelectSubset<T, SanMediaUpdateArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more SanMedias.
+     * @param {SanMediaDeleteManyArgs} args - Arguments to filter SanMedias to delete.
+     * @example
+     * // Delete a few SanMedias
+     * const { count } = await prisma.sanMedia.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends SanMediaDeleteManyArgs>(args?: SelectSubset<T, SanMediaDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SanMedias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many SanMedias
+     * const sanMedia = await prisma.sanMedia.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends SanMediaUpdateManyArgs>(args: SelectSubset<T, SanMediaUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SanMedias and returns the data updated in the database.
+     * @param {SanMediaUpdateManyAndReturnArgs} args - Arguments to update many SanMedias.
+     * @example
+     * // Update many SanMedias
+     * const sanMedia = await prisma.sanMedia.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more SanMedias and only return the `id`
+     * const sanMediaWithIdOnly = await prisma.sanMedia.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends SanMediaUpdateManyAndReturnArgs>(args: SelectSubset<T, SanMediaUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one SanMedia.
+     * @param {SanMediaUpsertArgs} args - Arguments to update or create a SanMedia.
+     * @example
+     * // Update or create a SanMedia
+     * const sanMedia = await prisma.sanMedia.upsert({
+     *   create: {
+     *     // ... data to create a SanMedia
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the SanMedia we want to update
+     *   }
+     * })
+     */
+    upsert<T extends SanMediaUpsertArgs>(args: SelectSubset<T, SanMediaUpsertArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of SanMedias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaCountArgs} args - Arguments to filter SanMedias to count.
+     * @example
+     * // Count the number of SanMedias
+     * const count = await prisma.sanMedia.count({
+     *   where: {
+     *     // ... the filter for the SanMedias we want to count
+     *   }
+     * })
+    **/
+    count<T extends SanMediaCountArgs>(
+      args?: Subset<T, SanMediaCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], SanMediaCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a SanMedia.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends SanMediaAggregateArgs>(args: Subset<T, SanMediaAggregateArgs>): Prisma.PrismaPromise<GetSanMediaAggregateType<T>>
+
+    /**
+     * Group by SanMedia.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends SanMediaGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: SanMediaGroupByArgs['orderBy'] }
+        : { orderBy?: SanMediaGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, SanMediaGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetSanMediaGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the SanMedia model
+   */
+  readonly fields: SanMediaFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for SanMedia.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__SanMediaClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    sanPham<T extends SanMedia$sanPhamArgs<ExtArgs> = {}>(args?: Subset<T, SanMedia$sanPhamArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the SanMedia model
+   */
+  interface SanMediaFieldRefs {
+    readonly id: FieldRef<"SanMedia", 'String'>
+    readonly ten: FieldRef<"SanMedia", 'String'>
+    readonly nguon: FieldRef<"SanMedia", 'String'>
+    readonly nguonId: FieldRef<"SanMedia", 'String'>
+    readonly lienKet: FieldRef<"SanMedia", 'String'>
+    readonly mime: FieldRef<"SanMedia", 'String'>
+    readonly bytes: FieldRef<"SanMedia", 'Int'>
+    readonly thoiLuongS: FieldRef<"SanMedia", 'Float'>
+    readonly anhBia: FieldRef<"SanMedia", 'String'>
+    readonly caption: FieldRef<"SanMedia", 'String'>
+    readonly kenh: FieldRef<"SanMedia", 'String'>
+    readonly channelId: FieldRef<"SanMedia", 'String'>
+    readonly henDangLuc: FieldRef<"SanMedia", 'DateTime'>
+    readonly trangThai: FieldRef<"SanMedia", 'String'>
+    readonly maTrenSan: FieldRef<"SanMedia", 'String'>
+    readonly loiCuoi: FieldRef<"SanMedia", 'String'>
+    readonly dangLuc: FieldRef<"SanMedia", 'DateTime'>
+    readonly createdBy: FieldRef<"SanMedia", 'String'>
+    readonly createdAt: FieldRef<"SanMedia", 'DateTime'>
+    readonly updatedAt: FieldRef<"SanMedia", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * SanMedia findUnique
+   */
+  export type SanMediaFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMedia to fetch.
+     */
+    where: SanMediaWhereUniqueInput
+  }
+
+  /**
+   * SanMedia findUniqueOrThrow
+   */
+  export type SanMediaFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMedia to fetch.
+     */
+    where: SanMediaWhereUniqueInput
+  }
+
+  /**
+   * SanMedia findFirst
+   */
+  export type SanMediaFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMedia to fetch.
+     */
+    where?: SanMediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMedias to fetch.
+     */
+    orderBy?: SanMediaOrderByWithRelationInput | SanMediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SanMedias.
+     */
+    cursor?: SanMediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SanMedias.
+     */
+    distinct?: SanMediaScalarFieldEnum | SanMediaScalarFieldEnum[]
+  }
+
+  /**
+   * SanMedia findFirstOrThrow
+   */
+  export type SanMediaFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMedia to fetch.
+     */
+    where?: SanMediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMedias to fetch.
+     */
+    orderBy?: SanMediaOrderByWithRelationInput | SanMediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SanMedias.
+     */
+    cursor?: SanMediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SanMedias.
+     */
+    distinct?: SanMediaScalarFieldEnum | SanMediaScalarFieldEnum[]
+  }
+
+  /**
+   * SanMedia findMany
+   */
+  export type SanMediaFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMedias to fetch.
+     */
+    where?: SanMediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMedias to fetch.
+     */
+    orderBy?: SanMediaOrderByWithRelationInput | SanMediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing SanMedias.
+     */
+    cursor?: SanMediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMedias.
+     */
+    skip?: number
+    distinct?: SanMediaScalarFieldEnum | SanMediaScalarFieldEnum[]
+  }
+
+  /**
+   * SanMedia create
+   */
+  export type SanMediaCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * The data needed to create a SanMedia.
+     */
+    data: XOR<SanMediaCreateInput, SanMediaUncheckedCreateInput>
+  }
+
+  /**
+   * SanMedia createMany
+   */
+  export type SanMediaCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many SanMedias.
+     */
+    data: SanMediaCreateManyInput | SanMediaCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * SanMedia createManyAndReturn
+   */
+  export type SanMediaCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * The data used to create many SanMedias.
+     */
+    data: SanMediaCreateManyInput | SanMediaCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * SanMedia update
+   */
+  export type SanMediaUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * The data needed to update a SanMedia.
+     */
+    data: XOR<SanMediaUpdateInput, SanMediaUncheckedUpdateInput>
+    /**
+     * Choose, which SanMedia to update.
+     */
+    where: SanMediaWhereUniqueInput
+  }
+
+  /**
+   * SanMedia updateMany
+   */
+  export type SanMediaUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update SanMedias.
+     */
+    data: XOR<SanMediaUpdateManyMutationInput, SanMediaUncheckedUpdateManyInput>
+    /**
+     * Filter which SanMedias to update
+     */
+    where?: SanMediaWhereInput
+    /**
+     * Limit how many SanMedias to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * SanMedia updateManyAndReturn
+   */
+  export type SanMediaUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * The data used to update SanMedias.
+     */
+    data: XOR<SanMediaUpdateManyMutationInput, SanMediaUncheckedUpdateManyInput>
+    /**
+     * Filter which SanMedias to update
+     */
+    where?: SanMediaWhereInput
+    /**
+     * Limit how many SanMedias to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * SanMedia upsert
+   */
+  export type SanMediaUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * The filter to search for the SanMedia to update in case it exists.
+     */
+    where: SanMediaWhereUniqueInput
+    /**
+     * In case the SanMedia found by the `where` argument doesn't exist, create a new SanMedia with this data.
+     */
+    create: XOR<SanMediaCreateInput, SanMediaUncheckedCreateInput>
+    /**
+     * In case the SanMedia was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<SanMediaUpdateInput, SanMediaUncheckedUpdateInput>
+  }
+
+  /**
+   * SanMedia delete
+   */
+  export type SanMediaDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+    /**
+     * Filter which SanMedia to delete.
+     */
+    where: SanMediaWhereUniqueInput
+  }
+
+  /**
+   * SanMedia deleteMany
+   */
+  export type SanMediaDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SanMedias to delete
+     */
+    where?: SanMediaWhereInput
+    /**
+     * Limit how many SanMedias to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * SanMedia.sanPham
+   */
+  export type SanMedia$sanPhamArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    where?: SanMediaSanPhamWhereInput
+    orderBy?: SanMediaSanPhamOrderByWithRelationInput | SanMediaSanPhamOrderByWithRelationInput[]
+    cursor?: SanMediaSanPhamWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: SanMediaSanPhamScalarFieldEnum | SanMediaSanPhamScalarFieldEnum[]
+  }
+
+  /**
+   * SanMedia without action
+   */
+  export type SanMediaDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMedia
+     */
+    select?: SanMediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMedia
+     */
+    omit?: SanMediaOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model SanMediaSanPham
+   */
+
+  export type AggregateSanMediaSanPham = {
+    _count: SanMediaSanPhamCountAggregateOutputType | null
+    _avg: SanMediaSanPhamAvgAggregateOutputType | null
+    _sum: SanMediaSanPhamSumAggregateOutputType | null
+    _min: SanMediaSanPhamMinAggregateOutputType | null
+    _max: SanMediaSanPhamMaxAggregateOutputType | null
+  }
+
+  export type SanMediaSanPhamAvgAggregateOutputType = {
+    thuTu: number | null
+  }
+
+  export type SanMediaSanPhamSumAggregateOutputType = {
+    thuTu: number | null
+  }
+
+  export type SanMediaSanPhamMinAggregateOutputType = {
+    id: string | null
+    mediaId: string | null
+    sku: string | null
+    productId: string | null
+    maTrenSan: string | null
+    nhan: string | null
+    thuTu: number | null
+  }
+
+  export type SanMediaSanPhamMaxAggregateOutputType = {
+    id: string | null
+    mediaId: string | null
+    sku: string | null
+    productId: string | null
+    maTrenSan: string | null
+    nhan: string | null
+    thuTu: number | null
+  }
+
+  export type SanMediaSanPhamCountAggregateOutputType = {
+    id: number
+    mediaId: number
+    sku: number
+    productId: number
+    maTrenSan: number
+    nhan: number
+    thuTu: number
+    _all: number
+  }
+
+
+  export type SanMediaSanPhamAvgAggregateInputType = {
+    thuTu?: true
+  }
+
+  export type SanMediaSanPhamSumAggregateInputType = {
+    thuTu?: true
+  }
+
+  export type SanMediaSanPhamMinAggregateInputType = {
+    id?: true
+    mediaId?: true
+    sku?: true
+    productId?: true
+    maTrenSan?: true
+    nhan?: true
+    thuTu?: true
+  }
+
+  export type SanMediaSanPhamMaxAggregateInputType = {
+    id?: true
+    mediaId?: true
+    sku?: true
+    productId?: true
+    maTrenSan?: true
+    nhan?: true
+    thuTu?: true
+  }
+
+  export type SanMediaSanPhamCountAggregateInputType = {
+    id?: true
+    mediaId?: true
+    sku?: true
+    productId?: true
+    maTrenSan?: true
+    nhan?: true
+    thuTu?: true
+    _all?: true
+  }
+
+  export type SanMediaSanPhamAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SanMediaSanPham to aggregate.
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMediaSanPhams to fetch.
+     */
+    orderBy?: SanMediaSanPhamOrderByWithRelationInput | SanMediaSanPhamOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: SanMediaSanPhamWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMediaSanPhams from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMediaSanPhams.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned SanMediaSanPhams
+    **/
+    _count?: true | SanMediaSanPhamCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: SanMediaSanPhamAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: SanMediaSanPhamSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: SanMediaSanPhamMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: SanMediaSanPhamMaxAggregateInputType
+  }
+
+  export type GetSanMediaSanPhamAggregateType<T extends SanMediaSanPhamAggregateArgs> = {
+        [P in keyof T & keyof AggregateSanMediaSanPham]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateSanMediaSanPham[P]>
+      : GetScalarType<T[P], AggregateSanMediaSanPham[P]>
+  }
+
+
+
+
+  export type SanMediaSanPhamGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: SanMediaSanPhamWhereInput
+    orderBy?: SanMediaSanPhamOrderByWithAggregationInput | SanMediaSanPhamOrderByWithAggregationInput[]
+    by: SanMediaSanPhamScalarFieldEnum[] | SanMediaSanPhamScalarFieldEnum
+    having?: SanMediaSanPhamScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: SanMediaSanPhamCountAggregateInputType | true
+    _avg?: SanMediaSanPhamAvgAggregateInputType
+    _sum?: SanMediaSanPhamSumAggregateInputType
+    _min?: SanMediaSanPhamMinAggregateInputType
+    _max?: SanMediaSanPhamMaxAggregateInputType
+  }
+
+  export type SanMediaSanPhamGroupByOutputType = {
+    id: string
+    mediaId: string
+    sku: string
+    productId: string | null
+    maTrenSan: string | null
+    nhan: string | null
+    thuTu: number
+    _count: SanMediaSanPhamCountAggregateOutputType | null
+    _avg: SanMediaSanPhamAvgAggregateOutputType | null
+    _sum: SanMediaSanPhamSumAggregateOutputType | null
+    _min: SanMediaSanPhamMinAggregateOutputType | null
+    _max: SanMediaSanPhamMaxAggregateOutputType | null
+  }
+
+  type GetSanMediaSanPhamGroupByPayload<T extends SanMediaSanPhamGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<SanMediaSanPhamGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof SanMediaSanPhamGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], SanMediaSanPhamGroupByOutputType[P]>
+            : GetScalarType<T[P], SanMediaSanPhamGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type SanMediaSanPhamSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    mediaId?: boolean
+    sku?: boolean
+    productId?: boolean
+    maTrenSan?: boolean
+    nhan?: boolean
+    thuTu?: boolean
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["sanMediaSanPham"]>
+
+  export type SanMediaSanPhamSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    mediaId?: boolean
+    sku?: boolean
+    productId?: boolean
+    maTrenSan?: boolean
+    nhan?: boolean
+    thuTu?: boolean
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["sanMediaSanPham"]>
+
+  export type SanMediaSanPhamSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    mediaId?: boolean
+    sku?: boolean
+    productId?: boolean
+    maTrenSan?: boolean
+    nhan?: boolean
+    thuTu?: boolean
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["sanMediaSanPham"]>
+
+  export type SanMediaSanPhamSelectScalar = {
+    id?: boolean
+    mediaId?: boolean
+    sku?: boolean
+    productId?: boolean
+    maTrenSan?: boolean
+    nhan?: boolean
+    thuTu?: boolean
+  }
+
+  export type SanMediaSanPhamOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "mediaId" | "sku" | "productId" | "maTrenSan" | "nhan" | "thuTu", ExtArgs["result"]["sanMediaSanPham"]>
+  export type SanMediaSanPhamInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }
+  export type SanMediaSanPhamIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }
+  export type SanMediaSanPhamIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    media?: boolean | SanMediaDefaultArgs<ExtArgs>
+  }
+
+  export type $SanMediaSanPhamPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "SanMediaSanPham"
+    objects: {
+      media: Prisma.$SanMediaPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      mediaId: string
+      /**
+       * SKU trong kho — thứ chủ shop gõ vào và nhìn thấy
+       */
+      sku: string
+      /**
+       * Product trong kho, null nếu SKU chưa khớp hàng nào
+       */
+      productId: string | null
+      /**
+       * Mã sản phẩm TRÊN SÀN (OnlineProduct.platformProductId) — thứ thật sự gửi đi.
+       * null = chưa tra ra listing trên gian hàng đang chọn ⇒ chưa đăng được.
+       */
+      maTrenSan: string | null
+      /**
+       * Nhãn hiện trên video. TikTok giới hạn 30 ký tự (mã lỗi 16011007).
+       */
+      nhan: string | null
+      thuTu: number
+    }, ExtArgs["result"]["sanMediaSanPham"]>
+    composites: {}
+  }
+
+  type SanMediaSanPhamGetPayload<S extends boolean | null | undefined | SanMediaSanPhamDefaultArgs> = $Result.GetResult<Prisma.$SanMediaSanPhamPayload, S>
+
+  type SanMediaSanPhamCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<SanMediaSanPhamFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: SanMediaSanPhamCountAggregateInputType | true
+    }
+
+  export interface SanMediaSanPhamDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['SanMediaSanPham'], meta: { name: 'SanMediaSanPham' } }
+    /**
+     * Find zero or one SanMediaSanPham that matches the filter.
+     * @param {SanMediaSanPhamFindUniqueArgs} args - Arguments to find a SanMediaSanPham
+     * @example
+     * // Get one SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends SanMediaSanPhamFindUniqueArgs>(args: SelectSubset<T, SanMediaSanPhamFindUniqueArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one SanMediaSanPham that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {SanMediaSanPhamFindUniqueOrThrowArgs} args - Arguments to find a SanMediaSanPham
+     * @example
+     * // Get one SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends SanMediaSanPhamFindUniqueOrThrowArgs>(args: SelectSubset<T, SanMediaSanPhamFindUniqueOrThrowArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SanMediaSanPham that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamFindFirstArgs} args - Arguments to find a SanMediaSanPham
+     * @example
+     * // Get one SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends SanMediaSanPhamFindFirstArgs>(args?: SelectSubset<T, SanMediaSanPhamFindFirstArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SanMediaSanPham that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamFindFirstOrThrowArgs} args - Arguments to find a SanMediaSanPham
+     * @example
+     * // Get one SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends SanMediaSanPhamFindFirstOrThrowArgs>(args?: SelectSubset<T, SanMediaSanPhamFindFirstOrThrowArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more SanMediaSanPhams that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all SanMediaSanPhams
+     * const sanMediaSanPhams = await prisma.sanMediaSanPham.findMany()
+     * 
+     * // Get first 10 SanMediaSanPhams
+     * const sanMediaSanPhams = await prisma.sanMediaSanPham.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const sanMediaSanPhamWithIdOnly = await prisma.sanMediaSanPham.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends SanMediaSanPhamFindManyArgs>(args?: SelectSubset<T, SanMediaSanPhamFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a SanMediaSanPham.
+     * @param {SanMediaSanPhamCreateArgs} args - Arguments to create a SanMediaSanPham.
+     * @example
+     * // Create one SanMediaSanPham
+     * const SanMediaSanPham = await prisma.sanMediaSanPham.create({
+     *   data: {
+     *     // ... data to create a SanMediaSanPham
+     *   }
+     * })
+     * 
+     */
+    create<T extends SanMediaSanPhamCreateArgs>(args: SelectSubset<T, SanMediaSanPhamCreateArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many SanMediaSanPhams.
+     * @param {SanMediaSanPhamCreateManyArgs} args - Arguments to create many SanMediaSanPhams.
+     * @example
+     * // Create many SanMediaSanPhams
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends SanMediaSanPhamCreateManyArgs>(args?: SelectSubset<T, SanMediaSanPhamCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many SanMediaSanPhams and returns the data saved in the database.
+     * @param {SanMediaSanPhamCreateManyAndReturnArgs} args - Arguments to create many SanMediaSanPhams.
+     * @example
+     * // Create many SanMediaSanPhams
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many SanMediaSanPhams and only return the `id`
+     * const sanMediaSanPhamWithIdOnly = await prisma.sanMediaSanPham.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends SanMediaSanPhamCreateManyAndReturnArgs>(args?: SelectSubset<T, SanMediaSanPhamCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a SanMediaSanPham.
+     * @param {SanMediaSanPhamDeleteArgs} args - Arguments to delete one SanMediaSanPham.
+     * @example
+     * // Delete one SanMediaSanPham
+     * const SanMediaSanPham = await prisma.sanMediaSanPham.delete({
+     *   where: {
+     *     // ... filter to delete one SanMediaSanPham
+     *   }
+     * })
+     * 
+     */
+    delete<T extends SanMediaSanPhamDeleteArgs>(args: SelectSubset<T, SanMediaSanPhamDeleteArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one SanMediaSanPham.
+     * @param {SanMediaSanPhamUpdateArgs} args - Arguments to update one SanMediaSanPham.
+     * @example
+     * // Update one SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends SanMediaSanPhamUpdateArgs>(args: SelectSubset<T, SanMediaSanPhamUpdateArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more SanMediaSanPhams.
+     * @param {SanMediaSanPhamDeleteManyArgs} args - Arguments to filter SanMediaSanPhams to delete.
+     * @example
+     * // Delete a few SanMediaSanPhams
+     * const { count } = await prisma.sanMediaSanPham.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends SanMediaSanPhamDeleteManyArgs>(args?: SelectSubset<T, SanMediaSanPhamDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SanMediaSanPhams.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many SanMediaSanPhams
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends SanMediaSanPhamUpdateManyArgs>(args: SelectSubset<T, SanMediaSanPhamUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SanMediaSanPhams and returns the data updated in the database.
+     * @param {SanMediaSanPhamUpdateManyAndReturnArgs} args - Arguments to update many SanMediaSanPhams.
+     * @example
+     * // Update many SanMediaSanPhams
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more SanMediaSanPhams and only return the `id`
+     * const sanMediaSanPhamWithIdOnly = await prisma.sanMediaSanPham.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends SanMediaSanPhamUpdateManyAndReturnArgs>(args: SelectSubset<T, SanMediaSanPhamUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one SanMediaSanPham.
+     * @param {SanMediaSanPhamUpsertArgs} args - Arguments to update or create a SanMediaSanPham.
+     * @example
+     * // Update or create a SanMediaSanPham
+     * const sanMediaSanPham = await prisma.sanMediaSanPham.upsert({
+     *   create: {
+     *     // ... data to create a SanMediaSanPham
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the SanMediaSanPham we want to update
+     *   }
+     * })
+     */
+    upsert<T extends SanMediaSanPhamUpsertArgs>(args: SelectSubset<T, SanMediaSanPhamUpsertArgs<ExtArgs>>): Prisma__SanMediaSanPhamClient<$Result.GetResult<Prisma.$SanMediaSanPhamPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of SanMediaSanPhams.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamCountArgs} args - Arguments to filter SanMediaSanPhams to count.
+     * @example
+     * // Count the number of SanMediaSanPhams
+     * const count = await prisma.sanMediaSanPham.count({
+     *   where: {
+     *     // ... the filter for the SanMediaSanPhams we want to count
+     *   }
+     * })
+    **/
+    count<T extends SanMediaSanPhamCountArgs>(
+      args?: Subset<T, SanMediaSanPhamCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], SanMediaSanPhamCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a SanMediaSanPham.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends SanMediaSanPhamAggregateArgs>(args: Subset<T, SanMediaSanPhamAggregateArgs>): Prisma.PrismaPromise<GetSanMediaSanPhamAggregateType<T>>
+
+    /**
+     * Group by SanMediaSanPham.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SanMediaSanPhamGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends SanMediaSanPhamGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: SanMediaSanPhamGroupByArgs['orderBy'] }
+        : { orderBy?: SanMediaSanPhamGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, SanMediaSanPhamGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetSanMediaSanPhamGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the SanMediaSanPham model
+   */
+  readonly fields: SanMediaSanPhamFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for SanMediaSanPham.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__SanMediaSanPhamClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    media<T extends SanMediaDefaultArgs<ExtArgs> = {}>(args?: Subset<T, SanMediaDefaultArgs<ExtArgs>>): Prisma__SanMediaClient<$Result.GetResult<Prisma.$SanMediaPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the SanMediaSanPham model
+   */
+  interface SanMediaSanPhamFieldRefs {
+    readonly id: FieldRef<"SanMediaSanPham", 'String'>
+    readonly mediaId: FieldRef<"SanMediaSanPham", 'String'>
+    readonly sku: FieldRef<"SanMediaSanPham", 'String'>
+    readonly productId: FieldRef<"SanMediaSanPham", 'String'>
+    readonly maTrenSan: FieldRef<"SanMediaSanPham", 'String'>
+    readonly nhan: FieldRef<"SanMediaSanPham", 'String'>
+    readonly thuTu: FieldRef<"SanMediaSanPham", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * SanMediaSanPham findUnique
+   */
+  export type SanMediaSanPhamFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMediaSanPham to fetch.
+     */
+    where: SanMediaSanPhamWhereUniqueInput
+  }
+
+  /**
+   * SanMediaSanPham findUniqueOrThrow
+   */
+  export type SanMediaSanPhamFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMediaSanPham to fetch.
+     */
+    where: SanMediaSanPhamWhereUniqueInput
+  }
+
+  /**
+   * SanMediaSanPham findFirst
+   */
+  export type SanMediaSanPhamFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMediaSanPham to fetch.
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMediaSanPhams to fetch.
+     */
+    orderBy?: SanMediaSanPhamOrderByWithRelationInput | SanMediaSanPhamOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SanMediaSanPhams.
+     */
+    cursor?: SanMediaSanPhamWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMediaSanPhams from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMediaSanPhams.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SanMediaSanPhams.
+     */
+    distinct?: SanMediaSanPhamScalarFieldEnum | SanMediaSanPhamScalarFieldEnum[]
+  }
+
+  /**
+   * SanMediaSanPham findFirstOrThrow
+   */
+  export type SanMediaSanPhamFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMediaSanPham to fetch.
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMediaSanPhams to fetch.
+     */
+    orderBy?: SanMediaSanPhamOrderByWithRelationInput | SanMediaSanPhamOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SanMediaSanPhams.
+     */
+    cursor?: SanMediaSanPhamWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMediaSanPhams from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMediaSanPhams.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SanMediaSanPhams.
+     */
+    distinct?: SanMediaSanPhamScalarFieldEnum | SanMediaSanPhamScalarFieldEnum[]
+  }
+
+  /**
+   * SanMediaSanPham findMany
+   */
+  export type SanMediaSanPhamFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter, which SanMediaSanPhams to fetch.
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SanMediaSanPhams to fetch.
+     */
+    orderBy?: SanMediaSanPhamOrderByWithRelationInput | SanMediaSanPhamOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing SanMediaSanPhams.
+     */
+    cursor?: SanMediaSanPhamWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SanMediaSanPhams from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SanMediaSanPhams.
+     */
+    skip?: number
+    distinct?: SanMediaSanPhamScalarFieldEnum | SanMediaSanPhamScalarFieldEnum[]
+  }
+
+  /**
+   * SanMediaSanPham create
+   */
+  export type SanMediaSanPhamCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * The data needed to create a SanMediaSanPham.
+     */
+    data: XOR<SanMediaSanPhamCreateInput, SanMediaSanPhamUncheckedCreateInput>
+  }
+
+  /**
+   * SanMediaSanPham createMany
+   */
+  export type SanMediaSanPhamCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many SanMediaSanPhams.
+     */
+    data: SanMediaSanPhamCreateManyInput | SanMediaSanPhamCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * SanMediaSanPham createManyAndReturn
+   */
+  export type SanMediaSanPhamCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * The data used to create many SanMediaSanPhams.
+     */
+    data: SanMediaSanPhamCreateManyInput | SanMediaSanPhamCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * SanMediaSanPham update
+   */
+  export type SanMediaSanPhamUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * The data needed to update a SanMediaSanPham.
+     */
+    data: XOR<SanMediaSanPhamUpdateInput, SanMediaSanPhamUncheckedUpdateInput>
+    /**
+     * Choose, which SanMediaSanPham to update.
+     */
+    where: SanMediaSanPhamWhereUniqueInput
+  }
+
+  /**
+   * SanMediaSanPham updateMany
+   */
+  export type SanMediaSanPhamUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update SanMediaSanPhams.
+     */
+    data: XOR<SanMediaSanPhamUpdateManyMutationInput, SanMediaSanPhamUncheckedUpdateManyInput>
+    /**
+     * Filter which SanMediaSanPhams to update
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * Limit how many SanMediaSanPhams to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * SanMediaSanPham updateManyAndReturn
+   */
+  export type SanMediaSanPhamUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * The data used to update SanMediaSanPhams.
+     */
+    data: XOR<SanMediaSanPhamUpdateManyMutationInput, SanMediaSanPhamUncheckedUpdateManyInput>
+    /**
+     * Filter which SanMediaSanPhams to update
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * Limit how many SanMediaSanPhams to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * SanMediaSanPham upsert
+   */
+  export type SanMediaSanPhamUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * The filter to search for the SanMediaSanPham to update in case it exists.
+     */
+    where: SanMediaSanPhamWhereUniqueInput
+    /**
+     * In case the SanMediaSanPham found by the `where` argument doesn't exist, create a new SanMediaSanPham with this data.
+     */
+    create: XOR<SanMediaSanPhamCreateInput, SanMediaSanPhamUncheckedCreateInput>
+    /**
+     * In case the SanMediaSanPham was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<SanMediaSanPhamUpdateInput, SanMediaSanPhamUncheckedUpdateInput>
+  }
+
+  /**
+   * SanMediaSanPham delete
+   */
+  export type SanMediaSanPhamDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+    /**
+     * Filter which SanMediaSanPham to delete.
+     */
+    where: SanMediaSanPhamWhereUniqueInput
+  }
+
+  /**
+   * SanMediaSanPham deleteMany
+   */
+  export type SanMediaSanPhamDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SanMediaSanPhams to delete
+     */
+    where?: SanMediaSanPhamWhereInput
+    /**
+     * Limit how many SanMediaSanPhams to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * SanMediaSanPham without action
+   */
+  export type SanMediaSanPhamDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SanMediaSanPham
+     */
+    select?: SanMediaSanPhamSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SanMediaSanPham
+     */
+    omit?: SanMediaSanPhamOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SanMediaSanPhamInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -192101,6 +194780,45 @@ export namespace Prisma {
   };
 
   export type MisaPurchaseLineScalarFieldEnum = (typeof MisaPurchaseLineScalarFieldEnum)[keyof typeof MisaPurchaseLineScalarFieldEnum]
+
+
+  export const SanMediaScalarFieldEnum: {
+    id: 'id',
+    ten: 'ten',
+    nguon: 'nguon',
+    nguonId: 'nguonId',
+    lienKet: 'lienKet',
+    mime: 'mime',
+    bytes: 'bytes',
+    thoiLuongS: 'thoiLuongS',
+    anhBia: 'anhBia',
+    caption: 'caption',
+    kenh: 'kenh',
+    channelId: 'channelId',
+    henDangLuc: 'henDangLuc',
+    trangThai: 'trangThai',
+    maTrenSan: 'maTrenSan',
+    loiCuoi: 'loiCuoi',
+    dangLuc: 'dangLuc',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type SanMediaScalarFieldEnum = (typeof SanMediaScalarFieldEnum)[keyof typeof SanMediaScalarFieldEnum]
+
+
+  export const SanMediaSanPhamScalarFieldEnum: {
+    id: 'id',
+    mediaId: 'mediaId',
+    sku: 'sku',
+    productId: 'productId',
+    maTrenSan: 'maTrenSan',
+    nhan: 'nhan',
+    thuTu: 'thuTu'
+  };
+
+  export type SanMediaSanPhamScalarFieldEnum = (typeof SanMediaSanPhamScalarFieldEnum)[keyof typeof SanMediaSanPhamScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -207051,6 +209769,206 @@ export namespace Prisma {
     giamGia?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
     productId?: StringNullableWithAggregatesFilter<"MisaPurchaseLine"> | string | null
     dongSo?: IntNullableWithAggregatesFilter<"MisaPurchaseLine"> | number | null
+  }
+
+  export type SanMediaWhereInput = {
+    AND?: SanMediaWhereInput | SanMediaWhereInput[]
+    OR?: SanMediaWhereInput[]
+    NOT?: SanMediaWhereInput | SanMediaWhereInput[]
+    id?: StringFilter<"SanMedia"> | string
+    ten?: StringFilter<"SanMedia"> | string
+    nguon?: StringFilter<"SanMedia"> | string
+    nguonId?: StringNullableFilter<"SanMedia"> | string | null
+    lienKet?: StringNullableFilter<"SanMedia"> | string | null
+    mime?: StringNullableFilter<"SanMedia"> | string | null
+    bytes?: IntNullableFilter<"SanMedia"> | number | null
+    thoiLuongS?: FloatNullableFilter<"SanMedia"> | number | null
+    anhBia?: StringNullableFilter<"SanMedia"> | string | null
+    caption?: StringNullableFilter<"SanMedia"> | string | null
+    kenh?: StringNullableFilter<"SanMedia"> | string | null
+    channelId?: StringNullableFilter<"SanMedia"> | string | null
+    henDangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    trangThai?: StringFilter<"SanMedia"> | string
+    maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
+    loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
+    dangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    createdBy?: StringNullableFilter<"SanMedia"> | string | null
+    createdAt?: DateTimeFilter<"SanMedia"> | Date | string
+    updatedAt?: DateTimeFilter<"SanMedia"> | Date | string
+    sanPham?: SanMediaSanPhamListRelationFilter
+  }
+
+  export type SanMediaOrderByWithRelationInput = {
+    id?: SortOrder
+    ten?: SortOrder
+    nguon?: SortOrder
+    nguonId?: SortOrderInput | SortOrder
+    lienKet?: SortOrderInput | SortOrder
+    mime?: SortOrderInput | SortOrder
+    bytes?: SortOrderInput | SortOrder
+    thoiLuongS?: SortOrderInput | SortOrder
+    anhBia?: SortOrderInput | SortOrder
+    caption?: SortOrderInput | SortOrder
+    kenh?: SortOrderInput | SortOrder
+    channelId?: SortOrderInput | SortOrder
+    henDangLuc?: SortOrderInput | SortOrder
+    trangThai?: SortOrder
+    maTrenSan?: SortOrderInput | SortOrder
+    loiCuoi?: SortOrderInput | SortOrder
+    dangLuc?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    sanPham?: SanMediaSanPhamOrderByRelationAggregateInput
+  }
+
+  export type SanMediaWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: SanMediaWhereInput | SanMediaWhereInput[]
+    OR?: SanMediaWhereInput[]
+    NOT?: SanMediaWhereInput | SanMediaWhereInput[]
+    ten?: StringFilter<"SanMedia"> | string
+    nguon?: StringFilter<"SanMedia"> | string
+    nguonId?: StringNullableFilter<"SanMedia"> | string | null
+    lienKet?: StringNullableFilter<"SanMedia"> | string | null
+    mime?: StringNullableFilter<"SanMedia"> | string | null
+    bytes?: IntNullableFilter<"SanMedia"> | number | null
+    thoiLuongS?: FloatNullableFilter<"SanMedia"> | number | null
+    anhBia?: StringNullableFilter<"SanMedia"> | string | null
+    caption?: StringNullableFilter<"SanMedia"> | string | null
+    kenh?: StringNullableFilter<"SanMedia"> | string | null
+    channelId?: StringNullableFilter<"SanMedia"> | string | null
+    henDangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    trangThai?: StringFilter<"SanMedia"> | string
+    maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
+    loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
+    dangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    createdBy?: StringNullableFilter<"SanMedia"> | string | null
+    createdAt?: DateTimeFilter<"SanMedia"> | Date | string
+    updatedAt?: DateTimeFilter<"SanMedia"> | Date | string
+    sanPham?: SanMediaSanPhamListRelationFilter
+  }, "id">
+
+  export type SanMediaOrderByWithAggregationInput = {
+    id?: SortOrder
+    ten?: SortOrder
+    nguon?: SortOrder
+    nguonId?: SortOrderInput | SortOrder
+    lienKet?: SortOrderInput | SortOrder
+    mime?: SortOrderInput | SortOrder
+    bytes?: SortOrderInput | SortOrder
+    thoiLuongS?: SortOrderInput | SortOrder
+    anhBia?: SortOrderInput | SortOrder
+    caption?: SortOrderInput | SortOrder
+    kenh?: SortOrderInput | SortOrder
+    channelId?: SortOrderInput | SortOrder
+    henDangLuc?: SortOrderInput | SortOrder
+    trangThai?: SortOrder
+    maTrenSan?: SortOrderInput | SortOrder
+    loiCuoi?: SortOrderInput | SortOrder
+    dangLuc?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: SanMediaCountOrderByAggregateInput
+    _avg?: SanMediaAvgOrderByAggregateInput
+    _max?: SanMediaMaxOrderByAggregateInput
+    _min?: SanMediaMinOrderByAggregateInput
+    _sum?: SanMediaSumOrderByAggregateInput
+  }
+
+  export type SanMediaScalarWhereWithAggregatesInput = {
+    AND?: SanMediaScalarWhereWithAggregatesInput | SanMediaScalarWhereWithAggregatesInput[]
+    OR?: SanMediaScalarWhereWithAggregatesInput[]
+    NOT?: SanMediaScalarWhereWithAggregatesInput | SanMediaScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"SanMedia"> | string
+    ten?: StringWithAggregatesFilter<"SanMedia"> | string
+    nguon?: StringWithAggregatesFilter<"SanMedia"> | string
+    nguonId?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    lienKet?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    mime?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    bytes?: IntNullableWithAggregatesFilter<"SanMedia"> | number | null
+    thoiLuongS?: FloatNullableWithAggregatesFilter<"SanMedia"> | number | null
+    anhBia?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    caption?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    kenh?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    channelId?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    henDangLuc?: DateTimeNullableWithAggregatesFilter<"SanMedia"> | Date | string | null
+    trangThai?: StringWithAggregatesFilter<"SanMedia"> | string
+    maTrenSan?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    loiCuoi?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    dangLuc?: DateTimeNullableWithAggregatesFilter<"SanMedia"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"SanMedia"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"SanMedia"> | Date | string
+  }
+
+  export type SanMediaSanPhamWhereInput = {
+    AND?: SanMediaSanPhamWhereInput | SanMediaSanPhamWhereInput[]
+    OR?: SanMediaSanPhamWhereInput[]
+    NOT?: SanMediaSanPhamWhereInput | SanMediaSanPhamWhereInput[]
+    id?: StringFilter<"SanMediaSanPham"> | string
+    mediaId?: StringFilter<"SanMediaSanPham"> | string
+    sku?: StringFilter<"SanMediaSanPham"> | string
+    productId?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    maTrenSan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    nhan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    thuTu?: IntFilter<"SanMediaSanPham"> | number
+    media?: XOR<SanMediaScalarRelationFilter, SanMediaWhereInput>
+  }
+
+  export type SanMediaSanPhamOrderByWithRelationInput = {
+    id?: SortOrder
+    mediaId?: SortOrder
+    sku?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    maTrenSan?: SortOrderInput | SortOrder
+    nhan?: SortOrderInput | SortOrder
+    thuTu?: SortOrder
+    media?: SanMediaOrderByWithRelationInput
+  }
+
+  export type SanMediaSanPhamWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    mediaId_sku?: SanMediaSanPhamMediaIdSkuCompoundUniqueInput
+    AND?: SanMediaSanPhamWhereInput | SanMediaSanPhamWhereInput[]
+    OR?: SanMediaSanPhamWhereInput[]
+    NOT?: SanMediaSanPhamWhereInput | SanMediaSanPhamWhereInput[]
+    mediaId?: StringFilter<"SanMediaSanPham"> | string
+    sku?: StringFilter<"SanMediaSanPham"> | string
+    productId?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    maTrenSan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    nhan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    thuTu?: IntFilter<"SanMediaSanPham"> | number
+    media?: XOR<SanMediaScalarRelationFilter, SanMediaWhereInput>
+  }, "id" | "mediaId_sku">
+
+  export type SanMediaSanPhamOrderByWithAggregationInput = {
+    id?: SortOrder
+    mediaId?: SortOrder
+    sku?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    maTrenSan?: SortOrderInput | SortOrder
+    nhan?: SortOrderInput | SortOrder
+    thuTu?: SortOrder
+    _count?: SanMediaSanPhamCountOrderByAggregateInput
+    _avg?: SanMediaSanPhamAvgOrderByAggregateInput
+    _max?: SanMediaSanPhamMaxOrderByAggregateInput
+    _min?: SanMediaSanPhamMinOrderByAggregateInput
+    _sum?: SanMediaSanPhamSumOrderByAggregateInput
+  }
+
+  export type SanMediaSanPhamScalarWhereWithAggregatesInput = {
+    AND?: SanMediaSanPhamScalarWhereWithAggregatesInput | SanMediaSanPhamScalarWhereWithAggregatesInput[]
+    OR?: SanMediaSanPhamScalarWhereWithAggregatesInput[]
+    NOT?: SanMediaSanPhamScalarWhereWithAggregatesInput | SanMediaSanPhamScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"SanMediaSanPham"> | string
+    mediaId?: StringWithAggregatesFilter<"SanMediaSanPham"> | string
+    sku?: StringWithAggregatesFilter<"SanMediaSanPham"> | string
+    productId?: StringNullableWithAggregatesFilter<"SanMediaSanPham"> | string | null
+    maTrenSan?: StringNullableWithAggregatesFilter<"SanMediaSanPham"> | string | null
+    nhan?: StringNullableWithAggregatesFilter<"SanMediaSanPham"> | string | null
+    thuTu?: IntWithAggregatesFilter<"SanMediaSanPham"> | number
   }
 
   export type BranchCreateInput = {
@@ -224717,6 +227635,240 @@ export namespace Prisma {
     dongSo?: NullableIntFieldUpdateOperationsInput | number | null
   }
 
+  export type SanMediaCreateInput = {
+    id?: string
+    ten: string
+    nguon?: string
+    nguonId?: string | null
+    lienKet?: string | null
+    mime?: string | null
+    bytes?: number | null
+    thoiLuongS?: number | null
+    anhBia?: string | null
+    caption?: string | null
+    kenh?: string | null
+    channelId?: string | null
+    henDangLuc?: Date | string | null
+    trangThai?: string
+    maTrenSan?: string | null
+    loiCuoi?: string | null
+    dangLuc?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sanPham?: SanMediaSanPhamCreateNestedManyWithoutMediaInput
+  }
+
+  export type SanMediaUncheckedCreateInput = {
+    id?: string
+    ten: string
+    nguon?: string
+    nguonId?: string | null
+    lienKet?: string | null
+    mime?: string | null
+    bytes?: number | null
+    thoiLuongS?: number | null
+    anhBia?: string | null
+    caption?: string | null
+    kenh?: string | null
+    channelId?: string | null
+    henDangLuc?: Date | string | null
+    trangThai?: string
+    maTrenSan?: string | null
+    loiCuoi?: string | null
+    dangLuc?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sanPham?: SanMediaSanPhamUncheckedCreateNestedManyWithoutMediaInput
+  }
+
+  export type SanMediaUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sanPham?: SanMediaSanPhamUpdateManyWithoutMediaNestedInput
+  }
+
+  export type SanMediaUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sanPham?: SanMediaSanPhamUncheckedUpdateManyWithoutMediaNestedInput
+  }
+
+  export type SanMediaCreateManyInput = {
+    id?: string
+    ten: string
+    nguon?: string
+    nguonId?: string | null
+    lienKet?: string | null
+    mime?: string | null
+    bytes?: number | null
+    thoiLuongS?: number | null
+    anhBia?: string | null
+    caption?: string | null
+    kenh?: string | null
+    channelId?: string | null
+    henDangLuc?: Date | string | null
+    trangThai?: string
+    maTrenSan?: string | null
+    loiCuoi?: string | null
+    dangLuc?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SanMediaUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SanMediaUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SanMediaSanPhamCreateInput = {
+    id?: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+    media: SanMediaCreateNestedOneWithoutSanPhamInput
+  }
+
+  export type SanMediaSanPhamUncheckedCreateInput = {
+    id?: string
+    mediaId: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+  }
+
+  export type SanMediaSanPhamUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+    media?: SanMediaUpdateOneRequiredWithoutSanPhamNestedInput
+  }
+
+  export type SanMediaSanPhamUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaId?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type SanMediaSanPhamCreateManyInput = {
+    id?: string
+    mediaId: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+  }
+
+  export type SanMediaSanPhamUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type SanMediaSanPhamUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaId?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -234731,6 +237883,143 @@ export namespace Prisma {
     dongSo?: SortOrder
   }
 
+  export type SanMediaSanPhamListRelationFilter = {
+    every?: SanMediaSanPhamWhereInput
+    some?: SanMediaSanPhamWhereInput
+    none?: SanMediaSanPhamWhereInput
+  }
+
+  export type SanMediaSanPhamOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type SanMediaCountOrderByAggregateInput = {
+    id?: SortOrder
+    ten?: SortOrder
+    nguon?: SortOrder
+    nguonId?: SortOrder
+    lienKet?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    thoiLuongS?: SortOrder
+    anhBia?: SortOrder
+    caption?: SortOrder
+    kenh?: SortOrder
+    channelId?: SortOrder
+    henDangLuc?: SortOrder
+    trangThai?: SortOrder
+    maTrenSan?: SortOrder
+    loiCuoi?: SortOrder
+    dangLuc?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SanMediaAvgOrderByAggregateInput = {
+    bytes?: SortOrder
+    thoiLuongS?: SortOrder
+  }
+
+  export type SanMediaMaxOrderByAggregateInput = {
+    id?: SortOrder
+    ten?: SortOrder
+    nguon?: SortOrder
+    nguonId?: SortOrder
+    lienKet?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    thoiLuongS?: SortOrder
+    anhBia?: SortOrder
+    caption?: SortOrder
+    kenh?: SortOrder
+    channelId?: SortOrder
+    henDangLuc?: SortOrder
+    trangThai?: SortOrder
+    maTrenSan?: SortOrder
+    loiCuoi?: SortOrder
+    dangLuc?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SanMediaMinOrderByAggregateInput = {
+    id?: SortOrder
+    ten?: SortOrder
+    nguon?: SortOrder
+    nguonId?: SortOrder
+    lienKet?: SortOrder
+    mime?: SortOrder
+    bytes?: SortOrder
+    thoiLuongS?: SortOrder
+    anhBia?: SortOrder
+    caption?: SortOrder
+    kenh?: SortOrder
+    channelId?: SortOrder
+    henDangLuc?: SortOrder
+    trangThai?: SortOrder
+    maTrenSan?: SortOrder
+    loiCuoi?: SortOrder
+    dangLuc?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SanMediaSumOrderByAggregateInput = {
+    bytes?: SortOrder
+    thoiLuongS?: SortOrder
+  }
+
+  export type SanMediaScalarRelationFilter = {
+    is?: SanMediaWhereInput
+    isNot?: SanMediaWhereInput
+  }
+
+  export type SanMediaSanPhamMediaIdSkuCompoundUniqueInput = {
+    mediaId: string
+    sku: string
+  }
+
+  export type SanMediaSanPhamCountOrderByAggregateInput = {
+    id?: SortOrder
+    mediaId?: SortOrder
+    sku?: SortOrder
+    productId?: SortOrder
+    maTrenSan?: SortOrder
+    nhan?: SortOrder
+    thuTu?: SortOrder
+  }
+
+  export type SanMediaSanPhamAvgOrderByAggregateInput = {
+    thuTu?: SortOrder
+  }
+
+  export type SanMediaSanPhamMaxOrderByAggregateInput = {
+    id?: SortOrder
+    mediaId?: SortOrder
+    sku?: SortOrder
+    productId?: SortOrder
+    maTrenSan?: SortOrder
+    nhan?: SortOrder
+    thuTu?: SortOrder
+  }
+
+  export type SanMediaSanPhamMinOrderByAggregateInput = {
+    id?: SortOrder
+    mediaId?: SortOrder
+    sku?: SortOrder
+    productId?: SortOrder
+    maTrenSan?: SortOrder
+    nhan?: SortOrder
+    thuTu?: SortOrder
+  }
+
+  export type SanMediaSanPhamSumOrderByAggregateInput = {
+    thuTu?: SortOrder
+  }
+
   export type UserCreateNestedManyWithoutBranchInput = {
     create?: XOR<UserCreateWithoutBranchInput, UserUncheckedCreateWithoutBranchInput> | UserCreateWithoutBranchInput[] | UserUncheckedCreateWithoutBranchInput[]
     connectOrCreate?: UserCreateOrConnectWithoutBranchInput | UserCreateOrConnectWithoutBranchInput[]
@@ -238789,6 +242078,62 @@ export namespace Prisma {
     upsert?: MisaPurchaseDocUpsertWithoutLinesInput
     connect?: MisaPurchaseDocWhereUniqueInput
     update?: XOR<XOR<MisaPurchaseDocUpdateToOneWithWhereWithoutLinesInput, MisaPurchaseDocUpdateWithoutLinesInput>, MisaPurchaseDocUncheckedUpdateWithoutLinesInput>
+  }
+
+  export type SanMediaSanPhamCreateNestedManyWithoutMediaInput = {
+    create?: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput> | SanMediaSanPhamCreateWithoutMediaInput[] | SanMediaSanPhamUncheckedCreateWithoutMediaInput[]
+    connectOrCreate?: SanMediaSanPhamCreateOrConnectWithoutMediaInput | SanMediaSanPhamCreateOrConnectWithoutMediaInput[]
+    createMany?: SanMediaSanPhamCreateManyMediaInputEnvelope
+    connect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+  }
+
+  export type SanMediaSanPhamUncheckedCreateNestedManyWithoutMediaInput = {
+    create?: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput> | SanMediaSanPhamCreateWithoutMediaInput[] | SanMediaSanPhamUncheckedCreateWithoutMediaInput[]
+    connectOrCreate?: SanMediaSanPhamCreateOrConnectWithoutMediaInput | SanMediaSanPhamCreateOrConnectWithoutMediaInput[]
+    createMany?: SanMediaSanPhamCreateManyMediaInputEnvelope
+    connect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+  }
+
+  export type SanMediaSanPhamUpdateManyWithoutMediaNestedInput = {
+    create?: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput> | SanMediaSanPhamCreateWithoutMediaInput[] | SanMediaSanPhamUncheckedCreateWithoutMediaInput[]
+    connectOrCreate?: SanMediaSanPhamCreateOrConnectWithoutMediaInput | SanMediaSanPhamCreateOrConnectWithoutMediaInput[]
+    upsert?: SanMediaSanPhamUpsertWithWhereUniqueWithoutMediaInput | SanMediaSanPhamUpsertWithWhereUniqueWithoutMediaInput[]
+    createMany?: SanMediaSanPhamCreateManyMediaInputEnvelope
+    set?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    disconnect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    delete?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    connect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    update?: SanMediaSanPhamUpdateWithWhereUniqueWithoutMediaInput | SanMediaSanPhamUpdateWithWhereUniqueWithoutMediaInput[]
+    updateMany?: SanMediaSanPhamUpdateManyWithWhereWithoutMediaInput | SanMediaSanPhamUpdateManyWithWhereWithoutMediaInput[]
+    deleteMany?: SanMediaSanPhamScalarWhereInput | SanMediaSanPhamScalarWhereInput[]
+  }
+
+  export type SanMediaSanPhamUncheckedUpdateManyWithoutMediaNestedInput = {
+    create?: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput> | SanMediaSanPhamCreateWithoutMediaInput[] | SanMediaSanPhamUncheckedCreateWithoutMediaInput[]
+    connectOrCreate?: SanMediaSanPhamCreateOrConnectWithoutMediaInput | SanMediaSanPhamCreateOrConnectWithoutMediaInput[]
+    upsert?: SanMediaSanPhamUpsertWithWhereUniqueWithoutMediaInput | SanMediaSanPhamUpsertWithWhereUniqueWithoutMediaInput[]
+    createMany?: SanMediaSanPhamCreateManyMediaInputEnvelope
+    set?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    disconnect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    delete?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    connect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
+    update?: SanMediaSanPhamUpdateWithWhereUniqueWithoutMediaInput | SanMediaSanPhamUpdateWithWhereUniqueWithoutMediaInput[]
+    updateMany?: SanMediaSanPhamUpdateManyWithWhereWithoutMediaInput | SanMediaSanPhamUpdateManyWithWhereWithoutMediaInput[]
+    deleteMany?: SanMediaSanPhamScalarWhereInput | SanMediaSanPhamScalarWhereInput[]
+  }
+
+  export type SanMediaCreateNestedOneWithoutSanPhamInput = {
+    create?: XOR<SanMediaCreateWithoutSanPhamInput, SanMediaUncheckedCreateWithoutSanPhamInput>
+    connectOrCreate?: SanMediaCreateOrConnectWithoutSanPhamInput
+    connect?: SanMediaWhereUniqueInput
+  }
+
+  export type SanMediaUpdateOneRequiredWithoutSanPhamNestedInput = {
+    create?: XOR<SanMediaCreateWithoutSanPhamInput, SanMediaUncheckedCreateWithoutSanPhamInput>
+    connectOrCreate?: SanMediaCreateOrConnectWithoutSanPhamInput
+    upsert?: SanMediaUpsertWithoutSanPhamInput
+    connect?: SanMediaWhereUniqueInput
+    update?: XOR<XOR<SanMediaUpdateToOneWithWhereWithoutSanPhamInput, SanMediaUpdateWithoutSanPhamInput>, SanMediaUncheckedUpdateWithoutSanPhamInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -252285,6 +255630,171 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type SanMediaSanPhamCreateWithoutMediaInput = {
+    id?: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+  }
+
+  export type SanMediaSanPhamUncheckedCreateWithoutMediaInput = {
+    id?: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+  }
+
+  export type SanMediaSanPhamCreateOrConnectWithoutMediaInput = {
+    where: SanMediaSanPhamWhereUniqueInput
+    create: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput>
+  }
+
+  export type SanMediaSanPhamCreateManyMediaInputEnvelope = {
+    data: SanMediaSanPhamCreateManyMediaInput | SanMediaSanPhamCreateManyMediaInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type SanMediaSanPhamUpsertWithWhereUniqueWithoutMediaInput = {
+    where: SanMediaSanPhamWhereUniqueInput
+    update: XOR<SanMediaSanPhamUpdateWithoutMediaInput, SanMediaSanPhamUncheckedUpdateWithoutMediaInput>
+    create: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput>
+  }
+
+  export type SanMediaSanPhamUpdateWithWhereUniqueWithoutMediaInput = {
+    where: SanMediaSanPhamWhereUniqueInput
+    data: XOR<SanMediaSanPhamUpdateWithoutMediaInput, SanMediaSanPhamUncheckedUpdateWithoutMediaInput>
+  }
+
+  export type SanMediaSanPhamUpdateManyWithWhereWithoutMediaInput = {
+    where: SanMediaSanPhamScalarWhereInput
+    data: XOR<SanMediaSanPhamUpdateManyMutationInput, SanMediaSanPhamUncheckedUpdateManyWithoutMediaInput>
+  }
+
+  export type SanMediaSanPhamScalarWhereInput = {
+    AND?: SanMediaSanPhamScalarWhereInput | SanMediaSanPhamScalarWhereInput[]
+    OR?: SanMediaSanPhamScalarWhereInput[]
+    NOT?: SanMediaSanPhamScalarWhereInput | SanMediaSanPhamScalarWhereInput[]
+    id?: StringFilter<"SanMediaSanPham"> | string
+    mediaId?: StringFilter<"SanMediaSanPham"> | string
+    sku?: StringFilter<"SanMediaSanPham"> | string
+    productId?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    maTrenSan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    nhan?: StringNullableFilter<"SanMediaSanPham"> | string | null
+    thuTu?: IntFilter<"SanMediaSanPham"> | number
+  }
+
+  export type SanMediaCreateWithoutSanPhamInput = {
+    id?: string
+    ten: string
+    nguon?: string
+    nguonId?: string | null
+    lienKet?: string | null
+    mime?: string | null
+    bytes?: number | null
+    thoiLuongS?: number | null
+    anhBia?: string | null
+    caption?: string | null
+    kenh?: string | null
+    channelId?: string | null
+    henDangLuc?: Date | string | null
+    trangThai?: string
+    maTrenSan?: string | null
+    loiCuoi?: string | null
+    dangLuc?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SanMediaUncheckedCreateWithoutSanPhamInput = {
+    id?: string
+    ten: string
+    nguon?: string
+    nguonId?: string | null
+    lienKet?: string | null
+    mime?: string | null
+    bytes?: number | null
+    thoiLuongS?: number | null
+    anhBia?: string | null
+    caption?: string | null
+    kenh?: string | null
+    channelId?: string | null
+    henDangLuc?: Date | string | null
+    trangThai?: string
+    maTrenSan?: string | null
+    loiCuoi?: string | null
+    dangLuc?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SanMediaCreateOrConnectWithoutSanPhamInput = {
+    where: SanMediaWhereUniqueInput
+    create: XOR<SanMediaCreateWithoutSanPhamInput, SanMediaUncheckedCreateWithoutSanPhamInput>
+  }
+
+  export type SanMediaUpsertWithoutSanPhamInput = {
+    update: XOR<SanMediaUpdateWithoutSanPhamInput, SanMediaUncheckedUpdateWithoutSanPhamInput>
+    create: XOR<SanMediaCreateWithoutSanPhamInput, SanMediaUncheckedCreateWithoutSanPhamInput>
+    where?: SanMediaWhereInput
+  }
+
+  export type SanMediaUpdateToOneWithWhereWithoutSanPhamInput = {
+    where?: SanMediaWhereInput
+    data: XOR<SanMediaUpdateWithoutSanPhamInput, SanMediaUncheckedUpdateWithoutSanPhamInput>
+  }
+
+  export type SanMediaUpdateWithoutSanPhamInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SanMediaUncheckedUpdateWithoutSanPhamInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ten?: StringFieldUpdateOperationsInput | string
+    nguon?: StringFieldUpdateOperationsInput | string
+    nguonId?: NullableStringFieldUpdateOperationsInput | string | null
+    lienKet?: NullableStringFieldUpdateOperationsInput | string | null
+    mime?: NullableStringFieldUpdateOperationsInput | string | null
+    bytes?: NullableIntFieldUpdateOperationsInput | number | null
+    thoiLuongS?: NullableFloatFieldUpdateOperationsInput | number | null
+    anhBia?: NullableStringFieldUpdateOperationsInput | string | null
+    caption?: NullableStringFieldUpdateOperationsInput | string | null
+    kenh?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
+    henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trangThai?: StringFieldUpdateOperationsInput | string
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
+    dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type UserCreateManyBranchInput = {
     id?: string
     email: string
@@ -256871,6 +260381,42 @@ export namespace Prisma {
     giamGia?: FloatFieldUpdateOperationsInput | number
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type SanMediaSanPhamCreateManyMediaInput = {
+    id?: string
+    sku: string
+    productId?: string | null
+    maTrenSan?: string | null
+    nhan?: string | null
+    thuTu?: number
+  }
+
+  export type SanMediaSanPhamUpdateWithoutMediaInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type SanMediaSanPhamUncheckedUpdateWithoutMediaInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type SanMediaSanPhamUncheckedUpdateManyWithoutMediaInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
+    nhan?: NullableStringFieldUpdateOperationsInput | string | null
+    thuTu?: IntFieldUpdateOperationsInput | number
   }
 
 

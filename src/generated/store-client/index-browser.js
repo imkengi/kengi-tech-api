@@ -2614,6 +2614,39 @@ exports.Prisma.MisaPurchaseLineScalarFieldEnum = {
   dongSo: 'dongSo'
 };
 
+exports.Prisma.SanMediaScalarFieldEnum = {
+  id: 'id',
+  ten: 'ten',
+  nguon: 'nguon',
+  nguonId: 'nguonId',
+  lienKet: 'lienKet',
+  mime: 'mime',
+  bytes: 'bytes',
+  thoiLuongS: 'thoiLuongS',
+  anhBia: 'anhBia',
+  caption: 'caption',
+  kenh: 'kenh',
+  channelId: 'channelId',
+  henDangLuc: 'henDangLuc',
+  trangThai: 'trangThai',
+  maTrenSan: 'maTrenSan',
+  loiCuoi: 'loiCuoi',
+  dangLuc: 'dangLuc',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SanMediaSanPhamScalarFieldEnum = {
+  id: 'id',
+  mediaId: 'mediaId',
+  sku: 'sku',
+  productId: 'productId',
+  maTrenSan: 'maTrenSan',
+  nhan: 'nhan',
+  thuTu: 'thuTu'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2775,7 +2808,9 @@ exports.Prisma.ModelName = {
   MisaSaleDoc: 'MisaSaleDoc',
   MisaSaleLine: 'MisaSaleLine',
   MisaPurchaseDoc: 'MisaPurchaseDoc',
-  MisaPurchaseLine: 'MisaPurchaseLine'
+  MisaPurchaseLine: 'MisaPurchaseLine',
+  SanMedia: 'SanMedia',
+  SanMediaSanPham: 'SanMediaSanPham'
 };
 
 /**

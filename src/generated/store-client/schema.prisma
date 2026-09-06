@@ -3685,3 +3685,90 @@ model MisaPurchaseLine {
   @@index([maHang])
   @@index([productId])
 }
+
+// ─── MEDIA BÁN HÀNG ────────────────────────────────────────────────────────────
+//
+//  Kho video cho kênh sàn: Shopee Video và video mua sắm TikTok.
+//  Tra cứu API 06/09/2026 (xem memory dang-video-len-san):
+//    · Shopee: v2.media.init_video_upload (business=3, scene=1) 1–180 giây, ≤1GB
+//      → v2.video.edit_video_info (caption, ảnh bìa, GẮN SẢN PHẨM, HẸN GIỜ ĐĂNG,
+//      cho phép stitch/duet) → v2.video.post_video. API kiểu USER: ký bằng user_id
+//      chứ không phải shop_id, app phải là loại Shopee Video Management.
+//    · TikTok: POST /affiliate_creator/*/videos/video_files → /videos với
+//      product_link_info {product_id, title ≤30 ký tự}. Scope creator.video.write,
+//      token CREATOR — không phải token shop đang có.
+//  ⇒ Cả hai đòi MỘT LUỒNG UỶ QUYỀN RIÊNG chưa có. Bảng này giữ kho media, sản phẩm
+//  gắn kèm và lịch đăng; `trangThai` chỉ chuyển 'da_dang' khi sàn TRẢ VỀ mã video.
+//
+//  Không lưu file vào đĩa: Cloud Run xoá sạch mỗi lần khởi động lại, và prod chưa
+//  bật GCS. Nguồn là Google Drive của chính cửa hàng (đã có OAuth sẵn) hoặc URL ngoài.
+model SanMedia {
+  id         String  @id @default(cuid())
+  ten        String
+  /// 'drive' = file trong Drive của cửa hàng · 'lien_ket' = URL ngoài
+  nguon      String  @default("drive")
+  /// fileId của Drive khi nguon='drive'
+  nguonId    String?
+  /// URL khi nguon='lien_ket'
+  lienKet    String?
+  mime       String?
+  bytes      Int?
+  thoiLuongS Float?
+  anhBia     String?
+
+  /// Lời dẫn sẽ đăng kèm video
+  caption String?
+
+  /// 'shopee' | 'tiktok' | null = chưa chọn kênh
+  kenh      String?
+  /// Gian hàng cụ thể (một cửa hàng có nhiều shop trên cùng một sàn)
+  channelId String?
+
+  /// HẸN GIỜ ĐĂNG. Shopee nhận thẳng post time trong edit_video_info; TikTok không
+  /// có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
+  henDangLuc DateTime?
+
+  /// nhap | da_len_lich | cho_dang | da_dang | loi
+  trangThai String    @default("nhap")
+  /// Mã video do SÀN trả về — chỉ có khi đăng THẬT thành công
+  maTrenSan String?
+  loiCuoi   String?
+  dangLuc   DateTime?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sanPham SanMediaSanPham[]
+
+  @@index([trangThai])
+  @@index([kenh])
+  @@index([henDangLuc])
+  @@index([createdAt])
+}
+
+/// Sản phẩm gắn vào video. BẢNG RIÊNG chứ không nhét JSON vào một cột chuỗi:
+/// Shopee cho gắn NHIỀU sản phẩm một video, TikTok chỉ một — và mã gắn lên sàn là
+/// `platformProductId` của gian hàng đó, KHÔNG phải id sản phẩm trong kho. Nhét JSON
+/// thì không truy vấn được "video nào đang gắn SKU này" và dễ trôi khỏi thực tế.
+model SanMediaSanPham {
+  id      String   @id @default(cuid())
+  mediaId String
+  media   SanMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  /// SKU trong kho — thứ chủ shop gõ vào và nhìn thấy
+  sku       String
+  /// Product trong kho, null nếu SKU chưa khớp hàng nào
+  productId String?
+  /// Mã sản phẩm TRÊN SÀN (OnlineProduct.platformProductId) — thứ thật sự gửi đi.
+  /// null = chưa tra ra listing trên gian hàng đang chọn ⇒ chưa đăng được.
+  maTrenSan String?
+  /// Nhãn hiện trên video. TikTok giới hạn 30 ký tự (mã lỗi 16011007).
+  nhan      String?
+  thuTu     Int     @default(0)
+
+  @@unique([mediaId, sku])
+  @@index([mediaId])
+  @@index([productId])
+  @@index([sku])
+}
