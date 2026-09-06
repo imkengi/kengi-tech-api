@@ -4858,6 +4858,9 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     daDoiSoat: tomTat(s.daDoiSoat),
                     hinhDangUocTinh: tomTat(s.hinhDangUocTinh),
                     chuaDoiSoat: tomTat(s.chuaDoiSoat),
+                    /* PHẢI IN RA. Tách nhóm mà không in là đơn biến mất khỏi báo cáo
+                     * còn êm hơn cả lúc chưa tách — tổng hụt đi mà không ai thấy vì sao. */
+                    hoanTra: tomTat(s.hoanTra),
                 }]))
                 d.kiemPhi = {
                     soDonKiem: soKiem,
