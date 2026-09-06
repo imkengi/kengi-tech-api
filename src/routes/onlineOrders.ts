@@ -677,10 +677,80 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
             .map(([status, data]) => ({ status, _count: data._count, _sum: data._sum }))
             .sort((a, b) => b._count - a._count)
 
+        /* LỢI NHUẬN + % LỢI NHUẬN — chỉ owner/admin, tính trên ĐÚNG phạm vi lọc của
+         * trang (kênh / sàn / khoảng ngày), tối đa TRAN_LN đơn mới nhất.
+         *
+         * Vì sao phải TÁCH hai nhóm chứ không cộng gộp: cột platformFee/netRevenue
+         * đang mang ba nghĩa — phí THẬT đã đối soát escrow; phí ƯỚC TÍNH (đơn tạo
+         * qua webhook ghi total × hoa hồng cấu hình rồi để đó như phí thật); và 0
+         * (chưa đối soát). Gộp ba thứ rồi chia ra một "% lợi nhuận" là con số vô
+         * nghĩa. Ở đây "đã đối soát" = netRevenue > 0 VÀ phí KHÔNG có hình dạng
+         * total × rate (phí escrow gần như không bao giờ khớp đúng công thức đó).
+         *
+         * Mẫu số của % là DOANH THU (subtotal) của đúng những đơn có đủ giá vốn —
+         * đơn thiếu giá vốn bị loại khỏi cả tử lẫn mẫu và đếm riêng, KHÔNG tính 0
+         * (tính 0 là thổi phồng lợi nhuận). Cùng quy ước với calculateFees ở FE
+         * (profitMargin = grossProfit / price). */
+        let loiNhuan: any = undefined
+        if (canSeeProfits) {
+            const TRAN_LN = 2000
+            const whereLN: any = {}
+            if (channelId && channelId !== 'all') whereLN.channelId = String(channelId)
+            if (platform && platform !== 'all') whereLN.platform = String(platform)
+            if (gte || lte) whereLN.createdAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) }
+            const donLN: any[] = await (prisma as any).onlineOrder.findMany({
+                where: whereLN,
+                select: {
+                    id: true, platform: true, status: true, subtotal: true, total: true,
+                    shippingFee: true, platformFee: true, platformFeeRate: true, netRevenue: true,
+                    items: { select: { productId: true, sku: true, quantity: true } },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: TRAN_LN,
+            }).catch(() => [])
+            const pMap = await computeOrderProfits(prisma, donLN).catch(() => new Map())
+
+            const nhomMoi = () => ({ soDon: 0, doanhThu: 0, giaVon: 0, loiNhuan: 0, doanhThuCoGiaVon: 0 })
+            const daDoiSoat = nhomMoi(), chuaDoiSoat = nhomMoi()
+            const thieuGiaVon = { soDon: 0, doanhThu: 0 }
+            for (const o of donLN) {
+                if (CANCELLED_STATUSES.has(String(o.status))) continue
+                const p: any = pMap.get(o.id)
+                if (!p) continue
+                const dt = Number(o.subtotal) || 0
+                const phi = Number(o.platformFee) || 0, net = Number(o.netRevenue) || 0
+                const rate = Number(o.platformFeeRate) || 0, total = Number(o.total) || 0
+                const hinhDangUocTinh = rate > 0 && Math.abs(phi - Math.round(total * rate / 100)) <= 1
+                const nhom = (net > 0 && !hinhDangUocTinh) ? daDoiSoat : chuaDoiSoat
+                nhom.soDon++
+                nhom.doanhThu += dt
+                if (p.missingCost) { thieuGiaVon.soDon++; thieuGiaVon.doanhThu += dt; continue }
+                nhom.giaVon += Number(p.cost) || 0
+                nhom.loiNhuan += Number(p.profit) || 0
+                nhom.doanhThuCoGiaVon += dt
+            }
+            const tomTat = (n: ReturnType<typeof nhomMoi>) => ({
+                soDon: n.soDon,
+                doanhThu: Math.round(n.doanhThu),
+                giaVon: Math.round(n.giaVon),
+                loiNhuan: Math.round(n.loiNhuan),
+                // null = không có đơn nào đủ giá vốn để chia — KHÔNG phải 0%
+                phanTram: n.doanhThuCoGiaVon > 0 ? Math.round(n.loiNhuan / n.doanhThuCoGiaVon * 1000) / 10 : null,
+            })
+            loiNhuan = {
+                tran: TRAN_LN,
+                biCatTran: donLN.length >= TRAN_LN,   // ⚠ nói ra, đừng để người đọc tưởng đã tính hết
+                daDoiSoat: tomTat(daDoiSoat),
+                chuaDoiSoat: tomTat(chuaDoiSoat),
+                thieuGiaVon: { soDon: thieuGiaVon.soDon, doanhThu: Math.round(thieuGiaVon.doanhThu) },
+            }
+        }
+
         res.json({
             success: true,
             data: {
                 totalOrders,
+                loiNhuan,
                 // Số đơn tính doanh thu (đã loại hủy/hoàn) — totalOrders vẫn đếm mọi đơn
                 revenueOrders: totals.count,
                 totalRevenue: totals.total,

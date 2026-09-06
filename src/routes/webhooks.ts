@@ -292,9 +292,21 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
                     syncedAt: new Date(),
                     createdAt: new Date(orderDetail.createdAt),
-                    platformFeeRate: channel.commissionRate || 0,
-                    platformFee: Math.round(orderDetail.total * (channel.commissionRate || 0) / 100),
-                    netRevenue: Math.round(orderDetail.total - orderDetail.total * (channel.commissionRate || 0) / 100 - orderDetail.shippingFee),
+                    // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
+                    // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
+                    // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
+                    // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
+                    // 06/09/2026:
+                    //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
+                    //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
+                    //     soát lại — giữ phí bịa vĩnh viễn.
+                    //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
+                    //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
+                    // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
+                    // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
+                    platformFeeRate: 0,
+                    platformFee: 0,
+                    netRevenue: 0,
                     items: {
                         create: orderDetail.items.map(item => ({
                             externalItemId: item.externalItemId || '',
@@ -578,9 +590,21 @@ router.post('/tiktok', async (req: Request, res: Response) => {
                     deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
                     syncedAt: new Date(),
                     createdAt: new Date(orderDetail.createdAt),
-                    platformFeeRate: channel.commissionRate || 0,
-                    platformFee: Math.round(orderDetail.total * (channel.commissionRate || 0) / 100),
-                    netRevenue: Math.round(orderDetail.total - orderDetail.total * (channel.commissionRate || 0) / 100 - orderDetail.shippingFee),
+                    // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
+                    // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
+                    // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
+                    // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
+                    // 06/09/2026:
+                    //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
+                    //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
+                    //     soát lại — giữ phí bịa vĩnh viễn.
+                    //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
+                    //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
+                    // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
+                    // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
+                    platformFeeRate: 0,
+                    platformFee: 0,
+                    netRevenue: 0,
                     items: {
                         create: orderDetail.items.map(item => ({
                             externalItemId: item.externalItemId || '',
