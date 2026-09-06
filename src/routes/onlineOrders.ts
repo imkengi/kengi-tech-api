@@ -655,6 +655,20 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
         )   /* KHÔNG nuốt lỗi: hỏng ⇒ [{cnt:0,total:0}] ⇒ tab "đã lấy hàng" hiện 0 đơn / 0đ y như
              * một ngày không ai lấy hàng. Cả trang này đã có nhánh lỗi ở FE (20/08/2026). */
 
+        /* ĐƠN ĐÃ CẢNH BÁO LÃI THẤP — đếm riêng, cùng bộ điều kiện kênh/sàn/ngày để
+         * số trên chip khớp danh sách `?loiNhuanThap=true`. Cột mới ở store cũ có
+         * thể chưa migrate: hỏng thì trả null (KHÔNG phải 0) để FE ẩn chip thay vì
+         * nói dối "không có đơn nào". */
+        let loiNhuanThapCount: number | null = null
+        try {
+            const lnConds = [...conds, `"loiNhuanThapBaoLuc" IS NOT NULL`]
+            const lnRows: any[] = await (prisma as any).$queryRawUnsafe(
+                `SELECT COUNT(*)::int AS cnt FROM "OnlineOrder" WHERE ${lnConds.join(' AND ')}`,
+                ...params
+            )
+            loiNhuanThapCount = Number(lnRows?.[0]?.cnt) || 0
+        } catch { loiNhuanThapCount = null }
+
         // Helper: aggregate count for a status, covering both Shopee UPPERCASE and legacy lowercase
         const countFor = (...statuses: string[]) =>
             statuses.reduce((sum, s) => sum + (statusMap.get(s)?.count ?? 0), 0)
@@ -776,6 +790,9 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
                 // ĐVVC đã lấy hàng hôm nay (theo shippedAt, giờ VN)
                 pickedUpTodayCount: Number(pickedRows?.[0]?.cnt) || 0,
                 pickedUpTodayRevenue: Number(pickedRows?.[0]?.total) || 0,
+                // Đơn đã cảnh báo lãi dưới ngưỡng (null = chưa đo được, không phải 0)
+                loiNhuanThapCount,
+                nguongLoiNhuanThap: Number(process.env.NGUONG_LOI_NHUAN_THAP || 5),
                 byStatus: groupedByStatus.map(s => ({ status: s.status, count: s._count, revenue: s._sum.total ?? 0 })),
                 byChannel: byChannel.map(c => ({ platform: c.platform, count: c._count, revenue: c._sum.total ?? 0 })),
                 canSeeProfits,
@@ -1010,6 +1027,13 @@ function dungWhereDon(q: any): { where: any; layHomNay: boolean } {
     if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus
     // Tab HỎA TỐC (Shopee Instant Delivery): ?isInstant=true — chỉ đơn instant
     if (isInstant === 'true') where.isInstant = true
+    /**
+     * ?loiNhuanThap=true — đơn ĐÃ bị cảnh báo lãi dưới ngưỡng (cột loiNhuanThapBaoLuc).
+     * Thông báo/push nói "vào Đơn hàng online kiểm giá vốn / giá bán" thì phải có
+     * đường TÌM RA chúng, không thì lời nhắc là ngõ cụt. Dùng chung dungWhereDon nên
+     * /stats đếm cùng bộ lọc — con số trên tab khớp danh sách.
+     */
+    if (String(q.loiNhuanThap || '') === 'true') where.loiNhuanThapBaoLuc = { not: null }
     /**
      * Tab ĐVVC ĐÃ LẤY HÀNG HÔM NAY: ?pickedUpToday=true
      * Mốc là `shippedAt` — thời điểm ĐVVC THỰC SỰ lấy hàng, không phải hạn
