@@ -6,6 +6,7 @@ import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, sy
 import { chayTheoDot } from '../lib/poolGuard'
 import { khoHuHong } from '../lib/warehouseHelper'
 import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
+import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
@@ -4048,6 +4049,167 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
  *  Mọi trần đọc đều KHAI RA trong kết quả — cắt ngầm rồi báo như thể không cắt là
  *  đúng lỗi đã cắn nhiều lần (xem memory tran-cat-am-tham).
  * ───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  % LỢI NHUẬN ĐƠN SÀN + PHÍ SÀN CÓ ĐÚNG KHÔNG — GET /admin/do-loi-nhuan-san (06/09/2026)
+ *  CHỈ ĐỌC. ?ngay=30 (mặc định) · ?tran=2000 đơn mỗi cửa hàng.
+ *
+ *  Vì sao cần: phí sàn trên đơn có BA nghĩa khác nhau nằm chung một cột:
+ *    (a) phí THẬT — đã đối soát escrow/settlement với sàn
+ *    (b) phí ƯỚC TÍNH — đơn tạo qua webhook ghi tổng tiền × hoa hồng cấu hình (6%)
+ *        rồi để đó như phí thật (webhooks.ts:295-297)
+ *    (c) 0 — "chưa đối soát" (đường sync tay/cron cố ý để 0)
+ *  Cộng gộp ba thứ này rồi chia ra "% lợi nhuận" là ra một con số không có nghĩa.
+ *  Bộ đo này TÁCH ba nhóm, và chỉ tính % trên nhóm (a) có đủ giá vốn.
+ *
+ *  Nhận diện (b): platformFee ≈ round(total × platformFeeRate/100) trong ±1đ. Đây
+ *  là suy đoán theo HÌNH DẠNG số — phí thật từ escrow gần như không bao giờ khớp
+ *  đúng công thức đó. Báo là "hình dạng ước tính", không báo là "chắc chắn".
+ *
+ *  Kiểm phí: với đơn (a), |total − platformFee − netRevenue| phải ≈ 0 nếu phí được
+ *  định nghĩa là "giá bán − thực nhận". Lệch nhiều = giá bán sàn dùng để tính phí
+ *  KHÔNG phải tổng tiền ta lưu (voucher, trợ giá…) → % phí hiển thị sai.
+ *
+ *  Chạy TUẦN TỰ từng cửa hàng — pool prod mỗi cửa hàng đúng 1 kết nối.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
+    try {
+        const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 30))
+        const TRAN = Math.min(5000, Math.max(100, Number(req.query.tran) || 2000))
+        const tuNgay = new Date(Date.now() - soNgay * 86400_000)
+        const HUY = new Set(['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned', 'UNPAID'])
+
+        const stores = await prisma.store.findMany({ orderBy: { code: 'asc' } })
+        const ketQua: any[] = []
+
+        for (const store of stores) {
+            if ((store as any).isDemo) continue
+            const d: any = { cuaHang: store.code, ten: store.name }
+            try {
+                const sp: any = getStorePrisma((store as any).schema)
+                const orders: any[] = await sp.onlineOrder.findMany({
+                    where: { createdAt: { gte: tuNgay } },
+                    select: {
+                        id: true, platform: true, status: true, subtotal: true, total: true,
+                        shippingFee: true, platformFee: true, platformFeeRate: true, netRevenue: true,
+                        items: { select: { productId: true, sku: true, quantity: true } },
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: TRAN,
+                })
+                d.soDonDoc = orders.length
+                d.biCatTran = orders.length >= TRAN   // ⚠ báo trần, đừng để người đọc tưởng đã đếm hết
+                if (!orders.length) { d.ketLuan = 'Không có đơn sàn trong kỳ.'; ketQua.push(d); continue }
+
+                /* % hoa hồng ĐANG CẤU HÌNH trên từng kênh — để so với % phí THẬT đo
+                 * được ở nhóm daDoiSoat. Đây chính là câu "hàm tính phí đúng chưa":
+                 * ước tính = total × commissionRate; đúng hay sai là so với escrow. */
+                const kenh: any[] = await sp.onlineChannel.findMany({
+                    select: { name: true, platform: true, commissionRate: true, status: true },
+                }).catch(() => [])
+                d.cauHinhKenh = kenh.map((k: any) => ({
+                    kenh: k.name, san: k.platform, trangThai: k.status,
+                    hoaHongCauHinhPhanTram: Number(k.commissionRate) || 0,
+                }))
+
+                const loi = await computeOrderProfits(sp, orders)
+
+                type Nhom = {
+                    soDon: number; doanhThu: number; phi: number; thucNhan: number; giaVon: number; loiNhuan: number
+                    thieuGiaVon: number; doanhThuThieuGiaVon: number
+                }
+                const nhomMoi = (): Nhom => ({ soDon: 0, doanhThu: 0, phi: 0, thucNhan: 0, giaVon: 0, loiNhuan: 0, thieuGiaVon: 0, doanhThuThieuGiaVon: 0 })
+                const cong = (n: Nhom, o: any, p: any) => {
+                    n.soDon++
+                    const dt = Number(o.subtotal) || 0
+                    n.doanhThu += dt
+                    n.phi += Number(o.platformFee) || 0
+                    n.thucNhan += Number(o.netRevenue) || 0
+                    if (p?.missingCost) { n.thieuGiaVon++; n.doanhThuThieuGiaVon += dt; return }
+                    n.giaVon += Number(p?.cost) || 0
+                    n.loiNhuan += Number(p?.profit) || 0
+                }
+
+                /* Ba nhóm theo nghĩa của cột phí, tách theo sàn. */
+                const theoSan: Record<string, { daDoiSoat: Nhom; hinhDangUocTinh: Nhom; chuaDoiSoat: Nhom; huy: number }> = {}
+                /* Kiểm bất biến phí trên nhóm đã đối soát. */
+                let soKiem = 0, lechTren1d = 0, tongLech = 0, lechLonNhat = 0
+                let viDuLech: any = null
+
+                for (const o of orders) {
+                    const san = String(o.platform || 'khac')
+                    if (!theoSan[san]) theoSan[san] = { daDoiSoat: nhomMoi(), hinhDangUocTinh: nhomMoi(), chuaDoiSoat: nhomMoi(), huy: 0 }
+                    const s = theoSan[san]
+                    if (HUY.has(String(o.status))) { s.huy++; continue }
+                    const p = loi.get(o.id)
+                    const phi = Number(o.platformFee) || 0, net = Number(o.netRevenue) || 0
+                    const total = Number(o.total) || 0, rate = Number(o.platformFeeRate) || 0
+
+                    if (phi === 0 && net === 0) { cong(s.chuaDoiSoat, o, p); continue }
+                    const uocTinh = rate > 0 && Math.abs(phi - Math.round(total * rate / 100)) <= 1
+                    if (uocTinh) { cong(s.hinhDangUocTinh, o, p); continue }
+
+                    cong(s.daDoiSoat, o, p)
+                    // bất biến: total − phí − thực nhận ≈ 0 ?
+                    const lech = Math.abs(total - phi - net)
+                    soKiem++
+                    tongLech += lech
+                    if (lech > 1) lechTren1d++
+                    if (lech > lechLonNhat) { lechLonNhat = lech; viDuLech = { id: o.id, total, phi, thucNhan: net, lech } }
+                }
+
+                const pt = (a: number, b: number) => b > 0 ? Math.round(a / b * 1000) / 10 : null
+                const tomTat = (n: Nhom) => ({
+                    soDon: n.soDon,
+                    doanhThu: Math.round(n.doanhThu),
+                    phiSan: Math.round(n.phi),
+                    /* % phí trên doanh thu — null khi không có gì để chia, KHÔNG phải 0 */
+                    phiSanPhanTram: pt(n.phi, n.doanhThu),
+                    thucNhan: Math.round(n.thucNhan),
+                    giaVon: Math.round(n.giaVon),
+                    loiNhuan: Math.round(n.loiNhuan),
+                    /* % lợi nhuận CHỈ trên đơn có đủ giá vốn — mẫu số là doanh thu của
+                     * đúng những đơn đó, không phải cả nhóm. */
+                    loiNhuanPhanTram: pt(n.loiNhuan, n.doanhThu - n.doanhThuThieuGiaVon),
+                    donThieuGiaVon: n.thieuGiaVon,
+                    doanhThuThieuGiaVon: Math.round(n.doanhThuThieuGiaVon),
+                })
+
+                d.theoSan = Object.fromEntries(Object.entries(theoSan).map(([san, s]) => [san, {
+                    huy: s.huy,
+                    daDoiSoat: tomTat(s.daDoiSoat),
+                    hinhDangUocTinh: tomTat(s.hinhDangUocTinh),
+                    chuaDoiSoat: tomTat(s.chuaDoiSoat),
+                }]))
+                d.kiemPhi = {
+                    soDonKiem: soKiem,
+                    lechTren1d,
+                    lechTrungBinh: soKiem ? Math.round(tongLech / soKiem) : null,
+                    lechLonNhat: Math.round(lechLonNhat),
+                    viDu: viDuLech,
+                    yNghia: 'Trên đơn đã đối soát: |total − phí − thựcNhận|. ≈0 = phí đúng nghĩa "giá bán − thực nhận". ' +
+                        'Lệch lớn = giá bán sàn dùng tính phí ≠ tổng tiền ta lưu → % phí hiển thị sai.',
+                }
+            } catch (e: any) {
+                d.docDuoc = false
+                d.loi = String(e?.message || e).slice(0, 200)
+            }
+            ketQua.push(d)
+        }
+
+        res.json({
+            success: true,
+            data: {
+                soNgay, tran: TRAN,
+                luuY: 'Ba nhóm phí: daDoiSoat = phí THẬT từ sàn; hinhDangUocTinh = phí ≈ total × rate (đơn webhook ghi ước tính như thật); ' +
+                    'chuaDoiSoat = 0/0. Chỉ tin % của nhóm daDoiSoat. `null` = không có gì để chia, không phải 0.',
+                cuaHang: ketQua,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/do-gia-von', async (req: Request, res: Response) => {
     try {
         const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 90))
