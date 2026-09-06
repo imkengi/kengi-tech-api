@@ -96,7 +96,16 @@ export async function suaGiaSanTikTok(
         viDu: [], donDaXuatHoaDon: [], loiMau: [], dungVi240s: false, conCho: 0, giay: 0,
     }
 
-    const whereCho: any = { channelId: opts.channelId, giaSanSuaLuc: null }
+    /* KHÔNG ĐỤNG ĐƠN HUỶ / HOÀN. Đơn huỷ đã có bút toán ĐẢO theo số cũ; sửa số
+     * trên phiếu mà bút toán đảo giữ nguyên là để lại phần dư treo ở 131-TIKTOK.
+     * Đơn huỷ cũng không có doanh thu để mà ghi thiếu — sửa chúng chỉ tốn lượt
+     * gọi sàn và thêm rủi ro. */
+    const TRANG_THAI_KHONG_DUNG = ['cancelled', 'CANCELLED', 'UNPAID', 'returned', 'TO_RETURN', 'IN_CANCEL', 'cancelling']
+    const whereCho: any = {
+        channelId: opts.channelId,
+        giaSanSuaLuc: null,
+        status: { notIn: TRANG_THAI_KHONG_DUNG },
+    }
     const tongCho = await sp.onlineOrder.count({ where: whereCho })
 
     /* CŨ NHẤT TRƯỚC: đơn cũ chắc chắn nằm trước bản vá, và chạy nhiều lượt thì
