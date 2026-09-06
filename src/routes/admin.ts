@@ -4071,6 +4071,73 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
  *
  *  Chạy TUẦN TỰ từng cửa hàng — pool prod mỗi cửa hàng đúng 1 kết nối.
  * ───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  ESCROW THÔ CỦA MỘT ĐƠN SHOPEE — GET /admin/do-escrow-tho?storeCode=&code=  (06/09/2026)
+ *  CHỈ ĐỌC. Hỏi thẳng Shopee get_escrow_detail và trả về NGUYÊN `order_income`
+ *  + `buyer_payment_info`, không rút gọn.
+ *
+ *  Vì sao cần: bất biến `total − phí = thực nhận` vỡ ở 13–18% đơn đã đối soát.
+ *  `getEscrowDetail()` chỉ đọc 8 trường của order_income nên không nhìn thấy
+ *  voucher_from_seller / seller_discount / seller_return_refund — đúng những
+ *  trường phân biệt "voucher shop tài trợ" với "trả hàng một phần". Đoán thì
+ *  sửa sai chỗ; đọc nguyên văn rồi mới sửa.
+ *  Không trả token; chỉ trả số liệu phí của đơn.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/do-escrow-tho', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const code = String(req.query.code || '').trim().replace(/^ONLINE-/i, '').replace(/^SPE-/i, '')
+        if (!code) { res.status(400).json({ success: false, error: 'thiếu ?code=' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const don = await sp.onlineOrder.findFirst({
+            where: { OR: [{ externalOrderId: code }, { externalOrderId: `SPE-${code}` }, { orderNumber: `SPE-${code}` }] },
+            select: {
+                orderNumber: true, externalOrderId: true, channelId: true, status: true,
+                subtotal: true, discount: true, shippingFee: true, total: true,
+                platformFee: true, netRevenue: true, adsVoucherDiscount: true,
+                items: { select: { productName: true, sku: true, quantity: true, unitPrice: true, discount: true, lineTotal: true } },
+            },
+        })
+        if (!don) { res.status(404).json({ success: false, error: 'không thấy đơn trong kho' }); return }
+        const ch = await sp.onlineChannel.findUnique({ where: { id: don.channelId } })
+        if (!ch || ch.platform !== 'shopee') { res.status(400).json({ success: false, error: 'kênh không phải Shopee' }); return }
+        const svc: any = new ShopeeService({
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        })
+        const sn = (don.externalOrderId || '').replace(/^SPE-/i, '')
+        const url = svc.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${encodeURIComponent(sn)}`
+        const data = await svc.httpGet(url)
+        const income = data?.response?.order_income ?? null
+        const pay = data?.response?.buyer_payment_info ?? null
+        /* Suy ngược để đối chiếu ngay trong cùng một màn. */
+        const doiChieu = income ? {
+            totalTaLuu: Number(don.total) || 0,
+            order_original_price: income.order_original_price ?? null,
+            order_selling_price: income.order_selling_price ?? null,
+            escrow_amount: income.escrow_amount ?? null,
+            hoTaLuu_tru_sellingPrice: (Number(don.total) || 0) - (Number(income.order_selling_price) || 0),
+            voucher_from_seller: income.voucher_from_seller ?? null,
+            seller_discount: income.seller_discount ?? null,
+            seller_return_refund: income.seller_return_refund ?? null,
+            voucher_from_shopee: income.voucher_from_shopee ?? null,
+            coins: income.coins ?? null,
+        } : null
+        res.json({
+            success: true,
+            data: {
+                don, loiShopee: data?.error ? { error: data.error, message: data.message } : null,
+                doiChieu, order_income: income, buyer_payment_info: pay,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
     try {
         const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 30))
