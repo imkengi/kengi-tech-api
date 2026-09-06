@@ -4772,7 +4772,7 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                 }
 
                 /* Ba nhóm theo nghĩa của cột phí, tách theo sàn. */
-                const theoSan: Record<string, { daDoiSoat: Nhom; hinhDangUocTinh: Nhom; chuaDoiSoat: Nhom; huy: number }> = {}
+                const theoSan: Record<string, { daDoiSoat: Nhom; hinhDangUocTinh: Nhom; chuaDoiSoat: Nhom; hoanTra: Nhom; huy: number }> = {}
                 /* Kiểm bất biến phí trên nhóm đã đối soát. Giữ 5 đơn lệch LỚN NHẤT
                  * kèm mã đơn + giảm giá + ship + ads voucher — để phân biệt được
                  * "voucher shop tài trợ" với "trả hàng một phần" thay vì đoán. */
@@ -4786,7 +4786,7 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
 
                 for (const o of orders) {
                     const san = String(o.platform || 'khac')
-                    if (!theoSan[san]) theoSan[san] = { daDoiSoat: nhomMoi(), hinhDangUocTinh: nhomMoi(), chuaDoiSoat: nhomMoi(), huy: 0 }
+                    if (!theoSan[san]) theoSan[san] = { daDoiSoat: nhomMoi(), hinhDangUocTinh: nhomMoi(), chuaDoiSoat: nhomMoi(), hoanTra: nhomMoi(), huy: 0 }
                     const s = theoSan[san]
                     if (HUY.has(String(o.status))) { s.huy++; continue }
                     const p = loi.get(o.id)
@@ -4794,6 +4794,12 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     const total = Number(o.total) || 0, rate = Number(o.platformFeeRate) || 0
 
                     if (phi === 0 && net === 0) { cong(s.chuaDoiSoat, o, p); continue }
+                    /* ĐƠN HOÀN — thực nhận ÂM (sàn hoàn hết tiền cho khách rồi trừ phí
+                     * ship hoàn). Tách RIÊNG: để trong nhóm đã đối soát thì doanh thu
+                     * không có thật của chúng làm phồng mẫu số, còn bất biến
+                     * `total − phí − thực nhận ≈ 0` cũng không áp dụng được cho chúng
+                     * (đo 06/09: chính chúng là phần lớn nhóm "hở dương"). */
+                    if (net < 0) { cong(s.hoanTra, o, p); continue }
                     const uocTinh = rate > 0 && Math.abs(phi - Math.round(total * rate / 100)) <= 1
                     if (uocTinh) { cong(s.hinhDangUocTinh, o, p); continue }
 
