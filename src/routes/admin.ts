@@ -4089,8 +4089,9 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                 const orders: any[] = await sp.onlineOrder.findMany({
                     where: { createdAt: { gte: tuNgay } },
                     select: {
-                        id: true, platform: true, status: true, subtotal: true, total: true,
-                        shippingFee: true, platformFee: true, platformFeeRate: true, netRevenue: true,
+                        id: true, orderNumber: true, externalOrderId: true, platform: true, status: true,
+                        subtotal: true, discount: true, total: true, shippingFee: true,
+                        platformFee: true, platformFeeRate: true, netRevenue: true, adsVoucherDiscount: true,
                         items: { select: { productId: true, sku: true, quantity: true } },
                     },
                     orderBy: { createdAt: 'desc' },
@@ -4131,9 +4132,12 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
 
                 /* Ba nhóm theo nghĩa của cột phí, tách theo sàn. */
                 const theoSan: Record<string, { daDoiSoat: Nhom; hinhDangUocTinh: Nhom; chuaDoiSoat: Nhom; huy: number }> = {}
-                /* Kiểm bất biến phí trên nhóm đã đối soát. */
+                /* Kiểm bất biến phí trên nhóm đã đối soát. Giữ 5 đơn lệch LỚN NHẤT
+                 * kèm mã đơn + giảm giá + ship + ads voucher — để phân biệt được
+                 * "voucher shop tài trợ" với "trả hàng một phần" thay vì đoán. */
                 let soKiem = 0, lechTren1d = 0, tongLech = 0, lechLonNhat = 0
                 let viDuLech: any = null
+                const topLech: any[] = []
 
                 for (const o of orders) {
                     const san = String(o.platform || 'khac')
@@ -4155,6 +4159,18 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     tongLech += lech
                     if (lech > 1) lechTren1d++
                     if (lech > lechLonNhat) { lechLonNhat = lech; viDuLech = { id: o.id, total, phi, thucNhan: net, lech } }
+                    if (lech > 1) {
+                        topLech.push({
+                            maDon: o.orderNumber, maSan: o.externalOrderId, trangThai: o.status,
+                            subtotal: Number(o.subtotal) || 0, giamGia: Number(o.discount) || 0,
+                            ship: Number(o.shippingFee) || 0, adsVoucher: Number(o.adsVoucherDiscount) || 0,
+                            total, phi, thucNhan: net, lech: Math.round(lech),
+                            // giá bán sàn suy ngược = phí + thực nhận; hở = total − giá bán sàn
+                            giaBanSanSuyNguoc: phi + net,
+                        })
+                        topLech.sort((a, b) => b.lech - a.lech)
+                        if (topLech.length > 5) topLech.length = 5
+                    }
                 }
 
                 const pt = (a: number, b: number) => b > 0 ? Math.round(a / b * 1000) / 10 : null
@@ -4186,6 +4202,7 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     lechTrungBinh: soKiem ? Math.round(tongLech / soKiem) : null,
                     lechLonNhat: Math.round(lechLonNhat),
                     viDu: viDuLech,
+                    top5Lech: topLech,
                     yNghia: 'Trên đơn đã đối soát: |total − phí − thựcNhận|. ≈0 = phí đúng nghĩa "giá bán − thực nhận". ' +
                         'Lệch lớn = giá bán sàn dùng tính phí ≠ tổng tiền ta lưu → % phí hiển thị sai.',
                 }
