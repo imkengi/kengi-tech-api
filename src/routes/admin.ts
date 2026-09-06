@@ -4199,6 +4199,87 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
  *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
  * ───────────────────────────────────────────────────────────────────────────── */
 /**
+ * DANH SÁCH HOÁ ĐƠN TIKTOK CẦN ĐIỀU CHỈNH — GET /admin/do-hd-can-dieu-chinh-tiktok
+ *
+ * Đơn TikTok ĐÃ xuất HĐĐT theo số khách trả, trong khi doanh thu của shop là giá
+ * bán trên sàn (TikTok hoàn lại phần sàn tài trợ). Bộ sửa giá cố ý không đụng nhóm
+ * này — sửa hoá đơn đã phát hành phải bằng hoá đơn điều chỉnh, là việc của chủ shop.
+ * Bảng này để đưa cho kế toán: từng hoá đơn, số đang ghi, số đúng, phần chênh.
+ *
+ * KHÔNG gọi API sàn: số đúng lấy từ QUYẾT TOÁN đã lưu (`netRevenue + platformFee`).
+ * Cách này vừa được kiểm chứng trên 199 đơn — khớp 198, lệch trung bình 249đ.
+ * Đơn CHƯA quyết toán thì không có số đúng để so → liệt kê riêng, không đoán.
+ *
+ * CHỈ ĐỌC.
+ */
+router.get('/do-hd-can-dieu-chinh-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const max = Math.min(2000, Math.max(1, Number(req.query.max) || 200))
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const HUY = `('cancelled','CANCELLED','UNPAID','returned','TO_RETURN','IN_CANCEL','cancelling')`
+        const PHAT_HANH = `('ISSUING','issued','SIGNED','SENT')`
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT DISTINCT ON (o.id)
+                   o."orderNumber", o."subtotal", o."netRevenue", o."platformFee", o."createdAt",
+                   e."invoiceNumber", e."invoiceSymbol", e."invoiceDate", e."totalAmount", e.status
+            FROM "OnlineOrder" o
+            JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+            JOIN "EInvoice" e ON e."transactionId" = t.id AND e.status IN ${PHAT_HANH}
+            WHERE o."platform"='tiktok' AND o."status" NOT IN ${HUY}
+            ORDER BY o.id, e."createdAt" DESC`)
+
+        let tongChenh = 0, tongHdDangGhi = 0, soDonDoiSoat = 0
+        const chuaQuyetToan: string[] = []
+        const ds: any[] = []
+        for (const r of rows) {
+            const net = Number(r.netRevenue) || 0
+            const phi = Number(r.platformFee) || 0
+            const dangGhi = Math.round(Number(r.subtotal) || 0)
+            if (net <= 0) { chuaQuyetToan.push(String(r.orderNumber)); continue }
+            const dung = Math.round(net + phi)
+            const chenh = dung - dangGhi
+            soDonDoiSoat++
+            tongChenh += chenh
+            tongHdDangGhi += Math.round(Number(r.totalAmount) || 0)
+            if (ds.length < max) {
+                ds.push({
+                    maDon: r.orderNumber,
+                    soHoaDon: r.invoiceNumber || null, kyHieu: r.invoiceSymbol || null,
+                    ngayHoaDon: r.invoiceDate || null, tienTrenHoaDon: Math.round(Number(r.totalAmount) || 0),
+                    doanhThuDangGhi: dangGhi, doanhThuDung: dung, chenh,
+                })
+            }
+        }
+        ds.sort((a, b) => b.chenh - a.chenh)
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                soHoaDonDaPhatHanh: rows.length,
+                soDonDaQuyetToan: soDonDoiSoat,
+                soDonChuaQuyetToan: chuaQuyetToan.length,
+                tongTienTrenHoaDon: tongHdDangGhi,
+                tongChenhCanDieuChinh: tongChenh,
+                danhSach: ds,
+                donChuaQuyetToan: chuaQuyetToan.slice(0, 50),
+                biCatTran: ds.length < soDonDoiSoat,
+                yNghia: 'doanhThuDung = thực nhận + phí sàn theo quyết toán của TikTok. '
+                    + 'chenh = phần hoá đơn ghi THIẾU. Đơn CHƯA quyết toán không có số đúng để so — '
+                    + 'liệt kê riêng, KHÔNG suy đoán. Danh sách này để kế toán quyết có xuất hoá đơn '
+                    + 'điều chỉnh hay không; bộ sửa giá KHÔNG tự đụng vào chúng.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐẾM ĐƠN TIKTOK THEO TÌNH TRẠNG HOÁ ĐƠN — GET /admin/do-hoa-don-don-tiktok?storeCode=
  *
  * Chạy thử bộ sửa giá trên 200 đơn cũ nhất cho thấy 142/200 đã xuất HĐĐT. Cần biết
