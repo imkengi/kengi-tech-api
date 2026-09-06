@@ -4203,20 +4203,32 @@ router.get('/do-thiet-bi', async (req: Request, res: Response) => {
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp: any = getStorePrisma(store.schema)
+        /* Hai phép đo ĐỘC LẬP. Bản đầu thoát sớm khi thiếu bảng DeviceToken nên 8/11
+         * cửa hàng không hề được đo cột loiNhuanThapBaoLuc — cửa sổ đo hẹp hơn vật
+         * cần đo, "không đo" nhìn y như "không có". */
         let rows: any[] = []
+        let loiThietBi: string | null = null
         try {
             rows = await sp.$queryRawUnsafe(`SELECT "updatedAt" FROM "DeviceToken" ORDER BY "updatedAt" DESC LIMIT 100`)
-        } catch (e: any) {
-            res.json({ success: true, data: { cuaHang: store.name, soThietBi: 0, ghiChu: 'Bảng DeviceToken chưa có → chưa thiết bị nào đăng ký push.', loi: String(e?.message || '').slice(0, 120) } })
-            return
-        }
-        const daBao = await sp.onlineOrder.count({ where: { loiNhuanThapBaoLuc: { not: null } } }).catch(() => null)
+        } catch (e: any) { loiThietBi = String(e?.message || e).slice(0, 120) }
+
+        let daBao: number | null = null
+        let loiCot: string | null = null
+        try {
+            daBao = await sp.onlineOrder.count({ where: { loiNhuanThapBaoLuc: { not: null } } })
+        } catch (e: any) { loiCot = String(e?.message || e).slice(0, 120) }
+
         res.json({
             success: true,
             data: {
-                cuaHang: store.name, soThietBi: rows.length,
+                cuaHang: store.name,
+                soThietBi: rows.length,
                 capNhatGanNhat: rows[0]?.updatedAt ?? null,
+                ghiChu: loiThietBi ? 'Bảng DeviceToken chưa có → chưa thiết bị nào đăng ký push.' : undefined,
+                loiThietBi: loiThietBi || undefined,
+                coCotBaoLuc: loiCot === null,
                 donDaCanhBaoLoiNhuanThap: daBao,
+                loiCot: loiCot || undefined,
                 nguong: Number(process.env.NGUONG_LOI_NHUAN_THAP || 5),
             },
         })

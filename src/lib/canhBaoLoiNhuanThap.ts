@@ -28,14 +28,17 @@ export const NGUONG_LOI_NHUAN_THAP = Number(process.env.NGUONG_LOI_NHUAN_THAP ||
 export interface KetQuaCanhBao {
     xet: number          // đơn đưa vào xét (đã đối soát, chưa cảnh báo)
     thap: number         // đơn dưới ngưỡng
+    daGhi: number        // đơn ghi được Notification + đánh dấu (thứ thật sự đã báo)
+    loiGhi: number       // đơn ghi hỏng — KHÔNG đánh dấu, lượt sau báo lại
     thieuGiaVon: number  // bỏ qua vì không biết giá vốn
     push: number         // số thiết bị nhận push (0 = không thiết bị / không push)
+    loiPush?: string     // push hỏng vì sao (rỗng = không hỏng)
 }
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
 
 export async function canhBaoLoiNhuanThap(prisma: any, orderIds: string[]): Promise<KetQuaCanhBao> {
-    const ra: KetQuaCanhBao = { xet: 0, thap: 0, thieuGiaVon: 0, push: 0 }
+    const ra: KetQuaCanhBao = { xet: 0, thap: 0, daGhi: 0, loiGhi: 0, thieuGiaVon: 0, push: 0 }
     const ids = [...new Set((orderIds || []).filter(Boolean))]
     if (!ids.length) return ra
 
@@ -68,28 +71,60 @@ export async function canhBaoLoiNhuanThap(prisma: any, orderIds: string[]): Prom
     const bayGio = new Date()
 
     /* Mỗi đơn một dòng trong app + đánh dấu đã báo — làm TRƯỚC khi push, để nếu
-     * push hỏng thì lượt sau cũng không báo lại (thà thiếu một push còn hơn spam). */
-    for (const t of thap) {
-        await prisma.notification.create({
-            data: {
-                title: `Lợi nhuận thấp: ${t.ma}`,
-                message: `${t.san.toUpperCase()} · lãi ${t.pt.toFixed(1)}% (${fmt(t.ln)} / ${fmt(t.dt)}) — dưới ngưỡng ${NGUONG_LOI_NHUAN_THAP}%, kiểm giá vốn / giá bán / phí.`,
-                type: 'loi_nhuan_thap',
-            },
-        }).catch(() => { })
-        await prisma.onlineOrder.updateMany({ where: { id: t.id }, data: { loiNhuanThapBaoLuc: bayGio } }).catch(() => { })
+     * push hỏng thì lượt sau cũng không báo lại (thà thiếu một push còn hơn spam).
+     *
+     * Nhưng ghi HỎNG thì KHÔNG đánh dấu: nuốt lỗi ở đây nghĩa là đơn bị đóng dấu
+     * "đã báo" trong khi trong app chẳng có dòng nào — không ai biết là mất. Ghi
+     * hỏng thì để nguyên, lượt đối soát sau xét lại (dedupe vẫn nguyên vì chỉ đơn
+     * ghi được mới mang dấu). */
+    /* Chuông chỉ giữ 30 dòng gần nhất (GET /notifications take: 30). Một mẻ đối
+     * soát 300–400 đơn với biên trung bình 8% có thể ra vài chục đơn dưới ngưỡng —
+     * ghi mỗi đơn một dòng là ĐẨY MỌI THÔNG BÁO KHÁC ra khỏi chuông. Nên: mẻ nhỏ
+     * ghi từng đơn (bấm vào xem được đúng đơn), mẻ lớn gộp một dòng tổng hợp; danh
+     * sách đầy đủ vẫn xem ở trang Đơn hàng online, nơi có sẵn cột % lợi nhuận. */
+    const NGUONG_GOP = 8
+    const daGhi: typeof thap = []
+    if (thap.length > NGUONG_GOP) {
+        const dsach = thap.slice(0, NGUONG_GOP).map(t => `${t.ma} ${t.pt.toFixed(1)}%`).join(' · ')
+        try {
+            await prisma.notification.create({
+                data: {
+                    title: `${thap.length} đơn lãi dưới ${NGUONG_LOI_NHUAN_THAP}%`,
+                    message: `Vừa đối soát phí thật. Thấp nhất: ${dsach} (+${thap.length - NGUONG_GOP} đơn nữa). Vào Đơn hàng online kiểm giá vốn / giá bán / phí.`,
+                    type: 'loi_nhuan_thap',
+                },
+            })
+            await prisma.onlineOrder.updateMany({ where: { id: { in: thap.map(t => t.id) } }, data: { loiNhuanThapBaoLuc: bayGio } })
+            daGhi.push(...thap)
+        } catch { ra.loiGhi += thap.length }
+    } else {
+        for (const t of thap) {
+            try {
+                await prisma.notification.create({
+                    data: {
+                        title: `Lợi nhuận thấp: ${t.ma}`,
+                        message: `${t.san.toUpperCase()} · lãi ${t.pt.toFixed(1)}% (${fmt(t.ln)} / ${fmt(t.dt)}) — dưới ngưỡng ${NGUONG_LOI_NHUAN_THAP}%, kiểm giá vốn / giá bán / phí.`,
+                        type: 'loi_nhuan_thap',
+                    },
+                })
+                await prisma.onlineOrder.updateMany({ where: { id: t.id }, data: { loiNhuanThapBaoLuc: bayGio } })
+                daGhi.push(t)
+            } catch { ra.loiGhi++ }
+        }
     }
+    ra.daGhi = daGhi.length
+    if (!daGhi.length) return ra
 
-    /* Một push cho cả mẻ. Data-only, app tự vẽ. */
-    const dau = thap.slice(0, 3).map(t => `${t.ma} ${t.pt.toFixed(1)}%`).join(' · ')
-    const conLai = thap.length > 3 ? ` (+${thap.length - 3} đơn nữa)` : ''
-    const tieuDe = thap.length === 1
-        ? `⚠ Đơn ${thap[0]!.ma} lãi ${thap[0]!.pt.toFixed(1)}%`
-        : `⚠ ${thap.length} đơn lãi dưới ${NGUONG_LOI_NHUAN_THAP}%`
+    /* Một push cho cả mẻ, nói về ĐÚNG những đơn đã ghi được. Data-only, app tự vẽ. */
+    const dau = daGhi.slice(0, 3).map(t => `${t.ma} ${t.pt.toFixed(1)}%`).join(' · ')
+    const conLai = daGhi.length > 3 ? ` (+${daGhi.length - 3} đơn nữa)` : ''
+    const tieuDe = daGhi.length === 1
+        ? `⚠ Đơn ${daGhi[0]!.ma} lãi ${daGhi[0]!.pt.toFixed(1)}%`
+        : `⚠ ${daGhi.length} đơn lãi dưới ${NGUONG_LOI_NHUAN_THAP}%`
     const noiDung = `${dau}${conLai}. Vừa đối soát phí thật. Vào Đơn hàng online kiểm giá vốn / giá bán.`
     try {
         const { sendPushToStore } = await import('../routes/notifications')
         ra.push = await sendPushToStore(prisma, tieuDe, noiDung)
-    } catch { ra.push = 0 }
+    } catch (e: any) { ra.push = 0; ra.loiPush = String(e?.message || e).slice(0, 160) }
     return ra
 }

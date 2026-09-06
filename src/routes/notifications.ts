@@ -209,7 +209,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 type: n.type || 'info',
                 title: n.title,
                 message: n.message,
-                severity: n.type === 'error' ? 'critical' : 'info',
+                severity: n.type === 'error' ? 'critical'
+                    : (n.type === 'loi_nhuan_thap' ? 'warning' : 'info'),
                 read: n.read,
                 createdAt: n.createdAt.toISOString(),
             }))
