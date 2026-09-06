@@ -1035,15 +1035,42 @@ export class TikTokService extends PlatformService {
         const currency = payment.currency || o.currency || o.line_items?.[0]?.currency
         const factor = this.minorUnitFactor(currency)
 
-        const items: PlatformOrderItem[] = (o.line_items || o.order_line_list || []).map((item: any) => ({
-            externalItemId: item.id || item.order_line_id,
-            productName: item.product_name || item.sku_name || '',
-            sku: item.seller_sku || item.sku_id || '',
-            quantity: item.quantity || 1,
-            unitPrice: this.toMajor(item.sale_price || item.original_price, factor),
-            discount: (this.toMajor(item.platform_discount, factor) + this.toMajor(item.seller_discount, factor)),
-            lineTotal: this.toMajor(item.sale_price, factor) * (item.quantity || 1),
-        }))
+        /* GIÁ BÁN TRÊN SÀN, KHÔNG PHẢI SỐ KHÁCH TRẢ (chủ shop quyết 06/09/2026).
+         *
+         * `sale_price` TikTok trả về = original − seller_discount − platform_discount,
+         * tức là số KHÁCH TRẢ sau cả giảm giá do TIKTOK tài trợ. Nhưng phần TikTok
+         * tài trợ thì TikTok hoàn lại cho shop khi quyết toán — doanh thu của shop
+         * là giá SAU giảm giá shop, TRƯỚC giảm giá sàn (statement gọi là
+         * `net_sales_amount` / `after_seller_discounts_subtotal_amount`).
+         *
+         * Đo 06/09/2026 trên TIK-585423055781791145: gross 1.856.000 − shop giảm
+         * 259.840 = 1.596.160 (giá bán sàn); ta lưu 1.101.350 = 1.596.160 − 494.810
+         * (TikTok bù). Tính trên 183 đơn đã đối soát: doanh thu ghi THIẾU ~20%,
+         * và "phí 27%" là 22,4% chia cho mẫu số thiếu. Cùng quy ước với Shopee
+         * (giá dòng sau giảm giá shop, trước voucher Shopee) và với hoá đơn
+         * ("xuất hàng bán, không phải xuất khách trả").
+         *
+         * `discount` giữ phần GIẢM GIÁ SHOP (giống Shopee: original − discounted);
+         * phần sàn bù không phải giảm giá của shop nên không ghi vào đó.
+         * Dòng TikTok v202309 là MỖI ĐƠN VỊ một dòng (quantity 1); cộng
+         * platform_discount một lần theo dòng để lỡ có quantity > 1 cũng không
+         * nhân sai. */
+        const items: PlatformOrderItem[] = (o.line_items || o.order_line_list || []).map((item: any) => {
+            const qty = item.quantity || 1
+            const khachTra = this.toMajor(item.sale_price || item.original_price, factor)
+            const sanBu = this.toMajor(item.platform_discount, factor)
+            const shopGiam = this.toMajor(item.seller_discount, factor)
+            const lineTotal = khachTra * qty + sanBu
+            return {
+                externalItemId: item.id || item.order_line_id,
+                productName: item.product_name || item.sku_name || '',
+                sku: item.seller_sku || item.sku_id || '',
+                quantity: qty,
+                unitPrice: Math.round(lineTotal / qty),
+                discount: shopGiam,
+                lineTotal,
+            }
+        })
 
         // TikTok v202309 returns `status` as a string enum (COMPLETED, IN_TRANSIT,
         // AWAITING_SHIPMENT, etc.). Earlier API versions used numeric codes. Accept

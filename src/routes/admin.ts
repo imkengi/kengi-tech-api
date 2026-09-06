@@ -4178,6 +4178,103 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
     }
 })
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  LẤY PHÍ TIKTOK CÓ GIỚI HẠN — POST /admin/lay-phi-tiktok  (06/09/2026)
+ *  ?storeCode=KENGISTORE&take=100&thu=1   (thu=1 = chỉ phân loại, KHÔNG ghi)
+ *
+ *  Vì sao không dùng nút "Đối soát phí sàn": nút chạy 6 luồng → TikTok chặn
+ *  36009002 gần cả mẻ. Vì sao không chỉ chờ cron: cron gộp null của "chưa quyết
+ *  toán" và null của "bị chặn tốc độ" làm một, nên không trả lời được câu
+ *  "có lấy được không". Ở đây gọi THÔ statement_transactions và phân loại theo
+ *  `data.code`:
+ *     0 + có giao dịch   → ok, ghi phí THẬT (giống cron: |Σfee|, Σsettlement)
+ *     0 + rỗng           → chưa quyết toán (TikTok chưa chốt, không phải lỗi)
+ *     36009002           → bị chặn tốc độ (thử lại vòng sau)
+ *     khác               → lỗi thật, giữ 3 thông báo đầu
+ *  Nhịp như cron: 2 luồng, nghỉ 350ms sau mỗi lời gọi, dừng ở 240s.
+ *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || 'KENGISTORE').trim()
+        const take = Math.min(400, Math.max(1, Number(req.query.take ?? req.body?.take) || 100))
+        const chiThu = String(req.query.thu ?? req.body?.thu ?? '') === '1'
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const kenhDs: any[] = await sp.onlineChannel.findMany({
+            where: { platform: 'tiktok', status: 'active', accessToken: { not: null } },
+        })
+        const batDau = Date.now()
+        const ra: any[] = []
+        for (const ch of kenhDs) {
+            const svc: any = new (TikTokService as any)({
+                apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                shopId: ch.shopId || undefined,
+            })
+            const whereCho = {
+                channelId: ch.id, platformFee: 0,
+                status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
+                externalOrderId: { not: null },
+                createdAt: { gte: new Date(Date.now() - 45 * 86400_000) },
+            }
+            const tongCho = await sp.onlineOrder.count({ where: whereCho })
+            const orders: any[] = await sp.onlineOrder.findMany({
+                where: whereCho, select: { id: true, externalOrderId: true, orderNumber: true, createdAt: true },
+                orderBy: { createdAt: 'desc' }, take,
+            })
+            const k = { kenh: ch.name, tongDangCho: tongCho, quet: orders.length, ok: 0, chuaQuyetToan: 0, biChanTocDo: 0, loiKhac: 0, dungVi240s: 0, loiMau: [] as string[], viDuOk: [] as any[], conCho: tongCho }
+            await mapWithConcurrency(orders, async (o: any) => {
+                if (Date.now() - batDau > 240_000) { k.dungVi240s++; return }
+                const id = String(o.externalOrderId || '').replace(/^TIK-/i, '')
+                try {
+                    const { url, headers } = svc.buildUrl(`/finance/202309/orders/${id}/statement_transactions`, {})
+                    const data = await svc.httpGet(url, headers)
+                    const code = Number(data?.code)
+                    if (code === 36009002) { k.biChanTocDo++ }
+                    else if (code !== 0) { k.loiKhac++; if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: [${code}] ${String(data?.message || '').slice(0, 120)}`) }
+                    else {
+                        const txs: any[] = data?.data?.statement_transactions || []
+                        if (!txs.length) { k.chuaQuyetToan++ }
+                        else {
+                            let settlement = 0, fee = 0, revenue = 0
+                            for (const t of txs) {
+                                settlement += Number(t.settlement_amount || 0)
+                                revenue += Number(t.revenue_amount || 0)
+                                fee += Math.abs(Number(t.fee_amount ?? t.fee_and_tax_amount ?? t.fee_tax_amount ?? 0))
+                            }
+                            if (fee === 0 && revenue > settlement) fee = revenue - settlement
+                            if (settlement > 0 || fee > 0) {
+                                if (!chiThu) await sp.onlineOrder.update({ where: { id: o.id }, data: { platformFee: Math.round(fee), netRevenue: Math.round(settlement) } })
+                                k.ok++
+                                if (k.viDuOk.length < 3) k.viDuOk.push({ ma: o.orderNumber, phi: Math.round(fee), thucNhan: Math.round(settlement), revenueTikTok: Math.round(revenue) })
+                            } else k.chuaQuyetToan++
+                        }
+                    }
+                } catch (e: any) {
+                    k.loiKhac++
+                    if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: ${String(e?.message || e).slice(0, 120)}`)
+                }
+                await new Promise(r => setTimeout(r, 350))
+            }, 2)
+            k.conCho = chiThu ? tongCho : await sp.onlineOrder.count({ where: whereCho })
+            ra.push(k)
+        }
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, cheDo: chiThu ? 'CHỈ PHÂN LOẠI (không ghi)' : 'GHI PHÍ THẬT',
+                giay: Math.round((Date.now() - batDau) / 1000), kenh: ra,
+                yNghia: 'chuaQuyetToan = TikTok chưa chốt statement (đơn mới giao, thường 1–2 tuần) — không phải lỗi, để "—". biChanTocDo = 36009002, vòng sau quét lại.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/do-statement-tho', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
