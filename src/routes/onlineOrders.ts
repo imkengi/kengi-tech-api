@@ -1183,6 +1183,9 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
                     estimatedProfit: p.profit,
                     profitIsEstimate: p.estimated,
                     profitMissingCost: p.missingCost,
+                    // Đơn khách trả: sàn quyết toán ÂM. Giao diện phải nói rõ là HOÀN,
+                    // không thì con số âm trông như lỗ do bán rẻ.
+                    donHoanTra: p.hoanTra === true,
                 } : oa
             })
         }
