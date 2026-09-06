@@ -40,7 +40,8 @@ export interface KetQuaSuaGiaSan {
     quet: number
     dungRoi: number            // số dựng lại trùng số đang lưu → chỉ đánh dấu
     suaDuoc: number
-    chenhTong: number          // tổng doanh thu ghi thiếu đã bù (đồng)
+    chenhTong: number          // tổng doanh thu ĐƠN SÀN ghi thiếu (đồng)
+    chenhSoTong: number        // tổng doanh thu ghi thiếu TRÊN SỔ (chỉ đơn có phiếu bán)
     boQuaHoaDon: number        // đã xuất HĐĐT → không đụng
     loiSan: number             // TikTok không trả đơn / lỗi gọi
     khongCoDong: number        // sàn trả đơn nhưng không có dòng hàng
@@ -92,7 +93,7 @@ export async function suaGiaSanTikTok(
     const batDau = Date.now()
     const k: KetQuaSuaGiaSan = {
         cheDo: opts.apply ? 'GHI THẬT' : 'CHỈ CHẠY THỬ (không ghi)',
-        quet: 0, dungRoi: 0, suaDuoc: 0, chenhTong: 0, boQuaHoaDon: 0,
+        quet: 0, dungRoi: 0, suaDuoc: 0, chenhTong: 0, chenhSoTong: 0, boQuaHoaDon: 0,
         loiSan: 0, khongCoDong: 0, khongTyLeDuoc: 0, phieuLa: 0,
         coPhieuBan: 0, daGhiButToan: 0, khoaSo: 0, loiGhi: 0,
         doiChieu: { soDon: 0, khop: 0, lech: 0, lechTrungBinh: 0 },
@@ -255,6 +256,7 @@ export async function suaGiaSanTikTok(
                 const txTotalCu = lam(phieu.total)
                 const subPhieuMoi = lam(txSubCu * tySo)
                 const chenhSo = subPhieuMoi - txSubCu
+                k.chenhSoTong += chenhSo
                 const phanBo = chiaTheoTiLe(phieu.items as any[], subPhieuMoi)
                 nhatKy.push({
                     ma: o.orderNumber, donCu: subCu, donMoi: subMoi,
