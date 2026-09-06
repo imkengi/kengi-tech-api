@@ -4470,6 +4470,48 @@ router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * BẢNG SanMedia CÓ THẬT KHÔNG — GET /admin/do-kho-media
+ *
+ * `POST /admin/sync-schemas` trả "ok" cho từng schema, nhưng đó là MÃ TRẠNG THÁI
+ * chứ không phải bằng chứng bảng tồn tại (bẫy đã cắn 3 lần với /admin/migrate).
+ * Bộ này ĐẾM THẲNG trên bảng ở từng cửa hàng: đếm được = bảng có thật.
+ * CHỈ ĐỌC.
+ */
+router.get('/do-kho-media', async (_req: Request, res: Response) => {
+    try {
+        const ds = await prisma.store.findMany({ select: { code: true, name: true, schema: true } })
+        const ra: any[] = []
+        // Tuần tự: pool prod chỉ 1 kết nối.
+        for (const st of ds) {
+            const sp: any = getStorePrisma(st.schema)
+            const o: any = { cuaHang: st.code }
+            try {
+                o.soMedia = await sp.sanMedia.count()
+                o.coBang = true
+            } catch (e: any) {
+                o.coBang = false
+                o.loi = String(e?.message || e).slice(0, 120)
+            }
+            try {
+                o.soSkuGan = await sp.sanMediaSanPham.count()
+                o.coBangSanPham = true
+            } catch { o.coBangSanPham = false }
+            ra.push(o)
+        }
+        res.json({
+            success: true,
+            data: {
+                cuaHang: ra,
+                thieuBang: ra.filter(x => !x.coBang || !x.coBangSanPham).map(x => x.cuaHang),
+                yNghia: 'coBang=true nghĩa là ĐẾM ĐƯỢC trên bảng thật, không phải đọc mã HTTP 200 của sync-schemas.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 /* Có thiết bị nào nhận push không — GET /admin/do-thiet-bi?storeCode=  (CHỈ ĐỌC, không trả token) */
 router.get('/do-thiet-bi', async (req: Request, res: Response) => {
     try {
