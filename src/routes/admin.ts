@@ -4199,6 +4199,78 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
  *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
  * ───────────────────────────────────────────────────────────────────────────── */
 /**
+ * ĐƠN CÓ QUYẾT TOÁN ÂM — GET /admin/do-don-quyet-toan-am?storeCode=&san=
+ *
+ * Phát hiện 06/09/2026: đơn khách trả hàng và được hoàn tiền toàn bộ vẫn được sàn
+ * QUYẾT TOÁN (status SETTLED), nhưng `settlement_amount` ÂM — shop không nhận đồng
+ * nào và còn phải chịu phí ship hoàn. Ta lưu `netRevenue` âm.
+ *
+ * Cả trang đơn lẫn bộ tính lợi nhuận đều dùng `netRevenue > 0` làm phép thử "đã đối
+ * soát" ⇒ những đơn này hiện "chưa quyết toán" VĨNH VIỄN, và khoản lỗ của chúng
+ * không vào bất kỳ báo cáo nào. Đó là giấu lỗ, không phải thiếu dữ liệu.
+ *
+ * Bộ này CHỈ ĐẾM để biết quy mô trước khi sửa.
+ */
+router.get('/do-don-quyet-toan-am', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT "platform", "status",
+                   COUNT(*)::int                            AS so_don,
+                   COALESCE(SUM("netRevenue"),0)::float8      AS tong_thuc_nhan,
+                   COALESCE(SUM("subtotal"),0)::float8        AS tong_doanh_thu_dang_ghi,
+                   COALESCE(SUM("platformFee"),0)::float8     AS tong_phi
+            FROM "OnlineOrder"
+            WHERE "netRevenue" < 0
+            GROUP BY "platform", "status"
+            ORDER BY COUNT(*) DESC`)
+
+        const mau: any[] = await sp.$queryRawUnsafe(`
+            SELECT "orderNumber", "platform", "status", "subtotal", "platformFee", "netRevenue", "createdAt"
+            FROM "OnlineOrder" WHERE "netRevenue" < 0
+            ORDER BY "netRevenue" ASC LIMIT 15`)
+
+        let soDon = 0, tongAm = 0, tongDoanhThu = 0
+        for (const r of rows) {
+            soDon += Number(r.so_don) || 0
+            tongAm += Number(r.tong_thuc_nhan) || 0
+            tongDoanhThu += Number(r.tong_doanh_thu_dang_ghi) || 0
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                soDonQuyetToanAm: soDon,
+                tongThucNhanAm: Math.round(tongAm),
+                doanhThuDangGhiChoNhomNay: Math.round(tongDoanhThu),
+                theoSanVaTrangThai: rows.map(r => ({
+                    san: r.platform, trangThai: r.status, soDon: Number(r.so_don),
+                    thucNhan: Math.round(Number(r.tong_thuc_nhan) || 0),
+                    doanhThuDangGhi: Math.round(Number(r.tong_doanh_thu_dang_ghi) || 0),
+                    phi: Math.round(Number(r.tong_phi) || 0),
+                })),
+                nangNhat: mau.map(m => ({
+                    ma: m.orderNumber, san: m.platform, trangThai: m.status,
+                    doanhThuDangGhi: Math.round(Number(m.subtotal) || 0),
+                    phi: Math.round(Number(m.platformFee) || 0),
+                    thucNhan: Math.round(Number(m.netRevenue) || 0),
+                })),
+                yNghia: 'Đây là đơn ĐÃ được sàn quyết toán nhưng shop KHÔNG nhận được đồng nào '
+                    + '(khách trả hàng, hoàn tiền) và còn chịu phí ship hoàn. Doanh thu đang ghi cho '
+                    + 'nhóm này là doanh thu KHÔNG CÓ THẬT — hàng đã trả lại, tiền đã hoàn.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * DANH SÁCH HOÁ ĐƠN TIKTOK CẦN ĐIỀU CHỈNH — GET /admin/do-hd-can-dieu-chinh-tiktok
  *
  * Đơn TikTok ĐÃ xuất HĐĐT theo số khách trả, trong khi doanh thu của shop là giá
