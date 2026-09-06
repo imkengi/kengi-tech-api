@@ -125,6 +125,11 @@ export async function suaGiaSanTikTok(
         },
     })
 
+    /* ĐƯỜNG QUAY LẠI. Sửa tiền trên sổ thật thì phải có cách trả về số cũ —
+     * ghi số TRƯỚC/SAU của từng đơn vào một dòng SyncLog cho mỗi mẻ. Không nhét
+     * vào `OnlineOrder.note` vì đó là ghi chú người dùng nhìn thấy. */
+    const nhatKy: any[] = []
+
     let tongLech = 0
     for (const o of orders) {
         if (Date.now() > opts.hanChot) { k.dungVi240s = true; break }
@@ -251,6 +256,12 @@ export async function suaGiaSanTikTok(
                 const subPhieuMoi = lam(txSubCu * tySo)
                 const chenhSo = subPhieuMoi - txSubCu
                 const phanBo = chiaTheoTiLe(phieu.items as any[], subPhieuMoi)
+                nhatKy.push({
+                    ma: o.orderNumber, donCu: subCu, donMoi: subMoi,
+                    phieu: phieu.id, phieuSubCu: txSubCu, phieuSubMoi: subPhieuMoi,
+                    phieuTotalCu: txTotalCu,
+                    dong: (phieu.items as any[]).map((it: any, i: number) => ({ id: it.id, cu: lam(it.lineTotal), moi: phanBo[i] ?? 0 })),
+                })
                 for (let i = 0; i < phieu.items.length; i++) {
                     const it: any = phieu.items[i]
                     const lt = phanBo[i] ?? 0
@@ -323,6 +334,25 @@ export async function suaGiaSanTikTok(
         } catch (e: any) {
             k.loiGhi++
             if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: ${String(e?.message || e).slice(0, 160)}`)
+        }
+    }
+
+    /* Một dòng nhật ký cho cả mẻ — đủ để dựng lại số cũ nếu phải quay đầu.
+     * Ghi hỏng thì NÓI RA: mất nhật ký nghĩa là mất đường về, dù dữ liệu đã sửa. */
+    if (opts.apply && nhatKy.length) {
+        try {
+            await sp.syncLog.create({
+                data: {
+                    channelId: opts.channelId,
+                    action: 'sua_gia_san_tiktok',
+                    status: 'success',
+                    ordersCount: nhatKy.length,
+                    details: JSON.stringify({ luc: new Date().toISOString(), don: nhatKy }).slice(0, 900_000),
+                },
+            })
+        } catch (e: any) {
+            k.loiGhi++
+            k.loiMau.push(`KHÔNG ghi được nhật ký hoàn tác (${nhatKy.length} đơn): ${String(e?.message || e).slice(0, 140)}`)
         }
     }
 
