@@ -4083,6 +4083,154 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
  *  sửa sai chỗ; đọc nguyên văn rồi mới sửa.
  *  Không trả token; chỉ trả số liệu phí của đơn.
  * ───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  STATEMENT THÔ CỦA MỘT ĐƠN TIKTOK — GET /admin/do-statement-tho?storeCode=&code=  (06/09/2026)
+ *  CHỈ ĐỌC. Hỏi thẳng TikTok /finance/202309/orders/{id}/statement_transactions
+ *  và trả về NGUYÊN mảng giao dịch, không rút gọn.
+ *
+ *  Vì sao cần: đo 30/90 ngày, với đơn TikTok đã đối soát thì
+ *  phí + thực nhận = 120% doanh thu (Shopee: 103%). `getOrderSettlement()` chỉ
+ *  cộng `fee_amount` và `revenue_amount` — nếu TikTok gộp tiền ship khách trả
+ *  vào cả hai thì "phí 27%" thực ra là ~7% phí + ~20% ship chuyển cho ĐVVC.
+ *  Đoán thì sửa sai chỗ; đọc nguyên văn trước.
+ * ───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  BỎ PHÍ ƯỚC TÍNH — POST /admin/bo-phi-uoc-tinh   (06/09/2026)
+ *  ⚠ MẶC ĐỊNH CHẠY THỬ. Gửi {"apply":true} mới ghi. ?storeCode= để giới hạn 1 cửa hàng.
+ *
+ *  Chủ shop quyết: "loại cái phí tạm tính 6% đi, lấy được thì hiển thị, không lấy
+ *  được thì không". Đơn tạo qua webhook trước 2ac8abd mang platformFee = total ×
+ *  hoa hồng cấu hình như thể là phí thật; cron đối soát chỉ quét platformFee = 0
+ *  nên chúng KHÔNG BAO GIỜ được sửa. Đưa về 0/0/0 = "chưa đối soát": giao diện
+ *  hiện "—", cron (6h/lần, 400 đơn/kênh) tự điền phí THẬT từ escrow/settlement.
+ *
+ *  Nhận diện: platformFeeRate > 0 VÀ |platformFee − round(total × rate/100)| ≤ 1
+ *  VÀ platformFee > 0. Phí escrow thật gần như không bao giờ khớp đúng công thức;
+ *  trường hợp trùng ngẫu nhiên thì cron đối soát lại ra đúng số cũ — vô hại.
+ *
+ *  CHỈ đụng ba cột phí trên OnlineOrder. KHÔNG đụng Transaction/sổ (phí sàn được
+ *  ghi nhận theo hoá đơn GTGT cuối kỳ, không lấy từ ba cột này).
+ *  Tuần tự từng cửa hàng — pool prod 1 kết nối. Ghi theo lô id, không quét mù.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
+    try {
+        const ghiThat = req.body?.apply === true
+        const chiStore = String(req.query.storeCode || req.body?.storeCode || '').trim()
+        const stores = await prisma.store.findMany({
+            where: chiStore ? { code: chiStore } : { status: 'active' },
+            select: { code: true, name: true, schema: true },
+            orderBy: { code: 'asc' },
+        })
+        const ketQua: any[] = []
+        let tongSeBo = 0, tongDaBo = 0, tongDocHong = 0
+        for (const st of stores) {
+            const d: any = { cuaHang: st.code, ten: st.name }
+            try {
+                const sp: any = getStorePrisma(st.schema)
+                const ds: any[] = await sp.onlineOrder.findMany({
+                    where: { platformFee: { gt: 0 }, platformFeeRate: { gt: 0 } },
+                    select: { id: true, platform: true, total: true, platformFee: true, platformFeeRate: true, netRevenue: true },
+                    take: 20000,
+                })
+                const uocTinh = ds.filter((o) =>
+                    Math.abs((Number(o.platformFee) || 0) - Math.round((Number(o.total) || 0) * (Number(o.platformFeeRate) || 0) / 100)) <= 1)
+                const theoSan: Record<string, number> = {}
+                for (const o of uocTinh) theoSan[String(o.platform || 'khac')] = (theoSan[String(o.platform || 'khac')] || 0) + 1
+                d.doc = ds.length
+                d.biCatTran = ds.length >= 20000
+                d.hinhDangUocTinh = uocTinh.length
+                d.theoSan = theoSan
+                d.viDu = uocTinh.slice(0, 3).map((o) => ({ id: o.id, san: o.platform, total: o.total, phi: o.platformFee, rate: o.platformFeeRate, net: o.netRevenue }))
+                tongSeBo += uocTinh.length
+                if (ghiThat && uocTinh.length) {
+                    let daBo = 0
+                    for (let i = 0; i < uocTinh.length; i += 500) {
+                        const lo = uocTinh.slice(i, i + 500).map((o) => o.id)
+                        const r = await sp.onlineOrder.updateMany({
+                            where: { id: { in: lo } },
+                            data: { platformFee: 0, platformFeeRate: 0, netRevenue: 0 },
+                        })
+                        daBo += r.count
+                    }
+                    d.daBo = daBo
+                    tongDaBo += daBo
+                }
+            } catch (e: any) {
+                d.docDuoc = false
+                d.loi = String(e?.message || e).slice(0, 200)
+                tongDocHong++
+            }
+            ketQua.push(d)
+        }
+        res.json({
+            success: true,
+            data: {
+                cheDo: ghiThat ? 'GHI THẬT' : 'CHẠY THỬ — gửi {"apply":true} để ghi',
+                tongHinhDangUocTinh: tongSeBo,
+                tongDaBo: ghiThat ? tongDaBo : 0,
+                soCuaHangDocHong: tongDocHong,
+                cuaHang: ketQua,
+                sauKhiBo: 'Giao diện hiện "—" ở Phí sàn/Thực nhận/Lợi nhuận cho tới khi cron (6h/lần, 400 đơn/kênh) điền phí thật. Đơn >45 ngày Shopee hết escrow → có thể ở "—" vĩnh viễn.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+router.get('/do-statement-tho', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const code = String(req.query.code || '').trim().replace(/^ONLINE-/i, '').replace(/^TIK-/i, '')
+        if (!code) { res.status(400).json({ success: false, error: 'thiếu ?code=' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const don = await sp.onlineOrder.findFirst({
+            where: { OR: [{ externalOrderId: code }, { externalOrderId: `TIK-${code}` }, { orderNumber: `TIK-${code}` }] },
+            select: {
+                orderNumber: true, externalOrderId: true, channelId: true, status: true,
+                subtotal: true, discount: true, shippingFee: true, total: true,
+                platformFee: true, netRevenue: true,
+                items: { select: { sku: true, quantity: true, unitPrice: true, discount: true, lineTotal: true } },
+            },
+        })
+        if (!don) { res.status(404).json({ success: false, error: 'không thấy đơn trong kho' }); return }
+        const ch = await sp.onlineChannel.findUnique({ where: { id: don.channelId } })
+        if (!ch || ch.platform !== 'tiktok') { res.status(400).json({ success: false, error: 'kênh không phải TikTok' }); return }
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const svc: any = new (TikTokService as any)({
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        })
+        const id = (don.externalOrderId || '').replace(/^TIK-/i, '')
+        const { url, headers } = svc.buildUrl(`/finance/202309/orders/${id}/statement_transactions`, {})
+        const data = await svc.httpGet(url, headers)
+        const txs: any[] = data?.data?.statement_transactions || []
+        /* Cộng lại đúng như getOrderSettlement để thấy hàm hiện tại "nhìn" gì. */
+        let settlement = 0, revenue = 0, fee = 0
+        for (const t of txs) {
+            settlement += Number(t.settlement_amount || 0)
+            revenue += Number(t.revenue_amount || 0)
+            fee += Math.abs(Number(t.fee_amount ?? t.fee_and_tax_amount ?? t.fee_tax_amount ?? 0))
+        }
+        res.json({
+            success: true,
+            data: {
+                don,
+                loiTikTok: data?.code !== 0 ? { code: data?.code, message: data?.message } : null,
+                hamHienTaiNhin: { settlement, revenue, fee, subtotalTaLuu: Number(don.subtotal) || 0,
+                    revenue_tren_subtotal: (Number(don.subtotal) || 0) > 0 ? Math.round(revenue / Number(don.subtotal) * 1000) / 10 : null },
+                soGiaoDich: txs.length,
+                statement_transactions: txs,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/do-escrow-tho', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
@@ -4103,7 +4251,8 @@ router.get('/do-escrow-tho', async (req: Request, res: Response) => {
         if (!don) { res.status(404).json({ success: false, error: 'không thấy đơn trong kho' }); return }
         const ch = await sp.onlineChannel.findUnique({ where: { id: don.channelId } })
         if (!ch || ch.platform !== 'shopee') { res.status(400).json({ success: false, error: 'kênh không phải Shopee' }); return }
-        const svc: any = new ShopeeService({
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const svc: any = new (ShopeeService as any)({
             apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
             accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
             shopId: ch.shopId || undefined,
@@ -4205,6 +4354,10 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                 let soKiem = 0, lechTren1d = 0, tongLech = 0, lechLonNhat = 0
                 let viDuLech: any = null
                 const topLech: any[] = []
+                /* THEO SÀN — bắt buộc tách. Đo 06/09: TikTok hở ÂM 20% doanh thu
+                 * (phí + thực nhận > doanh thu), Shopee hở DƯƠNG 3%. Gộp lại thì hai
+                 * dấu triệt tiêu nhau và nhìn như "gần đúng". Giữ dấu, không lấy |x|. */
+                const theoSanKiem: Record<string, { soDon: number; tongHo: number; hoDuong: number; hoAm: number; top: any[] }> = {}
 
                 for (const o of orders) {
                     const san = String(o.platform || 'khac')
@@ -4225,6 +4378,18 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     soKiem++
                     tongLech += lech
                     if (lech > 1) lechTren1d++
+                    {
+                        const ho = total - phi - net          // CÓ DẤU
+                        const k = theoSanKiem[san] ||= { soDon: 0, tongHo: 0, hoDuong: 0, hoAm: 0, top: [] }
+                        k.soDon++; k.tongHo += ho
+                        if (ho > 1) k.hoDuong++; else if (ho < -1) k.hoAm++
+                        if (Math.abs(ho) > 1) {
+                            k.top.push({ maDon: o.orderNumber, trangThai: o.status, subtotal: Number(o.subtotal) || 0,
+                                ship: Number(o.shippingFee) || 0, total, phi, thucNhan: net, ho: Math.round(ho) })
+                            k.top.sort((a: any, b: any) => Math.abs(b.ho) - Math.abs(a.ho))
+                            if (k.top.length > 3) k.top.length = 3
+                        }
+                    }
                     if (lech > lechLonNhat) { lechLonNhat = lech; viDuLech = { id: o.id, total, phi, thucNhan: net, lech } }
                     if (lech > 1) {
                         topLech.push({
@@ -4270,6 +4435,13 @@ router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
                     lechLonNhat: Math.round(lechLonNhat),
                     viDu: viDuLech,
                     top5Lech: topLech,
+                    theoSan: Object.fromEntries(Object.entries(theoSanKiem).map(([san, k]) => [san, {
+                        soDon: k.soDon,
+                        hoTrungBinhCoDau: k.soDon ? Math.round(k.tongHo / k.soDon) : null,
+                        donHoDuong: k.hoDuong, donHoAm: k.hoAm,
+                        yNghia: 'hở = total − phí − thựcNhận. DƯƠNG = giá bán sàn dùng tính phí < total ta lưu (voucher/trả hàng?). ÂM = phí+thực nhận > total (phí gộp cả ship khách trả?).',
+                        top3: k.top,
+                    }])),
                     yNghia: 'Trên đơn đã đối soát: |total − phí − thựcNhận|. ≈0 = phí đúng nghĩa "giá bán − thực nhận". ' +
                         'Lệch lớn = giá bán sàn dùng tính phí ≠ tổng tiền ta lưu → % phí hiển thị sai.',
                 }

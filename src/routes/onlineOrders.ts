@@ -724,6 +724,9 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
                 const nhom = (net > 0 && !hinhDangUocTinh) ? daDoiSoat : chuaDoiSoat
                 nhom.soDon++
                 nhom.doanhThu += dt
+                /* Chưa đối soát → computeOrderProfits trả profit null. KHÔNG được cộng
+                 * vào doanhThuCoGiaVon, nếu không mẫu số có mà tử số 0 → hiện "0%". */
+                if (p.profit == null) continue
                 if (p.missingCost) { thieuGiaVon.soDon++; thieuGiaVon.doanhThu += dt; continue }
                 nhom.giaVon += Number(p.cost) || 0
                 nhom.loiNhuan += Number(p.profit) || 0

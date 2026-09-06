@@ -217,16 +217,24 @@ export async function computeOrderProfits(
             continue
         }
 
-        // Đã đối soát thì dùng số thật của sàn; chưa thì ước tính
+        /* CHƯA ĐỐI SOÁT THÌ KHÔNG TÍNH LỢI NHUẬN — trả `profit: null`, giao diện hiện "—".
+         *
+         * Trước 06/09/2026 chỗ này ước tính bằng subtotal − shippingFee − platformFee.
+         * Chủ shop quyết bỏ (06/09): "lấy được thì hiển thị, không lấy được thì không".
+         * Lý do đo được: phí thật Shopee ≈ 24%, TikTok ≈ 27% doanh thu, còn phí ước
+         * tính là 6% (hoặc 0 sau khi bỏ) → lợi nhuận ước tính hiện 28% khi thực tế 8%.
+         * Một con số sai gấp 3,5 lần mà mang dấu "~" nhỏ xíu thì người ta vẫn tin.
+         * Đọc không được ≠ bằng 0, và cũng ≠ "tạm cho là thế". */
         const settled = Number(order.netRevenue) > 0
-        const revenue = settled
-            ? Number(order.netRevenue)
-            : (Number(order.subtotal) || 0) - (Number(order.shippingFee) || 0) - (Number(order.platformFee) || 0)
+        if (!settled) {
+            out.set(order.id, { cost, profit: null, estimated: true, missingCost })
+            continue
+        }
 
         out.set(order.id, {
             cost,
-            profit: Math.round(revenue - cost),
-            estimated: !settled || missingCost,
+            profit: Math.round(Number(order.netRevenue) - cost),
+            estimated: missingCost,
             missingCost,
         })
     }
