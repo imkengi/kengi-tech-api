@@ -44,6 +44,8 @@ export interface KetQuaSuaGiaSan {
     boQuaHoaDon: number        // đã xuất HĐĐT → không đụng
     loiSan: number             // TikTok không trả đơn / lỗi gọi
     khongCoDong: number        // sàn trả đơn nhưng không có dòng hàng
+    khongTyLeDuoc: number      // đơn đang lưu 0đ → không suy ra tỉ lệ cho phiếu bán
+    phieuLa: number            // có phiếu bán nhưng doanh thu phiếu = 0 → không đụng phiếu
     coPhieuBan: number         // trong số sửa được, bao nhiêu đơn có phiếu bán
     daGhiButToan: number
     khoaSo: number             // kỳ đã khoá → chứng từ sửa, bút toán bỏ qua
@@ -91,7 +93,8 @@ export async function suaGiaSanTikTok(
     const k: KetQuaSuaGiaSan = {
         cheDo: opts.apply ? 'GHI THẬT' : 'CHỈ CHẠY THỬ (không ghi)',
         quet: 0, dungRoi: 0, suaDuoc: 0, chenhTong: 0, boQuaHoaDon: 0,
-        loiSan: 0, khongCoDong: 0, coPhieuBan: 0, daGhiButToan: 0, khoaSo: 0, loiGhi: 0,
+        loiSan: 0, khongCoDong: 0, khongTyLeDuoc: 0, phieuLa: 0,
+        coPhieuBan: 0, daGhiButToan: 0, khoaSo: 0, loiGhi: 0,
         doiChieu: { soDon: 0, khop: 0, lech: 0, lechTrungBinh: 0 },
         viDu: [], donDaXuatHoaDon: [], loiMau: [], dungVi240s: false, conCho: 0, giay: 0,
     }
@@ -153,6 +156,15 @@ export async function suaGiaSanTikTok(
             // bao giờ khớp đến từng đồng với tổng dòng hàng.
             if (hieu <= Math.max(2000, theoQuyetToan * 0.02)) k.doiChieu.khop++
             else k.doiChieu.lech++
+        }
+
+        /* ── 3a. Đơn đang lưu doanh thu 0 thì KHÔNG nhân tỉ lệ được ──────────
+         * Không có mẫu số để suy ra phiếu bán phải đổi bao nhiêu. Đơn kiểu này
+         * bất thường (0đ mà có dòng hàng) — đếm và để người xem, đừng đoán. */
+        if (subCu <= 0) {
+            k.khongTyLeDuoc++
+            if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: đang lưu 0đ, sàn trả ${subMoi}đ — không suy ra tỉ lệ, bỏ qua`)
+            continue
         }
 
         // ── 3. Đã đúng rồi thì chỉ đánh dấu ─────────────────────────────────
@@ -222,11 +234,22 @@ export async function suaGiaSanTikTok(
                 },
             })
 
-            // 5c. Phiếu bán + dòng hàng: CHIA THEO TỈ LỆ, không gán số của sàn.
-            //     Dòng phiếu bán tính theo ĐƠN VỊ KHO (đã quy đổi vỉ/cái), không
-            //     khớp một-một với dòng sàn — gán thẳng là hỏng đơn giá quy đổi.
-            if (phieu) {
-                const subPhieuMoi = subMoi
+            /* 5c. Phiếu bán + dòng hàng: NHÂN THEO TỈ LỆ của chính phiếu, KHÔNG
+             *     gán số của sàn.
+             *
+             *  · Dòng phiếu bán tính theo ĐƠN VỊ KHO (đã quy đổi vỉ/cái) và có thể
+             *    thiếu dòng (SKU chưa nối) — gán thẳng số của sàn là hỏng đơn giá
+             *    quy đổi và làm tổng phiếu khác tổng dòng.
+             *  · Lấy tỉ lệ chứ không gán bằng subMoi: phiếu có thể đã bị sửa tay
+             *    lệch khỏi đơn; nhân tỉ lệ giữ nguyên quan hệ vốn có của phiếu.
+             *  · Bút toán điều chỉnh phải bằng ĐÚNG phần doanh thu đổi TRÊN PHIẾU
+             *    (bút toán SALE ghi theo `tx.subtotal`), không phải chênh của đơn sàn. */
+            if (phieu && lam(phieu.subtotal) > 0) {
+                const tySo = subMoi / subCu
+                const txSubCu = lam(phieu.subtotal)
+                const txTotalCu = lam(phieu.total)
+                const subPhieuMoi = lam(txSubCu * tySo)
+                const chenhSo = subPhieuMoi - txSubCu
                 const phanBo = chiaTheoTiLe(phieu.items as any[], subPhieuMoi)
                 for (let i = 0; i < phieu.items.length; i++) {
                     const it: any = phieu.items[i]
@@ -237,7 +260,7 @@ export async function suaGiaSanTikTok(
                         data: { lineTotal: lt, unitPrice: lam(lt / sl) },
                     })
                 }
-                const totalPhieuMoi = subPhieuMoi + (lam(phieu.total) - lam(phieu.subtotal))
+                const totalPhieuMoi = lam(txTotalCu * tySo)
                 await sp.transaction.update({
                     where: { id: phieu.id },
                     data: { subtotal: subPhieuMoi, total: totalPhieuMoi, amountReceived: totalPhieuMoi },
@@ -258,7 +281,7 @@ export async function suaGiaSanTikTok(
                 }
 
                 // 5d. Bút toán điều chỉnh — MỘT dòng, khoá theo reference riêng
-                if (opts.ghiSo && chenh !== 0) {
+                if (opts.ghiSo && chenhSo !== 0) {
                     const { khoaSoChan } = await import('./periodLock')
                     const ngay = String(phieu.transactionDate || phieu.createdAt || new Date()).slice(0, 10)
                     const khoa = await khoaSoChan(sp, phieu.branchId ?? null, ngay).catch(() => null)
@@ -272,11 +295,12 @@ export async function suaGiaSanTikTok(
                                     description: `Điều chỉnh doanh thu TikTok ${o.orderNumber} — ghi theo giá bán trên sàn (trước giảm giá do sàn tài trợ)`,
                                     debitAccount: '131-TIKTOK', debitAccountName: 'Phải thu Công ty TikTok',
                                     creditAccount: '511', creditAccountName: 'Doanh thu bán hàng',
-                                    amount: chenh,
+                                    amount: chenhSo,
                                     reference: `ADJ-SALE-${soPhieu}`,
                                     referenceType: 'sale',
                                     branchId: phieu.branchId ?? null,
-                                    notes: `Số cũ ${subCu.toLocaleString('vi-VN')}đ → ${subMoi.toLocaleString('vi-VN')}đ`,
+                                    notes: `Doanh thu trên phiếu ${txSubCu.toLocaleString('vi-VN')}đ → ${subPhieuMoi.toLocaleString('vi-VN')}đ`
+                                        + ` (đơn sàn ${subCu.toLocaleString('vi-VN')}đ → ${subMoi.toLocaleString('vi-VN')}đ)`,
                                 },
                             })
                             k.daGhiButToan++
@@ -289,6 +313,12 @@ export async function suaGiaSanTikTok(
                         }
                     }
                 }
+            } else if (phieu) {
+                /* Có phiếu bán nhưng doanh thu phiếu = 0: không có mẫu số để nhân
+                 * tỉ lệ. Đơn sàn đã sửa xong ở trên; phiếu và sổ để nguyên và ĐẾM
+                 * ra — im lặng bỏ qua là để sổ lệch mà không ai biết. */
+                k.phieuLa++
+                if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: phiếu bán ghi doanh thu 0đ — đã sửa đơn, KHÔNG đụng phiếu/sổ`)
             }
         } catch (e: any) {
             k.loiGhi++
