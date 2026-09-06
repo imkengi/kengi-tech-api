@@ -1915,6 +1915,9 @@ model OnlineOrder {
   // Đã cảnh báo "lợi nhuận dưới ngưỡng" (push admin) lúc nào — chỉ báo MỘT lần
   // mỗi đơn, đối soát lại không báo lại. null = chưa từng báo. (06/09/2026)
   loiNhuanThapBaoLuc DateTime?
+  // Đã dựng lại giá theo GIÁ BÁN TRÊN SÀN (trước giảm giá do sàn tài trợ) lúc nào.
+  // null = chưa xét. Dùng làm mốc chạy tiếp cho bộ sửa đơn TikTok cũ (06/09/2026).
+  giaSanSuaLuc       DateTime?
   syncedAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

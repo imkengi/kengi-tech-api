@@ -2684,6 +2684,8 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khongKhopLuc" TIMESTAMP(3)`)
                 // Cảnh báo lợi nhuận thấp chỉ báo MỘT lần mỗi đơn (06/09/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "loiNhuanThapBaoLuc" TIMESTAMP(3)`)
+                // Mốc chạy tiếp của bộ dựng lại giá bán trên sàn cho đơn TikTok cũ (06/09/2026)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "giaSanSuaLuc" TIMESTAMP(3)`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
@@ -4196,6 +4198,63 @@ router.post('/bo-phi-uoc-tinh', async (req: Request, res: Response) => {
  *  Nhịp như cron: 2 luồng, nghỉ 350ms sau mỗi lời gọi, dừng ở 240s.
  *  Chỉ đụng 3 cột phí trên OnlineOrder — cùng phép ghi cron vẫn làm mỗi 6h.
  * ───────────────────────────────────────────────────────────────────────────── */
+/**
+ * DỰNG LẠI GIÁ BÁN TRÊN SÀN CHO ĐƠN TIKTOK CŨ — chủ shop duyệt 06/09/2026.
+ *
+ *   POST /admin/sua-gia-san-tiktok?storeCode=KENGISTORE&take=200
+ *        &apply=1     ghi thật (KHÔNG có = chỉ chạy thử, không đụng dữ liệu)
+ *        &ghiSo=0     bỏ bút toán điều chỉnh, chỉ sửa chứng từ
+ *        &keCaHoaDon=1  đụng cả đơn ĐÃ XUẤT HOÁ ĐƠN (mặc định KHÔNG — xem lib)
+ *
+ * Chạy nhiều lượt: đơn đã xử lý mang dấu `giaSanSuaLuc` nên lượt sau không quét lại.
+ */
+router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || 'KENGISTORE').trim()
+        const take = Math.min(400, Math.max(1, Number(req.query.take ?? req.body?.take) || 100))
+        const apply = String(req.query.apply ?? req.body?.apply ?? '') === '1'
+        const ghiSo = String(req.query.ghiSo ?? req.body?.ghiSo ?? '1') === '1'
+        const keCaHoaDon = String(req.query.keCaHoaDon ?? req.body?.keCaHoaDon ?? '') === '1'
+
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const { suaGiaSanTikTok } = await import('../lib/suaGiaSanTikTok')
+        const kenhDs: any[] = await sp.onlineChannel.findMany({
+            where: { platform: 'tiktok', status: 'active', accessToken: { not: null } },
+        })
+        if (!kenhDs.length) { res.json({ success: true, data: { cuaHang: store.name, kenh: [], yNghia: 'Cửa hàng không có kênh TikTok đang hoạt động.' } }); return }
+
+        const hanChot = Date.now() + 240_000
+        const ra: any[] = []
+        // TUẦN TỰ từng kênh: pool prod chỉ 1 kết nối, chạy song song là cạn ngay.
+        for (const ch of kenhDs) {
+            const svc: any = new (TikTokService as any)({
+                apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                shopId: ch.shopId || undefined,
+            })
+            const k = await suaGiaSanTikTok(sp, svc, { take, apply, keCaHoaDon, ghiSo, channelId: ch.id, hanChot })
+            ra.push({ kenh: ch.name, ...k })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                kenh: ra,
+                yNghia: 'chenhTong = doanh thu ghi thiếu đã bù. doiChieu = đối chiếu số dựng lại với '
+                    + '(thực nhận + phí sàn) của statement — hai nguồn ĐỘC LẬP, lệch nhiều là cần người đọc. '
+                    + 'boQuaHoaDon = đơn ĐÃ XUẤT HĐĐT, không đụng: sửa hoá đơn đã phát hành phải bằng hoá đơn điều chỉnh.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* Có thiết bị nào nhận push không — GET /admin/do-thiet-bi?storeCode=  (CHỈ ĐỌC, không trả token) */
 router.get('/do-thiet-bi', async (req: Request, res: Response) => {
     try {

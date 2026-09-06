@@ -107860,6 +107860,7 @@ export namespace Prisma {
     khongKhopSku: boolean | null
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
+    giaSanSuaLuc: Date | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -107901,6 +107902,7 @@ export namespace Prisma {
     khongKhopSku: boolean | null
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
+    giaSanSuaLuc: Date | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -107942,6 +107944,7 @@ export namespace Prisma {
     khongKhopSku: number
     khongKhopLuc: number
     loiNhuanThapBaoLuc: number
+    giaSanSuaLuc: number
     syncedAt: number
     createdAt: number
     updatedAt: number
@@ -108007,6 +108010,7 @@ export namespace Prisma {
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
+    giaSanSuaLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -108048,6 +108052,7 @@ export namespace Prisma {
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
+    giaSanSuaLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -108089,6 +108094,7 @@ export namespace Prisma {
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
+    giaSanSuaLuc?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -108217,6 +108223,7 @@ export namespace Prisma {
     khongKhopSku: boolean
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
+    giaSanSuaLuc: Date | null
     syncedAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -108277,6 +108284,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
+    giaSanSuaLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -108321,6 +108329,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
+    giaSanSuaLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -108363,6 +108372,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
+    giaSanSuaLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -108405,12 +108415,13 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
+    giaSanSuaLuc?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "khongKhopSku" | "khongKhopLuc" | "loiNhuanThapBaoLuc" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
+  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "khongKhopSku" | "khongKhopLuc" | "loiNhuanThapBaoLuc" | "giaSanSuaLuc" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
   export type OnlineOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineOrder$channelArgs<ExtArgs>
     items?: boolean | OnlineOrder$itemsArgs<ExtArgs>
@@ -108465,6 +108476,7 @@ export namespace Prisma {
       khongKhopSku: boolean
       khongKhopLuc: Date | null
       loiNhuanThapBaoLuc: Date | null
+      giaSanSuaLuc: Date | null
       syncedAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -108928,6 +108940,7 @@ export namespace Prisma {
     readonly khongKhopSku: FieldRef<"OnlineOrder", 'Boolean'>
     readonly khongKhopLuc: FieldRef<"OnlineOrder", 'DateTime'>
     readonly loiNhuanThapBaoLuc: FieldRef<"OnlineOrder", 'DateTime'>
+    readonly giaSanSuaLuc: FieldRef<"OnlineOrder", 'DateTime'>
     readonly syncedAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly createdAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly updatedAt: FieldRef<"OnlineOrder", 'DateTime'>
@@ -190739,6 +190752,7 @@ export namespace Prisma {
     khongKhopSku: 'khongKhopSku',
     khongKhopLuc: 'khongKhopLuc',
     loiNhuanThapBaoLuc: 'loiNhuanThapBaoLuc',
+    giaSanSuaLuc: 'giaSanSuaLuc',
     syncedAt: 'syncedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -200068,6 +200082,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
+    giaSanSuaLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -200111,6 +200126,7 @@ export namespace Prisma {
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrderInput | SortOrder
     loiNhuanThapBaoLuc?: SortOrderInput | SortOrder
+    giaSanSuaLuc?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -200157,6 +200173,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
+    giaSanSuaLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -200200,6 +200217,7 @@ export namespace Prisma {
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrderInput | SortOrder
     loiNhuanThapBaoLuc?: SortOrderInput | SortOrder
+    giaSanSuaLuc?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -200249,6 +200267,7 @@ export namespace Prisma {
     khongKhopSku?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
+    giaSanSuaLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
@@ -216380,6 +216399,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -216423,6 +216443,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -216464,6 +216485,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -216507,6 +216529,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -216549,6 +216572,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -216589,6 +216613,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -216630,6 +216655,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -230168,6 +230194,7 @@ export namespace Prisma {
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
+    giaSanSuaLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -230220,6 +230247,7 @@ export namespace Prisma {
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
+    giaSanSuaLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -230261,6 +230289,7 @@ export namespace Prisma {
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
+    giaSanSuaLuc?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -246705,6 +246734,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -246746,6 +246776,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -246863,6 +246894,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
+    giaSanSuaLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -247353,6 +247385,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -247395,6 +247428,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -247524,6 +247558,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -247566,6 +247601,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -255032,6 +255068,7 @@ export namespace Prisma {
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
+    giaSanSuaLuc?: Date | string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -255090,6 +255127,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -255131,6 +255169,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -255172,6 +255211,7 @@ export namespace Prisma {
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    giaSanSuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
