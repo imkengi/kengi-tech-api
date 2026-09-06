@@ -18,6 +18,9 @@ export interface OrderProfit {
     profit: number | null   // null = đơn hủy/hoàn, không tính lợi nhuận
     estimated: boolean      // true khi chưa đối soát HOẶC thiếu giá vốn
     missingCost: boolean    // có dòng hàng không xác định được giá vốn
+    /** Đơn khách trả hàng: sàn quyết toán ÂM (hoàn hết tiền + trừ phí ship hoàn).
+     *  `profit` là số LỖ thật, giá vốn để 0 vì hàng đã về kho. */
+    hoanTra?: boolean
 }
 
 // Đơn hủy/hoàn không tính lợi nhuận (giữ đúng danh sách đang dùng ở /stats)
@@ -225,15 +228,31 @@ export async function computeOrderProfits(
          * tính là 6% (hoặc 0 sau khi bỏ) → lợi nhuận ước tính hiện 28% khi thực tế 8%.
          * Một con số sai gấp 3,5 lần mà mang dấu "~" nhỏ xíu thì người ta vẫn tin.
          * Đọc không được ≠ bằng 0, và cũng ≠ "tạm cho là thế". */
-        const settled = Number(order.netRevenue) > 0
-        if (!settled) {
+        /* ⚠ PHÉP THỬ PHẢI LÀ "KHÁC 0", KHÔNG PHẢI "LỚN HƠN 0" (sửa 06/09/2026).
+         *
+         * Sàn VẪN quyết toán đơn khách trả hàng: hoàn tiền toàn bộ cho khách rồi
+         * trừ tiếp phí ship hoàn của shop ⇒ `settlement_amount` ÂM, status SETTLED.
+         * Đo trên KENGISTORE 06/09: 18 đơn như vậy, tổng −977.028đ.
+         * Dùng `> 0` thì chúng rơi vào nhánh "chưa đối soát" VĨNH VIỄN — giao diện
+         * hiện "chưa quyết toán" mãi mãi và khoản LỖ không vào bất kỳ báo cáo nào.
+         * Giấu lỗ nguy hiểm hơn thiếu số, vì nhìn như chưa có dữ liệu. */
+        const netRevenue = Number(order.netRevenue) || 0
+        if (netRevenue === 0) {
             out.set(order.id, { cost, profit: null, estimated: true, missingCost })
+            continue
+        }
+
+        /* ĐƠN HOÀN (quyết toán âm): tiền đã trả lại khách, hàng đã về — phần lỗ THẬT
+         * là số sàn trừ (phí ship hoàn), KHÔNG phải `thực nhận − giá vốn`. Trừ giá vốn
+         * ở đây là tính lỗ hai lần: hàng nằm lại trong kho chứ không mất đi. */
+        if (netRevenue < 0) {
+            out.set(order.id, { cost: 0, profit: Math.round(netRevenue), estimated: false, missingCost: false, hoanTra: true })
             continue
         }
 
         out.set(order.id, {
             cost,
-            profit: Math.round(Number(order.netRevenue) - cost),
+            profit: Math.round(netRevenue - cost),
             estimated: missingCost,
             missingCost,
         })

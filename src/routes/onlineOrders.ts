@@ -727,6 +727,12 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
             const nhomMoi = () => ({ soDon: 0, doanhThu: 0, giaVon: 0, loiNhuan: 0, doanhThuCoGiaVon: 0 })
             const daDoiSoat = nhomMoi(), chuaDoiSoat = nhomMoi()
             const thieuGiaVon = { soDon: 0, doanhThu: 0 }
+            /* ĐƠN HOÀN — sàn quyết toán ÂM (hoàn hết tiền cho khách rồi trừ tiếp phí
+             * ship hoàn của shop). Đây là LỖ, và phải đứng RIÊNG: nhét vào nhóm đã đối
+             * soát thì doanh thu của chúng (thực ra không có thật) làm phồng mẫu số,
+             * còn để chúng ở nhóm "chưa đối soát" thì khoản lỗ biến mất khỏi mọi báo
+             * cáo — đúng thứ đã xảy ra tới 06/09/2026. */
+            const hoanTra = { soDon: 0, doanhThuDangGhi: 0, lo: 0 }
             for (const o of donLN) {
                 if (CANCELLED_STATUSES.has(String(o.status))) continue
                 const p: any = pMap.get(o.id)
@@ -735,6 +741,12 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
                 const phi = Number(o.platformFee) || 0, net = Number(o.netRevenue) || 0
                 const rate = Number(o.platformFeeRate) || 0, total = Number(o.total) || 0
                 const hinhDangUocTinh = rate > 0 && Math.abs(phi - Math.round(total * rate / 100)) <= 1
+                if (p.hoanTra || net < 0) {
+                    hoanTra.soDon++
+                    hoanTra.doanhThuDangGhi += dt
+                    hoanTra.lo += Number(p.profit) || 0
+                    continue
+                }
                 const nhom = (net > 0 && !hinhDangUocTinh) ? daDoiSoat : chuaDoiSoat
                 nhom.soDon++
                 nhom.doanhThu += dt
@@ -760,6 +772,7 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
                 daDoiSoat: tomTat(daDoiSoat),
                 chuaDoiSoat: tomTat(chuaDoiSoat),
                 thieuGiaVon: { soDon: thieuGiaVon.soDon, doanhThu: Math.round(thieuGiaVon.doanhThu) },
+                hoanTra: { soDon: hoanTra.soDon, doanhThuDangGhi: Math.round(hoanTra.doanhThuDangGhi), lo: Math.round(hoanTra.lo) },
             }
         }
 
