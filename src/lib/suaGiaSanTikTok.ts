@@ -47,6 +47,7 @@ export interface KetQuaSuaGiaSan {
     khongCoDong: number        // sàn trả đơn nhưng không có dòng hàng
     khongTyLeDuoc: number      // đơn đang lưu 0đ → không suy ra tỉ lệ cho phiếu bán
     phieuLa: number            // có phiếu bán nhưng doanh thu phiếu = 0 → không đụng phiếu
+    dongChiaTiLe: number       // không ghép đủ dòng với sàn → chia tổng theo tỉ lệ cũ
     coPhieuBan: number         // trong số sửa được, bao nhiêu đơn có phiếu bán
     daGhiButToan: number
     khoaSo: number             // kỳ đã khoá → chứng từ sửa, bút toán bỏ qua
@@ -94,7 +95,7 @@ export async function suaGiaSanTikTok(
     const k: KetQuaSuaGiaSan = {
         cheDo: opts.apply ? 'GHI THẬT' : 'CHỈ CHẠY THỬ (không ghi)',
         quet: 0, dungRoi: 0, suaDuoc: 0, chenhTong: 0, chenhSoTong: 0, boQuaHoaDon: 0,
-        loiSan: 0, khongCoDong: 0, khongTyLeDuoc: 0, phieuLa: 0,
+        loiSan: 0, khongCoDong: 0, khongTyLeDuoc: 0, phieuLa: 0, dongChiaTiLe: 0,
         coPhieuBan: 0, daGhiButToan: 0, khoaSo: 0, loiGhi: 0,
         doiChieu: { soDon: 0, khop: 0, lech: 0, lechTrungBinh: 0 },
         viDu: [], donDaXuatHoaDon: [], loiMau: [], dungVi240s: false, conCho: 0, giay: 0,
@@ -212,21 +213,41 @@ export async function suaGiaSanTikTok(
 
         // ── 5. GHI ──────────────────────────────────────────────────────────
         try {
-            // 5a. Dòng hàng của ĐƠN SÀN — số chính xác từ sàn, khớp theo mã dòng
+            /* 5a. Dòng hàng của ĐƠN SÀN.
+             *
+             * Ghép theo mã dòng, rồi mới đến SKU. Nhưng CHỈ dùng số chính xác của
+             * sàn khi ghép được HẾT — ghép nửa vời thì vài dòng mang số mới, vài
+             * dòng giữ số cũ, tổng dòng không còn bằng `subtotal` của đơn. Bất biến
+             * "tổng dòng = tổng đơn" quan trọng hơn độ chính xác từng dòng, vì mọi
+             * chỗ đọc lại (đóng gói, hoá đơn, đối soát) đều cộng dòng lên.
+             * Ghép thiếu ⇒ chia tổng mới theo tỉ lệ cũ: tổng luôn khớp. */
             const conLai = [...dongMoi]
+            const capDoi: { cu: any; moi: any }[] = []
             for (const dCu of o.items) {
                 let i = conLai.findIndex((d: any) => d.externalItemId && String(d.externalItemId) === String(dCu.externalItemId))
                 if (i < 0) i = conLai.findIndex((d: any) => d.sku && String(d.sku) === String(dCu.sku))
                 if (i < 0) continue
-                const dMoi = conLai.splice(i, 1)[0]
-                await sp.onlineOrderItem.update({
-                    where: { id: dCu.id },
-                    data: {
-                        unitPrice: lam(dMoi.unitPrice),
-                        lineTotal: lam(dMoi.lineTotal),
-                        discount: lam(dMoi.discount),
-                    },
-                })
+                capDoi.push({ cu: dCu, moi: conLai.splice(i, 1)[0] })
+            }
+            const ghepDu = capDoi.length === o.items.length && conLai.length === 0
+            if (ghepDu) {
+                for (const { cu, moi: dMoi } of capDoi) {
+                    await sp.onlineOrderItem.update({
+                        where: { id: cu.id },
+                        data: { unitPrice: lam(dMoi.unitPrice), lineTotal: lam(dMoi.lineTotal), discount: lam(dMoi.discount) },
+                    })
+                }
+            } else {
+                k.dongChiaTiLe++
+                const phanBoDon = chiaTheoTiLe(o.items as any[], subMoi)
+                for (let i = 0; i < o.items.length; i++) {
+                    const it: any = o.items[i]
+                    const lt = phanBoDon[i] ?? 0
+                    await sp.onlineOrderItem.update({
+                        where: { id: it.id },
+                        data: { lineTotal: lt, unitPrice: lam(lt / (Number(it.quantity) || 1)) },
+                    })
+                }
             }
 
             // 5b. Đơn sàn. GIỮ NGUYÊN khoảng cách total − subtotal (ship/giảm giá
