@@ -362,6 +362,29 @@ router.post('/tra-nhom', authMiddleware, async (req: AuthRequest, res: Response)
         const payBy = String(req.body?.paidBy || 'bank').toLowerCase()
         const laChuyenKhoan = payBy === 'bank' || payBy === 'transfer'
 
+        /* NGÀY TRẢ cho lệnh gộp — cùng luật với trả từng phiếu: không ghi ngày tương
+         * lai, và kỳ đã khoá sổ thì chặn TRƯỚC khi trừ nợ bất kỳ phiếu nào. */
+        let ngayTraNhom = new Date()
+        if (req.body?.ngayTra) {
+            const t = new Date(String(req.body.ngayTra))
+            if (isNaN(t.getTime())) { res.status(400).json({ success: false, error: 'Ngày thanh toán không đọc được' }); return }
+            if (t.getTime() > Date.now() + 86_400_000) { res.status(400).json({ success: false, error: 'Không ghi được ngày thanh toán ở tương lai.' }); return }
+            ngayTraNhom = t
+        }
+        try {
+            const { khoaSoChan } = await import('../lib/periodLock')
+            const khoa = await khoaSoChan(prisma, getBranchId(req) || null, ngayTraNhom.toISOString().slice(0, 10))
+            if (khoa) {
+                res.status(400).json({ success: false, error: `Kỳ kế toán đã khoá sổ đến ${(khoa as any).lockDate} — chọn ngày khác hoặc mở khoá sổ.` })
+                return
+            }
+        } catch (e: any) {
+            if (e?.code === 'PERIOD_LOCKED') { res.status(400).json({ success: false, error: e.message }); return }
+            console.error('[tra-nhom] không đọc được khoá sổ:', moTaLoi(e))
+            res.status(500).json({ success: false, error: 'Không kiểm được khoá sổ — chưa ghi gì cả, thử lại.' })
+            return
+        }
+
         const phieuDs = await prisma.importReceipt.findMany({ where: { id: { in: ids } } })
         if (phieuDs.length !== ids.length) {
             /* Thiếu phiếu thì DỪNG, đừng trả phần còn lại: người bấm đang nhìn một
@@ -498,7 +521,7 @@ router.post('/tra-nhom', authMiddleware, async (req: AuthRequest, res: Response)
                         category: 'supplier_payment',
                         paidBy: laChuyenKhoan ? 'bank' : 'cash',
                         bankAccountId,
-                        date: new Date(),
+                        date: ngayTraNhom,
                         branchId: getBranchId(req) || canTra[0]?.phieu.branchId || null,
                     },
                 })
@@ -1169,6 +1192,44 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
             return
         }
 
+        /* NGÀY TRẢ (chủ shop 07/09/2026). Trước đây phiếu chi và bút toán luôn lấy
+         * `new Date()` — hôm qua chuyển khoản, hôm nay mới vào ghi thì sổ quỹ lệch
+         * ngày và đối chiếu sao kê không khớp.
+         *
+         * Hai rào bắt buộc:
+         *  · KHÔNG cho ghi ngày TƯƠNG LAI — tiền chưa đi mà sổ đã ghi chi.
+         *  · Kỳ đã KHOÁ SỔ thì chặn NGAY Ở ĐÂY, đừng để ghi trả xong mới vỡ ở bước
+         *    bút toán: lúc đó phiếu nhập đã trừ nợ mà sổ quỹ không có khoản chi. */
+        let ngayTra = new Date()
+        if (req.body?.ngayTra) {
+            const t = new Date(String(req.body.ngayTra))
+            if (isNaN(t.getTime())) { res.status(400).json({ success: false, error: 'Ngày thanh toán không đọc được' }); return }
+            // Cho lệch tối đa 1 ngày về tương lai để không cãi nhau vì lệch múi giờ
+            if (t.getTime() > Date.now() + 86_400_000) {
+                res.status(400).json({ success: false, error: 'Không ghi được ngày thanh toán ở tương lai.' })
+                return
+            }
+            ngayTra = t
+        }
+        try {
+            const { khoaSoChan } = await import('../lib/periodLock')
+            const khoa = await khoaSoChan(prisma, receipt.branchId || null, ngayTra.toISOString().slice(0, 10))
+            if (khoa) {
+                res.status(400).json({
+                    success: false,
+                    error: `Kỳ kế toán đã khoá sổ đến ${(khoa as any).lockDate} — không ghi được khoản chi vào ngày ${ngayTra.toISOString().slice(0, 10)}. Chọn ngày khác hoặc mở khoá sổ.`,
+                })
+                return
+            }
+        } catch (e: any) {
+            /* Không đọc được khoá sổ thì KHÔNG được coi như "không khoá" — đọc hỏng
+             * khác hẳn không có. Chặn lại và nói ra. */
+            if (e?.code === 'PERIOD_LOCKED') { res.status(400).json({ success: false, error: e.message }); return }
+            console.error('[tra-ncc] không đọc được khoá sổ:', moTaLoi(e))
+            res.status(500).json({ success: false, error: 'Không kiểm được khoá sổ — chưa ghi gì cả, thử lại.' })
+            return
+        }
+
         // Chống race đọc-cộng-ghi: 2 request /pay đồng thời cùng đọc paidAmount cũ sẽ
         // mất 1 lần trả hoặc trả vượt totalCost. Gói vào $transaction, đọc lại phiếu
         // bên trong, kiểm tra paid + số trả <= totalCost, và ghi bằng khóa lạc quan
@@ -1235,7 +1296,7 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
                         category: 'supplier_payment',
                         paidBy: payBy === 'bank' || payBy === 'transfer' ? 'bank' : 'cash',
                         bankAccountId,
-                        date: new Date(),
+                        date: ngayTra,
                         branchId: receipt.branchId || null,
                     },
                 })
