@@ -4512,6 +4512,54 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
     }
 })
 
+/**
+ * ĐƠN SÀN THEO TRẠNG THÁI × ĐÃ LÊN PHIẾU CHƯA — GET /admin/do-don-len-phieu?storeCode=
+ *
+ * Chủ shop 07/09/2026 muốn "đơn đã XÁC NHẬN mới ghi vào đơn giao dịch". Trước khi
+ * sửa phải biết thực tế: trạng thái nào đang lên phiếu, và có đơn CHƯA xác nhận
+ * nào đã lỡ có phiếu chưa. Đếm THẲNG trên dữ liệu, đừng tin danh sách hằng số
+ * trong code — code là ý định, dữ liệu mới là sự thật.
+ *
+ * CHỈ ĐỌC.
+ */
+router.get('/do-don-len-phieu', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT o."platform", o."status",
+                   COUNT(*)::int AS so_don,
+                   COUNT(t.id)::int AS co_phieu,
+                   COALESCE(SUM(o."subtotal"),0)::float8 AS doanh_thu,
+                   COALESCE(SUM(CASE WHEN t.id IS NOT NULL THEN o."subtotal" ELSE 0 END),0)::float8 AS doanh_thu_da_len_phieu
+            FROM "OnlineOrder" o
+            LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+            GROUP BY o."platform", o."status"
+            ORDER BY COUNT(*) DESC`)
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                theoTrangThai: rows.map(r => ({
+                    san: r.platform, trangThai: r.status,
+                    soDon: Number(r.so_don), coPhieu: Number(r.co_phieu),
+                    chuaCoPhieu: Number(r.so_don) - Number(r.co_phieu),
+                    doanhThu: Math.round(Number(r.doanh_thu) || 0),
+                    doanhThuDaLenPhieu: Math.round(Number(r.doanh_thu_da_len_phieu) || 0),
+                })),
+                yNghia: 'coPhieu = đã có Transaction ONLINE-<mã đơn>. Trạng thái CHƯA xác nhận '
+                    + '(UNPAID/ON_HOLD/pending) mà coPhieu > 0 nghĩa là đã lỡ ghi vào sổ.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* Có thiết bị nào nhận push không — GET /admin/do-thiet-bi?storeCode=  (CHỈ ĐỌC, không trả token) */
 router.get('/do-thiet-bi', async (req: Request, res: Response) => {
     try {
