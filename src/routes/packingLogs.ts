@@ -105,6 +105,50 @@ router.post('/', authMiddleware, requirePermission('packing.view', 'online_order
         }
     })
 
+/**
+ * KIỂM TRÙNG TRƯỚC KHI QUAY — GET /packing-logs/kiem-trung?orderCode=
+ *
+ * Chủ shop 07/09/2026: "khi quét kiểm tra nếu trùng đơn thì báo đỏ không cho quét".
+ *
+ * Khác với khoá duy nhất của bảng — khoá đó là (người, mã, NGÀY) nên chỉ chặn
+ * cùng một người đóng lại trong CÙNG ngày. Đóng trùng thật thì thường là NGƯỜI
+ * KHÁC hoặc NGÀY KHÁC, và đó mới là thứ tốn tiền: gói thêm một kiện cho đơn đã
+ * gửi. Nên ở đây tra trên TOÀN BỘ, không giới hạn người và ngày.
+ *
+ * Trả về ai đóng và lúc nào — báo "trùng rồi" mà không nói ai đóng thì người đứng
+ * máy không biết phải hỏi ai.
+ *
+ * CHỈ ĐỌC.
+ */
+router.get('/kiem-trung', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'),
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const prisma: any = req.storePrisma!
+            const orderCode = String(req.query?.orderCode || '').trim()
+            if (!orderCode) { res.status(400).json({ success: false, error: 'Thiếu orderCode' }); return }
+
+            const ds = await prisma.packingLog.findMany({
+                where: { orderCode },
+                select: { userName: true, createdAt: true, workDate: true },
+                orderBy: { createdAt: 'asc' },
+                take: 20,
+            })
+
+            res.json({
+                success: true,
+                data: {
+                    orderCode,
+                    trung: ds.length > 0,
+                    soLan: ds.length,
+                    lanDau: ds[0] ? { nguoiDong: ds[0].userName, luc: ds[0].createdAt } : null,
+                    lanCuoi: ds.length ? { nguoiDong: ds[ds.length - 1].userName, luc: ds[ds.length - 1].createdAt } : null,
+                },
+            })
+        } catch (err: any) {
+            guiLoi(res, err, 'GET /packing-logs/kiem-trung lỗi:')
+        }
+    })
+
 // ─── GET /thong-ke — đếm theo nhân viên, theo ngày ───────────────────────────
 router.get('/thong-ke', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'),
     async (req: AuthRequest, res: Response) => {
