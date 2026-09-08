@@ -286,24 +286,36 @@ export class ShopeeService extends PlatformService {
         const path = '/api/v2/media/upload_video_part'
         const url = this.urlCong(path)
         const proxy = process.env.SHOPEE_FORWARD_PROXY
-        const form = new FormData()
-        const blob = new Blob([khoi], { type: 'application/octet-stream' })
-        let dich = url
-        if (proxy) {
-            dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
-            if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải khối')
-            form.set('secret', process.env.SHOPEE_FORWARD_SECRET || '')
-            form.set('url', url)
-            form.set('fields', JSON.stringify(fields))
-        } else {
-            for (const [k, v] of Object.entries(fields)) form.set(k, String(v))
-        }
-        form.set('part_content', blob, `part-${fields.part_seq ?? 0}.bin`)
 
         const ac = new AbortController()
         const timer = setTimeout(() => ac.abort(), 200_000)
         try {
-            const r = await fetch(dich, { method: 'POST', body: form, signal: ac.signal })
+            let r: Response
+            if (proxy) {
+                /* Qua Tino thì gửi JSON + base64, KHÔNG multipart. Đo 08/09/2026: tường
+                 * lửa hosting trả 403 HTML cho mọi yêu cầu có tệp đính kèm hoặc thân
+                 * nhị phân thô, còn thân JSON lớn thì vào PHP bình thường. PHP giải mã
+                 * rồi tự dựng multipart sang Shopee. */
+                const dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
+                if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải khối')
+                r = await fetch(dich, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        secret: process.env.SHOPEE_FORWARD_SECRET || '',
+                        url,
+                        fields,
+                        part_b64: Buffer.from(khoi).toString('base64'),
+                    }),
+                    signal: ac.signal,
+                })
+            } else {
+                // Không proxy (dev / IP đã whitelist): multipart thẳng lên Shopee.
+                const form = new FormData()
+                for (const [k, v] of Object.entries(fields)) form.set(k, String(v))
+                form.set('part_content', new Blob([khoi], { type: 'application/octet-stream' }), `part-${fields.part_seq ?? 0}.bin`)
+                r = await fetch(url, { method: 'POST', body: form, signal: ac.signal })
+            }
             const text = await r.text()
             try { return JSON.parse(text) }
             catch { throw new Error(`Đường tải khối trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }

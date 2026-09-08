@@ -4672,20 +4672,35 @@ router.post('/do-ky-shopee-video', async (req: Request, res: Response) => {
         buoc.init = { ...tom(r1), videoUploadId: r1?.response?.video_upload_id ?? null, partSize: r1?.response?.part_size ?? null }
         const id = r1?.response?.video_upload_id
 
+        /* Mỗi bước bọc riêng: bước 2 ném lỗi (proxy Tino 403) từng nuốt mất kết
+         * quả bước 1 — bộ đo phải trả về MỌI thứ đã đo được, không phải chỉ lỗi cuối. */
         // 2. một khối rác (partner, multipart)
         if (id) {
-            const zero = new Uint8Array(PHAN)
-            const md5 = (await import('crypto')).createHash('md5').update(zero).digest('hex')
-            const r2 = await svc.taiKhoiMedia({ video_upload_id: id, part_seq: 0, part_md5: md5 }, zero)
-            buoc.uploadPart = tom(r2)
+            try {
+                const zero = new Uint8Array(PHAN)
+                const md5 = (await import('crypto')).createHash('md5').update(zero).digest('hex')
+                const r2 = await svc.taiKhoiMedia({ video_upload_id: id, part_seq: 0, part_md5: md5 }, zero)
+                buoc.uploadPart = tom(r2)
+            } catch (e: any) {
+                buoc.uploadPart = { loiNem: String(e?.message || e).slice(0, 300) }
+            }
             // 3. dọn
-            const r3 = await svc.goiCong('/api/v2/media/cancel_video_upload', 'POST', undefined, { video_upload_id: id })
-            buoc.cancel = tom(r3)
+            try {
+                const r3 = await svc.goiCong('/api/v2/media/cancel_video_upload', 'POST', undefined, { video_upload_id: id })
+                buoc.cancel = tom(r3)
+            } catch (e: any) {
+                buoc.cancel = { loiNem: String(e?.message || e).slice(0, 200) }
+            }
         }
 
         // 4. user-type với id giả — phải là lỗi nghiệp vụ, không phải error_sign
-        const r4 = await svc.goiNguoiDung('/api/v2/video/get_cover_list', 'GET', cred, { video_upload_id: 'sg-kengi-test' })
-        buoc.coverListUserSign = tom(r4)
+        try {
+            const r4 = await svc.goiNguoiDung('/api/v2/video/get_cover_list', 'GET', cred, { video_upload_id: 'sg-kengi-test' })
+            buoc.coverListUserSign = tom(r4)
+        } catch (e: any) {
+            buoc.coverListUserSign = { loiNem: String(e?.message || e).slice(0, 200) }
+        }
+        const r4: any = buoc.coverListUserSign
 
         const kyMediaOk = !!id
         const kyUserOk = r4?.error !== 'error_sign'
