@@ -179,9 +179,14 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
             return
         }
 
-        const { google } = require('googleapis') as typeof import('googleapis')
-        const auth = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/drive.readonly'] })
-        const drive = google.drive({ version: 'v3', auth })
+        /* Đọc BẰNG TÀI KHOẢN CHỦ SHOP nếu đã nối, không thì rơi về tài khoản hệ
+         * thống. Bản đầu dùng thẳng tài khoản hệ thống nên cửa hàng đã nối Drive
+         * riêng vẫn thấy bảng trống — thư mục trong My Drive của chủ shop thì tài
+         * khoản hệ thống không nhìn thấy trừ khi được share tay. Đường GHI
+         * (/tai-len) vốn đã ưu tiên chủ shop; hai đường phải cùng một tài khoản,
+         * lệch nhau là "tải lên xong mà không thấy đâu". */
+        const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+        const { drive } = await getStoreDriveWriter(prisma)
 
         /* CHỈ thư mục đang chọn, KHÔNG đệ quy: thư mục gốc của cửa hàng còn chứa
          * video đóng gói (DON_*) sinh ra hàng trăm file mỗi ngày — kéo hết vào đây

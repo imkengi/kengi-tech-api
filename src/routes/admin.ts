@@ -4523,8 +4523,8 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
                 driveOAuthCoCauHinh: driveOAuthConfigured(),
                 yNghia: 'coBang=true nghĩa là ĐẾM ĐƯỢC trên bảng thật, không phải đọc mã HTTP 200 của sync-schemas. '
                     + 'thuMucDrive=null ⇒ tab Media sẽ báo "chưa nối Drive" chứ không phải lỗi.',
-                luuY: 'GET /san-media/drive dùng THẲNG service account (ADC), KHÔNG đi qua layDriveClient() '
-                    + 'nên KHÔNG dùng token OAuth của chủ shop như /api/drive-videos. Thư mục phải được share cho service account.',
+                luuY: 'daNoiDriveChuShop=false ⇒ đọc/ghi Drive chạy bằng service account của hệ thống, '
+                    + 'nên thư mục phải được share tay cho tài khoản đó thì mới thấy video.',
             },
         })
     } catch (err: any) {
