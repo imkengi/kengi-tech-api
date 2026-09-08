@@ -4670,6 +4670,54 @@ router.get('/do-tien-trinh-dang', async (req: Request, res: Response) => {
 })
 
 /**
+ * SHOPEE CHẶN Ở MỨC NÀO? — POST /admin/do-trang-thai-video-shopee?storeCode=  (kèm -d '{}')
+ *
+ * `post_video` trả `copyright_not_agree`. Chủ shop báo Kênh Người Bán KHÔNG có mục
+ * Shopee Video để bấm đồng ý. Trước khi chỉ đường tiếp (đã chỉ sai hai lần), hỏi
+ * thẳng Shopee bằng token của gian hàng:
+ *   1. get_video_list  — tài khoản có được dùng Shopee Video không?
+ *   2. post_video với video_upload_id GIẢ — nếu vẫn `copyright_not_agree` (chứ không
+ *      phải "video_upload_id is illegal") thì cổng điều khoản chặn TRƯỚC khi xét
+ *      tham số ⇒ vướng ở MỨC TÀI KHOẢN, không liên quan video của chủ shop.
+ * CHỈ ĐỌC (post_video với id giả không tạo được gì).
+ */
+router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ch = await sp.onlineChannel.findFirst({ where: { platform: 'shopee', videoUserId: { not: null } } as any })
+        if (!ch) { res.json({ success: true, data: { ketLuan: 'Chưa có kênh Shopee nào uỷ quyền video' } }); return }
+
+        const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
+        const { svc, accessToken, userId } = await layTokenVideoShopee(sp, ch.id)
+        const cred = { accessToken, userId }
+        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, coDuLieu: !!r?.response })
+        const ra: any = { kenh: ch.name, videoUserId: userId }
+
+        try { ra.getVideoList = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { page_size: 10 })) }
+        catch (e: any) { ra.getVideoList = { loiNem: String(e?.message || e).slice(0, 200) } }
+
+        try { ra.postVideoIdGia = tom(await svc.goiNguoiDung('/api/v2/video/post_video', 'POST', cred, undefined, { video_upload_id_list: ['sg-kengi-khong-co-that'] })) }
+        catch (e: any) { ra.postVideoIdGia = { loiNem: String(e?.message || e).slice(0, 200) } }
+
+        const chanMucTaiKhoan = ra.postVideoIdGia?.error === 'copyright_not_agree'
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ...ra,
+                ketLuan: chanMucTaiKhoan
+                    ? 'CHẶN Ở MỨC TÀI KHOẢN: id giả cũng ra copyright_not_agree ⇒ cổng điều khoản xét TRƯỚC tham số. Video của chủ shop không có lỗi gì.'
+                    : 'KHÔNG chặn ở mức tài khoản (id giả ra lỗi tham số) ⇒ vướng ở chính video/phiên tải.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * BỘ ĐO CHỮ KÝ SHOPEE VIDEO — POST /admin/do-ky-shopee-video?storeCode=  (kèm -d '{}')
  *
  * Chủ shop bấm Đăng thì Shopee trả `init_video_upload: error_sign — Wrong sign`.
