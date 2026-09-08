@@ -76,10 +76,17 @@ export async function guiKhoiResumable(
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), 250_000)
     try {
+        /* PHẢI đặt Content-Length BẰNG TAY. Đo 08/09/2026: Node 20 trên Cloud Run
+         * (undici cũ) KHÔNG tự đặt Content-Length cho thân Uint8Array → Google trả
+         * "411 Length Required" cho mọi khối. Node 24 cục bộ thì tự đặt nên lỗi
+         * không lộ khi thử ở máy. Truyền Buffer + khai độ dài là chắc ăn cả hai. */
         const r = await fetch(sessionUrl, {
             method: 'PUT',
-            headers: { 'Content-Range': `bytes ${offset}-${cuoi}/${total}` },
-            body: khoi,
+            headers: {
+                'Content-Range': `bytes ${offset}-${cuoi}/${total}`,
+                'Content-Length': String(khoi.length),
+            },
+            body: Buffer.from(khoi),
             signal: ac.signal,
         })
         // 308 = Resume Incomplete: còn khối nữa. 200/201 = xong.
