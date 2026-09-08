@@ -19,6 +19,22 @@ export interface TokenVideoShopee {
     channel: any
 }
 
+/**
+ * Cặp khoá cho API VIDEO. Ứng dụng "Shopee Video Management" là một APP RIÊNG trên
+ * console Shopee (chủ shop tạo 08/09/2026: "Video Store", Partner ID khác app bán
+ * hàng "Kengi Electric"). Lần đầu tôi dùng nhầm khoá app bán hàng: Shopee hiện màn
+ * xin quyền Product/Order/Payment — đúng app sai. KHÔNG rơi về khoá bán hàng một
+ * cách âm thầm nữa: thiếu là nói thiếu, để chủ shop khai đúng chỗ.
+ */
+export function credVideoShopee(ch: any): { apiKey: string; apiSecret: string } {
+    const id = String(ch?.videoPartnerId || '').trim()
+    const key = String(ch?.videoPartnerKey || '').trim()
+    if (!id || !key) {
+        throw new Error('Chưa khai Partner ID / Partner Key của ứng dụng Shopee Video Management — nhập ở tab Media, ô Shopee Video, rồi mới uỷ quyền.')
+    }
+    return { apiKey: id, apiSecret: key }
+}
+
 /** Biên an toàn: token 4 giờ, làm mới sớm 5 phút để không chết giữa lượt tải. */
 const BIEN_LAM_MOI_MS = 5 * 60_000
 
@@ -30,9 +46,8 @@ export async function layTokenVideoShopee(prisma: any, channelId: string): Promi
         throw new Error('Kênh chưa uỷ quyền Shopee Video — vào tab Media, bấm "Uỷ quyền Shopee Video" và đăng nhập bằng tài khoản chủ shop.')
     }
 
-    const svc: any = getPlatformService('shopee', {
-        apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '', shopId: ch.shopId || undefined,
-    })
+    const cred = credVideoShopee(ch)
+    const svc: any = getPlatformService('shopee', { ...cred, shopId: ch.shopId || undefined })
 
     const conHan = ch.videoTokenExpiresAt
         && new Date(ch.videoTokenExpiresAt).getTime() - Date.now() > BIEN_LAM_MOI_MS

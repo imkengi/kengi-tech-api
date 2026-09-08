@@ -1433,7 +1433,9 @@ exports.Prisma.OnlineChannelScalarFieldEnum = {
   videoAccessToken: 'videoAccessToken',
   videoRefreshToken: 'videoRefreshToken',
   videoTokenExpiresAt: 'videoTokenExpiresAt',
-  videoAuthAt: 'videoAuthAt'
+  videoAuthAt: 'videoAuthAt',
+  videoPartnerId: 'videoPartnerId',
+  videoPartnerKey: 'videoPartnerKey'
 };
 
 exports.Prisma.OnlineOrderScalarFieldEnum = {

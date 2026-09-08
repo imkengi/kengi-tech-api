@@ -2173,6 +2173,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoRefreshToken" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoTokenExpiresAt" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoAuthAt" TIMESTAMP(3)`)
+                // App Shopee Video Management là app RIÊNG → cặp khoá riêng (2026-09-08)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoPartnerId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoPartnerKey" TEXT`)
                 // Tiến trình đăng video lên sàn theo từng bước (2026-09-08). Bảng SanMedia
                 // do sync-schemas tạo ở các cửa hàng đã chạy; cửa hàng chưa có bảng thì
                 // ALTER báo lỗi "relation does not exist" — bọc riêng, không chặn phần sau.
@@ -4530,11 +4533,11 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
             try {
                 const kv = await sp.onlineChannel.findFirst({
                     where: { platform: 'shopee' },
-                    select: { id: true, name: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true } as any,
+                    select: { id: true, name: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoPartnerId: true } as any,
                 }) as any
                 o.cotVideoOk = true
                 o.shopeeVideo = kv
-                    ? { kenh: kv.name, daUyQuyen: !!kv.videoUserId, userId: kv.videoUserId || null, uyQuyenLuc: kv.videoAuthAt || null, tokenHetHan: kv.videoTokenExpiresAt || null }
+                    ? { kenh: kv.name, appVideo: kv.videoPartnerId || null, daUyQuyen: !!kv.videoUserId, userId: kv.videoUserId || null, uyQuyenLuc: kv.videoAuthAt || null, tokenHetHan: kv.videoTokenExpiresAt || null }
                     : null
             } catch (e: any) {
                 o.cotVideoOk = false

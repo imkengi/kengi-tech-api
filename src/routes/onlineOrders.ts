@@ -2868,6 +2868,36 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
 // Đi vòng qua web để đổi mã như luồng bán hàng: callback không có JWT nên máy chủ
 // không biết cửa hàng nào; web có JWT gọi lại.
 
+// PUT /api/online-orders/channels/:id/video-app  (body: { partnerId, partnerKey })
+// Khai cặp khoá của APP VIDEO (Shopee Video Management) — app riêng trên console.
+// Không trả khoá về; chỉ trả 4 ký tự cuối để chủ shop nhận ra đã lưu đúng.
+router.put('/channels/:id/video-app', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Chỉ kênh Shopee' }); return }
+        const partnerId = String(req.body?.partnerId || '').trim()
+        const partnerKey = String(req.body?.partnerKey || '').trim()
+        if (!/^\d{4,12}$/.test(partnerId)) { res.status(400).json({ success: false, error: 'Partner ID phải là dãy số (ví dụ 2044128) — lấy ở console Shopee, mục Live Partner_id của app Video' }); return }
+        if (partnerKey.length < 20) { res.status(400).json({ success: false, error: 'Partner Key quá ngắn — dùng Live API Partner Key (bắt đầu bằng shpk…) của app Video' }); return }
+
+        /* Đổi app là đổi bộ token: token cũ ký bằng app cũ không dùng được với app
+         * mới, giữ lại chỉ gây "invalid_access_token" khó hiểu. Xoá để bắt uỷ quyền lại. */
+        const doiApp = channel.videoPartnerId && channel.videoPartnerId !== partnerId
+        await prisma.onlineChannel.update({
+            where: { id: channel.id },
+            data: {
+                videoPartnerId: partnerId, videoPartnerKey: partnerKey,
+                ...(doiApp ? { videoUserId: null, videoAccessToken: null, videoRefreshToken: null, videoTokenExpiresAt: null, videoAuthAt: null } : {}),
+            } as any,
+        })
+        res.json({ success: true, data: { partnerId, keyDuoi4: partnerKey.slice(-4), daXoaUyQuyenCu: !!doiApp } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // GET /api/online-orders/channels/:id/video-auth-url
 router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2875,11 +2905,10 @@ router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthReque
         const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
         if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Chỉ kênh Shopee có luồng uỷ quyền video kiểu này' }); return }
-        if (!channel.apiKey || !channel.apiSecret) { res.status(400).json({ success: false, error: 'Kênh chưa có Partner ID / Partner Key' }); return }
 
-        const service: any = getPlatformService('shopee', {
-            apiKey: channel.apiKey, apiSecret: channel.apiSecret, shopId: channel.shopId || undefined,
-        })
+        // Khoá của APP VIDEO (app riêng trên console), KHÔNG phải khoá app bán hàng.
+        const { credVideoShopee } = await import('../lib/shopeeVideoAuth')
+        const service: any = getPlatformService('shopee', { ...credVideoShopee(channel), shopId: channel.shopId || undefined })
         const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`
         const redirectUri = `${baseUrl}/api/online-orders/channels/${channel.id}/video-callback`
         const state = Buffer.from(JSON.stringify({ channelId: channel.id, muc: 'video' })).toString('base64')
@@ -2911,9 +2940,8 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
         if (!req.body?.code) { res.status(400).json({ success: false, error: 'Thiếu code' }); return }
 
-        const service: any = getPlatformService('shopee', {
-            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '', shopId: channel.shopId || undefined,
-        })
+        const { credVideoShopee } = await import('../lib/shopeeVideoAuth')
+        const service: any = getPlatformService('shopee', { ...credVideoShopee(channel), shopId: channel.shopId || undefined })
         const t = await service.exchangeVideoToken(String(req.body.code))
 
         /* Một tài khoản chủ có thể sở hữu nhiều shop → hai danh sách song song.

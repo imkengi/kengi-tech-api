@@ -489,7 +489,7 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
         try {
             kenhDs = await prisma.onlineChannel.findMany({
                 where: { status: 'active' },
-                select: { id: true, platform: true, name: true, accessToken: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoRefreshToken: true },
+                select: { id: true, platform: true, name: true, accessToken: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoRefreshToken: true, videoPartnerId: true, videoPartnerKey: true },
             })
         } catch {
             chuaMigrate = true
@@ -520,11 +520,18 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                     videoUserId: kenhShopee?.videoUserId || null,
                     videoUyQuyenLuc: kenhShopee?.videoAuthAt || null,
                     videoRefreshHetHan,
+                    /* App Video là app RIÊNG trên console — không trả khoá, chỉ 4 ký tự cuối. */
+                    coAppVideo: !!(kenhShopee?.videoPartnerId && kenhShopee?.videoPartnerKey),
+                    videoPartnerId: kenhShopee?.videoPartnerId || null,
+                    videoKeyDuoi4: kenhShopee?.videoPartnerKey ? String(kenhShopee.videoPartnerKey).slice(-4) : null,
                     chuaMigrate,
                     conThieu: [
                         ...(daUyQuyenVideo ? [] : [
-                            'Ứng dụng phải đăng ký thêm loại "Shopee Video Management" trong Shopee Open Platform console (chủ shop báo đã làm 08/09).',
-                            'Bấm "Uỷ quyền Shopee Video" bên dưới và đăng nhập bằng tài khoản CHỦ shop: API video ký bằng user_id chứ không phải shop_id.',
+                            ...(kenhShopee?.videoPartnerId ? [] : [
+                                'Nhập Partner ID + Live API Partner Key của app "Shopee Video Management" (app riêng trên console, KHÔNG phải app bán hàng) vào ô bên dưới.',
+                            ]),
+                            'Trong console Shopee, app Video phải khai Live Redirect URL Domain = kengi.vn — để trống là Shopee từ chối đường về.',
+                            'Bấm "Uỷ quyền Shopee Video" và đăng nhập bằng tài khoản CHỦ shop: API video ký bằng user_id chứ không phải shop_id.',
                         ]),
                         'Cửa hàng phải đồng ý Điều khoản Shopee Video trong Seller Center.',
                         ...(daUyQuyenVideo ? ['Đường đăng (init_video_upload → post_video) đang được nối — uỷ quyền đã xong, việc còn lại ở phía mã.'] : []),
