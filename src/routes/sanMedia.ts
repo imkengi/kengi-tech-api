@@ -230,6 +230,101 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
     }
 })
 
+/* ─── TẢI VIDEO THẲNG TỪ MÁY LÊN ────────────────────────────────────────────────
+ *
+ * Byte KHÔNG đi qua máy chủ mình. Cloud Run chặn thân yêu cầu ở 32MB, mà Shopee
+ * Video cho tới 1GB — proxy là tắc ngay từ file thứ nhất. Đường đi:
+ *
+ *   1. Trình duyệt xin mở phiên  →  ĐIỂM NÀY (mở phiên nối tiếp trên Drive)
+ *   2. Trình duyệt PUT thẳng byte lên URL phiên Google trả về (có tiến độ, ngắt
+ *      giữa chừng thì PUT tiếp được)
+ *   3. Xong thì gọi POST /san-media với nguon='drive' + fileId vừa nhận
+ *
+ * Đo 08/09/2026: Google trả `Access-Control-Allow-Origin: https://kengi.vn` và
+ * cho phép PUT kèm `content-range` — nên bước 2 chạy được từ trình duyệt.
+ *
+ * File rơi vào ĐÚNG thư mục Drive đã khai ở Cài đặt, nên nó cũng hiện luôn trong
+ * bảng "Thêm video từ Drive" — một chỗ chứa, không đẻ ra chỗ thứ hai.
+ */
+router.post('/tai-len', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const b = req.body || {}
+        const ten = String(b.ten || '').trim()
+        const mime = String(b.mime || '').trim()
+        const bytes = Math.round(Number(b.bytes) || 0)
+
+        if (!ten) { res.status(400).json({ success: false, error: 'Thiếu tên file' }); return }
+        if (!/^video\//i.test(mime) && !/^image\//i.test(mime)) {
+            res.status(400).json({ success: false, error: `Chỉ nhận video hoặc ảnh. File này là "${mime || 'không rõ'}".` })
+            return
+        }
+        if (bytes <= 0) { res.status(400).json({ success: false, error: 'Không đọc được dung lượng file' }); return }
+        // Trần 2GB: trên mức này thì cả hai sàn đều không nhận, chặn sớm còn hơn
+        // để chủ shop ngồi chờ tải 40 phút rồi mới báo hỏng.
+        if (bytes > 2 * 1024 * 1024 * 1024) {
+            res.status(400).json({ success: false, error: 'File lớn hơn 2GB. Shopee Video tối đa 1GB — nén lại trước đã.' })
+            return
+        }
+
+        const cai = await prisma.storeSettings.findFirst({ select: { driveFolderId: true } as any }) as any
+        const folderId = cai?.driveFolderId || null
+        if (!folderId) {
+            res.status(400).json({
+                success: false,
+                error: 'Chưa chọn thư mục Google Drive. Vào Cài đặt → Google Drive, chọn thư mục chứa video rồi tải lên lại.',
+            })
+            return
+        }
+
+        const { layTokenGhiDrive } = await import('../lib/driveOAuth')
+        const { token, nguon, email } = await layTokenGhiDrive(prisma)
+
+        const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+                'X-Upload-Content-Type': mime,
+                'X-Upload-Content-Length': String(bytes),
+            },
+            body: JSON.stringify({ name: ten.slice(0, 200), parents: [folderId] }),
+        })
+
+        if (!r.ok) {
+            /* Lỗi của Google phải hiện NGUYÊN VĂN. "thư mục không tồn tại" và
+             * "tài khoản không có quyền ghi" là hai chuyện khác nhau, gộp thành
+             * "không tải lên được" là chủ shop không biết phải sửa ở đâu. */
+            const chiTiet = (await r.text().catch(() => '')).slice(0, 400)
+            res.status(502).json({
+                success: false,
+                error: `Google từ chối mở phiên tải lên (HTTP ${r.status}). Đang ghi bằng ${nguon === 'chu-shop' ? `tài khoản ${email || 'chủ shop'}` : 'tài khoản hệ thống'}. ${chiTiet}`,
+            })
+            return
+        }
+
+        const duongTaiLen = r.headers.get('location')
+        if (!duongTaiLen) {
+            res.status(502).json({ success: false, error: 'Google không trả địa chỉ phiên tải lên' })
+            return
+        }
+
+        res.json({
+            success: true,
+            data: {
+                duongTaiLen,
+                nguonQuyen: nguon,
+                email: email || null,
+                ghiChu: 'Trình duyệt PUT thẳng byte lên địa chỉ này, KHÔNG đi qua máy chủ. Xong rồi gọi POST /san-media với nguon="drive" và nguonId = id file Google trả về.',
+            },
+        })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('POST /san-media/tai-len lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không mở được phiên tải lên') })
+    }
+})
+
 // ─── Thêm vào kho ──────────────────────────────────────────────────────────────
 router.post('/', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {

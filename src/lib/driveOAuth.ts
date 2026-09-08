@@ -84,6 +84,45 @@ export function driveClientFromRefreshToken(refreshToken: string): any {
 }
 
 /**
+ * ACCESS TOKEN ghi Drive cho một cửa hàng.
+ *
+ * Cần riêng hàm này vì thư viện `googleapis` không mở được **phiên tải lên nối
+ * tiếp** (resumable) để trả URL cho trình duyệt — nó chỉ tự tải hộ, tức là byte
+ * phải đi xuyên qua Cloud Run. Mà Cloud Run chặn thân yêu cầu ở 32MB còn video
+ * Shopee cho tới 1GB, nên đường đó tắc. Có token thì gọi thẳng REST một phát,
+ * lấy URL phiên đưa cho trình duyệt PUT thẳng lên Google (đã đo 08/09/2026:
+ * Google trả `Access-Control-Allow-Origin: https://kengi.vn` cho phiên này).
+ *
+ * Token sống 1 tiếng — đừng lưu lại, mỗi lần mở phiên xin một cái mới.
+ */
+export async function layTokenGhiDrive(storePrisma: any): Promise<{ token: string; nguon: 'chu-shop' | 'service-account'; email?: string }> {
+    let refresh: string | null = null
+    let email: string | undefined
+    try {
+        const st = await storePrisma.storeSettings.findFirst({
+            select: { driveOauthToken: true, driveOauthEmail: true } as any,
+        }) as any
+        refresh = st?.driveOauthToken || null
+        email = st?.driveOauthEmail || undefined
+    } catch { /* cột chưa migrate → dùng SA */ }
+
+    if (refresh && driveOAuthConfigured()) {
+        const client = newOAuthClient()
+        client.setCredentials({ refresh_token: refresh })
+        const r = await client.getAccessToken()
+        const token = typeof r === 'string' ? r : r?.token
+        if (!token) throw new Error('Google không cấp access token — chủ shop cần kết nối lại Drive')
+        return { token, nguon: 'chu-shop', email }
+    }
+
+    const { google } = require('googleapis') as typeof import('googleapis')
+    const auth = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/drive'] })
+    const token = await auth.getAccessToken()
+    if (!token) throw new Error('Không lấy được quyền ghi Drive')
+    return { token: String(token), nguon: 'service-account' }
+}
+
+/**
  * Client GHI cho một cửa hàng: ưu tiên tài khoản chủ shop đã kết nối, không có
  * thì rơi về service account (chỉ xoá được file do chính SA sở hữu).
  * Trả kèm nguồn quyền để log/thông báo nói đúng nguyên nhân khi lỗi.
