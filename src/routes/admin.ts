@@ -4591,6 +4591,20 @@ router.post('/va-mau-in', async (req: Request, res: Response) => {
                 thanh: 'text-align:right;">{{giamGiaDonVi}}</td>',
                 vi: 'Cột Chiết khấu phải là chiết khấu TRÊN MỘT ĐƠN VỊ, không phải cả dòng',
             },
+            /* Hai ca dưới là của bản v13→v14 (07/09) — các cửa hàng phụ chưa từng
+             * mở web sau lượt đó nên bản trên máy chủ vẫn là bản trước v14. */
+            {
+                id: 'tpl-receipt',
+                tu: 'width:10%;">CK</th>',
+                thanh: 'width:10%;">Chiết khấu</th>',
+                vi: 'Tiêu đề cột "CK" viết tắt khó hiểu → "Chiết khấu"',
+            },
+            {
+                id: 'tpl-receipt',
+                tu: 'text-align:right;">{{donGia}}</td>',
+                thanh: 'text-align:right;">{{donGiaCK}}</td>',
+                vi: 'Ô Đơn giá hiện giá SAU chiết khấu, xuống dòng là giá gốc gạch ngang',
+            },
         ]
 
         const ds = await prisma.store.findMany({
