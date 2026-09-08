@@ -4696,20 +4696,29 @@ router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) =
         const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, requestId: r?.request_id ?? null, coDuLieu: !!r?.response })
         const ra: any = { kenh: ch.name, videoUserId: userId }
 
-        try { ra.getVideoList = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { page_size: 10 })) }
-        catch (e: any) { ra.getVideoList = { loiNem: String(e?.message || e).slice(0, 200) } }
+        /* get_video_list ĐÚNG THAM SỐ (list_type 1 và 2). Chạy được ⇒ app CÓ quyền
+         * nhóm Video cho gian hàng này, đóng luôn giả thuyết "thiếu quyền" — chỉ
+         * riêng post_video bị cổng điều khoản chặn. */
+        for (const lt of [1, 2]) {
+            try { ra[`getVideoList_type${lt}`] = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page_size: 10 })) }
+            catch (e: any) { ra[`getVideoList_type${lt}`] = { loiNem: String(e?.message || e).slice(0, 200) } }
+        }
 
         try { ra.postVideoIdGia = tom(await svc.goiNguoiDung('/api/v2/video/post_video', 'POST', cred, undefined, { video_upload_id_list: ['sg-kengi-khong-co-that'] })) }
         catch (e: any) { ra.postVideoIdGia = { loiNem: String(e?.message || e).slice(0, 200) } }
 
         const chanMucTaiKhoan = ra.postVideoIdGia?.error === 'copyright_not_agree'
+        const docDuoc = !ra.getVideoList_type1?.error || !ra.getVideoList_type2?.error
         res.json({
             success: true,
             data: {
                 cuaHang: store.name, ...ra,
-                ketLuan: chanMucTaiKhoan
+                ketLuan: (chanMucTaiKhoan
                     ? 'CHẶN Ở MỨC TÀI KHOẢN: id giả cũng ra copyright_not_agree ⇒ cổng điều khoản xét TRƯỚC tham số. Video của chủ shop không có lỗi gì.'
-                    : 'KHÔNG chặn ở mức tài khoản (id giả ra lỗi tham số) ⇒ vướng ở chính video/phiên tải.',
+                    : 'KHÔNG chặn ở mức tài khoản (id giả ra lỗi tham số) ⇒ vướng ở chính video/phiên tải.')
+                    + (docDuoc
+                        ? ' · get_video_list ĐỌC ĐƯỢC ⇒ app CÓ quyền nhóm Video cho gian này, không phải thiếu quyền.'
+                        : ' · get_video_list cũng hỏng — xem lỗi để biết là quyền hay tham số.'),
             },
         })
     } catch (err: any) {
