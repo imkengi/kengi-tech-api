@@ -522,8 +522,30 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
             }).catch(() => [])
         }
         const coKenh = (p: string) => kenhDs.some((c: any) => c.platform === p && c.accessToken)
-        const kenhShopee = kenhDs.find((c: any) => c.platform === 'shopee' && c.accessToken) || kenhDs.find((c: any) => c.platform === 'shopee')
-        const daUyQuyenVideo = !!kenhShopee?.videoUserId
+
+        /* Cửa hàng có NHIỀU gian hàng Shopee (KENGISTORE có 3: Kengi Tools/Store/
+         * Electric). App Video, uỷ quyền, và gian hàng chọn cho video phải bám
+         * theo CÙNG MỘT kênh — trước đây mỗi thứ rơi vào một kênh khác nhau nên
+         * không kênh nào đủ điều kiện. Trả trạng thái video của TỪNG kênh để web
+         * cho chọn, thay vì đoán một kênh. */
+        const kenhShopeeDs = kenhDs.filter((c: any) => c.platform === 'shopee').map((c: any) => ({
+            id: c.id,
+            ten: c.name,
+            daNoiBanHang: !!c.accessToken,
+            coAppVideo: !!(c.videoPartnerId && c.videoPartnerKey),
+            videoPartnerId: c.videoPartnerId || null,
+            videoKeyDuoi4: c.videoPartnerKey ? String(c.videoPartnerKey).slice(-4) : null,
+            daUyQuyenVideo: !!c.videoUserId,
+            videoUserId: c.videoUserId || null,
+            videoRefreshHetHan: c.videoAuthAt
+                ? new Date(new Date(c.videoAuthAt).getTime() + 30 * 86400_000).toISOString() : null,
+        }))
+        // Kênh "chính" để hiện tóm tắt: ưu tiên kênh ĐÃ uỷ quyền, rồi kênh có app key.
+        const kenhShopee = kenhDs.find((c: any) => c.platform === 'shopee' && c.videoUserId)
+            || kenhDs.find((c: any) => c.platform === 'shopee' && c.videoPartnerId)
+            || kenhDs.find((c: any) => c.platform === 'shopee' && c.accessToken)
+            || kenhDs.find((c: any) => c.platform === 'shopee')
+        const daUyQuyenVideo = kenhShopeeDs.some((c: any) => c.daUyQuyenVideo)
         // refresh_token sống 30 ngày kể từ lần uỷ quyền/làm mới gần nhất
         const videoRefreshHetHan = kenhShopee?.videoAuthAt
             ? new Date(new Date(kenhShopee.videoAuthAt).getTime() + 30 * 86400_000).toISOString()
@@ -537,6 +559,8 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                 shopee: {
                     dangDuoc: daUyQuyenVideo,
                     daNoiKenhBanHang: coKenh('shopee'),
+                    // Danh sách TỪNG gian hàng Shopee kèm trạng thái video — web dùng cái này.
+                    kenhDs: kenhShopeeDs,
                     kenhId: kenhShopee?.id || null,
                     kenhTen: kenhShopee?.name || null,
                     daUyQuyenVideo,
