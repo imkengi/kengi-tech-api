@@ -4560,6 +4560,64 @@ router.get('/do-don-len-phieu', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * MẪU IN TRÊN MÁY CHỦ ĐANG LÀ BẢN NÀO — GET /admin/do-mau-in?storeCode=&id=tpl-receipt
+ *
+ * 08/09/2026: sửa mẫu hoá đơn, deploy đúng, mà chủ shop in ra VẪN mẫu cũ ba lần.
+ * Đoán mãi không ra vì không ai nhìn được bản trên máy chủ. Bộ này đọc thẳng:
+ * mẫu nào, sửa lúc nào, có mang dấu vết bản CŨ không.
+ *
+ * CHỈ ĐỌC, KHÔNG trả toàn bộ HTML (rất dài) — chỉ trả dấu vết cần cho chẩn đoán.
+ */
+router.get('/do-mau-in', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const chiId = String(req.query.id || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        let ds: any[] = []
+        try {
+            ds = await sp.printTemplate.findMany({
+                where: chiId ? { id: chiId } : {},
+                select: { id: true, name: true, htmlSource: true, updatedAt: true, isBuiltIn: true, daSuaTay: true } as any,
+                take: 50,
+            })
+        } catch (e: any) {
+            res.json({ success: true, data: { cuaHang: store.name, coBang: false, loi: String(e?.message || e).slice(0, 200) } })
+            return
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                coBang: true,
+                soMau: ds.length,
+                mau: ds.map((t: any) => {
+                    const h = String(t.htmlSource || '')
+                    return {
+                        id: t.id, ten: t.name, suaLuc: t.updatedAt,
+                        isBuiltIn: t.isBuiltIn ?? null, daSuaTay: t.daSuaTay ?? null,
+                        dai: h.length,
+                        // Dấu vết phân biệt bản CŨ với bản MỚI của mẫu hoá đơn A4
+                        coTieuDeCK_cu: h.includes('width:10%;">CK</th>'),
+                        coChietKhau_moi: h.includes('>Chiết khấu</th>'),
+                        oDonGia_cu: h.includes('text-align:right;">{{donGia}}</td>'),
+                        oDonGia_moi: h.includes('{{donGiaCK}}'),
+                        oCK_caDong_cu: h.includes('text-align:right;">{{giamGiaSP}}</td>'),
+                        oCK_donVi_moi: h.includes('{{giamGiaDonVi}}'),
+                    }
+                }),
+                yNghia: 'oCK_caDong_cu = true nghĩa là máy chủ VẪN giữ bản cũ; máy nào kéo về cũng ra mẫu cũ.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* Có thiết bị nào nhận push không — GET /admin/do-thiet-bi?storeCode=  (CHỈ ĐỌC, không trả token) */
 router.get('/do-thiet-bi', async (req: Request, res: Response) => {
     try {
