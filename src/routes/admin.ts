@@ -4693,7 +4693,7 @@ router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) =
         const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
         const { svc, accessToken, userId } = await layTokenVideoShopee(sp, ch.id)
         const cred = { accessToken, userId }
-        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, coDuLieu: !!r?.response })
+        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, requestId: r?.request_id ?? null, coDuLieu: !!r?.response })
         const ra: any = { kenh: ch.name, videoUserId: userId }
 
         try { ra.getVideoList = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { page_size: 10 })) }
@@ -4742,7 +4742,7 @@ router.post('/do-ky-shopee-video', async (req: Request, res: Response) => {
         const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
         const { svc, accessToken, userId } = await layTokenVideoShopee(sp, ch.id)
         const cred = { accessToken, userId }
-        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null })
+        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, requestId: r?.request_id ?? null })
         const buoc: any = { kenh: ch.name, videoUserId: userId }
 
         // 1. init (partner)
