@@ -4497,14 +4497,34 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
                 o.soSkuGan = await sp.sanMediaSanPham.count()
                 o.coBangSanPham = true
             } catch { o.coBangSanPham = false }
+            /* Kho Media kéo video từ ĐÚNG thư mục Drive khai ở Cài đặt (cùng
+             * `driveFolderId` với video đóng gói). Chưa khai thì bảng trống là
+             * ĐÚNG chứ không phải hỏng — phải đo mới phân biệt được hai ca. */
+            try {
+                const s = await sp.storeSettings.findFirst({
+                    select: { driveFolderId: true, driveOauthEmail: true, driveOauthAt: true } as any,
+                }) as any
+                o.thuMucDrive = s?.driveFolderId ? String(s.driveFolderId).slice(0, 10) + '…' : null
+                o.daNoiDriveChuShop = !!s?.driveOauthEmail
+                o.driveEmail = s?.driveOauthEmail || null
+            } catch (e: any) {
+                o.thuMucDrive = 'không đọc được'
+                o.loiCaiDat = String(e?.message || e).slice(0, 100)
+            }
             ra.push(o)
         }
+        const { driveOAuthConfigured } = await import('../lib/driveOAuth')
         res.json({
             success: true,
             data: {
                 cuaHang: ra,
                 thieuBang: ra.filter(x => !x.coBang || !x.coBangSanPham).map(x => x.cuaHang),
-                yNghia: 'coBang=true nghĩa là ĐẾM ĐƯỢC trên bảng thật, không phải đọc mã HTTP 200 của sync-schemas.',
+                chuaKhaiThuMuc: ra.filter(x => !x.thuMucDrive).map(x => x.cuaHang),
+                driveOAuthCoCauHinh: driveOAuthConfigured(),
+                yNghia: 'coBang=true nghĩa là ĐẾM ĐƯỢC trên bảng thật, không phải đọc mã HTTP 200 của sync-schemas. '
+                    + 'thuMucDrive=null ⇒ tab Media sẽ báo "chưa nối Drive" chứ không phải lỗi.',
+                luuY: 'GET /san-media/drive dùng THẲNG service account (ADC), KHÔNG đi qua layDriveClient() '
+                    + 'nên KHÔNG dùng token OAuth của chủ shop như /api/drive-videos. Thư mục phải được share cho service account.',
             },
         })
     } catch (err: any) {
