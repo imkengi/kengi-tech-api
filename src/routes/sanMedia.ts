@@ -209,9 +209,11 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
         res.json({
             success: true,
             data: {
+                // `f: any` vì getStoreDriveWriter trả client kiểu any (nó phải
+                // nhận cả client OAuth lẫn client service account).
                 items: files
-                    .filter(f => !daCo.has(f.id))
-                    .map(f => ({
+                    .filter((f: any) => !daCo.has(f.id))
+                    .map((f: any) => ({
                         driveId: f.id,
                         ten: f.name,
                         mime: f.mimeType,
