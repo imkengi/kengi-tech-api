@@ -269,7 +269,22 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
     } catch (e: any) {
         /* Giữ NGUYÊN tiến trình (khối đã lên vẫn tính), chỉ đánh dấu lỗi kèm lý do
          * nguyên văn của Shopee. Lần bấm sau đọc tiến trình ra chạy tiếp. */
-        const msg = String(e?.message || e).slice(0, 500)
+        let msg = String(e?.message || e).slice(0, 500)
+
+        /* TRỪ KHI phiên tải bên Shopee đã hỏng/hết hạn. Lúc đó chạy tiếp là kẹt VĨNH
+         * VIỄN: mọi lượt sau đều nhảy thẳng vào post_video với một video_upload_id
+         * không còn tồn tại. Ca này chắc chắn xảy ra khi chủ shop chờ Shopee mở
+         * quyền vài ngày rồi mới bấm lại. Đặt lại về `init` để lượt sau tải lại từ
+         * đầu, và NÓI RA để không ai tưởng mất công vô cớ.
+         * Ba câu này lấy từ bảng mã lỗi của edit_video_info và post_video. */
+        const phaiTaiLai = /video_upload_id is illegal|Invalid video source|no record in database|can not find video/i.test(msg)
+        if (phaiTaiLai && tt.giaiDoan !== 'init') {
+            tt.giaiDoan = 'init'
+            delete tt.videoUploadId
+            delete tt.coverUrl
+            tt.phanXong = 0
+            msg = `${msg} — phiên tải trên Shopee đã hết hạn, bấm "Tiếp tục đăng" để tải lại từ đầu.`
+        }
         await prisma.sanMedia.update({
             where: { id: m.id },
             data: { trangThai: 'loi', loiCuoi: msg, tienTrinhDang: JSON.stringify(tt) },
