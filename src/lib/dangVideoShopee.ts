@@ -169,14 +169,18 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
             while (conGio()) {
                 const r = await svc.goiCong('/api/v2/media/get_video_upload_result', 'GET', { video_upload_id: tt.videoUploadId as string })
                 kiemLoiShopee(r, 'get_video_upload_result')
-                const st = String(r.response?.status || '')
-                if (st === 'SUCCEEDED') {
+                const st = String(r.response?.status || '').toUpperCase()
+                /* ĐO 08/09/2026: Shopee trả 'SUCCEED', KHÔNG phải 'SUCCEEDED' như tài
+                 * liệu. So đúng chữ tài liệu là không bao giờ khớp: video đã xong mà
+                 * mã cứ hỏi lại mỗi 5s cho hết ngân sách, bốn lượt 200s liền (chủ shop
+                 * tưởng treo). Nhận theo TIỀN TỐ để cả hai cách viết đều qua. */
+                if (/^SUCCE/.test(st)) {
                     tt.giaiDoan = 'cover'
                     tt.ghiChu = r.response?.video_info?.resolution ? `Shopee nhận video ${r.response.video_info.resolution}` : undefined
                     await luu(prisma, m.id, tt)
                     break
                 }
-                if (st === 'FAILED' || st === 'CANCELLED') {
+                if (/^FAIL/.test(st) || /^CANCEL/.test(st)) {
                     // Tải lại từ đầu mới có ích — đặt về init để lần bấm sau không kẹt.
                     tt.giaiDoan = 'init'
                     throw new Error(`Shopee xử lý video ${st}: ${r.response?.reason || 'không rõ lý do'}`)
