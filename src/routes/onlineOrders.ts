@@ -2885,14 +2885,32 @@ router.put('/channels/:id/video-app', authMiddleware, async (req: AuthRequest, r
         /* Đổi app là đổi bộ token: token cũ ký bằng app cũ không dùng được với app
          * mới, giữ lại chỉ gây "invalid_access_token" khó hiểu. Xoá để bắt uỷ quyền lại. */
         const doiApp = channel.videoPartnerId && channel.videoPartnerId !== partnerId
-        await prisma.onlineChannel.update({
-            where: { id: channel.id },
-            data: {
-                videoPartnerId: partnerId, videoPartnerKey: partnerKey,
-                ...(doiApp ? { videoUserId: null, videoAccessToken: null, videoRefreshToken: null, videoTokenExpiresAt: null, videoAuthAt: null } : {}),
-            } as any,
-        })
-        res.json({ success: true, data: { partnerId, keyDuoi4: partnerKey.slice(-4), daXoaUyQuyenCu: !!doiApp } })
+        const xoaToken = { videoUserId: null, videoAccessToken: null, videoRefreshToken: null, videoTokenExpiresAt: null, videoAuthAt: null }
+
+        /* ÁP CHO MỌI GIAN SHOPEE (mặc định bật). Một cửa hàng chỉ có MỘT app trên
+         * Open Platform, nên bắt chủ shop dán lại Partner ID + Key cho từng gian là
+         * vô nghĩa — mà không dán thì nút "Uỷ quyền Shopee Video" của gian đó bị
+         * khoá, đúng cảnh "các shop khác vẫn không uỷ quyền được" (08/09/2026).
+         * Chỉ ghi khoá, KHÔNG đụng token của gian khác trừ khi đổi sang app khác. */
+        const apDungTatCa = req.body?.apDungTatCa !== false
+        const dsKenh = apDungTatCa
+            ? await prisma.onlineChannel.findMany({ where: { platform: 'shopee' }, select: { id: true, name: true, videoPartnerId: true } as any })
+            : [{ id: channel.id, name: channel.name, videoPartnerId: channel.videoPartnerId } as any]
+
+        let soKenh = 0
+        for (const c of dsKenh as any[]) {
+            const doiAppKenhNay = c.videoPartnerId && c.videoPartnerId !== partnerId
+            await prisma.onlineChannel.update({
+                where: { id: c.id },
+                data: {
+                    videoPartnerId: partnerId, videoPartnerKey: partnerKey,
+                    ...(doiAppKenhNay ? xoaToken : {}),
+                } as any,
+            })
+            soKenh++
+        }
+
+        res.json({ success: true, data: { partnerId, keyDuoi4: partnerKey.slice(-4), daXoaUyQuyenCu: !!doiApp, soKenhDaLuu: soKenh } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
@@ -2941,7 +2959,8 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
         if (!req.body?.code) { res.status(400).json({ success: false, error: 'Thiếu code' }); return }
 
         const { credVideoShopee } = await import('../lib/shopeeVideoAuth')
-        const service: any = getPlatformService('shopee', { ...credVideoShopee(channel), shopId: channel.shopId || undefined })
+        const cred = credVideoShopee(channel)
+        const service: any = getPlatformService('shopee', { ...cred, shopId: channel.shopId || undefined })
         const t = await service.exchangeVideoToken(String(req.body.code))
 
         /* Một tài khoản chủ có thể sở hữu nhiều shop → hai danh sách song song.
@@ -2959,20 +2978,53 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
             return
         }
 
-        await prisma.onlineChannel.update({
-            where: { id: channel.id },
-            data: {
-                videoUserId: userId,
-                videoAccessToken: t.accessToken,
-                videoRefreshToken: t.refreshToken,
-                videoTokenExpiresAt: new Date(Date.now() + t.expiresIn * 1000),
-                videoAuthAt: new Date(),
-            } as any,
+        const hetHan = new Date(Date.now() + t.expiresIn * 1000)
+        const boToken = {
+            videoAccessToken: t.accessToken,
+            videoRefreshToken: t.refreshToken,
+            videoTokenExpiresAt: hetHan,
+            videoAuthAt: new Date(),
+        }
+
+        /* MỘT LẦN UỶ QUYỀN ĂN CHO MỌI GIAN CỦA TÀI KHOẢN ĐÓ.
+         * `get_access_token` trả shop_id_list + user_id_list SONG SONG — tức là
+         * toàn bộ shop mà tài khoản vừa đăng nhập sở hữu. Bản đầu chỉ ghi vào đúng
+         * kênh bấm nút, nên chủ shop có 3 gian Shopee phải uỷ quyền 3 lần mà hai
+         * lần kia lại không có nút (chưa khai khoá app) — "mới uỷ quyền được 1 shop".
+         * Nay quét mọi kênh Shopee: shopId nào có trong danh sách thì ghi token kèm
+         * ĐÚNG user_id ở cùng vị trí, và chép luôn khoá app sang. */
+        const moiKenh = await prisma.onlineChannel.findMany({
+            where: { platform: 'shopee' },
+            select: { id: true, name: true, shopId: true } as any,
         })
+        const daGan: Array<{ kenh: string; shopId: string; userId: string }> = []
+        for (const c of moiKenh as any[]) {
+            const k = c.shopId ? t.shopIdList.indexOf(String(c.shopId)) : -1
+            const uid = k >= 0 ? t.userIdList[k] : undefined
+            if (!uid) continue
+            await prisma.onlineChannel.update({
+                where: { id: c.id },
+                data: {
+                    videoUserId: uid, ...boToken,
+                    videoPartnerId: cred.apiKey, videoPartnerKey: cred.apiSecret,
+                } as any,
+            })
+            daGan.push({ kenh: c.name, shopId: String(c.shopId), userId: uid })
+        }
+
+        // Kênh bấm nút mà shopId không khớp shop nào: vẫn ghi để không mất công uỷ quyền.
+        if (!daGan.some(x => x.kenh === channel.name)) {
+            await prisma.onlineChannel.update({
+                where: { id: channel.id },
+                data: { videoUserId: userId, ...boToken } as any,
+            })
+            daGan.push({ kenh: channel.name, shopId: String(channel.shopId || '?'), userId })
+        }
+
         await prisma.syncLog.create({
             data: {
                 channelId: channel.id, action: 'video_auth', status: 'success',
-                details: `Shopee Video user_id=${userId}, shop=${t.shopIdList[idx] || '?'}${i < 0 && channel.shopId ? ' (KHÔNG khớp shop đang nối ' + channel.shopId + ')' : ''}, ${t.shopIdList.length} shop`,
+                details: `Shopee Video: uỷ quyền ${daGan.length} gian (${daGan.map(x => `${x.kenh}=${x.userId}`).join(', ')}); tài khoản sở hữu ${t.shopIdList.length} shop`,
             },
         })
 
@@ -2982,6 +3034,8 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
                 userId, shopId: t.shopIdList[idx] || null,
                 shopKhop: i >= 0 || !channel.shopId,
                 soShop: t.shopIdList.length,
+                soKenhDaUyQuyen: daGan.length,
+                cacKenh: daGan.map(x => x.kenh),
                 expiresIn: t.expiresIn,
                 channelName: channel.name,
             },
