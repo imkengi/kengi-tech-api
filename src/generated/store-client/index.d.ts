@@ -189483,6 +189483,7 @@ export namespace Prisma {
     maTrenSan: string | null
     loiCuoi: string | null
     dangLuc: Date | null
+    tienTrinhDang: string | null
     createdBy: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -189506,6 +189507,7 @@ export namespace Prisma {
     maTrenSan: string | null
     loiCuoi: string | null
     dangLuc: Date | null
+    tienTrinhDang: string | null
     createdBy: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -189529,6 +189531,7 @@ export namespace Prisma {
     maTrenSan: number
     loiCuoi: number
     dangLuc: number
+    tienTrinhDang: number
     createdBy: number
     createdAt: number
     updatedAt: number
@@ -189564,6 +189567,7 @@ export namespace Prisma {
     maTrenSan?: true
     loiCuoi?: true
     dangLuc?: true
+    tienTrinhDang?: true
     createdBy?: true
     createdAt?: true
     updatedAt?: true
@@ -189587,6 +189591,7 @@ export namespace Prisma {
     maTrenSan?: true
     loiCuoi?: true
     dangLuc?: true
+    tienTrinhDang?: true
     createdBy?: true
     createdAt?: true
     updatedAt?: true
@@ -189610,6 +189615,7 @@ export namespace Prisma {
     maTrenSan?: true
     loiCuoi?: true
     dangLuc?: true
+    tienTrinhDang?: true
     createdBy?: true
     createdAt?: true
     updatedAt?: true
@@ -189720,6 +189726,7 @@ export namespace Prisma {
     maTrenSan: string | null
     loiCuoi: string | null
     dangLuc: Date | null
+    tienTrinhDang: string | null
     createdBy: string | null
     createdAt: Date
     updatedAt: Date
@@ -189762,6 +189769,7 @@ export namespace Prisma {
     maTrenSan?: boolean
     loiCuoi?: boolean
     dangLuc?: boolean
+    tienTrinhDang?: boolean
     createdBy?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -189787,6 +189795,7 @@ export namespace Prisma {
     maTrenSan?: boolean
     loiCuoi?: boolean
     dangLuc?: boolean
+    tienTrinhDang?: boolean
     createdBy?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -189810,6 +189819,7 @@ export namespace Prisma {
     maTrenSan?: boolean
     loiCuoi?: boolean
     dangLuc?: boolean
+    tienTrinhDang?: boolean
     createdBy?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -189833,12 +189843,13 @@ export namespace Prisma {
     maTrenSan?: boolean
     loiCuoi?: boolean
     dangLuc?: boolean
+    tienTrinhDang?: boolean
     createdBy?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type SanMediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ten" | "nguon" | "nguonId" | "lienKet" | "mime" | "bytes" | "thoiLuongS" | "anhBia" | "caption" | "kenh" | "channelId" | "henDangLuc" | "trangThai" | "maTrenSan" | "loiCuoi" | "dangLuc" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["sanMedia"]>
+  export type SanMediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ten" | "nguon" | "nguonId" | "lienKet" | "mime" | "bytes" | "thoiLuongS" | "anhBia" | "caption" | "kenh" | "channelId" | "henDangLuc" | "trangThai" | "maTrenSan" | "loiCuoi" | "dangLuc" | "tienTrinhDang" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["sanMedia"]>
   export type SanMediaInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     sanPham?: boolean | SanMedia$sanPhamArgs<ExtArgs>
     _count?: boolean | SanMediaCountOutputTypeDefaultArgs<ExtArgs>
@@ -189897,6 +189908,13 @@ export namespace Prisma {
       maTrenSan: string | null
       loiCuoi: string | null
       dangLuc: Date | null
+      /**
+       * TIẾN TRÌNH ĐĂNG đang dở (JSON): video_upload_id, part_size, số khối đã lên,
+       * giai đoạn… Cloud Run bóp CPU ngoài yêu cầu và cắt yêu cầu ở 300 giây, nên
+       * việc đăng chạy theo TỪNG BƯỚC có ngân sách thời gian, mỗi bước ghi lại đây;
+       * đứt giữa chừng thì bước sau đọc ra chạy tiếp, không tải lại từ khối 0.
+       */
+      tienTrinhDang: string | null
       createdBy: string | null
       createdAt: Date
       updatedAt: Date
@@ -190341,6 +190359,7 @@ export namespace Prisma {
     readonly maTrenSan: FieldRef<"SanMedia", 'String'>
     readonly loiCuoi: FieldRef<"SanMedia", 'String'>
     readonly dangLuc: FieldRef<"SanMedia", 'DateTime'>
+    readonly tienTrinhDang: FieldRef<"SanMedia", 'String'>
     readonly createdBy: FieldRef<"SanMedia", 'String'>
     readonly createdAt: FieldRef<"SanMedia", 'DateTime'>
     readonly updatedAt: FieldRef<"SanMedia", 'DateTime'>
@@ -194870,6 +194889,7 @@ export namespace Prisma {
     maTrenSan: 'maTrenSan',
     loiCuoi: 'loiCuoi',
     dangLuc: 'dangLuc',
+    tienTrinhDang: 'tienTrinhDang',
     createdBy: 'createdBy',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -209887,6 +209907,7 @@ export namespace Prisma {
     maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
     dangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    tienTrinhDang?: StringNullableFilter<"SanMedia"> | string | null
     createdBy?: StringNullableFilter<"SanMedia"> | string | null
     createdAt?: DateTimeFilter<"SanMedia"> | Date | string
     updatedAt?: DateTimeFilter<"SanMedia"> | Date | string
@@ -209911,6 +209932,7 @@ export namespace Prisma {
     maTrenSan?: SortOrderInput | SortOrder
     loiCuoi?: SortOrderInput | SortOrder
     dangLuc?: SortOrderInput | SortOrder
+    tienTrinhDang?: SortOrderInput | SortOrder
     createdBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -209938,6 +209960,7 @@ export namespace Prisma {
     maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
     dangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    tienTrinhDang?: StringNullableFilter<"SanMedia"> | string | null
     createdBy?: StringNullableFilter<"SanMedia"> | string | null
     createdAt?: DateTimeFilter<"SanMedia"> | Date | string
     updatedAt?: DateTimeFilter<"SanMedia"> | Date | string
@@ -209962,6 +209985,7 @@ export namespace Prisma {
     maTrenSan?: SortOrderInput | SortOrder
     loiCuoi?: SortOrderInput | SortOrder
     dangLuc?: SortOrderInput | SortOrder
+    tienTrinhDang?: SortOrderInput | SortOrder
     createdBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -209993,6 +210017,7 @@ export namespace Prisma {
     maTrenSan?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     dangLuc?: DateTimeNullableWithAggregatesFilter<"SanMedia"> | Date | string | null
+    tienTrinhDang?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     createdBy?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"SanMedia"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"SanMedia"> | Date | string
@@ -227783,6 +227808,7 @@ export namespace Prisma {
     maTrenSan?: string | null
     loiCuoi?: string | null
     dangLuc?: Date | string | null
+    tienTrinhDang?: string | null
     createdBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -227807,6 +227833,7 @@ export namespace Prisma {
     maTrenSan?: string | null
     loiCuoi?: string | null
     dangLuc?: Date | string | null
+    tienTrinhDang?: string | null
     createdBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -227831,6 +227858,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -227855,6 +227883,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -227879,6 +227908,7 @@ export namespace Prisma {
     maTrenSan?: string | null
     loiCuoi?: string | null
     dangLuc?: Date | string | null
+    tienTrinhDang?: string | null
     createdBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -227902,6 +227932,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -227925,6 +227956,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -238056,6 +238088,7 @@ export namespace Prisma {
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
     dangLuc?: SortOrder
+    tienTrinhDang?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -238084,6 +238117,7 @@ export namespace Prisma {
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
     dangLuc?: SortOrder
+    tienTrinhDang?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -238107,6 +238141,7 @@ export namespace Prisma {
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
     dangLuc?: SortOrder
+    tienTrinhDang?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -255890,6 +255925,7 @@ export namespace Prisma {
     maTrenSan?: string | null
     loiCuoi?: string | null
     dangLuc?: Date | string | null
+    tienTrinhDang?: string | null
     createdBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -255913,6 +255949,7 @@ export namespace Prisma {
     maTrenSan?: string | null
     loiCuoi?: string | null
     dangLuc?: Date | string | null
+    tienTrinhDang?: string | null
     createdBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -255952,6 +255989,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -255975,6 +256013,7 @@ export namespace Prisma {
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
     dangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tienTrinhDang?: NullableStringFieldUpdateOperationsInput | string | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string

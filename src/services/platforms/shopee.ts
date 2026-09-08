@@ -217,6 +217,70 @@ export class ShopeeService extends PlatformService {
         return this.hmacSha256(`${partnerId}${path}${timestamp}${accessToken}${userId}`, apiSecret)
     }
 
+    /** URL đã ký cho API kiểu USER (query chung + query nghiệp vụ nếu có). */
+    urlNguoiDung(path: string, cred: { accessToken: string; userId: string }, query?: Record<string, string | number>): string {
+        const timestamp = Math.floor(Date.now() / 1000)
+        const partnerId = parseInt(this.credentials.apiKey, 10)
+        const p = new URLSearchParams({
+            partner_id: String(partnerId),
+            timestamp: String(timestamp),
+            access_token: cred.accessToken,
+            user_id: cred.userId,
+            sign: this.signUser(path, timestamp, cred.accessToken, cred.userId),
+        })
+        for (const [k, v] of Object.entries(query || {})) p.set(k, String(v))
+        return `${SHOPEE_HOST}${path}?${p}`
+    }
+
+    /**
+     * Gọi API kiểu USER (v2.video.*, v2.media.* cho Shopee Video). Đi qua cùng
+     * đường shopeeFetch → proxy Tino (IP whitelist). Trả về NGUYÊN body JSON —
+     * bên gọi tự xét `error`/`message`, vì Shopee Video có lỗi nghiệp vụ nằm trong
+     * `response.failure_list` mà `error` vẫn rỗng.
+     */
+    async goiNguoiDung(path: string, method: 'GET' | 'POST', cred: { accessToken: string; userId: string }, query?: Record<string, string | number>, body?: any): Promise<any> {
+        const url = this.urlNguoiDung(path, cred, method === 'GET' ? query : undefined)
+        const r = await this.shopeeFetch(url, method, method === 'POST' ? (body ?? {}) : undefined)
+        const text = await r.text()
+        try { return JSON.parse(text) }
+        catch { throw new Error(`Shopee trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
+    }
+
+    /**
+     * Tải MỘT KHỐI video (v2.media.upload_video_part) — multipart, KHÔNG đi được qua
+     * shopee-forward.php (JSON). Có SHOPEE_FORWARD_PROXY thì đi qua bản anh em
+     * shopee-forward-upload.php cùng thư mục; không có (dev) thì gửi thẳng Shopee.
+     */
+    async taiKhoiNguoiDung(cred: { accessToken: string; userId: string }, fields: Record<string, string | number>, khoi: Uint8Array): Promise<any> {
+        const path = '/api/v2/media/upload_video_part'
+        const url = this.urlNguoiDung(path, cred)
+        const proxy = process.env.SHOPEE_FORWARD_PROXY
+        const form = new FormData()
+        const blob = new Blob([khoi], { type: 'application/octet-stream' })
+        let dich = url
+        if (proxy) {
+            dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
+            if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải khối')
+            form.set('secret', process.env.SHOPEE_FORWARD_SECRET || '')
+            form.set('url', url)
+            form.set('fields', JSON.stringify(fields))
+        } else {
+            for (const [k, v] of Object.entries(fields)) form.set(k, String(v))
+        }
+        form.set('part_content', blob, `part-${fields.part_seq ?? 0}.bin`)
+
+        const ac = new AbortController()
+        const timer = setTimeout(() => ac.abort(), 200_000)
+        try {
+            const r = await fetch(dich, { method: 'POST', body: form, signal: ac.signal })
+            const text = await r.text()
+            try { return JSON.parse(text) }
+            catch { throw new Error(`Đường tải khối trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
+        } finally {
+            clearTimeout(timer)
+        }
+    }
+
     async refreshAccessToken(): Promise<TokenResponse> {
         const timestamp = Math.floor(Date.now() / 1000)
         const path = '/api/v2/auth/access_token/get'

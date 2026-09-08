@@ -2885,7 +2885,9 @@ router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthReque
         const state = Buffer.from(JSON.stringify({ channelId: channel.id, muc: 'video' })).toString('base64')
         res.json({ success: true, data: { authUrl: service.generateVideoAuthUrl(redirectUri, state), redirectUri } })
     } catch (err: any) {
-        res.status(500).json({ success: false, error: errMsg(err) })
+        // Không qua errMsg: trên prod nó che mọi thứ thành "Internal server error",
+        // mà "Partner ID không hợp lệ" là câu chủ shop cần đọc để tự sửa.
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
 })
 
@@ -2958,7 +2960,8 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
         })
     } catch (err: any) {
         console.error('Video exchange token error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        // Nguyên văn lỗi Shopee ("invalid_code", "error_auth"…) — errMsg sẽ che mất trên prod.
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
 })
 

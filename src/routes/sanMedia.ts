@@ -328,7 +328,26 @@ router.post('/tai-len', authMiddleware, requirePermission('online_orders.edit', 
     } catch (err: any) {
         if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
         console.error('POST /san-media/tai-len lỗi:', err)
-        res.status(500).json({ success: false, error: errMsg(err, 'Không mở được phiên tải lên') })
+        // Nguyên văn: "Google không cấp access token — kết nối lại Drive" phải tới được chủ shop.
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) || 'Không mở được phiên tải lên' })
+    }
+})
+
+/* ─── ĐĂNG LÊN SHOPEE VIDEO — một bước mỗi lần gọi ──────────────────────────────
+ * Xem lib/dangVideoShopee.ts vì sao theo bước. Web gọi lặp tới khi `xong`.
+ * Lỗi của Shopee trả NGUYÊN VĂN: "copyright_not_agree" (chưa đồng ý điều khoản)
+ * và "unauthorized" (chưa được bật) là hai việc khác nhau chủ shop phải tự làm. */
+router.post('/:id/dang-shopee', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { buocDangShopee } = await import('../lib/dangVideoShopee')
+        const nganSach = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 200_000))
+        const kq = await buocDangShopee(prisma, String(req.params.id), nganSach)
+        res.json({ success: true, data: kq })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('POST /san-media/:id/dang-shopee lỗi:', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 600) })
     }
 })
 
@@ -493,7 +512,7 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                 /* Nói ĐÚNG cái đang thiếu. "Chưa hỗ trợ" là câu vô dụng: chủ shop không
                  * biết phải làm gì tiếp, còn người sửa sau không biết còn bao xa. */
                 shopee: {
-                    dangDuoc: false,
+                    dangDuoc: daUyQuyenVideo,
                     daNoiKenhBanHang: coKenh('shopee'),
                     kenhId: kenhShopee?.id || null,
                     kenhTen: kenhShopee?.name || null,

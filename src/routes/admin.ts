@@ -2173,6 +2173,12 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoRefreshToken" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoTokenExpiresAt" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoAuthAt" TIMESTAMP(3)`)
+                // Tiến trình đăng video lên sàn theo từng bước (2026-09-08). Bảng SanMedia
+                // do sync-schemas tạo ở các cửa hàng đã chạy; cửa hàng chưa có bảng thì
+                // ALTER báo lỗi "relation does not exist" — bọc riêng, không chặn phần sau.
+                try {
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "tienTrinhDang" TEXT`)
+                } catch { /* cửa hàng chưa có bảng SanMedia → sync-schemas sẽ tạo đủ cột */ }
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION`)
@@ -4518,6 +4524,29 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
             } catch (e: any) {
                 o.thuMucDrive = 'không đọc được'
                 o.loiCaiDat = String(e?.message || e).slice(0, 100)
+            }
+            /* Cột Shopee Video (08/09/2026): đo BẰNG NỘI DUNG — SELECT thẳng cột mới.
+             * /admin/migrate trả "OK" không chứng minh cột tồn tại (bẫy đã cắn 3 lần). */
+            try {
+                const kv = await sp.onlineChannel.findFirst({
+                    where: { platform: 'shopee' },
+                    select: { id: true, name: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true } as any,
+                }) as any
+                o.cotVideoOk = true
+                o.shopeeVideo = kv
+                    ? { kenh: kv.name, daUyQuyen: !!kv.videoUserId, userId: kv.videoUserId || null, uyQuyenLuc: kv.videoAuthAt || null, tokenHetHan: kv.videoTokenExpiresAt || null }
+                    : null
+            } catch (e: any) {
+                o.cotVideoOk = false
+                o.loiCotVideo = String(e?.message || e).slice(0, 120)
+            }
+            // Cột SanMedia.tienTrinhDang (08/09/2026) — cũng đo bằng SELECT thẳng.
+            try {
+                await sp.sanMedia.findFirst({ select: { id: true, tienTrinhDang: true } as any })
+                o.cotTienTrinhOk = true
+            } catch (e: any) {
+                o.cotTienTrinhOk = false
+                o.loiCotTienTrinh = String(e?.message || e).slice(0, 120)
             }
             ra.push(o)
         }

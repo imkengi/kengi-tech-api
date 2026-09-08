@@ -2637,6 +2637,7 @@ exports.Prisma.SanMediaScalarFieldEnum = {
   maTrenSan: 'maTrenSan',
   loiCuoi: 'loiCuoi',
   dangLuc: 'dangLuc',
+  tienTrinhDang: 'tienTrinhDang',
   createdBy: 'createdBy',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

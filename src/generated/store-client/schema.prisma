@@ -3744,6 +3744,12 @@ model SanMedia {
   loiCuoi   String?
   dangLuc   DateTime?
 
+  /// TIẾN TRÌNH ĐĂNG đang dở (JSON): video_upload_id, part_size, số khối đã lên,
+  /// giai đoạn… Cloud Run bóp CPU ngoài yêu cầu và cắt yêu cầu ở 300 giây, nên
+  /// việc đăng chạy theo TỪNG BƯỚC có ngân sách thời gian, mỗi bước ghi lại đây;
+  /// đứt giữa chừng thì bước sau đọc ra chạy tiếp, không tải lại từ khối 0.
+  tienTrinhDang String?
+
   createdBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
