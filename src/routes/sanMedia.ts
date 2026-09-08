@@ -462,11 +462,30 @@ router.delete('/:id', authMiddleware, requirePermission('online_orders.edit', 'o
 router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const kenhDs = await prisma.onlineChannel.findMany({
-            where: { status: 'active' },
-            select: { platform: true, name: true, accessToken: true },
-        }).catch(() => [])
+        /* Cột video* mới thêm 08/09/2026. Cửa hàng chưa chạy /admin/migrate thì
+         * SELECT rộng ném P2022 — rơi về SELECT hẹp và NÓI RA, đừng nuốt thành
+         * "chưa nối kênh" (đó là câu sai). */
+        let chuaMigrate = false
+        let kenhDs: any[] = []
+        try {
+            kenhDs = await prisma.onlineChannel.findMany({
+                where: { status: 'active' },
+                select: { id: true, platform: true, name: true, accessToken: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoRefreshToken: true },
+            })
+        } catch {
+            chuaMigrate = true
+            kenhDs = await prisma.onlineChannel.findMany({
+                where: { status: 'active' },
+                select: { id: true, platform: true, name: true, accessToken: true },
+            }).catch(() => [])
+        }
         const coKenh = (p: string) => kenhDs.some((c: any) => c.platform === p && c.accessToken)
+        const kenhShopee = kenhDs.find((c: any) => c.platform === 'shopee' && c.accessToken) || kenhDs.find((c: any) => c.platform === 'shopee')
+        const daUyQuyenVideo = !!kenhShopee?.videoUserId
+        // refresh_token sống 30 ngày kể từ lần uỷ quyền/làm mới gần nhất
+        const videoRefreshHetHan = kenhShopee?.videoAuthAt
+            ? new Date(new Date(kenhShopee.videoAuthAt).getTime() + 30 * 86400_000).toISOString()
+            : null
 
         res.json({
             success: true,
@@ -476,10 +495,20 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                 shopee: {
                     dangDuoc: false,
                     daNoiKenhBanHang: coKenh('shopee'),
+                    kenhId: kenhShopee?.id || null,
+                    kenhTen: kenhShopee?.name || null,
+                    daUyQuyenVideo,
+                    videoUserId: kenhShopee?.videoUserId || null,
+                    videoUyQuyenLuc: kenhShopee?.videoAuthAt || null,
+                    videoRefreshHetHan,
+                    chuaMigrate,
                     conThieu: [
-                        'Ứng dụng phải đăng ký thêm loại "Shopee Video Management" trong Shopee Open Platform console.',
-                        'Phải uỷ quyền lại theo kiểu USER: API video ký bằng user_id chứ không phải shop_id (auth_type=seller thì get_access_token trả về cả hai).',
+                        ...(daUyQuyenVideo ? [] : [
+                            'Ứng dụng phải đăng ký thêm loại "Shopee Video Management" trong Shopee Open Platform console (chủ shop báo đã làm 08/09).',
+                            'Bấm "Uỷ quyền Shopee Video" bên dưới và đăng nhập bằng tài khoản CHỦ shop: API video ký bằng user_id chứ không phải shop_id.',
+                        ]),
                         'Cửa hàng phải đồng ý Điều khoản Shopee Video trong Seller Center.',
+                        ...(daUyQuyenVideo ? ['Đường đăng (init_video_upload → post_video) đang được nối — uỷ quyền đã xong, việc còn lại ở phía mã.'] : []),
                     ],
                     duongApi: ['v2.media.init_video_upload', 'v2.media.upload_video_part', 'v2.media.complete_video_upload', 'v2.video.get_cover_list', 'v2.video.edit_video_info', 'v2.video.post_video'],
                     gioiHan: GIOI_HAN.shopee,

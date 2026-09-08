@@ -1428,7 +1428,12 @@ exports.Prisma.OnlineChannelScalarFieldEnum = {
   totalRevenue: 'totalRevenue',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  commissionRate: 'commissionRate'
+  commissionRate: 'commissionRate',
+  videoUserId: 'videoUserId',
+  videoAccessToken: 'videoAccessToken',
+  videoRefreshToken: 'videoRefreshToken',
+  videoTokenExpiresAt: 'videoTokenExpiresAt',
+  videoAuthAt: 'videoAuthAt'
 };
 
 exports.Prisma.OnlineOrderScalarFieldEnum = {

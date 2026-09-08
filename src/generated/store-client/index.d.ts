@@ -106706,6 +106706,11 @@ export namespace Prisma {
     createdAt: Date | null
     updatedAt: Date | null
     commissionRate: number | null
+    videoUserId: string | null
+    videoAccessToken: string | null
+    videoRefreshToken: string | null
+    videoTokenExpiresAt: Date | null
+    videoAuthAt: Date | null
   }
 
   export type OnlineChannelMaxAggregateOutputType = {
@@ -106730,6 +106735,11 @@ export namespace Prisma {
     createdAt: Date | null
     updatedAt: Date | null
     commissionRate: number | null
+    videoUserId: string | null
+    videoAccessToken: string | null
+    videoRefreshToken: string | null
+    videoTokenExpiresAt: Date | null
+    videoAuthAt: Date | null
   }
 
   export type OnlineChannelCountAggregateOutputType = {
@@ -106754,6 +106764,11 @@ export namespace Prisma {
     createdAt: number
     updatedAt: number
     commissionRate: number
+    videoUserId: number
+    videoAccessToken: number
+    videoRefreshToken: number
+    videoTokenExpiresAt: number
+    videoAuthAt: number
     _all: number
   }
 
@@ -106792,6 +106807,11 @@ export namespace Prisma {
     createdAt?: true
     updatedAt?: true
     commissionRate?: true
+    videoUserId?: true
+    videoAccessToken?: true
+    videoRefreshToken?: true
+    videoTokenExpiresAt?: true
+    videoAuthAt?: true
   }
 
   export type OnlineChannelMaxAggregateInputType = {
@@ -106816,6 +106836,11 @@ export namespace Prisma {
     createdAt?: true
     updatedAt?: true
     commissionRate?: true
+    videoUserId?: true
+    videoAccessToken?: true
+    videoRefreshToken?: true
+    videoTokenExpiresAt?: true
+    videoAuthAt?: true
   }
 
   export type OnlineChannelCountAggregateInputType = {
@@ -106840,6 +106865,11 @@ export namespace Prisma {
     createdAt?: true
     updatedAt?: true
     commissionRate?: true
+    videoUserId?: true
+    videoAccessToken?: true
+    videoRefreshToken?: true
+    videoTokenExpiresAt?: true
+    videoAuthAt?: true
     _all?: true
   }
 
@@ -106951,6 +106981,11 @@ export namespace Prisma {
     createdAt: Date
     updatedAt: Date
     commissionRate: number
+    videoUserId: string | null
+    videoAccessToken: string | null
+    videoRefreshToken: string | null
+    videoTokenExpiresAt: Date | null
+    videoAuthAt: Date | null
     _count: OnlineChannelCountAggregateOutputType | null
     _avg: OnlineChannelAvgAggregateOutputType | null
     _sum: OnlineChannelSumAggregateOutputType | null
@@ -106994,6 +107029,11 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     commissionRate?: boolean
+    videoUserId?: boolean
+    videoAccessToken?: boolean
+    videoRefreshToken?: boolean
+    videoTokenExpiresAt?: boolean
+    videoAuthAt?: boolean
     orders?: boolean | OnlineChannel$ordersArgs<ExtArgs>
     products?: boolean | OnlineChannel$productsArgs<ExtArgs>
     _count?: boolean | OnlineChannelCountOutputTypeDefaultArgs<ExtArgs>
@@ -107021,6 +107061,11 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     commissionRate?: boolean
+    videoUserId?: boolean
+    videoAccessToken?: boolean
+    videoRefreshToken?: boolean
+    videoTokenExpiresAt?: boolean
+    videoAuthAt?: boolean
   }, ExtArgs["result"]["onlineChannel"]>
 
   export type OnlineChannelSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -107045,6 +107090,11 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     commissionRate?: boolean
+    videoUserId?: boolean
+    videoAccessToken?: boolean
+    videoRefreshToken?: boolean
+    videoTokenExpiresAt?: boolean
+    videoAuthAt?: boolean
   }, ExtArgs["result"]["onlineChannel"]>
 
   export type OnlineChannelSelectScalar = {
@@ -107069,9 +107119,14 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     commissionRate?: boolean
+    videoUserId?: boolean
+    videoAccessToken?: boolean
+    videoRefreshToken?: boolean
+    videoTokenExpiresAt?: boolean
+    videoAuthAt?: boolean
   }
 
-  export type OnlineChannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "platform" | "status" | "shopUrl" | "apiKey" | "apiSecret" | "accessToken" | "refreshToken" | "tokenExpiresAt" | "shopId" | "platformShopId" | "webhookSecret" | "syncEnabled" | "syncFromDate" | "lastSyncAt" | "totalOrders" | "totalRevenue" | "createdAt" | "updatedAt" | "commissionRate", ExtArgs["result"]["onlineChannel"]>
+  export type OnlineChannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "platform" | "status" | "shopUrl" | "apiKey" | "apiSecret" | "accessToken" | "refreshToken" | "tokenExpiresAt" | "shopId" | "platformShopId" | "webhookSecret" | "syncEnabled" | "syncFromDate" | "lastSyncAt" | "totalOrders" | "totalRevenue" | "createdAt" | "updatedAt" | "commissionRate" | "videoUserId" | "videoAccessToken" | "videoRefreshToken" | "videoTokenExpiresAt" | "videoAuthAt", ExtArgs["result"]["onlineChannel"]>
   export type OnlineChannelInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     orders?: boolean | OnlineChannel$ordersArgs<ExtArgs>
     products?: boolean | OnlineChannel$productsArgs<ExtArgs>
@@ -107108,6 +107163,11 @@ export namespace Prisma {
       createdAt: Date
       updatedAt: Date
       commissionRate: number
+      videoUserId: string | null
+      videoAccessToken: string | null
+      videoRefreshToken: string | null
+      videoTokenExpiresAt: Date | null
+      videoAuthAt: Date | null
     }, ExtArgs["result"]["onlineChannel"]>
     composites: {}
   }
@@ -107554,6 +107614,11 @@ export namespace Prisma {
     readonly createdAt: FieldRef<"OnlineChannel", 'DateTime'>
     readonly updatedAt: FieldRef<"OnlineChannel", 'DateTime'>
     readonly commissionRate: FieldRef<"OnlineChannel", 'Float'>
+    readonly videoUserId: FieldRef<"OnlineChannel", 'String'>
+    readonly videoAccessToken: FieldRef<"OnlineChannel", 'String'>
+    readonly videoRefreshToken: FieldRef<"OnlineChannel", 'String'>
+    readonly videoTokenExpiresAt: FieldRef<"OnlineChannel", 'DateTime'>
+    readonly videoAuthAt: FieldRef<"OnlineChannel", 'DateTime'>
   }
     
 
@@ -193389,7 +193454,12 @@ export namespace Prisma {
     totalRevenue: 'totalRevenue',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
-    commissionRate: 'commissionRate'
+    commissionRate: 'commissionRate',
+    videoUserId: 'videoUserId',
+    videoAccessToken: 'videoAccessToken',
+    videoRefreshToken: 'videoRefreshToken',
+    videoTokenExpiresAt: 'videoTokenExpiresAt',
+    videoAuthAt: 'videoAuthAt'
   };
 
   export type OnlineChannelScalarFieldEnum = (typeof OnlineChannelScalarFieldEnum)[keyof typeof OnlineChannelScalarFieldEnum]
@@ -202646,6 +202716,11 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"OnlineChannel"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineChannel"> | Date | string
     commissionRate?: FloatFilter<"OnlineChannel"> | number
+    videoUserId?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoAccessToken?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoRefreshToken?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoTokenExpiresAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
+    videoAuthAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     orders?: OnlineOrderListRelationFilter
     products?: OnlineProductListRelationFilter
   }
@@ -202672,6 +202747,11 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     commissionRate?: SortOrder
+    videoUserId?: SortOrderInput | SortOrder
+    videoAccessToken?: SortOrderInput | SortOrder
+    videoRefreshToken?: SortOrderInput | SortOrder
+    videoTokenExpiresAt?: SortOrderInput | SortOrder
+    videoAuthAt?: SortOrderInput | SortOrder
     orders?: OnlineOrderOrderByRelationAggregateInput
     products?: OnlineProductOrderByRelationAggregateInput
   }
@@ -202701,6 +202781,11 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"OnlineChannel"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineChannel"> | Date | string
     commissionRate?: FloatFilter<"OnlineChannel"> | number
+    videoUserId?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoAccessToken?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoRefreshToken?: StringNullableFilter<"OnlineChannel"> | string | null
+    videoTokenExpiresAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
+    videoAuthAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     orders?: OnlineOrderListRelationFilter
     products?: OnlineProductListRelationFilter
   }, "id">
@@ -202727,6 +202812,11 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     commissionRate?: SortOrder
+    videoUserId?: SortOrderInput | SortOrder
+    videoAccessToken?: SortOrderInput | SortOrder
+    videoRefreshToken?: SortOrderInput | SortOrder
+    videoTokenExpiresAt?: SortOrderInput | SortOrder
+    videoAuthAt?: SortOrderInput | SortOrder
     _count?: OnlineChannelCountOrderByAggregateInput
     _avg?: OnlineChannelAvgOrderByAggregateInput
     _max?: OnlineChannelMaxOrderByAggregateInput
@@ -202759,6 +202849,11 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"OnlineChannel"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"OnlineChannel"> | Date | string
     commissionRate?: FloatWithAggregatesFilter<"OnlineChannel"> | number
+    videoUserId?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
+    videoAccessToken?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
+    videoRefreshToken?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
+    videoTokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"OnlineChannel"> | Date | string | null
+    videoAuthAt?: DateTimeNullableWithAggregatesFilter<"OnlineChannel"> | Date | string | null
   }
 
   export type OnlineOrderWhereInput = {
@@ -219128,6 +219223,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     orders?: OnlineOrderCreateNestedManyWithoutChannelInput
     products?: OnlineProductCreateNestedManyWithoutChannelInput
   }
@@ -219154,6 +219254,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     orders?: OnlineOrderUncheckedCreateNestedManyWithoutChannelInput
     products?: OnlineProductUncheckedCreateNestedManyWithoutChannelInput
   }
@@ -219180,6 +219285,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     orders?: OnlineOrderUpdateManyWithoutChannelNestedInput
     products?: OnlineProductUpdateManyWithoutChannelNestedInput
   }
@@ -219206,6 +219316,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     orders?: OnlineOrderUncheckedUpdateManyWithoutChannelNestedInput
     products?: OnlineProductUncheckedUpdateManyWithoutChannelNestedInput
   }
@@ -219232,6 +219347,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
   }
 
   export type OnlineChannelUpdateManyMutationInput = {
@@ -219256,6 +219376,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type OnlineChannelUncheckedUpdateManyInput = {
@@ -219280,6 +219405,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type OnlineOrderCreateInput = {
@@ -233243,6 +233373,11 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     commissionRate?: SortOrder
+    videoUserId?: SortOrder
+    videoAccessToken?: SortOrder
+    videoRefreshToken?: SortOrder
+    videoTokenExpiresAt?: SortOrder
+    videoAuthAt?: SortOrder
   }
 
   export type OnlineChannelAvgOrderByAggregateInput = {
@@ -233273,6 +233408,11 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     commissionRate?: SortOrder
+    videoUserId?: SortOrder
+    videoAccessToken?: SortOrder
+    videoRefreshToken?: SortOrder
+    videoTokenExpiresAt?: SortOrder
+    videoAuthAt?: SortOrder
   }
 
   export type OnlineChannelMinOrderByAggregateInput = {
@@ -233297,6 +233437,11 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     commissionRate?: SortOrder
+    videoUserId?: SortOrder
+    videoAccessToken?: SortOrder
+    videoRefreshToken?: SortOrder
+    videoTokenExpiresAt?: SortOrder
+    videoAuthAt?: SortOrder
   }
 
   export type OnlineChannelSumOrderByAggregateInput = {
@@ -250283,6 +250428,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     products?: OnlineProductCreateNestedManyWithoutChannelInput
   }
 
@@ -250308,6 +250458,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     products?: OnlineProductUncheckedCreateNestedManyWithoutChannelInput
   }
 
@@ -250383,6 +250538,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     products?: OnlineProductUpdateManyWithoutChannelNestedInput
   }
 
@@ -250408,6 +250568,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     products?: OnlineProductUncheckedUpdateManyWithoutChannelNestedInput
   }
 
@@ -250449,6 +250614,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     orders?: OnlineOrderCreateNestedManyWithoutChannelInput
   }
 
@@ -250474,6 +250644,11 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     commissionRate?: number
+    videoUserId?: string | null
+    videoAccessToken?: string | null
+    videoRefreshToken?: string | null
+    videoTokenExpiresAt?: Date | string | null
+    videoAuthAt?: Date | string | null
     orders?: OnlineOrderUncheckedCreateNestedManyWithoutChannelInput
   }
 
@@ -250588,6 +250763,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     orders?: OnlineOrderUpdateManyWithoutChannelNestedInput
   }
 
@@ -250613,6 +250793,11 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     commissionRate?: FloatFieldUpdateOperationsInput | number
+    videoUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    videoAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    videoTokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    videoAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     orders?: OnlineOrderUncheckedUpdateManyWithoutChannelNestedInput
   }
 

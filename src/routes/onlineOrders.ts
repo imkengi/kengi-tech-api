@@ -2860,6 +2860,108 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
     }
 })
 
+// ═══ SHOPEE VIDEO — uỷ quyền CẤP NGƯỜI DÙNG, tách hẳn token bán hàng ═══════════
+// Chủ shop 08/09/2026 đã đăng ký loại app "Shopee Video Management", hỏi "giờ uỷ
+// quyền sao". Luồng theo tài liệu gốc (Livestream API Integration Guide mục 3):
+//   link open.shopee.com/auth?auth_type=seller → callback mang `code` (10 phút,
+//   dùng một lần) → get_access_token trả shop_id_list + user_id_list song song.
+// Đi vòng qua web để đổi mã như luồng bán hàng: callback không có JWT nên máy chủ
+// không biết cửa hàng nào; web có JWT gọi lại.
+
+// GET /api/online-orders/channels/:id/video-auth-url
+router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Chỉ kênh Shopee có luồng uỷ quyền video kiểu này' }); return }
+        if (!channel.apiKey || !channel.apiSecret) { res.status(400).json({ success: false, error: 'Kênh chưa có Partner ID / Partner Key' }); return }
+
+        const service: any = getPlatformService('shopee', {
+            apiKey: channel.apiKey, apiSecret: channel.apiSecret, shopId: channel.shopId || undefined,
+        })
+        const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`
+        const redirectUri = `${baseUrl}/api/online-orders/channels/${channel.id}/video-callback`
+        const state = Buffer.from(JSON.stringify({ channelId: channel.id, muc: 'video' })).toString('base64')
+        res.json({ success: true, data: { authUrl: service.generateVideoAuthUrl(redirectUri, state), redirectUri } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/online-orders/channels/:id/video-callback?code=...&state=...
+router.get('/channels/:id/video-callback', async (req: AuthRequest, res: Response) => {
+    try {
+        const { code } = req.query
+        if (!code) { res.status(400).send('Thiếu mã uỷ quyền (code)'); return }
+        const frontendUrl = process.env.FRONTEND_URL || 'https://kengi.vn'
+        res.redirect(`${frontendUrl}/dashboard-online-orders?video_code=${encodeURIComponent(String(code))}&channel_id=${encodeURIComponent(req.params.id as string)}`)
+    } catch (err: any) {
+        res.status(500).send('Lỗi uỷ quyền video: ' + err.message)
+    }
+})
+
+// POST /api/online-orders/channels/:id/video-exchange-token  (body: { code })
+router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (!req.body?.code) { res.status(400).json({ success: false, error: 'Thiếu code' }); return }
+
+        const service: any = getPlatformService('shopee', {
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '', shopId: channel.shopId || undefined,
+        })
+        const t = await service.exchangeVideoToken(String(req.body.code))
+
+        /* Một tài khoản chủ có thể sở hữu nhiều shop → hai danh sách song song.
+         * Lấy đúng user_id của shop đang nối; không khớp shop nào thì lấy phần tử
+         * đầu NHƯNG phải nói ra, đừng im lặng gắn nhầm shop. */
+        const i = channel.shopId ? t.shopIdList.indexOf(String(channel.shopId)) : -1
+        const idx = i >= 0 ? i : 0
+        const userId: string | undefined = t.userIdList[idx]
+        if (!userId) {
+            res.status(400).json({
+                success: false,
+                error: 'Shopee không trả user_id. Thường do: tài khoản vừa đăng nhập không phải tài khoản CHỦ shop, '
+                    + 'hoặc app chưa được cấp loại "Shopee Video Management", hoặc chưa đồng ý Điều khoản Shopee Video trong Seller Center.',
+            })
+            return
+        }
+
+        await prisma.onlineChannel.update({
+            where: { id: channel.id },
+            data: {
+                videoUserId: userId,
+                videoAccessToken: t.accessToken,
+                videoRefreshToken: t.refreshToken,
+                videoTokenExpiresAt: new Date(Date.now() + t.expiresIn * 1000),
+                videoAuthAt: new Date(),
+            } as any,
+        })
+        await prisma.syncLog.create({
+            data: {
+                channelId: channel.id, action: 'video_auth', status: 'success',
+                details: `Shopee Video user_id=${userId}, shop=${t.shopIdList[idx] || '?'}${i < 0 && channel.shopId ? ' (KHÔNG khớp shop đang nối ' + channel.shopId + ')' : ''}, ${t.shopIdList.length} shop`,
+            },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                userId, shopId: t.shopIdList[idx] || null,
+                shopKhop: i >= 0 || !channel.shopId,
+                soShop: t.shopIdList.length,
+                expiresIn: t.expiresIn,
+                channelName: channel.name,
+            },
+        })
+    } catch (err: any) {
+        console.error('Video exchange token error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // POST /api/online-orders/channels/:id/sync
 // ── Thứ tự vòng đời đơn ──────────────────────────────────────────────────────
 // Ta suy ra "đã giao" từ VẬN ĐƠN, thường sớm hơn lúc sàn kịp đổi trạng thái ĐƠN.

@@ -1859,6 +1859,15 @@ model OnlineChannel {
   products OnlineProduct[]
 
   commissionRate Float @default(6) // % phí sàn mặc định
+
+  // ─ Shopee Video / Livestream: uỷ quyền CẤP NGƯỜI DÙNG, tách hẳn token bán hàng ─
+  // Mọi API v2.video.* ký bằng user_id chứ KHÔNG phải shop_id; token 4 giờ,
+  // refresh_token 30 ngày dùng MỘT lần (làm mới xong phải lưu cái mới ngay).
+  videoUserId         String?
+  videoAccessToken    String?
+  videoRefreshToken   String?
+  videoTokenExpiresAt DateTime?
+  videoAuthAt         DateTime?
 }
 
 // ─── Online Orders ──────────────────────────────────────────────────────────

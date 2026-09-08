@@ -2165,6 +2165,14 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Shopee Ads Smart Voucher — chỉ quan sát (2026-06-24)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "adsVoucherDiscount" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "commissionRate" DOUBLE PRECISION NOT NULL DEFAULT 6`)
+                // Shopee Video: uỷ quyền CẤP NGƯỜI DÙNG, tách hẳn token bán hàng (2026-09-08).
+                // Thiếu cột là onlineChannel.findUnique (SELECT đủ cột) ném P2022 → trang
+                // Đơn Hàng Online trắng cho MỌI cửa hàng, không riêng gì Media.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoUserId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoAccessToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoRefreshToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoTokenExpiresAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoAuthAt" TIMESTAMP(3)`)
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION`)

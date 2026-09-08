@@ -155,6 +155,68 @@ export class ShopeeService extends PlatformService {
         }
     }
 
+    // ─── SHOPEE VIDEO / LIVESTREAM — uỷ quyền CẤP NGƯỜI DÙNG ───────────────────
+    // Đọc tài liệu gốc 08/09/2026 (Livestream API Integration Guide, mục 3, được
+    // Shopee Video Guide mục 5 trỏ sang). KHÁC HẲN luồng cấp cửa hàng ở trên:
+    //  · link đi qua open.shopee.com/auth, KHÔNG ký, bắt buộc auth_type=seller
+    //    thì get_access_token mới trả về CẢ shop_id_list lẫn user_id_list;
+    //  · mọi API v2.video.* / v2.livestream.* ký bằng user_id, không phải shop_id;
+    //  · token 4 giờ, refresh_token 30 ngày và dùng MỘT lần cho mỗi user_id.
+    // Miền của redirect_uri phải trùng miền đã khai khi tạo app.
+
+    generateVideoAuthUrl(redirectUri: string, state: string): string {
+        const partnerId = parseInt(this.credentials.apiKey, 10)
+        if (isNaN(partnerId) || partnerId <= 0) {
+            throw new Error(`Partner ID không hợp lệ: "${this.credentials.apiKey}". Partner ID phải là số nguyên.`)
+        }
+        const params = new URLSearchParams({
+            partner_id: String(partnerId),
+            auth_type: 'seller',
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            state,
+        })
+        return `https://open.shopee.com/auth?${params}`
+    }
+
+    /** Đổi mã → token cấp người dùng. Body KHÔNG mang shop_id; Shopee trả hai danh sách song song. */
+    async exchangeVideoToken(code: string): Promise<{
+        shopIdList: string[]; userIdList: string[]; accessToken: string; refreshToken: string; expiresIn: number
+    }> {
+        const timestamp = Math.floor(Date.now() / 1000)
+        const path = '/api/v2/auth/token/get'
+        const sign = this.sign(path, timestamp)
+        const partnerId = parseInt(this.credentials.apiKey, 10)
+        const url = `${SHOPEE_API}/auth/token/get?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sign}`
+        const data = await this.httpPost(url, { code, partner_id: partnerId })
+        if (data.error) throw new Error(`Shopee auth error: ${data.error} - ${data.message}`)
+        return {
+            shopIdList: (data.shop_id_list || []).map(String),
+            userIdList: (data.user_id_list || []).map(String),
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+            expiresIn: Number(data.expire_in) || 14400,
+        }
+    }
+
+    /** Làm mới token cấp người dùng: body mang user_id chứ không phải shop_id. */
+    async refreshVideoToken(refreshToken: string, userId: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+        const timestamp = Math.floor(Date.now() / 1000)
+        const path = '/api/v2/auth/access_token/get'
+        const sign = this.sign(path, timestamp)
+        const partnerId = parseInt(this.credentials.apiKey, 10)
+        const url = `${SHOPEE_API}/auth/access_token/get?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sign}`
+        const data = await this.httpPost(url, { refresh_token: refreshToken, partner_id: partnerId, user_id: Number(userId) })
+        if (data.error) throw new Error(`Shopee refresh error: ${data.error} - ${data.message}`)
+        return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: Number(data.expire_in) || 14400 }
+    }
+
+    /** Chữ ký API kiểu USER: partner_id + path + timestamp + access_token + user_id. */
+    signUser(path: string, timestamp: number, accessToken: string, userId: string): string {
+        const { apiKey: partnerId, apiSecret } = this.credentials
+        return this.hmacSha256(`${partnerId}${path}${timestamp}${accessToken}${userId}`, apiSecret)
+    }
+
     async refreshAccessToken(): Promise<TokenResponse> {
         const timestamp = Math.floor(Date.now() / 1000)
         const path = '/api/v2/auth/access_token/get'
