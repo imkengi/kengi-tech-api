@@ -4702,6 +4702,10 @@ router.get('/do-mau-in', async (req: Request, res: Response) => {
                         oDonGia_moi: h.includes('{{donGiaCK}}'),
                         oCK_caDong_cu: h.includes('text-align:right;">{{giamGiaSP}}</td>'),
                         oCK_donVi_moi: h.includes('{{giamGiaDonVi}}'),
+                        /* ?raw=1: trả nguyên HTML để so hai cửa hàng với nhau.
+                         * Cần khi độ dài lệch mà không biết phần lệch là sửa
+                         * thật của chủ shop hay rác — đoán tiếp là mất dữ liệu. */
+                        ...(String(req.query.raw || '') === '1' ? { html: h } : {}),
                     }
                 }),
                 yNghia: 'oCK_caDong_cu = true nghĩa là máy chủ VẪN giữ bản cũ; máy nào kéo về cũng ra mẫu cũ.',
