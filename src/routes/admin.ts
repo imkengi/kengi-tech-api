@@ -4573,6 +4573,70 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
 })
 
 /**
+ * BỘ ĐO ĐƯỜNG TẢI KHỐI LÊN DRIVE — POST /admin/do-tai-khoi-drive?storeCode=
+ *
+ * Chủ shop báo "Mất kết nối khi đang tải lên". Đã đổi sang tải theo KHỐI qua máy
+ * chủ. Bộ này chứng minh nửa MÁY CHỦ→GOOGLE chạy được (nửa trình duyệt→máy chủ là
+ * CORS thường, vốn đã chạy cho /tai-len): mở phiên rồi gửi HAI khối 256KB thật,
+ * xong thì xoá file thử. Không đụng gì tới dữ liệu cửa hàng.
+ *
+ * CHỈ ĐO. Chạy được ⇒ token + thư mục + giao thức nối tiếp đều ổn từ IP Cloud Run.
+ */
+router.post('/do-tai-khoi-drive', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const cai = await sp.storeSettings.findFirst({ select: { driveFolderId: true } as any }) as any
+        const folderId = cai?.driveFolderId || null
+        if (!folderId) { res.json({ success: true, data: { cuaHang: store.name, ketLuan: 'CHƯA khai thư mục Drive — không có gì để thử' } }); return }
+
+        const { layTokenGhiDrive, getStoreDriveWriter } = await import('../lib/driveOAuth')
+        const { moPhienResumable, guiKhoiResumable } = await import('../lib/driveChunkUpload')
+
+        const { token, nguon, email } = await layTokenGhiDrive(sp)
+        const PHAN = 262144            // 256KB
+        const tong = PHAN * 2
+        const ten = `_kengi-chunk-test-${Date.now()}.bin`
+
+        const buoc: any = { nguonQuyen: nguon, email: email || null, thuMuc: String(folderId).slice(0, 10) + '…' }
+        const url = await moPhienResumable(token, folderId, ten, 'application/octet-stream', tong)
+        buoc.moPhien = 'OK'
+
+        const zero = new Uint8Array(PHAN)   // toàn 0, chỉ để thử
+        const k0 = await guiKhoiResumable(url, zero, 0, tong)
+        buoc.khoi0 = { xong: k0.xong, status: k0.status, daNhan: k0.daNhan }
+        const k1 = await guiKhoiResumable(url, zero, PHAN, tong)
+        buoc.khoi1 = { xong: k1.xong, status: k1.status, fileId: k1.file?.id || null }
+
+        let daXoa = false
+        if (k1.file?.id) {
+            try {
+                const { drive } = await getStoreDriveWriter(sp)
+                await drive.files.delete({ fileId: k1.file.id, supportsAllDrives: true })
+                daXoa = true
+            } catch (e: any) { buoc.loiXoa = String(e?.message || e).slice(0, 150) }
+        }
+        buoc.daXoaFileThu = daXoa
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                ...buoc,
+                ketLuan: k1.file?.id
+                    ? 'CHẠY ĐƯỢC — máy chủ mở phiên, gửi 2 khối, Drive trả file id. Đường tải khối ổn từ IP Cloud Run.'
+                    : 'KHÔNG XONG — xem khoi0/khoi1 để biết kẹt ở đâu.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐƠN SÀN THEO TRẠNG THÁI × ĐÃ LÊN PHIẾU CHƯA — GET /admin/do-don-len-phieu?storeCode=
  *
  * Chủ shop 07/09/2026 muốn "đơn đã XÁC NHẬN mới ghi vào đơn giao dịch". Trước khi

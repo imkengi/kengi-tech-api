@@ -25,7 +25,7 @@
 //  sang 'da_dang' khi SÀN thật sự trả về mã video — không tự đánh dấu.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Router, Response } from 'express'
+import express, { Router, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
@@ -285,34 +285,20 @@ router.post('/tai-len', authMiddleware, requirePermission('online_orders.edit', 
         }
 
         const { layTokenGhiDrive } = await import('../lib/driveOAuth')
+        const { moPhienResumable, KICH_THUOC_KHOI } = await import('../lib/driveChunkUpload')
         const { token, nguon, email } = await layTokenGhiDrive(prisma)
 
-        const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json; charset=UTF-8',
-                'X-Upload-Content-Type': mime,
-                'X-Upload-Content-Length': String(bytes),
-            },
-            body: JSON.stringify({ name: ten.slice(0, 200), parents: [folderId] }),
-        })
-
-        if (!r.ok) {
-            /* Lỗi của Google phải hiện NGUYÊN VĂN. "thư mục không tồn tại" và
-             * "tài khoản không có quyền ghi" là hai chuyện khác nhau, gộp thành
-             * "không tải lên được" là chủ shop không biết phải sửa ở đâu. */
-            const chiTiet = (await r.text().catch(() => '')).slice(0, 400)
+        let duongTaiLen: string
+        try {
+            duongTaiLen = await moPhienResumable(token, folderId, ten, mime, bytes)
+        } catch (e: any) {
+            /* Lỗi của Google hiện NGUYÊN VĂN kèm ĐANG GHI BẰNG TÀI KHOẢN NÀO —
+             * "thư mục không tồn tại" và "không có quyền ghi" là hai chuyện khác
+             * nhau, và tài khoản hệ thống chưa được share thư mục cũng ra lỗi này. */
             res.status(502).json({
                 success: false,
-                error: `Google từ chối mở phiên tải lên (HTTP ${r.status}). Đang ghi bằng ${nguon === 'chu-shop' ? `tài khoản ${email || 'chủ shop'}` : 'tài khoản hệ thống'}. ${chiTiet}`,
+                error: `${String(e?.message || e)} (đang ghi bằng ${nguon === 'chu-shop' ? `tài khoản ${email || 'chủ shop'}` : 'tài khoản hệ thống'})`,
             })
-            return
-        }
-
-        const duongTaiLen = r.headers.get('location')
-        if (!duongTaiLen) {
-            res.status(502).json({ success: false, error: 'Google không trả địa chỉ phiên tải lên' })
             return
         }
 
@@ -322,7 +308,8 @@ router.post('/tai-len', authMiddleware, requirePermission('online_orders.edit', 
                 duongTaiLen,
                 nguonQuyen: nguon,
                 email: email || null,
-                ghiChu: 'Trình duyệt PUT thẳng byte lên địa chỉ này, KHÔNG đi qua máy chủ. Xong rồi gọi POST /san-media với nguon="drive" và nguonId = id file Google trả về.',
+                kichThuocKhoi: KICH_THUOC_KHOI,
+                ghiChu: 'Trình duyệt cắt file thành khối rồi POST từng khối lên /san-media/tai-len/chunk (kèm header X-Upload-Url = duongTaiLen). Máy chủ chuyển tiếp vào Google. Khối cuối trả file.id → gọi POST /san-media với nguon="drive".',
             },
         })
     } catch (err: any) {
@@ -332,6 +319,42 @@ router.post('/tai-len', authMiddleware, requirePermission('online_orders.edit', 
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) || 'Không mở được phiên tải lên' })
     }
 })
+
+/* ─── NHẬN MỘT KHỐI, CHUYỂN TIẾP LÊN GOOGLE ─────────────────────────────────────
+ * Thân yêu cầu là byte thô (application/octet-stream) → express.raw. Header mang
+ * URL phiên + vị trí khối. Không đọc DB, không cần storePrisma — chỉ chuyển tiếp,
+ * nên nhẹ và nhanh. SSRF chặn ở guiKhoiResumable (host phải là googleapis.com). */
+router.post('/tai-len/chunk',
+    authMiddleware,
+    requirePermission('online_orders.edit', 'online_orders.view'),
+    express.raw({ type: () => true, limit: '24mb' }),
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const url = String(req.headers['x-upload-url'] || '')
+            const offset = Math.round(Number(req.headers['x-chunk-offset']))
+            const total = Math.round(Number(req.headers['x-chunk-total']))
+            const buf: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([])
+
+            if (!url) { res.status(400).json({ success: false, error: 'Thiếu X-Upload-Url' }); return }
+            if (!Number.isFinite(offset) || offset < 0) { res.status(400).json({ success: false, error: 'X-Chunk-Offset không hợp lệ' }); return }
+            if (!Number.isFinite(total) || total <= 0) { res.status(400).json({ success: false, error: 'X-Chunk-Total không hợp lệ' }); return }
+            if (buf.length === 0) { res.status(400).json({ success: false, error: 'Khối rỗng' }); return }
+
+            const { guiKhoiResumable } = await import('../lib/driveChunkUpload')
+            const kq = await guiKhoiResumable(url, new Uint8Array(buf), offset, total)
+
+            if (kq.xong) {
+                const fileId = kq.file?.id || null
+                if (!fileId) { res.status(502).json({ success: false, error: 'Google báo xong nhưng không trả id file' }); return }
+                res.json({ success: true, data: { xong: true, fileId, ten: kq.file?.name || null } })
+            } else {
+                res.json({ success: true, data: { xong: false, daNhan: kq.daNhan ?? offset + buf.length } })
+            }
+        } catch (err: any) {
+            console.error('POST /san-media/tai-len/chunk lỗi:', err?.message || err)
+            res.status(502).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+        }
+    })
 
 /* ─── ĐĂNG LÊN SHOPEE VIDEO — một bước mỗi lần gọi ──────────────────────────────
  * Xem lib/dangVideoShopee.ts vì sao theo bước. Web gọi lặp tới khi `xong`.
