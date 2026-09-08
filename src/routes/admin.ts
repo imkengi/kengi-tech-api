@@ -4561,6 +4561,86 @@ router.get('/do-don-len-phieu', async (req: Request, res: Response) => {
 })
 
 /**
+ * VÁ THẲNG MẪU IN TRÊN MÁY CHỦ — POST /admin/va-mau-in?apply=1
+ *
+ * 08/09/2026, sau BA lượt vá phía web đều trượt. Lý do đo được:
+ *  · mẫu mang `daSuaTay: true` (do chính bước chuyển đổi v10→v11 tự gắn) nên mọi
+ *    bước vá phía web cố ý bỏ qua;
+ *  · lúc IN thì mẫu lấy từ máy người dùng (`usePrintTemplateStore`), không phải
+ *    từ máy chủ — nên vá ở máy chủ mà không ai kéo về cũng vô ích;
+ *  · nhưng `keoMauInVeMay()` hoà theo "bản nào sửa SAU thì thắng" và **KHÔNG xét
+ *    `daSuaTay`** ⇒ chỉ cần bản trên máy chủ mới hơn là nó kéo về đè.
+ *
+ * Nên đường chắc ăn nhất là sửa THẲNG bản trên máy chủ rồi để đồng bộ đẩy xuống.
+ *
+ * Chỉ đổi ĐÚNG chuỗi trong đúng ô, KHÔNG thay cả mẫu — mẫu này người dùng có thể
+ * đã sửa thật (logo, lời cảm ơn…), thay cả là xoá mất.
+ * MẶC ĐỊNH CHẠY THỬ; phải có apply=1 mới ghi.
+ */
+router.post('/va-mau-in', async (req: Request, res: Response) => {
+    try {
+        const apply = String(req.query.apply ?? req.body?.apply ?? '') === '1'
+        const chiStore = String(req.query.storeCode || '').trim()
+
+        /* Danh sách vá: đổi ĐÚNG chuỗi này thành chuỗi kia. Thêm ca mới thì thêm
+         * dòng, đừng viết hàm sửa HTML thông minh — mẫu là của người dùng. */
+        const VA: Array<{ id: string; tu: string; thanh: string; vi: string }> = [
+            {
+                id: 'tpl-receipt',
+                tu: 'text-align:right;">{{giamGiaSP}}</td>',
+                thanh: 'text-align:right;">{{giamGiaDonVi}}</td>',
+                vi: 'Cột Chiết khấu phải là chiết khấu TRÊN MỘT ĐƠN VỊ, không phải cả dòng',
+            },
+        ]
+
+        const ds = await prisma.store.findMany({
+            where: chiStore ? { code: chiStore } : {},
+            select: { code: true, name: true, schema: true },
+        })
+        const ra: any[] = []
+        for (const st of ds) {
+            const sp: any = getStorePrisma(st.schema)
+            const o: any = { cuaHang: st.code, sua: 0, boQua: 0, chiTiet: [] as any[] }
+            try {
+                for (const v of VA) {
+                    const t = await sp.printTemplate.findFirst({ where: { id: v.id }, select: { id: true, htmlSource: true } as any })
+                    if (!t) { o.boQua++; o.chiTiet.push({ id: v.id, ketQua: 'không có mẫu này' }); continue }
+                    const html = String(t.htmlSource || '')
+                    if (!html.includes(v.tu)) { o.boQua++; o.chiTiet.push({ id: v.id, ketQua: 'không thấy chuỗi cũ — có thể đã vá rồi' }); continue }
+                    const moi = html.split(v.tu).join(v.thanh)
+                    if (apply) {
+                        /* Nhích updatedAt để bản này THẮNG ở phép hoà của máy người
+                         * dùng — không nhích thì kéo về vẫn thua bản trong máy. */
+                        await sp.printTemplate.update({
+                            where: { id: t.id },
+                            data: { htmlSource: moi, updatedAt: new Date() } as any,
+                        })
+                    }
+                    o.sua++
+                    o.chiTiet.push({ id: v.id, ketQua: apply ? 'ĐÃ VÁ' : 'sẽ vá (chạy thử)', vi: v.vi })
+                }
+            } catch (e: any) {
+                o.loi = String(e?.message || e).slice(0, 160)
+            }
+            ra.push(o)
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cheDo: apply ? 'GHI THẬT' : 'CHỈ CHẠY THỬ (không ghi)',
+                cuaHang: ra,
+                tongSua: ra.reduce((a, x) => a + (x.sua || 0), 0),
+                yNghia: 'Sau khi vá, máy người dùng kéo về ở lần mở web kế tiếp vì bản máy chủ mới hơn. '
+                    + 'keoMauInVeMay KHÔNG xét daSuaTay nên đường này đi được cả với mẫu đã đánh dấu sửa tay.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * MẪU IN TRÊN MÁY CHỦ ĐANG LÀ BẢN NÀO — GET /admin/do-mau-in?storeCode=&id=tpl-receipt
  *
  * 08/09/2026: sửa mẫu hoá đơn, deploy đúng, mà chủ shop in ra VẪN mẫu cũ ba lần.
