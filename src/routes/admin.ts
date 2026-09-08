@@ -4577,6 +4577,52 @@ router.get('/do-don-len-phieu', async (req: Request, res: Response) => {
  * đã sửa thật (logo, lời cảm ơn…), thay cả là xoá mất.
  * MẶC ĐỊNH CHẠY THỬ; phải có apply=1 mới ghi.
  */
+/**
+ * SỬA VÒNG LẶP DÒNG HÀNG BỊ TRÌNH SOẠN ĐẨY VĂNG RA NGOÀI BẢNG.
+ *
+ * Đo trên HUTI 08/09/2026: `{{#each_item}}` và `{{/each_item}}` nằm CẠNH NHAU
+ * thành một khối RỖNG ngay trước `<table>`, còn dòng hàng `<tr>{{stt}}…` thì
+ * trần trụi trong `<tbody>`, không có vòng lặp nào bọc.
+ *
+ * Đây là hành vi chuẩn của trình duyệt chứ không phải người dùng nghịch: chữ nằm
+ * thẳng trong `<table>` mà không nằm trong ô nào thì bộ dựng HTML **bê ra trước
+ * bảng** (foster parenting). Trình soạn mẫu đi một vòng qua DOM là dính. Dấu vết
+ * đi kèm luôn: `<tbody>` tự mọc ra, `<br/>` rút thành `<br>`.
+ *
+ * Hậu quả khi in: dòng hàng không lặp, mà token trong đó cũng không được thay →
+ * bước cuối quét sạch token còn sót thành rỗng ⇒ **bảng hàng in ra TRỐNG TRƠN**.
+ * Hỏng câm, không một dòng lỗi nào.
+ *
+ * Trả null khi không dính, để bên gọi phân biệt "không cần sửa" với "đã sửa".
+ */
+function suaVongLapDongHang(html: string): { moi: string; viTri: string } | null {
+    // Chỉ nhận đúng ca đã đo: có khối each_item RỖNG.
+    const khoiRong = /\s*\{\{#each_item\}\}\s*\{\{\/each_item\}\}\s*/
+    if (!khoiRong.test(html)) return null
+
+    const iStt = html.indexOf('{{stt}}')
+    if (iStt < 0) return null
+
+    // Dòng hàng đã nằm trong vòng lặp rồi thì thôi — đừng lồng thêm lần nữa.
+    const truoc = html.slice(0, iStt)
+    if (truoc.lastIndexOf('{{#each_item}}') > truoc.lastIndexOf('{{/each_item}}')) return null
+
+    let ra = html.replace(khoiRong, '\n  ')
+
+    const j = ra.indexOf('{{stt}}')
+    const moTr = ra.lastIndexOf('<tr>', j)
+    const dongTr = ra.indexOf('</tr>', j)
+    if (moTr < 0 || dongTr < 0) return null
+
+    ra = ra.slice(0, moTr)
+        + '{{#each_item}}\n      '
+        + ra.slice(moTr, dongTr + 5)
+        + '\n      {{/each_item}}'
+        + ra.slice(dongTr + 5)
+
+    return { moi: ra, viTri: 'bọc lại dòng hàng chứa {{stt}} và bỏ khối each_item rỗng' }
+}
+
 router.post('/va-mau-in', async (req: Request, res: Response) => {
     try {
         const apply = String(req.query.apply ?? req.body?.apply ?? '') === '1'
@@ -4632,6 +4678,27 @@ router.post('/va-mau-in', async (req: Request, res: Response) => {
                     }
                     o.sua++
                     o.chiTiet.push({ id: v.id, ketQua: apply ? 'ĐÃ VÁ' : 'sẽ vá (chạy thử)', vi: v.vi })
+                }
+
+                /* Bước 2 — sửa vòng lặp dòng hàng bị đẩy văng (xem hàm ở trên).
+                 * Đọc LẠI từ máy chủ vì bước 1 vừa có thể ghi đè. */
+                const t2 = await sp.printTemplate.findFirst({ where: { id: 'tpl-receipt' }, select: { id: true, htmlSource: true } as any })
+                if (t2) {
+                    const r = suaVongLapDongHang(String(t2.htmlSource || ''))
+                    if (r) {
+                        if (apply) {
+                            await sp.printTemplate.update({
+                                where: { id: t2.id },
+                                data: { htmlSource: r.moi, updatedAt: new Date() } as any,
+                            })
+                        }
+                        o.sua++
+                        o.chiTiet.push({
+                            id: 'tpl-receipt',
+                            ketQua: apply ? 'ĐÃ SỬA VÒNG LẶP' : 'sẽ sửa vòng lặp (chạy thử)',
+                            vi: 'Vòng lặp dòng hàng bị trình soạn đẩy ra ngoài bảng ⇒ hoá đơn in ra KHÔNG CÓ DÒNG HÀNG NÀO. ' + r.viTri,
+                        })
+                    }
                 }
             } catch (e: any) {
                 o.loi = String(e?.message || e).slice(0, 160)
