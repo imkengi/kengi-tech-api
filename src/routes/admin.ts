@@ -4700,7 +4700,7 @@ router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) =
          * nhóm Video cho gian hàng này, đóng luôn giả thuyết "thiếu quyền" — chỉ
          * riêng post_video bị cổng điều khoản chặn. */
         for (const lt of [1, 2]) {
-            try { ra[`getVideoList_type${lt}`] = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page_size: 10 })) }
+            try { ra[`getVideoList_type${lt}`] = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page: 1, page_size: 10 })) }
             catch (e: any) { ra[`getVideoList_type${lt}`] = { loiNem: String(e?.message || e).slice(0, 200) } }
         }
 
