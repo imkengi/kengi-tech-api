@@ -246,14 +246,45 @@ export class ShopeeService extends PlatformService {
         catch { throw new Error(`Shopee trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
     }
 
+    // ─── NHÓM v2.media.* — "Public Video Upload APIs": ký KIỂU PARTNER, KHÔNG token ──
+    // Đo tài liệu 08/09/2026 sau khi Shopee trả `error_sign` cho init_video_upload:
+    // ví dụ URL của init_video_upload và get_video_upload_result CHỈ có
+    // partner_id, sign, timestamp (+ tham số nghiệp vụ) — không access_token, không
+    // user_id. Còn v2.video.* (get_cover_list, edit_video_info, post_video) thì có
+    // access_token + user_id. Hai nhóm hai chữ ký; ký nhầm là Wrong sign.
+    // Việc gắn video_upload_id vào đúng người dùng xảy ra ở bước v2.video.* sau đó.
+
+    /** URL ký kiểu PARTNER (partner_id + path + timestamp) cho nhóm v2.media.*. */
+    urlCong(path: string, query?: Record<string, string | number>): string {
+        const timestamp = Math.floor(Date.now() / 1000)
+        const partnerId = parseInt(this.credentials.apiKey, 10)
+        const p = new URLSearchParams({
+            partner_id: String(partnerId),
+            timestamp: String(timestamp),
+            sign: this.sign(path, timestamp),
+        })
+        for (const [k, v] of Object.entries(query || {})) p.set(k, String(v))
+        return `${SHOPEE_HOST}${path}?${p}`
+    }
+
+    /** Gọi API nhóm v2.media.* (ký partner). Trả NGUYÊN body JSON, bên gọi tự xét error. */
+    async goiCong(path: string, method: 'GET' | 'POST', query?: Record<string, string | number>, body?: any): Promise<any> {
+        const url = this.urlCong(path, method === 'GET' ? query : undefined)
+        const r = await this.shopeeFetch(url, method, method === 'POST' ? (body ?? {}) : undefined)
+        const text = await r.text()
+        try { return JSON.parse(text) }
+        catch { throw new Error(`Shopee trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
+    }
+
     /**
-     * Tải MỘT KHỐI video (v2.media.upload_video_part) — multipart, KHÔNG đi được qua
-     * shopee-forward.php (JSON). Có SHOPEE_FORWARD_PROXY thì đi qua bản anh em
-     * shopee-forward-upload.php cùng thư mục; không có (dev) thì gửi thẳng Shopee.
+     * Tải MỘT KHỐI video (v2.media.upload_video_part) — multipart, ký kiểu PARTNER
+     * (nhóm v2.media.*, không token). KHÔNG đi được qua shopee-forward.php (JSON);
+     * có SHOPEE_FORWARD_PROXY thì đi qua bản anh em shopee-forward-upload.php cùng
+     * thư mục, không có (dev) thì gửi thẳng Shopee.
      */
-    async taiKhoiNguoiDung(cred: { accessToken: string; userId: string }, fields: Record<string, string | number>, khoi: Uint8Array): Promise<any> {
+    async taiKhoiMedia(fields: Record<string, string | number>, khoi: Uint8Array): Promise<any> {
         const path = '/api/v2/media/upload_video_part'
-        const url = this.urlNguoiDung(path, cred)
+        const url = this.urlCong(path)
         const proxy = process.env.SHOPEE_FORWARD_PROXY
         const form = new FormData()
         const blob = new Blob([khoi], { type: 'application/octet-stream' })

@@ -9,6 +9,9 @@
 //  `conTiep` để web gọi tiếp. Đứt mạng, đóng tab, lỗi tạm — bấm lại là chạy tiếp
 //  từ khối đang dở, không tải lại từ đầu.
 //
+//  HAI NHÓM, HAI CHỮ KÝ (đo lại 08/09 sau khi bị error_sign): v2.media.* ký kiểu
+//  PARTNER (partner_id+path+timestamp, không token) → goiCong/taiKhoiMedia;
+//  v2.video.* ký kiểu USER (+access_token+user_id) → goiNguoiDung.
 //  Đường đi (tài liệu Shopee đọc 08/09/2026):
 //    init_video_upload → upload_video_part ×N (multipart, md5 từng khối, đúng
 //    part_size trừ khối cuối) → complete_video_upload → get_video_upload_result
@@ -114,7 +117,7 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
             if (!duration) throw new Error('Không đọc được thời lượng video từ Drive — Drive có thể chưa xử lý xong file, thử lại sau vài phút')
             if (duration < 1 || duration > 180) throw new Error(`Video dài ${duration} giây — Shopee Video chỉ nhận 1–180 giây`)
 
-            const r = await svc.goiNguoiDung('/api/v2/media/init_video_upload', 'POST', cred, undefined, {
+            const r = await svc.goiCong('/api/v2/media/init_video_upload', 'POST', undefined, {
                 business: 3, scene: 1,
                 file_name: String(meta.data?.name || m.ten).slice(0, 200),
                 file_size: fileSize,
@@ -143,7 +146,7 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
                 const khoi = await docKhoiDrive(drive, m.nguonId, tu, den)
                 if (khoi.length !== den - tu + 1) throw new Error(`Khối ${i}: Drive trả ${khoi.length} byte, cần ${den - tu + 1} — Drive không tôn trọng Range?`)
                 const md5 = crypto.createHash('md5').update(khoi).digest('hex')
-                const r = await svc.taiKhoiNguoiDung(cred, { video_upload_id: tt.videoUploadId as string, part_seq: i, part_md5: md5 }, khoi)
+                const r = await svc.taiKhoiMedia({ video_upload_id: tt.videoUploadId as string, part_seq: i, part_md5: md5 }, khoi)
                 kiemLoiShopee(r, `upload_video_part #${i}`)
                 tt.phanXong = i + 1
                 await luu(prisma, m.id, tt)   // ghi từng khối: đứt là chạy tiếp đúng chỗ
@@ -155,7 +158,7 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
 
         // ── 3. COMPLETE ────────────────────────────────────────────────────────
         if (tt.giaiDoan === 'complete') {
-            const r = await svc.goiNguoiDung('/api/v2/media/complete_video_upload', 'POST', cred, undefined, { video_upload_id: tt.videoUploadId })
+            const r = await svc.goiCong('/api/v2/media/complete_video_upload', 'POST', undefined, { video_upload_id: tt.videoUploadId })
             kiemLoiShopee(r, 'complete_video_upload')
             tt.giaiDoan = 'processing'
             await luu(prisma, m.id, tt)
@@ -164,7 +167,7 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
         // ── 4. PROCESSING (Shopee chuyển mã) ───────────────────────────────────
         if (tt.giaiDoan === 'processing') {
             while (conGio()) {
-                const r = await svc.goiNguoiDung('/api/v2/media/get_video_upload_result', 'GET', cred, { video_upload_id: tt.videoUploadId as string })
+                const r = await svc.goiCong('/api/v2/media/get_video_upload_result', 'GET', { video_upload_id: tt.videoUploadId as string })
                 kiemLoiShopee(r, 'get_video_upload_result')
                 const st = String(r.response?.status || '')
                 if (st === 'SUCCEEDED') {

@@ -4637,6 +4637,71 @@ router.post('/do-tai-khoi-drive', async (req: Request, res: Response) => {
 })
 
 /**
+ * BỘ ĐO CHỮ KÝ SHOPEE VIDEO — POST /admin/do-ky-shopee-video?storeCode=  (kèm -d '{}')
+ *
+ * Chủ shop bấm Đăng thì Shopee trả `init_video_upload: error_sign — Wrong sign`.
+ * Tài liệu nói hai nhóm hai chữ ký (v2.media.* ký partner, v2.video.* ký user).
+ * Bộ này CHẠY THẬT từng bước với khối rác nhỏ rồi huỷ phiên, để nhìn thấy Shopee
+ * trả gì cho từng chữ ký — không cần chủ shop bấm lại để thử hộ:
+ *   1. init_video_upload (ký partner)  → mong: có video_upload_id (qua được chữ ký)
+ *   2. upload_video_part (ký partner, multipart qua Tino) → mong: error rỗng
+ *   3. cancel_video_upload (ký partner) → dọn phiên thử
+ *   4. get_cover_list (ký user, id giả) → mong: lỗi NGHIỆP VỤ (id illegal), KHÔNG phải error_sign
+ * Không đụng dữ liệu cửa hàng. Cần kênh đã uỷ quyền video (videoUserId).
+ */
+router.post('/do-ky-shopee-video', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ch = await sp.onlineChannel.findFirst({ where: { platform: 'shopee', videoUserId: { not: null } } as any })
+        if (!ch) { res.json({ success: true, data: { ketLuan: 'Chưa có kênh Shopee nào uỷ quyền video — không có gì để thử' } }); return }
+
+        const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
+        const { svc, accessToken, userId } = await layTokenVideoShopee(sp, ch.id)
+        const cred = { accessToken, userId }
+        const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null })
+        const buoc: any = { kenh: ch.name, videoUserId: userId }
+
+        // 1. init (partner)
+        const PHAN = 262144
+        const r1 = await svc.goiCong('/api/v2/media/init_video_upload', 'POST', undefined, {
+            business: 3, scene: 1, file_name: '_kengi-sign-test.mp4', file_size: PHAN, duration: 5,
+        })
+        buoc.init = { ...tom(r1), videoUploadId: r1?.response?.video_upload_id ?? null, partSize: r1?.response?.part_size ?? null }
+        const id = r1?.response?.video_upload_id
+
+        // 2. một khối rác (partner, multipart)
+        if (id) {
+            const zero = new Uint8Array(PHAN)
+            const md5 = (await import('crypto')).createHash('md5').update(zero).digest('hex')
+            const r2 = await svc.taiKhoiMedia({ video_upload_id: id, part_seq: 0, part_md5: md5 }, zero)
+            buoc.uploadPart = tom(r2)
+            // 3. dọn
+            const r3 = await svc.goiCong('/api/v2/media/cancel_video_upload', 'POST', undefined, { video_upload_id: id })
+            buoc.cancel = tom(r3)
+        }
+
+        // 4. user-type với id giả — phải là lỗi nghiệp vụ, không phải error_sign
+        const r4 = await svc.goiNguoiDung('/api/v2/video/get_cover_list', 'GET', cred, { video_upload_id: 'sg-kengi-test' })
+        buoc.coverListUserSign = tom(r4)
+
+        const kyMediaOk = !!id
+        const kyUserOk = r4?.error !== 'error_sign'
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ...buoc,
+                ketLuan: `${kyMediaOk ? 'ký v2.media.* (partner) QUA' : 'ký v2.media.* VẪN SAI'} · ${kyUserOk ? 'ký v2.video.* (user) QUA' : 'ký v2.video.* SAI'}`,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐƠN SÀN THEO TRẠNG THÁI × ĐÃ LÊN PHIẾU CHƯA — GET /admin/do-don-len-phieu?storeCode=
  *
  * Chủ shop 07/09/2026 muốn "đơn đã XÁC NHẬN mới ghi vào đơn giao dịch". Trước khi
