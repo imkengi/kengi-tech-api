@@ -51,7 +51,7 @@ export interface KetQuaBuoc {
     thongDiep: string
 }
 
-const NGAN_SACH_MAC_DINH_MS = 200_000
+const NGAN_SACH_MAC_DINH_MS = 75_000   // lượt ngắn để web hiện tiến trình đều; 200s từng bị tưởng là treo
 const MOT_GB = 1024 * 1024 * 1024
 
 function docTienTrinh(s?: string | null): TienTrinh {

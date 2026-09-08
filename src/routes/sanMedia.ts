@@ -364,7 +364,9 @@ router.post('/:id/dang-shopee', authMiddleware, requirePermission('online_orders
     try {
         const prisma: any = req.storePrisma!
         const { buocDangShopee } = await import('../lib/dangVideoShopee')
-        const nganSach = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 200_000))
+        /* 75s chứ không 200s: chủ shop nhìn 'Bắt đầu…' đứng im 3 phút tưởng treo (08/09).
+         * Lượt ngắn = web nhận tiến trình thường xuyên; trạng thái vẫn nằm ở DB. */
+        const nganSach = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 75_000))
         const kq = await buocDangShopee(prisma, String(req.params.id), nganSach)
         res.json({ success: true, data: kq })
     } catch (err: any) {

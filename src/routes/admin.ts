@@ -4637,6 +4637,39 @@ router.post('/do-tai-khoi-drive', async (req: Request, res: Response) => {
 })
 
 /**
+ * TIẾN TRÌNH ĐĂNG VIDEO ĐANG DỞ — GET /admin/do-tien-trinh-dang?storeCode=
+ * Chủ shop báo "treo": web đứng im khi máy chủ đang tải khối. Bộ này đọc thẳng
+ * SanMedia.tienTrinhDang (ghi sau MỖI khối) để biết đang ở khối mấy, sửa lúc nào.
+ * CHỈ ĐỌC.
+ */
+router.get('/do-tien-trinh-dang', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ds = await sp.sanMedia.findMany({
+            where: { OR: [{ trangThai: { in: ['cho_dang', 'loi', 'da_dang', 'da_len_lich'] } }, { tienTrinhDang: { not: null } }] } as any,
+            select: { id: true, ten: true, trangThai: true, loiCuoi: true, maTrenSan: true, dangLuc: true, tienTrinhDang: true, updatedAt: true } as any,
+            orderBy: { updatedAt: 'desc' }, take: 20,
+        })
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, luc: new Date().toISOString(),
+                media: ds.map((m: any) => {
+                    let tt: any = null
+                    try { tt = m.tienTrinhDang ? JSON.parse(m.tienTrinhDang) : null } catch { tt = { loiDoc: true } }
+                    return { id: m.id, ten: m.ten, trangThai: m.trangThai, loiCuoi: m.loiCuoi, maTrenSan: m.maTrenSan, dangLuc: m.dangLuc, suaLuc: m.updatedAt, tienTrinh: tt }
+                }),
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
  * BỘ ĐO CHỮ KÝ SHOPEE VIDEO — POST /admin/do-ky-shopee-video?storeCode=  (kèm -d '{}')
  *
  * Chủ shop bấm Đăng thì Shopee trả `init_video_upload: error_sign — Wrong sign`.
