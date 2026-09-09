@@ -39,7 +39,7 @@ const NGUON = ['drive', 'lien_ket'] as const
 /** Giới hạn của từng sàn — lấy từ tài liệu gốc, để kiểm TRƯỚC khi tốn công tải lên. */
 const GIOI_HAN = {
     shopee: { giayToiThieu: 1, giayToiDa: 180, byteToiDa: 1024 * 1024 * 1024, ghiChu: 'Shopee Video: 1–180 giây, tối đa 1GB.' },
-    tiktok: { giayToiThieu: 1, giayToiDa: 600, byteToiDa: 10 * 1024 * 1024, ghiChu: 'TikTok: tải trực tiếp tối đa 10MB (lớn hơn phải dùng Large File Uploads), tỉ lệ 9:16 đến 16:9, khuyến nghị 720p và dài hơn 30 giây.' },
+    tiktok: { giayToiThieu: 1, giayToiDa: 600, byteToiDa: 4 * 1024 * 1024 * 1024, ghiChu: 'TikTok Content Posting API: tối đa 4GB, tải theo khối 10MB. Tỉ lệ 9:16 đến 16:9, khuyến nghị 720p.' },
 } as const
 
 /* Đọc hỏng KHÁC HẲN "không có". Bảng SanMedia là bảng MỚI: cửa hàng nào chưa chạy
@@ -376,6 +376,27 @@ router.post('/:id/dang-shopee', authMiddleware, requirePermission('online_orders
     }
 })
 
+/* ─── ĐĂNG LÊN TIKTOK — cũng một bước mỗi lần gọi ───────────────────────────────
+ * `dangThang` false (mặc định) = thả vào HỘP THƯ TikTok, chủ tài khoản mở app bấm
+ * hoàn tất. true = đăng thẳng, cần quyền video.publish VÀ ứng dụng đã qua kiểm
+ * duyệt, nếu chưa thì TikTok để video ở chế độ chỉ mình xem. */
+router.post('/:id/dang-tiktok', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { buocDangTikTok } = await import('../lib/dangVideoTikTok')
+        const nganSachMs = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 75_000))
+        const kq = await buocDangTikTok(prisma, String(req.params.id), {
+            dangThang: req.body?.dangThang === true,
+            nganSachMs,
+        })
+        res.json({ success: true, data: kq })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('POST /san-media/:id/dang-tiktok lỗi:', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 600) })
+    }
+})
+
 // ─── Thêm vào kho ──────────────────────────────────────────────────────────────
 router.post('/', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -553,6 +574,40 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
             ? new Date(new Date(kenhShopee.videoAuthAt).getTime() + 30 * 86400_000).toISOString()
             : null
 
+        /* TikTok KHÔNG bám theo OnlineChannel: token gắn với MỘT TÀI KHOẢN TikTok
+         * (open_id) chứ không phải gian hàng, nên lưu ở StoreSettings. Cột ttPost*
+         * mới thêm 09/09/2026 — chưa migrate thì SELECT ném P2022, phải nói ra. */
+        const tt = await (async () => {
+            try {
+                const c = await prisma.storeSettings.findFirst({
+                    select: {
+                        ttPostClientKey: true, ttPostClientSecret: true, ttPostOpenId: true,
+                        ttPostScopes: true, ttPostDisplayName: true, ttPostAvatar: true, ttPostAuthAt: true,
+                    } as any,
+                })
+                const sc = String(c?.ttPostScopes || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+                return {
+                    chuaMigrate: false,
+                    coApp: !!(c?.ttPostClientKey && c?.ttPostClientSecret),
+                    clientKey: c?.ttPostClientKey || null,
+                    secretDuoi4: c?.ttPostClientSecret ? String(c.ttPostClientSecret).slice(-4) : null,
+                    daKetNoi: !!c?.ttPostOpenId,
+                    tenHienThi: c?.ttPostDisplayName || null,
+                    anhDaiDien: c?.ttPostAvatar || null,
+                    ketNoiLuc: c?.ttPostAuthAt || null,
+                    scopeDaCap: sc,
+                    coTaiLen: sc.includes('video.upload'),
+                    coDangThang: sc.includes('video.publish'),
+                }
+            } catch {
+                return {
+                    chuaMigrate: true, coApp: false, clientKey: null, secretDuoi4: null,
+                    daKetNoi: false, tenHienThi: null, anhDaiDien: null, ketNoiLuc: null,
+                    scopeDaCap: [] as string[], coTaiLen: false, coDangThang: false,
+                }
+            }
+        })()
+
         res.json({
             success: true,
             data: {
@@ -589,16 +644,30 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                     gioiHan: GIOI_HAN.shopee,
                 },
                 tiktok: {
-                    dangDuoc: false,
+                    dangDuoc: tt.daKetNoi && tt.coTaiLen,
                     daNoiKenhBanHang: coKenh('tiktok'),
+                    ...tt,
                     conThieu: [
-                        'Cần scope creator.video.write và token CREATOR (user_type=1) — token TikTok Shop đang dùng để lấy đơn KHÔNG dùng lại được.',
-                        'Chủ tài khoản TikTok phải uỷ quyền riêng cho ứng dụng theo luồng creator.',
+                        ...(tt.chuaMigrate ? ['Cửa hàng chưa có cột lưu kết nối TikTok — chạy POST /api/admin/migrate.'] : []),
+                        ...(tt.coApp ? [] : ['Nhập Client key + Client secret của ứng dụng trên developers.tiktok.com (KHÔNG phải app TikTok Shop) vào ô bên dưới.']),
+                        ...(tt.daKetNoi ? [] : ['Bấm "Kết nối TikTok" và đăng nhập bằng chính tài khoản TikTok sẽ đăng video.']),
+                        ...(tt.daKetNoi && !tt.coTaiLen ? ['Tài khoản đã nối nhưng TikTok KHÔNG cấp quyền video.upload — kết nối lại và tick đủ quyền.'] : []),
+                        ...(tt.daKetNoi && tt.coTaiLen && !tt.coDangThang
+                            ? ['Đang ở chế độ HỘP THƯ: video vào mục thông báo của app TikTok, chủ tài khoản mở app bấm hoàn tất. Muốn đăng thẳng thì kết nối lại và bật "đăng thẳng" (quyền video.publish).']
+                            : []),
                     ],
-                    duongApi: ['POST /affiliate_creator/202505/videos/video_files', 'POST /affiliate_creator/202603/videos'],
+                    duongApi: [
+                        'POST /v2/oauth/token/',
+                        'POST /v2/post/publish/inbox/video/init/',
+                        'POST /v2/post/publish/video/init/',
+                        'PUT <upload_url> (Content-Range)',
+                        'POST /v2/post/publish/status/fetch/',
+                    ],
                     gioiHan: GIOI_HAN.tiktok,
                 },
-                tomTat: 'Kho media dùng được ngay. Nút đăng thẳng lên sàn CHƯA bật vì cả hai sàn đòi một luồng uỷ quyền riêng, khác token bán hàng hiện có.',
+                tomTat: daUyQuyenVideo || (tt.daKetNoi && tt.coTaiLen)
+                    ? 'Kho media dùng được. Sàn nào đã uỷ quyền thì bấm đăng thẳng từ đây.'
+                    : 'Kho media dùng được ngay. Nút đăng thẳng lên sàn CHƯA bật vì mỗi sàn đòi một luồng uỷ quyền riêng, khác token bán hàng hiện có.',
             },
         })
     } catch (err: any) {

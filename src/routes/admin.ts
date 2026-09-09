@@ -2665,6 +2665,24 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // thiếu cột này thì storeSettings.findFirst() (SELECT đủ cột theo
                 // schema) trả P2022 → GET /api/store-settings 500 cho MỌI cửa hàng.
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveFolderId" TEXT`)
+                /* Đăng video lên TikTok qua Content Posting API (2026-09-09) — app RIÊNG
+                 * trên developers.tiktok.com, gắn với TÀI KHOẢN TikTok chứ không phải gian
+                 * hàng, nên lưu ở cấp cửa hàng. Thiếu cột là storeSettings.findFirst()
+                 * (SELECT đủ cột theo schema) ném P2022 → GET /api/store-settings 500 cho
+                 * MỌI cửa hàng, đúng bẫy driveFolderId đã cắn 01/08. */
+                /* Viết THẲNG từng dòng, đừng gói vào vòng lặp: `npm run check:migrate`
+                 * dò bằng CHUỖI, cột nào nằm trong `${c}` là nó không thấy và báo
+                 * thiếu — mà nó báo thiếu thì đúng, vì người sửa sau cũng không thấy. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostClientKey" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostClientSecret" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostOpenId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostAccessToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostRefreshToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostScopes" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostDisplayName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostAvatar" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostExpiresAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "ttPostAuthAt" TIMESTAMP(3)`)
 
                 // Cờ hoá đơn VAT đầu vào cho phiếu nhập (2026-07-24) — chỉ phiếu có
                 // HĐ GTGT mới tính vào tồn kho thuế (gate xuất HĐ).

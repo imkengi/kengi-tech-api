@@ -1253,6 +1253,16 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   driveOauthToken: 'driveOauthToken',
   driveOauthEmail: 'driveOauthEmail',
   driveOauthAt: 'driveOauthAt',
+  ttPostClientKey: 'ttPostClientKey',
+  ttPostClientSecret: 'ttPostClientSecret',
+  ttPostOpenId: 'ttPostOpenId',
+  ttPostAccessToken: 'ttPostAccessToken',
+  ttPostRefreshToken: 'ttPostRefreshToken',
+  ttPostExpiresAt: 'ttPostExpiresAt',
+  ttPostScopes: 'ttPostScopes',
+  ttPostDisplayName: 'ttPostDisplayName',
+  ttPostAvatar: 'ttPostAvatar',
+  ttPostAuthAt: 'ttPostAuthAt',
   updatedAt: 'updatedAt'
 };
 

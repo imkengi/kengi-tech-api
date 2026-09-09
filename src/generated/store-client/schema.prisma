@@ -1650,6 +1650,27 @@ model StoreSettings {
   driveOauthEmail    String? // email tài khoản đã kết nối, để hiện trên giao diện
   driveOauthAt       DateTime?
 
+  /**
+   * ─ ĐĂNG VIDEO LÊN TIKTOK (Content Posting API, developers.tiktok.com) ───────
+   * KHÁC HẲN kênh bán hàng TikTok Shop: đây là app riêng trên TikTok for
+   * Developers, gắn với một TÀI KHOẢN TIKTOK chứ không phải một gian hàng, nên
+   * lưu ở cấp CỬA HÀNG chứ không phải OnlineChannel. Đường của Shop (Affiliate
+   * Creator) đã đo 09/09/2026: KHÔNG mở cho app bán hàng — app chỉ có
+   * creator.showcase.write và creator.affiliate.info, không có creator.video.write.
+   * Khoá app do chủ shop tự dán (như app Shopee Video): mỗi cửa hàng một app
+   * riêng. KHÔNG bao giờ trả client secret ngược ra giao diện.
+   */
+  ttPostClientKey    String?
+  ttPostClientSecret String?
+  ttPostOpenId       String? // định danh người dùng TikTok đã cho phép
+  ttPostAccessToken  String?
+  ttPostRefreshToken String?
+  ttPostExpiresAt    DateTime? // access_token của TikTok sống 24 giờ
+  ttPostScopes       String? // granted_scopes TRẢ VỀ THẬT — phải kiểm, đừng tin cái mình xin
+  ttPostDisplayName  String?
+  ttPostAvatar       String?
+  ttPostAuthAt       DateTime?
+
   updatedAt DateTime @updatedAt
 }
 

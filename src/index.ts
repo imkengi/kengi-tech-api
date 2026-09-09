@@ -364,6 +364,12 @@ app.use('/api/storage', storageRoutes)
 import sanMediaRoutes from './routes/sanMedia'
 app.use('/api/san-media', sanMediaRoutes)   // Media ban hang: video cho Shopee Video / TikTok
 
+// Dang video len TikTok qua Content Posting API (developers.tiktok.com) — KHONG
+// phai TikTok Shop: app rieng, token gan voi mot TAI KHOAN TikTok. Xem
+// lib/tiktokDangVideo.ts. Duong /callback KHONG co JWT (TikTok goi thang vao).
+import tiktokDangVideoRoutes from './routes/tiktokDangVideo'
+app.use('/api/tiktok-dang-video', tiktokDangVideoRoutes)
+
 import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)

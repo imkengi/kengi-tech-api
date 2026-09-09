@@ -96699,6 +96699,16 @@ export namespace Prisma {
     driveOauthToken: string | null
     driveOauthEmail: string | null
     driveOauthAt: Date | null
+    ttPostClientKey: string | null
+    ttPostClientSecret: string | null
+    ttPostOpenId: string | null
+    ttPostAccessToken: string | null
+    ttPostRefreshToken: string | null
+    ttPostExpiresAt: Date | null
+    ttPostScopes: string | null
+    ttPostDisplayName: string | null
+    ttPostAvatar: string | null
+    ttPostAuthAt: Date | null
     updatedAt: Date | null
   }
 
@@ -96741,6 +96751,16 @@ export namespace Prisma {
     driveOauthToken: string | null
     driveOauthEmail: string | null
     driveOauthAt: Date | null
+    ttPostClientKey: string | null
+    ttPostClientSecret: string | null
+    ttPostOpenId: string | null
+    ttPostAccessToken: string | null
+    ttPostRefreshToken: string | null
+    ttPostExpiresAt: Date | null
+    ttPostScopes: string | null
+    ttPostDisplayName: string | null
+    ttPostAvatar: string | null
+    ttPostAuthAt: Date | null
     updatedAt: Date | null
   }
 
@@ -96783,6 +96803,16 @@ export namespace Prisma {
     driveOauthToken: number
     driveOauthEmail: number
     driveOauthAt: number
+    ttPostClientKey: number
+    ttPostClientSecret: number
+    ttPostOpenId: number
+    ttPostAccessToken: number
+    ttPostRefreshToken: number
+    ttPostExpiresAt: number
+    ttPostScopes: number
+    ttPostDisplayName: number
+    ttPostAvatar: number
+    ttPostAuthAt: number
     updatedAt: number
     _all: number
   }
@@ -96839,6 +96869,16 @@ export namespace Prisma {
     driveOauthToken?: true
     driveOauthEmail?: true
     driveOauthAt?: true
+    ttPostClientKey?: true
+    ttPostClientSecret?: true
+    ttPostOpenId?: true
+    ttPostAccessToken?: true
+    ttPostRefreshToken?: true
+    ttPostExpiresAt?: true
+    ttPostScopes?: true
+    ttPostDisplayName?: true
+    ttPostAvatar?: true
+    ttPostAuthAt?: true
     updatedAt?: true
   }
 
@@ -96881,6 +96921,16 @@ export namespace Prisma {
     driveOauthToken?: true
     driveOauthEmail?: true
     driveOauthAt?: true
+    ttPostClientKey?: true
+    ttPostClientSecret?: true
+    ttPostOpenId?: true
+    ttPostAccessToken?: true
+    ttPostRefreshToken?: true
+    ttPostExpiresAt?: true
+    ttPostScopes?: true
+    ttPostDisplayName?: true
+    ttPostAvatar?: true
+    ttPostAuthAt?: true
     updatedAt?: true
   }
 
@@ -96923,6 +96973,16 @@ export namespace Prisma {
     driveOauthToken?: true
     driveOauthEmail?: true
     driveOauthAt?: true
+    ttPostClientKey?: true
+    ttPostClientSecret?: true
+    ttPostOpenId?: true
+    ttPostAccessToken?: true
+    ttPostRefreshToken?: true
+    ttPostExpiresAt?: true
+    ttPostScopes?: true
+    ttPostDisplayName?: true
+    ttPostAvatar?: true
+    ttPostAuthAt?: true
     updatedAt?: true
     _all?: true
   }
@@ -97052,6 +97112,16 @@ export namespace Prisma {
     driveOauthToken: string | null
     driveOauthEmail: string | null
     driveOauthAt: Date | null
+    ttPostClientKey: string | null
+    ttPostClientSecret: string | null
+    ttPostOpenId: string | null
+    ttPostAccessToken: string | null
+    ttPostRefreshToken: string | null
+    ttPostExpiresAt: Date | null
+    ttPostScopes: string | null
+    ttPostDisplayName: string | null
+    ttPostAvatar: string | null
+    ttPostAuthAt: Date | null
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _avg: StoreSettingsAvgAggregateOutputType | null
@@ -97113,6 +97183,16 @@ export namespace Prisma {
     driveOauthToken?: boolean
     driveOauthEmail?: boolean
     driveOauthAt?: boolean
+    ttPostClientKey?: boolean
+    ttPostClientSecret?: boolean
+    ttPostOpenId?: boolean
+    ttPostAccessToken?: boolean
+    ttPostRefreshToken?: boolean
+    ttPostExpiresAt?: boolean
+    ttPostScopes?: boolean
+    ttPostDisplayName?: boolean
+    ttPostAvatar?: boolean
+    ttPostAuthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97155,6 +97235,16 @@ export namespace Prisma {
     driveOauthToken?: boolean
     driveOauthEmail?: boolean
     driveOauthAt?: boolean
+    ttPostClientKey?: boolean
+    ttPostClientSecret?: boolean
+    ttPostOpenId?: boolean
+    ttPostAccessToken?: boolean
+    ttPostRefreshToken?: boolean
+    ttPostExpiresAt?: boolean
+    ttPostScopes?: boolean
+    ttPostDisplayName?: boolean
+    ttPostAvatar?: boolean
+    ttPostAuthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97197,6 +97287,16 @@ export namespace Prisma {
     driveOauthToken?: boolean
     driveOauthEmail?: boolean
     driveOauthAt?: boolean
+    ttPostClientKey?: boolean
+    ttPostClientSecret?: boolean
+    ttPostOpenId?: boolean
+    ttPostAccessToken?: boolean
+    ttPostRefreshToken?: boolean
+    ttPostExpiresAt?: boolean
+    ttPostScopes?: boolean
+    ttPostDisplayName?: boolean
+    ttPostAvatar?: boolean
+    ttPostAuthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97239,10 +97339,20 @@ export namespace Prisma {
     driveOauthToken?: boolean
     driveOauthEmail?: boolean
     driveOauthAt?: boolean
+    ttPostClientKey?: boolean
+    ttPostClientSecret?: boolean
+    ttPostOpenId?: boolean
+    ttPostAccessToken?: boolean
+    ttPostRefreshToken?: boolean
+    ttPostExpiresAt?: boolean
+    ttPostScopes?: boolean
+    ttPostDisplayName?: boolean
+    ttPostAvatar?: boolean
+    ttPostAuthAt?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "ttPostClientKey" | "ttPostClientSecret" | "ttPostOpenId" | "ttPostAccessToken" | "ttPostRefreshToken" | "ttPostExpiresAt" | "ttPostScopes" | "ttPostDisplayName" | "ttPostAvatar" | "ttPostAuthAt" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -97293,6 +97403,27 @@ export namespace Prisma {
       driveOauthToken: string | null
       driveOauthEmail: string | null
       driveOauthAt: Date | null
+      /**
+       * ─ ĐĂNG VIDEO LÊN TIKTOK (Content Posting API, developers.tiktok.com) ───────
+       *    * KHÁC HẲN kênh bán hàng TikTok Shop: đây là app riêng trên TikTok for
+       *    * Developers, gắn với một TÀI KHOẢN TIKTOK chứ không phải một gian hàng, nên
+       *    * lưu ở cấp CỬA HÀNG chứ không phải OnlineChannel. Đường của Shop (Affiliate
+       *    * Creator) đã đo 09/09/2026: KHÔNG mở cho app bán hàng — app chỉ có
+       *    * creator.showcase.write và creator.affiliate.info, không có creator.video.write.
+       *    *
+       *    * Khoá app do chủ shop tự dán (như app Shopee Video): mỗi cửa hàng một app
+       *    * riêng. KHÔNG bao giờ trả client secret ngược ra giao diện.
+       */
+      ttPostClientKey: string | null
+      ttPostClientSecret: string | null
+      ttPostOpenId: string | null
+      ttPostAccessToken: string | null
+      ttPostRefreshToken: string | null
+      ttPostExpiresAt: Date | null
+      ttPostScopes: string | null
+      ttPostDisplayName: string | null
+      ttPostAvatar: string | null
+      ttPostAuthAt: Date | null
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -97755,6 +97886,16 @@ export namespace Prisma {
     readonly driveOauthToken: FieldRef<"StoreSettings", 'String'>
     readonly driveOauthEmail: FieldRef<"StoreSettings", 'String'>
     readonly driveOauthAt: FieldRef<"StoreSettings", 'DateTime'>
+    readonly ttPostClientKey: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostClientSecret: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostOpenId: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostAccessToken: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostRefreshToken: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostExpiresAt: FieldRef<"StoreSettings", 'DateTime'>
+    readonly ttPostScopes: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostDisplayName: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostAvatar: FieldRef<"StoreSettings", 'String'>
+    readonly ttPostAuthAt: FieldRef<"StoreSettings", 'DateTime'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -193300,6 +193441,16 @@ export namespace Prisma {
     driveOauthToken: 'driveOauthToken',
     driveOauthEmail: 'driveOauthEmail',
     driveOauthAt: 'driveOauthAt',
+    ttPostClientKey: 'ttPostClientKey',
+    ttPostClientSecret: 'ttPostClientSecret',
+    ttPostOpenId: 'ttPostOpenId',
+    ttPostAccessToken: 'ttPostAccessToken',
+    ttPostRefreshToken: 'ttPostRefreshToken',
+    ttPostExpiresAt: 'ttPostExpiresAt',
+    ttPostScopes: 'ttPostScopes',
+    ttPostDisplayName: 'ttPostDisplayName',
+    ttPostAvatar: 'ttPostAvatar',
+    ttPostAuthAt: 'ttPostAuthAt',
     updatedAt: 'updatedAt'
   };
 
@@ -201707,6 +201858,16 @@ export namespace Prisma {
     driveOauthToken?: StringNullableFilter<"StoreSettings"> | string | null
     driveOauthEmail?: StringNullableFilter<"StoreSettings"> | string | null
     driveOauthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    ttPostClientKey?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostClientSecret?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostOpenId?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAccessToken?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostRefreshToken?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostExpiresAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    ttPostScopes?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostDisplayName?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -201749,6 +201910,16 @@ export namespace Prisma {
     driveOauthToken?: SortOrderInput | SortOrder
     driveOauthEmail?: SortOrderInput | SortOrder
     driveOauthAt?: SortOrderInput | SortOrder
+    ttPostClientKey?: SortOrderInput | SortOrder
+    ttPostClientSecret?: SortOrderInput | SortOrder
+    ttPostOpenId?: SortOrderInput | SortOrder
+    ttPostAccessToken?: SortOrderInput | SortOrder
+    ttPostRefreshToken?: SortOrderInput | SortOrder
+    ttPostExpiresAt?: SortOrderInput | SortOrder
+    ttPostScopes?: SortOrderInput | SortOrder
+    ttPostDisplayName?: SortOrderInput | SortOrder
+    ttPostAvatar?: SortOrderInput | SortOrder
+    ttPostAuthAt?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
   }
 
@@ -201794,6 +201965,16 @@ export namespace Prisma {
     driveOauthToken?: StringNullableFilter<"StoreSettings"> | string | null
     driveOauthEmail?: StringNullableFilter<"StoreSettings"> | string | null
     driveOauthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    ttPostClientKey?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostClientSecret?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostOpenId?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAccessToken?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostRefreshToken?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostExpiresAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    ttPostScopes?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostDisplayName?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
+    ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -201836,6 +202017,16 @@ export namespace Prisma {
     driveOauthToken?: SortOrderInput | SortOrder
     driveOauthEmail?: SortOrderInput | SortOrder
     driveOauthAt?: SortOrderInput | SortOrder
+    ttPostClientKey?: SortOrderInput | SortOrder
+    ttPostClientSecret?: SortOrderInput | SortOrder
+    ttPostOpenId?: SortOrderInput | SortOrder
+    ttPostAccessToken?: SortOrderInput | SortOrder
+    ttPostRefreshToken?: SortOrderInput | SortOrder
+    ttPostExpiresAt?: SortOrderInput | SortOrder
+    ttPostScopes?: SortOrderInput | SortOrder
+    ttPostDisplayName?: SortOrderInput | SortOrder
+    ttPostAvatar?: SortOrderInput | SortOrder
+    ttPostAuthAt?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _avg?: StoreSettingsAvgOrderByAggregateInput
@@ -201886,6 +202077,16 @@ export namespace Prisma {
     driveOauthToken?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     driveOauthEmail?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     driveOauthAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
+    ttPostClientKey?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostClientSecret?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostOpenId?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostAccessToken?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostRefreshToken?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostExpiresAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
+    ttPostScopes?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostDisplayName?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostAvatar?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    ttPostAuthAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -217952,6 +218153,16 @@ export namespace Prisma {
     driveOauthToken?: string | null
     driveOauthEmail?: string | null
     driveOauthAt?: Date | string | null
+    ttPostClientKey?: string | null
+    ttPostClientSecret?: string | null
+    ttPostOpenId?: string | null
+    ttPostAccessToken?: string | null
+    ttPostRefreshToken?: string | null
+    ttPostExpiresAt?: Date | string | null
+    ttPostScopes?: string | null
+    ttPostDisplayName?: string | null
+    ttPostAvatar?: string | null
+    ttPostAuthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -217994,6 +218205,16 @@ export namespace Prisma {
     driveOauthToken?: string | null
     driveOauthEmail?: string | null
     driveOauthAt?: Date | string | null
+    ttPostClientKey?: string | null
+    ttPostClientSecret?: string | null
+    ttPostOpenId?: string | null
+    ttPostAccessToken?: string | null
+    ttPostRefreshToken?: string | null
+    ttPostExpiresAt?: Date | string | null
+    ttPostScopes?: string | null
+    ttPostDisplayName?: string | null
+    ttPostAvatar?: string | null
+    ttPostAuthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -218036,6 +218257,16 @@ export namespace Prisma {
     driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostClientKey?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostClientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostOpenId?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostScopes?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218078,6 +218309,16 @@ export namespace Prisma {
     driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostClientKey?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostClientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostOpenId?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostScopes?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218120,6 +218361,16 @@ export namespace Prisma {
     driveOauthToken?: string | null
     driveOauthEmail?: string | null
     driveOauthAt?: Date | string | null
+    ttPostClientKey?: string | null
+    ttPostClientSecret?: string | null
+    ttPostOpenId?: string | null
+    ttPostAccessToken?: string | null
+    ttPostRefreshToken?: string | null
+    ttPostExpiresAt?: Date | string | null
+    ttPostScopes?: string | null
+    ttPostDisplayName?: string | null
+    ttPostAvatar?: string | null
+    ttPostAuthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -218162,6 +218413,16 @@ export namespace Prisma {
     driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostClientKey?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostClientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostOpenId?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostScopes?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218204,6 +218465,16 @@ export namespace Prisma {
     driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
     driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostClientKey?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostClientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostOpenId?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAccessToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostRefreshToken?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ttPostScopes?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
+    ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -232743,6 +233014,16 @@ export namespace Prisma {
     driveOauthToken?: SortOrder
     driveOauthEmail?: SortOrder
     driveOauthAt?: SortOrder
+    ttPostClientKey?: SortOrder
+    ttPostClientSecret?: SortOrder
+    ttPostOpenId?: SortOrder
+    ttPostAccessToken?: SortOrder
+    ttPostRefreshToken?: SortOrder
+    ttPostExpiresAt?: SortOrder
+    ttPostScopes?: SortOrder
+    ttPostDisplayName?: SortOrder
+    ttPostAvatar?: SortOrder
+    ttPostAuthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -232791,6 +233072,16 @@ export namespace Prisma {
     driveOauthToken?: SortOrder
     driveOauthEmail?: SortOrder
     driveOauthAt?: SortOrder
+    ttPostClientKey?: SortOrder
+    ttPostClientSecret?: SortOrder
+    ttPostOpenId?: SortOrder
+    ttPostAccessToken?: SortOrder
+    ttPostRefreshToken?: SortOrder
+    ttPostExpiresAt?: SortOrder
+    ttPostScopes?: SortOrder
+    ttPostDisplayName?: SortOrder
+    ttPostAvatar?: SortOrder
+    ttPostAuthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -232833,6 +233124,16 @@ export namespace Prisma {
     driveOauthToken?: SortOrder
     driveOauthEmail?: SortOrder
     driveOauthAt?: SortOrder
+    ttPostClientKey?: SortOrder
+    ttPostClientSecret?: SortOrder
+    ttPostOpenId?: SortOrder
+    ttPostAccessToken?: SortOrder
+    ttPostRefreshToken?: SortOrder
+    ttPostExpiresAt?: SortOrder
+    ttPostScopes?: SortOrder
+    ttPostDisplayName?: SortOrder
+    ttPostAvatar?: SortOrder
+    ttPostAuthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
