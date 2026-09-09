@@ -4513,6 +4513,51 @@ router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
  * Bộ này ĐẾM THẲNG trên bảng ở từng cửa hàng: đếm được = bảng có thật.
  * CHỈ ĐỌC.
  */
+/* ─── ĐO CỘT THẬT SỰ CÓ TRONG DB (chỉ đọc) ─────────────────────────────────────
+ * `/admin/migrate` trả "OK" cho mọi cửa hàng KỂ CẢ khi danh sách ALTER viết tay
+ * của nó thiếu cột — nó chỉ chạy đúng những dòng nó có. Nên sau mỗi lần migrate
+ * phải soi information_schema, đừng nghiệm thu bằng HTTP 200.
+ *   GET /admin/do-cot?bang=StoreSettings&tienTo=ttPost
+ * Trả về: cửa hàng nào có/thiếu cột nào. Không đụng dữ liệu. */
+router.get('/do-cot', async (req: Request, res: Response) => {
+    try {
+        const bang = String(req.query.bang || '').trim()
+        const tienTo = String(req.query.tienTo || '').trim()
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(bang)) { res.status(400).json({ success: false, error: 'Thiếu/sai ?bang' }); return }
+        if (tienTo && !/^[A-Za-z0-9_]+$/.test(tienTo)) { res.status(400).json({ success: false, error: 'Sai ?tienTo' }); return }
+
+        const ds = await prisma.store.findMany({ select: { code: true, schema: true } })
+        const ra: any[] = []
+        // Tuần tự: pool prod chỉ 1 kết nối.
+        for (const st of ds) {
+            const sp: any = getStorePrisma(st.schema)
+            try {
+                const cot: any[] = await sp.$queryRawUnsafe(
+                    `SELECT column_name, data_type FROM information_schema.columns
+                     WHERE table_schema = $1 AND table_name = $2
+                       AND ($3 = '' OR column_name LIKE $3 || '%')
+                     ORDER BY column_name`,
+                    st.schema, bang, tienTo,
+                )
+                ra.push({ cuaHang: st.code, schema: st.schema, soCot: cot.length, cot: cot.map(c => `${c.column_name}:${c.data_type}`) })
+            } catch (e: any) {
+                ra.push({ cuaHang: st.code, schema: st.schema, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+        const soCotDs = ra.map(r => r.soCot).filter((n: any) => typeof n === 'number')
+        res.json({
+            success: true,
+            data: {
+                bang, tienTo,
+                dongDeu: soCotDs.length > 0 && new Set(soCotDs).size === 1,
+                cuaHang: ra,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 router.get('/do-kho-media', async (_req: Request, res: Response) => {
     try {
         const ds = await prisma.store.findMany({ select: { code: true, name: true, schema: true } })
