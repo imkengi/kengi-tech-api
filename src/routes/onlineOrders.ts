@@ -1585,17 +1585,13 @@ router.post('/reconvert', skuAuth, requirePermission('online_orders.manage', 'or
             data: { khongKhopSku: false, khongKhopLuc: null },
         })
 
+        // Cùng danh sách với máy chuyển đơn: KHÔNG có READY_TO_SHIP / AWAITING_SHIPMENT
+        // (đơn chờ xác nhận là Đặt hàng, chưa lên phiếu — chủ shop chốt 09/09/2026).
+        const { TRANG_THAI_DUOC_LEN_PHIEU } = await import('../lib/donDuocXoa')
         const orders = await prisma.onlineOrder.findMany({
             where: {
                 createdAt: { gte: tuNgay },
-                status: {
-                    in: [
-                        'confirmed', 'processing', 'shipping', 'completed', 'delivered',
-                        'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
-                        'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING',
-                        'IN_TRANSIT', 'DELIVERED',
-                    ],
-                },
+                status: { in: [...TRANG_THAI_DUOC_LEN_PHIEU] },
             },
             select: { id: true, orderNumber: true },
             orderBy: { createdAt: 'desc' },
@@ -1979,7 +1975,11 @@ router.put('/:id/status', authMiddleware, requirePermission('online_orders.updat
 
         // ── Inventory auto-sync ──────────────────────────────────────────
         // Deduct stock when order is confirmed/processed, reverse when cancelled/returned
-        const confirmStatuses = ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'confirmed', 'processing', 'shipping']
+        /* READY_TO_SHIP KHÔNG còn ở đây (09/09/2026): đơn chờ xác nhận là ĐẶT HÀNG —
+         * không phiếu, không trừ kho — cùng luật với máy chuyển đơn bên orderSync.
+         * Đơn cũ đã trừ ở READY_TO_SHIP theo luật cũ thì lên PROCESSED sẽ claim
+         * cờ stockDeducted trượt (count=0) và bỏ qua, không trừ lần hai. */
+        const confirmStatuses = ['PROCESSED', 'SHIPPED', 'confirmed', 'processing', 'shipping']
         const wasNotConfirmed = !oldStatus || !confirmStatuses.includes(oldStatus)
         const isNowConfirmed = confirmStatuses.includes(status)
 

@@ -384,9 +384,11 @@ export async function sucKhoeDuLieu(
            AND o."createdAt" >= $1 AND o."createdAt" < $2
            AND o."createdAt" < now() - interval '${NGAY_BO_QUA} days'
            AND o.status IN ('confirmed','processing','shipping','completed','delivered',
-                            'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
-                            'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                            'PROCESSED','SHIPPED','COMPLETED',
+                            'AWAITING_COLLECTION','PARTIALLY_SHIPPING',
                             'IN_TRANSIT','DELIVERED')`,
+        /* KHÔNG có READY_TO_SHIP / AWAITING_SHIPMENT: từ 09/09/2026 đơn chờ xác nhận
+         * cố ý chưa lên phiếu (là Đặt hàng), kể là "kẹt chưa vào sổ" là tố oan. */
         ky.start, ky.end,
     ), null)
 

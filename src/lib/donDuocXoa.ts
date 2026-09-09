@@ -43,6 +43,37 @@ export const TRANG_THAI_LEN_PHIEU = [
 ] as const
 
 /**
+ * ĐƠN CHỜ XÁC NHẬN — khách đã đặt (Shopee: đã trả tiền) nhưng NGƯỜI BÁN CHƯA bấm
+ * xử lý bên sàn. Chủ shop chốt 09/09/2026: "đơn online chưa xác nhận thì nằm bên
+ * Đặt hàng, xác nhận đơn xong mới sang Giao dịch". Nên nhóm này KHÔNG lên phiếu,
+ * không trừ kho, không bút toán — đúng nghĩa một đơn đặt hàng.
+ *
+ * Đo trước khi đổi (GET /admin/do-don-len-phieu, KENGISTORE 09/09): READY_TO_SHIP
+ * 97/111 đơn đã có phiếu, AWAITING_SHIPMENT 15/15 — đúng cái chủ shop nhìn thấy
+ * trong Giao dịch mà chưa hề bấm gì bên sàn. UNPAID thì 0/20, vốn đã đúng.
+ *
+ * Vẫn nằm trong TRANG_THAI_LEN_PHIEU (⇒ TRANG_THAI_DA_BAN) vì chúng SẼ lên phiếu:
+ * cron dọn dẹp phải tiếp tục coi là "đã bán mà chưa có phiếu ⇒ GIỮ". Rút khỏi
+ * danh sách trên là mở lại đúng lỗ hổng xoá đơn mà file này sinh ra để chặn.
+ *
+ * `confirmed` chữ thường KHÔNG vào đây: Lazada VN kẹt ở `confirmed` kể cả đơn đã
+ * giao cả tháng (xem ghi chú lazada-trang-thai-dong-bang) — chặn nó là mất sạch
+ * doanh thu Lazada. Nhóm này chỉ gồm trạng thái sàn trả về NGUYÊN VĂN.
+ *
+ * Áp dụng cho đơn TỪ NAY: phiếu đã lập cho đơn READY_TO_SHIP trước đó giữ nguyên
+ * (chủ shop: "không cần chỉnh các đơn trước"); hàm chuyển vốn bỏ qua đơn đã có
+ * phiếu nên không có gì bị lật lại.
+ */
+export const TRANG_THAI_CHO_XAC_NHAN = ['READY_TO_SHIP', 'AWAITING_SHIPMENT'] as const
+
+/** Trạng thái THỰC SỰ được lên phiếu = còn lên phiếu được, TRỪ nhóm chờ xác nhận. */
+export const TRANG_THAI_DUOC_LEN_PHIEU: string[] = (TRANG_THAI_LEN_PHIEU as readonly string[])
+    .filter(s => !(TRANG_THAI_CHO_XAC_NHAN as readonly string[]).includes(s))
+
+export const duocLenPhieu = (status: string): boolean => TRANG_THAI_DUOC_LEN_PHIEU.includes(String(status))
+export const choXacNhan = (status: string): boolean => (TRANG_THAI_CHO_XAC_NHAN as readonly string[]).includes(String(status))
+
+/**
  * Trạng thái nghĩa là ĐÃ BÁN — nhóm bắt buộc phải có phiếu mới được xoá.
  *
  * SUY RA từ danh sách trên chứ không gõ tay: định nghĩa đúng của "đã bán" chính

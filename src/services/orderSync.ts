@@ -7,7 +7,7 @@ import { adjustSellableStock } from '../lib/warehouseHelper'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
 import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { moTaLoi } from '../lib/gomLoi'
-import { TRANG_THAI_LEN_PHIEU } from '../lib/donDuocXoa'
+import { duocLenPhieu, TRANG_THAI_DUOC_LEN_PHIEU } from '../lib/donDuocXoa'
 import { dangTat } from '../lib/choXong'
 
 type StorePrisma = any
@@ -34,7 +34,10 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         return false
     }
 
-    if (!(TRANG_THAI_LEN_PHIEU as readonly string[]).includes(order.status)) return false
+    /* Chờ xác nhận (READY_TO_SHIP / AWAITING_SHIPMENT) thì CHƯA lên phiếu — chủ shop
+     * chốt 09/09/2026: chưa xác nhận là Đặt hàng, xác nhận xong mới là Giao dịch.
+     * Lượt đồng bộ sau thấy PROCESSED/SHIPPED… sẽ chuyển. Xem lib/donDuocXoa.ts. */
+    if (!duocLenPhieu(order.status)) return false
 
     // Check if already converted (receipt exists with this order number)
     const existing = await prisma.transaction.findFirst({
@@ -427,13 +430,10 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
     const orders = await prisma.onlineOrder.findMany({
         where: {
             channelId,
-            status: { in: [
-                'confirmed', 'processing', 'shipping', 'completed', 'delivered',
-                'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
-                // TikTok native (mapStatus giữ nguyên trạng thái gốc từ 2026-06-11)
-                'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT',
-                'DELIVERED', // thiếu trước đây → đơn TikTok đã giao không bao giờ được chuyển
-            ] },
+            /* MỘT nguồn với hàm chuyển ở trên (trước đây là danh sách gõ tay riêng,
+             * khớp nhau bằng niềm tin). Không có READY_TO_SHIP / AWAITING_SHIPMENT:
+             * đơn chờ xác nhận không được quét lên phiếu — xem lib/donDuocXoa.ts. */
+            status: { in: [...TRANG_THAI_DUOC_LEN_PHIEU] },
             OR: [
                 { khongKhopSku: false },
                 { khongKhopLuc: null },                  // cờ bật mà chưa có mốc → cứ thử
