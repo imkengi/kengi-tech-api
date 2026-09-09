@@ -161,6 +161,8 @@ export async function moPhienDang(
         videoUrl?: string | null
         fileSize?: number
         chunkSize?: number
+        /** SỐ KHỐI — người gọi tính và truyền vào, KHÔNG tính lại ở đây. */
+        totalChunkCount?: number
         title?: string
         privacyLevel?: string
         disableComment?: boolean
@@ -178,7 +180,13 @@ export async function moPhienDang(
             source: 'FILE_UPLOAD',
             video_size: opts.fileSize,
             chunk_size: opts.chunkSize ?? opts.fileSize,
-            total_chunk_count: Math.max(1, Math.ceil((opts.fileSize || 1) / (opts.chunkSize || opts.fileSize || 1))),
+            /* ⚠ FLOOR, KHÔNG PHẢI CEIL — và phải là ĐÚNG con số người gọi dùng để
+             * chia khối. TikTok dồn phần dư vào khối CUỐI, nên file 12MB với khối
+             * 10MB là MỘT khối 12MB, không phải hai. Trước đây chỗ này tự tính bằng
+             * ceil ⇒ khai 2 khối mà chỉ gửi 1, phiên treo vĩnh viễn với mọi file
+             * không chia hết cho 10MB. Một phép tính, một chỗ. */
+            total_chunk_count: opts.totalChunkCount
+                ?? Math.max(1, Math.floor((opts.fileSize || 1) / (opts.chunkSize || opts.fileSize || 1))),
         }
 
     const body: any = { source_info: sourceInfo }

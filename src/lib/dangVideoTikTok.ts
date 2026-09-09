@@ -133,6 +133,7 @@ export async function buocDangTikTok(
                 dangThang,
                 fileSize,
                 chunkSize,
+                totalChunkCount: tongPhan,   // MỘT phép tính dùng chung với vòng tải dưới
                 title: String(m.caption || m.ten || '').slice(0, 2200),
                 privacyLevel: privacy,
             })
