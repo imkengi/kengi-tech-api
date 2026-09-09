@@ -4637,6 +4637,68 @@ router.post('/do-tai-khoi-drive', async (req: Request, res: Response) => {
 })
 
 /**
+ * VÌ SAO TRANG ĐÓNG HÀNG KHÔNG THẤY ĐƠN — GET /admin/do-tim-don-san?storeCode=&q=<mã>
+ *
+ * 09/09/2026: trang kengi.vn/video-online quét mã vận đơn, `/online-orders?search=`
+ * trả 200 nhưng ĐÚNG 776 byte cho mọi mã khác nhau (nền 204 là 643) ⇒ danh sách
+ * RỖNG. Bộ này chạy CHÍNH phép tìm của route đó để biết đơn có trong máy không,
+ * và in dạng `trackingNumber` của các đơn mới nhất — nếu cột đó rỗng thì quét mã
+ * vận đơn không bao giờ ra, dù đơn vẫn về đủ.
+ * CHỈ ĐỌC.
+ */
+router.get('/do-tim-don-san', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const q = String(req.query.q || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        // Y HỆT dungWhereDon() của GET /online-orders
+        const timThay = q ? await sp.onlineOrder.findMany({
+            where: {
+                OR: [
+                    { orderNumber: { contains: q, mode: 'insensitive' } },
+                    { customerName: { contains: q, mode: 'insensitive' } },
+                    { customerPhone: { contains: q, mode: 'insensitive' } },
+                    { trackingNumber: { contains: q, mode: 'insensitive' } },
+                ],
+            },
+            select: { orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true, shippedAt: true },
+            take: 5,
+        }) : []
+
+        // Đơn mới nhất — để nhìn DẠNG mã vận đơn đang lưu
+        const moiNhat = await sp.onlineOrder.findMany({
+            select: { orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true },
+            orderBy: { createdAt: 'desc' }, take: 8,
+        })
+        const tong = await sp.onlineOrder.count()
+        const coTracking = await sp.onlineOrder.count({ where: { trackingNumber: { not: null } } })
+        // Đơn tạo trong 24h qua — đồng bộ còn mang đơn mới về không
+        const gan24h = await sp.onlineOrder.count({ where: { createdAt: { gte: new Date(Date.now() - 86400_000) } } })
+        const gan24hCoTracking = await sp.onlineOrder.count({
+            where: { createdAt: { gte: new Date(Date.now() - 86400_000) }, trackingNumber: { not: null } },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, timTheo: q || '(không truyền q)',
+                soDonTimThay: timThay.length, timThay,
+                tongDon: tong, donCoMaVanDon: coTracking,
+                don24h: gan24h, don24hCoMaVanDon: gan24hCoTracking,
+                donMoiNhat: moiNhat,
+                yNghia: 'soDonTimThay=0 mà tổng đơn vẫn lớn ⇒ đơn KHÔNG có trong máy hoặc mã vận đơn lưu khác dạng. '
+                    + 'don24hCoMaVanDon nhỏ hơn hẳn don24h ⇒ đơn về nhưng CHƯA có mã vận đơn, quét mã sẽ không ra.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * TỒN KHO ĐƠN SÀN — GET /admin/do-ton-don-san?storeCode=&soDon=300
  *
  * Soát 09/09/2026: có HAI đường trừ kho cho cùng một đơn, và chúng KHÔNG trừ
@@ -4731,10 +4793,35 @@ router.get('/do-ton-don-san', async (req: Request, res: Response) => {
             }
         }
 
+        /* ── C. Bẫy đã lên nòng chưa? ────────────────────────────────────────
+         * Lệch chỉ gây hại khi có mã CẦN QUY ĐỔI hoặc là COMBO đi qua đơn sàn.
+         * Không có mã nào như vậy thì hai đường trừ ra cùng một số ⇒ chưa nổ,
+         * nhưng nổ ngay lần đầu chủ shop khai ánh xạ vỉ→cái hoặc bán combo. */
+        const soAnhXaQuyDoi = await sp.skuMapping.count({ where: { conversionRate: { not: 1 } } }).catch(() => -1)
+        const soAnhXaCombo = await sp.skuMapping.count({ where: { bundleId: { not: null } } }).catch(() => -1)
+        const soMaDaGop = await sp.product.count({ where: { mergedIntoId: { not: null } } }).catch(() => -1)
+        const soMaCombo = await sp.product.count({ where: { bundleId: { not: null } } }).catch(() => -1)
+
+        // SKU nào ĐANG bán online mà lại nằm trong nhóm cần quy đổi/bung combo
+        const skuDonGanDay = [...new Set(donA.flatMap((o: any) => (o.items || []).map((i: any) => String(i.sku || '')).filter(Boolean)))] as string[]
+        const anhXaDinh = skuDonGanDay.length ? await sp.skuMapping.findMany({
+            where: { platformSku: { in: skuDonGanDay }, OR: [{ conversionRate: { not: 1 } }, { bundleId: { not: null } }] },
+            select: { platformSku: true, conversionRate: true, bundleId: true }, take: 20,
+        }).catch(() => []) : []
+
         res.json({
             success: true,
             data: {
                 cuaHang: store.name, tranQuet: soDon,
+                C_nguyCoDangCho: {
+                    anhXaSkuCoQuyDoi: soAnhXaQuyDoi,
+                    anhXaSkuLaCombo: soAnhXaCombo,
+                    maDaGop: soMaDaGop,
+                    maLaCombo: soMaCombo,
+                    skuDangBanOnlineCanQuyDoi: anhXaDinh,
+                    yNghia: 'Tất cả bằng 0 ⇒ hai đường trừ hiện ra CÙNG một số nên lệch chưa gây hại. '
+                        + 'Khác 0 ⇒ bẫy đã lên nòng: chỉ cần đơn của mã đó đi qua đường PUT trạng thái, hoặc bị huỷ sau khi đã convert.',
+                },
                 A_dangTruKho: {
                     daQuet: donA.length, chamTran: donA.length >= soDon,
                     quaDuongConvert: quaConvert,
