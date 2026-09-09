@@ -4637,6 +4637,134 @@ router.post('/do-tai-khoi-drive', async (req: Request, res: Response) => {
 })
 
 /**
+ * TỒN KHO ĐƠN SÀN — GET /admin/do-ton-don-san?storeCode=&soDon=300
+ *
+ * Soát 09/09/2026: có HAI đường trừ kho cho cùng một đơn, và chúng KHÔNG trừ
+ * giống nhau; còn đường hoàn kho thì trừ kiểu này hoàn kiểu kia.
+ *   · orderSync.convertOnlineOrderToTransaction — quy đổi đủ: ánh xạ SKU
+ *     (conversionRate), mã đã gộp (mergedRate), bung combo → trừ `baseQuantity`.
+ *   · PUT /online-orders/:id/status — khớp SKU CHẶT (phân biệt hoa thường, không
+ *     tra SkuMapping), không quy đổi, không bung combo → trừ `quantity` thô.
+ *   · reverseOnlineOrderEffects — hoàn `quantity` thô của OnlineOrderItem.
+ * Cả hai đường trừ đều giành chung cờ `stockDeducted`, nên đường nào chạy trước
+ * thì đơn trừ theo kiểu đó — kết quả phụ thuộc thứ tự, không tất định.
+ *
+ * Bộ này ĐẾM trên dữ liệu thật, không đoán:
+ *   A. Đơn đang mang cờ đã trừ: trừ bằng đường nào, và đường PUT có item nào
+ *      khớp SKU chặt KHÔNG RA (⇒ cờ đã giành mà kho không hề bị trừ).
+ *   B. Đơn đã huỷ/hoàn và đã đảo: Σ(baseQuantity − quantity) = số đơn vị mất
+ *      vĩnh viễn vì trừ theo đơn vị gốc mà hoàn theo đơn vị sàn.
+ * CHỈ ĐỌC. Chạy tuần tự (pool prod = 1).
+ */
+router.get('/do-ton-don-san', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const soDon = Math.min(2000, Math.max(50, Number(req.query.soDon) || 300))
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const DAO = ['CANCELLED', 'cancelled', 'TO_RETURN', 'returned']
+
+        // ── A. Đơn đang mang cờ đã trừ ──────────────────────────────────────
+        const donA = await sp.onlineOrder.findMany({
+            where: { stockDeducted: true },
+            select: { id: true, orderNumber: true, status: true, items: { select: { productId: true, sku: true, quantity: true, productName: true } } },
+            orderBy: { createdAt: 'desc' }, take: soDon,
+        })
+        const soHieuA = donA.map((o: any) => `ONLINE-${o.orderNumber}`)
+        const txA = soHieuA.length ? await sp.transaction.findMany({
+            where: { receiptNumber: { in: soHieuA } },
+            select: { receiptNumber: true, status: true, items: { select: { quantity: true, baseQuantity: true } } },
+        }) : []
+        const banTxA = new Map(txA.map((t: any) => [t.receiptNumber, t]))
+
+        /* SKU cần kiểm khớp CHẶT — đúng phép so của đường PUT:
+         * findFirst({ where: { sku } }), phân biệt hoa thường, không trim. */
+        const skuCanKiem = [...new Set(donA.flatMap((o: any) => (o.items || [])
+            .filter((i: any) => !i.productId && i.sku).map((i: any) => String(i.sku))))] as string[]
+        const spKhopChat = skuCanKiem.length ? await sp.product.findMany({
+            where: { sku: { in: skuCanKiem } }, select: { sku: true },
+        }) : []
+        const boSkuChat = new Set(spKhopChat.map((p: any) => String(p.sku)))
+
+        let quaConvert = 0, quaPutStatus = 0
+        let itemTruKhong = 0, donTruKhong = 0
+        const viDuTruKhong: any[] = []
+        for (const o of donA) {
+            if (banTxA.has(`ONLINE-${o.orderNumber}`)) { quaConvert++; continue }
+            quaPutStatus++
+            const hong = (o.items || []).filter((i: any) => !i.productId && !(i.sku && boSkuChat.has(String(i.sku))))
+            if (hong.length) {
+                donTruKhong++
+                itemTruKhong += hong.length
+                if (viDuTruKhong.length < 10) {
+                    viDuTruKhong.push({ don: o.orderNumber, trangThai: o.status, itemHong: hong.map((i: any) => `${i.sku || '(không SKU)'} ×${i.quantity}`) })
+                }
+            }
+        }
+
+        // ── B. Đơn đã huỷ/hoàn (cờ đã về false = đã đảo) ────────────────────
+        const donB = await sp.onlineOrder.findMany({
+            where: { status: { in: DAO }, stockDeducted: false },
+            select: { id: true, orderNumber: true, status: true, items: { select: { quantity: true } } },
+            orderBy: { createdAt: 'desc' }, take: soDon,
+        })
+        const soHieuB = donB.map((o: any) => `ONLINE-${o.orderNumber}`)
+        const txB = soHieuB.length ? await sp.transaction.findMany({
+            where: { receiptNumber: { in: soHieuB } },
+            select: { receiptNumber: true, status: true, items: { select: { quantity: true, baseQuantity: true, productName: true } } },
+        }) : []
+        const banTxB = new Map(txB.map((t: any) => [t.receiptNumber, t]))
+
+        let donDaDao = 0, donLechDonVi = 0, tongDonViMat = 0, donComboBung = 0
+        const viDuMat: any[] = []
+        for (const o of donB) {
+            const t: any = banTxB.get(`ONLINE-${o.orderNumber}`)
+            if (!t) continue                      // chưa từng lên phiếu ⇒ chưa từng trừ theo đường convert
+            donDaDao++
+            const lech = (t.items || []).reduce((a: number, it: any) => a + (Math.round(Number(it.baseQuantity) || 0) - (Number(it.quantity) || 0)), 0)
+            if ((t.items || []).length > (o.items || []).length) donComboBung++
+            if (lech > 0) {
+                donLechDonVi++
+                tongDonViMat += lech
+                if (viDuMat.length < 10) viDuMat.push({ don: o.orderNumber, trangThai: o.status, thieu: lech, phieu: t.receiptNumber })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, tranQuet: soDon,
+                A_dangTruKho: {
+                    daQuet: donA.length, chamTran: donA.length >= soDon,
+                    quaDuongConvert: quaConvert,
+                    quaDuongPutStatus: quaPutStatus,
+                    donCoItemKhongTruDuoc: donTruKhong,
+                    soItemKhongTruDuoc: itemTruKhong,
+                    viDu: viDuTruKhong,
+                    yNghia: 'quaDuongPutStatus = trừ bằng SỐ LƯỢNG SÀN (không quy đổi, không bung combo). '
+                        + 'donCoItemKhongTruDuoc = cờ stockDeducted ĐÃ giành nhưng khớp SKU chặt không ra ⇒ kho KHÔNG hề bị trừ, '
+                        + 'và đường convert về sau thấy cờ=true nên bỏ qua vĩnh viễn.',
+                },
+                B_daHuyHoanVaDaDao: {
+                    daQuet: donB.length, chamTran: donB.length >= soDon,
+                    donTungLenPhieu: donDaDao,
+                    donHoanThieu: donLechDonVi,
+                    tongDonViHoanThieu: tongDonViMat,
+                    donComboBung: donComboBung,
+                    viDu: viDuMat,
+                    yNghia: 'Trừ theo baseQuantity (đơn vị gốc) mà hoàn theo quantity (đơn vị sàn) ⇒ mỗi đơn mất '
+                        + '(baseQuantity − quantity) đơn vị VĨNH VIỄN. donComboBung = phiếu có nhiều dòng hơn đơn ⇒ '
+                        + 'đã trừ vào THÀNH PHẦN combo nhưng hoàn vào mã combo/không mã.',
+                },
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * TIẾN TRÌNH ĐĂNG VIDEO ĐANG DỞ — GET /admin/do-tien-trinh-dang?storeCode=
  * Chủ shop báo "treo": web đứng im khi máy chủ đang tải khối. Bộ này đọc thẳng
  * SanMedia.tienTrinhDang (ghi sau MỖI khối) để biết đang ở khối mấy, sửa lúc nào.
