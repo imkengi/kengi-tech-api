@@ -30,6 +30,8 @@ import { getStoreDriveWriter } from './driveOAuth'
 export type GiaiDoan = 'init' | 'parts' | 'complete' | 'processing' | 'cover' | 'edit' | 'post' | 'xong'
 
 export interface TienTrinh {
+    /** 'shopee' — CỘT tienTrinhDang DÙNG CHUNG với TikTok, phải biết của ai. */
+    san?: string
     giaiDoan: GiaiDoan
     videoUploadId?: string
     partSize?: number
@@ -54,14 +56,28 @@ export interface KetQuaBuoc {
 const NGAN_SACH_MAC_DINH_MS = 75_000   // lượt ngắn để web hiện tiến trình đều; 200s từng bị tưởng là treo
 const MOT_GB = 1024 * 1024 * 1024
 
+const GIAI_DOAN_SHOPEE: string[] = ['init', 'parts', 'complete', 'processing', 'cover', 'edit', 'post', 'xong']
+
+/**
+ * ⚠ `tienTrinhDang` là MỘT cột dùng chung với TikTok — đổi kênh video là ô này còn
+ * tiến trình của sàn kia. Đọc phải kiểm dấu `san`.
+ *
+ * `!t.san` = bản ghi CŨ, có từ trước khi đóng dấu (09/09/2026) ⇒ vẫn là Shopee,
+ * PHẢI nhận. Đá đi là mất bản nháp đang chờ Shopee mở khoá điều khoản, tải lại từ
+ * khối 0 — thứ đã tốn cả buổi mới lên tới nơi.
+ */
 function docTienTrinh(s?: string | null): TienTrinh {
     try {
         const t = s ? JSON.parse(s) : null
-        return t && typeof t === 'object' && t.giaiDoan ? t : { giaiDoan: 'init' }
+        if (!t || typeof t !== 'object') return { giaiDoan: 'init' }
+        if (t.san && t.san !== 'shopee') return { giaiDoan: 'init' }
+        if (!GIAI_DOAN_SHOPEE.includes(t.giaiDoan)) return { giaiDoan: 'init' }
+        return t
     } catch { return { giaiDoan: 'init' } }
 }
 
 async function luu(prisma: any, id: string, tt: TienTrinh, them?: Record<string, any>) {
+    tt.san = 'shopee'
     tt.capNhatLuc = new Date().toISOString()
     await prisma.sanMedia.update({ where: { id }, data: { tienTrinhDang: JSON.stringify(tt), ...(them || {}) } })
 }

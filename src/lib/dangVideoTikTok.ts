@@ -25,6 +25,8 @@ import { layTokenTikTok, moPhienDang, trangThaiDang, layHoSoNguoiDang } from './
 export type GiaiDoanTT = 'init' | 'parts' | 'check' | 'xong'
 
 export interface TienTrinhTT {
+    /** 'tiktok' — CỘT tienTrinhDang DÙNG CHUNG với Shopee, phải biết của ai. */
+    san?: string
     giaiDoan: GiaiDoanTT
     publishId?: string
     uploadUrl?: string
@@ -50,14 +52,28 @@ const NGAN_SACH_MAC_DINH_MS = 75_000
 const KHOI = 10 * 1024 * 1024
 const TRAN_TIKTOK = 4 * 1024 * 1024 * 1024   // TikTok nhận tối đa 4GB
 
+const GIAI_DOAN_TT: string[] = ['init', 'parts', 'check', 'xong']
+
+/**
+ * ⚠ `SanMedia.tienTrinhDang` là MỘT cột dùng chung cho CẢ HAI sàn. Đổi kênh một
+ * video từ Shopee sang TikTok thì ô này vẫn còn tiến trình Shopee — mà giai đoạn
+ * của Shopee ('post', 'cover', 'edit'…) không khớp giai đoạn nào của TikTok, nên
+ * bản đầu rơi thẳng xuống `return { xong: true }` cuối hàm và **báo ĐÃ ĐĂNG XONG
+ * mà chưa gửi một byte nào**. Nay đọc phải kiểm cả `san` lẫn tên giai đoạn; không
+ * phải của mình thì bắt đầu lại từ 'init'.
+ */
 function docTienTrinh(s?: string | null): TienTrinhTT {
     try {
         const t = s ? JSON.parse(s) : null
-        return t && typeof t === 'object' && t.giaiDoan ? t : { giaiDoan: 'init' }
+        if (!t || typeof t !== 'object') return { giaiDoan: 'init' }
+        if (t.san !== 'tiktok') return { giaiDoan: 'init' }        // của sàn khác (hoặc bản cũ chưa đóng dấu)
+        if (!GIAI_DOAN_TT.includes(t.giaiDoan)) return { giaiDoan: 'init' }
+        return t
     } catch { return { giaiDoan: 'init' } }
 }
 
 async function luu(prisma: any, id: string, tt: TienTrinhTT, them?: Record<string, any>) {
+    tt.san = 'tiktok'
     tt.capNhatLuc = new Date().toISOString()
     await prisma.sanMedia.update({ where: { id }, data: { tienTrinhDang: JSON.stringify(tt), ...(them || {}) } })
 }
@@ -234,7 +250,15 @@ export async function buocDangTikTok(
             }
         }
 
-        return { xong: true, conTiep: false, giaiDoan: tt.giaiDoan, tienTrinh: tt, thongDiep: tt.ghiChu || 'Đã xong' }
+        /* Chỉ 'xong' mới được nói là xong. Rơi tới đây với giai đoạn khác nghĩa là
+         * tiến trình hỏng — nói thẳng và cho chạy lại, đừng báo thành công khống. */
+        if (tt.giaiDoan === 'xong') {
+            return { xong: true, conTiep: false, giaiDoan: 'xong', tienTrinh: tt, thongDiep: tt.ghiChu || 'Đã đăng' }
+        }
+        tt.giaiDoan = 'init'
+        tt.ghiChu = 'Tiến trình cũ không đọc được — bắt đầu lại'
+        await luu(prisma, mediaId, tt)
+        return { xong: false, conTiep: true, giaiDoan: 'init', tienTrinh: tt, thongDiep: tt.ghiChu }
     } catch (err: any) {
         const msg = String(err?.message || err)
         /* Phiên tải hết hạn thì ĐẶT LẠI về init cho lượt sau mở phiên mới, thay vì
