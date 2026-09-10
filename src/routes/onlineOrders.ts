@@ -5435,6 +5435,13 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
             } catch (e: any) { console.warn('[push-stock] Token refresh failed:', e.message) }
         }
 
+        /* CHẠY THỬ: tính y hệt lượt thật rồi TRẢ BẢNG SỐ, không gọi sàn, không ghi
+         * gì. Bắt buộc phải có vì đẩy tồn là thao tác KHÔNG CÓ ĐƯỜNG LUI — đẩy
+         * nhầm số 0 lên là khoá sạch hàng đang bán. MỘT bản tính cho cả hai chế độ;
+         * viết bảng xem trước riêng là cách chắc chắn nhất để nó lệch lượt thật. */
+        const chayThu = req.body?.dryRun === true || String(req.query.dryRun || '') === '1'
+        const bangThu: any[] = []
+
         const { onlineProductIds, force } = req.body || {}
         const where: any = { channelId: channel.id }
         if (Array.isArray(onlineProductIds) && onlineProductIds.length > 0) where.id = { in: onlineProductIds.map(String) }
@@ -5514,6 +5521,22 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
 
             // Tồn theo ĐƠN VỊ BÁN trên sàn: 26 cái = 2 vỉ (không phải 26 vỉ)
             const targetStock = Math.max(0, Math.floor(tonNguon / (rate > 0 ? rate : 1)))
+
+            if (chayThu) {
+                if (bangThu.length < 300) {
+                    bangThu.push({
+                        sku: p.sku || local.sku, tenSan: String(p.name || '').slice(0, 40),
+                        tonDangTrenSan: p.stock, seDay: targetStock,
+                        doi: targetStock - (p.stock || 0),
+                        ...(khoMe ? { tonKhoMe: tonNguon + (donTreo.get(String(local.sku || '').trim().toLowerCase()) || 0), donTreo: donTreo.get(String(local.sku || '').trim().toLowerCase()) || 0 } : {}),
+                        ...(rate !== 1 ? { heSo: rate } : {}),
+                        boQua: !force && p.stock === targetStock,
+                    })
+                }
+                if (!force && p.stock === targetStock) skipped++; else pushed++
+                continue
+            }
+
             if (!force && p.stock === targetStock) { skipped++; continue }
 
             try {
@@ -5535,6 +5558,20 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
 
             // Soft throttle between platform calls to stay under rate limits
             await new Promise(r => setTimeout(r, 300))
+        }
+
+        if (chayThu) {
+            res.json({
+                success: true,
+                data: {
+                    chayThu: true,
+                    seDay: pushed, seBoQua: skipped,
+                    ...(khoMe ? { khoMe: khoMe.ma, boQuaViKhongCoOKhoMe: boQuaKhoMe.length, viDuBoQua: boQuaKhoMe.slice(0, 10) } : {}),
+                    bang: bangThu,
+                    ghiChu: 'CHẠY THỬ — chưa gọi sàn, chưa ghi gì. Bỏ dryRun để chạy thật.',
+                },
+            })
+            return
         }
 
         await prisma.syncLog.create({

@@ -4566,6 +4566,65 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * BẬT / TẮT KHO MẸ — POST /admin/kho-me
+ * Body: { con: 'KENGISTORE', me: 'HUTI' | null, apply?: true }
+ *
+ * Không có `apply` → CHẠY THỬ: chỉ nói sẽ đổi gì, không ghi. Bật kho mẹ là đổi
+ * hành vi trừ kho của một cửa hàng đang bán thật, nên mặc định phải là chạy thử.
+ * `me: null` để TẮT — luôn có đường lui, tắt xong mọi thứ về y như cũ (tồn đã trừ
+ * thì vẫn đã trừ, nhưng không trừ thêm nữa).
+ */
+router.post('/kho-me', async (req: Request, res: Response) => {
+    try {
+        const maCon = String(req.body?.con || '').trim()
+        const maMe = req.body?.me === null ? null : String(req.body?.me || '').trim()
+        const apply = req.body?.apply === true
+        if (!maCon) { res.status(400).json({ success: false, error: 'Cần `con` (mã cửa hàng mượn kho)' }); return }
+
+        const con = await prisma.store.findFirst({ where: { code: { equals: maCon, mode: 'insensitive' } }, select: { code: true, name: true, schema: true } })
+        if (!con) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${maCon}` }); return }
+
+        let me: any = null
+        if (maMe) {
+            me = await prisma.store.findFirst({ where: { code: { equals: maMe, mode: 'insensitive' } }, select: { code: true, name: true, schema: true, status: true } })
+            if (!me) { res.status(404).json({ success: false, error: `Không thấy cửa hàng mẹ ${maMe}` }); return }
+            if (me.schema === con.schema) { res.status(400).json({ success: false, error: 'Kho mẹ trùng chính nó — sẽ trừ hai lần một kho' }); return }
+            if (me.status && me.status !== 'active') { res.status(400).json({ success: false, error: `Kho mẹ ${me.code} đang "${me.status}"` }); return }
+        }
+
+        const sp: any = getStorePrisma(con.schema)
+        const cai = await sp.storeSettings.findFirst({ select: { id: true, khoMeMa: true } as any })
+        if (!cai) { res.status(400).json({ success: false, error: `${con.code} chưa có bản ghi cài đặt` }); return }
+
+        const truoc = cai.khoMeMa || null
+        const sau = maMe ? me.code : null
+        if (!apply) {
+            res.json({
+                success: true,
+                data: {
+                    chayThu: true, cuaHang: con.code, truoc, sau,
+                    doi: truoc !== sau,
+                    canhBao: sau
+                        ? [`Bật xong: MỌI đơn sàn MỚI của ${con.code} sẽ trừ thêm kho ${sau}, và push-stock lấy tồn từ ${sau}.`,
+                           'Đơn CŨ không bị đụng — cờ khoMeTruLuc của chúng đang rỗng.',
+                           `Nên chạy thử push-stock trước: POST /api/online-orders/channels/<id>/push-stock {"dryRun":true}`]
+                        : [`Tắt xong: ${con.code} quay lại chỉ dùng tồn của chính nó.`,
+                           'Đơn đã trừ kho mẹ trước đó KHÔNG tự hoàn — tắt chỉ ngừng trừ tiếp.'],
+                    cachChay: 'Gửi lại kèm {"apply":true} để ghi thật.',
+                },
+            })
+            return
+        }
+
+        await sp.storeSettings.update({ where: { id: cai.id }, data: { khoMeMa: sau } as any })
+        console.log(`[KhoMe] ${con.code}: kho mẹ ${truoc || '(không)'} → ${sau || '(không)'}`)
+        res.json({ success: true, data: { cuaHang: con.code, truoc, sau, daGhi: true } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO KHO MẸ — GET /admin/do-kho-me?me=HUTI&con=KENGISTORE
  *
  * Chủ shop 10/09/2026: KENGISTORE bán trên sàn nhưng MƯỢN tồn của HUTI — đẩy tồn
