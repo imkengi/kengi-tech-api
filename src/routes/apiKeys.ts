@@ -2,17 +2,21 @@ import { Router, Response } from 'express'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { authMiddleware, AuthRequest, getBranchId } from '../middleware/auth'
-import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // ─── GET /api/api-keys — Get current key info (admin only) ──────────────────
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const schema = req.user?.storeSchema || 'default'
-        const cacheKey = `${schema}:apiKeys:${JSON.stringify(req.query)}`
-        const cached = await cacheGet(cacheKey)
-        if (cached) return res.json(cached)
+        /* KHÔNG ĐỆM. Đo 10/09/2026: `/api/health` báo `cache.type = "memory"` (Redis
+         * không nối được) và Cloud Run chạy `--max-instances 3` ⇒ đệm nằm TRONG BỘ
+         * NHỚ TỪNG MÁY, xoá đệm chỉ xoá được máy nhận lệnh ghi. Bấm "Tạo Secret"
+         * trúng máy B thì máy A và C vẫn trả bản cũ tới 5 phút — đúng bệnh chủ shop
+         * báo ("tạo key xong F5 lại mất"), và không cách nào xoá cho hết.
+         *
+         * Đây là MỘT dòng có chỉ mục, chỉ admin/manager gọi, chỉ khi mở màn Cài đặt.
+         * Đệm không tiết kiệm được gì đáng kể mà đẻ ra cả một lớp lỗi khó lần. */
         const prisma = req.storePrisma!
         if (req.user!.role !== 'admin' && req.user!.role !== 'manager') {
             res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' })
@@ -36,13 +40,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             },
         })
 
-        const _response = { success: true, data: key }
-        /* KHÔNG đệm trạng thái "chưa có key". Đó đúng là lúc sắp có: chủ shop mở
-         * trang, thấy trống, bấm Tạo Secret ngay sau đó. Đệm cái null 5 phút là
-         * tạo xong bấm F5 vẫn thấy "— chưa tạo —" (lỗi chủ shop báo 10/09/2026).
-         * Có key rồi mới đệm — trạng thái đó ổn định, và mọi đường ghi đều xoá đệm. */
-        if (key) await cacheSet(cacheKey, _response, 300)
-        res.json(_response)
+        res.json({ success: true, data: key })
     } catch (err) {
         console.error('Get API key error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
