@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import registryPrisma, { getStorePrisma } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
-import { convertOnlineOrderToTransaction } from '../services/orderSync'
+import { convertOnlineOrderToTransaction, lienKetHangDon } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { moTaLoi } from '../lib/gomLoi'
@@ -255,6 +255,11 @@ router.post('/shopee', async (req: Request, res: Response) => {
             console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} `
                 + `tracking=${_mvd || 'none'}${maVanDonTuPush ? ' (từ push)' : ''}`)
 
+            /* Liên kết hàng ↔ kho NGAY khi đơn về, không đợi lập phiếu: đơn chờ xác
+             * nhận không lập phiếu (09/09) mà trang đóng gói cần mã hàng + ảnh từ
+             * liên kết này. Đã liên kết hết thì hàm trả 0 sau một truy vấn. */
+            try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
+
             // Đơn chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng (hoàn kho + void
             // HĐ đã convert + đảo bút toán). Idempotent nên gọi lặp lại vô hại.
             if (isReversalStatus(orderDetail.status)) {
@@ -266,7 +271,7 @@ router.post('/shopee', async (req: Request, res: Response) => {
             }
         } else {
             // Create new order
-            await storePrisma.onlineOrder.create({
+            const newOrder = await storePrisma.onlineOrder.create({
                 data: {
                     orderNumber: orderDetail.orderNumber,
                     channelId: channel.id,
@@ -321,6 +326,8 @@ router.post('/shopee', async (req: Request, res: Response) => {
                 },
             })
             console.log(`[Shopee Webhook] ✅ Created new order ${orderSn} → ${orderDetail.status}`)
+            // Liên kết hàng ↔ kho ngay lúc về (xem chú thích ở nhánh Updated phía trên).
+            try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
         }
 
     } catch (err: any) {
@@ -545,6 +552,9 @@ router.post('/tiktok', async (req: Request, res: Response) => {
                 },
             })
             console.log(`[TikTok Webhook] ✅ Updated ${orderId} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
+            // Liên kết hàng ↔ kho ngay lúc về — đơn chờ xác nhận không lập phiếu nên
+            // không còn được liên kết ở hàm lập phiếu (10/09/2026, xem lienKetHangDon).
+            try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
 
             // Đơn CANCELLED/hoàn → đảo hiệu ứng (hoàn kho + void HĐ + đảo bút toán)
             if (isReversalStatus(orderDetail.status)) {
@@ -619,6 +629,8 @@ router.post('/tiktok', async (req: Request, res: Response) => {
                 },
             })
             console.log(`[TikTok Webhook] ✅ Created new order ${orderId} → ${orderDetail.status}`)
+            // Liên kết hàng ↔ kho ngay lúc về (xem lienKetHangDon).
+            try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
 
             // Auto-convert if eligible
             try {

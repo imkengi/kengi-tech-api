@@ -4727,14 +4727,31 @@ router.get('/do-tim-don-san', async (req: Request, res: Response) => {
                     { trackingNumber: { contains: q, mode: 'insensitive' } },
                 ],
             },
-            select: { orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true, shippedAt: true },
+            select: {
+                orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true, shippedAt: true,
+                items: { select: { sku: true, productName: true, productId: true, quantity: true } },
+            },
             take: 5,
         }) : []
 
         // Đơn mới nhất — để nhìn DẠNG mã vận đơn đang lưu
         const moiNhat = await sp.onlineOrder.findMany({
-            select: { orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true },
+            select: {
+                orderNumber: true, status: true, trackingNumber: true, platform: true, createdAt: true,
+                items: { select: { sku: true, productName: true, productId: true, quantity: true } },
+            },
             orderBy: { createdAt: 'desc' }, take: 8,
+        })
+        /* 10/09/2026 — "đóng hàng không hiện mã hàng": trang đóng gói hiện
+         * `item.sku || item.product.sku`, nên dòng KHÔNG có sku VÀ CHƯA liên kết
+         * productId là dòng sẽ ra "(hàng chưa có mã)". Đếm thẳng ở đây. */
+        const tomTatDong = (o: any) => ({
+            ...o,
+            soDong: (o.items || []).length,
+            daLienKet: (o.items || []).filter((i: any) => i.productId).length,
+            seHienKhongMa: (o.items || []).filter((i: any) => !String(i.sku || '').trim() && !i.productId)
+                .map((i: any) => String(i.productName || '').slice(0, 50)),
+            items: undefined,
         })
         const tong = await sp.onlineOrder.count()
         const coTracking = await sp.onlineOrder.count({ where: { trackingNumber: { not: null } } })
@@ -4748,12 +4765,13 @@ router.get('/do-tim-don-san', async (req: Request, res: Response) => {
             success: true,
             data: {
                 cuaHang: store.name, timTheo: q || '(không truyền q)',
-                soDonTimThay: timThay.length, timThay,
+                soDonTimThay: timThay.length, timThay: timThay.map(tomTatDong),
                 tongDon: tong, donCoMaVanDon: coTracking,
                 don24h: gan24h, don24hCoMaVanDon: gan24hCoTracking,
-                donMoiNhat: moiNhat,
+                donMoiNhat: moiNhat.map(tomTatDong),
                 yNghia: 'soDonTimThay=0 mà tổng đơn vẫn lớn ⇒ đơn KHÔNG có trong máy hoặc mã vận đơn lưu khác dạng. '
-                    + 'don24hCoMaVanDon nhỏ hơn hẳn don24h ⇒ đơn về nhưng CHƯA có mã vận đơn, quét mã sẽ không ra.',
+                    + 'don24hCoMaVanDon nhỏ hơn hẳn don24h ⇒ đơn về nhưng CHƯA có mã vận đơn, quét mã sẽ không ra. '
+                    + 'seHienKhongMa có tên ⇒ trang đóng gói sẽ hiện "(hàng chưa có mã)" cho dòng đó (không sku, chưa liên kết productId).',
             },
         })
     } catch (err: any) {

@@ -7,7 +7,7 @@ import { adjustSellableStock } from '../lib/warehouseHelper'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
 import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { moTaLoi } from '../lib/gomLoi'
-import { duocLenPhieu, TRANG_THAI_DUOC_LEN_PHIEU } from '../lib/donDuocXoa'
+import { duocLenPhieu, TRANG_THAI_DUOC_LEN_PHIEU, TRANG_THAI_CHO_XAC_NHAN } from '../lib/donDuocXoa'
 import { dangTat } from '../lib/choXong'
 
 type StorePrisma = any
@@ -416,6 +416,75 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
 /**
  * Process all newly synced orders for a channel — convert eligible ones to transactions
  */
+/**
+ * LIÊN KẾT HÀNG CỦA ĐƠN VỚI SẢN PHẨM TRONG KHO — không lập phiếu, không trừ kho.
+ *
+ * Vì sao phải tách riêng (10/09/2026): `productId` của OnlineOrderItem trước đây chỉ
+ * được ghi BÊN TRONG convertOnlineOrderToTransaction, tức lúc lập phiếu. Từ 09/09 đơn
+ * chờ xác nhận (READY_TO_SHIP / AWAITING_SHIPMENT) không lập phiếu nữa ⇒ không bao
+ * giờ được liên kết ⇒ trang đóng gói (kengi.vn/video-online) quét đơn ra
+ * "(hàng chưa có mã)" và mất ảnh: nó hiện `item.sku || item.product.sku`, mà hàng
+ * Shopee nhiều phân loại thì item_sku TRỐNG. Chủ shop báo 10/09: "đóng hàng không
+ * hiện mã hàng nữa" — lỗi do bản 7bf8a21 gộp hai việc vào một hàm.
+ *
+ * Ba phép khớp Y HỆT hàm lập phiếu, cùng thứ tự: SKU kho không phân biệt hoa thường
+ * và DUY NHẤT → bảng ánh xạ SKU → listing OnlineProduct cùng kênh khớp duy nhất.
+ * Ánh xạ sang COMBO thì bỏ qua (combo không phải một sản phẩm, lúc lập phiếu mới
+ * bung). Nhiều mã trùng nhau thì KHÔNG đoán — y như bên lập phiếu.
+ * Trả về số dòng vừa liên kết thêm. Tuần tự, pool prod = 1.
+ */
+export async function lienKetHangDon(prisma: StorePrisma, orderId: string): Promise<number> {
+    const order = await prisma.onlineOrder.findUnique({
+        where: { id: orderId },
+        select: {
+            id: true, platform: true, channelId: true,
+            items: { where: { productId: null }, select: { id: true, sku: true, productName: true } },
+        },
+    })
+    if (!order || !order.items?.length) return 0
+
+    let them = 0
+    for (const item of order.items) {
+        const skuSach = String(item.sku || '').trim() || null
+        let productId: string | null = null
+
+        if (skuSach) {
+            const ungVien = await prisma.product.findMany({
+                where: { sku: { equals: skuSach, mode: 'insensitive' } },
+                select: { id: true }, take: 2,
+            })
+            if (ungVien.length === 1) productId = ungVien[0].id
+        }
+        if (!productId && skuSach) {
+            const map = await prisma.skuMapping.findFirst({
+                where: {
+                    platformSku: { equals: skuSach, mode: 'insensitive' },
+                    OR: [{ platform: null }, { platform: order.platform || undefined }],
+                },
+            }).catch(() => null)
+            if (map && !(map as any).bundleId && map.productId) productId = map.productId
+        }
+        if (!productId && order.channelId) {
+            const ungVien = await prisma.onlineProduct.findMany({
+                where: {
+                    channelId: order.channelId,
+                    localProductId: { not: null },
+                    OR: [...(skuSach ? [{ sku: skuSach }] : []), { name: item.productName }],
+                },
+                select: { localProductId: true }, take: 2,
+            })
+            if (ungVien.length === 1 && ungVien[0].localProductId) productId = ungVien[0].localProductId
+        }
+
+        if (productId) {
+            const ok = await prisma.onlineOrderItem.update({ where: { id: item.id }, data: { productId } })
+                .then(() => true).catch(() => false)
+            if (ok) them++
+        }
+    }
+    return them
+}
+
 export async function processNewOrders(prisma: StorePrisma, channelId: string): Promise<number> {
     // Find orders that are confirmed/completed but not yet converted to transactions
     /* Đơn đã thử mà không khớp được SKU nào thì CHỈ thử lại mỗi 24h, không phải
@@ -471,6 +540,31 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
              * mà không chẩn được thì cũng như không thấy. */
             console.error(`[OrderSync] Error converting order ${order.orderNumber}: ${moTaLoi(err)}`)
         }
+    }
+
+    /* LIÊN KẾT HÀNG cho đơn CHỜ XÁC NHẬN — chúng không đi qua hàm lập phiếu (nơi
+     * liên kết từng được ghi), nên phải quét riêng, xem lienKetHangDon. Chỉ đơn còn
+     * dòng chưa liên kết, 7 ngày gần nhất, mới trước, có trần — để một lượt không
+     * dài thêm đáng kể (pool = 1). Dòng không khớp được gì sẽ được thử lại mỗi lượt,
+     * cho tới khi chủ shop khai ánh xạ SKU hoặc đơn được xác nhận và lên phiếu. */
+    try {
+        const choLienKet = await prisma.onlineOrder.findMany({
+            where: {
+                channelId,
+                status: { in: [...TRANG_THAI_CHO_XAC_NHAN] },
+                createdAt: { gte: new Date(Date.now() - 7 * 86400_000) },
+                items: { some: { productId: null } },
+            },
+            select: { id: true }, orderBy: { createdAt: 'desc' }, take: 150,
+        })
+        let daLienKet = 0
+        for (const o of choLienKet) {
+            if (dangTat()) break
+            daLienKet += await lienKetHangDon(prisma, o.id)
+        }
+        if (daLienKet > 0) console.log(`[OrderSync] Liên kết hàng cho đơn chờ xác nhận: ${daLienKet} dòng / ${choLienKet.length} đơn`)
+    } catch (err: any) {
+        console.error(`[OrderSync] Liên kết hàng đơn chờ xác nhận lỗi: ${moTaLoi(err)}`)
     }
 
     return converted
