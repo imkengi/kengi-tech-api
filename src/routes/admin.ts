@@ -4713,6 +4713,28 @@ router.get('/do-tim-don-san', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
         const q = String(req.query.q || '').trim()
+
+        /* ?tatCa=1 — tìm mã ở MỌI cửa hàng. Sinh ra 10/09/2026 khi một mã vận đơn
+         * "đã ghi từ push" theo log mà cửa hàng chính lại không có: webhook chọn
+         * schema theo shop_id qua cache, cửa hàng bản sao (demo) có kênh cùng
+         * shop_id là ghi nhầm chỗ. Chỉ đọc, tuần tự (pool = 1). */
+        if (q && String(req.query.tatCa || '') === '1') {
+            const ds = await prisma.store.findMany({ select: { code: true, schema: true } })
+            const ra: any[] = []
+            for (const st of ds) {
+                try {
+                    const hit = await (getStorePrisma(st.schema) as any).onlineOrder.findMany({
+                        where: { OR: [{ orderNumber: { contains: q, mode: 'insensitive' } }, { trackingNumber: { contains: q, mode: 'insensitive' } }] },
+                        select: { orderNumber: true, status: true, trackingNumber: true, channelId: true, updatedAt: true },
+                        take: 3,
+                    })
+                    if (hit.length) ra.push({ cuaHang: st.code, don: hit })
+                } catch (e: any) { ra.push({ cuaHang: st.code, loi: String(e?.message || e).slice(0, 120) }) }
+            }
+            res.json({ success: true, data: { timTheo: q, cuaHangCo: ra } })
+            return
+        }
+
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp: any = getStorePrisma(store.schema)

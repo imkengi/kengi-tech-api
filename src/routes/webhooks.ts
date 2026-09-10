@@ -151,9 +151,16 @@ router.post('/shopee', async (req: Request, res: Response) => {
          * vào là hỏng hai shop. Ưu tiên khoá theo TỪNG KÊNH.
          *
          * Thử lần lượt và nói rõ khoá nào khớp, để lần sau khỏi mò. */
+        /* 10/09/2026 — thêm khoá của APP VIDEO. Đo 24h: 1.366 push của Kengi Store bị
+         * "chữ ký không khớp" mà vẫn có push cùng đơn qua được — mỗi sự kiện Shopee
+         * đẩy HAI bản, từ HAI app cùng trỏ một URL (app bán hàng + app Shopee Video
+         * uỷ quyền 08/09), mỗi app ký bằng khoá riêng. Bản của app Video bị bỏ; bình
+         * thường vô hại vì bản kia đã lưu — nhưng khi bản kia hỏng giữa chừng (gọi
+         * chi tiết đơn lỗi) thì MẤT LUÔN mã vận đơn, quét đóng gói không ra. */
         const ungVienKhoa: Array<{ ten: string; key: string }> = [
             { ten: 'channel.webhookSecret', key: channel.webhookSecret || '' },
             { ten: 'channel.apiSecret', key: channel.apiSecret || '' },
+            { ten: 'channel.videoPartnerKey', key: channel.videoPartnerKey || '' },
             { ten: 'env.SHOPEE_PARTNER_KEY', key: process.env.SHOPEE_PARTNER_KEY || '' },
         ].filter(x => !!x.key)
 
@@ -226,6 +233,20 @@ router.post('/shopee', async (req: Request, res: Response) => {
 
         const orderDetail = await shopee.getOrderDetail(orderSn)
         if (!orderDetail) {
+            /* Gọi chi tiết đơn hỏng KHÔNG được kéo theo mất mã vận đơn: push code 4
+             * đã mang sẵn `tracking_no`, ghi ngay cho đơn đang có rồi mới thôi. Đo
+             * 10/09: đơn 260909JP54NHW1 — chi tiết lỗi, mã bị vứt, đơn SHIPPED cả
+             * ngày không có mã, quét đóng gói không ra. */
+            if (maVanDonTuPush) {
+                const co = await storePrisma.onlineOrder.findFirst({
+                    where: { externalOrderId: orderSn, channelId: channel.id }, select: { id: true, trackingNumber: true },
+                }).catch(() => null)
+                if (co && co.trackingNumber !== maVanDonTuPush) {
+                    await storePrisma.onlineOrder.update({ where: { id: co.id }, data: { trackingNumber: maVanDonTuPush, syncedAt: new Date() } }).catch(() => { })
+                    console.log(`[Shopee Webhook] Chi tiết đơn ${orderSn} lỗi nhưng ĐÃ ghi mã vận đơn ${maVanDonTuPush} từ push`)
+                    return
+                }
+            }
             console.log(`[Shopee Webhook] Could not fetch order detail for ${orderSn}`)
             return
         }
