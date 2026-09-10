@@ -37,7 +37,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         })
 
         const _response = { success: true, data: key }
-        await cacheSet(cacheKey, _response, 300)
+        /* KHÔNG đệm trạng thái "chưa có key". Đó đúng là lúc sắp có: chủ shop mở
+         * trang, thấy trống, bấm Tạo Secret ngay sau đó. Đệm cái null 5 phút là
+         * tạo xong bấm F5 vẫn thấy "— chưa tạo —" (lỗi chủ shop báo 10/09/2026).
+         * Có key rồi mới đệm — trạng thái đó ổn định, và mọi đường ghi đều xoá đệm. */
+        if (key) await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('Get API key error:', err)
@@ -85,6 +89,13 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
                 createdAt: true,
             },
         })
+
+        /* XOÁ ĐỆM — thiếu đúng dòng này là tạo key xong F5 vẫn "— chưa tạo —" suốt
+         * 5 phút (chủ shop báo 10/09/2026). Hai đường ghi kia (POST / và DELETE /:id)
+         * đã xoá đệm từ trước, riêng đường này — đường mà NÚT "Tạo Secret" của màn
+         * Cài đặt gọi — thì không. Dùng `*` chứ không phải khoá `{}` đúng chữ: khoá
+         * đệm ghép từ `req.query`, thêm một tham số lọc là khoá khác và lại mốc meo. */
+        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:*`).catch(() => { })
 
         // Return the secret ONCE with clientId + clientSecret for token exchange
         res.json({
@@ -152,7 +163,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             },
             select: { id: true, name: true, keyId: true, lastFour: true, scopes: true, isActive: true, createdAt: true },
         })
-        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:{}`).catch(() => { })
+        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:*`).catch(() => { })
         res.json({ success: true, data: { ...rec, secret } })
     } catch (err) {
         console.error('Create API key error:', err)
@@ -169,7 +180,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         const key = await prisma.apiKey.findUnique({ where: { id } })
         if (!key) { res.status(404).json({ success: false, error: 'Không tìm thấy key' }); return }
         await prisma.apiKey.delete({ where: { id } })
-        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:{}`).catch(() => { })
+        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:*`).catch(() => { })
         res.json({ success: true, data: { id, name: key.name } })
     } catch (err) {
         console.error('Delete API key error:', err)
