@@ -1,4 +1,5 @@
-import { khoangNgayVN, ngayVN } from '../lib/vnTime'
+import { khoangNgayVN } from '../lib/vnTime'
+import { dungPackingList } from '../lib/packingList'
 import { Router, Response, NextFunction } from 'express'
 import { ganAnhDongHang } from '../lib/anhDongHang'
 import { postReturnJournal } from '../lib/autoJournalPurchase'
@@ -1249,171 +1250,21 @@ router.get('/carriers', authMiddleware, requirePermission('online_orders.view', 
  *
  * GET /api/online-orders/packing-list?ngay=YYYY-MM-DD&platform=&channelId=&carrier=
  *
- * Mốc là `shippedAt` — LÚC ĐVVC THỰC SỰ LẤY HÀNG (Shopee `pickup_done_time`,
- * TikTok `rts_time`, Lazada `shipped_at`), KHÔNG phải hạn bàn giao. Cùng một mốc
- * với tab "ĐVVC đã lấy hôm nay" của danh sách đơn (`?pickedUpToday=true`), nên
- * hai màn hình không thể lệch nhau. Cắt ngày theo GIỜ VN.
- *
- * `ngay` để trống = hôm nay. Truyền ngày cũ để in lại biên bản bàn giao hôm trước.
- *
- * ⚠ SỐ LƯỢNG LÀ ĐƠN VỊ SÀN — đúng thứ người đóng cầm trên tay. Listing bán "vỉ"
- * thì đây là số VỈ, dù kho trừ theo CÁI (hệ số ở SkuMapping). Đừng dùng con số này
- * để đối chiếu thẻ kho; nó là danh sách để ĐẾM HÀNG, không phải bút toán.
- *
- * Dòng không tra ra hàng kho vẫn ĐƯỢC ĐẾM và đánh dấu `chuaLienKet` — bỏ đi thì
- * tổng của packing list ít hơn số hàng thật mà không ai biết.
+ * Phần tính nằm ở `lib/packingList.ts` — dùng CHUNG với bộ đo
+ * `GET /admin/do-packing-list`, để hai đường không bao giờ ra hai con số.
  */
 router.get('/packing-list', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
-
-        /* Ngày VN: lấy mốc GIỮA TRƯA của ngày đó rồi mới cắt biên, tránh chuyện
-         * `new Date('YYYY-MM-DD')` bị hiểu là 00:00 UTC = 07:00 VN cùng ngày (may)
-         * hoặc lệch hẳn sang hôm trước khi máy chủ ở múi khác. */
-        const ngayXin = String(req.query.ngay || '').trim()
-        if (ngayXin && !/^\d{4}-\d{2}-\d{2}$/.test(ngayXin)) {
-            res.status(400).json({ success: false, error: 'Tham số ngay phải dạng YYYY-MM-DD' })
-            return
-        }
-        const moc = ngayXin ? new Date(`${ngayXin}T12:00:00+07:00`) : new Date()
-        if (Number.isNaN(moc.getTime())) {
-            res.status(400).json({ success: false, error: `Ngày không hợp lệ: ${ngayXin}` })
-            return
-        }
-        const { tu, den } = khoangNgayVN(moc)
-
-        const where: any = { shippedAt: { gte: tu, lte: den } }
-        const platform = String(req.query.platform || '').trim()
-        if (platform && platform !== 'all') where.platform = platform
-        const channelId = String(req.query.channelId || '').trim()
-        if (channelId) where.channelId = channelId
-        // Lọc ĐVVC theo NHÓM (GHN nằm dưới ba tên khác nhau) — xem lib/dvvc.ts.
-        const carrier = String(req.query.carrier || '').trim()
-        if (carrier && carrier !== 'all') {
-            if (carrier === 'khong-co') where.OR = [{ shippingCarrier: null }, { shippingCarrier: '' }]
-            else where.shippingCarrier = { in: await nhanThuocNhomDVVC(prisma, carrier) }
-        }
-
-        /* Trần 2000 đơn/ngày: quá thì NÓI RA chứ không cắt âm thầm. Ngày đông nhất
-         * đo được mới ~400 đơn, nên trần này là lưới an toàn cho bộ nhớ 512Mi. */
-        const TRAN = 2000
-        const orders = await prisma.onlineOrder.findMany({
-            where,
-            select: {
-                id: true, orderNumber: true, status: true, platform: true,
-                channelId: true, shippingCarrier: true, shippedAt: true,
-                items: {
-                    select: {
-                        sku: true, productName: true, quantity: true, productId: true, externalItemId: true,
-                        product: {
-                            select: {
-                                sku: true, name: true, stock: true,
-                                images: { select: { url: true }, orderBy: { isPrimary: 'desc' }, take: 1 },
-                            },
-                        },
-                    },
-                },
-            },
-            orderBy: { shippedAt: 'asc' },
-            take: TRAN + 1,
+        const data = await dungPackingList(req.storePrisma!, {
+            ngay: String(req.query.ngay || ''),
+            platform: String(req.query.platform || ''),
+            channelId: String(req.query.channelId || ''),
+            carrier: String(req.query.carrier || ''),
         })
-        const chamTran = orders.length > TRAN
-        if (chamTran) orders.length = TRAN
-
-        /* Gộp theo HÀNG KHO trước, rồi mới tới SKU sàn, cuối cùng mới tới tên.
-         * Gộp thẳng theo tên là gom nhầm hai phân loại khác nhau của cùng listing. */
-        type Dong = {
-            khoa: string; productId: string | null; sku: string | null; ten: string
-            soLuong: number; donSet: Set<string>; tonKho: number | null; chuaLienKet: boolean
-            externalItemId: string | null
-        }
-        const gom = new Map<string, Dong>()
-        let tongSoLuong = 0
-        let soDongChuaLienKet = 0
-        const theoKenh = new Map<string, { channelId: string | null; soDon: Set<string>; soLuong: number }>()
-        const donDaHuy: string[] = []
-
-        for (const o of orders) {
-            if (isReversalStatus(o.status)) donDaHuy.push(o.orderNumber)
-            const kKenh = o.channelId || '(không kênh)'
-            if (!theoKenh.has(kKenh)) theoKenh.set(kKenh, { channelId: o.channelId, soDon: new Set(), soLuong: 0 })
-            const tk = theoKenh.get(kKenh)!
-            tk.soDon.add(o.id)
-
-            for (const it of (o.items || [])) {
-                const sl = Number(it.quantity) || 0
-                const skuSan = String(it.sku || '').trim()
-                const skuKho = String(it.product?.sku || '').trim()
-                const ten = it.productName || it.product?.name || 'Không tên'
-                const khoa = it.productId ? `p:${it.productId}`
-                    : skuSan ? `s:${skuSan.toLowerCase()}`
-                        : `n:${ten.toLowerCase()}`
-
-                if (!gom.has(khoa)) {
-                    gom.set(khoa, {
-                        khoa,
-                        productId: it.productId || null,
-                        sku: skuSan || skuKho || null,
-                        ten,
-                        soLuong: 0,
-                        donSet: new Set(),
-                        tonKho: it.product ? Number(it.product.stock) : null,
-                        chuaLienKet: !it.productId,
-                        externalItemId: it.externalItemId || null,
-                    })
-                    if (!it.productId) soDongChuaLienKet++
-                }
-                const d = gom.get(khoa)!
-                d.soLuong += sl
-                d.donSet.add(o.id)
-                tongSoLuong += sl
-                tk.soLuong += sl
-            }
-        }
-
-        // Ảnh: dùng CHUNG bộ dò với danh sách đơn và trang đóng gói (lib/anhDongHang.ts),
-        // để ba nơi không nói khác nhau về "hàng này ảnh nào".
-        const dsGom = [...gom.values()].sort((a, b) => b.soLuong - a.soLuong || a.ten.localeCompare(b.ten, 'vi'))
-        const coAnh = await ganAnhDongHang(prisma, dsGom.map(d => ({
-            sku: d.sku, productId: d.productId, externalItemId: d.externalItemId,
-            product: d.productId ? { images: [] } : null,
-        })) as any[])
-
-        const items = dsGom.map((d, i) => ({
-            productId: d.productId,
-            sku: d.sku,
-            ten: d.ten,
-            soLuong: d.soLuong,
-            soDon: d.donSet.size,
-            tonKho: d.tonKho,
-            imageUrl: (coAnh[i] as any)?.imageUrl ?? null,
-            chuaLienKet: d.chuaLienKet,
-        }))
-
-        res.json({
-            success: true,
-            data: {
-                ngay: ngayVN(moc),
-                tu: tu.toISOString(), den: den.toISOString(),
-                soDon: orders.length,
-                soMaHang: items.length,
-                tongSoLuong,
-                items,
-                theoKenh: [...theoKenh.values()].map(k => ({
-                    channelId: k.channelId, soDon: k.soDon.size, soLuong: k.soLuong,
-                })),
-                chamTran,
-                /* Nói ra CHÍNH XÁC cái người đọc cần cảnh giác, kèm con số — câu
-                 * cảnh báo không có số thì không ai biết nặng nhẹ tới đâu. */
-                canhBao: [
-                    ...(chamTran ? [`Ngày này có hơn ${TRAN} đơn — danh sách mới tính ${TRAN} đơn đầu, tổng đang THIẾU.`] : []),
-                    ...(soDongChuaLienKet > 0 ? [`${soDongChuaLienKet} mã chưa tra ra hàng trong kho (vẫn được đếm, nhưng không có tồn kho và có thể thiếu ảnh). Khai ở màn Ánh xạ SKU.`] : []),
-                    ...(donDaHuy.length > 0 ? [`${donDaHuy.length} đơn đã lấy hàng rồi mới huỷ/hoàn: ${donDaHuy.slice(0, 5).join(', ')}${donDaHuy.length > 5 ? '…' : ''}`] : []),
-                ],
-                ghiChu: 'Số lượng theo ĐƠN VỊ SÀN (thứ người đóng cầm trên tay), không phải đơn vị kho.',
-            },
-        })
+        res.json({ success: true, data })
     } catch (err: any) {
+        // Sai tham số là lỗi CỦA NGƯỜI GỌI (400), đừng gộp vào 500 rồi bảo "lỗi hệ thống".
+        if (err?.code === 'THAM_SO') { res.status(400).json({ success: false, error: err.message }); return }
         console.error('GET /online-orders/packing-list lỗi:', moTaLoi(err))
         res.status(500).json(errMsg(err, 'Không lấy được packing list'))
     }

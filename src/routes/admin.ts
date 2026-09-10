@@ -4558,6 +4558,58 @@ router.get('/do-cot', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * ĐO PACKING LIST — GET /admin/do-packing-list?storeCode=&ngay=&platform=&channelId=
+ *
+ * Gọi ĐÚNG hàm mà `GET /api/online-orders/packing-list` gọi (lib/packingList.ts),
+ * chỉ khác cách xác thực. Sinh ra vì đường kia đòi JWT cửa hàng nên không nghiệm
+ * thu được từ ngoài — mà "route trả 401 thay vì 404" mới chỉ chứng minh route TỒN
+ * TẠI, chưa chứng minh nó CHẠY ĐÚNG trên dữ liệu thật.
+ *
+ * Trả thêm `tongTay` — tổng số lượng đếm lại bằng một đường KHÁC (đếm thẳng dòng
+ * hàng, không qua bảng gộp). Hai số lệch nhau là phép gộp sai.
+ * CHỈ ĐỌC.
+ */
+router.get('/do-packing-list', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const { dungPackingList } = await import('../lib/packingList')
+        const kq = await dungPackingList(sp, {
+            ngay: String(req.query.ngay || ''),
+            platform: String(req.query.platform || ''),
+            channelId: String(req.query.channelId || ''),
+            carrier: String(req.query.carrier || ''),
+        })
+
+        // Đếm lại bằng đường khác: cộng thẳng quantity của mọi dòng hàng trong khung.
+        const don: any[] = await sp.onlineOrder.findMany({
+            where: { shippedAt: { gte: new Date(kq.tu), lte: new Date(kq.den) } },
+            select: { items: { select: { quantity: true } } },
+            take: 2000,
+        })
+        const tongTay = don.reduce((t, o) => t + (o.items || []).reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0), 0)
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                ...kq,
+                items: kq.items.slice(0, 30),
+                soMaHangTraVe: Math.min(30, kq.items.length),
+                tongTay,
+                khop: tongTay === kq.tongSoLuong,
+                yNghia: 'khop=false ⇒ phép gộp làm rơi hoặc nhân đôi số lượng. items cắt còn 30 dòng đầu cho gọn, soMaHang mới là tổng số mã.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 router.get('/do-kho-media', async (_req: Request, res: Response) => {
     try {
         const ds = await prisma.store.findMany({ select: { code: true, name: true, schema: true } })
