@@ -157,12 +157,28 @@ router.post('/shopee', async (req: Request, res: Response) => {
          * uỷ quyền 08/09), mỗi app ký bằng khoá riêng. Bản của app Video bị bỏ; bình
          * thường vô hại vì bản kia đã lưu — nhưng khi bản kia hỏng giữa chừng (gọi
          * chi tiết đơn lỗi) thì MẤT LUÔN mã vận đơn, quét đóng gói không ra. */
-        const ungVienKhoa: Array<{ ten: string; key: string }> = [
+        /* Đo sau vá (10:28–10:42 10/09): khoá app Video KHÔNG khớp bản nào (0/58), bản
+         * thứ hai vẫn bị bỏ ⇒ nó ký bằng khoá KHÁC. Một cửa hàng có nhiều gian trên
+         * nhiều app (Kengi Store / Tools / Electric), shop có thể được uỷ quyền cho
+         * hơn một app của cùng chủ ⇒ thử luôn khoá của MỌI kênh Shopee trong cửa
+         * hàng. Vẫn là HMAC kiểm thật, chỉ mở rộng tập khoá của chính chủ shop. */
+        const kenhAnhEm: any[] = await storePrisma.onlineChannel.findMany({
+            where: { platform: 'shopee', id: { not: channel.id } },
+            select: { name: true, webhookSecret: true, apiSecret: true, videoPartnerKey: true },
+        }).catch(() => [])
+        const ungVienKhoaTho: Array<{ ten: string; key: string }> = [
             { ten: 'channel.webhookSecret', key: channel.webhookSecret || '' },
             { ten: 'channel.apiSecret', key: channel.apiSecret || '' },
             { ten: 'channel.videoPartnerKey', key: channel.videoPartnerKey || '' },
             { ten: 'env.SHOPEE_PARTNER_KEY', key: process.env.SHOPEE_PARTNER_KEY || '' },
+            ...kenhAnhEm.flatMap(k => [
+                { ten: `kênh "${k.name}".webhookSecret`, key: k.webhookSecret || '' },
+                { ten: `kênh "${k.name}".apiSecret`, key: k.apiSecret || '' },
+                { ten: `kênh "${k.name}".videoPartnerKey`, key: k.videoPartnerKey || '' },
+            ]),
         ].filter(x => !!x.key)
+        const daThay = new Set<string>()
+        const ungVienKhoa = ungVienKhoaTho.filter(x => (daThay.has(x.key) ? false : (daThay.add(x.key), true)))
 
         if (ungVienKhoa.length === 0) {
             console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
@@ -171,7 +187,27 @@ router.post('/shopee', async (req: Request, res: Response) => {
         } else if (!rawBody) {
             console.warn(`[Shopee Webhook] Không đọc được thân thô — xử lý mà KHÔNG kiểm`)
         } else {
-            const khop = ungVienKhoa.find(x => verifyShopeeSignature(rawBody, pushUrl, x.key, signature))
+            /* Thử thêm URL thay thế: Shopee ký theo URL KHAI TRONG CONSOLE, còn ta ghép
+             * từ host thật. App khác có thể khai kengi.vn (302 sang api) hay lệch dấu
+             * '/'. Ghi rõ cặp (khoá, url) nào khớp để lần sau khỏi mò. */
+            const ungVienUrl = [...new Set([
+                pushUrl,
+                'https://api.kengi.vn/api/webhooks/shopee',
+                'https://kengi.vn/api/webhooks/shopee',
+                pushUrl.endsWith('/') ? pushUrl.slice(0, -1) : pushUrl + '/',
+            ])]
+            let khop: { ten: string; key: string; url?: string } | undefined
+            for (const u of ungVienUrl) {
+                const k = ungVienKhoa.find(x => verifyShopeeSignature(rawBody, u, x.key, signature))
+                if (k) { khop = { ...k, url: u }; break }
+            }
+            if (!khop) {
+                // Chẩn đoán: bản bị bỏ đến từ đâu, dài bao nhiêu — để phân biệt "app khác"
+                // với "Shopee gửi lại" hay "thân bị đổi dọc đường".
+                console.error(`[Shopee Webhook] chẩn đoán chữ ký: sig=${signature.slice(0, 10)}… ip=${String(req.headers['x-forwarded-for'] || req.ip || '')} ` +
+                    `ua=${String(req.headers['user-agent'] || '').slice(0, 40)} host=${req.get('host')} path=${req.originalUrl} ` +
+                    `khoá=${ungVienKhoa.length} url=${ungVienUrl.length} body=${rawBody.length}B`)
+            }
             if (!khop) {
                 console.error(
                     `[Shopee Webhook] ❌ CHỮ KÝ KHÔNG KHỚP — bỏ push code=${pushCode} của kênh "${channel.name}" (shop_id=${shopId}).
@@ -188,7 +224,7 @@ router.post('/shopee', async (req: Request, res: Response) => {
             }
             if (khop.ten !== 'channel.webhookSecret') {
                 // Khớp bằng khoá dự phòng — chạy được, nhưng nên khai đúng chỗ cho rõ ràng
-                console.log(`[Shopee Webhook] chữ ký khớp bằng ${khop.ten} (kênh ${channel.name})`)
+                console.log(`[Shopee Webhook] chữ ký khớp bằng ${khop.ten} @ ${khop.url} (kênh ${channel.name})`)
             }
         }
 

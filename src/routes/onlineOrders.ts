@@ -3544,7 +3544,11 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                         status: newStatus,
                                         externalStatus: d.order_status,
                                         paymentStatus: newPayStatus,
-                                        trackingNumber: newTracking,
+                                        /* KHÔNG ghi null đè mã đã có: `snToOld` là ảnh chụp lúc BẮT ĐẦU lượt
+                                         * sync (kéo dài 30'+); push code 4 ghi mã vào giữa chừng thì dòng cũ
+                                         * `trackingNumber: newTracking` (= null từ ảnh chụp) xoá mất — đo 10/09:
+                                         * đơn 260910N4U4M036 log "đã ghi mã từ push" 08:46, sau đó lại null. */
+                                        ...(newTracking ? { trackingNumber: newTracking } : {}),
                                         shippingCarrier: newCarrier,
                                         syncedAt: new Date(),
                                     }
