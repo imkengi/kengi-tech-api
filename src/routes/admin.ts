@@ -4559,6 +4559,127 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO KHO MẸ — GET /admin/do-kho-me?me=HUTI&con=KENGISTORE
+ *
+ * Chủ shop 10/09/2026: KENGISTORE bán trên sàn nhưng MƯỢN tồn của HUTI — đẩy tồn
+ * HUTI lên sàn, có đơn thì trừ HUTI, hoàn thì cộng lại HUTI. Không dính tồn thuế.
+ *
+ * Trước khi viết đường trừ kho CHÉO CỬA HÀNG (không có đường lui nếu trừ nhầm),
+ * phải biết hai kho khớp nhau tới đâu. Bộ này ĐẾM trên dữ liệu thật:
+ *   · listing trên sàn của con → tra ra hàng kho con chưa (đường đang chạy)
+ *   · hàng kho con → có SKU tương ứng bên mẹ không (đường sắp dựng)
+ *   · SKU khớp NHIỀU hàng bên mẹ ⇒ KHÔNG được đoán, phải khai tay
+ * CHỈ ĐỌC, tuần tự (pool prod = 1).
+ */
+router.get('/do-kho-me', async (req: Request, res: Response) => {
+    try {
+        const maMe = String(req.query.me || 'HUTI').trim()
+        const maCon = String(req.query.con || 'KENGISTORE').trim()
+        const me = await prisma.store.findFirst({ where: { code: maMe }, select: { schema: true, name: true } })
+        const con = await prisma.store.findFirst({ where: { code: maCon }, select: { schema: true, name: true } })
+        if (!me || !con) { res.status(404).json({ success: false, error: `Không thấy cửa hàng: ${!me ? maMe : maCon}` }); return }
+
+        const spMe: any = getStorePrisma(me.schema)
+        const spCon: any = getStorePrisma(con.schema)
+
+        // Bảng SKU của MẸ, gộp theo sku thường hoá — SKU trùng nhau khi bỏ hoa
+        // thường là chỗ KHÔNG được đoán, phải đếm riêng.
+        const hangMe: any[] = await spMe.product.findMany({
+            select: { id: true, sku: true, name: true, stock: true },
+            take: 20000,
+        })
+        const theoSkuMe = new Map<string, any[]>()
+        for (const p of hangMe) {
+            const k = String(p.sku || '').trim().toLowerCase()
+            if (!k) continue
+            if (!theoSkuMe.has(k)) theoSkuMe.set(k, [])
+            theoSkuMe.get(k)!.push(p)
+        }
+
+        const hangCon: any[] = await spCon.product.findMany({
+            select: { id: true, sku: true, name: true, stock: true },
+            take: 20000,
+        })
+
+        let khop = 0, khongKhop = 0, khopNhieu = 0, khongSku = 0
+        const viDuKhop: any[] = []
+        const viDuKhongKhop: any[] = []
+        const viDuKhopNhieu: any[] = []
+        for (const c of hangCon) {
+            const k = String(c.sku || '').trim().toLowerCase()
+            if (!k) { khongSku++; continue }
+            const ds = theoSkuMe.get(k)
+            if (!ds || ds.length === 0) {
+                khongKhop++
+                if (viDuKhongKhop.length < 15) viDuKhongKhop.push({ sku: c.sku, ten: String(c.name || '').slice(0, 40), tonCon: c.stock })
+                continue
+            }
+            if (ds.length > 1) {
+                khopNhieu++
+                if (viDuKhopNhieu.length < 10) viDuKhopNhieu.push({ sku: c.sku, soHangMe: ds.length, skuMe: ds.map((x: any) => x.sku) })
+                continue
+            }
+            khop++
+            if (viDuKhop.length < 15) {
+                viDuKhop.push({ sku: c.sku, ten: String(c.name || '').slice(0, 36), tonCon: c.stock, tonMe: ds[0].stock })
+            }
+        }
+
+        /* Listing đang bán trên sàn mới là thứ THẬT SỰ cần tồn. Hàng kho không có
+         * listing thì khớp hay không cũng không ảnh hưởng gì. */
+        const listing: any[] = await spCon.onlineProduct.findMany({
+            select: { sku: true, name: true, localProductId: true, channelId: true },
+            take: 20000,
+        })
+        const skuHangCon = new Map<string, any>()
+        for (const c of hangCon) {
+            const k = String(c.sku || '').trim().toLowerCase()
+            if (k && !skuHangCon.has(k)) skuHangCon.set(k, c)
+        }
+        let lsCoKhoCon = 0, lsRaDuocMe = 0, lsTacO = { khongRaKhoCon: 0, khoConKhongCoMe: 0 }
+        const viDuListingHong: any[] = []
+        for (const l of listing) {
+            let hc: any = null
+            if (l.localProductId) hc = hangCon.find(c => c.id === l.localProductId) || null
+            if (!hc) hc = skuHangCon.get(String(l.sku || '').trim().toLowerCase()) || null
+            if (!hc) {
+                lsTacO.khongRaKhoCon++
+                if (viDuListingHong.length < 15) viDuListingHong.push({ sku: l.sku, ten: String(l.name || '').slice(0, 40), tac: 'listing không tra ra hàng kho con' })
+                continue
+            }
+            lsCoKhoCon++
+            const ds = theoSkuMe.get(String(hc.sku || '').trim().toLowerCase())
+            if (ds && ds.length === 1) lsRaDuocMe++
+            else {
+                lsTacO.khoConKhongCoMe++
+                if (viDuListingHong.length < 15) viDuListingHong.push({ sku: l.sku, skuKho: hc.sku, tac: ds && ds.length > 1 ? `SKU khớp ${ds.length} hàng bên mẹ` : 'không có SKU này bên mẹ' })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                me: { ma: maMe, ten: me.name, soHang: hangMe.length, soSkuRieng: theoSkuMe.size },
+                con: { ma: maCon, ten: con.name, soHang: hangCon.length, soListing: listing.length },
+                doiChieuHangKho: { khop, khongKhop, khopNhieu, khongSku },
+                duongThatSuDung: {
+                    listingRaDuocKhoCon: lsCoKhoCon,
+                    listingRaDuocToiKhoMe: lsRaDuocMe,
+                    tacO: lsTacO,
+                    tyLeChay: listing.length ? Math.round((lsRaDuocMe / listing.length) * 100) + '%' : '—',
+                },
+                viDuKhop, viDuKhongKhop, viDuKhopNhieu, viDuListingHong,
+                yNghia: 'listingRaDuocToiKhoMe là số listing SẼ đẩy được tồn từ kho mẹ. '
+                    + 'khopNhieu là chỗ TUYỆT ĐỐI không đoán — một SKU ứng nhiều hàng bên mẹ thì phải khai tay, '
+                    + 'chọn bừa là trừ nhầm mặt hàng của cửa hàng khác.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO PACKING LIST — GET /admin/do-packing-list?storeCode=&ngay=&platform=&channelId=
  *
  * Gọi ĐÚNG hàm mà `GET /api/online-orders/packing-list` gọi (lib/packingList.ts),
