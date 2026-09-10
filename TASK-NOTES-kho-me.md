@@ -45,3 +45,22 @@ hàng của thuế. Nó mượn kho HUTI để đẩy data lên cho sàn, mượ
 - [ ] Đường trừ/hoàn sang kho mẹ (idempotent) + gắn vào orderSync và reversal
 - [ ] push-stock đọc tồn mẹ − đơn treo
 - [ ] Bộ đo chạy thử (dry-run) trước khi bật thật
+
+## Trạng thái 10/09/2026 — ĐÃ DỰNG XONG, CHƯA BẬT
+- `50d2b43` schema + lib/khoMe.ts + nối vào orderSync / reversal / push-stock
+- `9055d0f` nút bật/tắt `POST /admin/kho-me` (mặc định chạy thử) + push-stock `dryRun`
+- migrate xong: `khoMeMa` (StoreSettings) + `khoMeTruLuc` (OnlineOrder) có ở CẢ 11
+  cửa hàng, nghiệm thu bằng `GET /admin/do-cot`, `dongDeu: true`
+- **`khoMeMa` đang RỖNG ở mọi cửa hàng ⇒ tính năng đang TẮT, chưa đổi hành vi gì**
+- Chặn tự trỏ chính nó: đã thử `{con:KENGISTORE, me:KENGISTORE}` → bị từ chối
+
+## Bật thật (khi chủ shop chốt)
+1. Chạy thử đẩy tồn, NHÌN BẢNG SỐ trước:
+   `POST /api/online-orders/channels/<id>/push-stock` body `{"dryRun":true}` (JWT)
+2. Bật: `POST /admin/kho-me {"con":"KENGISTORE","me":"HUTI","apply":true}`
+3. Tắt bất cứ lúc nào: `{"con":"KENGISTORE","me":null,"apply":true}`
+   ⚠ Tắt chỉ NGỪNG trừ tiếp, không tự hoàn phần đã trừ.
+
+## Chưa làm
+- Giao diện bật/tắt ở màn Cài đặt (hiện chỉ có admin endpoint)
+- 206 listing `sku = null` vẫn không hưởng kho mẹ — phải gán SKU trên sàn
