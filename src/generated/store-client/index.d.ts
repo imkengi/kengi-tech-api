@@ -96709,6 +96709,7 @@ export namespace Prisma {
     ttPostDisplayName: string | null
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
+    khoMeMa: string | null
     updatedAt: Date | null
   }
 
@@ -96761,6 +96762,7 @@ export namespace Prisma {
     ttPostDisplayName: string | null
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
+    khoMeMa: string | null
     updatedAt: Date | null
   }
 
@@ -96813,6 +96815,7 @@ export namespace Prisma {
     ttPostDisplayName: number
     ttPostAvatar: number
     ttPostAuthAt: number
+    khoMeMa: number
     updatedAt: number
     _all: number
   }
@@ -96879,6 +96882,7 @@ export namespace Prisma {
     ttPostDisplayName?: true
     ttPostAvatar?: true
     ttPostAuthAt?: true
+    khoMeMa?: true
     updatedAt?: true
   }
 
@@ -96931,6 +96935,7 @@ export namespace Prisma {
     ttPostDisplayName?: true
     ttPostAvatar?: true
     ttPostAuthAt?: true
+    khoMeMa?: true
     updatedAt?: true
   }
 
@@ -96983,6 +96988,7 @@ export namespace Prisma {
     ttPostDisplayName?: true
     ttPostAvatar?: true
     ttPostAuthAt?: true
+    khoMeMa?: true
     updatedAt?: true
     _all?: true
   }
@@ -97122,6 +97128,7 @@ export namespace Prisma {
     ttPostDisplayName: string | null
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
+    khoMeMa: string | null
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _avg: StoreSettingsAvgAggregateOutputType | null
@@ -97193,6 +97200,7 @@ export namespace Prisma {
     ttPostDisplayName?: boolean
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
+    khoMeMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97245,6 +97253,7 @@ export namespace Prisma {
     ttPostDisplayName?: boolean
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
+    khoMeMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97297,6 +97306,7 @@ export namespace Prisma {
     ttPostDisplayName?: boolean
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
+    khoMeMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97349,10 +97359,11 @@ export namespace Prisma {
     ttPostDisplayName?: boolean
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
+    khoMeMa?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "ttPostClientKey" | "ttPostClientSecret" | "ttPostOpenId" | "ttPostAccessToken" | "ttPostRefreshToken" | "ttPostExpiresAt" | "ttPostScopes" | "ttPostDisplayName" | "ttPostAvatar" | "ttPostAuthAt" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "ttPostClientKey" | "ttPostClientSecret" | "ttPostOpenId" | "ttPostAccessToken" | "ttPostRefreshToken" | "ttPostExpiresAt" | "ttPostScopes" | "ttPostDisplayName" | "ttPostAvatar" | "ttPostAuthAt" | "khoMeMa" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -97424,6 +97435,12 @@ export namespace Prisma {
       ttPostDisplayName: string | null
       ttPostAvatar: string | null
       ttPostAuthAt: Date | null
+      /**
+       * * KHO MẸ (10/09/2026) — mã cửa hàng cho MƯỢN tồn. Cửa hàng này bán trên sàn
+       *    *  nhưng hàng nằm ở kho đó: đẩy tồn của nó lên sàn, có đơn thì trừ, hoàn thì cộng
+       *    *  lại, và ghi phiếu trên thẻ kho bên đó. Trống = không dùng. Xem lib/khoMe.ts.
+       */
+      khoMeMa: string | null
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -97896,6 +97913,7 @@ export namespace Prisma {
     readonly ttPostDisplayName: FieldRef<"StoreSettings", 'String'>
     readonly ttPostAvatar: FieldRef<"StoreSettings", 'String'>
     readonly ttPostAuthAt: FieldRef<"StoreSettings", 'DateTime'>
+    readonly khoMeMa: FieldRef<"StoreSettings", 'String'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -108307,6 +108325,7 @@ export namespace Prisma {
     isInstant: boolean | null
     shipByDate: Date | null
     stockDeducted: boolean | null
+    khoMeTruLuc: Date | null
     khongKhopSku: boolean | null
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
@@ -108349,6 +108368,7 @@ export namespace Prisma {
     isInstant: boolean | null
     shipByDate: Date | null
     stockDeducted: boolean | null
+    khoMeTruLuc: Date | null
     khongKhopSku: boolean | null
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
@@ -108391,6 +108411,7 @@ export namespace Prisma {
     isInstant: number
     shipByDate: number
     stockDeducted: number
+    khoMeTruLuc: number
     khongKhopSku: number
     khongKhopLuc: number
     loiNhuanThapBaoLuc: number
@@ -108457,6 +108478,7 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khoMeTruLuc?: true
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
@@ -108499,6 +108521,7 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khoMeTruLuc?: true
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
@@ -108541,6 +108564,7 @@ export namespace Prisma {
     isInstant?: true
     shipByDate?: true
     stockDeducted?: true
+    khoMeTruLuc?: true
     khongKhopSku?: true
     khongKhopLuc?: true
     loiNhuanThapBaoLuc?: true
@@ -108670,6 +108694,7 @@ export namespace Prisma {
     isInstant: boolean
     shipByDate: Date | null
     stockDeducted: boolean
+    khoMeTruLuc: Date | null
     khongKhopSku: boolean
     khongKhopLuc: Date | null
     loiNhuanThapBaoLuc: Date | null
@@ -108731,6 +108756,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khoMeTruLuc?: boolean
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
@@ -108776,6 +108802,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khoMeTruLuc?: boolean
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
@@ -108819,6 +108846,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khoMeTruLuc?: boolean
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
@@ -108862,6 +108890,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: boolean
     stockDeducted?: boolean
+    khoMeTruLuc?: boolean
     khongKhopSku?: boolean
     khongKhopLuc?: boolean
     loiNhuanThapBaoLuc?: boolean
@@ -108871,7 +108900,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "khongKhopSku" | "khongKhopLuc" | "loiNhuanThapBaoLuc" | "giaSanSuaLuc" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
+  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "khoMeTruLuc" | "khongKhopSku" | "khongKhopLuc" | "loiNhuanThapBaoLuc" | "giaSanSuaLuc" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
   export type OnlineOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineOrder$channelArgs<ExtArgs>
     items?: boolean | OnlineOrder$itemsArgs<ExtArgs>
@@ -108923,6 +108952,13 @@ export namespace Prisma {
       isInstant: boolean
       shipByDate: Date | null
       stockDeducted: boolean
+      /**
+       * KHO MẸ (10/09/2026): mốc đã trừ kho của cửa hàng cho mượn. Cờ RIÊNG chứ không
+       * dùng chung `stockDeducted` — hai kho ở HAI SCHEMA nên không chung transaction,
+       * một bên trừ xong bên kia hỏng là chuyện có thật; gộp cờ thì mất dấu bên nào đã
+       * trừ. Giành bằng updateMany null→now, nhả bằng now→null. Xem lib/khoMe.ts.
+       */
+      khoMeTruLuc: Date | null
       khongKhopSku: boolean
       khongKhopLuc: Date | null
       loiNhuanThapBaoLuc: Date | null
@@ -109387,6 +109423,7 @@ export namespace Prisma {
     readonly isInstant: FieldRef<"OnlineOrder", 'Boolean'>
     readonly shipByDate: FieldRef<"OnlineOrder", 'DateTime'>
     readonly stockDeducted: FieldRef<"OnlineOrder", 'Boolean'>
+    readonly khoMeTruLuc: FieldRef<"OnlineOrder", 'DateTime'>
     readonly khongKhopSku: FieldRef<"OnlineOrder", 'Boolean'>
     readonly khongKhopLuc: FieldRef<"OnlineOrder", 'DateTime'>
     readonly loiNhuanThapBaoLuc: FieldRef<"OnlineOrder", 'DateTime'>
@@ -193451,6 +193488,7 @@ export namespace Prisma {
     ttPostDisplayName: 'ttPostDisplayName',
     ttPostAvatar: 'ttPostAvatar',
     ttPostAuthAt: 'ttPostAuthAt',
+    khoMeMa: 'khoMeMa',
     updatedAt: 'updatedAt'
   };
 
@@ -193696,6 +193734,7 @@ export namespace Prisma {
     isInstant: 'isInstant',
     shipByDate: 'shipByDate',
     stockDeducted: 'stockDeducted',
+    khoMeTruLuc: 'khoMeTruLuc',
     khongKhopSku: 'khongKhopSku',
     khongKhopLuc: 'khongKhopLuc',
     loiNhuanThapBaoLuc: 'loiNhuanThapBaoLuc',
@@ -201868,6 +201907,7 @@ export namespace Prisma {
     ttPostDisplayName?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    khoMeMa?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -201920,6 +201960,7 @@ export namespace Prisma {
     ttPostDisplayName?: SortOrderInput | SortOrder
     ttPostAvatar?: SortOrderInput | SortOrder
     ttPostAuthAt?: SortOrderInput | SortOrder
+    khoMeMa?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
   }
 
@@ -201975,6 +202016,7 @@ export namespace Prisma {
     ttPostDisplayName?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
+    khoMeMa?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -202027,6 +202069,7 @@ export namespace Prisma {
     ttPostDisplayName?: SortOrderInput | SortOrder
     ttPostAvatar?: SortOrderInput | SortOrder
     ttPostAuthAt?: SortOrderInput | SortOrder
+    khoMeMa?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _avg?: StoreSettingsAvgOrderByAggregateInput
@@ -202087,6 +202130,7 @@ export namespace Prisma {
     ttPostDisplayName?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     ttPostAvatar?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
+    khoMeMa?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -203151,6 +203195,7 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khoMeTruLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
@@ -203195,6 +203240,7 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
+    khoMeTruLuc?: SortOrderInput | SortOrder
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrderInput | SortOrder
     loiNhuanThapBaoLuc?: SortOrderInput | SortOrder
@@ -203242,6 +203288,7 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khoMeTruLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
@@ -203286,6 +203333,7 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
+    khoMeTruLuc?: SortOrderInput | SortOrder
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrderInput | SortOrder
     loiNhuanThapBaoLuc?: SortOrderInput | SortOrder
@@ -203336,6 +203384,7 @@ export namespace Prisma {
     isInstant?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
+    khoMeTruLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     khongKhopSku?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
@@ -218163,6 +218212,7 @@ export namespace Prisma {
     ttPostDisplayName?: string | null
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
+    khoMeMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218215,6 +218265,7 @@ export namespace Prisma {
     ttPostDisplayName?: string | null
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
+    khoMeMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218267,6 +218318,7 @@ export namespace Prisma {
     ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218319,6 +218371,7 @@ export namespace Prisma {
     ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218371,6 +218424,7 @@ export namespace Prisma {
     ttPostDisplayName?: string | null
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
+    khoMeMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218423,6 +218477,7 @@ export namespace Prisma {
     ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218475,6 +218530,7 @@ export namespace Prisma {
     ttPostDisplayName?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -219792,6 +219848,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -219836,6 +219893,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -219878,6 +219936,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -219922,6 +219981,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -219965,6 +220025,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -220006,6 +220067,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -220048,6 +220110,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -233024,6 +233087,7 @@ export namespace Prisma {
     ttPostDisplayName?: SortOrder
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
+    khoMeMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -233082,6 +233146,7 @@ export namespace Prisma {
     ttPostDisplayName?: SortOrder
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
+    khoMeMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -233134,6 +233199,7 @@ export namespace Prisma {
     ttPostDisplayName?: SortOrder
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
+    khoMeMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -233879,6 +233945,7 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khoMeTruLuc?: SortOrder
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
@@ -233932,6 +233999,7 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khoMeTruLuc?: SortOrder
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
@@ -233974,6 +234042,7 @@ export namespace Prisma {
     isInstant?: SortOrder
     shipByDate?: SortOrder
     stockDeducted?: SortOrder
+    khoMeTruLuc?: SortOrder
     khongKhopSku?: SortOrder
     khongKhopLuc?: SortOrder
     loiNhuanThapBaoLuc?: SortOrder
@@ -250615,6 +250684,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -250657,6 +250727,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -250775,6 +250846,7 @@ export namespace Prisma {
     isInstant?: BoolFilter<"OnlineOrder"> | boolean
     shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
+    khoMeTruLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     khongKhopSku?: BoolFilter<"OnlineOrder"> | boolean
     khongKhopLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     loiNhuanThapBaoLuc?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
@@ -251322,6 +251394,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -251365,6 +251438,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -251495,6 +251569,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -251538,6 +251613,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -259174,6 +259250,7 @@ export namespace Prisma {
     isInstant?: boolean
     shipByDate?: Date | string | null
     stockDeducted?: boolean
+    khoMeTruLuc?: Date | string | null
     khongKhopSku?: boolean
     khongKhopLuc?: Date | string | null
     loiNhuanThapBaoLuc?: Date | string | null
@@ -259233,6 +259310,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -259275,6 +259353,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -259317,6 +259396,7 @@ export namespace Prisma {
     isInstant?: BoolFieldUpdateOperationsInput | boolean
     shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
+    khoMeTruLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khongKhopSku?: BoolFieldUpdateOperationsInput | boolean
     khongKhopLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     loiNhuanThapBaoLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

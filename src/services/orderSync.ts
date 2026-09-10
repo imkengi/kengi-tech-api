@@ -399,6 +399,34 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         }
     }
 
+    /* KHO MẸ — cửa hàng này có mượn tồn của cửa hàng khác thì trừ luôn bên đó.
+     *
+     * Chủ shop chốt 10/09/2026 là trừ CẢ HAI kho. Trừ theo `inventoryUpdates` —
+     * tức số ĐÃ QUY ĐỔI (ánh xạ SKU, mã gộp, bung combo), đúng bằng số vừa trừ ở
+     * kho con, để hai bên không kể hai câu chuyện khác nhau.
+     *
+     * Hai schema khác nhau ⇒ KHÔNG chung transaction: hàm tự chống trùng bằng cờ
+     * `khoMeTruLuc`. Hỏng ở đây KHÔNG được làm hỏng việc lập phiếu — phiếu đã ghi,
+     * ném lỗi ra là lượt sau chuyển lại và đẻ phiếu trùng. */
+    if (inventoryUpdates.length > 0) {
+        try {
+            const { moKhoMe, truKhoMe } = await import('../lib/khoMe')
+            const khoMe = await moKhoMe(prisma)
+            if (khoMe) {
+                const kq = await truKhoMe(prisma, khoMe, order.id, order.orderNumber,
+                    inventoryUpdates.map(i => ({ sku: i.productSku, soLuong: i.quantity, ten: i.productName })))
+                if (kq.daGianhCo) {
+                    console.log(`[KhoMe] ${order.orderNumber}: trừ ${kq.daTru}/${inventoryUpdates.length} dòng ở kho mẹ ${khoMe.ma}`)
+                }
+                // Dòng không trừ được phải NÓI RA kèm mã hàng — im lặng là kho mẹ
+                // thiếu hàng mà không ai biết vì sao.
+                for (const b of kq.boQua) console.warn(`[KhoMe] ${order.orderNumber}: ${b}`)
+            }
+        } catch (e: any) {
+            console.error(`[KhoMe] ${order.orderNumber}: trừ kho mẹ hỏng — ${moTaLoi(e)}`)
+        }
+    }
+
     /* Chuyển được rồi thì XOÁ cờ kẹt SKU (nếu trước đây từng kẹt). Không xoá thì
      * đơn đã lên phiếu vẫn mang cờ, làm mọi bộ đếm "đơn kẹt" đọc sai về sau.
      * `updateMany` để không ném lỗi nếu đơn vừa bị xoá xen giữa. */

@@ -1671,6 +1671,13 @@ model StoreSettings {
   ttPostAvatar       String?
   ttPostAuthAt       DateTime?
 
+  /**
+   * KHO MẸ (10/09/2026) — mã cửa hàng cho MƯỢN tồn. Cửa hàng này bán trên sàn
+   * nhưng hàng nằm ở kho đó: đẩy tồn của nó lên sàn, có đơn thì trừ, hoàn thì cộng
+   * lại, và ghi phiếu trên thẻ kho bên đó. Trống = không dùng. Xem lib/khoMe.ts.
+   */
+  khoMeMa String?
+
   updatedAt DateTime @updatedAt
 }
 
@@ -1937,6 +1944,11 @@ model OnlineOrder {
   // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
   // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
   stockDeducted      Boolean   @default(false)
+  /// KHO MẸ (10/09/2026): mốc đã trừ kho của cửa hàng cho mượn. Cờ RIÊNG chứ không
+  /// dùng chung `stockDeducted` — hai kho ở HAI SCHEMA nên không chung transaction,
+  /// một bên trừ xong bên kia hỏng là chuyện có thật; gộp cờ thì mất dấu bên nào đã
+  /// trừ. Giành bằng updateMany null→now, nhả bằng now→null. Xem lib/khoMe.ts.
+  khoMeTruLuc        DateTime?
   // Đã thử lên phiếu nhưng KHÔNG khớp được SKU nào sang hàng kho → ĐỪNG thử lại
   // mỗi lượt đồng bộ. Đo 05/09/2026: 1.033 đơn như vậy bị quét lại ~5 lần/ngày,
   // mỗi lượt tốn ~4 truy vấn (findUnique + transaction.findFirst + user.findFirst

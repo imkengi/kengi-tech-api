@@ -5447,6 +5447,14 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
         let pushed = 0, skipped = 0, failed = 0
         const errors: string[] = []
 
+        /* Kho mẹ mở MỘT LẦN cho cả lượt: `moKhoMe` tra registry, gọi trong vòng lặp
+         * 700 listing là 700 truy vấn thừa. Đơn treo cũng gộp sẵn một lượt. */
+        const { moKhoMe, timHangMe: timHangMeFn, donTreoTheoSku } = await import('../lib/khoMe')
+        const khoMe = await moKhoMe(prisma)
+        const donTreo = khoMe ? await donTreoTheoSku(prisma) : new Map<string, number>()
+        const boQuaKhoMe: string[] = []
+        if (khoMe) console.log(`[push-stock] ${channel.name}: lấy tồn từ kho mẹ ${khoMe.ma}, trừ ${donTreo.size} mã có đơn treo`)
+
         for (const p of onlineProducts) {
             // Resolve the local product: explicit link → SKU match → BẢNG ÁNH XẠ.
             // Thiếu bước ánh xạ thì phân loại có mã riêng (combo/vỉ) không bao giờ
@@ -5482,8 +5490,30 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
             }
             if (!local) { skipped++; continue }
 
+            /* KHO MẸ — cửa hàng mượn tồn của cửa hàng khác thì đẩy TỒN BÊN ĐÓ.
+             *
+             * Chủ shop chốt 10/09/2026: số đẩy lên sàn = tồn mẹ − ĐƠN TREO bên này
+             * (đơn đã có mà chưa trừ kho). Đơn chờ xác nhận đã hứa hàng cho khách
+             * nhưng chưa trừ kho (chốt 09/09) — đẩy nguyên tồn mẹ là đúng phần hàng
+             * đã hứa đó bị bán thêm một lần nữa.
+             *
+             * Không tra ra hàng bên mẹ thì BỎ QUA hẳn listing này, KHÔNG rơi về tồn
+             * kho con: tồn con ở cửa hàng mượn kho là 0/âm, đẩy lên là khoá sạch
+             * hàng đang bán được. */
+            let tonNguon = local.stock || 0
+            if (khoMe) {
+                const hangMe = await timHangMeFn(khoMe.sp, local.sku)
+                if (!hangMe) {
+                    skipped++
+                    boQuaKhoMe.push(`${p.sku || local.sku || p.platformProductId}: không tra ra hàng ở kho mẹ ${khoMe.ma}`)
+                    continue
+                }
+                const treo = donTreo.get(String(local.sku || '').trim().toLowerCase()) || 0
+                tonNguon = (hangMe.stock || 0) - treo
+            }
+
             // Tồn theo ĐƠN VỊ BÁN trên sàn: 26 cái = 2 vỉ (không phải 26 vỉ)
-            const targetStock = Math.max(0, Math.floor((local.stock || 0) / (rate > 0 ? rate : 1)))
+            const targetStock = Math.max(0, Math.floor(tonNguon / (rate > 0 ? rate : 1)))
             if (!force && p.stock === targetStock) { skipped++; continue }
 
             try {
@@ -5512,12 +5542,27 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
                 channelId: channel.id,
                 action: 'push_stock',
                 status: failed > 0 ? 'partial' : 'success',
-                details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}${errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''}`,
+                details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}`
+                    + (khoMe ? ` | kho mẹ ${khoMe.ma}, bỏ qua ${boQuaKhoMe.length} mã không có bên đó` : '')
+                    + (errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''),
                 ordersCount: pushed,
             },
         }).catch(() => { })
 
-        res.json({ success: true, data: { pushed, skipped, failed, errors } })
+        res.json({
+            success: true,
+            data: {
+                pushed, skipped, failed, errors,
+                // Nói RA khi đang lấy tồn từ kho khác — người bấm nút phải biết số
+                // vừa đẩy lên sàn đến từ đâu, và mã nào bị bỏ vì không tra ra bên đó.
+                ...(khoMe ? {
+                    khoMe: khoMe.ma,
+                    soMaCoDonTreo: donTreo.size,
+                    boQuaViKhongCoOKhoMe: boQuaKhoMe.length,
+                    viDuBoQua: boQuaKhoMe.slice(0, 10),
+                } : {}),
+            },
+        })
     } catch (err: any) {
         console.error('Push stock error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })

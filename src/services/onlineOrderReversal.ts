@@ -65,6 +65,28 @@ export async function reverseOnlineOrderEffects(
     // updateMany điều kiện stockDeducted:true là atomic: 2 request đồng thời chỉ
     // 1 bên claim được → không hoàn kho 2 lần. Đơn cũ trước khi có cờ (đã trừ
     // nhưng stockDeducted=false) không hoàn tự động được — chấp nhận, chỉnh tay.
+    /* KHO MẸ — hoàn lại bên cửa hàng cho mượn tồn. Chủ shop: "khi hoàn về thì báo
+     * cho HUTI hoàn trả lại sản phẩm" (10/09/2026).
+     *
+     * Chạy NGOÀI cờ `stockDeducted` và có cờ RIÊNG của nó: hai kho ở hai schema
+     * nên có thể lệch trạng thái (con đã trừ, mẹ chưa, hoặc ngược lại). Buộc chung
+     * một cờ là một bên hoàn hụt vĩnh viễn.
+     *
+     * Cộng lại ĐÚNG BẰNG phiếu đã xuất chứ không tính lại từ dòng hàng — đường trừ
+     * dùng số đã quy đổi, đường hoàn ở dưới dùng `item.quantity` thô, hai số khác
+     * nhau (lỗi tồn đọng ghi 09/09). Xem lib/khoMe.ts. */
+    try {
+        const { moKhoMe, hoanKhoMe } = await import('../lib/khoMe')
+        const khoMe = await moKhoMe(sp)
+        if (khoMe) {
+            const kq = await hoanKhoMe(sp, khoMe, full.id, full.orderNumber)
+            if (kq.daHoan > 0) console.log(`[KhoMe] ${full.orderNumber}: hoàn ${kq.daHoan} dòng về kho mẹ ${khoMe.ma}`)
+            for (const b of kq.boQua) console.warn(`[KhoMe] ${full.orderNumber}: ${b}`)
+        }
+    } catch (e: any) {
+        console.error(`[KhoMe] ${full.orderNumber}: hoàn kho mẹ hỏng — ${e?.message || e}`)
+    }
+
     const claim = await sp.onlineOrder.updateMany({
         where: { id: full.id, stockDeducted: true },
         data: { stockDeducted: false },

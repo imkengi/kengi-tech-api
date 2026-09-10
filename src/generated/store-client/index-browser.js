@@ -1263,6 +1263,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   ttPostDisplayName: 'ttPostDisplayName',
   ttPostAvatar: 'ttPostAvatar',
   ttPostAuthAt: 'ttPostAuthAt',
+  khoMeMa: 'khoMeMa',
   updatedAt: 'updatedAt'
 };
 
@@ -1481,6 +1482,7 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   isInstant: 'isInstant',
   shipByDate: 'shipByDate',
   stockDeducted: 'stockDeducted',
+  khoMeTruLuc: 'khoMeTruLuc',
   khongKhopSku: 'khongKhopSku',
   khongKhopLuc: 'khongKhopLuc',
   loiNhuanThapBaoLuc: 'loiNhuanThapBaoLuc',
