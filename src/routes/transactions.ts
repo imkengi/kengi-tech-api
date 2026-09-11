@@ -183,6 +183,17 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             userMap = Object.fromEntries(users.map(u => [u.id, u.name]))
         }
 
+        /* SĐT / ĐỊA CHỈ KHÁCH cho phiếu in (11/09/2026: "SĐT với địa chỉ có mà lên phiếu in
+         * không hiện"). Phiếu bán chỉ lưu customerPhone LÚC BÁN (nhiều phiếu để trống) và
+         * KHÔNG có cột địa chỉ — thứ thật nằm ở hồ sơ khách. Kéo từ hồ sơ khách: phiếu có
+         * SĐT riêng thì giữ SĐT của phiếu, trống thì lấy của hồ sơ. */
+        const custIds = [...new Set(filteredTx.map((t: any) => t.customerId).filter(Boolean))] as string[]
+        const custMap = new Map<string, { phone: string | null; address: string | null }>()
+        if (custIds.length > 0) {
+            const custs = await prisma.customer.findMany({ where: { id: { in: custIds } }, select: { id: true, phone: true, address: true } })
+            for (const c of custs) custMap.set(c.id, { phone: c.phone || null, address: c.address || null })
+        }
+
         const data = filteredTx.map(t => {
             // Giá vốn + lợi nhuận TỪNG ĐƠN (02/09/2026 — app bấm "Lợi nhuận" ở báo
             // cáo phải thấy lãi từng đơn, không phải doanh thu). TransactionItem
@@ -201,7 +212,8 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             receiptNumber: t.receiptNumber,
             customerId: t.customerId,
             customerName: t.customerName,
-            customerPhone: t.customerPhone,
+            customerPhone: t.customerPhone || (t.customerId ? custMap.get(t.customerId)?.phone : null) || null,
+            customerAddress: (t.customerId ? custMap.get(t.customerId)?.address : null) || null,
             items: t.items.map(i => ({
                 productId: i.productId,
                 productName: i.productName,
@@ -573,10 +585,17 @@ router.get('/:id', authMiddleware, requirePermission('pos.view'), async (req: Au
             return
         }
 
+        // SĐT / địa chỉ khách cho phiếu in — cùng luật với danh sách phiếu (xem GET /).
+        const kh = transaction.customerId
+            ? await prisma.customer.findUnique({ where: { id: transaction.customerId }, select: { phone: true, address: true } })
+            : null
+
         res.json({
             success: true,
             data: {
                 ...transaction,
+                customerPhone: transaction.customerPhone || kh?.phone || null,
+                customerAddress: kh?.address || null,
                 createdAt: transaction.createdAt.toISOString(),
                 returnedAt: transaction.returnedAt?.toISOString(),
             },
