@@ -4566,6 +4566,71 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO QUYỀN NHÓM KHIẾU NẠI SHOPEE — GET /admin/do-khieu-nai-shopee?storeCode=&channelId=
+ *
+ * Chủ shop 11/09/2026 muốn nộp bằng chứng (ảnh + ghi chú) cho vụ trả hàng thẳng
+ * trong app thay vì sang seller center. Làm đủ sẽ phải sửa cả file trung chuyển
+ * trên Tino (nó đóng cứng tên trường file là `part_content`, còn convert_image đòi
+ * `upload_image`) — tức ba nơi phải deploy.
+ *
+ * Nên ĐO TRƯỚC thứ rẻ nhất mà rủi ro nhất: gian hàng có được gọi nhóm này không.
+ * Hai đường CHỈ ĐỌC, không cần sửa gì: get_return_dispute_reason + query_proof.
+ * Bài học Shopee Video: có API trong tài liệu KHÔNG có nghĩa shop mình gọi được.
+ */
+router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const channelId = String(req.query.channelId || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const ch = channelId
+            ? await sp.onlineChannel.findUnique({ where: { id: channelId } })
+            : await sp.onlineChannel.findFirst({ where: { platform: 'shopee', accessToken: { not: null } } })
+        if (!ch || ch.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Không có kênh Shopee đã kết nối' }); return }
+
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const svc = new ShopeeService({
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        })
+
+        // Lấy vụ trả THẬT gần đây để thử — cửa sổ 14 ngày (get_return_list chặn >15).
+        const ds = await svc.fetchReturns({ since: new Date(Date.now() - 14 * 86400_000) })
+        const dsArr: any[] = Array.isArray(ds) ? ds : ((ds as any)?.items || [])
+        const mau = dsArr.slice(0, 5).map((r: any) => ({
+            return_sn: r.returnSn || r.return_sn || r.code, trangThai: r.status, maDon: r.orderSn || r.order_sn,
+        }))
+        const thu = mau.find(m => m.return_sn)?.return_sn
+
+        let lyDo: any = null, bangChung: any = null
+        if (thu) {
+            try { lyDo = await svc.getReturnDisputeReasons(String(thu)) }
+            catch (e: any) { lyDo = { loi: String(e?.message || e).slice(0, 220) } }
+            try { bangChung = await svc.queryReturnProof(String(thu)) }
+            catch (e: any) { bangChung = { loi: String(e?.message || e).slice(0, 220) } }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                kenh: ch.name, soVuTra14Ngay: dsArr.length, mau, thuTrenVu: thu || null,
+                get_return_dispute_reason: lyDo,
+                query_proof: bangChung,
+                yNghia: !thu
+                    ? '14 ngày qua không có vụ trả nào ⇒ chưa thử được quyền; chờ có vụ hoặc nới cửa sổ.'
+                    : 'Có `loi` chứa error_auth/no_permission ⇒ shop CHƯA được bật nhóm này, dừng, đừng viết thêm. '
+                      + 'Trả về dữ liệu ⇒ gọi được, làm tiếp phần nộp ảnh (phải sửa file trung chuyển trên Tino).',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * PHÂN LOẠI CỦA MỘT LISTING SHOPEE — GET /admin/do-phan-loai-shopee
  *   ?storeCode=&channelId=&onlineProductId=
  *

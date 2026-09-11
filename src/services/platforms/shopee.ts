@@ -775,6 +775,28 @@ export class ShopeeService extends PlatformService {
     }
 
     /**
+     * Mã lý do khiếu nại HỢP LỆ cho đúng vụ trả này — GET /api/v2/returns/get_return_dispute_reason.
+     *
+     * Trước 11/09/2026 mã lý do bị GÕ CỨNG (`reason || 2` = OTHER) khi từ chối trả
+     * hàng. Sai lý do là yếu thế ngay từ đầu, mà danh sách hợp lệ lại khác nhau tuỳ
+     * vụ — phải hỏi Shopee chứ không tự liệt kê.
+     */
+    async getReturnDisputeReasons(returnSn: string): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/returns/get_return_dispute_reason')}&return_sn=${encodeURIComponent(returnSn)}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_return_dispute_reason: ${data.error} - ${data.message}`)
+        return data.response ?? {}
+    }
+
+    /** Bằng chứng ĐÃ nộp cho một vụ trả — GET /api/v2/returns/query_proof. */
+    async queryReturnProof(returnSn: string): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/returns/query_proof')}&return_sn=${encodeURIComponent(returnSn)}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee query_proof: ${data.error} - ${data.message}`)
+        return data.response ?? {}
+    }
+
+    /**
      * Dispute (disagree with) a return request — POST /api/v2/returns/dispute.
      * Shopee requires a contact email + dispute reason; images optional.
      * dispute_reason enum (Shopee v2): 1 NON_RECEIPT, 2 OTHER, 3 NOT_RECEIVED,
