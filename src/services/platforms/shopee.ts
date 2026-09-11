@@ -860,26 +860,42 @@ export class ShopeeService extends PlatformService {
             description: params.description,
         }
         const data = await this.httpPost(this.apiUrl('/api/v2/returns/upload_proof'), body)
-        if (data.error) throw new Error(`Shopee upload_proof: ${data.error} - ${data.message}`)
+        // Cắt khoảng trắng: tài liệu ví dụ trả `"error": " "` khi thành công.
+        const loi = String(data?.error ?? '').trim()
+        if (loi) throw new Error(`Shopee upload_proof: ${loi} - ${data.message}`)
         return data.response ?? {}
     }
 
     /**
-     * Dispute (disagree with) a return request — POST /api/v2/returns/dispute.
-     * Shopee requires a contact email + dispute reason; images optional.
-     * dispute_reason enum (Shopee v2): 1 NON_RECEIPT, 2 OTHER, 3 NOT_RECEIVED,
-     * 4 WRONG_ITEM, 5 ITEM_DAMAGED... — caller passes the applicable code.
+     * KHIẾU NẠI vụ trả — POST /api/v2/returns/dispute, LUỒNG MỚI.
+     *
+     * Bản cũ gửi `dispute_reason` (mã gõ cứng = 2) + `image`: Shopee KHAI TỬ luồng
+     * đó từ 07/05/2024 (announcement 883). Luồng mới:
+     *   • `dispute_reason_id` — PHẢI lấy từ get_return_dispute_reason của CHÍNH vụ
+     *     này. Đo 11/09/2026: cùng một lý do mà mỗi vụ một mã (46–50 ở vụ này,
+     *     81–89 ở vụ khác) ⇒ không có bảng mã cố định nào để gõ cứng.
+     *   • `image_list[]` — mỗi phần tử là MỘT Ô bằng chứng của lý do đó:
+     *     { module_index, requirement (chép NGUYÊN VĂN từ Shopee — lệch là bị trả
+     *     "requirement and dispute reason ID does not match"), image_url[] ≤ 3 }.
+     * Ô bắt buộc thiếu ảnh ⇒ Shopee trả "mandatory evidence is missing".
+     *
+     * `error` được so sau khi CẮT KHOẢNG TRẮNG: ví dụ trong tài liệu trả `"error": " "`
+     * khi THÀNH CÔNG; `if (data.error)` sẽ báo hỏng một khiếu nại đã gửi được, người
+     * dùng bấm lại lần hai.
      */
-    async disputeReturn(returnSn: string, params: { email: string; reason: number; textReason: string; images?: string[] }): Promise<void> {
-        const body: any = {
-            return_sn: returnSn,
-            email: params.email,
-            dispute_reason: params.reason,
-            dispute_text_reason: params.textReason,
-        }
-        if (params.images?.length) body.image = params.images
+    async khieuNaiVuTra(returnSn: string, p: {
+        email: string
+        disputeReasonId: number
+        textReason?: string
+        imageList: { module_index: number; requirement: string; image_url: string[] }[]
+    }): Promise<any> {
+        const body: any = { return_sn: returnSn, email: p.email, dispute_reason_id: p.disputeReasonId }
+        if (p.imageList.length) body.image_list = p.imageList
+        if (p.textReason) body.dispute_text_reason = p.textReason
         const data = await this.httpPost(this.apiUrl('/api/v2/returns/dispute'), body)
-        if (data.error) throw new Error(`Shopee returns/dispute: ${data.error} - ${data.message}`)
+        const loi = String(data?.error ?? '').trim()
+        if (loi) throw new Error(`Shopee returns/dispute: ${loi} - ${data.message}`)
+        return data.response ?? {}
     }
 
     /**

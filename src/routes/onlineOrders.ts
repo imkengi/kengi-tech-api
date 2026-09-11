@@ -4990,20 +4990,18 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
                         if (action === 'approve') {
                             await service.confirmReturn(returnSn)
                         } else {
-                            // Shopee từ chối = mở khiếu nại (dispute) — bắt buộc email + lý do
-                            const { disputeEmail, disputeReason } = req.body
-                            if (!disputeEmail) {
-                                res.status(400).json({
-                                    success: false,
-                                    error: 'Từ chối trả hàng Shopee = mở khiếu nại — cần gửi kèm disputeEmail (email liên hệ) và disputeReason (mã lý do)',
-                                })
-                                return
-                            }
-                            await service.disputeReturn(returnSn, {
-                                email: String(disputeEmail),
-                                reason: Number(disputeReason) || 2,
-                                textReason: reviewNote || 'Người bán không đồng ý yêu cầu trả hàng',
+                            /* Shopee KHÔNG có "từ chối" — chỉ có KHIẾU NẠI, và khiếu nại
+                             * phải chọn lý do + nộp ảnh theo TỪNG Ô của lý do đó. Bản cũ ở
+                             * đây đòi `disputeEmail` mà web không bao giờ gửi (nên chưa từng
+                             * chạy), lại dùng trường `dispute_reason` Shopee khai tử từ
+                             * 07/05/2024. Nay khiếu nại đi riêng qua POST
+                             * /returns/:id/khieu-nai. Dừng TRƯỚC khi đụng DB: đánh "từ chối"
+                             * ở phía mình trong khi Shopee chưa hề nhận gì là tự lừa mình. */
+                            res.status(400).json({
+                                success: false,
+                                error: 'Vụ trả Shopee không "từ chối" được — bấm nút KHIẾU NẠI để chọn lý do và nộp ảnh theo từng ô Shopee yêu cầu.',
                             })
+                            return
                         }
                     }
                 } catch (platformErr: any) {
@@ -5218,7 +5216,47 @@ async function shopeeChoPhieuTra(prisma: any, phieu: any) {
     return { shopee, returnSn, channel }
 }
 
-/** GET /returns/:returnId/bang-chung — bằng chứng ĐÃ nộp cho vụ này. */
+/**
+ * Chuẩn hoá get_return_dispute_reason thành danh sách lý do + Ô bằng chứng.
+ *
+ * Đo 11/09/2026 trên 4 vụ thật: mỗi vụ 5 lý do, mỗi lý do 0–2 ô, có ô bắt buộc,
+ * có ô tuỳ chọn. Tên lý do KHÔNG có trường riêng — nó nằm trong câu
+ * `dispute_requirement` ("Khiếu nại của bạn với lý do \"Hàng trả về bị vỡ/ hư hại\"…").
+ * Lý do đầu tiên (46 / 81) có câu RỖNG và 0 ô ⇒ không bóc được tên; để null chứ
+ * không bịa. `yeuCau` của từng ô giữ NGUYÊN VĂN — lúc khiếu nại phải gửi trả đúng
+ * chuỗi đó, lệch một ký tự là Shopee báo "requirement … does not match".
+ */
+interface OBangChung { moduleIndex: number; yeuCau: string; batBuoc: boolean }
+interface LyDoKhieuNai { id: number; nhan: string | null; yeuCau: string; o: OBangChung[]; mau: { url: string; thumbnail: string }[] }
+
+function chuanHoaLyDo(raw: any): LyDoKhieuNai[] {
+    const ds: any[] = Array.isArray(raw?.dispute_reason_list) ? raw.dispute_reason_list : []
+    return ds.map((r: any): LyDoKhieuNai => {
+        const yeuCau = String(r.dispute_requirement || '')
+        const m = /lý do\s*["“]([^"”]+)["”]/i.exec(yeuCau)
+        const oTho: any[] = Array.isArray(r.evidence_module_list) ? r.evidence_module_list : []
+        const mauTho: any[] = Array.isArray(r.sample_evidence) ? r.sample_evidence : []
+        return {
+            id: Number(r.dispute_reason),
+            nhan: m?.[1]?.trim() || null,
+            yeuCau,
+            o: oTho
+                .map((x: any): OBangChung => ({ moduleIndex: Number(x.module_index), yeuCau: String(x.requirement ?? ''), batBuoc: !!x.is_required }))
+                .sort((a, b) => a.moduleIndex - b.moduleIndex),
+            mau: mauTho.map((s: any) => ({ url: String(s.url || ''), thumbnail: String(s.thumbnail || s.url || '') })),
+        }
+    })
+}
+
+/**
+ * GET /returns/:returnId/bang-chung — mọi thứ màn KHIẾU NẠI cần, một lượt:
+ *   • lyDo       — lý do hợp lệ + ô bằng chứng của TỪNG lý do (chuanHoaLyDo)
+ *   • chiTiet    — trạng thái, HẠN XỬ LÝ, khách kêu gì, ảnh/video khách gửi,
+ *                  seller_proof (Shopee có đang đòi bổ sung bằng chứng không)
+ *   • daNop      — bằng chứng bổ sung đã nộp (query_proof)
+ *   • emailGoiY  — email cửa hàng trong Cài đặt (Shopee bắt buộc email liên hệ)
+ * Mỗi phần hỏng riêng thì báo riêng, không làm hỏng cả màn.
+ */
 router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -5226,21 +5264,159 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
         if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
 
         const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+        const loi: Record<string, string> = {}
 
-        let daNop: any = null, chuaNop = false, loi: string | null = null
+        let daNop: any = null, chuaNop = false
         try { daNop = await shopee.queryReturnProof(returnSn) }
         catch (e: any) {
             const m = String(e?.message || e)
             // Chưa nộp lần nào thì Shopee trả LỖI NGHIỆP VỤ, không phải lỗi quyền —
             // đừng hiện nó như hỏng hóc (đo 11/09/2026).
             if (/proof not exist/i.test(m)) chuaNop = true
-            else loi = m.slice(0, 300)
+            else loi.daNop = m.slice(0, 300)
         }
 
-        let lyDoHopLe: any = null
-        try { lyDoHopLe = await shopee.getReturnDisputeReasons(returnSn) } catch { /* không chặn */ }
+        let lyDo: any[] = []
+        try { lyDo = chuanHoaLyDo(await shopee.getReturnDisputeReasons(returnSn)) }
+        catch (e: any) { loi.lyDo = String(e?.message || e).slice(0, 300) }
 
-        res.json({ success: true, data: { returnSn, chuaNop, daNop, lyDoHopLe, loi } })
+        let chiTiet: any = null
+        try {
+            const d = await shopee.getReturnDetailRaw(returnSn)
+            chiTiet = {
+                trangThai: d.status || null,
+                hanXuLy: d.return_seller_due_date ? d.return_seller_due_date * 1000 : null,
+                khachLyDo: d.reason || null,
+                khachGhiChu: d.text_reason || null,
+                anhKhach: Array.isArray(d.image) ? d.image : [],
+                videoKhach: Array.isArray(d.buyer_videos) ? d.buyer_videos : [],
+                soTienHoan: d.refund_amount ?? null,
+                sellerProof: d.seller_proof
+                    ? { trangThai: d.seller_proof.seller_proof_status || null, hanChot: d.seller_proof.seller_evidence_deadline ? d.seller_proof.seller_evidence_deadline * 1000 : null }
+                    : null,
+            }
+        } catch (e: any) { loi.chiTiet = String(e?.message || e).slice(0, 300) }
+
+        let emailGoiY: string | null = null
+        try {
+            const s: any = await prisma.storeSettings.findFirst({ select: { email: true } as any })
+            emailGoiY = s?.email ? String(s.email).trim() || null : null
+        } catch { /* không có thì để người dùng tự gõ */ }
+
+        res.json({ success: true, data: { returnSn, lyDo, chiTiet, chuaNop, daNop, emailGoiY, loi } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
+ * POST /returns/:returnId/anh-khieu-nai — nạp MỘT ảnh lên kho ảnh Shopee.
+ * Body: { ten, b64 } → { url, thumbnail }.
+ *
+ * Tách từng ảnh một lượt thay vì gửi cả lô: thân request chặn 10MB, và màn hình
+ * báo được tiến độ "ảnh 3/5" thay vì treo im lặng. Ảnh nạp xong CHƯA gắn vào vụ
+ * nào — chỉ khi gọi /khieu-nai mới thành bằng chứng.
+ */
+router.post('/returns/:returnId/anh-khieu-nai', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const ten = String(req.body?.ten || 'bang-chung.jpg')
+        const b64 = String(req.body?.b64 || '').replace(/^data:[^;]+;base64,/, '')
+        if (!b64) { res.status(400).json({ success: false, error: 'Ảnh rỗng' }); return }
+
+        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
+        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+        const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+
+        const kq = await shopee.convertReturnImage(returnSn, new Uint8Array(Buffer.from(b64, 'base64')), ten)
+        const url = kq?.url || kq?.image_url
+        if (!url) { res.status(502).json({ success: false, error: `Shopee trả về hình dạng lạ: ${JSON.stringify(kq).slice(0, 160)}` }); return }
+        res.json({ success: true, data: { url: String(url), thumbnail: String(kq?.thumbnail || kq?.thumbnail_url || url) } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
+ * POST /returns/:returnId/khieu-nai — KHIẾU NẠI vụ trả Shopee theo luồng mới.
+ * Body: { lyDoId, email, ghiChu?, oBangChung: [{ moduleIndex, urls: string[] }] }
+ *
+ * Máy chủ HỎI LẠI Shopee danh sách lý do ngay lúc gửi (không tin bản màn hình
+ * giữ từ lúc mở form), rồi tự dựng image_list với `requirement` chép nguyên văn —
+ * bên gọi chỉ nói "ô số mấy, ảnh nào". Kiểm trước những gì Shopee sẽ chặn:
+ * lý do không thuộc vụ, ô bắt buộc trống, quá 3 ảnh/ô, ô không thuộc lý do.
+ *
+ * KHÔNG đổi trạng thái phiếu: khiếu nại xong Shopee chuyển vụ sang
+ * SELLER_DISPUTE/JUDGING, returnSync map cả hai về 'pending' và sẽ ghi đè bất cứ
+ * thứ gì mình đặt. Chỉ nối ghi chú + ghi audit.
+ */
+router.post('/returns/:returnId/khieu-nai', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const lyDoId = Number(req.body?.lyDoId)
+        const email = String(req.body?.email || '').trim()
+        const ghiChu = String(req.body?.ghiChu || '').trim()
+        const vao: any[] = Array.isArray(req.body?.oBangChung) ? req.body.oBangChung : []
+        if (!Number.isFinite(lyDoId)) { res.status(400).json({ success: false, error: 'Chưa chọn lý do khiếu nại' }); return }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ success: false, error: 'Email liên hệ không hợp lệ (Shopee bắt buộc)' }); return }
+
+        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
+        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+        const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+
+        const lyDo = chuanHoaLyDo(await shopee.getReturnDisputeReasons(returnSn)).find(l => l.id === lyDoId)
+        if (!lyDo) {
+            res.status(400).json({ success: false, error: `Lý do #${lyDoId} không còn trong danh sách Shopee cho vụ này — đóng form mở lại để tải danh sách mới` })
+            return
+        }
+
+        const theoO = new Map<number, string[]>()
+        for (const x of vao) {
+            const mi = Number(x?.moduleIndex)
+            const urls = (Array.isArray(x?.urls) ? x.urls : []).map((u: any) => String(u)).filter((u: string) => /^https:\/\//i.test(u))
+            if (!urls.length) continue
+            theoO.set(mi, [...(theoO.get(mi) || []), ...urls])
+        }
+        const loiO: string[] = []
+        for (const mi of theoO.keys()) {
+            if (!lyDo.o.some(o => o.moduleIndex === mi)) loiO.push(`ô #${mi} không thuộc lý do này`)
+        }
+        for (const o of lyDo.o) {
+            const n = theoO.get(o.moduleIndex)?.length || 0
+            if (o.batBuoc && n === 0) loiO.push(`ô #${o.moduleIndex} BẮT BUỘC mà chưa có ảnh`)
+            if (n > 3) loiO.push(`ô #${o.moduleIndex} có ${n} ảnh — Shopee chỉ nhận tối đa 3`)
+        }
+        if (loiO.length) { res.status(400).json({ success: false, error: loiO.join(' · ') }); return }
+
+        const imageList = lyDo.o
+            .filter(o => (theoO.get(o.moduleIndex)?.length || 0) > 0)
+            .map(o => ({ module_index: o.moduleIndex, requirement: o.yeuCau, image_url: theoO.get(o.moduleIndex)! }))
+        const soAnh = imageList.reduce((s, x) => s + x.image_url.length, 0)
+
+        await shopee.khieuNaiVuTra(returnSn, { email, disputeReasonId: lyDoId, textReason: ghiChu || undefined, imageList })
+
+        const nhan = lyDo.nhan || `lý do #${lyDoId}`
+        const luc = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+        try {
+            await prisma.returnOrder.update({
+                where: { id: phieu.id },
+                data: { notes: `${phieu.notes || ''}\n[Khiếu nại] ${luc} — ${nhan} — ${soAnh} ảnh — chờ Shopee phân xử${ghiChu ? ` — "${ghiChu.slice(0, 200)}"` : ''}` },
+            })
+        } catch { /* ghi chú hỏng không được làm hỏng khiếu nại đã gửi */ }
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user?.userId,
+                    userName: req.user?.email || 'system',
+                    action: 'dispute_return',
+                    entity: 'ReturnOrder',
+                    entityId: phieu.id,
+                    details: JSON.stringify({ returnSn, lyDoId, nhan, email, soAnh, oDaNop: imageList.map(x => x.module_index), ghiChu }),
+                },
+            })
+        } catch { }
+
+        res.json({ success: true, data: { returnSn, lyDo: nhan, soAnh } })
     } catch (err: any) {
         res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
     }
@@ -5266,6 +5442,21 @@ router.post('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthReq
         if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
 
         const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+
+        /* upload_proof là BỔ SUNG bằng chứng khi Shopee ĐÒI (seller_proof_status),
+         * thường sau khi đã khiếu nại. Đo 11/09/2026: cả 4 vụ đang treo đều
+         * NOT_NEEDED. Chặn đúng giá trị ĐÃ ĐO; giá trị khác để Shopee tự trả lời
+         * chứ không đoán bảng mã. */
+        try {
+            const d = await shopee.getReturnDetailRaw(returnSn)
+            if (d?.seller_proof?.seller_proof_status === 'NOT_NEEDED') {
+                res.status(400).json({
+                    success: false,
+                    error: 'Shopee CHƯA yêu cầu bổ sung bằng chứng cho vụ này. Muốn phản đối yêu cầu trả hàng thì dùng nút KHIẾU NẠI (chọn lý do + ảnh theo từng ô).',
+                })
+                return
+            }
+        } catch { /* đọc chi tiết hỏng thì để upload_proof tự báo */ }
 
         /* Nạp TỪNG ảnh một. Không Promise.all: pool Prisma prod = 1 và Shopee cũng
          * chặn tần suất — chạy song song là tự chuốc lỗi khó đọc. */
