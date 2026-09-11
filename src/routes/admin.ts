@@ -4634,6 +4634,51 @@ router.get('/do-khieu-nai-tiktok', async (req: Request, res: Response) => {
 })
 
 /**
+ * THỬ TẢI ẢNH LÊN TIKTOK — POST /admin/thu-anh-tiktok { storeCode, returnId, anhUrl }
+ *
+ * Phần CHƯA từng chạy thật của luồng từ chối TikTok: Upload Product Image (multipart,
+ * trường `data`, chữ ký không gồm thân, KHÔNG shop_cipher). Ảnh lên kho ảnh TikTok,
+ * CHƯA gắn vào vụ nào — vô hại như convert_image bên Shopee. Không gọi lệnh từ chối.
+ * Kênh lấy THEO PHIẾU RTN-TT-<returnId>.
+ */
+router.post('/thu-anh-tiktok', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || 'KENGISTORE').trim()
+        const returnId = String(b.returnId || '').trim()
+        const anhUrl = String(b.anhUrl || 'https://kengi.vn/logo.png')
+        if (!returnId) { res.status(400).json({ success: false, error: 'Cần returnId (để lấy đúng kênh)' }); return }
+        if (!/^https:\/\//i.test(anhUrl)) { res.status(400).json({ success: false, error: 'anhUrl phải là https' }); return }
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const phieu = await sp.returnOrder.findFirst({ where: { code: `RTN-TT-${returnId}` }, select: { channelId: true } })
+        if (!phieu?.channelId) { res.status(404).json({ success: false, error: 'Không thấy phiếu RTN-TT- hoặc phiếu chưa có kênh' }); return }
+        const c = await sp.onlineChannel.findUnique({ where: { id: phieu.channelId } })
+        if (!c || c.platform !== 'tiktok') { res.status(400).json({ success: false, error: 'Kênh không phải TikTok' }); return }
+
+        const rr = await fetch(anhUrl)
+        if (!rr.ok) { res.status(400).json({ success: false, error: `Tải anhUrl hỏng: HTTP ${rr.status}` }); return }
+        const bytes = new Uint8Array(await rr.arrayBuffer())
+        const ten = anhUrl.split('?')[0].split('/').pop() || 'thu.png'
+        const kieu = /\.png$/i.test(ten) ? 'image/png' : 'image/jpeg'
+
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const svc = new TikTokService({
+            apiKey: c.apiKey || '', apiSecret: c.apiSecret || '',
+            accessToken: c.accessToken || undefined, refreshToken: c.refreshToken || undefined,
+            shopId: c.shopId || undefined,
+        })
+        let kq: any = null, loi: string | null = null
+        try { kq = await svc.taiAnhBangChung(bytes, ten, kieu) }
+        catch (e: any) { loi = String(e?.message || e).slice(0, 400) }
+        res.json({ success: true, data: { kenh: c.name, cyKB: Math.round(bytes.length / 1024), kieu, ketQua: kq, loi } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO QUYỀN NHÓM KHIẾU NẠI SHOPEE — GET /admin/do-khieu-nai-shopee?storeCode=&channelId=
  *
  * Chủ shop 11/09/2026 muốn nộp bằng chứng (ảnh + ghi chú) cho vụ trả hàng thẳng
