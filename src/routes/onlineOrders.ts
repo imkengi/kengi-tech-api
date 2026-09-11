@@ -5178,6 +5178,150 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  BẰNG CHỨNG KHIẾU NẠI (Shopee) — ảnh + ghi chú
+//
+//  Trước 11/09/2026 chủ shop phải copy link đơn rồi sang seller center nộp tay.
+//  Shopee có API cho việc này nhưng đi HAI NHỊP và không nhận link ảnh của mình:
+//    1. convert_image — nạp TỪNG ảnh lên kho ảnh Shopee, đổi lấy cặp url+thumbnail
+//    2. upload_proof  — nộp cặp đó kèm ghi chú vào đúng vụ trả
+//  Đo thật 11/09 trên KENGISTORE: chạy được, Shopee trả về khoá `url`/`thumbnail`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Dựng ShopeeService cho một phiếu trả, tự làm mới token nếu sắp hết hạn. */
+async function shopeeChoPhieuTra(prisma: any, phieu: any) {
+    const channelId = (phieu as any).channelId
+    if (!channelId) throw new Error('Phiếu trả chưa gắn kênh — mở lại danh sách trả hàng một lần để hệ thống điền kênh rồi thử lại')
+    const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
+    if (!channel) throw new Error('Kênh không tồn tại')
+    if (channel.platform !== 'shopee') throw new Error(`Mới làm cho Shopee, kênh này là ${channel.platform}`)
+    if (!channel.accessToken) throw new Error('Kênh Shopee chưa kết nối (thiếu access token)')
+
+    const shopee = new ShopeeService({
+        apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+        accessToken: channel.accessToken || undefined,
+        refreshToken: channel.refreshToken || undefined,
+        shopId: channel.shopId || undefined,
+    })
+    if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+        try {
+            const tokens = await shopee.refreshAccessToken();
+            (shopee as any).credentials.accessToken = tokens.accessToken;
+            (shopee as any).credentials.refreshToken = tokens.refreshToken
+            await prisma.onlineChannel.update({
+                where: { id: channel.id },
+                data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+            })
+        } catch { /* token cũ có thể vẫn còn dùng được — để lời gọi thật báo lỗi */ }
+    }
+    const returnSn = String(phieu.code || '').replace(/^RTN-(TT|SH)-/, '')
+    if (!returnSn) throw new Error('Không đọc được mã vụ trả từ mã phiếu')
+    return { shopee, returnSn, channel }
+}
+
+/** GET /returns/:returnId/bang-chung — bằng chứng ĐÃ nộp cho vụ này. */
+router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
+        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+
+        const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+
+        let daNop: any = null, chuaNop = false, loi: string | null = null
+        try { daNop = await shopee.queryReturnProof(returnSn) }
+        catch (e: any) {
+            const m = String(e?.message || e)
+            // Chưa nộp lần nào thì Shopee trả LỖI NGHIỆP VỤ, không phải lỗi quyền —
+            // đừng hiện nó như hỏng hóc (đo 11/09/2026).
+            if (/proof not exist/i.test(m)) chuaNop = true
+            else loi = m.slice(0, 300)
+        }
+
+        let lyDoHopLe: any = null
+        try { lyDoHopLe = await shopee.getReturnDisputeReasons(returnSn) } catch { /* không chặn */ }
+
+        res.json({ success: true, data: { returnSn, chuaNop, daNop, lyDoHopLe, loi } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
+ * POST /returns/:returnId/bang-chung — nộp ảnh + ghi chú.
+ * Body: { anh: [{ ten, b64 }], ghiChu }
+ *
+ * Ảnh phải được THU NHỎ ở trình duyệt trước khi gửi: thân request bị chặn 10MB mà
+ * base64 phình ~33%, còn Shopee chặn 10MB mỗi ảnh.
+ */
+router.post('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const anhVao: any[] = Array.isArray(req.body?.anh) ? req.body.anh : []
+        const ghiChu = String(req.body?.ghiChu || '').trim()
+        if (!anhVao.length) { res.status(400).json({ success: false, error: 'Phải có ít nhất 1 ảnh' }); return }
+        if (anhVao.length > 5) { res.status(400).json({ success: false, error: 'Nhiều nhất 5 ảnh mỗi lần nộp' }); return }
+        if (!ghiChu) { res.status(400).json({ success: false, error: 'Phải có ghi chú (Shopee đọc phần này)' }); return }
+
+        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
+        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+
+        const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
+
+        /* Nạp TỪNG ảnh một. Không Promise.all: pool Prisma prod = 1 và Shopee cũng
+         * chặn tần suất — chạy song song là tự chuốc lỗi khó đọc. */
+        const cap: { url: string; thumbnail: string }[] = []
+        const loiAnh: string[] = []
+        for (const a of anhVao) {
+            const ten = String(a?.ten || 'bang-chung.jpg')
+            const b64 = String(a?.b64 || '').replace(/^data:[^;]+;base64,/, '')
+            if (!b64) { loiAnh.push(`${ten}: rỗng`); continue }
+            try {
+                const kq = await shopee.convertReturnImage(returnSn, new Uint8Array(Buffer.from(b64, 'base64')), ten)
+                const url = kq?.url || kq?.image_url
+                const th = kq?.thumbnail || kq?.thumbnail_url
+                if (!url) { loiAnh.push(`${ten}: Shopee trả về hình dạng lạ (${JSON.stringify(kq).slice(0, 120)})`); continue }
+                cap.push({ url: String(url), thumbnail: String(th || url) })
+            } catch (e: any) {
+                loiAnh.push(`${ten}: ${String(e?.message || e).slice(0, 160)}`)
+            }
+        }
+
+        if (!cap.length) {
+            res.status(400).json({ success: false, error: `Không nạp được ảnh nào lên Shopee. ${loiAnh.join(' | ')}`.slice(0, 400) })
+            return
+        }
+
+        await shopee.uploadReturnProof(returnSn, { photo: cap, description: ghiChu })
+
+        // Nghiệm thu BẰNG NỘI DUNG: hỏi lại Shopee xem đã thấy bằng chứng chưa,
+        // đừng coi "không ném lỗi" là đã nộp xong.
+        let sauKhiNop: any = null
+        try { sauKhiNop = await shopee.queryReturnProof(returnSn) } catch { /* không chặn */ }
+
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user?.userId,
+                    userName: req.user?.email || 'system',
+                    action: 'upload_return_proof',
+                    entity: 'ReturnOrder',
+                    entityId: phieu.id,
+                    details: JSON.stringify({ returnSn, soAnh: cap.length, ghiChu, loiAnh }),
+                },
+            })
+        } catch { }
+
+        res.json({
+            success: true,
+            data: { returnSn, daNop: cap.length, boQua: loiAnh, sauKhiNop },
+            ...(loiAnh.length ? { warning: `${loiAnh.length} ảnh không lên được: ${loiAnh.join(' | ')}`.slice(0, 300) } : {}),
+        })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  SYNC RETURNS FROM SHOPEE / TIKTOK
 // ═══════════════════════════════════════════════════════════════════════════════
 
