@@ -4631,6 +4631,53 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO PHIẾU TRẢ SHOPEE — GET /admin/do-phieu-tra-shopee?storeCode=&soLuong=
+ *
+ * Nút "Nộp bằng chứng" trên web tra kênh qua `ReturnOrder.channelId`; cột này được
+ * điền LƯỜI (lúc mở danh sách trả hàng) nên phiếu cũ có thể còn trống ⇒ bấm nút sẽ
+ * báo lỗi. Bộ này đếm trước xem bao nhiêu phiếu đủ điều kiện, thay vì để chủ shop
+ * bấm rồi mới biết. CHỈ ĐỌC.
+ */
+router.get('/do-phieu-tra-shopee', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const soLuong = Math.min(50, Math.max(1, parseInt(String(req.query.soLuong || '15'), 10) || 15))
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const ds = await sp.returnOrder.findMany({
+            where: { code: { startsWith: 'RTN-SH-' } },
+            orderBy: { createdAt: 'desc' },
+            take: soLuong,
+        })
+        const rows = ds.map((r: any) => ({
+            id: r.id, code: r.code,
+            returnSn: String(r.code || '').replace(/^RTN-(TT|SH)-/, '') || null,
+            coKenh: !!r.channelId,
+            trangThai: r.status,
+            ngay: r.createdAt,
+        }))
+        const thieuKenh = rows.filter((r: any) => !r.coKenh).length
+        const tongThieu = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-SH-' }, channelId: null } })
+        const tong = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-SH-' } } })
+
+        res.json({
+            success: true,
+            data: {
+                tongPhieuShopee: tong, tongThieuKenh: tongThieu,
+                trongMau: rows.length, mauThieuKenh: thieuKenh, mau: rows,
+                yNghia: tongThieu === 0
+                    ? 'Mọi phiếu Shopee đều có kênh ⇒ nút Nộp bằng chứng bấm được ở tất cả.'
+                    : `${tongThieu}/${tong} phiếu chưa có channelId ⇒ bấm nút ở mấy phiếu đó sẽ báo lỗi. Mở tab Trả hàng một lượt để hệ thống điền lười, rồi đo lại.`,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * THỬ NỘP BẰNG CHỨNG KHIẾU NẠI — POST /admin/nop-bang-chung-thu
  *   { storeCode, channelId?, returnSn, anhUrl | anhB64, tenFile?, ghiChu, apply? }
  *
