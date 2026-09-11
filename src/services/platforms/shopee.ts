@@ -1618,7 +1618,7 @@ export class ShopeeService extends PlatformService {
      * Model list của 1 item (để build models[] cho add items — mỗi model cần
      * input_promo_price + stock riêng). Item không phân loại → mảng rỗng.
      */
-    async getModelList(itemId: number): Promise<{ model_id: number; price: number; stock: number; name: string }[]> {
+    async getModelList(itemId: number): Promise<{ model_id: number; price: number; stock: number; name: string; sku: string }[]> {
         const url = `${this.apiUrl('/api/v2/product/get_model_list')}&item_id=${itemId}`
         const data = await this.httpGet(url)
         if (data.error) throw new Error(`Shopee get_model_list: ${data.error} - ${data.message}`)
@@ -1626,6 +1626,11 @@ export class ShopeeService extends PlatformService {
         return models.map((m: any) => ({
             model_id: m.model_id,
             name: m.model_name || '',
+            /* SKU CỦA TỪNG PHÂN LOẠI (11/09/2026). Thiếu nó thì không biết phân loại
+             * nào ứng với mã hàng nào trong kho — mà đẩy tồn hàng có phân loại BẮT
+             * BUỘC phải gửi đúng `model_id`, gửi vào nhầm phân loại là sai tồn của
+             * một mặt hàng khác. Shopee có trả `model_sku`, trước chỉ chưa lấy. */
+            sku: m.model_sku || '',
             // GIÁ GỐC làm chuẩn tính % giảm flash sale (Shopee validate 5–90% so
             // với original_price; current_price có thể đã dính KM khác → sai chuẩn).
             price: m.price_info?.[0]?.original_price ?? m.price_info?.[0]?.current_price ?? 0,

@@ -4566,6 +4566,66 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * PHÂN LOẠI CỦA MỘT LISTING SHOPEE — GET /admin/do-phan-loai-shopee
+ *   ?storeCode=&channelId=&onlineProductId=
+ *
+ * 11/09/2026: đẩy tồn SHD1072 bị Shopee từ chối "model_id is mandatory if item is
+ * under model level". Hàng có phân loại thì tồn nằm ở TỪNG phân loại, mà mình chỉ
+ * gửi id listing cha. Bộ này hỏi thẳng Shopee xem listing đó có mấy phân loại, mã
+ * và tồn từng cái — phải nhìn hình dạng dữ liệu thật rồi mới viết luật ghép.
+ * CHỈ ĐỌC (gọi get_model_list, không ghi gì).
+ */
+router.get('/do-phan-loai-shopee', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const channelId = String(req.query.channelId || '').trim()
+        const opId = String(req.query.onlineProductId || '').trim()
+        if (!storeCode || !channelId || !opId) {
+            res.status(400).json({ success: false, error: 'Cần storeCode, channelId, onlineProductId' }); return
+        }
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const ch = await sp.onlineChannel.findUnique({ where: { id: channelId } })
+        if (!ch || ch.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Kênh không phải Shopee' }); return }
+        const lt = await sp.onlineProduct.findUnique({ where: { id: opId } })
+        if (!lt) { res.status(404).json({ success: false, error: 'Không thấy listing' }); return }
+
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const svc = new ShopeeService({
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        })
+        const models = await svc.getModelList(Number(lt.platformProductId))
+
+        // Ghép thử theo SKU để biết luật khớp có đi được không — CHƯA đẩy gì.
+        const skuListing = String(lt.sku || '').trim().toLowerCase()
+        const khop = models.filter(m => String(m.sku || '').trim().toLowerCase() === skuListing)
+
+        res.json({
+            success: true,
+            data: {
+                listing: { id: lt.id, sku: lt.sku, ten: String(lt.name || '').slice(0, 60), itemId: lt.platformProductId, tonGhiNhan: lt.stock },
+                soPhanLoai: models.length,
+                phanLoai: models.map(m => ({ model_id: m.model_id, sku: m.sku, ten: m.name, tonTrenSan: m.stock, gia: m.price })),
+                khopTheoSku: khop.length,
+                yNghia: models.length === 0
+                    ? 'Listing KHÔNG có phân loại — đẩy tồn bằng item_id là đủ, lỗi model_id không phải từ đây.'
+                    : khop.length === 1
+                        ? 'Có đúng MỘT phân loại trùng SKU listing ⇒ ghép được, đẩy vào model_id đó.'
+                        : models.length === 1
+                            ? 'Chỉ có MỘT phân loại ⇒ đẩy vào nó, không cần đoán.'
+                            : 'NHIỀU phân loại mà không cái nào trùng SKU ⇒ KHÔNG được đoán, phải khai tay phân loại nào ứng mã kho nào.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐẨY TỒN THỬ — POST /admin/day-ton-thu
  * Body: { storeCode, channelId, onlineProductIds: [...], apply?: true }
  *
