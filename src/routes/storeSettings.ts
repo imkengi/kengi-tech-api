@@ -54,6 +54,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 address: store?.address || '',
                 phone: store?.phone || '',
                 logo: store?.logo || '',
+                /* Thông tin công ty IN LÊN PHIẾU. Bảng có cột từ lâu nhưng đường này
+                 * không trả, và PUT không nhận ⇒ MST/email/website chưa bao giờ đi
+                 * được giữa các máy: chủ shop báo 11/09/2026 "in thử mà các biến thông
+                 * tin công ty không nhảy theo". Máy chủ là bản gốc cho mọi máy. */
+                taxCode: store?.taxCode || '',
+                email: store?.email || '',
+                website: store?.website || '',
                 costPriceMethod: store?.costPriceMethod || 'fixed',
                 trackSerial: store?.trackSerial ?? false,
                 trackBatch: store?.trackBatch ?? false,
@@ -88,7 +95,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, address, phone, logo, costPriceMethod, trackSerial, trackBatch, allowNegativeStock, shiftConfig,
+        const { name, address, phone, logo, taxCode, email, website, costPriceMethod, trackSerial, trackBatch, allowNegativeStock, shiftConfig,
             notifyLowStock, notifyNewOrder, notifyDailyReport, notifyWeeklyReport,
             openTime, closeTime, dailyRevenueTarget, monthlyRevenueTarget, dailyOrderTarget,
             driveFolderId, driveAppsScriptUrl } = req.body
@@ -130,6 +137,10 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
         if (address !== undefined) data.address = address
         if (phone !== undefined) data.phone = phone
         if (logo !== undefined) data.logo = logo
+        // Thông tin công ty in lên phiếu — xem chú thích ở GET.
+        if (taxCode !== undefined) data.taxCode = String(taxCode ?? '').trim() || null
+        if (email !== undefined) data.email = String(email ?? '').trim() || null
+        if (website !== undefined) data.website = String(website ?? '').trim() || null
         if (costPriceMethod !== undefined) data.costPriceMethod = costPriceMethod
         if (trackSerial !== undefined) data.trackSerial = Boolean(trackSerial)
         if (trackBatch !== undefined) data.trackBatch = Boolean(trackBatch)

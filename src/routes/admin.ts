@@ -4566,6 +4566,40 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * THÔNG TIN CÔNG TY IN LÊN PHIẾU — GET /admin/do-thong-tin-cong-ty
+ *
+ * 11/09/2026: chủ shop in thử, tên ra "Open Retail", địa chỉ/điện thoại/MST trống.
+ * Thông tin công ty ở web nằm trong localStorage TỪNG MÁY và nút Lưu chưa từng
+ * gửi lên máy chủ ⇒ phải biết máy chủ đang giữ gì trước khi cho mọi máy nạp từ đó
+ * (nạp mù một ô rỗng là XOÁ mất thông tin tốt đang nằm ở máy đã khai).
+ * CHỈ ĐỌC. Logo chỉ báo có/không + độ dài (base64 rất dài).
+ */
+router.get('/do-thong-tin-cong-ty', async (_req: Request, res: Response) => {
+    try {
+        const ds = await prisma.store.findMany({ select: { code: true, schema: true }, orderBy: { code: 'asc' } })
+        const ra: any[] = []
+        for (const st of ds) {
+            try {
+                const c: any = await getStorePrisma(st.schema).storeSettings.findFirst({
+                    select: { name: true, address: true, phone: true, taxCode: true, email: true, website: true, logo: true } as any,
+                })
+                ra.push({
+                    ma: st.code,
+                    ten: c?.name || null, diaChi: c?.address || null, dienThoai: c?.phone || null,
+                    mst: c?.taxCode || null, email: c?.email || null, website: c?.website || null,
+                    logo: c?.logo ? `có (${String(c.logo).length} ký tự)` : null,
+                })
+            } catch (e: any) {
+                ra.push({ ma: st.code, loi: String(e?.message || e).slice(0, 120) })
+            }
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * DANH SÁCH LIÊN KẾT KHO MẸ — GET /admin/kho-me
  *
  * Cho tab "Kho Mẹ" ở trang admin: cửa hàng nào đang mượn kho của ai. Đọc TỪNG
