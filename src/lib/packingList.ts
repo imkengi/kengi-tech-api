@@ -37,6 +37,9 @@ const CHON_HANG = { id: true, sku: true, name: true, stock: true, mergedIntoId: 
  * Thứ tự luật chép từ orderSync; KHÁC một chỗ có chủ ý: thành phần combo mà là mã
  * con thì cũng quy về mã mẹ (luật chủ shop áp cho mọi dòng), còn orderSync hiện
  * trừ thẳng vào mã thành phần.
+ * KHÔNG nuốt lỗi truy vấn: đọc hỏng mà coi như "không tra ra" thì dòng hiện thành
+ * "chưa liên kết" — sai mà trông như thật (bộ soát "đọc hỏng ≠ không có"). Lỗi nổi lên
+ * route trả 500 kèm lời, ai cũng thấy.
  */
 class BoPhanGiai {
     private theoId = new Map<string, HangKho | null>()
@@ -48,7 +51,7 @@ class BoPhanGiai {
 
     async layId(id: string): Promise<HangKho | null> {
         if (!this.theoId.has(id)) {
-            const p = await this.prisma.product.findUnique({ where: { id }, select: CHON_HANG }).catch(() => null)
+            const p = await this.prisma.product.findUnique({ where: { id }, select: CHON_HANG })
             this.theoId.set(id, p ? { ...p, mergedRate: Number(p.mergedRate) || 1 } : null)
         }
         return this.theoId.get(id) ?? null
@@ -58,7 +61,7 @@ class BoPhanGiai {
     private async laySku(sku: string): Promise<HangKho | null> {
         const k = sku.toLowerCase()
         if (!this.theoSku.has(k)) {
-            const ds = await this.prisma.product.findMany({ where: { sku: { equals: sku, mode: 'insensitive' } }, select: CHON_HANG, take: 2 }).catch(() => [])
+            const ds = await this.prisma.product.findMany({ where: { sku: { equals: sku, mode: 'insensitive' } }, select: CHON_HANG, take: 2 })
             this.theoSku.set(k, ds.length === 1 ? { ...ds[0], mergedRate: Number(ds[0].mergedRate) || 1 } : null)
         }
         return this.theoSku.get(k) ?? null
@@ -69,7 +72,7 @@ class BoPhanGiai {
         if (!this.anhXa.has(k)) {
             const m = await this.prisma.skuMapping.findFirst({
                 where: { platformSku: { equals: sku, mode: 'insensitive' }, OR: [{ platform: null }, { platform: platform || undefined }] },
-            }).catch(() => null)
+            })
             this.anhXa.set(k, m)
         }
         return this.anhXa.get(k)
@@ -81,7 +84,7 @@ class BoPhanGiai {
             const ds = await this.prisma.onlineProduct.findMany({
                 where: { channelId, localProductId: { not: null }, OR: [...(sku ? [{ sku }] : []), { name: ten }] },
                 select: { localProductId: true }, take: 2,
-            }).catch(() => [])
+            })
             this.listing.set(k, ds.length === 1 ? ds[0].localProductId : null)
         }
         return this.listing.get(k) ?? null
@@ -90,7 +93,7 @@ class BoPhanGiai {
     /** Thành phần combo (JSON trong Bundle.items) — thành phần theo productId, hoặc SKU. */
     private async layCombo(bundleId: string) {
         if (!this.combo.has(bundleId)) {
-            const b = await this.prisma.bundle.findUnique({ where: { id: bundleId } }).catch(() => null)
+            const b = await this.prisma.bundle.findUnique({ where: { id: bundleId } })
             let comps: any[] = []
             try { comps = JSON.parse(b?.items || '[]') } catch { comps = [] }
             const ra: { sp: HangKho; soLuong: number }[] = []
@@ -98,7 +101,7 @@ class BoPhanGiai {
                 let sp: HangKho | null = null
                 if (c?.productId) sp = await this.layId(String(c.productId))
                 else if (c?.sku) {
-                    const p = await this.prisma.product.findFirst({ where: { sku: String(c.sku) }, select: CHON_HANG }).catch(() => null)
+                    const p = await this.prisma.product.findFirst({ where: { sku: String(c.sku) }, select: CHON_HANG })
                     sp = p ? { ...p, mergedRate: Number(p.mergedRate) || 1 } : null
                 }
                 if (sp) ra.push({ sp, soLuong: Number(c?.quantity) || 1 })
