@@ -4566,6 +4566,31 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * DANH SÁCH LIÊN KẾT KHO MẸ — GET /admin/kho-me
+ *
+ * Cho tab "Kho Mẹ" ở trang admin: cửa hàng nào đang mượn kho của ai. Đọc TỪNG
+ * cửa hàng tuần tự (pool prod = 1). Cửa hàng đọc hỏng thì ghi `loi` riêng chứ
+ * không gộp thành "không dùng kho mẹ" — đọc hỏng ≠ không có.
+ */
+router.get('/kho-me', async (_req: Request, res: Response) => {
+    try {
+        const ds = await prisma.store.findMany({ select: { code: true, name: true, schema: true, status: true }, orderBy: { code: 'asc' } })
+        const ra: any[] = []
+        for (const st of ds) {
+            try {
+                const c = await getStorePrisma(st.schema).storeSettings.findFirst({ select: { khoMeMa: true } as any })
+                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: (c as any)?.khoMeMa || null })
+            } catch (e: any) {
+                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: null, loi: String(e?.message || e).slice(0, 120) })
+            }
+        }
+        res.json({ success: true, data: { cuaHang: ra, dangMuon: ra.filter(r => r.khoMe).length } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * BẬT / TẮT KHO MẸ — POST /admin/kho-me
  * Body: { con: 'KENGISTORE', me: 'HUTI' | null, apply?: true }
  *
