@@ -11,6 +11,60 @@ const TIKTOK_API = 'https://open-api.tiktokglobalshop.com'
 /** Đơn đã qua khâu ĐVVC lấy hàng — dùng để quyết có được lùi về `rts_time` không */
 const DA_QUA_LAY_HANG = new Set(['IN_TRANSIT', 'DELIVERED', 'COMPLETED'])
 
+/* ── Chọn LOẠI quyết định cho vụ trả (11/09/2026) ─────────────────────────────
+ * TikTok đòi `decision` khớp đúng loại + trạng thái vụ, sai là 25020004. Bảng dưới
+ * lấy NGUYÊN định nghĩa trong tài liệu Approve Return / Reject Return; ngoài các ca
+ * đó trả null — không đoán. Đo: vụ 4042242491051640263 = REFUND + đang chờ duyệt;
+ * vụ 4042223877292721302 = RETURN_AND_REFUND + BUYER_SHIPPED_ITEM + is_quick_refund. */
+export function quyetDinhDuyetTikTok(r: any): { ma: string; nhan: string } | null {
+    const loai = String(r?.return_type || ''), tt = String(r?.return_status || '')
+    if (loai === 'REFUND') return { ma: 'APPROVE_REFUND', nhan: 'Đồng ý hoàn tiền (khách không trả hàng)' }
+    if (loai === 'REPLACEMENT') return { ma: 'APPROVE_REPLACEMENT', nhan: 'Đồng ý đổi hàng' }
+    if (loai === 'RETURN_AND_REFUND') {
+        if (tt === 'RETURN_OR_REFUND_REQUEST_PENDING') return { ma: 'APPROVE_RETURN', nhan: 'Đồng ý cho khách trả hàng' }
+        if (tt === 'BUYER_SHIPPED_ITEM') return { ma: 'APPROVE_RECEIVED_PACKAGE', nhan: 'Chấp nhận bưu kiện trả hàng' }
+    }
+    return null
+}
+
+export function quyetDinhTuChoiTikTok(r: any): { ma: string; nhan: string } | null {
+    const loai = String(r?.return_type || ''), tt = String(r?.return_status || '')
+    if (loai === 'REFUND') return { ma: 'REJECT_REFUND', nhan: 'Từ chối yêu cầu hoàn tiền (khách không trả hàng)' }
+    if (loai === 'REPLACEMENT') return { ma: 'REJECT_REPLACEMENT', nhan: 'Từ chối yêu cầu đổi hàng' }
+    if (loai === 'RETURN_AND_REFUND') {
+        if (tt === 'RETURN_OR_REFUND_REQUEST_PENDING') return { ma: 'REJECT_RETURN', nhan: 'Từ chối yêu cầu trả hàng hoàn tiền' }
+        if (tt === 'BUYER_SHIPPED_ITEM') return { ma: 'REJECT_RECEIVED_PACKAGE', nhan: 'Từ chối kiện hàng khách gửi trả' }
+    }
+    return null
+}
+
+/**
+ * Vụ HOÀN TIỀN NHANH (Speedy Refund) đã tới bước kiện hàng: TikTok CẤM người bán từ
+ * chối — đo 11/09/2026, gửi REJECT_RECEIVED_PACKAGE bị trả 25011025 "covered by
+ * Speedy Refund. Do not retry". Seller Center chỉ cho: Chấp nhận bưu kiện, hoặc KHÁNG
+ * NGHỊ (trong 15 ngày) — kháng nghị KHÔNG có trong API (đã soát tài liệu Return/Refund,
+ * cả bản 202606). Cờ lấy thẳng từ bản ghi vụ: `is_quick_refund`.
+ */
+export const TIKTOK_HOAN_NHANH_THONG_BAO =
+    'Vụ được TikTok HOÀN TIỀN NHANH — người bán KHÔNG được từ chối kiện hàng. Chỉ còn hai cách: Chấp nhận bưu kiện, hoặc KHÁNG NGHỊ trên Seller Center (trong 15 ngày, kèm video đóng gói / mở hàng).'
+export const laHoanNhanhKhongTuChoiDuoc = (r: any) =>
+    !!r?.is_quick_refund && quyetDinhTuChoiTikTok(r)?.ma === 'REJECT_RECEIVED_PACKAGE'
+
+/** Mã lỗi TikTok hay gặp khi xử lý vụ trả → lời dễ hiểu; mã lạ giữ nguyên văn sàn. */
+const LOI_TIKTOK_VI: Record<number, string> = {
+    25011025: TIKTOK_HOAN_NHANH_THONG_BAO + ' Đừng gửi lại.',
+    25011010: 'Vụ đã chuyển cho nhân viên TikTok xem xét — người bán không thao tác được nữa, theo dõi trên Seller Center.',
+    25020004: 'Loại quyết định không khớp loại vụ.',
+    25020010: 'Vụ đã được duyệt, không từ chối được nữa.',
+    25020011: 'Kiện hàng trả về đã được xác nhận nhận rồi.',
+    25011013: 'Trạng thái vụ chưa cho chấp nhận kiện hàng (khách chưa gửi hàng về?).',
+}
+export function loiTikTokVi(d: any): string {
+    const code = Number(d?.code)
+    const vi = LOI_TIKTOK_VI[code]
+    return `[${code}] ${vi ? `${vi} (${String(d?.message || '').slice(0, 160)})` : (d?.message || 'lỗi không rõ')}`
+}
+
 export class TikTokService extends PlatformService {
     get platformName() { return 'tiktok' }
 
@@ -714,17 +768,22 @@ export class TikTokService extends PlatformService {
     }
 
     /**
-     * Approve a return/refund request — POST /return_refund/202309/returns/{return_id}/approve.
+     * DUYỆT vụ trả — POST /return_refund/202309/returns/{return_id}/approve.
+     *
+     * Bản cũ LUÔN gửi APPROVE_RETURN. Tài liệu Approve Return: vụ chỉ hoàn tiền phải là
+     * APPROVE_REFUND, khách đã gửi hàng về là APPROVE_RECEIVED_PACKAGE ("Chấp nhận bưu
+     * kiện trả hàng" trên Seller Center) — gửi sai loại là 25020004. Nay đọc vụ THẬT rồi
+     * mới chọn loại (quyetDinhDuyetTikTok).
      */
-    async approveReturn(returnId: string): Promise<void> {
-        const path = `/return_refund/202309/returns/${returnId}/approve`
-        const bodyObj = { decision: 'APPROVE_RETURN' }
-        const bodyStr = JSON.stringify(bodyObj)
-        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+    async approveReturn(returnId: string): Promise<{ ma: string; nhan: string }> {
+        const vu = await this.layVuTra(returnId)
+        const qd = quyetDinhDuyetTikTok(vu)
+        if (!qd) throw new Error(`TikTok không cho duyệt vụ loại ${vu?.return_type || '?'} ở trạng thái ${vu?.return_status || '?'}`)
+        const bodyObj = { decision: qd.ma }
+        const { url, headers } = this.buildUrl(`/return_refund/202309/returns/${returnId}/approve`, {}, JSON.stringify(bodyObj))
         const data = await this.httpPost(url, bodyObj, headers)
-        if (data.code !== 0) {
-            throw new Error(`TikTok approveReturn: [${data.code}] ${data.message || 'Unknown error'}`)
-        }
+        if (data.code !== 0) throw new Error(`TikTok duyệt: ${loiTikTokVi(data)}`)
+        return qd
     }
 
     /* ── TỪ CHỐI / KHIẾU NẠI VỤ TRẢ (11/09/2026) ────────────────────────────────
@@ -795,7 +854,7 @@ export class TikTokService extends PlatformService {
         if (p.images.length) bodyObj.images = p.images
         const { url, headers } = this.buildUrl(`/return_refund/202309/returns/${returnId}/reject`, {}, JSON.stringify(bodyObj))
         const d = await this.httpPost(url, bodyObj, headers)
-        if (d.code !== 0) throw new Error(`TikTok từ chối: [${d.code}] ${d.message || ''}`)
+        if (d.code !== 0) throw new Error(`TikTok từ chối: ${loiTikTokVi(d)}`)
         return d.data ?? {}
     }
 

@@ -2738,6 +2738,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { getPlatformService, isSupportedPlatform, TikTokService, LazadaService, type PlatformOrder } from '../services/platforms'
+import { quyetDinhTuChoiTikTok, laHoanNhanhKhongTuChoiDuoc, TIKTOK_HOAN_NHANH_THONG_BAO } from '../services/platforms/tiktok'
 import { processNewOrders, convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 
@@ -4937,7 +4938,16 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             res.status(404).json({ success: false, error: 'Không tìm thấy yêu cầu trả hàng' })
             return
         }
-        if (returnOrder.status !== 'pending') {
+        /* "Chấp nhận bưu kiện trả hàng" (TikTok, 11/09/2026): khách ĐÃ gửi hàng về thì
+         * returnSync map BUYER_SHIPPED_ITEM → 'approved', nên chặn cứng 'pending' làm việc
+         * này không làm được từ app. Cho riêng DUYỆT phiếu TikTok 'approved' — approveReturn
+         * đọc vụ THẬT và chỉ gửi APPROVE_RECEIVED_PACKAGE khi TikTok nói khách đã gửi;
+         * trạng thái khác thì TikTok/ hàm chọn loại trả lỗi, không có gì bị ghi. Phiếu
+         * 'approved' chưa hạch toán hoàn tiền (chỉ 'refunded' mới đảo) ⇒ không ghi trùng. */
+        const duyetKienHangTikTok = action === 'approve'
+            && returnOrder.status === 'approved'
+            && String(returnOrder.code || '').startsWith('RTN-TT-')
+        if (returnOrder.status !== 'pending' && !duyetKienHangTikTok) {
             res.status(400).json({ success: false, error: 'Yêu cầu đã được xử lý' })
             return
         }
@@ -5260,26 +5270,6 @@ async function tiktokChoPhieuTra(prisma: any, phieu: any) {
     return { tiktok, returnId, channel }
 }
 
-/**
- * `decision` TỪ CHỐI của TikTok, suy theo ĐÚNG định nghĩa trong tài liệu Reject Return:
- *   REFUND (chỉ hoàn tiền)                    → REJECT_REFUND
- *   REPLACEMENT (đổi hàng)                    → REJECT_REPLACEMENT
- *   RETURN_AND_REFUND đang chờ người bán duyệt → REJECT_RETURN
- *   RETURN_AND_REFUND khách đã gửi hàng về    → REJECT_RECEIVED_PACKAGE
- * Ngoài các ca đó trả null — KHÔNG đoán (TikTok cũng sẽ trả 25020004). Đo 11/09/2026:
- * vụ 4042242491051640263 là REFUND + RETURN_OR_REFUND_REQUEST_PENDING.
- */
-function quyetDinhTuChoiTikTok(r: any): { ma: string; nhan: string } | null {
-    const loai = String(r?.return_type || ''), tt = String(r?.return_status || '')
-    if (loai === 'REFUND') return { ma: 'REJECT_REFUND', nhan: 'Từ chối yêu cầu hoàn tiền (khách không trả hàng)' }
-    if (loai === 'REPLACEMENT') return { ma: 'REJECT_REPLACEMENT', nhan: 'Từ chối yêu cầu đổi hàng' }
-    if (loai === 'RETURN_AND_REFUND') {
-        if (tt === 'RETURN_OR_REFUND_REQUEST_PENDING') return { ma: 'REJECT_RETURN', nhan: 'Từ chối yêu cầu trả hàng hoàn tiền' }
-        if (tt === 'BUYER_SHIPPED_ITEM') return { ma: 'REJECT_RECEIVED_PACKAGE', nhan: 'Từ chối kiện hàng khách gửi trả' }
-    }
-    return null
-}
-
 /** Lý do TikTok đưa về CÙNG hình dạng màn Khiếu nại đang dùng cho Shopee. TikTok
  *  không chia ô theo lý do — bằng chứng là MỘT danh sách ảnh tuỳ chọn ⇒ một ô. */
 const O_ANH_TIKTOK = { moduleIndex: 1, yeuCau: 'Ảnh bằng chứng (không bắt buộc)', batBuoc: false }
@@ -5341,11 +5331,19 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
             catch (e: any) { loi.lyDo = String(e?.message || e).slice(0, 300) }
 
             let chiTiet: any = null, quyetDinh: { ma: string; nhan: string } | null = null
+            let hoanTienNhanh = false
             try {
                 const r = await tiktok.layVuTra(returnId)
                 if (r) {
+                    hoanTienNhanh = !!r.is_quick_refund
                     quyetDinh = quyetDinhTuChoiTikTok(r)
-                    if (!quyetDinh) loi.quyetDinh = `TikTok không cho từ chối vụ loại ${r.return_type || '?'} ở trạng thái ${r.return_status || '?'}`
+                    if (laHoanNhanhKhongTuChoiDuoc(r)) {
+                        // TikTok cấm từ chối (25011025) — khoá TRƯỚC, đừng để bấm rồi mới lỗi.
+                        quyetDinh = null
+                        loi.quyetDinh = TIKTOK_HOAN_NHANH_THONG_BAO
+                    } else if (!quyetDinh) {
+                        loi.quyetDinh = `TikTok không cho từ chối vụ loại ${r.return_type || '?'} ở trạng thái ${r.return_status || '?'}`
+                    }
                     const han = (Array.isArray(r.seller_next_action_response) ? r.seller_next_action_response : [])
                         .map((a: any) => Number(a?.deadline) || 0).filter(Boolean)
                     chiTiet = {
@@ -5382,7 +5380,7 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
                 }
             } catch (e: any) { loi.lichSu = String(e?.message || e).slice(0, 300) }
 
-            res.json({ success: true, data: { san: 'tiktok', returnSn: returnId, lyDo, chiTiet, quyetDinh, chuaNop: false, daNop: null, emailGoiY: null, loi } })
+            res.json({ success: true, data: { san: 'tiktok', returnSn: returnId, lyDo, chiTiet, quyetDinh, hoanTienNhanh, chuaNop: false, daNop: null, emailGoiY: null, loi } })
             return
         }
 
@@ -5505,6 +5503,8 @@ router.post('/returns/:returnId/khieu-nai', authMiddleware, async (req: AuthRequ
             const lyDoTT = (await tiktok.layLyDoTuChoi(returnId)).find(x => x.name === tenLyDo)
             if (!lyDoTT) { res.status(400).json({ success: false, error: 'Lý do này không còn trong danh sách TikTok cho vụ — đóng form mở lại để tải danh sách mới' }); return }
             const vu = await tiktok.layVuTra(returnId)
+            // Hoàn tiền nhanh: TikTok dặn "Do not retry" — chặn ở đây, không gửi lên nữa.
+            if (laHoanNhanhKhongTuChoiDuoc(vu)) { res.status(400).json({ success: false, error: TIKTOK_HOAN_NHANH_THONG_BAO }); return }
             const qd = quyetDinhTuChoiTikTok(vu)
             if (!qd) { res.status(400).json({ success: false, error: `TikTok không cho từ chối vụ loại ${vu?.return_type || '?'} ở trạng thái ${vu?.return_status || '?'}` }); return }
 
