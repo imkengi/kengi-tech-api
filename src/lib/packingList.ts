@@ -170,6 +170,13 @@ async function nhanThuocNhom(prisma: any, key: string): Promise<string[]> {
     return rows.map(r => String(r.shippingCarrier || '')).filter(t => t && khoaNhomDVVC(t) === key)
 }
 
+/** Cho BỘ ĐO: phân giải MỘT dòng giả (sku / productId, số lượng) y như packing list —
+ *  kiểm luật mã con / combo khi chưa có đơn thật nào đi qua. Chỉ đọc. */
+export async function thuPhanGiai(prisma: any, dong: { sku?: string | null; productId?: string | null; quantity?: number; productName?: string }, platform: string | null = null, channelId: string | null = null) {
+    const kq = await new BoPhanGiai(prisma).phanGiai({ quantity: 1, ...dong }, platform, channelId)
+    return kq ? kq.map(x => ({ productId: x.sp.id, sku: x.sp.sku, ten: x.sp.name, soLuongKho: x.soLuong, loai: x.loai })) : null
+}
+
 export async function dungPackingList(prisma: any, ts: ThamSoPackingList) {
     /* Lấy mốc GIỮA TRƯA của ngày rồi mới cắt biên: `new Date('YYYY-MM-DD')` là
      * 00:00 UTC = 07:00 VN cùng ngày (may) hoặc lệch hẳn sang hôm trước. */

@@ -4703,9 +4703,18 @@ router.get('/do-ma-con-combo', async (req: Request, res: Response) => {
             if (laCb) theoNgay[ngay].combo++; else theoNgay[ngay].maCon++
             if (mau.length < 12) mau.push({ ngay, don: d.onlineOrder.orderNumber, sku: d.sku, sl: d.quantity, loai: laCb ? 'combo' : 'ma-con' })
         }
+        // ?thuSku=A,B : phân giải thẳng từng mã (2 đơn vị) bằng CHÍNH bộ phân giải của packing list.
+        const thu: any[] = []
+        const thuSku = String(req.query.thuSku || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 5)
+        if (thuSku.length) {
+            const { thuPhanGiai } = await import('../lib/packingList')
+            for (const s of thuSku) thu.push({ sku: s, soLuongSan: 2, ra: await thuPhanGiai(sp, { sku: s, quantity: 2 }) })
+        }
+
         res.json({
             success: true,
             data: {
+                thu,
                 soMaCon: maCon.length, soMaCombo: maCombo.length, soAnhXaCombo: axCombo.length,
                 maConMau: maCon.slice(0, 8), soDongDaQuet: dong.length, soNgay,
                 ngayCoQuyDoi: Object.entries(theoNgay).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 20),
