@@ -39,12 +39,30 @@ trả hàng Shopee ngay trong app, không phải sang seller center.
 - [x] BE `deebb8f`: `guiFileMultipart` + `convertReturnImage` + `uploadReturnProof`
       + `POST /admin/nop-bang-chung-thu`. `npx tsc --noEmit` sạch.
 
+- [x] `deebb8f` lên prod. Chạy thử `nop-bang-chung-thu` (không apply) trên vụ
+      `2609080FMFRT1EM`: ảnh 48KB lên được, Shopee trả **đúng hai khoá `url` và
+      `thumbnail`** (host `fileproxy.scsusercontent.com`).
+- [x] BE `8398a64`: `GET/POST /online-orders/returns/:id/bang-chung` (có auth,
+      dùng cho web). Nạp từng ảnh, ảnh nào hỏng báo riêng; nghiệm thu bằng
+      `query_proof` sau khi nộp; ghi `auditLog upload_return_proof`.
+- [x] FE `4f4055b`: `BangChungKhieuNaiModal` + nút trong tab Trả hàng (chỉ vụ
+      Shopee có `returnSn`). Ảnh tự thu về 1600px/JPEG 0.82 ở trình duyệt.
+      `npx tsc --noEmit` = **157 lỗi, đúng baseline, 0 lỗi mới**.
+      Đã deploy; đối chứng gói thật trên prod: chuỗi `bang-chung` có trong
+      `/_next/static/chunks/1042-8c6d433b4d305768.js` (1/39 chunk).
+- [x] BE `ecd591f` + đo: **358 phiếu trả Shopee, 0 phiếu thiếu `channelId`**
+      ⇒ nút bấm được ở tất cả, không phiếu nào rơi vào nhánh báo lỗi.
+
 ## Đang làm / Tiếp theo
-- [ ] Chờ CI deploy `deebb8f`, đối chứng `build.sha` ở `/api/health`.
-- [ ] Chạy thử `nop-bang-chung-thu` (không apply) để **đo tên khoá** `convert_image`
-      trả về — hàm bóc khoá hiện chấp nhận `url|image_url|image.url` và
-      `thumbnail|thumbnail_url|image.thumbnail`; lạ hơn thì phải sửa theo số thật.
-- [ ] Có cặp url/thumbnail rồi mới tính tới nút trên web.
+- [ ] **Chưa nộp thật lần nào.** Nộp bằng chứng là thao tác ra ngoài, người mua và
+      Shopee nhìn thấy, gỡ không được ⇒ chủ shop tự bấm. Vụ đang treo để thử:
+      `2609080FMFRT1EM`, `2609100NK6HF2CC`.
+- [ ] Chưa xem được giao diện chạy thật (phải đăng nhập bằng tài khoản chủ shop —
+      không tự đăng nhập). Mới đối chứng tới mức gói JS trên prod có mã mới.
+- [ ] Mã lý do khiếu nại vẫn gõ cứng `reason || 2` ở `disputeReturn`. Đã có
+      `getReturnDisputeReasons` và GET `/bang-chung` trả kèm `lyDoHopLe`, nhưng
+      **chưa nối vào nút Từ chối** — làm sau nếu chủ shop cần.
+- [ ] TikTok: chưa có đường nộp bằng chứng, nút tự ẩn.
 
 ## Bẫy đã gặp
 - Máy không có `php` (cả Windows lẫn WSL) ⇒ không kiểm được cú pháp cục bộ.
