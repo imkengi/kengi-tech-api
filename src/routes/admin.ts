@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
-import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, dropStoreSchema, dropBranchSchema, taoBangTuSqlDungSan, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
 import { chayTheoDot } from '../lib/poolGuard'
 import { khoHuHong } from '../lib/warehouseHelper'
 import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
@@ -11101,6 +11101,72 @@ router.get('/online-live-check', async (req: Request, res: Response) => {
         })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/* ─── POST /admin/thu-tao-schema — ĐO đường tạo bảng mới (11/09/2026) ─────────
+ * Đăng ký cửa hàng giờ tạo bảng từ dist/store-schema.sql thay vì `npx prisma db
+ * push` (lib/prisma.ts, taoBangTuSqlDungSan). Bộ đo này tạo một schema TẠM bằng
+ * đường mới, so từng cột / chỉ mục / ràng buộc với schema của một cửa hàng thật
+ * đã tạo bằng db push (?so=<schema>, mặc định cửa hàng mới đăng ký nhất), rồi
+ * XOÁ schema tạm. Không dùng đường lùi db push — hỏng thì báo hỏng. */
+router.post('/thu-tao-schema', async (req: Request, res: Response) => {
+    const tam = `thu_tao_bang_${Date.now()}`
+    try {
+        let so = String((req.query as any)?.so || '')
+        if (!so) {
+            const moiNhat = await registryPrisma.store.findFirst({ orderBy: { createdAt: 'desc' }, select: { schema: true, code: true } })
+            so = moiNhat?.schema || ''
+        }
+        if (!/^[a-z0-9_]+$/.test(so)) return res.status(400).json({ success: false, error: `schema so sánh không hợp lệ: "${so}"` })
+
+        await registryPrisma.$executeRawUnsafe(`CREATE SCHEMA "${tam}"`)
+        const t0 = Date.now()
+        const soCau = await taoBangTuSqlDungSan(tam)
+        const thoiGianMs = Date.now() - t0
+        if (!soCau) return res.status(500).json({ success: false, error: 'Không có dist/store-schema.sql trên máy chủ' })
+
+        // Tên schema nằm trong định nghĩa chỉ mục / khoá / mặc định → thay bằng <S> rồi mới so
+        const chuan = (s: string, schema: string) => String(s ?? '').split(`"${schema}".`).join('').split(`${schema}.`).join('')
+        const layBo = async (schema: string) => {
+            const cot = await registryPrisma.$queryRawUnsafe<any[]>(
+                `SELECT table_name, column_name, data_type, udt_name, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $1`, schema)
+            const chiMuc = await registryPrisma.$queryRawUnsafe<any[]>(
+                `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1`, schema)
+            const rangBuoc = await registryPrisma.$queryRawUnsafe<any[]>(
+                `SELECT c.conname, c.conrelid::regclass::text AS bang, pg_get_constraintdef(c.oid) AS dinh
+                 FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = $1`, schema)
+            return {
+                cot: new Set(cot.map(r => `${r.table_name}.${r.column_name} ${r.udt_name} ${r.is_nullable} ${chuan(r.column_default, schema)}`)),
+                chiMuc: new Set(chiMuc.map(r => chuan(r.indexdef, schema))),
+                rangBuoc: new Set(rangBuoc.map(r => `${chuan(r.bang, schema)} ${r.conname} ${chuan(r.dinh, schema)}`)),
+                soBang: new Set(cot.map(r => r.table_name)).size,
+            }
+        }
+        const a = await layBo(so)
+        const b = await layBo(tam)
+        const lech = (x: Set<string>, y: Set<string>) => ({
+            thieuSoVoiMau: [...x].filter(k => !y.has(k)),
+            thuaSoVoiMau: [...y].filter(k => !x.has(k)),
+        })
+        const cot = lech(a.cot, b.cot), chiMuc = lech(a.chiMuc, b.chiMuc), rangBuoc = lech(a.rangBuoc, b.rangBuoc)
+        const khop = [cot, chiMuc, rangBuoc].every(d => !d.thieuSoVoiMau.length && !d.thuaSoVoiMau.length)
+        res.json({
+            success: true,
+            data: {
+                khop, soCau, thoiGianMs, soSanhVoi: so,
+                mau: { bang: a.soBang, cot: a.cot.size, chiMuc: a.chiMuc.size, rangBuoc: a.rangBuoc.size },
+                tam: { bang: b.soBang, cot: b.cot.size, chiMuc: b.chiMuc.size, rangBuoc: b.rangBuoc.size },
+                cot: { thieu: cot.thieuSoVoiMau.slice(0, 30), thua: cot.thuaSoVoiMau.slice(0, 30) },
+                chiMuc: { thieu: chiMuc.thieuSoVoiMau.slice(0, 30), thua: chiMuc.thuaSoVoiMau.slice(0, 30) },
+                rangBuoc: { thieu: rangBuoc.thieuSoVoiMau.slice(0, 30), thua: rangBuoc.thuaSoVoiMau.slice(0, 30) },
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    } finally {
+        // Chỉ xoá đúng schema tạm vừa tạo (tên có tiền tố cố định)
+        if (tam.startsWith('thu_tao_bang_')) await dropBranchSchema(tam).catch(e => console.error('[thu-tao-schema] xoá schema tạm hỏng:', e?.message))
     }
 })
 

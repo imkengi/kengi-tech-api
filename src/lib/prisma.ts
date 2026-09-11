@@ -16,6 +16,8 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { execSync } from 'child_process'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
 import { chonClientDeThai } from './thaiClientNhanRoi'
 
 const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
@@ -159,6 +161,46 @@ if (NHAN_ROI_MS > 0) {
 
 // ─── Schema Management ──────────────────────────────────────────────────────
 
+/* TẠO BẢNG BẰNG SQL DỰNG SẴN (11/09/2026).
+ *
+ * Trước đây createBranchSchema chạy `npx prisma db push` bằng execSync: đẻ thêm
+ * npm + Prisma CLI + schema engine (vài trăm MB) ngay cạnh máy chủ đang chạy.
+ * Đo 11/09 20:36: đăng ký cửa hàng RONRON đẩy instance lên 543/512 MiB, Cloud
+ * Run giết container giữa chừng → khách nhận 503 sau 12,8 s, cửa hàng kẹt lại
+ * với chi nhánh mà KHÔNG có tài khoản nào. execSync còn chặn event loop cả
+ * ~10 s — mọi cửa hàng khác đứng theo trong lúc có người đăng ký.
+ *
+ * dist/store-schema.sql sinh lúc build (npm run build) bằng
+ * `prisma migrate diff --from-empty --to-schema-datamodel` — cùng bộ máy so khác
+ * mà db push dùng, nên ra đúng các câu db push sẽ chạy trên schema rỗng. Chạy
+ * trong MỘT giao dịch: hỏng câu nào thì cuộn lại hết, schema vẫn rỗng. */
+const TEP_SQL_TAO_BANG = [join(__dirname, 'store-schema.sql'), join(process.cwd(), 'dist', 'store-schema.sql')]
+let cauTaoBang: string[] | null = null
+
+function docCauTaoBang(): string[] {
+    if (cauTaoBang) return cauTaoBang
+    const tep = TEP_SQL_TAO_BANG.find(p => existsSync(p))
+    if (!tep) return []
+    cauTaoBang = readFileSync(tep, 'utf8')
+        .split(/;\s*\n/)
+        .map(cau => cau.replace(/^\s*--.*$/gm, '').trim())
+        // "CREATE SCHEMA IF NOT EXISTS public" của migrate diff — schema đích đã tạo ở bước 1
+        .filter(cau => cau && !/^CREATE SCHEMA/i.test(cau))
+    return cauTaoBang
+}
+
+/** Trả số câu đã chạy; 0 = không có file SQL (chạy từ mã nguồn, chưa build). */
+async function taoBangTuSqlDungSan(schemaName: string): Promise<number> {
+    const cacCau = docCauTaoBang()
+    if (!cacCau.length) return 0
+    await getStorePrisma(schemaName).$transaction(async (tx) => {
+        // Câu SQL không ghi tên schema — ép search_path để bảng rơi đúng vào schema mới
+        await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schemaName}"`)
+        for (const cau of cacCau) await tx.$executeRawUnsafe(cau)
+    }, { maxWait: 20_000, timeout: 180_000 })
+    return cacCau.length
+}
+
 /**
  * Create a new PostgreSQL schema and push all branch tables into it.
  * Called at signup (main branch) and when adding new branches.
@@ -171,7 +213,21 @@ async function createBranchSchema(schemaName: string): Promise<void> {
     await registryPrisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`)
     console.log(`📦 Schema created: ${schemaName}`)
 
-    // 2. Push tables using prisma db push
+    // 2a. Tạo bảng từ SQL dựng sẵn lúc build — KHÔNG đẻ tiến trình con (xem taoBangTuSqlDungSan)
+    try {
+        const t0 = Date.now()
+        const soCau = await taoBangTuSqlDungSan(schemaName)
+        if (soCau > 0) {
+            console.log(`✅ Tables created from store-schema.sql: ${schemaName} (${soCau} câu, ${Date.now() - t0} ms)`)
+            return
+        }
+        console.warn(`⚠️ Không có dist/store-schema.sql — ${schemaName} tạo bảng bằng prisma db push`)
+    } catch (err: any) {
+        // Giao dịch đã cuộn lại ⇒ schema vẫn rỗng, đường cũ bên dưới chạy như trước
+        console.warn(`⚠️ store-schema.sql lỗi cho ${schemaName}: ${err?.message} — chuyển sang prisma db push`)
+    }
+
+    // 2b. Đường cũ: prisma db push (tiến trình con, nặng — chỉ còn là đường lùi)
     const base = getBaseDbUrl()
     const sep = base.includes('?') ? '&' : '?'
     const schemaUrl = `${base}${sep}schema=${schemaName}`
@@ -391,6 +447,7 @@ export {
     getStorePrisma,
     branchIdToSchema,
     createBranchSchema,
+    taoBangTuSqlDungSan,
     syncBranchSchemaTables,
     dropBranchSchema,
     disconnectAll,

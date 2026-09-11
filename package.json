@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "npx tsx watch src/index.ts",
-    "build": "npx prisma generate && npx prisma generate --schema=prisma/schema-store.prisma && npx esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --packages=external --format=cjs",
+    "build": "npx prisma generate && npx prisma generate --schema=prisma/schema-store.prisma && npx esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --packages=external --format=cjs && npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema-store.prisma --script --output dist/store-schema.sql",
     "build:tsc": "tsc",
     "check:mcp": "npx tsx scripts/check-mcp-tools.ts",
     "check:marketing": "npx tsx scripts/check-marketing-gate.ts",
