@@ -24,6 +24,8 @@ interface MauIn {
     isDefault?: boolean
     isBuiltIn?: boolean
     daSuaTay?: boolean
+    /** Cố ý quay về mẫu gốc — cửa DUY NHẤT để mẫu không sửa tay đè được bản sửa tay. */
+    datLaiMacDinh?: boolean
     updatedAt?: string
 }
 
@@ -39,6 +41,7 @@ const chuanHoa = (t: any): MauIn | null => {
         isDefault: !!t.isDefault,
         isBuiltIn: !!t.isBuiltIn,
         daSuaTay: !!t.daSuaTay,
+        datLaiMacDinh: t.datLaiMacDinh === true,
         updatedAt: t.updatedAt ? String(t.updatedAt) : new Date().toISOString(),
     }
 }
@@ -89,8 +92,25 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         const daGhi: string[] = []
         const boQua: string[] = []
+        const giuSuaTay: string[] = []
         for (const t of ds) {
             const cu = await prisma.printTemplate.findUnique({ where: { id: t.id } }).catch(() => null)
+
+            /* BẢN SỬA TAY KHÔNG BAO GIỜ BỊ MẪU MẶC ĐỊNH ĐÈ — bất kể giờ ghi nói gì.
+             *
+             * Chủ shop báo 11/09/2026: "mẫu in không lưu vào DB, lấy máy khác mở nó
+             * không lưu cái cũ". Đo: CẢ 11 cửa hàng không còn một mẫu nào mang
+             * `daSuaTay`, dù trình soạn mẫu CÓ gắn cờ đó mỗi lần sửa ⇒ bản sửa từng
+             * lên máy chủ rồi bị đè.
+             *
+             * Thủ phạm: mẫu mặc định ở web đóng dấu `updatedAt: new Date()` NGAY LÚC
+             * TẢI TRANG, nên mở web ở máy khác là mẫu mặc định "mới hơn" mọi bản đã
+             * sửa; luật "bản mới hơn thắng" để nó đẩy lên và đè. Giờ ghi của một máy
+             * không nói được ai là bản thật — cờ `daSuaTay` mới nói được.
+             *
+             * `datLaiMacDinh` là cửa duy nhất để CỐ Ý quay về mẫu gốc. */
+            if (cu?.daSuaTay && !t.daSuaTay && !t.datLaiMacDinh) { giuSuaTay.push(t.id); continue }
+
             const moiHon = !cu || new Date(t.updatedAt!) >= new Date(cu.updatedAt)
             if (!moiHon) { boQua.push(t.id); continue }
 
@@ -109,7 +129,12 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             daGhi.push(t.id)
         }
 
-        res.json({ success: true, data: { daGhi: daGhi.length, boQuaVìCũHơn: boQua.length, boQua } })
+        if (giuSuaTay.length > 0) {
+            // Nói ra ở log: một máy vừa cố đẩy mẫu mặc định đè bản sửa tay — đó
+            // đúng là lỗi 11/09, giờ bị chặn; thấy dòng này là biết chốt đang làm việc.
+            console.log(`[MauIn] giữ ${giuSuaTay.length} mẫu SỬA TAY, không cho mẫu mặc định đè: ${giuSuaTay.join(', ')}`)
+        }
+        res.json({ success: true, data: { daGhi: daGhi.length, boQuaVìCũHơn: boQua.length, boQua, giuSuaTay } })
     } catch (err: any) {
         if (/does not exist|P2021/i.test(String(err?.message))) {
             return res.status(503).json({
