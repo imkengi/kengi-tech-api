@@ -4753,7 +4753,7 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
         /* Listing đang bán trên sàn mới là thứ THẬT SỰ cần tồn. Hàng kho không có
          * listing thì khớp hay không cũng không ảnh hưởng gì. */
         const listing: any[] = await spCon.onlineProduct.findMany({
-            select: { sku: true, name: true, localProductId: true, channelId: true },
+            select: { id: true, sku: true, name: true, localProductId: true, channelId: true, stock: true },
             take: 20000,
         })
         const skuHangCon = new Map<string, any>()
@@ -4768,6 +4768,7 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
          * chính cửa hàng bán sàn — mà cửa hàng mượn kho thì tồn của nó là 0/âm, đẩy
          * lên là khoá sạch hàng đang bán. Phải đếm ra con số, đừng suy từ vài dòng mẫu. */
         let seVeKhong = 0, khoMeCoHang = 0
+        const deThu: any[] = []
         for (const l of listing) {
             let hc: any = null
             if (l.localProductId) hc = hangCon.find(c => c.id === l.localProductId) || null
@@ -4779,6 +4780,18 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
             }
             lsCoKhoCon++
             if ((Number(hc.stock) || 0) <= 0) seVeKhong++
+            /* MÃ ĐỂ THỬ MỘT LISTING. Thử phải chọn mã mà tồn kho CON đang DƯƠNG: khi
+             * chưa bật kho mẹ, nút đẩy gửi tồn của kho con — mã tồn 0 thì "thử" hoá ra
+             * là đặt listing về 0, không chứng minh được gì mà còn khoá bán. */
+            else if (deThu.length < 5) {
+                const dsMe = theoSkuMe.get(String(hc.sku || '').trim().toLowerCase())
+                deThu.push({
+                    onlineProductId: l.id, channelId: l.channelId,
+                    sku: hc.sku, ten: String(l.name || '').slice(0, 44),
+                    tonKhoCon: hc.stock, tonKhoMe: dsMe?.length === 1 ? dsMe[0].stock : null,
+                    tonDangTrenSan: l.stock,
+                })
+            }
             const ds = theoSkuMe.get(String(hc.sku || '').trim().toLowerCase())
             if (ds && ds.length === 1) {
                 lsRaDuocMe++
@@ -4808,6 +4821,12 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
                     yNghia: 'chuaBatKhoMe_seDayVeKhong = số listing sẽ bị đẩy tồn về 0 nếu bấm "Đẩy tồn kho lên sàn" '
                         + 'KHI CHƯA bật kho mẹ (nút chạy thật ngay, không hỏi lại). '
                         + 'daBatKhoMe_khoMeConHang = số listing sẽ được đẩy tồn THẬT sau khi bật kho mẹ.',
+                },
+                deThuMotListing: {
+                    ds: deThu,
+                    cachChay: 'POST /api/online-orders/channels/<channelId>/push-stock  body {"onlineProductIds":["<onlineProductId>"]}  (JWT cửa hàng)',
+                    yNghia: 'Mấy mã này có tồn kho CON đang dương nên đẩy thử là gửi số THẬT, không khoá bán mã nào. '
+                        + 'Đẩy xong so tonDangTrenSan với tonKhoCon để biết đã lên hay chưa.',
                 },
                 viDuKhop, viDuKhongKhop, viDuKhopNhieu, viDuListingHong,
                 yNghia: 'listingRaDuocToiKhoMe là số listing SẼ đẩy được tồn từ kho mẹ. '
