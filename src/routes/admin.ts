@@ -4583,9 +4583,13 @@ router.get('/do-khieu-nai-tiktok', async (req: Request, res: Response) => {
         const sp: any = getStorePrisma(store.schema)
 
         const tongCho = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-TT-' }, status: 'pending' } })
-        const phieu: any[] = chiDinh.length
-            ? await sp.returnOrder.findMany({ where: { code: { in: chiDinh.map(x => `RTN-TT-${x}`) } } })
-            : await sp.returnOrder.findMany({ where: { code: { startsWith: 'RTN-TT-' }, status: 'pending' }, orderBy: { createdAt: 'desc' }, take: 4 })
+        // ?phieuId= : mã phiếu TRONG DB (log prod ghi đường /returns/<phieuId>/…).
+        const phieuId = String(req.query.phieuId || '').trim()
+        const phieu: any[] = phieuId
+            ? await sp.returnOrder.findMany({ where: { id: phieuId } })
+            : chiDinh.length
+                ? await sp.returnOrder.findMany({ where: { code: { in: chiDinh.map(x => `RTN-TT-${x}`) } } })
+                : await sp.returnOrder.findMany({ where: { code: { startsWith: 'RTN-TT-' }, status: 'pending' }, orderBy: { createdAt: 'desc' }, take: 4 })
 
         const { TikTokService } = await import('../services/platforms/tiktok')
         const svcTheoKenh = new Map<string, any>()
@@ -4625,6 +4629,29 @@ router.get('/do-khieu-nai-tiktok', async (req: Request, res: Response) => {
                 const h = await k.svc.goiTho('GET', `/return_refund/202309/returns/${rid}/records`, { locale: 'vi-VN' })
                 mot.lichSu = h?.code === 0 ? tom((h.data?.records || []).slice(0, 6)) : { code: h?.code, message: h?.message }
             } catch (e: any) { mot.lichSu = { loi: String(e?.message || e).slice(0, 200) } }
+            // Bản ghi vụ NGUYÊN (cắt 4KB) — tìm dấu hiệu "Hoàn tiền nhanh" (Speedy Refund):
+            // 11/09 chủ shop bấm từ chối kiện hàng, TikTok trả 25011025 "covered by Speedy Refund".
+            try {
+                const s = await k.svc.goiTho('POST', '/return_refund/202309/returns/search', { page_size: '1' }, { return_ids: [rid] })
+                mot.banGhiTho = tom(s?.data?.return_orders?.[0] ?? { code: s?.code, message: s?.message })
+            } catch (e: any) { mot.banGhiTho = { loi: String(e?.message || e).slice(0, 200) } }
+            // Get Review Decision 202606: TỪNG quyết định được/không được làm + lý do cấm
+            // (ineligible_code/_reason) — biết trước thì màn hình khoá từ đầu, khỏi bấm rồi lỗi.
+            // Cần seller_id: thử id của shop (getAuthorizedShops, khớp cipher của kênh).
+            try {
+                if (!k.sellerId) {
+                    const shops = await k.svc.getAuthorizedShops()
+                    const c = await sp.onlineChannel.findUnique({ where: { id: p.channelId }, select: { shopId: true } })
+                    k.sellerId = String(shops.find((x: any) => x?.cipher === c?.shopId)?.id || '')
+                }
+                mot.sellerIdDung = k.sellerId || null
+                if (k.sellerId) {
+                    const d = await k.svc.goiTho('GET', '/return_refund/202606/review_decision', { seller_id: k.sellerId, return_or_cancel_id: rid, locale: 'vi-VN' })
+                    mot.review_decision = tom(d)
+                } else {
+                    mot.review_decision = { loi: 'không khớp được shop theo cipher' }
+                }
+            } catch (e: any) { mot.review_decision = { loi: String(e?.message || e).slice(0, 200) } }
             theoVu.push(mot)
         }
         res.json({ success: true, data: { tongPhieuTikTokCho: tongCho, theoVu } })
@@ -4732,6 +4759,13 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
          * đó (evidence_module_list). Đo trên các vụ ĐANG TREO — vụ đã duyệt trả `{}`.
          * ?returnSn=a,b để chỉ định; mặc định lấy tối đa 4 vụ pending. TUẦN TỰ. */
         const chiDinh = String(req.query.returnSn || '').split(',').map(s => s.trim()).filter(Boolean)
+        // ?phieuId= : mã phiếu TRONG DB (log prod ghi đường /returns/<phieuId>/…) → returnSn.
+        const phieuId = String(req.query.phieuId || '').trim()
+        if (phieuId) {
+            const pp = await sp.returnOrder.findUnique({ where: { id: phieuId }, select: { code: true } })
+            const sn = String(pp?.code || '').replace(/^RTN-SH-/, '')
+            if (sn && !chiDinh.includes(sn)) chiDinh.unshift(sn)
+        }
         const cacVu = (chiDinh.length ? chiDinh : mau.filter(m => m.trangThai === 'pending').map(m => String(m.return_sn))).slice(0, 4)
         /* Kênh PHẢI lấy theo chính phiếu trả. KENGISTORE có nhiều gian Shopee và
          * findFirst không orderBy bốc gian nào tuỳ lần (đo 11/09: lần Kengi Tools,
