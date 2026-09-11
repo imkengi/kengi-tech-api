@@ -61,6 +61,8 @@ hàng của thuế. Nó mượn kho HUTI để đẩy data lên cho sàn, mượ
 3. Tắt bất cứ lúc nào: `{"con":"KENGISTORE","me":null,"apply":true}`
    ⚠ Tắt chỉ NGỪNG trừ tiếp, không tự hoàn phần đã trừ.
 
+## Giao diện (11/09/2026)
+- ĐÃ LÀM: tab **Kho Mẹ** ở kengi.vn/admin (FE `80c87dd`) — xem trước khớp SKU rồi mới hiện nút Bật, xác nhận hai bước; Tắt cũng hai bước. Chủ shop chốt đặt ở trang admin vì nó nối HAI cửa hàng.
+
 ## Chưa làm
-- Giao diện bật/tắt ở màn Cài đặt (hiện chỉ có admin endpoint)
 - 206 listing `sku = null` vẫn không hưởng kho mẹ — phải gán SKU trên sàn
