@@ -4985,7 +4985,17 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
                 try {
                     if (isTikTokReturn) {
                         if (action === 'approve') await service.approveReturn(returnSn)
-                        else await service.rejectReturn(returnSn, reviewNote)
+                        else {
+                            /* Bản cũ lấy BỪA lý do đầu tiên và luôn gửi REJECT_RETURN —
+                             * sai với vụ chỉ hoàn tiền (đo 11/09/2026: TikTok đòi
+                             * REJECT_REFUND). Từ chối TikTok nay đi qua màn Khiếu nại
+                             * (POST /returns/:id/khieu-nai): chọn lý do + kèm ảnh. */
+                            res.status(400).json({
+                                success: false,
+                                error: 'Vụ trả TikTok: bấm nút KHIẾU NẠI để chọn lý do từ chối (TikTok đòi đúng lý do + đúng loại quyết định) và kèm ảnh.',
+                            })
+                            return
+                        }
                     } else {
                         if (action === 'approve') {
                             await service.confirmReturn(returnSn)
@@ -5216,6 +5226,66 @@ async function shopeeChoPhieuTra(prisma: any, phieu: any) {
     return { shopee, returnSn, channel }
 }
 
+const laPhieuTikTok = (phieu: any) => String(phieu?.code || '').startsWith('RTN-TT-')
+
+/** Dựng TikTokService cho một phiếu RTN-TT-, tự làm mới token nếu sắp hết hạn.
+ *  Kênh lấy THEO PHIẾU — cửa hàng có thể nhiều gian cùng sàn. */
+async function tiktokChoPhieuTra(prisma: any, phieu: any) {
+    const channelId = (phieu as any).channelId
+    if (!channelId) throw new Error('Phiếu trả chưa gắn kênh — mở lại danh sách trả hàng một lần để hệ thống điền kênh rồi thử lại')
+    const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
+    if (!channel) throw new Error('Kênh không tồn tại')
+    if (channel.platform !== 'tiktok') throw new Error(`Phiếu TikTok mà kênh là ${channel.platform}`)
+    if (!channel.accessToken) throw new Error('Kênh TikTok chưa kết nối (thiếu access token)')
+
+    const tiktok = new TikTokService({
+        apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+        accessToken: channel.accessToken || undefined,
+        refreshToken: channel.refreshToken || undefined,
+        shopId: channel.shopId || undefined,
+    })
+    if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+        try {
+            const tokens = await tiktok.refreshAccessToken();
+            (tiktok as any).credentials.accessToken = tokens.accessToken;
+            (tiktok as any).credentials.refreshToken = tokens.refreshToken
+            await prisma.onlineChannel.update({
+                where: { id: channel.id },
+                data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+            })
+        } catch { /* token cũ có thể vẫn dùng được — để lời gọi thật báo lỗi */ }
+    }
+    const returnId = String(phieu.code || '').replace(/^RTN-TT-/, '')
+    if (!returnId) throw new Error('Không đọc được mã vụ trả từ mã phiếu')
+    return { tiktok, returnId, channel }
+}
+
+/**
+ * `decision` TỪ CHỐI của TikTok, suy theo ĐÚNG định nghĩa trong tài liệu Reject Return:
+ *   REFUND (chỉ hoàn tiền)                    → REJECT_REFUND
+ *   REPLACEMENT (đổi hàng)                    → REJECT_REPLACEMENT
+ *   RETURN_AND_REFUND đang chờ người bán duyệt → REJECT_RETURN
+ *   RETURN_AND_REFUND khách đã gửi hàng về    → REJECT_RECEIVED_PACKAGE
+ * Ngoài các ca đó trả null — KHÔNG đoán (TikTok cũng sẽ trả 25020004). Đo 11/09/2026:
+ * vụ 4042242491051640263 là REFUND + RETURN_OR_REFUND_REQUEST_PENDING.
+ */
+function quyetDinhTuChoiTikTok(r: any): { ma: string; nhan: string } | null {
+    const loai = String(r?.return_type || ''), tt = String(r?.return_status || '')
+    if (loai === 'REFUND') return { ma: 'REJECT_REFUND', nhan: 'Từ chối yêu cầu hoàn tiền (khách không trả hàng)' }
+    if (loai === 'REPLACEMENT') return { ma: 'REJECT_REPLACEMENT', nhan: 'Từ chối yêu cầu đổi hàng' }
+    if (loai === 'RETURN_AND_REFUND') {
+        if (tt === 'RETURN_OR_REFUND_REQUEST_PENDING') return { ma: 'REJECT_RETURN', nhan: 'Từ chối yêu cầu trả hàng hoàn tiền' }
+        if (tt === 'BUYER_SHIPPED_ITEM') return { ma: 'REJECT_RECEIVED_PACKAGE', nhan: 'Từ chối kiện hàng khách gửi trả' }
+    }
+    return null
+}
+
+/** Lý do TikTok đưa về CÙNG hình dạng màn Khiếu nại đang dùng cho Shopee. TikTok
+ *  không chia ô theo lý do — bằng chứng là MỘT danh sách ảnh tuỳ chọn ⇒ một ô. */
+const O_ANH_TIKTOK = { moduleIndex: 1, yeuCau: 'Ảnh bằng chứng (không bắt buộc)', batBuoc: false }
+const lyDoTikTokThanhO = (ds: { name: string; text: string }[]) =>
+    ds.map(x => ({ id: x.name, nhan: x.text || x.name, yeuCau: '', o: [O_ANH_TIKTOK], mau: [] as { url: string; thumbnail: string }[] }))
+
 /**
  * Chuẩn hoá get_return_dispute_reason thành danh sách lý do + Ô bằng chứng.
  *
@@ -5263,6 +5333,59 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
         const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
         if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
 
+        if (laPhieuTikTok(phieu)) {
+            const { tiktok, returnId } = await tiktokChoPhieuTra(prisma, phieu)
+            const loi: Record<string, string> = {}
+            let lyDo: any[] = []
+            try { lyDo = lyDoTikTokThanhO(await tiktok.layLyDoTuChoi(returnId)) }
+            catch (e: any) { loi.lyDo = String(e?.message || e).slice(0, 300) }
+
+            let chiTiet: any = null, quyetDinh: { ma: string; nhan: string } | null = null
+            try {
+                const r = await tiktok.layVuTra(returnId)
+                if (r) {
+                    quyetDinh = quyetDinhTuChoiTikTok(r)
+                    if (!quyetDinh) loi.quyetDinh = `TikTok không cho từ chối vụ loại ${r.return_type || '?'} ở trạng thái ${r.return_status || '?'}`
+                    const han = (Array.isArray(r.seller_next_action_response) ? r.seller_next_action_response : [])
+                        .map((a: any) => Number(a?.deadline) || 0).filter(Boolean)
+                    chiTiet = {
+                        trangThai: r.return_status || null,
+                        loaiVu: r.return_type || null,
+                        hanXuLy: han.length ? Math.min(...han) * 1000 : null,
+                        khachLyDo: r.return_reason || null,
+                        khachGhiChu: r.return_reason_text || null,
+                        anhKhach: [] as string[],
+                        videoKhach: [] as { url: string; anhBia: string }[],
+                        soTienHoan: null,
+                        sellerProof: null,
+                        suKienCuoi: null as any,
+                    }
+                }
+            } catch (e: any) { loi.chiTiet = String(e?.message || e).slice(0, 300) }
+
+            // Lịch sử vụ: lời khách + ảnh/video khách gửi kèm, và sự kiện MỚI NHẤT —
+            // đo 11/09: vụ đang "Chuyển cho nhân viên hỗ trợ" (TikTok tự xem xét) thì
+            // từ chối có thể bị chặn 25011010; màn hình phải báo trước.
+            try {
+                const ls = await tiktok.layLichSuVuTra(returnId)
+                if (chiTiet) {
+                    const khach = ls.filter((x: any) => x?.role === 'BUYER')
+                    const loiKhach = khach.map((x: any) => String(x.note || '').trim()).filter(Boolean)
+                    if (loiKhach.length) chiTiet.khachGhiChu = [chiTiet.khachGhiChu, ...loiKhach].filter(Boolean).join('\n')
+                    chiTiet.anhKhach = khach.flatMap((x: any) => (x.images || []).map((i: any) => String(i?.url || ''))).filter(Boolean)
+                    chiTiet.videoKhach = khach.flatMap((x: any) => (x.videos || []).map((v: any) => ({ url: String(v?.url || ''), anhBia: String(v?.cover || '') })))
+                        .filter((v: any) => v.url)
+                    const moiNhat = [...ls].sort((a: any, b: any) => (b?.create_time || 0) - (a?.create_time || 0))[0]
+                    chiTiet.suKienCuoi = moiNhat
+                        ? { suKien: moiNhat.event || null, moTa: moiNhat.description || null, luc: moiNhat.create_time ? moiNhat.create_time * 1000 : null }
+                        : null
+                }
+            } catch (e: any) { loi.lichSu = String(e?.message || e).slice(0, 300) }
+
+            res.json({ success: true, data: { san: 'tiktok', returnSn: returnId, lyDo, chiTiet, quyetDinh, chuaNop: false, daNop: null, emailGoiY: null, loi } })
+            return
+        }
+
         const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
         const loi: Record<string, string> = {}
 
@@ -5303,7 +5426,7 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
             emailGoiY = s?.email ? String(s.email).trim() || null : null
         } catch { /* không có thì để người dùng tự gõ */ }
 
-        res.json({ success: true, data: { returnSn, lyDo, chiTiet, chuaNop, daNop, emailGoiY, loi } })
+        res.json({ success: true, data: { san: 'shopee', returnSn, lyDo, chiTiet, quyetDinh: null, chuaNop, daNop, emailGoiY, loi } })
     } catch (err: any) {
         res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
     }
@@ -5326,6 +5449,18 @@ router.post('/returns/:returnId/anh-khieu-nai', authMiddleware, async (req: Auth
 
         const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
         if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+
+        if (laPhieuTikTok(phieu)) {
+            // TikTok: ảnh lên qua Upload Product Image → `uri` chính là image_id khi từ chối.
+            const bytes = new Uint8Array(Buffer.from(b64, 'base64'))
+            if (bytes.length > 10 * 1024 * 1024) { res.status(400).json({ success: false, error: 'Ảnh lớn hơn 10MB — TikTok chặn' }); return }
+            const kieu = /\.png$/i.test(ten) ? 'image/png' : 'image/jpeg'
+            const { tiktok } = await tiktokChoPhieuTra(prisma, phieu)
+            const kq = await tiktok.taiAnhBangChung(bytes, ten, kieu)
+            res.json({ success: true, data: { url: kq.url, thumbnail: kq.url, imageId: kq.uri, width: kq.width, height: kq.height, mimeType: kieu } })
+            return
+        }
+
         const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
 
         const kq = await shopee.convertReturnImage(returnSn, new Uint8Array(Buffer.from(b64, 'base64')), ten)
@@ -5353,15 +5488,60 @@ router.post('/returns/:returnId/anh-khieu-nai', authMiddleware, async (req: Auth
 router.post('/returns/:returnId/khieu-nai', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
+        const ghiChu = String(req.body?.ghiChu || '').trim()
+        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
+        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
+
+        /* ── TikTok: TỪ CHỐI kèm lý do + ảnh. Body { lyDoId: <name lý do>, ghiChu?,
+         * anh: [{ imageId, width, height, mimeType }] }. Hỏi lại TikTok lý do + loại vụ
+         * NGAY lúc gửi; decision suy theo loại vụ (quyetDinhTuChoiTikTok). */
+        if (laPhieuTikTok(phieu)) {
+            const tenLyDo = String(req.body?.lyDoId || '').trim()
+            const anhVao: any[] = Array.isArray(req.body?.anh) ? req.body.anh : []
+            if (!tenLyDo) { res.status(400).json({ success: false, error: 'Chưa chọn lý do từ chối' }); return }
+            if (anhVao.length > 6) { res.status(400).json({ success: false, error: 'Nhiều nhất 6 ảnh mỗi lần gửi' }); return }
+
+            const { tiktok, returnId } = await tiktokChoPhieuTra(prisma, phieu)
+            const lyDoTT = (await tiktok.layLyDoTuChoi(returnId)).find(x => x.name === tenLyDo)
+            if (!lyDoTT) { res.status(400).json({ success: false, error: 'Lý do này không còn trong danh sách TikTok cho vụ — đóng form mở lại để tải danh sách mới' }); return }
+            const vu = await tiktok.layVuTra(returnId)
+            const qd = quyetDinhTuChoiTikTok(vu)
+            if (!qd) { res.status(400).json({ success: false, error: `TikTok không cho từ chối vụ loại ${vu?.return_type || '?'} ở trạng thái ${vu?.return_status || '?'}` }); return }
+
+            const images = anhVao
+                .map(a => ({ image_id: String(a?.imageId || ''), mime_type: String(a?.mimeType || 'image/jpeg'), width: Number(a?.width) || 0, height: Number(a?.height) || 0 }))
+                .filter(x => x.image_id)
+            await tiktok.tuChoiVuTra(returnId, { decision: qd.ma, rejectReason: lyDoTT.name, comment: ghiChu || undefined, images })
+
+            // KHÔNG tự đổi trạng thái phiếu: lần đồng bộ sau lấy trạng thái THẬT từ TikTok.
+            const luc = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+            try {
+                await prisma.returnOrder.update({
+                    where: { id: phieu.id },
+                    data: { notes: `${phieu.notes || ''}\n[Từ chối TikTok] ${luc} — ${qd.nhan} — ${lyDoTT.text} — ${images.length} ảnh${ghiChu ? ` — "${ghiChu.slice(0, 200)}"` : ''}` },
+                })
+            } catch { /* ghi chú hỏng không được làm hỏng lệnh đã gửi */ }
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: req.user?.userId,
+                        userName: req.user?.email || 'system',
+                        action: 'reject_return_tiktok',
+                        entity: 'ReturnOrder',
+                        entityId: phieu.id,
+                        details: JSON.stringify({ returnId, decision: qd.ma, lyDo: lyDoTT.name, soAnh: images.length, ghiChu }),
+                    },
+                })
+            } catch { }
+            res.json({ success: true, data: { returnSn: returnId, lyDo: lyDoTT.text, soAnh: images.length, quyetDinh: qd.nhan } })
+            return
+        }
+
         const lyDoId = Number(req.body?.lyDoId)
         const email = String(req.body?.email || '').trim()
-        const ghiChu = String(req.body?.ghiChu || '').trim()
         const vao: any[] = Array.isArray(req.body?.oBangChung) ? req.body.oBangChung : []
         if (!Number.isFinite(lyDoId)) { res.status(400).json({ success: false, error: 'Chưa chọn lý do khiếu nại' }); return }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ success: false, error: 'Email liên hệ không hợp lệ (Shopee bắt buộc)' }); return }
-
-        const phieu = await prisma.returnOrder.findUnique({ where: { id: req.params.returnId as string } })
-        if (!phieu) { res.status(404).json({ success: false, error: 'Phiếu trả không tồn tại' }); return }
         const { shopee, returnSn } = await shopeeChoPhieuTra(prisma, phieu)
 
         const lyDo = chuanHoaLyDo(await shopee.getReturnDisputeReasons(returnSn)).find(l => l.id === lyDoId)

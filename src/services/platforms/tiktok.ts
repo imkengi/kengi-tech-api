@@ -727,34 +727,76 @@ export class TikTokService extends PlatformService {
         }
     }
 
-    /**
-     * Reject a return/refund request — POST /return_refund/202309/returns/{return_id}/reject.
-     * TikTok requires a reject_reason from its own catalog, so we look up the
-     * available reasons for this return first and use the given/first one.
-     */
-    async rejectReturn(returnId: string, comment?: string, rejectReason?: string): Promise<void> {
-        let reason = rejectReason
-        if (!reason) {
-            const { url: rUrl, headers: rHeaders } = this.buildUrl('/return_refund/202309/reject_reasons', {
-                return_or_cancel_id: returnId,
-                locale: 'vi-VN',
-            })
-            const reasonsData = await this.httpGet(rUrl, rHeaders)
-            reason = reasonsData.data?.reasons?.[0]?.name
-            if (!reason) {
-                throw new Error(`TikTok: không lấy được danh sách lý do từ chối cho phiếu ${returnId}${reasonsData.code !== 0 ? ` ([${reasonsData.code}] ${reasonsData.message})` : ''}`)
-            }
-        }
+    /* ── TỪ CHỐI / KHIẾU NẠI VỤ TRẢ (11/09/2026) ────────────────────────────────
+     * Bản cũ `rejectReturn` lấy BỪA lý do đầu tiên (reasons[0]) và LUÔN gửi
+     * decision REJECT_RETURN. Đo vụ thật 4042242491051640263: return_type = REFUND
+     * (chỉ hoàn tiền) ⇒ phải là REJECT_REFUND, gửi REJECT_RETURN là TikTok trả
+     * 25020004 "decision not match reverse type". Nay: chủ shop CHỌN lý do, decision
+     * suy theo đúng định nghĩa trong tài liệu, kèm ảnh bằng chứng. */
 
-        const path = `/return_refund/202309/returns/${returnId}/reject`
-        const bodyObj: any = { decision: 'REJECT_RETURN', reject_reason: reason }
-        if (comment) bodyObj.comment = comment
-        const bodyStr = JSON.stringify(bodyObj)
-        const { url, headers } = this.buildUrl(path, {}, bodyStr)
-        const data = await this.httpPost(url, bodyObj, headers)
-        if (data.code !== 0) {
-            throw new Error(`TikTok rejectReturn: [${data.code}] ${data.message || 'Unknown error'}`)
-        }
+    /** Lý do từ chối hợp lệ cho ĐÚNG vụ này — GET /return_refund/202309/reject_reasons.
+     *  Đo 11/09: trả [{name, text}], text đã là tiếng Việt khi locale vi-VN. */
+    async layLyDoTuChoi(returnId: string): Promise<{ name: string; text: string }[]> {
+        const { url, headers } = this.buildUrl('/return_refund/202309/reject_reasons', { return_or_cancel_id: returnId, locale: 'vi-VN' })
+        const d = await this.httpGet(url, headers)
+        if (d.code !== 0) throw new Error(`TikTok reject_reasons: [${d.code}] ${d.message || ''}`)
+        return (d.data?.reasons || [])
+            .map((r: any) => ({ name: String(r.name || ''), text: String(r.text || r.name || '') }))
+            .filter((r: { name: string }) => r.name)
+    }
+
+    /** Một vụ trả — POST /return_refund/202309/returns/search theo return_ids. NGUYÊN bản ghi. */
+    async layVuTra(returnId: string): Promise<any | null> {
+        const bodyObj = { return_ids: [returnId] }
+        const { url, headers } = this.buildUrl('/return_refund/202309/returns/search', { page_size: '1' }, JSON.stringify(bodyObj))
+        const d = await this.httpPost(url, bodyObj, headers)
+        if (d.code !== 0) throw new Error(`TikTok returns/search: [${d.code}] ${d.message || ''}`)
+        return d.data?.return_orders?.[0] || null
+    }
+
+    /** Lịch sử vụ — GET /return_refund/202309/returns/{id}/records. Đo 11/09: bản ghi
+     *  role=BUYER mang `note`, `images[{url,width,height}]`, `videos[{url,cover}]`. */
+    async layLichSuVuTra(returnId: string): Promise<any[]> {
+        const { url, headers } = this.buildUrl(`/return_refund/202309/returns/${returnId}/records`, { locale: 'vi-VN' })
+        const d = await this.httpGet(url, headers)
+        if (d.code !== 0) throw new Error(`TikTok returns/records: [${d.code}] ${d.message || ''}`)
+        return d.data?.records || []
+    }
+
+    /**
+     * Tải MỘT ảnh bằng chứng — POST /product/202309/images/upload (multipart, trường
+     * `data`). Tài liệu Reject Return: image_id = "Image URI obtained from the Upload
+     * Product Image API". Bảng tham số chỉ có app_key/sign/timestamp ⇒ KHÔNG gửi
+     * shop_cipher; multipart thì chữ ký không gồm thân. use_case DESCRIPTION_IMAGE vì
+     * MAIN/ATTRIBUTE bị TikTok tự cắt về 1:1 khi ngoài 3:4–4:3 — ảnh chụp màn là ảnh ngang.
+     */
+    async taiAnhBangChung(anh: Uint8Array, tenFile: string, kieu: string): Promise<{ uri: string; url: string; width: number; height: number }> {
+        const { url, headers } = this.buildUrl('/product/202309/images/upload', {}, undefined, { noShopCipher: true })
+        const form = new FormData()
+        form.set('data', new Blob([anh], { type: kieu }), tenFile)
+        form.set('use_case', 'DESCRIPTION_IMAGE')
+        const r = await fetch(url, { method: 'POST', headers, body: form })
+        const text = await r.text()
+        let d: any
+        try { d = JSON.parse(text) } catch { throw new Error(`TikTok images/upload trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
+        if (d.code !== 0) throw new Error(`TikTok images/upload: [${d.code}] ${d.message || ''}`)
+        const x = d.data || {}
+        if (!x.uri) throw new Error(`TikTok images/upload không trả uri: ${JSON.stringify(x).slice(0, 160)}`)
+        return { uri: String(x.uri), url: String(x.url || '').trim(), width: Number(x.width) || 0, height: Number(x.height) || 0 }
+    }
+
+    /** TỪ CHỐI vụ trả kèm ảnh — POST /return_refund/202309/returns/{id}/reject. */
+    async tuChoiVuTra(returnId: string, p: {
+        decision: string; rejectReason: string; comment?: string
+        images: { image_id: string; mime_type: string; width: number; height: number }[]
+    }): Promise<any> {
+        const bodyObj: any = { decision: p.decision, reject_reason: p.rejectReason }
+        if (p.comment) bodyObj.comment = p.comment
+        if (p.images.length) bodyObj.images = p.images
+        const { url, headers } = this.buildUrl(`/return_refund/202309/returns/${returnId}/reject`, {}, JSON.stringify(bodyObj))
+        const d = await this.httpPost(url, bodyObj, headers)
+        if (d.code !== 0) throw new Error(`TikTok từ chối: [${d.code}] ${d.message || ''}`)
+        return d.data ?? {}
     }
 
     /**
