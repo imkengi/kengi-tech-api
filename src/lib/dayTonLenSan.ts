@@ -27,6 +27,52 @@ export interface KetQuaDayTon {
     data?: any
 }
 
+/**
+ * Đẩy tồn MỘT listing Shopee, tự xử hàng CÓ PHÂN LOẠI.
+ *
+ * Đo 11/09/2026: listing SHD1072 (item 16994673670) có HAI phân loại mang HAI mã
+ * kho khác nhau — "Hồng" sku SHD1072 và "Tím" sku SHD2011. Shopee bắt buộc gửi
+ * `model_id` cho hàng kiểu này, gửi thiếu thì trả
+ * "model_id is mandatory if item is under model level" và KHÔNG đẩy được gì.
+ *
+ * Vì sao thử trước rồi mới hỏi phân loại, thay vì luôn hỏi: hàng KHÔNG phân loại
+ * chiếm phần lớn và chúng đẩy được ngay; hỏi danh sách phân loại cho cả 709 listing
+ * là 709 lời gọi thừa, đủ để chạm trần tần suất của Shopee.
+ *
+ * Ghép phân loại CHỈ theo SKU, và chỉ nhận khi khớp DUY NHẤT. Đẩy tồn vào nhầm
+ * phân loại là sai tồn của một mặt hàng KHÁC — ở đây là SHD2011 — nên thà báo lỗi
+ * còn hơn đoán.
+ */
+async function dayTonShopee(service: any, p: any, local: any, targetStock: number): Promise<void> {
+    try {
+        await service.updateStock(p.platformProductId, targetStock)
+        return
+    } catch (e: any) {
+        if (!/model_id is mandatory|under model level/i.test(String(e?.message || ''))) throw e
+    }
+
+    const models: any[] = await service.getModelList(Number(p.platformProductId))
+    if (models.length === 0) {
+        throw new Error('Shopee đòi model_id nhưng get_model_list trả rỗng — không rõ phân loại, không đẩy')
+    }
+
+    const canhSku = [String(p.sku || '').trim().toLowerCase(), String(local?.sku || '').trim().toLowerCase()]
+        .filter(Boolean)
+    const khop = models.filter(m => canhSku.includes(String(m.sku || '').trim().toLowerCase()))
+
+    let modelId: number | null = null
+    if (khop.length === 1) modelId = khop[0].model_id
+    else if (khop.length === 0 && models.length === 1) modelId = models[0].model_id
+
+    if (!modelId) {
+        const mota = models.map(m => `${m.sku || '(không mã)'}→${m.model_id}`).join(', ')
+        throw new Error(khop.length > 1
+            ? `SKU "${p.sku || local?.sku}" khớp ${khop.length} phân loại (${mota}) — KHÔNG đoán, phải khai tay`
+            : `listing có ${models.length} phân loại (${mota}), không cái nào mang SKU "${p.sku || local?.sku}" — KHÔNG đoán, phải khai tay`)
+    }
+    await service.updateStock(p.platformProductId, targetStock, modelId)
+}
+
 export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDayTon = {}): Promise<KetQuaDayTon> {
     const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
     if (!channel) return { http: 404, ok: false, loi: 'Kênh không tồn tại' }
@@ -155,7 +201,7 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
 
         try {
             if (channel.platform === 'shopee') {
-                await service.updateStock(p.platformProductId, targetStock)
+                await dayTonShopee(service, p, local, targetStock)
             } else {
                 await service.updateStock(p.platformProductId, targetStock, undefined, p.sku || undefined)
             }
