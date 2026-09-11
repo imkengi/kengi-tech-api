@@ -53,6 +53,22 @@ trả hàng Shopee ngay trong app, không phải sang seller center.
 - [x] BE `ecd591f` + đo: **358 phiếu trả Shopee, 0 phiếu thiếu `channelId`**
       ⇒ nút bấm được ở tất cả, không phiếu nào rơi vào nhánh báo lỗi.
 
+## Vòng 2 (11/09 chiều) — chủ shop: "bằng chứng mỗi lí do mỗi kiểu mà"
+- Đọc tài liệu Shopee bằng trình duyệt trong app (WebFetch bị chặn domain
+  open.shopee.com): `get_return_dispute_reason` trả `evidence_module_list` theo từng
+  lý do; `dispute` nhận `image_list[{module_index, requirement, image_url≤3}]`.
+- **Luồng dispute cũ chết 07/05/2024** (announcement 883). Code cũ gửi
+  `dispute_reason || 2` + `image`; web chưa từng gửi `disputeEmail` ⇒ nút Từ chối vụ
+  Shopee luôn 400.
+- Đo 4 vụ thật (bộ đo phải sửa: `findFirst` bốc nhầm gian Kengi Electric): 5 lý
+  do/vụ, 0–2 ô/lý do, mã lý do khác nhau giữa các vụ, cả 4 `NOT_NEEDED`.
+- BE `67c41cb`: `khieuNaiVuTra` (luồng mới, so lỗi đã trim), GET `/bang-chung` đủ
+  lý do+ô+hạn+khách kêu gì, POST `/anh-khieu-nai`, POST `/khieu-nai`, process
+  reject Shopee → 400 rõ, upload_proof chặn NOT_NEEDED.
+- FE `1512e3b`: `KhieuNaiModal` + nút Khiếu nại thay Từ chối (vụ Shopee). 157 lỗi
+  = baseline. Deploy xong, chunk trang `page-aa9d165ca1fc8c44.js` có mã mới.
+- **Chưa gửi khiếu nại thật lần nào** — không có tham số chạy thử được tài liệu hoá.
+
 ## Đang làm / Tiếp theo
 - [ ] **Chưa nộp thật lần nào.** Nộp bằng chứng là thao tác ra ngoài, người mua và
       Shopee nhìn thấy, gỡ không được ⇒ chủ shop tự bấm. Vụ đang treo để thử:
