@@ -4661,6 +4661,63 @@ router.get('/do-khieu-nai-tiktok', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO MÃ CON / COMBO TRONG ĐƠN ĐÃ LẤY — GET /admin/do-ma-con-combo?storeCode=&soNgay=60
+ *
+ * Packing list 11/09/2026 quy mã con → mã mẹ, bung combo. Hai ngày gần nhất đo ra 0 dòng
+ * quy đổi ⇒ luật chưa được dữ liệu thật thử. Bộ này đếm cửa hàng có bao nhiêu mã con /
+ * combo / ánh xạ-combo, và NGÀY nào có đơn đã lấy hàng dính chúng — để kiểm đúng ngày đó.
+ * CHỈ ĐỌC.
+ */
+router.get('/do-ma-con-combo', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const soNgay = Math.min(120, Math.max(1, parseInt(String(req.query.soNgay || '60'), 10) || 60))
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const maCon: any[] = await sp.product.findMany({ where: { mergedIntoId: { not: null } }, select: { id: true, sku: true, mergedIntoId: true, mergedRate: true } })
+        const maCombo: any[] = await sp.product.findMany({ where: { bundleId: { not: null } }, select: { id: true, sku: true, bundleId: true } })
+        const axCombo: any[] = await sp.skuMapping.findMany({ where: { bundleId: { not: null } }, select: { platformSku: true, platform: true, bundleId: true } })
+
+        const idCon = new Set(maCon.map(p => p.id)), idCombo = new Set(maCombo.map(p => p.id))
+        const skuAx = new Set(axCombo.map(m => String(m.platformSku).toLowerCase()))
+        const skuCon = new Set(maCon.map(p => String(p.sku).toLowerCase()))
+        const skuCb = new Set(maCombo.map(p => String(p.sku).toLowerCase()))
+
+        const tu = new Date(Date.now() - soNgay * 86400_000)
+        const dong: any[] = await sp.onlineOrderItem.findMany({
+            where: { order: { shippedAt: { gte: tu } } },
+            select: { sku: true, productId: true, quantity: true, order: { select: { shippedAt: true, orderNumber: true } } },
+            take: 30000,
+        })
+        const theoNgay: Record<string, { maCon: number; combo: number }> = {}
+        const mau: any[] = []
+        for (const d of dong) {
+            const s = String(d.sku || '').trim().toLowerCase()
+            const laCon = (d.productId && idCon.has(d.productId)) || (!!s && skuCon.has(s))
+            const laCb = (d.productId && idCombo.has(d.productId)) || (!!s && (skuCb.has(s) || skuAx.has(s)))
+            if (!laCon && !laCb) continue
+            const ngay = new Date(d.order.shippedAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
+            theoNgay[ngay] = theoNgay[ngay] || { maCon: 0, combo: 0 }
+            if (laCb) theoNgay[ngay].combo++; else theoNgay[ngay].maCon++
+            if (mau.length < 12) mau.push({ ngay, don: d.order.orderNumber, sku: d.sku, sl: d.quantity, loai: laCb ? 'combo' : 'ma-con' })
+        }
+        res.json({
+            success: true,
+            data: {
+                soMaCon: maCon.length, soMaCombo: maCombo.length, soAnhXaCombo: axCombo.length,
+                maConMau: maCon.slice(0, 8), soDongDaQuet: dong.length, soNgay,
+                ngayCoQuyDoi: Object.entries(theoNgay).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 20),
+                mau,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * THỬ TẢI ẢNH LÊN TIKTOK — POST /admin/thu-anh-tiktok { storeCode, returnId, anhUrl }
  *
  * Phần CHƯA từng chạy thật của luồng từ chối TikTok: Upload Product Image (multipart,
@@ -5425,8 +5482,10 @@ router.get('/do-packing-list', async (req: Request, res: Response) => {
                 items: kq.items.slice(0, 30),
                 soMaHangTraVe: Math.min(30, kq.items.length),
                 tongTay,
-                khop: tongTay === kq.tongSoLuong,
-                yNghia: 'khop=false ⇒ phép gộp làm rơi hoặc nhân đôi số lượng. items cắt còn 30 dòng đầu cho gọn, soMaHang mới là tổng số mã.',
+                // Từ 11/09 tongSoLuong là ĐƠN VỊ KHO (mã con × hệ số, combo bung) nên so với
+                // tổng tay (đơn vị sàn) là lệch OAN mỗi khi có quy đổi — so bằng tongSoLuongSan.
+                khop: tongTay === kq.tongSoLuongSan,
+                yNghia: 'khop=false ⇒ phép gộp làm rơi hoặc nhân đôi dòng đơn (so ĐƠN VỊ SÀN: tongTay vs tongSoLuongSan). tongSoLuong là đơn vị kho sau quy đổi mẹ/combo. items cắt còn 30 dòng đầu cho gọn, soMaHang mới là tổng số mã.',
             },
         })
     } catch (err: any) {

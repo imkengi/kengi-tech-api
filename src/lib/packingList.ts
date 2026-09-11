@@ -215,6 +215,7 @@ export async function dungPackingList(prisma: any, ts: ThamSoPackingList) {
     const theoKenh = new Map<string, { channelId: string | null; soDon: Set<string>; soLuong: number }>()
     const donDaHuy: string[] = []
     let tongSoLuong = 0
+    let tongSoLuongSan = 0   // ĐƠN VỊ SÀN, mỗi dòng đơn cộng MỘT lần — để bộ đo kiểm bảo toàn
     let soDongChuaLienKet = 0
     let soDongMaCon = 0
     let soDongCombo = 0
@@ -242,6 +243,7 @@ export async function dungPackingList(prisma: any, ts: ThamSoPackingList) {
             const sl = Number(it.quantity) || 0
             const skuSan = String(it.sku || '').trim() || null
             const ten = it.productName || 'Không tên'
+            tongSoLuongSan += sl
             const kq = await bo.phanGiai(it, o.platform || null, o.channelId || null)
 
             if (!kq) {
@@ -280,6 +282,7 @@ export async function dungPackingList(prisma: any, ts: ThamSoPackingList) {
         soDon: orders.length,
         soMaHang: dsGom.length,
         tongSoLuong: tron(tongSoLuong),
+        tongSoLuongSan: tron(tongSoLuongSan),
         items: dsGom.map((d, i) => ({
             productId: d.productId,
             sku: d.sku,
