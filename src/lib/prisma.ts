@@ -176,6 +176,7 @@ if (NHAN_ROI_MS > 0) {
  * trong MỘT giao dịch: hỏng câu nào thì cuộn lại hết, schema vẫn rỗng. */
 const TEP_SQL_TAO_BANG = [join(__dirname, 'store-schema.sql'), join(process.cwd(), 'dist', 'store-schema.sql')]
 let cauTaoBang: string[] | null = null
+const GOI_DDL = 100
 
 function docCauTaoBang(): string[] {
     if (cauTaoBang) return cauTaoBang
@@ -196,7 +197,16 @@ async function taoBangTuSqlDungSan(schemaName: string): Promise<number> {
     await getStorePrisma(schemaName).$transaction(async (tx) => {
         // Câu SQL không ghi tên schema — ép search_path để bảng rơi đúng vào schema mới
         await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schemaName}"`)
-        for (const cau of cacCau) await tx.$executeRawUnsafe(cau)
+        /* Gói GOI_DDL câu vào MỘT khối DO: chạy từng câu là một lượt đi-về Cloud SQL,
+         * đo 11/09 = 571 câu × ~19 ms ≈ 11 s. Prisma không cho nhiều câu trong một
+         * lệnh (prepared statement) nên gói bằng EXECUTE trong DO — cả gói chạy phía
+         * máy chủ. Câu nào lỡ chứa thẻ bao $kengi_… thì không gói được → ném lỗi,
+         * createBranchSchema lùi về db push. */
+        if (cacCau.some(cau => cau.includes('$kengi_'))) throw new Error('store-schema.sql chứa "$kengi_" — không gói vào khối DO được')
+        for (let i = 0; i < cacCau.length; i += GOI_DDL) {
+            const than = cacCau.slice(i, i + GOI_DDL).map(cau => `EXECUTE $kengi_ddl$${cau}$kengi_ddl$;`).join('\n')
+            await tx.$executeRawUnsafe(`DO $kengi_goi$ BEGIN\n${than}\nEND $kengi_goi$`)
+        }
     }, { maxWait: 20_000, timeout: 180_000 })
     return cacCau.length
 }
