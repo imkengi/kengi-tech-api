@@ -699,6 +699,21 @@ export class TikTokService extends PlatformService {
     }
 
     /**
+     * Gọi THÔ một API TikTok (tự ký) và trả NGUYÊN body — cho bộ đo đọc hình dạng dữ
+     * liệu thật trước khi viết code (11/09/2026: đo lý do từ chối + bằng chứng).
+     * Không tự xét `code`: bên gọi tự đọc.
+     */
+    async goiTho(method: 'GET' | 'POST', path: string, query: Record<string, string> = {}, body?: any): Promise<any> {
+        if (method === 'GET') {
+            const { url, headers } = this.buildUrl(path, query)
+            return this.httpGet(url, headers)
+        }
+        const bodyObj = body ?? {}
+        const { url, headers } = this.buildUrl(path, query, JSON.stringify(bodyObj))
+        return this.httpPost(url, bodyObj, headers)
+    }
+
+    /**
      * Approve a return/refund request — POST /return_refund/202309/returns/{return_id}/approve.
      */
     async approveReturn(returnId: string): Promise<void> {

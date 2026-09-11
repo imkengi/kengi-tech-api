@@ -4566,6 +4566,74 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO KHIẾU NẠI TIKTOK — GET /admin/do-khieu-nai-tiktok?storeCode=&returnId=a,b
+ *
+ * 11/09/2026 chủ shop: "làm tương tự với tiktok" (form lý do + ảnh bằng chứng như
+ * Shopee). Code cũ rejectReturn lấy BỪA lý do đầu tiên (reasons[0]) và không gửi
+ * ảnh. Trước khi viết lại, nhìn dữ liệu THẬT: TikTok trả những lý do nào, có kèm
+ * yêu cầu bằng chứng không, vụ đang ở trạng thái gì. CHỈ ĐỌC (reject_reasons,
+ * returns/search, returns/{id}/records). Kênh lấy THEO PHIẾU TRẢ — bẫy findFirst.
+ */
+router.get('/do-khieu-nai-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const chiDinh = String(req.query.returnId || '').split(',').map(s => s.trim()).filter(Boolean)
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const tongCho = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-TT-' }, status: 'pending' } })
+        const phieu: any[] = chiDinh.length
+            ? await sp.returnOrder.findMany({ where: { code: { in: chiDinh.map(x => `RTN-TT-${x}`) } } })
+            : await sp.returnOrder.findMany({ where: { code: { startsWith: 'RTN-TT-' }, status: 'pending' }, orderBy: { createdAt: 'desc' }, take: 4 })
+
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const svcTheoKenh = new Map<string, any>()
+        const theoVu: any[] = []
+        for (const p of phieu) {
+            const rid = String(p.code).replace(/^RTN-TT-/, '')
+            const mot: any = { returnId: rid, trangThaiPhieu: p.status, ngay: p.createdAt }
+            if (!p.channelId) { mot.loi = 'phiếu chưa có channelId'; theoVu.push(mot); continue }
+            if (!svcTheoKenh.has(p.channelId)) {
+                const c = await sp.onlineChannel.findUnique({ where: { id: p.channelId } })
+                svcTheoKenh.set(p.channelId, c ? {
+                    ten: c.name, nen: c.platform,
+                    svc: new TikTokService({
+                        apiKey: c.apiKey || '', apiSecret: c.apiSecret || '',
+                        accessToken: c.accessToken || undefined, refreshToken: c.refreshToken || undefined,
+                        shopId: c.shopId || undefined,
+                    }),
+                } : null)
+            }
+            const k = svcTheoKenh.get(p.channelId)
+            if (!k) { mot.loi = 'không thấy kênh'; theoVu.push(mot); continue }
+            mot.kenh = `${k.ten} (${k.nen})`
+            const tom = (x: any) => JSON.parse(JSON.stringify(x ?? null).slice(0, 6000) || 'null')
+            try { mot.reject_reasons = await k.svc.goiTho('GET', '/return_refund/202309/reject_reasons', { return_or_cancel_id: rid, locale: 'vi-VN' }) }
+            catch (e: any) { mot.reject_reasons = { loi: String(e?.message || e).slice(0, 200) } }
+            try {
+                const s = await k.svc.goiTho('POST', '/return_refund/202309/returns/search', { page_size: '1' }, { return_ids: [rid] })
+                const r = s?.data?.return_orders?.[0]
+                mot.chiTiet = r ? {
+                    tatCaKhoa: Object.keys(r).sort().join(','),
+                    return_status: r.return_status, return_type: r.return_type, return_reason: r.return_reason,
+                    return_reason_text: r.return_reason_text, seller_next_action_response: r.seller_next_action_response,
+                    arbitration_status: r.arbitration_status, can_buyer_keep_item: r.can_buyer_keep_item,
+                } : { code: s?.code, message: s?.message }
+            } catch (e: any) { mot.chiTiet = { loi: String(e?.message || e).slice(0, 200) } }
+            try {
+                const h = await k.svc.goiTho('GET', `/return_refund/202309/returns/${rid}/records`, { locale: 'vi-VN' })
+                mot.lichSu = h?.code === 0 ? tom((h.data?.records || []).slice(0, 6)) : { code: h?.code, message: h?.message }
+            } catch (e: any) { mot.lichSu = { loi: String(e?.message || e).slice(0, 200) } }
+            theoVu.push(mot)
+        }
+        res.json({ success: true, data: { tongPhieuTikTokCho: tongCho, theoVu } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO QUYỀN NHÓM KHIẾU NẠI SHOPEE — GET /admin/do-khieu-nai-shopee?storeCode=&channelId=
  *
  * Chủ shop 11/09/2026 muốn nộp bằng chứng (ảnh + ghi chú) cho vụ trả hàng thẳng
