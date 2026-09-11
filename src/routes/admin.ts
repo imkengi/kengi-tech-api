@@ -4566,6 +4566,68 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐẨY TỒN THỬ — POST /admin/day-ton-thu
+ * Body: { storeCode, channelId, onlineProductIds: [...], apply?: true }
+ *
+ * Gọi ĐÚNG lõi mà nút "Đẩy tồn kho lên sàn" trên web gọi (lib/dayTonLenSan.ts),
+ * chỉ khác cách xác thực — đường kia đòi đăng nhập cửa hàng nên không thử được
+ * từ ngoài. Viết bản thứ hai cho admin là cách chắc chắn nhất để hai bên đẩy ra
+ * hai con số khác nhau.
+ *
+ * ⚠ GỌI THẲNG API SÀN, KHÔNG CÓ ĐƯỜNG LUI. Nên:
+ *   · BẮT BUỘC truyền `onlineProductIds` — không có chế độ "đẩy cả kênh" ở đây;
+ *     đẩy cả kênh là việc của nút trên web, nơi chủ shop tự chịu trách nhiệm.
+ *   · Tối đa 5 listing một lượt. Đây là bộ THỬ, không phải bộ đẩy hàng loạt.
+ *   · Không có `apply` thì CHẠY THỬ (dryRun): tính y hệt nhưng không gọi sàn.
+ */
+router.post('/day-ton-thu', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.body?.storeCode || '').trim()
+        const channelId = String(req.body?.channelId || '').trim()
+        const ids: string[] = Array.isArray(req.body?.onlineProductIds) ? req.body.onlineProductIds.map(String) : []
+        const apply = req.body?.apply === true
+        if (!storeCode || !channelId) { res.status(400).json({ success: false, error: 'Cần storeCode và channelId' }); return }
+        if (ids.length === 0) { res.status(400).json({ success: false, error: 'Cần onlineProductIds — bộ này KHÔNG đẩy cả kênh' }); return }
+        if (ids.length > 5) { res.status(400).json({ success: false, error: 'Tối đa 5 listing một lượt — đây là bộ THỬ' }); return }
+
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { code: true, schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${storeCode}` }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        // Ảnh chụp TRƯỚC để so sau — "đã lên hay chưa" phải đọc được bằng số.
+        const truoc: any[] = await sp.onlineProduct.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, sku: true, name: true, stock: true, platformProductId: true, syncedAt: true },
+        })
+
+        const { dayTonLenSan } = await import('../lib/dayTonLenSan')
+        const kq = await dayTonLenSan(sp, channelId, { onlineProductIds: ids, force: true, dryRun: !apply })
+        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi }); return }
+
+        const sau: any[] = await sp.onlineProduct.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, sku: true, stock: true, syncedAt: true },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.code, chayThu: !apply,
+                ketQua: kq.data,
+                truoc: truoc.map(t => ({ id: t.id, sku: t.sku, ten: String(t.name || '').slice(0, 40), tonGhiNhan: t.stock, dongBoLuc: t.syncedAt })),
+                sau: sau.map(s => ({ id: s.id, sku: s.sku, tonGhiNhan: s.stock, dongBoLuc: s.syncedAt })),
+                yNghia: apply
+                    ? 'So `truoc.tonGhiNhan` với `sau.tonGhiNhan`: đổi số VÀ `dongBoLuc` mới = sàn đã nhận. '
+                      + 'failed>0 thì đọc `ketQua.errors` — đó là câu NGUYÊN VĂN của sàn.'
+                    : 'CHẠY THỬ — chưa gọi sàn. Gửi lại kèm {"apply":true} để đẩy thật.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * THÔNG TIN CÔNG TY IN LÊN PHIẾU — GET /admin/do-thong-tin-cong-ty
  *
  * 11/09/2026: chủ shop in thử, tên ra "Open Retail", địa chỉ/điện thoại/MST trống.
