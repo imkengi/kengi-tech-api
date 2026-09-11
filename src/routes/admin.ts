@@ -4763,6 +4763,11 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
         }
         let lsCoKhoCon = 0, lsRaDuocMe = 0, lsTacO = { khongRaKhoCon: 0, khoConKhongCoMe: 0 }
         const viDuListingHong: any[] = []
+        /* BẤM "ĐẨY TỒN KHO LÊN SÀN" HÔM NAY THÌ SAO?
+         * Nút đó chạy THẬT ngay, không hỏi lại. Khi CHƯA bật kho mẹ nó đẩy tồn của
+         * chính cửa hàng bán sàn — mà cửa hàng mượn kho thì tồn của nó là 0/âm, đẩy
+         * lên là khoá sạch hàng đang bán. Phải đếm ra con số, đừng suy từ vài dòng mẫu. */
+        let seVeKhong = 0, khoMeCoHang = 0
         for (const l of listing) {
             let hc: any = null
             if (l.localProductId) hc = hangCon.find(c => c.id === l.localProductId) || null
@@ -4773,8 +4778,12 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
                 continue
             }
             lsCoKhoCon++
+            if ((Number(hc.stock) || 0) <= 0) seVeKhong++
             const ds = theoSkuMe.get(String(hc.sku || '').trim().toLowerCase())
-            if (ds && ds.length === 1) lsRaDuocMe++
+            if (ds && ds.length === 1) {
+                lsRaDuocMe++
+                if ((Number(ds[0].stock) || 0) > 0) khoMeCoHang++
+            }
             else {
                 lsTacO.khoConKhongCoMe++
                 if (viDuListingHong.length < 15) viDuListingHong.push({ sku: l.sku, skuKho: hc.sku, tac: ds && ds.length > 1 ? `SKU khớp ${ds.length} hàng bên mẹ` : 'không có SKU này bên mẹ' })
@@ -4792,6 +4801,13 @@ router.get('/do-kho-me', async (req: Request, res: Response) => {
                     listingRaDuocToiKhoMe: lsRaDuocMe,
                     tacO: lsTacO,
                     tyLeChay: listing.length ? Math.round((lsRaDuocMe / listing.length) * 100) + '%' : '—',
+                },
+                neuDayTonHomNay: {
+                    chuaBatKhoMe_seDayVeKhong: seVeKhong,
+                    daBatKhoMe_khoMeConHang: khoMeCoHang,
+                    yNghia: 'chuaBatKhoMe_seDayVeKhong = số listing sẽ bị đẩy tồn về 0 nếu bấm "Đẩy tồn kho lên sàn" '
+                        + 'KHI CHƯA bật kho mẹ (nút chạy thật ngay, không hỏi lại). '
+                        + 'daBatKhoMe_khoMeConHang = số listing sẽ được đẩy tồn THẬT sau khi bật kho mẹ.',
                 },
                 viDuKhop, viDuKhongKhop, viDuKhopNhieu, viDuListingHong,
                 yNghia: 'listingRaDuocToiKhoMe là số listing SẼ đẩy được tồn từ kho mẹ. '
