@@ -4620,13 +4620,36 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
          * ?returnSn=a,b để chỉ định; mặc định lấy tối đa 4 vụ pending. TUẦN TỰ. */
         const chiDinh = String(req.query.returnSn || '').split(',').map(s => s.trim()).filter(Boolean)
         const cacVu = (chiDinh.length ? chiDinh : mau.filter(m => m.trangThai === 'pending').map(m => String(m.return_sn))).slice(0, 4)
+        /* Kênh PHẢI lấy theo chính phiếu trả. KENGISTORE có nhiều gian Shopee và
+         * findFirst không orderBy bốc gian nào tuỳ lần (đo 11/09: lần Kengi Tools,
+         * lần Kengi Electric) ⇒ "shop_and_return_not_matched" giả. */
+        const svcTheoKenh = new Map<string, any>()
         const theoVu: any[] = []
         for (const sn of cacVu) {
             const mot: any = { return_sn: sn }
-            try { mot.lyDo = await svc.getReturnDisputeReasons(sn) }
+            let s: any = svc
+            const phieu = await sp.returnOrder.findFirst({ where: { code: `RTN-SH-${sn}` }, select: { channelId: true } })
+            if (phieu?.channelId) {
+                if (!svcTheoKenh.has(phieu.channelId)) {
+                    const c = await sp.onlineChannel.findUnique({ where: { id: phieu.channelId } })
+                    svcTheoKenh.set(phieu.channelId, c ? {
+                        ten: c.name,
+                        svc: new ShopeeService({
+                            apiKey: c.apiKey || '', apiSecret: c.apiSecret || '',
+                            accessToken: c.accessToken || undefined, refreshToken: c.refreshToken || undefined,
+                            shopId: c.shopId || undefined,
+                        }),
+                    } : null)
+                }
+                const k = svcTheoKenh.get(phieu.channelId)
+                if (k) { s = k.svc; mot.kenh = k.ten }
+            } else {
+                mot.kenh = `(không thấy phiếu RTN-SH-${sn} trong DB — dùng tạm ${ch.name})`
+            }
+            try { mot.lyDo = await s.getReturnDisputeReasons(sn) }
             catch (e: any) { mot.lyDo = { loi: String(e?.message || e).slice(0, 220) } }
             try {
-                const d = await svc.getReturnDetailRaw(sn)
+                const d = await s.getReturnDetailRaw(sn)
                 mot.chiTiet = {
                     tatCaKhoa: Object.keys(d).sort().join(','),
                     status: d.status, reason: d.reason, text_reason: d.text_reason,
