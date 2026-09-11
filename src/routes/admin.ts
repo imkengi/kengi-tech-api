@@ -4600,7 +4600,7 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
         // Lấy vụ trả THẬT gần đây để thử — cửa sổ 14 ngày (get_return_list chặn >15).
         const ds = await svc.fetchReturns({ since: new Date(Date.now() - 14 * 86400_000) })
         const dsArr: any[] = Array.isArray(ds) ? ds : ((ds as any)?.items || [])
-        const mau = dsArr.slice(0, 5).map((r: any) => ({
+        const mau = dsArr.slice(0, 12).map((r: any) => ({
             return_sn: r.returnSn || r.return_sn || r.code, trangThai: r.status, maDon: r.orderSn || r.order_sn,
         }))
         const thu = mau.find(m => m.return_sn)?.return_sn
@@ -4613,12 +4613,39 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
             catch (e: any) { bangChung = { loi: String(e?.message || e).slice(0, 220) } }
         }
 
+        /* 11/09/2026 — chủ shop chỉ form Seller Center: mỗi LÝ DO khiếu nại đòi một
+         * bộ ô bằng chứng riêng (hàng giả: hoá đơn GTGT, giấy uỷ quyền, đăng ký nhãn
+         * hiệu…, mỗi ô ≤3 ảnh). Tài liệu nói get_return_dispute_reason trả đúng các ô
+         * đó (evidence_module_list). Đo trên các vụ ĐANG TREO — vụ đã duyệt trả `{}`.
+         * ?returnSn=a,b để chỉ định; mặc định lấy tối đa 4 vụ pending. TUẦN TỰ. */
+        const chiDinh = String(req.query.returnSn || '').split(',').map(s => s.trim()).filter(Boolean)
+        const cacVu = (chiDinh.length ? chiDinh : mau.filter(m => m.trangThai === 'pending').map(m => String(m.return_sn))).slice(0, 4)
+        const theoVu: any[] = []
+        for (const sn of cacVu) {
+            const mot: any = { return_sn: sn }
+            try { mot.lyDo = await svc.getReturnDisputeReasons(sn) }
+            catch (e: any) { mot.lyDo = { loi: String(e?.message || e).slice(0, 220) } }
+            try {
+                const d = await svc.getReturnDetailRaw(sn)
+                mot.chiTiet = {
+                    tatCaKhoa: Object.keys(d).sort().join(','),
+                    status: d.status, reason: d.reason, text_reason: d.text_reason,
+                    return_seller_due_date: d.return_seller_due_date,
+                    seller_proof: d.seller_proof, seller_compensation: d.seller_compensation,
+                    negotiation: d.negotiation, return_solution: d.return_solution,
+                    return_refund_type: d.return_refund_type,
+                }
+            } catch (e: any) { mot.chiTiet = { loi: String(e?.message || e).slice(0, 220) } }
+            theoVu.push(mot)
+        }
+
         res.json({
             success: true,
             data: {
                 kenh: ch.name, soVuTra14Ngay: dsArr.length, mau, thuTrenVu: thu || null,
                 get_return_dispute_reason: lyDo,
                 query_proof: bangChung,
+                theoVu,
                 yNghia: !thu
                     ? '14 ngày qua không có vụ trả nào ⇒ chưa thử được quyền; chờ có vụ hoặc nới cửa sổ.'
                     : 'Có `loi` chứa error_auth/no_permission ⇒ shop CHƯA được bật nhóm này, dừng, đừng viết thêm. '

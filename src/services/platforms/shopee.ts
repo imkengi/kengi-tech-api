@@ -1378,6 +1378,15 @@ export class ShopeeService extends PlatformService {
         return this.mapReturn(data.response)
     }
 
+    /** get_return_detail NGUYÊN BẢN — mapReturn bỏ mất các trường về bằng chứng
+     *  (seller_proof, negotiation, hạn chót…), bộ đo cần nhìn thấy chúng. */
+    async getReturnDetailRaw(returnSn: string): Promise<any> {
+        const url = this.apiUrl('/api/v2/returns/get_return_detail') + `&return_sn=${encodeURIComponent(returnSn)}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_return_detail: ${data.error} - ${data.message}`)
+        return data.response ?? {}
+    }
+
     private mapReturn(r: any) {
         const RETURN_STATUS_MAP: Record<string, string> = {
             REQUESTED: 'pending',
