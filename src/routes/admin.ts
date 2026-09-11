@@ -4631,6 +4631,118 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
 })
 
 /**
+ * THỬ NỘP BẰNG CHỨNG KHIẾU NẠI — POST /admin/nop-bang-chung-thu
+ *   { storeCode, channelId?, returnSn, anhUrl | anhB64, tenFile?, ghiChu, apply? }
+ *
+ * Hai nửa, KHÁC hẳn nhau về mức nguy hiểm:
+ *   • convert_image — nạp ảnh lên kho ảnh Shopee, CHƯA gắn vào vụ nào. Chạy cả khi
+ *     chạy thử, vì đây mới là chỗ đo được TÊN KHOÁ Shopee trả về (url/thumbnail?).
+ *   • upload_proof  — NỘP THẬT vào vụ trả, người mua và Shopee nhìn thấy. CHỈ chạy
+ *     khi apply=true.
+ * Tên khoá của convert_image chưa từng đo trên gian hàng này nên route in NGUYÊN
+ * phản hồi và chỉ bóc khoá theo danh sách đã thấy; không thấy thì DỪNG và nói rõ,
+ * không đoán.
+ */
+router.post('/nop-bang-chung-thu', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const channelId = String(b.channelId || '').trim()
+        const returnSn = String(b.returnSn || '').trim()
+        const ghiChu = String(b.ghiChu || '').trim()
+        const apply = b.apply === true
+        if (!storeCode || !returnSn) { res.status(400).json({ success: false, error: 'Cần storeCode và returnSn' }); return }
+        if (apply && !ghiChu) { res.status(400).json({ success: false, error: 'Nộp thật thì phải có ghiChu (description)' }); return }
+
+        // ── Lấy byte ảnh ────────────────────────────────────────────────────────
+        let anh: Uint8Array
+        let tenFile = String(b.tenFile || '').trim()
+        if (b.anhB64) {
+            anh = new Uint8Array(Buffer.from(String(b.anhB64), 'base64'))
+            if (!tenFile) tenFile = 'bang-chung.jpg'
+        } else if (b.anhUrl) {
+            const u = String(b.anhUrl)
+            if (!/^https:\/\//i.test(u)) { res.status(400).json({ success: false, error: 'anhUrl phải là https' }); return }
+            const rr = await fetch(u)
+            if (!rr.ok) { res.status(400).json({ success: false, error: `Tải anhUrl hỏng: HTTP ${rr.status}` }); return }
+            anh = new Uint8Array(await rr.arrayBuffer())
+            if (!tenFile) tenFile = (u.split('?')[0].split('/').pop() || 'bang-chung.jpg')
+        } else {
+            res.status(400).json({ success: false, error: 'Cần anhUrl hoặc anhB64' }); return
+        }
+        if (!/\.(jpe?g|png)$/i.test(tenFile)) tenFile += '.jpg'
+
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ch = channelId
+            ? await sp.onlineChannel.findUnique({ where: { id: channelId } })
+            : await sp.onlineChannel.findFirst({ where: { platform: 'shopee', accessToken: { not: null } } })
+        if (!ch || ch.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Không có kênh Shopee đã kết nối' }); return }
+
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const svc = new ShopeeService({
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        })
+
+        const truoc = await svc.queryReturnProof(returnSn).catch((e: any) => ({ loi: String(e?.message || e).slice(0, 200) }))
+
+        let daNap: any = null, loiNap: string | null = null
+        try { daNap = await svc.convertReturnImage(returnSn, anh, tenFile) }
+        catch (e: any) { loiNap = String(e?.message || e).slice(0, 300) }
+
+        // Bóc khoá: chỉ nhận tên đã thấy trong tài liệu Shopee, KHÔNG suy diễn.
+        const boc = (o: any) => {
+            if (!o || typeof o !== 'object') return null
+            const url = o.url || o.image_url || o.image?.url || null
+            const th = o.thumbnail || o.thumbnail_url || o.image?.thumbnail || null
+            return url ? { url: String(url), thumbnail: String(th || url) } : null
+        }
+        const cap = boc(daNap)
+
+        let ketQuaNop: any = null
+        if (apply) {
+            if (!cap) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Chưa bóc được cặp url/thumbnail từ convert_image ⇒ KHÔNG nộp. Xem `convert_image_raw` để biết tên khoá thật.',
+                    data: { convert_image_raw: daNap, loiNap },
+                })
+                return
+            }
+            try { ketQuaNop = await svc.uploadReturnProof(returnSn, { photo: [cap], description: ghiChu }) }
+            catch (e: any) { ketQuaNop = { loi: String(e?.message || e).slice(0, 300) } }
+        }
+
+        const sau = apply
+            ? await svc.queryReturnProof(returnSn).catch((e: any) => ({ loi: String(e?.message || e).slice(0, 200) }))
+            : null
+
+        res.json({
+            success: true,
+            data: {
+                cheDo: apply ? 'NỘP THẬT' : 'CHẠY THỬ (chỉ nạp ảnh, chưa gắn vào vụ)',
+                returnSn, kenh: ch.name, cyKB: Math.round(anh.length / 1024), tenFile,
+                convert_image_raw: daNap, loiNap,
+                capBocDuoc: cap,
+                bangChungTruoc: truoc,
+                upload_proof: ketQuaNop,
+                bangChungSau: sau,
+                yNghia: loiNap
+                    ? 'convert_image hỏng — đọc `loiNap`. Có "upload_image" trong lời báo ⇒ file trung chuyển Tino chưa nhận tên trường.'
+                    : cap
+                        ? (apply ? 'So `bangChungTruoc` với `bangChungSau` để nghiệm thu BẰNG NỘI DUNG, đừng tin HTTP 200.' : 'Ảnh đã lên kho Shopee. Gọi lại với apply=true để nộp thật.')
+                        : 'convert_image trả về hình dạng lạ — xem `convert_image_raw` rồi sửa hàm bóc khoá, KHÔNG đoán.',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * PHÂN LOẠI CỦA MỘT LISTING SHOPEE — GET /admin/do-phan-loai-shopee
  *   ?storeCode=&channelId=&onlineProductId=
  *

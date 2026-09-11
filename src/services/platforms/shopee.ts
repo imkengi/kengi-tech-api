@@ -283,8 +283,28 @@ export class ShopeeService extends PlatformService {
      * thư mục, không có (dev) thì gửi thẳng Shopee.
      */
     async taiKhoiMedia(fields: Record<string, string | number>, khoi: Uint8Array): Promise<any> {
-        const path = '/api/v2/media/upload_video_part'
-        const url = this.urlCong(path)
+        return this.guiFileMultipart(this.urlCong('/api/v2/media/upload_video_part'), fields, khoi, {
+            tenTruong: 'part_content',
+            tenFile: `part-${fields.part_seq ?? 0}.bin`,
+            kieu: 'application/octet-stream',
+        })
+    }
+
+    /**
+     * Gửi MỘT tệp nhị phân theo multipart tới một URL Shopee ĐÃ KÝ SẴN.
+     *
+     * Tách ra từ taiKhoiMedia ngày 11/09/2026 vì nhóm KHIẾU NẠI
+     * (v2.returns.convert_image) cũng cần đúng cơ chế này, chỉ khác TÊN TRƯỜNG
+     * ('upload_image' thay vì 'part_content') và KIỂU tệp (ảnh thật, không phải
+     * octet-stream — Shopee xét đuôi/kiểu). Bên gọi tự ký URL nên hàm này dùng được
+     * cho cả nhóm ký PARTNER (v2.media.*) lẫn nhóm ký có token (v2.returns.*).
+     */
+    private async guiFileMultipart(
+        url: string,
+        fields: Record<string, string | number>,
+        dulieu: Uint8Array,
+        opt: { tenTruong: string; tenFile: string; kieu: string },
+    ): Promise<any> {
         const proxy = process.env.SHOPEE_FORWARD_PROXY
 
         const ac = new AbortController()
@@ -297,7 +317,7 @@ export class ShopeeService extends PlatformService {
                  * nhị phân thô, còn thân JSON lớn thì vào PHP bình thường. PHP giải mã
                  * rồi tự dựng multipart sang Shopee. */
                 const dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
-                if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải khối')
+                if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải tệp')
                 r = await fetch(dich, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -305,7 +325,10 @@ export class ShopeeService extends PlatformService {
                         secret: process.env.SHOPEE_FORWARD_SECRET || '',
                         url,
                         fields,
-                        part_b64: Buffer.from(khoi).toString('base64'),
+                        part_b64: Buffer.from(dulieu).toString('base64'),
+                        file_field: opt.tenTruong,
+                        file_name: opt.tenFile,
+                        file_mime: opt.kieu,
                     }),
                     signal: ac.signal,
                 })
@@ -313,12 +336,12 @@ export class ShopeeService extends PlatformService {
                 // Không proxy (dev / IP đã whitelist): multipart thẳng lên Shopee.
                 const form = new FormData()
                 for (const [k, v] of Object.entries(fields)) form.set(k, String(v))
-                form.set('part_content', new Blob([khoi], { type: 'application/octet-stream' }), `part-${fields.part_seq ?? 0}.bin`)
+                form.set(opt.tenTruong, new Blob([dulieu], { type: opt.kieu }), opt.tenFile)
                 r = await fetch(url, { method: 'POST', body: form, signal: ac.signal })
             }
             const text = await r.text()
             try { return JSON.parse(text) }
-            catch { throw new Error(`Đường tải khối trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
+            catch { throw new Error(`Đường tải tệp trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
         } finally {
             clearTimeout(timer)
         }
@@ -793,6 +816,51 @@ export class ShopeeService extends PlatformService {
         const url = `${this.apiUrl('/api/v2/returns/query_proof')}&return_sn=${encodeURIComponent(returnSn)}`
         const data = await this.httpGet(url)
         if (data.error) throw new Error(`Shopee query_proof: ${data.error} - ${data.message}`)
+        return data.response ?? {}
+    }
+
+    /**
+     * Đưa MỘT ảnh lên kho ảnh khiếu nại — POST /api/v2/returns/convert_image (multipart).
+     *
+     * Shopee KHÔNG nhận URL ảnh của mình; phải nạp tệp lên đây để đổi lấy cặp
+     * url + thumbnail của Shopee, rồi mới nộp được bằng chứng. Giới hạn Shopee công
+     * bố: mỗi lượt MỘT ảnh, ≤10MB, chỉ .jpg/.jpeg/.png.
+     *
+     * Trả về NGUYÊN `response` — tên khoá (url / image_url / thumbnail…) chưa được đo
+     * trên gian hàng thật nên KHÔNG đoán ở đây; bên gọi tự bóc và báo rõ nếu không
+     * thấy khoá nào dùng được.
+     */
+    async convertReturnImage(returnSn: string, anh: Uint8Array, tenFile: string): Promise<any> {
+        const duoi = (tenFile.split('.').pop() || '').toLowerCase()
+        if (!['jpg', 'jpeg', 'png'].includes(duoi)) {
+            throw new Error(`Shopee chỉ nhận .jpg/.jpeg/.png cho ảnh khiếu nại (đang gửi "${tenFile}")`)
+        }
+        if (anh.length > 10 * 1024 * 1024) {
+            throw new Error(`Ảnh ${tenFile} nặng ${(anh.length / 1048576).toFixed(1)}MB — Shopee chặn trên 10MB`)
+        }
+        const data = await this.guiFileMultipart(
+            this.apiUrl('/api/v2/returns/convert_image'),
+            { return_sn: returnSn },
+            anh,
+            { tenTruong: 'upload_image', tenFile, kieu: duoi === 'png' ? 'image/png' : 'image/jpeg' },
+        )
+        if (data?.error) throw new Error(`Shopee convert_image: ${data.error} - ${data.message}`)
+        return data?.response ?? data
+    }
+
+    /**
+     * Nộp bằng chứng cho một vụ trả — POST /api/v2/returns/upload_proof.
+     * `photo` phải là cặp url/thumbnail DO SHOPEE trả về từ convert_image.
+     */
+    async uploadReturnProof(returnSn: string, params: { photo: { url: string; thumbnail: string }[]; description: string }): Promise<any> {
+        if (!params.photo.length) throw new Error('upload_proof: phải có ít nhất 1 ảnh')
+        const body = {
+            return_sn: returnSn,
+            photo: params.photo.map(p => ({ url: p.url, thumbnail: p.thumbnail })),
+            description: params.description,
+        }
+        const data = await this.httpPost(this.apiUrl('/api/v2/returns/upload_proof'), body)
+        if (data.error) throw new Error(`Shopee upload_proof: ${data.error} - ${data.message}`)
         return data.response ?? {}
     }
 
