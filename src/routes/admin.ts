@@ -4687,8 +4687,8 @@ router.get('/do-ma-con-combo', async (req: Request, res: Response) => {
 
         const tu = new Date(Date.now() - soNgay * 86400_000)
         const dong: any[] = await sp.onlineOrderItem.findMany({
-            where: { order: { shippedAt: { gte: tu } } },
-            select: { sku: true, productId: true, quantity: true, order: { select: { shippedAt: true, orderNumber: true } } },
+            where: { onlineOrder: { shippedAt: { gte: tu } } },
+            select: { sku: true, productId: true, quantity: true, onlineOrder: { select: { shippedAt: true, orderNumber: true } } },
             take: 30000,
         })
         const theoNgay: Record<string, { maCon: number; combo: number }> = {}
@@ -4698,10 +4698,10 @@ router.get('/do-ma-con-combo', async (req: Request, res: Response) => {
             const laCon = (d.productId && idCon.has(d.productId)) || (!!s && skuCon.has(s))
             const laCb = (d.productId && idCombo.has(d.productId)) || (!!s && (skuCb.has(s) || skuAx.has(s)))
             if (!laCon && !laCb) continue
-            const ngay = new Date(d.order.shippedAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
+            const ngay = new Date(d.onlineOrder.shippedAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
             theoNgay[ngay] = theoNgay[ngay] || { maCon: 0, combo: 0 }
             if (laCb) theoNgay[ngay].combo++; else theoNgay[ngay].maCon++
-            if (mau.length < 12) mau.push({ ngay, don: d.order.orderNumber, sku: d.sku, sl: d.quantity, loai: laCb ? 'combo' : 'ma-con' })
+            if (mau.length < 12) mau.push({ ngay, don: d.onlineOrder.orderNumber, sku: d.sku, sl: d.quantity, loai: laCb ? 'combo' : 'ma-con' })
         }
         res.json({
             success: true,
