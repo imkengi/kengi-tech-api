@@ -113,6 +113,7 @@ function getStorePrisma(schemaName: string): StorePrisma {
     ;(client as any).__schema = schemaName
 
     branchClients.set(schemaName, { client, lastUsed: Date.now(), dangBan: 0 })
+    soClientDaTao++
     return client
 }
 
@@ -148,6 +149,7 @@ function thaiClientNhanRoi(): void {
         const val = branchClients.get(schema)
         if (!val) continue
         branchClients.delete(schema)
+        soClientDaThai++
         val.client.$disconnect().catch(() => { })
     }
 }
@@ -157,6 +159,25 @@ function thaiClientNhanRoi(): void {
 if (NHAN_ROI_MS > 0) {
     const hen = setInterval(thaiClientNhanRoi, 2 * 60_000)
     if (typeof hen.unref === 'function') hen.unref()
+}
+
+/* ĐẾM ĐỂ TRUY RÒ RỈ BỘ NHỚ (12/09/2026). Máy chủ leo từ ~52% lên 100% trong 1,5–3
+ * giờ rồi bị Cloud Run giết, 18 lần/5 ngày. Nghi client Prisma bị tạo đi tạo lại
+ * (thải nhàn rỗi 3' + cron 5–10' = mở lại liên tục), mỗi client kéo theo bộ máy
+ * truy vấn bằng mã máy. GET /api/admin/do-bo-nho đọc mấy số này. */
+let soClientDaTao = 0
+let soClientDaThai = 0
+
+function thongKeClientStore() {
+    const nay = Date.now()
+    return {
+        dangGiu: branchClients.size,
+        daTao: soClientDaTao,
+        daThai: soClientDaThai,
+        chiTiet: [...branchClients.entries()].map(([schema, v]) => ({
+            schema, nhanRoiGiay: Math.round((nay - v.lastUsed) / 1000), dangBan: v.dangBan,
+        })),
+    }
 }
 
 // ─── Schema Management ──────────────────────────────────────────────────────
@@ -454,6 +475,7 @@ async function mapWithConcurrency<T, R>(
 
 export {
     registryPrisma,
+    thongKeClientStore,
     getStorePrisma,
     branchIdToSchema,
     createBranchSchema,

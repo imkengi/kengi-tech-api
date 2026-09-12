@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
-import { registryPrisma, getStorePrisma, dropStoreSchema, dropBranchSchema, taoBangTuSqlDungSan, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, dropStoreSchema, dropBranchSchema, taoBangTuSqlDungSan, thongKeClientStore, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
 import { chayTheoDot } from '../lib/poolGuard'
 import { khoHuHong } from '../lib/warehouseHelper'
 import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
@@ -11168,6 +11168,32 @@ router.post('/thu-tao-schema', async (req: Request, res: Response) => {
         // Chỉ xoá đúng schema tạm vừa tạo (tên có tiền tố cố định)
         if (tam.startsWith('thu_tao_bang_')) await dropBranchSchema(tam).catch(e => console.error('[thu-tao-schema] xoá schema tạm hỏng:', e?.message))
     }
+})
+
+/* ─── GET /admin/do-bo-nho — ĐO RÒ RỈ BỘ NHỚ (12/09/2026) ────────────────────
+ * Đường bộ nhớ Cloud Run là răng cưa: khởi động lại ở ~52%, leo đều tới 100%
+ * trong 1,5–3 giờ rồi bị giết — 18 lần trong 5 ngày, cả lúc đêm không ai dùng.
+ * Gọi endpoint này nhiều lần cách nhau vài phút rồi so: heapUsed leo = rò ở
+ * JS; rss/external leo mà heapUsed đứng = rò ở phần mã máy (bộ máy Prisma);
+ * client.daTao leo nhanh = client cửa hàng bị mở đi mở lại. */
+router.get('/do-bo-nho', async (_req: Request, res: Response) => {
+    const v8 = await import('v8')
+    const m = process.memoryUsage()
+    const mb = (n: number) => Math.round(n / 1048576)
+    const h = v8.getHeapStatistics()
+    res.json({
+        success: true,
+        data: {
+            chayDuocGiay: Math.round(process.uptime()),
+            rssMB: mb(m.rss),
+            heapUsedMB: mb(m.heapUsed),
+            heapTotalMB: mb(m.heapTotal),
+            externalMB: mb(m.external),
+            arrayBuffersMB: mb(m.arrayBuffers),
+            heapTranMB: mb(h.heap_size_limit),
+            client: thongKeClientStore(),
+        },
+    })
 })
 
 export default router
