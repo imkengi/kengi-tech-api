@@ -219,7 +219,22 @@ router.get('/stores/:id', async (req: Request, res: Response) => {
             dungLuong = { loi: String(e?.message || e).slice(0, 200) }
         }
 
-        res.json({ success: true, data: { ...store, users, branches, dungLuong } })
+        /* ĐẾM DỮ LIỆU CỬA HÀNG (12/09/2026, chủ shop: "hiện tổng cộng bao nhiêu khách
+         * hàng, NCC và mã hàng"). TUẦN TỰ, không Promise.all: pool prod = 1, bắn song
+         * song là tự xếp hàng rồi cạn kết nối. Đếm hỏng thì để null và nói ra ở `loi`
+         * — "không đọc được" phải khác "bằng 0". */
+        const soLieu: any = {}
+        for (const [ten, dem] of [
+            ['khachHang', () => storePrisma.customer.count()],
+            ['nhaCungCap', () => (storePrisma as any).supplier.count()],
+            ['maHang', () => storePrisma.product.count()],
+            ['giaoDich', () => storePrisma.transaction.count()],
+            ['donSan', () => (storePrisma as any).onlineOrder.count()],
+        ] as Array<[string, () => Promise<number>]>) {
+            try { soLieu[ten] = await dem() } catch (e: any) { soLieu[ten] = null; soLieu.loi = `${soLieu.loi ? soLieu.loi + '; ' : ''}${ten}: ${String(e?.message || e).slice(0, 80)}` }
+        }
+
+        res.json({ success: true, data: { ...store, users, branches, dungLuong, soLieu } })
     } catch (err) {
         console.error('Admin store detail error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
