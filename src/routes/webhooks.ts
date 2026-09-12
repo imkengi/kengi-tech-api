@@ -70,14 +70,26 @@ router.post('/shopee', async (req: Request, res: Response) => {
 
         console.log(`[Shopee Webhook] code=${pushCode} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
-        // Process order pushes (3, 4) + new chat message push (10)
         // code 0 = Shopee xác minh URL (bấm Verify bên console). Đã trả 200 rỗng ở trên.
         if (pushCode === 0) {
             console.log(`[Shopee Webhook] ✅ Xác minh URL — đã trả 200 thân rỗng`)
             return
         }
-        if (pushCode !== 3 && pushCode !== 4 && pushCode !== 10) {
-            console.log(`[Shopee Webhook] Bỏ qua push code ${pushCode} (chỉ nhận 3=trạng thái, 4=mã vận đơn, 10=chat)`)
+        /* MÃ PUSH NHẬN (12/09/2026, chủ shop: "ráng sửa webhook nhận đầy đủ nhất có thể
+         * để không phải phụ thuộc sync cron"). Đếm 7 ngày log prod TRƯỚC khi mở, kèm
+         * payload thật của từng mã:
+         *   3  trạng thái đơn                                        308 lượt
+         *   30 fulfillment_status, LOGISTICS_DELIVERY_DONE + giờ     237 — GIỜ NHẬN HÀNG
+         *   47 changed_fields logistics_channel_id / ship_by_date    117 — đổi ĐVVC, hạn bàn giao
+         *   4  mã vận đơn                                             85
+         *   29 return_status + return_sn                              32 — PHIẾU TRẢ HÀNG
+         *   15 kiện hàng status READY                                 22
+         *   10 chat                                                   13
+         * Trước đó chỉ nhận 3, 4, 10: ba loại còn lại rơi vào log "bỏ qua" rồi phải chờ
+         * cron 30' vớt, riêng phiếu trả chờ tới lượt quét trả hàng. */
+        const MA_PUSH_NHAN = new Set([3, 4, 10, 15, 29, 30, 47])
+        if (!MA_PUSH_NHAN.has(Number(pushCode))) {
+            console.log(`[Shopee Webhook] Bỏ qua push code ${pushCode} (nhận ${[...MA_PUSH_NHAN].join(', ')})`)
             return
         }
 
@@ -247,6 +259,28 @@ router.post('/shopee', async (req: Request, res: Response) => {
             return
         }
 
+        /* ── Code 29: phiếu trả hàng đổi trạng thái → đồng bộ NGAY ──────────────
+         * Push mang sẵn return_sn + order_sn, nhưng bộ đồng bộ phiếu trả làm việc
+         * theo KHUNG NGÀY (upsert, nắn ngày phiếu, đảo đơn khi hoàn tiền, vá mã vận
+         * đơn trả) nên gọi lại chính nó với khung hẹp 3 ngày, đừng chép tay logic đó
+         * ra đây. Debounce 60s/kênh: Shopee bắn 2–3 push cho một phiếu (return_status
+         * rồi return_solution rồi logistics_status) — đo 7 ngày: 32 push. */
+        if (pushCode === 29) {
+            const khoaCho = `webhook:shopee:returns:${channel.id}`
+            if (await cacheGet(khoaCho)) {
+                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — đã có lượt quét vừa chạy, bỏ lượt này`)
+                return
+            }
+            await cacheSet(khoaCho, '1', 60)
+            try {
+                const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 3 * 86400_000))
+                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} (đơn ${orderSn}) → +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
+            } catch (retErr: any) {
+                console.error(`[Shopee Webhook] Đồng bộ phiếu trả hỏng cho ${channel.name}:`, retErr.message)
+            }
+            return
+        }
+
         // Create ShopeeService to fetch order detail
         const shopee = new ShopeeService({
             apiKey: channel.apiKey,
@@ -266,6 +300,14 @@ router.post('/shopee', async (req: Request, res: Response) => {
          *
          * Đây cũng là đường NHANH NHẤT: khỏi chờ Shopee cập nhật xong bên API. */
         const maVanDonTuPush = String((data as any).tracking_no || (data as any).tracking_number || '').trim()
+        /* Push 30 `fulfillment_status=LOGISTICS_DELIVERY_DONE` + `update_time` (giây) = đúng
+         * lúc giao thành công. CHỈ nhận mốc này, không nhận mốc khác của code 30
+         * (PICKUP_DONE, DELIVERY_FAILED…) kẻo ghi nhầm ngày nhận hàng. */
+        const ngayNhanTuPush = pushCode === 30
+            && /DELIVERY_DONE/i.test(String((data as any).fulfillment_status || ''))
+            && Number((data as any).update_time) > 0
+            ? new Date(Number((data as any).update_time) * 1000)
+            : null
 
         const orderDetail = await shopee.getOrderDetail(orderSn)
         if (!orderDetail) {
@@ -303,8 +345,16 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || existing.trackingNumber,
                     shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
                     shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
-                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : existing.deliveredAt,
+                    /* GIỜ NHẬN HÀNG: get_order_detail của Shopee KHÔNG trả giờ giao thành công
+                     * — đó là lý do cron phải gọi thêm API hành trình để vá (đo 12/09: 8–11 đơn
+                     * mỗi lượt). Push code 30 mang sẵn giờ đó ở `update_time`, lấy luôn. */
+                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : (ngayNhanTuPush || existing.deliveredAt),
                     paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : existing.paidAt,
+                    /* Hạn bàn giao + cờ hoả tốc: push 47 báo đổi đơn vị vận chuyển / ship_by_date.
+                     * Chỉ NÂNG cờ hoả tốc, không hạ (get_channel_list lỗi → false giả) — cùng quy
+                     * ước với đường sync ở onlineOrders.ts. */
+                    shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : (existing as any).shipByDate,
+                    ...((orderDetail as any).isInstant ? { isInstant: true } : {}),
                     syncedAt: new Date(),
                 },
             })
@@ -352,6 +402,8 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
                     shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
                     deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
+                    shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : null,
+                    isInstant: !!(orderDetail as any).isInstant,
                     syncedAt: new Date(),
                     createdAt: new Date(orderDetail.createdAt),
                     // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
@@ -437,15 +489,21 @@ router.post('/tiktok', async (req: Request, res: Response) => {
 
         console.log(`[TikTok Webhook] type=${pushType} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
-        // Push types we process: 1 = order status change, 2 = reverse order
-        // (return/refund) status change, 4 = package update
-        if (pushType !== 1 && pushType !== 2 && pushType !== 4) {
+        /* LOẠI PUSH NHẬN (12/09/2026). Đếm 7 ngày log prod kèm payload thật:
+         *   1  đổi trạng thái đơn                                        82 lượt
+         *   2  đơn hoàn/trả đổi trạng thái                                4
+         *   12 return_id + return_status (RETURN_OR_REFUND_REQUEST_…)     2 — PHIẾU TRẢ, trước bỏ qua
+         *   11 cancel_id + cancel_status (khách/shop huỷ đơn)             4 — trước bỏ qua
+         *   4  đổi kiện hàng
+         * Type 12 chính là loại mang vụ trả 4042223877292721302 mà mình xử lý hôm 11/09
+         * — nó bị bỏ qua, phải chờ cron quét trả hàng mới thấy. */
+        if (pushType !== 1 && pushType !== 2 && pushType !== 4 && pushType !== 11 && pushType !== 12) {
             console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
             return
         }
 
         const orderId = data.order_id
-        if (pushType !== 2 && !orderId) {
+        if (pushType !== 2 && pushType !== 12 && !orderId) {
             console.log(`[TikTok Webhook] No order_id in data`)
             return
         }
@@ -527,7 +585,8 @@ router.post('/tiktok', async (req: Request, res: Response) => {
         // ── Type 2: return/refund status change → sync returns realtime ──
         // Webhook là kênh cập nhật chính cho trả hàng; nút sync tay chỉ là fallback.
         // Debounce 60s/kênh: một đợt event dồn dập chỉ chạy 1 lần quét (7 ngày).
-        if (pushType === 2) {
+        // Type 12 mang return_id + return_status, cùng đường với type 2.
+        if (pushType === 2 || pushType === 12) {
             const debounceKey = `webhook:tiktok:returns:${channel.id}`
             if (await cacheGet(debounceKey)) {
                 console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name}`)
@@ -536,7 +595,8 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             await cacheSet(debounceKey, '1', 60)
             try {
                 const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 7 * 86400_000))
-                console.log(`[TikTok Webhook] 🔄 Returns synced for ${channel.name}: +${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
+                console.log(`[TikTok Webhook] 🔄 Returns synced (type ${pushType}${data.return_id ? `, vụ ${data.return_id}` : ''}) for ${channel.name}: `
+                    + `+${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
             } catch (retErr: any) {
                 console.error(`[TikTok Webhook] Returns sync failed for ${channel.name}:`, retErr.message)
             }
