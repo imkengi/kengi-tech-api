@@ -11192,8 +11192,48 @@ router.get('/do-bo-nho', async (_req: Request, res: Response) => {
             arrayBuffersMB: mb(m.arrayBuffers),
             heapTranMB: mb(h.heap_size_limit),
             client: thongKeClientStore(),
+            cgroup: docCgroup(),
+            thuMuc: doThuMuc(['/app/public/uploads', '/tmp', '/app/dist']),
         },
     })
 })
+
+/* Cloud Run giết theo SỐ CỦA CGROUP, không theo rss của Node: file ghi xuống đĩa
+ * trong container cũng tính vào đó (đĩa Cloud Run nằm trong RAM). Tách anon (tiến
+ * trình) / file (đệm đọc ghi) / shmem (tmpfs) để biết phần nào phình. */
+function docCgroup() {
+    const doc = (p: string) => { try { return require('fs').readFileSync(p, 'utf8') } catch { return '' } }
+    const mb = (n: number) => Math.round(n / 1048576)
+    const v2 = doc('/sys/fs/cgroup/memory.current')
+    const stat = doc('/sys/fs/cgroup/memory.stat') || doc('/sys/fs/cgroup/memory/memory.stat')
+    const lay = (ten: string) => {
+        const m = stat.match(new RegExp('(?:^|\n)' + ten + ' (\d+)'))
+        return m ? mb(Number(m[1])) : null
+    }
+    const dungMB = v2 ? mb(Number(v2.trim())) : (Number(doc('/sys/fs/cgroup/memory/memory.usage_in_bytes').trim()) ? mb(Number(doc('/sys/fs/cgroup/memory/memory.usage_in_bytes').trim())) : null)
+    return { dungMB, anonMB: lay('anon'), fileMB: lay('file'), shmemMB: lay('shmem'), slabMB: lay('slab'), sockMB: lay('sock') }
+}
+
+/** Kích thước các thư mục ghi được — file ở đây là RAM trên Cloud Run. */
+function doThuMuc(duongDan: string[]) {
+    const fs = require('fs'), path = require('path')
+    const quet = (goc: string) => {
+        let so = 0, byte = 0
+        const di = (d: string, sau: number) => {
+            if (sau > 6 || so > 20000) return
+            let muc: any[] = []
+            try { muc = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
+            for (const m of muc) {
+                const p = path.join(d, m.name)
+                if (m.isDirectory()) di(p, sau + 1)
+                else { try { byte += fs.statSync(p).size; so++ } catch { /* file vừa bị xoá */ } }
+            }
+        }
+        if (!fs.existsSync(goc)) return { duong: goc, co: false }
+        di(goc, 0)
+        return { duong: goc, co: true, soFile: so, MB: Math.round(byte / 1048576) }
+    }
+    return duongDan.map(quet)
+}
 
 export default router
