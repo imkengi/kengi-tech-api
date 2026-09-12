@@ -176,11 +176,50 @@ router.get('/stores/:id', async (req: Request, res: Response) => {
         // Get user count + branches from store schema
         const storePrisma = getStorePrisma(store.schema)
         const [users, branches] = await Promise.all([
-            storePrisma.user.findMany({ select: { id: true, name: true, email: true, role: true, employeeStatus: true } }),
+            storePrisma.user.findMany({ select: { id: true, name: true, email: true, role: true, employeeStatus: true, isLocked: true, createdAt: true } }),
             storePrisma.branch.findMany({ select: { id: true, name: true, code: true, status: true, address: true } }),
         ])
 
-        res.json({ success: true, data: { ...store, users, branches } })
+        /* DUNG LƯỢNG THẬT CỦA CỬA HÀNG (12/09/2026, chủ shop: "xem được từng store đang
+         * lưu trữ data khoảng bao nhiêu").
+         *
+         * Hai phần tách riêng vì chúng nằm hai nơi và tính tiền khác nhau:
+         *  • dbByte  — schema Postgres của cửa hàng: pg_total_relation_size gộp cả chỉ mục
+         *              và TOAST, tức đúng chỗ đĩa bị chiếm, không phải ước lượng theo số dòng.
+         *  • fileByte — tệp trong Kho lưu trữ (bảng StorageFile), là số trang danh sách
+         *              đang hiển thị và dùng để tính phí vượt 500 MB.
+         * soDong lấy từ reltuples nên là SỐ ƯỚC TÍNH của Postgres (cập nhật sau ANALYZE),
+         * chỉ để biết bảng nào phình — đừng dùng làm số liệu nghiệp vụ.
+         * Ép ::float8 vì bigint của Postgres sang JSON là BigInt, JSON.stringify sẽ ném lỗi. */
+        let dungLuong: any = null
+        try {
+            const bang: any[] = await registryPrisma.$queryRawUnsafe(
+                `SELECT c.relname AS ten,
+                        pg_total_relation_size(c.oid)::float8 AS byte,
+                        GREATEST(c.reltuples, 0)::float8 AS "soDongUocTinh"
+                   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE n.nspname = $1 AND c.relkind = 'r'
+                  ORDER BY pg_total_relation_size(c.oid) DESC`, store.schema)
+            const dbByte = bang.reduce((t, r) => t + Number(r.byte || 0), 0)
+            const tep: any = await (storePrisma as any).storageFile
+                .aggregate({ _sum: { size: true }, _count: true }).catch(() => null)
+            const fileByte = Number(tep?._sum?.size || 0)
+            dungLuong = {
+                dbByte,
+                fileByte,
+                tongByte: dbByte + fileByte,
+                soTep: Number(tep?._count || 0),
+                soBang: bang.length,
+                bangLon: bang.slice(0, 8).map(r => ({
+                    ten: r.ten, byte: Number(r.byte || 0), soDongUocTinh: Math.round(Number(r.soDongUocTinh || 0)),
+                })),
+            }
+        } catch (e: any) {
+            // Đọc hỏng thì NÓI RA, đừng trả 0 — "không đo được" khác "cửa hàng trống"
+            dungLuong = { loi: String(e?.message || e).slice(0, 200) }
+        }
+
+        res.json({ success: true, data: { ...store, users, branches, dungLuong } })
     } catch (err) {
         console.error('Admin store detail error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
