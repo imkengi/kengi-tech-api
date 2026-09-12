@@ -513,6 +513,9 @@ export async function lienKetHangDon(prisma: StorePrisma, orderId: string): Prom
     return them
 }
 
+/** Trần đơn chuyển mỗi lượt/kênh — chặn một đợt tồn đọng làm sập lượt đồng bộ. */
+const TRAN_MOI_LUOT = 500
+
 export async function processNewOrders(prisma: StorePrisma, channelId: string): Promise<number> {
     // Find orders that are confirmed/completed but not yet converted to transactions
     /* Đơn đã thử mà không khớp được SKU nào thì CHỈ thử lại mỗi 24h, không phải
@@ -524,21 +527,44 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
      * vĩnh viễn mà không ai biết. Một lượt/ngày là giá rẻ để không bỏ sót doanh thu
      * — "chưa khớp được" KHÔNG có nghĩa là "sẽ không bao giờ khớp". */
     const hanThuLai = new Date(Date.now() - 24 * 3600_000)
-    const orders = await prisma.onlineOrder.findMany({
-        where: {
-            channelId,
-            /* MỘT nguồn với hàm chuyển ở trên (trước đây là danh sách gõ tay riêng,
-             * khớp nhau bằng niềm tin). Không có READY_TO_SHIP / AWAITING_SHIPMENT:
-             * đơn chờ xác nhận không được quét lên phiếu — xem lib/donDuocXoa.ts. */
-            status: { in: [...TRANG_THAI_DUOC_LEN_PHIEU] },
-            OR: [
-                { khongKhopSku: false },
-                { khongKhopLuc: null },                  // cờ bật mà chưa có mốc → cứ thử
-                { khongKhopLuc: { lt: hanThuLai } },
-            ],
-        },
-        select: { id: true, orderNumber: true },
-    })
+
+    /* CHỈ LẤY ĐƠN CHƯA CÓ PHIẾU — lọc ngay trong truy vấn (12/09/2026).
+     *
+     * Bản cũ lấy TẤT CẢ đơn ở trạng thái lên phiếu rồi nạp TỪNG đơn kèm `items` mới
+     * hỏi "đã có phiếu chưa" (convertOnlineOrderToTransaction hỏi ở giữa hàm), nên
+     * gần như mỗi lượt là nạp lại hàng nghìn đơn CŨ để vứt đi. Đo 12/09 trên log
+     * prod: 2.692 + 2.547 + 1.413 đơn mỗi lượt cho 3 kênh, cứ 30 phút một lần. Máy
+     * chủ leo từ ~52% lên trần 512 MiB trong 1,5–3 giờ rồi bị Cloud Run giết — 18 lần
+     * trong 5 ngày; cùng cửa sổ có 8 lần cạn kết nối (pool = 1). Máy bị giết lúc
+     * 04:17:38 đang đứng ngay trong vòng này.
+     *
+     * Phép lọc lấy đúng của GET /admin/don-ket: nối trái sang Transaction theo
+     * `receiptNumber = 'ONLINE-' || orderNumber` — chính khoá mà hàm chuyển tạo ra,
+     * nên "có dòng khớp" = "đã lên phiếu", không phải đoán.
+     *
+     * TRAN_MOI_LUOT: một đợt tồn đọng (ví dụ 732 đơn kẹt vì listing thiếu SKU, cứ 24h
+     * lại tới lượt thử lại) không được phép làm sập một lượt. Xếp đơn CHƯA bị đánh dấu
+     * lệch SKU lên trước để đơn mới không bị đám kẹt lâu năm chen chỗ. */
+    const trangThaiAnToan = TRANG_THAI_DUOC_LEN_PHIEU.filter(s => /^[A-Za-z_]+$/.test(s))
+    if (trangThaiAnToan.length !== TRANG_THAI_DUOC_LEN_PHIEU.length) {
+        throw new Error('[OrderSync] Trạng thái lên phiếu có ký tự lạ — không ghép thẳng vào SQL được')
+    }
+    const dsTrangThai = trangThaiAnToan.map(t => `'${t}'`).join(',')
+    const orders: Array<{ id: string; orderNumber: string }> = await prisma.$queryRawUnsafe(
+        `SELECT o.id, o."orderNumber"
+           FROM "OnlineOrder" o
+           LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+          WHERE o."channelId" = $1
+            AND t.id IS NULL
+            AND o.status IN (${dsTrangThai})
+            AND (o."khongKhopSku" = false OR o."khongKhopLuc" IS NULL OR o."khongKhopLuc" < $2)
+          ORDER BY o."khongKhopSku" ASC, o."createdAt" ASC
+          LIMIT ${TRAN_MOI_LUOT}`,
+        channelId, hanThuLai,
+    )
+    if (orders.length >= TRAN_MOI_LUOT) {
+        console.log(`[OrderSync] Chạm trần ${TRAN_MOI_LUOT} đơn/lượt — còn đơn chưa lên phiếu, lượt sau chạy tiếp`)
+    }
 
     let converted = 0
     let daXuLy = 0          // đếm đơn ĐÃ CHẠM (thành công hay không) — khác `converted`

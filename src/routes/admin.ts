@@ -11236,4 +11236,63 @@ function doThuMuc(duongDan: string[]) {
     return duongDan.map(quet)
 }
 
+/* ─── GET /admin/do-chuyen-don — NGHIỆM THU truy vấn chọn đơn để lên phiếu ───
+ * (12/09/2026) processNewOrders trước đây lấy MỌI đơn ở trạng thái lên phiếu rồi
+ * nạp từng đơn kèm items mới hỏi "đã có phiếu chưa" → mỗi lượt nạp lại hàng nghìn
+ * đơn cũ, máy chủ leo tới trần 512 MiB rồi bị giết. Nay lọc thẳng trong truy vấn.
+ * Bộ đo này chạy CẢ HAI phép đếm trên dữ liệu thật và kiểm bất biến:
+ *      cũ = mới + đã có phiếu
+ * Lệch một đơn nghĩa là phép lọc mới bỏ sót hoặc ôm dư — phải xem lại trước khi tin. */
+router.get('/do-chuyen-don', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.store || 'KENGISTORE').trim()
+        const store = await registryPrisma.store.findFirst({ where: { code: ma }, select: { schema: true, name: true, code: true } })
+        if (!store) { res.status(404).json({ success: false, error: `Không tìm thấy cửa hàng ${ma}` }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const { TRANG_THAI_DUOC_LEN_PHIEU } = await import('../lib/donDuocXoa')
+        const ds = TRANG_THAI_DUOC_LEN_PHIEU.filter(t => /^[A-Za-z_]+$/.test(t)).map(t => `'${t}'`).join(',')
+        const han = new Date(Date.now() - 24 * 3600_000)
+        const dieuKienChung = `o.status IN (${ds})
+              AND (o."khongKhopSku" = false OR o."khongKhopLuc" IS NULL OR o."khongKhopLuc" < $2)`
+
+        const kenh: any[] = await sp.onlineChannel.findMany({ select: { id: true, name: true, platform: true } })
+        const bang: any[] = []
+        // TUẦN TỰ — pool prod = 1, Promise.all ở đây là tự cạn kết nối
+        for (const k of kenh) {
+            const dem = async (them: string) => {
+                const r: any[] = await sp.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS so FROM "OnlineOrder" o
+                       LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+                      WHERE o."channelId" = $1 AND ${dieuKienChung} ${them}`, k.id, han)
+                return Number(r[0]?.so || 0)
+            }
+            const cu = await dem('')                       // cách cũ: không quan tâm đã có phiếu chưa
+            const moi = await dem('AND t.id IS NULL')      // cách mới: chỉ đơn chưa có phiếu
+            const daCoPhieu = await dem('AND t.id IS NOT NULL')
+            bang.push({
+                kenh: k.name, san: k.platform,
+                cachCu: cu, cachMoi: moi, daCoPhieu,
+                khop: cu === moi + daCoPhieu,
+                giamPhanTram: cu > 0 ? Math.round((1 - moi / cu) * 100) : 0,
+            })
+        }
+        const tongCu = bang.reduce((a, b) => a + b.cachCu, 0)
+        const tongMoi = bang.reduce((a, b) => a + b.cachMoi, 0)
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, tongCu, tongMoi,
+                giamPhanTram: tongCu > 0 ? Math.round((1 - tongMoi / tongCu) * 100) : 0,
+                khopHet: bang.every(b => b.khop),
+                tranMoiLuot: 500,
+                bang,
+                yNghia: 'cachCu = số đơn mỗi lượt TRƯỚC đây nạp lên (kèm toàn bộ dòng hàng); cachMoi = số đơn thật sự cần chuyển; khop = cũ bằng mới cộng đã có phiếu',
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 export default router
