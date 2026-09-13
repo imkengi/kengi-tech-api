@@ -22,7 +22,7 @@ import { chonClientDeThai } from './thaiClientNhanRoi'
 
 const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
-const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '50', 10)
+const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '16', 10)
 
 // ─── Registry Client (public schema — Store lookup only) ────────────────────
 
@@ -138,7 +138,29 @@ function getStorePrisma(schemaName: string): StorePrisma {
  * vẫn 36–41/50 kết nối. Cron giờ đã dãn (30'/10'/5') và chỉ chạy trên một
  * bản, nên 3' là đủ để cửa hàng vắng thật sự trả kết nối. Cửa hàng đang bán
  * chạm liên tục nên không bao giờ tới hạn; nối lại chỉ tốn một lần bắt tay. */
-const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(3 * 60_000), 10)
+/* NÂNG 3' → 30' (13/09/2026) — ĐO ĐƯỢC, không phải đoán. Máy chủ bị Cloud Run
+ * giết vì hết RAM 28 lần/7 ngày, răng cưa leo 2,5–3 h mỗi nhịp. Đo trên prod:
+ *
+ *   • bản mới khởi động, 1 client:        rss 143 MB (heap 55)
+ *   • chạm lần lượt 12 cửa hàng:         rss 233 MB, 12 client sống
+ *     → MỖI CLIENT SỐNG chỉ tốn 8,2 MB, heap chỉ nhích 2 MB (phần tăng nằm
+ *       NGOÀI heap = bộ máy truy vấn Prisma bằng mã Rust)
+ *   • bản đã chạy 2,7–3,2 h (đã tạo 157–182 client): khi chỉ còn 3 client sống
+ *     rss vẫn 420–451 MB, trong khi bản mới cùng 3 client chỉ ~160 MB
+ *     → ~1,6 MB KHÔNG ĐƯỢC TRẢ LẠI cho mỗi vòng tạo–rồi-thải
+ *
+ * Với ngưỡng 3', cron chạm cửa hàng mỗi ~12' nên client bị thải rồi tạo lại
+ * ~1 lần/phút ⇒ ~1,6 MB/phút ⇒ từ 143 MB lên 512 MiB đúng ~2,8 h. Khớp y hệt
+ * nhịp răng cưa đo được.
+ *
+ * Giữ nguyên 12 client sống cả ngày chỉ tốn 98 MB — RẺ HƠN HẲN việc thải đi tạo
+ * lại. Ngưỡng 30' đủ dài để hầu hết cửa hàng không bao giờ bị thải (cron chạm
+ * mỗi 12'), nên số lần tạo tụt từ ~180/3h xuống ~12–20 mỗi đời bản máy.
+ * Kết nối DB vẫn an toàn: 12 cửa hàng × connection_limit=1 = 12/bản (đo 13/09
+ * đỉnh 17/50, và ngưỡng 3' ra đời 16/08 hồi POOL_SIZE=3 — giờ đã là 1).
+ * Nghiệm thu: GET /api/admin/do-bo-nho — `daTao` phải gần bằng số cửa hàng,
+ * không còn leo hàng trăm; rss phải phẳng quanh 240–270 MB. */
+const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(30 * 60_000), 10)
 
 function thaiClientNhanRoi(): void {
     /* Phần QUYẾT ĐỊNH nằm ở lib/thaiClientNhanRoi.ts (thuần, có bộ kiểm riêng);
