@@ -24,17 +24,79 @@ const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
 const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '16', 10)
 
+/* ─── THỬ LẠI KHI MẤT KẾT NỐI (13/09/2026) ────────────────────────────────────
+ *
+ * Cloud Run chạy với `cpu-throttling: true` — NGOÀI lúc xử lý request container
+ * gần như không có CPU, nên keepalive của kết nối không chạy được và kết nối
+ * nằm im lâu thì CHẾT ÂM THẦM. Truy vấn đầu tiên sau đó ăn `P1001 Can't reach
+ * database server`; pool của Prisma sau đó tự thay kết nối, nên lần thử THỨ HAI
+ * gần như luôn được.
+ *
+ * Đo 13/09 (09:55–12:25): 47 lần "không tới được DB", đơn thành chùm ở phút :25
+ * và :55 — đúng nhịp cron 30'. Trong đó `onlineOrder.create` hỏng 40 lần và
+ * `journalEntry.create` 6 lần. NGHIÊM TRỌNG vì webhook sàn trả 200 TRƯỚC khi xử
+ * lý (webhooks.ts:58) rồi chỉ console.error, nên sàn không bao giờ đẩy lại —
+ * mỗi lần hỏng là một đơn rơi, chỉ còn cron sync vớt. (Vì vậy CHƯA được bỏ cron
+ * sync đơn.) Lỗi này có từ trước, không phải do nâng ngưỡng thải client; nâng
+ * ngưỡng chỉ làm kết nối nằm im lâu hơn nên gặp nhiều hơn (21 → 47).
+ *
+ * Chỉ thử lại LỖI KẾT NỐI (P1001/P1017 — truy vấn chưa tới được máy chủ nên
+ * chạy lại là an toàn). Mọi lỗi khác (ràng buộc, trùng khoá, dữ liệu) ném
+ * nguyên, TUYỆT ĐỐI không thử lại kẻo ghi trùng.
+ *
+ * Prisma 6 đã bỏ `$use`, nên bọc bằng `$extends`. Client GỐC được giữ riêng để
+ * `$disconnect()` — không phụ thuộc việc bản bọc có lộ hàm đó hay không. */
+const MA_MAT_KET_NOI = new Set(['P1001', 'P1017'])
+const CHO_THU_LAI_MS = [150, 600]
+let soLanThuLai = 0
+let soLanThuLaiThatBai = 0
+
+function laLoiMatKetNoi(e: any): boolean {
+    if (!e) return false
+    if (typeof e.code === 'string' && MA_MAT_KET_NOI.has(e.code)) return true
+    const m = String(e.message || '')
+    return /Can't reach database server|Server has closed the connection|Connection reset by peer|Timed out trying to acquire a postgres advisory lock/i.test(m)
+}
+
+function bocThuLai<T extends { $extends: (x: any) => any }>(goc: T): T {
+    return goc.$extends({
+        name: 'thuLaiKhiMatKetNoi',
+        query: {
+            async $allOperations({ args, query }: any) {
+                let cuoi: any
+                for (let lan = 0; lan <= CHO_THU_LAI_MS.length; lan++) {
+                    try {
+                        return await query(args)
+                    } catch (e: any) {
+                        if (!laLoiMatKetNoi(e)) throw e
+                        cuoi = e
+                        if (lan === CHO_THU_LAI_MS.length) break
+                        soLanThuLai++
+                        await new Promise(r => setTimeout(r, CHO_THU_LAI_MS[lan]))
+                    }
+                }
+                soLanThuLaiThatBai++
+                throw cuoi
+            },
+        },
+    }) as unknown as T
+}
+
 // ─── Registry Client (public schema — Store lookup only) ────────────────────
 
-const registryPrisma = new PrismaClient({
+const registryPrismaGoc = new PrismaClient({
     datasources: { db: { url: process.env.DATABASE_URL || '' } },
     log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['warn', 'error'],
 })
+const registryPrisma = bocThuLai(registryPrismaGoc)
 
 // ─── Branch Client Cache (LRU) ───────────────────────────────────────────────
 
 interface CachedClient {
+    /** bản ĐÃ BỌC thử-lại — dùng để truy vấn */
     client: StorePrisma
+    /** bản GỐC — chỉ dùng để $disconnect() */
+    goc: StorePrisma
     lastUsed: number
     /** Số lượt chạy dài đang GIỮ client này (cron đồng bộ, quét toàn bộ). >0 = cấm thải. */
     dangBan: number
@@ -94,7 +156,7 @@ function getStorePrisma(schemaName: string): StorePrisma {
             }
         }
         if (oldest) {
-            branchClients.get(oldest)?.client.$disconnect().catch(() => { })
+            branchClients.get(oldest)?.goc.$disconnect().catch(() => { })
             branchClients.delete(oldest)
         }
     }
@@ -105,14 +167,15 @@ function getStorePrisma(schemaName: string): StorePrisma {
     // This prevents the severe bug where multiple PrismaClients share the search_path of the first loaded schema
     const url = `${base}${sep}schema=${schemaName}&application_name=${schemaName}&connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}`
 
-    const client = new StorePrisma({
+    const goc = new StorePrisma({
         datasources: { db: { url } },
         log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['warn', 'error'],
     })
+    const client = bocThuLai(goc)
     // Stash schema name để tiện tra ngược (vd webhook dispatch fast-path).
     ;(client as any).__schema = schemaName
 
-    branchClients.set(schemaName, { client, lastUsed: Date.now(), dangBan: 0 })
+    branchClients.set(schemaName, { client, goc, lastUsed: Date.now(), dangBan: 0 })
     soClientDaTao++
     return client
 }
@@ -172,7 +235,7 @@ function thaiClientNhanRoi(): void {
         if (!val) continue
         branchClients.delete(schema)
         soClientDaThai++
-        val.client.$disconnect().catch(() => { })
+        val.goc.$disconnect().catch(() => { })
     }
 }
 
@@ -196,6 +259,8 @@ function thongKeClientStore() {
         dangGiu: branchClients.size,
         daTao: soClientDaTao,
         daThai: soClientDaThai,
+        thuLai: soLanThuLai,
+        thuLaiThatBai: soLanThuLaiThatBai,
         chiTiet: [...branchClients.entries()].map(([schema, v]) => ({
             schema, nhanRoiGiay: Math.round((nay - v.lastUsed) / 1000), dangBan: v.dangBan,
         })),
@@ -387,7 +452,7 @@ async function createTablesRawSQL(schemaName: string): Promise<void> {
 async function dropBranchSchema(schemaName: string): Promise<void> {
     validateSchemaName(schemaName)
     await registryPrisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`)
-    branchClients.get(schemaName)?.client.$disconnect().catch(() => { })
+    branchClients.get(schemaName)?.goc.$disconnect().catch(() => { })
     branchClients.delete(schemaName)
     console.log(`🗑️ Dropped schema: ${schemaName}`)
 }
@@ -395,9 +460,9 @@ async function dropBranchSchema(schemaName: string): Promise<void> {
 // ─── Disconnect All ─────────────────────────────────────────────────────────
 
 async function disconnectAll(): Promise<void> {
-    await registryPrisma.$disconnect()
-    for (const [, { client }] of branchClients) {
-        await client.$disconnect().catch(() => { })
+    await registryPrismaGoc.$disconnect()
+    for (const [, { goc }] of branchClients) {
+        await goc.$disconnect().catch(() => { })
     }
     branchClients.clear()
 }
@@ -425,7 +490,7 @@ function traClient(schemaName: string): void {
     // Lượt chạy dài khác đang giữ → để yên, họ sẽ nhả sau.
     if (c.dangBan > 0) return
     branchClients.delete(schemaName)
-    c.client.$disconnect().catch(() => { })
+    c.goc.$disconnect().catch(() => { })
 }
 
 /**
