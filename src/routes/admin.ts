@@ -8,6 +8,8 @@ import { khoHuHong } from '../lib/warehouseHelper'
 import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
+import { thongKeHopThu, tuKiemHopThu, chayLaiPushHong } from '../services/hopThuWebhook'
+import { moTaLoi } from '../lib/gomLoi'
 
 const router = Router()
 
@@ -11230,6 +11232,39 @@ router.post('/thu-tao-schema', async (req: Request, res: Response) => {
  * Gọi endpoint này nhiều lần cách nhau vài phút rồi so: heapUsed leo = rò ở
  * JS; rss/external leo mà heapUsed đứng = rò ở phần mã máy (bộ máy Prisma);
  * client.daTao leo nhanh = client cửa hàng bị mở đi mở lại. */
+/* HỘP THƯ WEBHOOK SÀN (13/09/2026) — xem services/hopThuWebhook.ts.
+ * GET  /do-hop-thu-webhook          : 24 h theo trạng thái, thời gian xử lý, dòng đang chờ, lỗi gần đây
+ * POST /thu-hop-thu-webhook         : chạy dòng GIẢ qua mọi câu SQL trên DB thật rồi xoá (chạy ngay sau deploy)
+ * POST /hop-thu-webhook/chay-lai-hong {platform?} : đưa push đã bỏ cuộc về hàng đợi (sau khi chữa nguyên nhân) */
+router.get('/do-hop-thu-webhook', async (_req: Request, res: Response) => {
+    try {
+        res.json({ success: true, data: await thongKeHopThu() })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+router.post('/thu-hop-thu-webhook', async (_req: Request, res: Response) => {
+    try {
+        const kq = await tuKiemHopThu()
+        res.status(kq.ok ? 200 : 500).json({ success: kq.ok, data: kq })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+router.post('/hop-thu-webhook/chay-lai-hong', async (req: Request, res: Response) => {
+    try {
+        const p = req.body?.platform
+        if (p != null && p !== 'shopee' && p !== 'tiktok') {
+            return res.status(400).json({ success: false, error: 'platform chỉ nhận shopee | tiktok' })
+        }
+        res.json({ success: true, data: { soDong: await chayLaiPushHong(p ?? undefined) } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
 router.get('/do-bo-nho', async (_req: Request, res: Response) => {
     const v8 = await import('v8')
     const m = process.memoryUsage()

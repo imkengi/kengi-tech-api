@@ -103,6 +103,7 @@ import { khaiNenTang } from './services/mktDangBai'
 import { nenTangFacebook } from './services/mktNenTangFb'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
+import { startHopThuWebhookCron, stopHopThuWebhookCron } from './cron/hopThuWebhookCron'
 import { startTaxAuditCron, stopTaxAuditCron } from './cron/taxAuditCron'
 import { startTaxDeadlineCron, stopTaxDeadlineCron } from './cron/taxDeadlineCron'
 import { startReconcileCron, stopReconcileCron } from './cron/reconcileCron'
@@ -1562,6 +1563,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startMktWorker()
                 startAiAgentCron()
                 startWebhookCron()
+                startHopThuWebhookCron()
                 startEmailReplyCron()
                 startHanThanhToanCron()
                 startFlashSaleScheduler()
@@ -1594,6 +1596,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         stopKiotVietNightlyCron()
         stopAiAgentCron()
         stopWebhookCron()
+        stopHopThuWebhookCron()
         stopEmailReplyCron()
         stopTaxAuditCron()
         stopTaxDeadlineCron()

@@ -562,6 +562,7 @@ async function mapWithConcurrency<T, R>(
 
 export {
     registryPrisma,
+    laLoiMatKetNoi,
     thongKeClientStore,
     getStorePrisma,
     branchIdToSchema,

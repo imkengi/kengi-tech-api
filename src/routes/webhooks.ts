@@ -10,6 +10,8 @@ import { moTaLoi } from '../lib/gomLoi'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { processComment } from '../services/fanpageAutoReply'
+import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
+import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
 
 const router = Router()
 
@@ -55,394 +57,436 @@ router.post('/shopee', async (req: Request, res: Response) => {
      *
      * Trả lời NGAY rồi mới xử lý: Shopee tính giờ chờ ngắn và gửi lại nếu chậm,
      * mà lấy chi tiết đơn thì phải gọi ngược API Shopee nên không kịp. */
-    res.status(200).end()
+    /* GHI XONG MỚI TRẢ 200 (13/09/2026). "Trả ngay" làm RƠI push: lỗi sau khi đã trả
+     * 200 chỉ console.error nên Shopee không bao giờ đẩy lại (đo 24 h: rơi 416/5.027).
+     * Giờ GHI push vào hộp thư trước (một INSERT) → xử lý tại chỗ tối đa 2 s → trả 200
+     * thân rỗng; chưa xong hay hỏng thì hộp thư chạy tiếp/thử lại. Ghi hộp thư hỏng →
+     * 503 cho Shopee đẩy lại. Xem services/hopThuWebhook.ts. */
+    const body = req.body || {}
+    const pushCode = body.code
 
-    try {
-        const body = req.body
-        const shopId = String(body.shop_id)
-        const pushCode = body.code
-        const data = body.data || {}
+    // code 0 = Shopee xác minh URL (bấm Verify bên console) → 200 rỗng ngay, không vào hộp thư.
+    if (pushCode === 0) {
+        console.log(`[Shopee Webhook] ✅ Xác minh URL — đã trả 200 thân rỗng`)
+        res.status(200).end()
+        return
+    }
 
-        const rawBody: Buffer | undefined = (req as any).rawBody
-        const signature = String(req.header('authorization') || req.header('x-shopee-signature') || '').trim()
-        const pushUrl = process.env.SHOPEE_WEBHOOK_URL ||
-            `${req.protocol}://${req.get('host')}${req.originalUrl}`
+    const rawBody: Buffer | undefined = (req as any).rawBody
+    const signature = String(req.header('authorization') || req.header('x-shopee-signature') || '').trim()
+    const pushUrl = process.env.SHOPEE_WEBHOOK_URL ||
+        `${req.protocol}://${req.get('host')}${req.originalUrl}`
 
-        console.log(`[Shopee Webhook] code=${pushCode} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
+    console.log(`[Shopee Webhook] code=${pushCode} shop=${String(body.shop_id)} data=${JSON.stringify(body.data || {}).substring(0, 300)}`)
 
-        // code 0 = Shopee xác minh URL (bấm Verify bên console). Đã trả 200 rỗng ở trên.
-        if (pushCode === 0) {
-            console.log(`[Shopee Webhook] ✅ Xác minh URL — đã trả 200 thân rỗng`)
-            return
+    await nhanPush(
+        { platform: 'shopee', body, rawBody, signature, pushUrl },
+        () => { res.status(200).end() },
+        () => { res.status(503).end() },
+    )
+})
+
+/** Xử lý một push Shopee lấy từ hộp thư. Ném = lỗi tạm thời → hộp thư thử lại. */
+async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
+    const body = tin.body || {}
+    const shopId = String(body.shop_id)
+    const pushCode = body.code
+    const data = body.data || {}
+
+    const rawBody = tin.rawBody
+    const signature = tin.signature
+    const pushUrl = tin.pushUrl
+
+    if (tin.soLanThu > 1) {
+        console.log(`[Shopee Webhook] (thử lại lần ${tin.soLanThu}, tin ${tin.id}) code=${pushCode} shop=${shopId} đơn=${data.ordersn || data.order_sn || ''}`)
+    }
+    /* MÃ PUSH NHẬN (12/09/2026, chủ shop: "ráng sửa webhook nhận đầy đủ nhất có thể
+     * để không phải phụ thuộc sync cron"). Đếm 7 ngày log prod TRƯỚC khi mở, kèm
+     * payload thật của từng mã:
+     *   3  trạng thái đơn                                        308 lượt
+     *   30 fulfillment_status, LOGISTICS_DELIVERY_DONE + giờ     237 — GIỜ NHẬN HÀNG
+     *   47 changed_fields logistics_channel_id / ship_by_date    117 — đổi ĐVVC, hạn bàn giao
+     *   4  mã vận đơn                                             85
+     *   29 return_status + return_sn                              32 — PHIẾU TRẢ HÀNG
+     *   15 kiện hàng status READY                                 22
+     *   10 chat                                                   13
+     * Trước đó chỉ nhận 3, 4, 10: ba loại còn lại rơi vào log "bỏ qua" rồi phải chờ
+     * cron 30' vớt, riêng phiếu trả chờ tới lượt quét trả hàng. */
+    const MA_PUSH_NHAN = new Set([3, 4, 10, 15, 29, 30, 47])
+    if (!MA_PUSH_NHAN.has(Number(pushCode))) {
+        console.log(`[Shopee Webhook] Bỏ qua push code ${pushCode} (nhận ${[...MA_PUSH_NHAN].join(', ')})`)
+        return boPush(`mã push ${pushCode} không nhận`)
+    }
+
+    const orderSn = data.ordersn || data.order_sn
+    if (!orderSn && pushCode !== 10) {
+        console.log(`[Shopee Webhook] No ordersn in data`)
+        return boPush('push không có ordersn')
+    }
+
+    // ── Find channel by shop_id (cached schema lookup → fall back to scan) ──
+    let channel: any = null
+    let storePrisma: any = null
+    let resolvedSchema: string | null = null
+
+    const cachedSchema = shopId ? await cacheGet<string>(shopSchemaCacheKey(shopId)) : null
+    if (cachedSchema) {
+        try {
+            const prisma = getStorePrisma(cachedSchema)
+            const found = await prisma.onlineChannel.findFirst({
+                where: { platform: 'shopee', shopId },
+            })
+            if (found) {
+                channel = found
+                storePrisma = prisma
+                resolvedSchema = cachedSchema
+            }
+        } catch {
+            // Cached schema went stale (store removed, table missing) — fall through to scan.
         }
-        /* MÃ PUSH NHẬN (12/09/2026, chủ shop: "ráng sửa webhook nhận đầy đủ nhất có thể
-         * để không phải phụ thuộc sync cron"). Đếm 7 ngày log prod TRƯỚC khi mở, kèm
-         * payload thật của từng mã:
-         *   3  trạng thái đơn                                        308 lượt
-         *   30 fulfillment_status, LOGISTICS_DELIVERY_DONE + giờ     237 — GIỜ NHẬN HÀNG
-         *   47 changed_fields logistics_channel_id / ship_by_date    117 — đổi ĐVVC, hạn bàn giao
-         *   4  mã vận đơn                                             85
-         *   29 return_status + return_sn                              32 — PHIẾU TRẢ HÀNG
-         *   15 kiện hàng status READY                                 22
-         *   10 chat                                                   13
-         * Trước đó chỉ nhận 3, 4, 10: ba loại còn lại rơi vào log "bỏ qua" rồi phải chờ
-         * cron 30' vớt, riêng phiếu trả chờ tới lượt quét trả hàng. */
-        const MA_PUSH_NHAN = new Set([3, 4, 10, 15, 29, 30, 47])
-        if (!MA_PUSH_NHAN.has(Number(pushCode))) {
-            console.log(`[Shopee Webhook] Bỏ qua push code ${pushCode} (nhận ${[...MA_PUSH_NHAN].join(', ')})`)
-            return
-        }
+    }
 
-        const orderSn = data.ordersn || data.order_sn
-        if (!orderSn && pushCode !== 10) {
-            console.log(`[Shopee Webhook] No ordersn in data`)
-            return
-        }
-
-        // ── Find channel by shop_id (cached schema lookup → fall back to scan) ──
-        let channel: any = null
-        let storePrisma: any = null
-        let resolvedSchema: string | null = null
-
-        const cachedSchema = shopId ? await cacheGet<string>(shopSchemaCacheKey(shopId)) : null
-        if (cachedSchema) {
+    /* Quét dở vì lỗi TẠM THỜI (pool đầy, mất kết nối) thì KHÔNG được kết luận "không
+     * có kênh" rồi bỏ push — không đọc được ≠ không có. Chỉ bảng thiếu (P2021/P2022,
+     * cửa hàng chưa có OnlineChannel) mới là "không có" thật. */
+    let loiQuet: any = null
+    if (!channel) {
+        const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
+        for (const store of allStores) {
             try {
-                const prisma = getStorePrisma(cachedSchema)
+                const prisma = getStorePrisma(store.schema)
                 const found = await prisma.onlineChannel.findFirst({
                     where: { platform: 'shopee', shopId },
                 })
                 if (found) {
                     channel = found
                     storePrisma = prisma
-                    resolvedSchema = cachedSchema
+                    resolvedSchema = store.schema
+                    break
                 }
-            } catch {
-                // Cached schema went stale (store removed, table missing) — fall through to scan.
+            } catch (e: any) {
+                // Store might not have OnlineChannel table
+                if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
+                continue
             }
         }
+    }
 
-        if (!channel) {
-            const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-            for (const store of allStores) {
-                try {
-                    const prisma = getStorePrisma(store.schema)
-                    const found = await prisma.onlineChannel.findFirst({
-                        where: { platform: 'shopee', shopId },
-                    })
-                    if (found) {
-                        channel = found
-                        storePrisma = prisma
-                        resolvedSchema = store.schema
-                        break
-                    }
-                } catch {
-                    // Store might not have OnlineChannel table
-                    continue
-                }
-            }
+    if (!channel || !storePrisma) {
+        if (loiQuet) throw loiQuet
+        console.log(`[Shopee Webhook] No channel found for shop_id=${shopId}`)
+        return boPush(`không có kênh Shopee nào mang shop_id=${shopId}`)
+    }
+
+    if (resolvedSchema && resolvedSchema !== cachedSchema) {
+        await cacheSet(shopSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
+    }
+
+    /* ── KIỂM CHỮ KÝ: THỬ NHIỀU KHOÁ (03/09/2026) ────────────────────────
+     *
+     * Shopee ký push bằng "Live Push Partner Key" — bên console nó là ô RIÊNG,
+     * có nút Reset riêng, nên rất có thể KHÁC khoá API đang lưu ở `apiSecret`.
+     * Bản cũ chỉ thử một khoá rồi im lặng bỏ push; chủ shop sẽ thấy "Shopee báo
+     * gửi thành công" mà mã vận đơn không về, không có manh mối nào.
+     *
+     * Ba cửa hàng của mình nằm trên BA app Shopee khác nhau, mỗi app một khoá,
+     * nên KHÔNG dùng được một biến môi trường chung — `SHOPEE_PARTNER_KEY` đặt
+     * vào là hỏng hai shop. Ưu tiên khoá theo TỪNG KÊNH.
+     *
+     * Thử lần lượt và nói rõ khoá nào khớp, để lần sau khỏi mò. */
+    /* 10/09/2026 — thêm khoá của APP VIDEO. Đo 24h: 1.366 push của Kengi Store bị
+     * "chữ ký không khớp" mà vẫn có push cùng đơn qua được — mỗi sự kiện Shopee
+     * đẩy HAI bản, từ HAI app cùng trỏ một URL (app bán hàng + app Shopee Video
+     * uỷ quyền 08/09), mỗi app ký bằng khoá riêng. Bản của app Video bị bỏ; bình
+     * thường vô hại vì bản kia đã lưu — nhưng khi bản kia hỏng giữa chừng (gọi
+     * chi tiết đơn lỗi) thì MẤT LUÔN mã vận đơn, quét đóng gói không ra. */
+    /* Đo sau vá (10:28–10:42 10/09): khoá app Video KHÔNG khớp bản nào (0/58), bản
+     * thứ hai vẫn bị bỏ ⇒ nó ký bằng khoá KHÁC. Một cửa hàng có nhiều gian trên
+     * nhiều app (Kengi Store / Tools / Electric), shop có thể được uỷ quyền cho
+     * hơn một app của cùng chủ ⇒ thử luôn khoá của MỌI kênh Shopee trong cửa
+     * hàng. Vẫn là HMAC kiểm thật, chỉ mở rộng tập khoá của chính chủ shop. */
+    const kenhAnhEm: any[] = await storePrisma.onlineChannel.findMany({
+        where: { platform: 'shopee', id: { not: channel.id } },
+        select: { name: true, webhookSecret: true, apiSecret: true, videoPartnerKey: true },
+    }).catch(() => [])
+    const ungVienKhoaTho: Array<{ ten: string; key: string }> = [
+        { ten: 'channel.webhookSecret', key: channel.webhookSecret || '' },
+        { ten: 'channel.apiSecret', key: channel.apiSecret || '' },
+        { ten: 'channel.videoPartnerKey', key: channel.videoPartnerKey || '' },
+        { ten: 'env.SHOPEE_PARTNER_KEY', key: process.env.SHOPEE_PARTNER_KEY || '' },
+        ...kenhAnhEm.flatMap(k => [
+            { ten: `kênh "${k.name}".webhookSecret`, key: k.webhookSecret || '' },
+            { ten: `kênh "${k.name}".apiSecret`, key: k.apiSecret || '' },
+            { ten: `kênh "${k.name}".videoPartnerKey`, key: k.videoPartnerKey || '' },
+        ]),
+    ].filter(x => !!x.key)
+    const daThay = new Set<string>()
+    const ungVienKhoa = ungVienKhoaTho.filter(x => (daThay.has(x.key) ? false : (daThay.add(x.key), true)))
+
+    if (ungVienKhoa.length === 0) {
+        console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
+    } else if (!signature) {
+        console.warn(`[Shopee Webhook] Không có header Authorization (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
+    } else if (!rawBody) {
+        console.warn(`[Shopee Webhook] Không đọc được thân thô — xử lý mà KHÔNG kiểm`)
+    } else {
+        /* Thử thêm URL thay thế: Shopee ký theo URL KHAI TRONG CONSOLE, còn ta ghép
+         * từ host thật. App khác có thể khai kengi.vn (302 sang api) hay lệch dấu
+         * '/'. Ghi rõ cặp (khoá, url) nào khớp để lần sau khỏi mò. */
+        const ungVienUrl = [...new Set([
+            pushUrl,
+            'https://api.kengi.vn/api/webhooks/shopee',
+            'https://kengi.vn/api/webhooks/shopee',
+            pushUrl.endsWith('/') ? pushUrl.slice(0, -1) : pushUrl + '/',
+        ])]
+        let khop: { ten: string; key: string; url?: string } | undefined
+        for (const u of ungVienUrl) {
+            const k = ungVienKhoa.find(x => verifyShopeeSignature(rawBody, u, x.key, signature))
+            if (k) { khop = { ...k, url: u }; break }
         }
-
-        if (!channel || !storePrisma) {
-            console.log(`[Shopee Webhook] No channel found for shop_id=${shopId}`)
-            return
+        if (!khop) {
+            // Chẩn đoán: bản bị bỏ đến từ đâu, dài bao nhiêu — để phân biệt "app khác"
+            // với "Shopee gửi lại" hay "thân bị đổi dọc đường".
+            // (13/09: chạy từ hộp thư nên không còn IP/user-agent của request; pushUrl đã gồm host + path.)
+            console.error(`[Shopee Webhook] chẩn đoán chữ ký: sig=${signature.slice(0, 10)}… url=${pushUrl} tin=${tin.id} lần=${tin.soLanThu} ` +
+                `khoá=${ungVienKhoa.length} url=${ungVienUrl.length} body=${rawBody.length}B`)
         }
-
-        if (resolvedSchema && resolvedSchema !== cachedSchema) {
-            await cacheSet(shopSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
-        }
-
-        /* ── KIỂM CHỮ KÝ: THỬ NHIỀU KHOÁ (03/09/2026) ────────────────────────
-         *
-         * Shopee ký push bằng "Live Push Partner Key" — bên console nó là ô RIÊNG,
-         * có nút Reset riêng, nên rất có thể KHÁC khoá API đang lưu ở `apiSecret`.
-         * Bản cũ chỉ thử một khoá rồi im lặng bỏ push; chủ shop sẽ thấy "Shopee báo
-         * gửi thành công" mà mã vận đơn không về, không có manh mối nào.
-         *
-         * Ba cửa hàng của mình nằm trên BA app Shopee khác nhau, mỗi app một khoá,
-         * nên KHÔNG dùng được một biến môi trường chung — `SHOPEE_PARTNER_KEY` đặt
-         * vào là hỏng hai shop. Ưu tiên khoá theo TỪNG KÊNH.
-         *
-         * Thử lần lượt và nói rõ khoá nào khớp, để lần sau khỏi mò. */
-        /* 10/09/2026 — thêm khoá của APP VIDEO. Đo 24h: 1.366 push của Kengi Store bị
-         * "chữ ký không khớp" mà vẫn có push cùng đơn qua được — mỗi sự kiện Shopee
-         * đẩy HAI bản, từ HAI app cùng trỏ một URL (app bán hàng + app Shopee Video
-         * uỷ quyền 08/09), mỗi app ký bằng khoá riêng. Bản của app Video bị bỏ; bình
-         * thường vô hại vì bản kia đã lưu — nhưng khi bản kia hỏng giữa chừng (gọi
-         * chi tiết đơn lỗi) thì MẤT LUÔN mã vận đơn, quét đóng gói không ra. */
-        /* Đo sau vá (10:28–10:42 10/09): khoá app Video KHÔNG khớp bản nào (0/58), bản
-         * thứ hai vẫn bị bỏ ⇒ nó ký bằng khoá KHÁC. Một cửa hàng có nhiều gian trên
-         * nhiều app (Kengi Store / Tools / Electric), shop có thể được uỷ quyền cho
-         * hơn một app của cùng chủ ⇒ thử luôn khoá của MỌI kênh Shopee trong cửa
-         * hàng. Vẫn là HMAC kiểm thật, chỉ mở rộng tập khoá của chính chủ shop. */
-        const kenhAnhEm: any[] = await storePrisma.onlineChannel.findMany({
-            where: { platform: 'shopee', id: { not: channel.id } },
-            select: { name: true, webhookSecret: true, apiSecret: true, videoPartnerKey: true },
-        }).catch(() => [])
-        const ungVienKhoaTho: Array<{ ten: string; key: string }> = [
-            { ten: 'channel.webhookSecret', key: channel.webhookSecret || '' },
-            { ten: 'channel.apiSecret', key: channel.apiSecret || '' },
-            { ten: 'channel.videoPartnerKey', key: channel.videoPartnerKey || '' },
-            { ten: 'env.SHOPEE_PARTNER_KEY', key: process.env.SHOPEE_PARTNER_KEY || '' },
-            ...kenhAnhEm.flatMap(k => [
-                { ten: `kênh "${k.name}".webhookSecret`, key: k.webhookSecret || '' },
-                { ten: `kênh "${k.name}".apiSecret`, key: k.apiSecret || '' },
-                { ten: `kênh "${k.name}".videoPartnerKey`, key: k.videoPartnerKey || '' },
-            ]),
-        ].filter(x => !!x.key)
-        const daThay = new Set<string>()
-        const ungVienKhoa = ungVienKhoaTho.filter(x => (daThay.has(x.key) ? false : (daThay.add(x.key), true)))
-
-        if (ungVienKhoa.length === 0) {
-            console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
-        } else if (!signature) {
-            console.warn(`[Shopee Webhook] Không có header Authorization (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
-        } else if (!rawBody) {
-            console.warn(`[Shopee Webhook] Không đọc được thân thô — xử lý mà KHÔNG kiểm`)
-        } else {
-            /* Thử thêm URL thay thế: Shopee ký theo URL KHAI TRONG CONSOLE, còn ta ghép
-             * từ host thật. App khác có thể khai kengi.vn (302 sang api) hay lệch dấu
-             * '/'. Ghi rõ cặp (khoá, url) nào khớp để lần sau khỏi mò. */
-            const ungVienUrl = [...new Set([
-                pushUrl,
-                'https://api.kengi.vn/api/webhooks/shopee',
-                'https://kengi.vn/api/webhooks/shopee',
-                pushUrl.endsWith('/') ? pushUrl.slice(0, -1) : pushUrl + '/',
-            ])]
-            let khop: { ten: string; key: string; url?: string } | undefined
-            for (const u of ungVienUrl) {
-                const k = ungVienKhoa.find(x => verifyShopeeSignature(rawBody, u, x.key, signature))
-                if (k) { khop = { ...k, url: u }; break }
-            }
-            if (!khop) {
-                // Chẩn đoán: bản bị bỏ đến từ đâu, dài bao nhiêu — để phân biệt "app khác"
-                // với "Shopee gửi lại" hay "thân bị đổi dọc đường".
-                console.error(`[Shopee Webhook] chẩn đoán chữ ký: sig=${signature.slice(0, 10)}… ip=${String(req.headers['x-forwarded-for'] || req.ip || '')} ` +
-                    `ua=${String(req.headers['user-agent'] || '').slice(0, 40)} host=${req.get('host')} path=${req.originalUrl} ` +
-                    `khoá=${ungVienKhoa.length} url=${ungVienUrl.length} body=${rawBody.length}B`)
-            }
-            if (!khop) {
-                console.error(
-                    `[Shopee Webhook] ❌ CHỮ KÝ KHÔNG KHỚP — bỏ push code=${pushCode} của kênh "${channel.name}" (shop_id=${shopId}).
+        if (!khop) {
+            console.error(
+                `[Shopee Webhook] ❌ CHỮ KÝ KHÔNG KHỚP — bỏ push code=${pushCode} của kênh "${channel.name}" (shop_id=${shopId}).
 ` +
-                    `   Đã thử ${ungVienKhoa.length} khoá: ${ungVienKhoa.map(x => x.ten).join(', ')}.
+                `   Đã thử ${ungVienKhoa.length} khoá: ${ungVienKhoa.map(x => x.ten).join(', ')}.
 ` +
-                    `   URL dùng để ký: ${pushUrl}
+                `   URL dùng để ký: ${pushUrl}
 ` +
-                    `   CÁCH CHỮA: vào Shopee Open Platform → Push Mechanism → Set Push, chép "Live Push Partner Key" ` +
-                    `của app này rồi lưu vào webhookSecret của kênh. Nếu URL trên KHÁC chuỗi đã khai bên console ` +
-                    `thì đặt biến SHOPEE_WEBHOOK_URL đúng bằng chuỗi đó (Shopee ký theo URL, sai một ký tự là lệch).`,
-                )
-                return
+                `   CÁCH CHỮA: vào Shopee Open Platform → Push Mechanism → Set Push, chép "Live Push Partner Key" ` +
+                `của app này rồi lưu vào webhookSecret của kênh. Nếu URL trên KHÁC chuỗi đã khai bên console ` +
+                `thì đặt biến SHOPEE_WEBHOOK_URL đúng bằng chuỗi đó (Shopee ký theo URL, sai một ký tự là lệch).`,
+            )
+            return boPush(`chữ ký không khớp ${ungVienKhoa.length} khoá (bản của app khác?)`)
+        }
+        if (khop.ten !== 'channel.webhookSecret') {
+            // Khớp bằng khoá dự phòng — chạy được, nhưng nên khai đúng chỗ cho rõ ràng
+            console.log(`[Shopee Webhook] chữ ký khớp bằng ${khop.ten} @ ${khop.url} (kênh ${channel.name})`)
+        }
+    }
+
+    // ── Code 10: tin nhắn chat mới → đẩy realtime cho FE refresh khung chat ──
+    // (FE đang poll chat; event này cho phép refresh tức thì khi có socket.)
+    if (pushCode === 10) {
+        let content: any = data.content || data
+        if (typeof content === 'string') { try { content = JSON.parse(content) } catch { } }
+        publishEvent(resolvedSchema || undefined, 'chat:new-platform-message', {
+            platform: 'shopee',
+            channelId: channel.id,
+            channelName: channel.name,
+            conversationId: String(content.conversation_id || ''),
+            messageId: String(content.message_id || ''),
+            fromUserName: content.from_user_name || content.from_user_id || '',
+            messageType: content.message_type || 'text',
+            text: content.content?.text || '',
+        }).catch(() => { })
+        console.log(`[Shopee Webhook] 💬 New chat message → published for channel ${channel.name}`)
+        return xongPush('tin nhắn chat')
+    }
+
+    /* ── Code 29: phiếu trả hàng đổi trạng thái → đồng bộ NGAY ──────────────
+     * Push mang sẵn return_sn + order_sn, nhưng bộ đồng bộ phiếu trả làm việc
+     * theo KHUNG NGÀY (upsert, nắn ngày phiếu, đảo đơn khi hoàn tiền, vá mã vận
+     * đơn trả) nên gọi lại chính nó với khung hẹp 3 ngày, đừng chép tay logic đó
+     * ra đây. Debounce 60s/kênh: Shopee bắn 2–3 push cho một phiếu (return_status
+     * rồi return_solution rồi logistics_status) — đo 7 ngày: 32 push. */
+    if (pushCode === 29) {
+        /* 13/09/2026: debounce KHÔNG còn vứt push. Khoá giữ LÚC BẮT ĐẦU lượt quét:
+         * lượt quét bắt đầu SAU lúc push tới thì đã bao phủ nó → xong; bắt đầu TRƯỚC
+         * thì có thể chưa thấy phiếu này → hoãn tới khi hết debounce rồi tự quét. */
+        const khoaCho = `webhook:shopee:returns:${channel.id}`
+        const quetLuc = Number(await cacheGet(khoaCho)) || 0
+        if (Date.now() - quetLuc < 60_000) {
+            if (quetLuc >= tin.nhanLuc.getTime()) {
+                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — lượt quét bắt đầu sau push này đã bao phủ`)
+                return xongPush('lượt quét phiếu trả bắt đầu sau push đã bao phủ')
             }
-            if (khop.ten !== 'channel.webhookSecret') {
-                // Khớp bằng khoá dự phòng — chạy được, nhưng nên khai đúng chỗ cho rõ ràng
-                console.log(`[Shopee Webhook] chữ ký khớp bằng ${khop.ten} @ ${khop.url} (kênh ${channel.name})`)
+            console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — lượt quét vừa chạy TRƯỚC push này, hẹn quét lại`)
+            return hoanPush('đợi hết debounce 60s để quét lại phiếu trả', 70)
+        }
+        await cacheSet(khoaCho, Date.now(), 60)
+        try {
+            const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 3 * 86400_000))
+            console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} (đơn ${orderSn}) → +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
+            return xongPush(`phiếu trả: +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
+        } catch (retErr: any) {
+            // Nhả khoá: lượt quét HỎNG không được tính là "đã bao phủ" push nào.
+            await cacheDel(khoaCho).catch(() => { })
+            console.error(`[Shopee Webhook] Đồng bộ phiếu trả hỏng cho ${channel.name}: ${moTaLoi(retErr)}`)
+            throw retErr
+        }
+    }
+
+    // Create ShopeeService to fetch order detail
+    const shopee = new ShopeeService({
+        apiKey: channel.apiKey,
+        apiSecret: channel.apiSecret,
+        accessToken: channel.accessToken,
+        refreshToken: channel.refreshToken,
+        shopId: channel.shopId,
+    })
+
+    // Fetch full order detail from Shopee
+    /* MÃ VẬN ĐƠN LẤY THẲNG TỪ PUSH (03/09/2026).
+     *
+     * Push code 4 mang sẵn `tracking_no` trong thân, nhưng bản cũ bỏ qua nó và
+     * chỉ đọc `orderDetail.trackingNumber` từ lượt gọi ngược API — mà lượt đó
+     * trả rỗng. Đo thật hôm nay: push nói `"tracking_no":"GYYUGRH6"` mà log ghi
+     * `tracking=none` — đúng thứ chủ shop cần thì bị vứt đi.
+     *
+     * Đây cũng là đường NHANH NHẤT: khỏi chờ Shopee cập nhật xong bên API. */
+    const maVanDonTuPush = String((data as any).tracking_no || (data as any).tracking_number || '').trim()
+    /* Push 30 `fulfillment_status=LOGISTICS_DELIVERY_DONE` + `update_time` (giây) = đúng
+     * lúc giao thành công. CHỈ nhận mốc này, không nhận mốc khác của code 30
+     * (PICKUP_DONE, DELIVERY_FAILED…) kẻo ghi nhầm ngày nhận hàng. */
+    const ngayNhanTuPush = pushCode === 30
+        && /DELIVERY_DONE/i.test(String((data as any).fulfillment_status || ''))
+        && Number((data as any).update_time) > 0
+        ? new Date(Number((data as any).update_time) * 1000)
+        : null
+
+    const orderDetail = await shopee.getOrderDetail(orderSn)
+    if (!orderDetail) {
+        /* Gọi chi tiết đơn hỏng KHÔNG được kéo theo mất mã vận đơn: push code 4
+         * đã mang sẵn `tracking_no`, ghi ngay cho đơn đang có rồi mới thôi. Đo
+         * 10/09: đơn 260909JP54NHW1 — chi tiết lỗi, mã bị vứt, đơn SHIPPED cả
+         * ngày không có mã, quét đóng gói không ra. */
+        if (maVanDonTuPush) {
+            const co = await storePrisma.onlineOrder.findFirst({
+                where: { externalOrderId: orderSn, channelId: channel.id }, select: { id: true, trackingNumber: true },
+            }).catch(() => null)
+            if (co && co.trackingNumber !== maVanDonTuPush) {
+                await storePrisma.onlineOrder.update({ where: { id: co.id }, data: { trackingNumber: maVanDonTuPush, syncedAt: new Date() } }).catch(() => { })
+                console.log(`[Shopee Webhook] Chi tiết đơn ${orderSn} lỗi nhưng ĐÃ ghi mã vận đơn ${maVanDonTuPush} từ push`)
             }
         }
+        /* 13/09/2026: KHÔNG bỏ push nữa — ném để hộp thư thử lại (đo 24 h: 168 push bị
+         * bỏ ở đây). Mã vận đơn đã ghi ở trên thì lần thử lại chỉ cập nhật nốt phần còn lại. */
+        console.log(`[Shopee Webhook] Could not fetch order detail for ${orderSn}`)
+        throw new Error(`Không lấy được chi tiết đơn ${orderSn} từ Shopee`)
+    }
 
-        // ── Code 10: tin nhắn chat mới → đẩy realtime cho FE refresh khung chat ──
-        // (FE đang poll chat; event này cho phép refresh tức thì khi có socket.)
-        if (pushCode === 10) {
-            let content: any = data.content || data
-            if (typeof content === 'string') { try { content = JSON.parse(content) } catch { } }
-            publishEvent(resolvedSchema || undefined, 'chat:new-platform-message', {
-                platform: 'shopee',
+    // Find existing order in DB
+    const existing = await storePrisma.onlineOrder.findFirst({
+        where: { externalOrderId: orderSn, channelId: channel.id },
+    })
+
+    if (existing) {
+        // Update existing order
+        await storePrisma.onlineOrder.update({
+            where: { id: existing.id },
+            data: {
+                status: orderDetail.status,
+                externalStatus: orderDetail.externalStatus,
+                paymentStatus: orderDetail.paymentStatus,
+                trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || existing.trackingNumber,
+                shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
+                shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
+                /* GIỜ NHẬN HÀNG: get_order_detail của Shopee KHÔNG trả giờ giao thành công
+                 * — đó là lý do cron phải gọi thêm API hành trình để vá (đo 12/09: 8–11 đơn
+                 * mỗi lượt). Push code 30 mang sẵn giờ đó ở `update_time`, lấy luôn. */
+                deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : (ngayNhanTuPush || existing.deliveredAt),
+                paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : existing.paidAt,
+                /* Hạn bàn giao + cờ hoả tốc: push 47 báo đổi đơn vị vận chuyển / ship_by_date.
+                 * Chỉ NÂNG cờ hoả tốc, không hạ (get_channel_list lỗi → false giả) — cùng quy
+                 * ước với đường sync ở onlineOrders.ts. */
+                shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : (existing as any).shipByDate,
+                ...((orderDetail as any).isInstant ? { isInstant: true } : {}),
+                syncedAt: new Date(),
+            },
+        })
+        const _mvd = maVanDonTuPush || orderDetail.trackingNumber
+        console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} `
+            + `tracking=${_mvd || 'none'}${maVanDonTuPush ? ' (từ push)' : ''}`)
+
+        /* Liên kết hàng ↔ kho NGAY khi đơn về, không đợi lập phiếu: đơn chờ xác
+         * nhận không lập phiếu (09/09) mà trang đóng gói cần mã hàng + ảnh từ
+         * liên kết này. Đã liên kết hết thì hàm trả 0 sau một truy vấn. */
+        try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
+
+        // Đơn chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng (hoàn kho + void
+        // HĐ đã convert + đảo bút toán). Idempotent nên gọi lặp lại vô hại.
+        if (isReversalStatus(orderDetail.status)) {
+            try {
+                await reverseOnlineOrderEffects(storePrisma, existing)
+            } catch (revErr: any) {
+                // Đảo hiệu ứng idempotent → để hộp thư thử lại, đừng bỏ đơn huỷ chưa hoàn kho.
+                console.error(`[Shopee Webhook] Reversal failed for ${orderSn}: ${moTaLoi(revErr)}`)
+                throw revErr
+            }
+        }
+    } else {
+        // Create new order
+        const newOrder = await storePrisma.onlineOrder.create({
+            data: {
+                orderNumber: orderDetail.orderNumber,
                 channelId: channel.id,
                 channelName: channel.name,
-                conversationId: String(content.conversation_id || ''),
-                messageId: String(content.message_id || ''),
-                fromUserName: content.from_user_name || content.from_user_id || '',
-                messageType: content.message_type || 'text',
-                text: content.content?.text || '',
-            }).catch(() => { })
-            console.log(`[Shopee Webhook] 💬 New chat message → published for channel ${channel.name}`)
-            return
-        }
-
-        /* ── Code 29: phiếu trả hàng đổi trạng thái → đồng bộ NGAY ──────────────
-         * Push mang sẵn return_sn + order_sn, nhưng bộ đồng bộ phiếu trả làm việc
-         * theo KHUNG NGÀY (upsert, nắn ngày phiếu, đảo đơn khi hoàn tiền, vá mã vận
-         * đơn trả) nên gọi lại chính nó với khung hẹp 3 ngày, đừng chép tay logic đó
-         * ra đây. Debounce 60s/kênh: Shopee bắn 2–3 push cho một phiếu (return_status
-         * rồi return_solution rồi logistics_status) — đo 7 ngày: 32 push. */
-        if (pushCode === 29) {
-            const khoaCho = `webhook:shopee:returns:${channel.id}`
-            if (await cacheGet(khoaCho)) {
-                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — đã có lượt quét vừa chạy, bỏ lượt này`)
-                return
-            }
-            await cacheSet(khoaCho, '1', 60)
-            try {
-                const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 3 * 86400_000))
-                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} (đơn ${orderSn}) → +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
-            } catch (retErr: any) {
-                console.error(`[Shopee Webhook] Đồng bộ phiếu trả hỏng cho ${channel.name}:`, retErr.message)
-            }
-            return
-        }
-
-        // Create ShopeeService to fetch order detail
-        const shopee = new ShopeeService({
-            apiKey: channel.apiKey,
-            apiSecret: channel.apiSecret,
-            accessToken: channel.accessToken,
-            refreshToken: channel.refreshToken,
-            shopId: channel.shopId,
-        })
-
-        // Fetch full order detail from Shopee
-        /* MÃ VẬN ĐƠN LẤY THẲNG TỪ PUSH (03/09/2026).
-         *
-         * Push code 4 mang sẵn `tracking_no` trong thân, nhưng bản cũ bỏ qua nó và
-         * chỉ đọc `orderDetail.trackingNumber` từ lượt gọi ngược API — mà lượt đó
-         * trả rỗng. Đo thật hôm nay: push nói `"tracking_no":"GYYUGRH6"` mà log ghi
-         * `tracking=none` — đúng thứ chủ shop cần thì bị vứt đi.
-         *
-         * Đây cũng là đường NHANH NHẤT: khỏi chờ Shopee cập nhật xong bên API. */
-        const maVanDonTuPush = String((data as any).tracking_no || (data as any).tracking_number || '').trim()
-        /* Push 30 `fulfillment_status=LOGISTICS_DELIVERY_DONE` + `update_time` (giây) = đúng
-         * lúc giao thành công. CHỈ nhận mốc này, không nhận mốc khác của code 30
-         * (PICKUP_DONE, DELIVERY_FAILED…) kẻo ghi nhầm ngày nhận hàng. */
-        const ngayNhanTuPush = pushCode === 30
-            && /DELIVERY_DONE/i.test(String((data as any).fulfillment_status || ''))
-            && Number((data as any).update_time) > 0
-            ? new Date(Number((data as any).update_time) * 1000)
-            : null
-
-        const orderDetail = await shopee.getOrderDetail(orderSn)
-        if (!orderDetail) {
-            /* Gọi chi tiết đơn hỏng KHÔNG được kéo theo mất mã vận đơn: push code 4
-             * đã mang sẵn `tracking_no`, ghi ngay cho đơn đang có rồi mới thôi. Đo
-             * 10/09: đơn 260909JP54NHW1 — chi tiết lỗi, mã bị vứt, đơn SHIPPED cả
-             * ngày không có mã, quét đóng gói không ra. */
-            if (maVanDonTuPush) {
-                const co = await storePrisma.onlineOrder.findFirst({
-                    where: { externalOrderId: orderSn, channelId: channel.id }, select: { id: true, trackingNumber: true },
-                }).catch(() => null)
-                if (co && co.trackingNumber !== maVanDonTuPush) {
-                    await storePrisma.onlineOrder.update({ where: { id: co.id }, data: { trackingNumber: maVanDonTuPush, syncedAt: new Date() } }).catch(() => { })
-                    console.log(`[Shopee Webhook] Chi tiết đơn ${orderSn} lỗi nhưng ĐÃ ghi mã vận đơn ${maVanDonTuPush} từ push`)
-                    return
-                }
-            }
-            console.log(`[Shopee Webhook] Could not fetch order detail for ${orderSn}`)
-            return
-        }
-
-        // Find existing order in DB
-        const existing = await storePrisma.onlineOrder.findFirst({
-            where: { externalOrderId: orderSn, channelId: channel.id },
-        })
-
-        if (existing) {
-            // Update existing order
-            await storePrisma.onlineOrder.update({
-                where: { id: existing.id },
-                data: {
-                    status: orderDetail.status,
-                    externalStatus: orderDetail.externalStatus,
-                    paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || existing.trackingNumber,
-                    shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
-                    shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
-                    /* GIỜ NHẬN HÀNG: get_order_detail của Shopee KHÔNG trả giờ giao thành công
-                     * — đó là lý do cron phải gọi thêm API hành trình để vá (đo 12/09: 8–11 đơn
-                     * mỗi lượt). Push code 30 mang sẵn giờ đó ở `update_time`, lấy luôn. */
-                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : (ngayNhanTuPush || existing.deliveredAt),
-                    paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : existing.paidAt,
-                    /* Hạn bàn giao + cờ hoả tốc: push 47 báo đổi đơn vị vận chuyển / ship_by_date.
-                     * Chỉ NÂNG cờ hoả tốc, không hạ (get_channel_list lỗi → false giả) — cùng quy
-                     * ước với đường sync ở onlineOrders.ts. */
-                    shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : (existing as any).shipByDate,
-                    ...((orderDetail as any).isInstant ? { isInstant: true } : {}),
-                    syncedAt: new Date(),
+                platform: 'shopee',
+                externalOrderId: orderSn,
+                externalStatus: orderDetail.externalStatus,
+                customerName: orderDetail.customerName,
+                customerPhone: orderDetail.customerPhone || null,
+                customerEmail: orderDetail.customerEmail || null,
+                shippingAddress: orderDetail.shippingAddress || null,
+                status: orderDetail.status,
+                subtotal: orderDetail.subtotal,
+                discount: orderDetail.discount,
+                shippingFee: orderDetail.shippingFee,
+                total: orderDetail.total,
+                paymentMethod: orderDetail.paymentMethod || null,
+                paymentStatus: orderDetail.paymentStatus,
+                trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || null,
+                shippingCarrier: orderDetail.shippingCarrier || null,
+                paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
+                shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
+                deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
+                shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : null,
+                isInstant: !!(orderDetail as any).isInstant,
+                syncedAt: new Date(),
+                createdAt: new Date(orderDetail.createdAt),
+                // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
+                // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
+                // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
+                // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
+                // 06/09/2026:
+                //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
+                //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
+                //     soát lại — giữ phí bịa vĩnh viễn.
+                //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
+                //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
+                // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
+                // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
+                platformFeeRate: 0,
+                platformFee: 0,
+                netRevenue: 0,
+                items: {
+                    create: orderDetail.items.map(item => ({
+                        externalItemId: item.externalItemId || '',
+                        productName: item.productName,
+                        sku: item.sku || null,
+                        quantity: item.quantity,
+                        unitPrice: item.unitPrice,
+                        discount: item.discount || 0,
+                        lineTotal: item.lineTotal,
+                    })),
                 },
-            })
-            const _mvd = maVanDonTuPush || orderDetail.trackingNumber
-            console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} `
-                + `tracking=${_mvd || 'none'}${maVanDonTuPush ? ' (từ push)' : ''}`)
-
-            /* Liên kết hàng ↔ kho NGAY khi đơn về, không đợi lập phiếu: đơn chờ xác
-             * nhận không lập phiếu (09/09) mà trang đóng gói cần mã hàng + ảnh từ
-             * liên kết này. Đã liên kết hết thì hàm trả 0 sau một truy vấn. */
-            try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
-
-            // Đơn chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng (hoàn kho + void
-            // HĐ đã convert + đảo bút toán). Idempotent nên gọi lặp lại vô hại.
-            if (isReversalStatus(orderDetail.status)) {
-                try {
-                    await reverseOnlineOrderEffects(storePrisma, existing)
-                } catch (revErr: any) {
-                    console.error(`[Shopee Webhook] Reversal failed for ${orderSn}:`, revErr.message)
-                }
-            }
-        } else {
-            // Create new order
-            const newOrder = await storePrisma.onlineOrder.create({
-                data: {
-                    orderNumber: orderDetail.orderNumber,
-                    channelId: channel.id,
-                    channelName: channel.name,
-                    platform: 'shopee',
-                    externalOrderId: orderSn,
-                    externalStatus: orderDetail.externalStatus,
-                    customerName: orderDetail.customerName,
-                    customerPhone: orderDetail.customerPhone || null,
-                    customerEmail: orderDetail.customerEmail || null,
-                    shippingAddress: orderDetail.shippingAddress || null,
-                    status: orderDetail.status,
-                    subtotal: orderDetail.subtotal,
-                    discount: orderDetail.discount,
-                    shippingFee: orderDetail.shippingFee,
-                    total: orderDetail.total,
-                    paymentMethod: orderDetail.paymentMethod || null,
-                    paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || null,
-                    shippingCarrier: orderDetail.shippingCarrier || null,
-                    paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
-                    shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
-                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
-                    shipByDate: (orderDetail as any).shipByDate ? new Date((orderDetail as any).shipByDate) : null,
-                    isInstant: !!(orderDetail as any).isInstant,
-                    syncedAt: new Date(),
-                    createdAt: new Date(orderDetail.createdAt),
-                    // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
-                    // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
-                    // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
-                    // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
-                    // 06/09/2026:
-                    //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
-                    //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
-                    //     soát lại — giữ phí bịa vĩnh viễn.
-                    //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
-                    //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
-                    // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
-                    // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
-                    platformFeeRate: 0,
-                    platformFee: 0,
-                    netRevenue: 0,
-                    items: {
-                        create: orderDetail.items.map(item => ({
-                            externalItemId: item.externalItemId || '',
-                            productName: item.productName,
-                            sku: item.sku || null,
-                            quantity: item.quantity,
-                            unitPrice: item.unitPrice,
-                            discount: item.discount || 0,
-                            lineTotal: item.lineTotal,
-                        })),
-                    },
-                },
-            })
-            console.log(`[Shopee Webhook] ✅ Created new order ${orderSn} → ${orderDetail.status}`)
-            // Liên kết hàng ↔ kho ngay lúc về (xem chú thích ở nhánh Updated phía trên).
-            try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
-        }
-
-    } catch (err: any) {
-        console.error('[Shopee Webhook] Error:', err.message)
+            },
+        })
+        console.log(`[Shopee Webhook] ✅ Created new order ${orderSn} → ${orderDetail.status}`)
+        // Liên kết hàng ↔ kho ngay lúc về (xem chú thích ở nhánh Updated phía trên).
+        try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
     }
-})
+
+    return xongPush()
+}
+dangKyBoXuLyPush('shopee', xuLyPushShopee)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TIKTOK SHOP WEBHOOK (PUSH NOTIFICATION)
@@ -475,294 +519,325 @@ function verifyTikTokSignature(rawBody: Buffer, appKey: string, appSecret: strin
 }
 
 router.post('/tiktok', async (req: Request, res: Response) => {
-    // Always respond 200 immediately (TikTok retries on non-200)
-    res.json({ success: true })
+    /* GHI XONG MỚI TRẢ 200 (13/09/2026). Trước đây trả 200 NGAY rồi mới xử lý, nên lỗi
+     * là rơi push — TikTok chỉ đẩy lại khi nhận non-200. Giờ ghi hộp thư trước → xử lý
+     * tại chỗ tối đa 2 s → 200; ghi hộp thư hỏng → 503 cho TikTok đẩy lại. Xem
+     * services/hopThuWebhook.ts. */
+    const body = req.body || {}
+    const rawBody: Buffer | undefined = (req as any).rawBody
+    const signature = String(req.header('x-tts-sign') || '').trim()
 
-    try {
-        const body = req.body
-        const pushType = body.type
-        const shopId = String(body.shop_id || '')
-        const data = body.data || {}
+    console.log(`[TikTok Webhook] type=${body.type} shop=${String(body.shop_id || '')} data=${JSON.stringify(body.data || {}).substring(0, 300)}`)
 
-        const rawBody: Buffer | undefined = (req as any).rawBody
-        const signature = String(req.header('x-tts-sign') || '').trim()
+    await nhanPush(
+        { platform: 'tiktok', body, rawBody, signature, pushUrl: '' },
+        () => { res.json({ success: true }) },
+        () => { res.status(503).json({ success: false }) },
+    )
+})
 
-        console.log(`[TikTok Webhook] type=${pushType} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
+/** Xử lý một push TikTok lấy từ hộp thư. Ném = lỗi tạm thời → hộp thư thử lại. */
+async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
+    const body = tin.body || {}
+    const pushType = body.type
+    const shopId = String(body.shop_id || '')
+    const data = body.data || {}
 
-        /* LOẠI PUSH NHẬN (12/09/2026). Đếm 7 ngày log prod kèm payload thật:
-         *   1  đổi trạng thái đơn                                        82 lượt
-         *   2  đơn hoàn/trả đổi trạng thái                                4
-         *   12 return_id + return_status (RETURN_OR_REFUND_REQUEST_…)     2 — PHIẾU TRẢ, trước bỏ qua
-         *   11 cancel_id + cancel_status (khách/shop huỷ đơn)             4 — trước bỏ qua
-         *   4  đổi kiện hàng
-         * Type 12 chính là loại mang vụ trả 4042223877292721302 mà mình xử lý hôm 11/09
-         * — nó bị bỏ qua, phải chờ cron quét trả hàng mới thấy. */
-        if (pushType !== 1 && pushType !== 2 && pushType !== 4 && pushType !== 11 && pushType !== 12) {
-            console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
-            return
+    const rawBody = tin.rawBody
+    const signature = tin.signature
+
+    if (tin.soLanThu > 1) {
+        console.log(`[TikTok Webhook] (thử lại lần ${tin.soLanThu}, tin ${tin.id}) type=${pushType} shop=${shopId} đơn=${data.order_id || ''}`)
+    }
+
+    /* LOẠI PUSH NHẬN (12/09/2026). Đếm 7 ngày log prod kèm payload thật:
+     *   1  đổi trạng thái đơn                                        82 lượt
+     *   2  đơn hoàn/trả đổi trạng thái                                4
+     *   12 return_id + return_status (RETURN_OR_REFUND_REQUEST_…)     2 — PHIẾU TRẢ, trước bỏ qua
+     *   11 cancel_id + cancel_status (khách/shop huỷ đơn)             4 — trước bỏ qua
+     *   4  đổi kiện hàng
+     * Type 12 chính là loại mang vụ trả 4042223877292721302 mà mình xử lý hôm 11/09
+     * — nó bị bỏ qua, phải chờ cron quét trả hàng mới thấy. */
+    if (pushType !== 1 && pushType !== 2 && pushType !== 4 && pushType !== 11 && pushType !== 12) {
+        console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
+        return boPush(`loại push ${pushType} không nhận`)
+    }
+
+    const orderId = data.order_id
+    if (pushType !== 2 && pushType !== 12 && !orderId) {
+        console.log(`[TikTok Webhook] No order_id in data`)
+        return boPush('push không có order_id')
+    }
+
+    // ── Find channel by shopId (cached schema lookup → fall back to scan) ──
+    // TikTok's webhook `shop_id` matches the shop_cipher or shopId stored in our
+    // onlineChannel record.
+    let channel: any = null
+    let storePrisma: any = null
+    let resolvedSchema: string | null = null
+
+    // TikTok webhooks carry the NUMERIC shop id, while channel.shopId stores the
+    // shop_cipher (order APIs require the cipher) — so match on either shopId or
+    // platformShopId (populated at connect + self-healed by sync/cron).
+    const channelWhere = {
+        platform: 'tiktok',
+        OR: [{ shopId }, { platformShopId: shopId }],
+    }
+
+    const cachedSchema = shopId ? await cacheGet<string>(tiktokSchemaCacheKey(shopId)) : null
+    if (cachedSchema) {
+        try {
+            const prisma = getStorePrisma(cachedSchema)
+            const found = await prisma.onlineChannel.findFirst({ where: channelWhere })
+            if (found) {
+                channel = found
+                storePrisma = prisma
+                resolvedSchema = cachedSchema
+            }
+        } catch {
+            // Cached schema went stale — fall through to scan.
         }
+    }
 
-        const orderId = data.order_id
-        if (pushType !== 2 && pushType !== 12 && !orderId) {
-            console.log(`[TikTok Webhook] No order_id in data`)
-            return
-        }
-
-        // ── Find channel by shopId (cached schema lookup → fall back to scan) ──
-        // TikTok's webhook `shop_id` matches the shop_cipher or shopId stored in our
-        // onlineChannel record.
-        let channel: any = null
-        let storePrisma: any = null
-        let resolvedSchema: string | null = null
-
-        // TikTok webhooks carry the NUMERIC shop id, while channel.shopId stores the
-        // shop_cipher (order APIs require the cipher) — so match on either shopId or
-        // platformShopId (populated at connect + self-healed by sync/cron).
-        const channelWhere = {
-            platform: 'tiktok',
-            OR: [{ shopId }, { platformShopId: shopId }],
-        }
-
-        const cachedSchema = shopId ? await cacheGet<string>(tiktokSchemaCacheKey(shopId)) : null
-        if (cachedSchema) {
+    // Quét dở vì lỗi tạm thời ≠ không có kênh (xem nhánh Shopee).
+    let loiQuet: any = null
+    if (!channel) {
+        const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
+        for (const store of allStores) {
             try {
-                const prisma = getStorePrisma(cachedSchema)
+                const prisma = getStorePrisma(store.schema)
                 const found = await prisma.onlineChannel.findFirst({ where: channelWhere })
                 if (found) {
                     channel = found
                     storePrisma = prisma
-                    resolvedSchema = cachedSchema
+                    resolvedSchema = store.schema
+                    break
                 }
-            } catch {
-                // Cached schema went stale — fall through to scan.
+            } catch (e: any) {
+                if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
+                continue
             }
         }
+    }
 
-        if (!channel) {
-            const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-            for (const store of allStores) {
-                try {
-                    const prisma = getStorePrisma(store.schema)
-                    const found = await prisma.onlineChannel.findFirst({ where: channelWhere })
-                    if (found) {
-                        channel = found
-                        storePrisma = prisma
-                        resolvedSchema = store.schema
-                        break
-                    }
-                } catch {
-                    continue
-                }
+    if (!channel || !storePrisma) {
+        if (loiQuet) throw loiQuet
+        console.log(`[TikTok Webhook] No channel found for shop_id=${shopId}`)
+        return boPush(`không có kênh TikTok nào mang shop_id=${shopId}`)
+    }
+
+    if (resolvedSchema && resolvedSchema !== cachedSchema) {
+        await cacheSet(tiktokSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
+    }
+
+    // ── Verify HMAC signature ──
+    const appSecret = channel.apiSecret || process.env.TIKTOK_APP_SECRET || ''
+    if (!appSecret) {
+        console.warn(`[TikTok Webhook] No app secret for shop_id=${shopId} — processing without signature check`)
+    } else if (!signature) {
+        console.warn(`[TikTok Webhook] Missing x-tts-sign header — processing without signature check`)
+    } else if (!rawBody) {
+        console.warn(`[TikTok Webhook] Raw body unavailable — processing without signature check`)
+    } else if (!verifyTikTokSignature(rawBody, channel.apiKey || '', appSecret, signature)) {
+        // TikTok's exact signing base string is poorly documented (body-only vs
+        // app_key+body variants exist in the wild). The handler re-fetches the
+        // authoritative order from TikTok's API with our own credentials anyway,
+        // so a signature mismatch can't inject data — log loudly but continue
+        // rather than silently dropping real status updates.
+        console.warn(`[TikTok Webhook] ⚠️ Signature mismatch for shop_id=${shopId} — processing anyway (order re-fetched from API)`)
+    }
+
+    // ── Type 2: return/refund status change → sync returns realtime ──
+    // Webhook là kênh cập nhật chính cho trả hàng; nút sync tay chỉ là fallback.
+    // Debounce 60s/kênh: một đợt event dồn dập chỉ chạy 1 lần quét (7 ngày).
+    // Type 12 mang return_id + return_status, cùng đường với type 2.
+    if (pushType === 2 || pushType === 12) {
+        // Debounce không còn vứt push (13/09/2026) — cùng quy ước với code 29 bên Shopee.
+        const debounceKey = `webhook:tiktok:returns:${channel.id}`
+        const quetLuc = Number(await cacheGet(debounceKey)) || 0
+        if (Date.now() - quetLuc < 60_000) {
+            if (quetLuc >= tin.nhanLuc.getTime()) {
+                console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name} — lượt quét bắt đầu sau push này đã bao phủ`)
+                return xongPush('lượt quét trả hàng bắt đầu sau push đã bao phủ')
             }
+            console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name} — lượt quét chạy TRƯỚC push này, hẹn quét lại`)
+            return hoanPush('đợi hết debounce 60s để quét lại trả hàng', 70)
         }
-
-        if (!channel || !storePrisma) {
-            console.log(`[TikTok Webhook] No channel found for shop_id=${shopId}`)
-            return
+        await cacheSet(debounceKey, Date.now(), 60)
+        try {
+            const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 7 * 86400_000))
+            console.log(`[TikTok Webhook] 🔄 Returns synced (type ${pushType}${data.return_id ? `, vụ ${data.return_id}` : ''}) for ${channel.name}: `
+                + `+${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
+            return xongPush(`trả hàng: +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
+        } catch (retErr: any) {
+            await cacheDel(debounceKey).catch(() => { })
+            console.error(`[TikTok Webhook] Returns sync failed for ${channel.name}: ${moTaLoi(retErr)}`)
+            throw retErr
         }
+    }
 
-        if (resolvedSchema && resolvedSchema !== cachedSchema) {
-            await cacheSet(tiktokSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
-        }
+    // ── Fetch full order detail from TikTok API ──
+    const tiktok = new TikTokService({
+        apiKey: channel.apiKey,
+        apiSecret: channel.apiSecret,
+        accessToken: channel.accessToken,
+        refreshToken: channel.refreshToken,
+        shopId: channel.shopId,
+    })
 
-        // ── Verify HMAC signature ──
-        const appSecret = channel.apiSecret || process.env.TIKTOK_APP_SECRET || ''
-        if (!appSecret) {
-            console.warn(`[TikTok Webhook] No app secret for shop_id=${shopId} — processing without signature check`)
-        } else if (!signature) {
-            console.warn(`[TikTok Webhook] Missing x-tts-sign header — processing without signature check`)
-        } else if (!rawBody) {
-            console.warn(`[TikTok Webhook] Raw body unavailable — processing without signature check`)
-        } else if (!verifyTikTokSignature(rawBody, channel.apiKey || '', appSecret, signature)) {
-            // TikTok's exact signing base string is poorly documented (body-only vs
-            // app_key+body variants exist in the wild). The handler re-fetches the
-            // authoritative order from TikTok's API with our own credentials anyway,
-            // so a signature mismatch can't inject data — log loudly but continue
-            // rather than silently dropping real status updates.
-            console.warn(`[TikTok Webhook] ⚠️ Signature mismatch for shop_id=${shopId} — processing anyway (order re-fetched from API)`)
-        }
+    // Handle token refresh if needed
+    let orderDetail = await tiktok.getOrderDetail(orderId)
 
-        // ── Type 2: return/refund status change → sync returns realtime ──
-        // Webhook là kênh cập nhật chính cho trả hàng; nút sync tay chỉ là fallback.
-        // Debounce 60s/kênh: một đợt event dồn dập chỉ chạy 1 lần quét (7 ngày).
-        // Type 12 mang return_id + return_status, cùng đường với type 2.
-        if (pushType === 2 || pushType === 12) {
-            const debounceKey = `webhook:tiktok:returns:${channel.id}`
-            if (await cacheGet(debounceKey)) {
-                console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name}`)
-                return
-            }
-            await cacheSet(debounceKey, '1', 60)
-            try {
-                const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 7 * 86400_000))
-                console.log(`[TikTok Webhook] 🔄 Returns synced (type ${pushType}${data.return_id ? `, vụ ${data.return_id}` : ''}) for ${channel.name}: `
-                    + `+${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
-            } catch (retErr: any) {
-                console.error(`[TikTok Webhook] Returns sync failed for ${channel.name}:`, retErr.message)
-            }
-            return
-        }
-
-        // ── Fetch full order detail from TikTok API ──
-        const tiktok = new TikTokService({
-            apiKey: channel.apiKey,
-            apiSecret: channel.apiSecret,
-            accessToken: channel.accessToken,
-            refreshToken: channel.refreshToken,
-            shopId: channel.shopId,
-        })
-
-        // Handle token refresh if needed
-        let orderDetail = await tiktok.getOrderDetail(orderId)
-
-        if (!orderDetail && channel.refreshToken) {
-            try {
-                const newTokens = await tiktok.refreshAccessToken()
-                if (newTokens.accessToken) {
-                    // Update channel credentials
-                    await storePrisma.onlineChannel.update({
-                        where: { id: channel.id },
-                        data: {
-                            accessToken: newTokens.accessToken,
-                            refreshToken: newTokens.refreshToken || channel.refreshToken,
-                            tokenExpiresAt: new Date(Date.now() + (newTokens.expiresIn || 86400) * 1000),
-                        },
-                    })
-                    // Retry with new token
-                    const refreshedTiktok = new TikTokService({
-                        apiKey: channel.apiKey,
-                        apiSecret: channel.apiSecret,
+    if (!orderDetail && channel.refreshToken) {
+        try {
+            const newTokens = await tiktok.refreshAccessToken()
+            if (newTokens.accessToken) {
+                // Update channel credentials
+                await storePrisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: {
                         accessToken: newTokens.accessToken,
                         refreshToken: newTokens.refreshToken || channel.refreshToken,
-                        shopId: channel.shopId,
-                    })
-                    orderDetail = await refreshedTiktok.getOrderDetail(orderId)
-                }
-            } catch (refreshErr: any) {
-                console.error(`[TikTok Webhook] Token refresh failed: ${moTaLoi(refreshErr)}`)
-            }
-        }
-
-        if (!orderDetail) {
-            console.log(`[TikTok Webhook] Could not fetch order detail for ${orderId}`)
-            return
-        }
-
-        // ── Upsert order in DB ──
-        const existing = await storePrisma.onlineOrder.findFirst({
-            where: { externalOrderId: String(orderId), channelId: channel.id },
-        })
-
-        if (existing) {
-            await storePrisma.onlineOrder.update({
-                where: { id: existing.id },
-                data: {
-                    status: orderDetail.status,
-                    externalStatus: orderDetail.externalStatus,
-                    paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: orderDetail.trackingNumber || existing.trackingNumber,
-                    shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
-                    shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
-                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : existing.deliveredAt,
-                    paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : existing.paidAt,
-                    syncedAt: new Date(),
-                },
-            })
-            console.log(`[TikTok Webhook] ✅ Updated ${orderId} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
-            // Liên kết hàng ↔ kho ngay lúc về — đơn chờ xác nhận không lập phiếu nên
-            // không còn được liên kết ở hàm lập phiếu (10/09/2026, xem lienKetHangDon).
-            try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
-
-            // Đơn CANCELLED/hoàn → đảo hiệu ứng (hoàn kho + void HĐ + đảo bút toán)
-            if (isReversalStatus(orderDetail.status)) {
-                try {
-                    await reverseOnlineOrderEffects(storePrisma, existing)
-                } catch (revErr: any) {
-                    console.error(`[TikTok Webhook] Reversal failed for ${orderId}:`, revErr.message)
-                }
-            }
-
-            // Auto-convert eligible orders to transactions
-            try {
-                await convertOnlineOrderToTransaction(storePrisma, existing.id)
-            } catch (convErr: any) {
-                /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
-                 * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
-                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
-            }
-        } else {
-            const newOrder = await storePrisma.onlineOrder.create({
-                data: {
-                    orderNumber: orderDetail.orderNumber,
-                    channelId: channel.id,
-                    channelName: channel.name,
-                    platform: 'tiktok',
-                    externalOrderId: String(orderId),
-                    externalStatus: orderDetail.externalStatus,
-                    customerName: orderDetail.customerName,
-                    customerPhone: orderDetail.customerPhone || null,
-                    customerEmail: null,
-                    shippingAddress: orderDetail.shippingAddress || null,
-                    status: orderDetail.status,
-                    subtotal: orderDetail.subtotal,
-                    discount: orderDetail.discount,
-                    shippingFee: orderDetail.shippingFee,
-                    total: orderDetail.total,
-                    paymentMethod: orderDetail.paymentMethod || null,
-                    paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: orderDetail.trackingNumber || null,
-                    shippingCarrier: orderDetail.shippingCarrier || null,
-                    paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
-                    shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
-                    deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
-                    syncedAt: new Date(),
-                    createdAt: new Date(orderDetail.createdAt),
-                    // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
-                    // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
-                    // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
-                    // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
-                    // 06/09/2026:
-                    //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
-                    //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
-                    //     soát lại — giữ phí bịa vĩnh viễn.
-                    //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
-                    //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
-                    // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
-                    // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
-                    platformFeeRate: 0,
-                    platformFee: 0,
-                    netRevenue: 0,
-                    items: {
-                        create: orderDetail.items.map(item => ({
-                            externalItemId: item.externalItemId || '',
-                            productName: item.productName,
-                            sku: item.sku || null,
-                            quantity: item.quantity,
-                            unitPrice: item.unitPrice,
-                            discount: item.discount || 0,
-                            lineTotal: item.lineTotal,
-                        })),
+                        tokenExpiresAt: new Date(Date.now() + (newTokens.expiresIn || 86400) * 1000),
                     },
-                },
-            })
-            console.log(`[TikTok Webhook] ✅ Created new order ${orderId} → ${orderDetail.status}`)
-            // Liên kết hàng ↔ kho ngay lúc về (xem lienKetHangDon).
-            try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
+                })
+                // Retry with new token
+                const refreshedTiktok = new TikTokService({
+                    apiKey: channel.apiKey,
+                    apiSecret: channel.apiSecret,
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken || channel.refreshToken,
+                    shopId: channel.shopId,
+                })
+                orderDetail = await refreshedTiktok.getOrderDetail(orderId)
+            }
+        } catch (refreshErr: any) {
+            console.error(`[TikTok Webhook] Token refresh failed: ${moTaLoi(refreshErr)}`)
+        }
+    }
 
-            // Auto-convert if eligible
+    if (!orderDetail) {
+        // Không bỏ push nữa (13/09/2026) — ném để hộp thư thử lại.
+        console.log(`[TikTok Webhook] Could not fetch order detail for ${orderId}`)
+        throw new Error(`Không lấy được chi tiết đơn ${orderId} từ TikTok`)
+    }
+
+    // ── Upsert order in DB ──
+    const existing = await storePrisma.onlineOrder.findFirst({
+        where: { externalOrderId: String(orderId), channelId: channel.id },
+    })
+
+    if (existing) {
+        await storePrisma.onlineOrder.update({
+            where: { id: existing.id },
+            data: {
+                status: orderDetail.status,
+                externalStatus: orderDetail.externalStatus,
+                paymentStatus: orderDetail.paymentStatus,
+                trackingNumber: orderDetail.trackingNumber || existing.trackingNumber,
+                shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
+                shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
+                deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : existing.deliveredAt,
+                paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : existing.paidAt,
+                syncedAt: new Date(),
+            },
+        })
+        console.log(`[TikTok Webhook] ✅ Updated ${orderId} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
+        // Liên kết hàng ↔ kho ngay lúc về — đơn chờ xác nhận không lập phiếu nên
+        // không còn được liên kết ở hàm lập phiếu (10/09/2026, xem lienKetHangDon).
+        try { await lienKetHangDon(storePrisma, existing.id) } catch { /* không chặn webhook */ }
+
+        // Đơn CANCELLED/hoàn → đảo hiệu ứng (hoàn kho + void HĐ + đảo bút toán)
+        if (isReversalStatus(orderDetail.status)) {
             try {
-                await convertOnlineOrderToTransaction(storePrisma, newOrder.id)
-            } catch (convErr: any) {
-                /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
-                 * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
-                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
+                await reverseOnlineOrderEffects(storePrisma, existing)
+            } catch (revErr: any) {
+                // Đảo hiệu ứng idempotent → để hộp thư thử lại, đừng bỏ đơn huỷ chưa hoàn kho.
+                console.error(`[TikTok Webhook] Reversal failed for ${orderId}: ${moTaLoi(revErr)}`)
+                throw revErr
             }
         }
 
-    } catch (err: any) {
-        console.error('[TikTok Webhook] Error:', err.message)
+        // Auto-convert eligible orders to transactions
+        try {
+            await convertOnlineOrderToTransaction(storePrisma, existing.id)
+        } catch (convErr: any) {
+            /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
+             * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
+            console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
+        }
+    } else {
+        const newOrder = await storePrisma.onlineOrder.create({
+            data: {
+                orderNumber: orderDetail.orderNumber,
+                channelId: channel.id,
+                channelName: channel.name,
+                platform: 'tiktok',
+                externalOrderId: String(orderId),
+                externalStatus: orderDetail.externalStatus,
+                customerName: orderDetail.customerName,
+                customerPhone: orderDetail.customerPhone || null,
+                customerEmail: null,
+                shippingAddress: orderDetail.shippingAddress || null,
+                status: orderDetail.status,
+                subtotal: orderDetail.subtotal,
+                discount: orderDetail.discount,
+                shippingFee: orderDetail.shippingFee,
+                total: orderDetail.total,
+                paymentMethod: orderDetail.paymentMethod || null,
+                paymentStatus: orderDetail.paymentStatus,
+                trackingNumber: orderDetail.trackingNumber || null,
+                shippingCarrier: orderDetail.shippingCarrier || null,
+                paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
+                shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
+                deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : null,
+                syncedAt: new Date(),
+                createdAt: new Date(orderDetail.createdAt),
+                // PHÍ SÀN KHÔNG TỰ TÍNH — đồng nhất với đường sync tay/cron
+                // (onlineOrders.ts, khối tạo đơn). Trước đây chỗ này ghi
+                // total × hoa hồng cấu hình (mặc định 6%) và netRevenue = total −
+                // phí − shippingFee, rồi để đó NHƯ PHÍ THẬT. Hai hậu quả đo được
+                // 06/09/2026:
+                //  1. cron đối soát phí (autoSync) chỉ quét đơn platformFee = 0,
+                //     nên đơn webhook mang số ước tính > 0 KHÔNG BAO GIỜ được đối
+                //     soát lại — giữ phí bịa vĩnh viễn.
+                //  2. computeOrderProfits coi netRevenue > 0 là "đã đối soát" →
+                //     lợi nhuận của chúng hiện KHÔNG có dấu "~" dù là ước tính.
+                // Để 0/0/0 = "chưa đối soát"; giao diện hiện "—"; cron và
+                // /sync-fees sẽ điền phí THẬT từ escrow/settlement.
+                platformFeeRate: 0,
+                platformFee: 0,
+                netRevenue: 0,
+                items: {
+                    create: orderDetail.items.map(item => ({
+                        externalItemId: item.externalItemId || '',
+                        productName: item.productName,
+                        sku: item.sku || null,
+                        quantity: item.quantity,
+                        unitPrice: item.unitPrice,
+                        discount: item.discount || 0,
+                        lineTotal: item.lineTotal,
+                    })),
+                },
+            },
+        })
+        console.log(`[TikTok Webhook] ✅ Created new order ${orderId} → ${orderDetail.status}`)
+        // Liên kết hàng ↔ kho ngay lúc về (xem lienKetHangDon).
+        try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
+
+        // Auto-convert if eligible
+        try {
+            await convertOnlineOrderToTransaction(storePrisma, newOrder.id)
+        } catch (convErr: any) {
+            /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
+             * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
+            console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
+        }
     }
-})
+
+    return xongPush()
+}
+dangKyBoXuLyPush('tiktok', xuLyPushTikTok)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  FACEBOOK PAGE WEBHOOK (Fanpage Manager)
