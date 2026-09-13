@@ -171,8 +171,15 @@ async function chayTin(tin: TinPush): Promise<void> {
         } else if (kq.loai === 'bo') {
             await capNhat(`UPDATE ${BANG} SET "trangThai"='bo', "xongLuc"=now(), "ghiChu"=$2 WHERE "id"=$1::bigint`,
                 tin.id, kq.lyDo)
+        } else if (Date.now() - tin.nhanLuc.getTime() > 3 * 3600_000) {
+            // Hoãn mãi quá 3 giờ là có chuyện (lượt quét nền chết liên tục?) → bỏ cuộc cho người soi.
+            await capNhat(`UPDATE ${BANG} SET "trangThai"='hong', "xongLuc"=now(), "ghiChu"=$2 WHERE "id"=$1::bigint`,
+                tin.id, `hoãn quá 3 giờ — ${kq.lyDo}`.slice(0, 2000))
+            console.error(`[Hộp thư webhook] ❌ ${tin.platform} tin ${tin.id} hoãn quá 3 giờ — bỏ cuộc: ${kq.lyDo}`)
         } else {
-            await capNhat(`UPDATE ${BANG} SET "trangThai"='cho', "henLuc"=now() + ($2::int * interval '1 second'), "ghiChu"=$3 WHERE "id"=$1::bigint`,
+            /* Hoãn có chủ đích KHÔNG ăn vào số lần thử: lượt nhặt đã +1 thì trả lại. Không
+             * có dòng này thì một lượt quét phiếu trả 6,5 phút đủ đốt hết 6 lượt thử. */
+            await capNhat(`UPDATE ${BANG} SET "trangThai"='cho', "soLanThu"=GREATEST("soLanThu" - 1, 0), "henLuc"=now() + ($2::int * interval '1 second'), "ghiChu"=$3 WHERE "id"=$1::bigint`,
                 tin.id, Math.max(1, Math.round(kq.sauGiay)), kq.lyDo)
         }
     } catch (e) {
@@ -391,10 +398,11 @@ export async function tuKiemHopThu(): Promise<{ ok: boolean; buoc: Array<{ buoc:
         if (t) idGia.push(t.id)
         return t
     }
+    const daHoan = new Set<string>()
     boXuLy.set(GIA, async (tin) => {
         const kieu = tin.body?.kieu
         if (kieu === 'loi-lan-1' && tin.soLanThu === 1) throw new Error('lỗi giả lần 1 (tự kiểm)')
-        if (kieu === 'hoan' && tin.soLanThu === 1) return hoanPush('tự kiểm: hoãn', 5)
+        if (kieu === 'hoan' && !daHoan.has(tin.id)) { daHoan.add(tin.id); return hoanPush('tự kiểm: hoãn', 5) }
         return xongPush(`tự kiểm: xong ở lần ${tin.soLanThu}`)
     })
     try {
@@ -424,7 +432,7 @@ export async function tuKiemHopThu(): Promise<{ ok: boolean; buoc: Array<{ buoc:
         if (t3) {
             await chayTin(t3)
             const r = await docDong(t3.id)
-            ghi("hoãn có chủ đích → 'cho', hẹn ~5s", r?.trangThai === 'cho' && r?.henSauGiay > 0 && r?.henSauGiay <= 6, r)
+            ghi("hoãn có chủ đích → 'cho', hẹn ~5s, KHÔNG ăn lượt thử", r?.trangThai === 'cho' && r?.henSauGiay > 0 && r?.henSauGiay <= 6 && Number(r?.soLanThu) === 0, r)
         }
 
         const t4 = await themGia('ket')
@@ -436,7 +444,7 @@ export async function tuKiemHopThu(): Promise<{ ok: boolean; buoc: Array<{ buoc:
         if (t3) await registryPrisma.$executeRawUnsafe(`UPDATE ${BANG} SET "henLuc" = now() - interval '1 second' WHERE "id" = $1::bigint`, t3.id)
         await quetHopThu({ epDon: true })
         if (t2) { const r = await docDong(t2.id); ghi("lượt quét nhặt dòng 'loi' → 'xong' ở lần 2", r?.trangThai === 'xong' && Number(r?.soLanThu) === 2, r) }
-        if (t3) { const r = await docDong(t3.id); ghi("lượt quét nhặt dòng 'cho' → 'xong' ở lần 2", r?.trangThai === 'xong' && Number(r?.soLanThu) === 2, r) }
+        if (t3) { const r = await docDong(t3.id); ghi("lượt quét nhặt dòng 'cho' → 'xong' (lần thử vẫn là 1)", r?.trangThai === 'xong' && Number(r?.soLanThu) === 1, r) }
         if (t4) { const r = await docDong(t4.id); ghi("gỡ kẹt 'dang' quá 15' → nhặt lại → 'xong' ở lần 2", r?.trangThai === 'xong' && Number(r?.soLanThu) === 2, r) }
 
         if (t4) {

@@ -12,6 +12,7 @@ import { publishEvent } from '../lib/pubsub'
 import { processComment } from '../services/fanpageAutoReply'
 import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
 import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
+import { giuKhoa, traKhoa } from '../lib/leaderLock'
 
 const router = Router()
 
@@ -46,6 +47,52 @@ function verifyShopeeSignature(rawBody: Buffer, url: string, partnerKey: string,
 //    4  = tracking number update
 //    5  = Shopee updates
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/* ─── PUSH PHIẾU TRẢ QUA HỘP THƯ (13/09/2026, sửa lần 2) ─────────────────────
+ *
+ * Đo ngay sau khi hộp thư lên: một lượt syncChannelReturns mất ~6,5 PHÚT (gọi ngược
+ * API qua proxy, CPU bị bóp), mà khoá debounce 60 s hết hạn giữa chừng → push kế tiếp
+ * mở lượt thứ HAI chồng lên lượt đầu (15:44→15:51 và 15:46→15:52, cùng một kênh), và
+ * vì lượt quét hộp thư chạy tuần tự nên cả hàng đợi kẹt 6 phút sau nó.
+ *
+ * Nay mỗi kênh MỘT lượt quét, giành bằng khoá nguyên tử (push code 29 tới THEO CẶP
+ * cách nhau ~1 s, từ hai app), chạy NỀN — xử lý push chỉ tốn vài ms:
+ *   • lượt quét XONG gần nhất bắt đầu sau lúc push tới → đã bao phủ → xong
+ *   • giành được khoá → mở lượt quét nền → hoãn 60 s chờ nó xong
+ *   • đang có lượt chạy → hoãn 60 s; lượt đó bắt đầu TRƯỚC push thì lần sau tự mở
+ *     lượt mới — một đợt push dồn tốn tối đa HAI lượt quét
+ * Hoãn không ăn vào số lần thử của hộp thư. Lượt quét hỏng thì không ghi mốc xong →
+ * push còn hoãn tự mở lại lượt khác. */
+async function xuLyPushPhieuTra(
+    tin: TinPush, channel: any, storePrisma: any, soNgay: number, nhan: string,
+): Promise<KetQuaPush> {
+    const mocXong = `webhook:${tin.platform}:returns:${channel.id}:xong`
+    const xongLuc = Number(await cacheGet(mocXong)) || 0
+    if (xongLuc >= tin.nhanLuc.getTime()) {
+        console.log(`${nhan} — lượt quét bắt đầu sau push này đã xong`)
+        return xongPush('lượt quét phiếu trả bắt đầu sau push đã xong')
+    }
+    const tenKhoa = `quet-phieu-tra:${tin.platform}:${channel.id}`
+    if (!(await giuKhoa(tenKhoa, 30 * 60_000))) {
+        return hoanPush('đang có lượt quét phiếu trả chạy — đợi xong', 60)
+    }
+    const batDau = Date.now()
+    void (async () => {
+        try {
+            const r = await syncChannelReturns(storePrisma, channel, new Date(batDau - soNgay * 86400_000))
+            /* Lùi mốc 2 s: đồng hồ DB (nhanLuc) và đồng hồ máy chủ lệch nhau cỡ dưới 1 s —
+             * thà quét thừa một lượt còn hơn coi nhầm push tới NGAY sau lúc bắt đầu là đã bao phủ. */
+            await cacheSet(mocXong, batDau - 2_000, 24 * 3600)
+            console.log(`${nhan} → +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi (quét ${Math.round((Date.now() - batDau) / 1000)}s)`)
+        } catch (e: any) {
+            console.error(`${nhan} — đồng bộ phiếu trả HỎNG cho ${channel.name}: ${moTaLoi(e)}`)
+        } finally {
+            await traKhoa(tenKhoa)
+        }
+    })()
+    console.log(`${nhan} — mở lượt quét phiếu trả chạy nền`)
+    return hoanPush('đã mở lượt quét phiếu trả chạy nền — đợi xong', 60)
+}
 
 router.post('/shopee', async (req: Request, res: Response) => {
     /* TRẢ 200 VỚI THÂN RỖNG (03/09/2026).
@@ -297,30 +344,8 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
      * ra đây. Debounce 60s/kênh: Shopee bắn 2–3 push cho một phiếu (return_status
      * rồi return_solution rồi logistics_status) — đo 7 ngày: 32 push. */
     if (pushCode === 29) {
-        /* 13/09/2026: debounce KHÔNG còn vứt push. Khoá giữ LÚC BẮT ĐẦU lượt quét:
-         * lượt quét bắt đầu SAU lúc push tới thì đã bao phủ nó → xong; bắt đầu TRƯỚC
-         * thì có thể chưa thấy phiếu này → hoãn tới khi hết debounce rồi tự quét. */
-        const khoaCho = `webhook:shopee:returns:${channel.id}`
-        const quetLuc = Number(await cacheGet(khoaCho)) || 0
-        if (Date.now() - quetLuc < 60_000) {
-            if (quetLuc >= tin.nhanLuc.getTime()) {
-                console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — lượt quét bắt đầu sau push này đã bao phủ`)
-                return xongPush('lượt quét phiếu trả bắt đầu sau push đã bao phủ')
-            }
-            console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} — lượt quét vừa chạy TRƯỚC push này, hẹn quét lại`)
-            return hoanPush('đợi hết debounce 60s để quét lại phiếu trả', 70)
-        }
-        await cacheSet(khoaCho, Date.now(), 60)
-        try {
-            const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 3 * 86400_000))
-            console.log(`[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} (đơn ${orderSn}) → +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
-            return xongPush(`phiếu trả: +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
-        } catch (retErr: any) {
-            // Nhả khoá: lượt quét HỎNG không được tính là "đã bao phủ" push nào.
-            await cacheDel(khoaCho).catch(() => { })
-            console.error(`[Shopee Webhook] Đồng bộ phiếu trả hỏng cho ${channel.name}: ${moTaLoi(retErr)}`)
-            throw retErr
-        }
+        return xuLyPushPhieuTra(tin, channel, storePrisma, 3,
+            `[Shopee Webhook] 🔄 Phiếu trả ${data.return_sn || ''} (đơn ${orderSn})`)
     }
 
     // Create ShopeeService to fetch order detail
@@ -652,28 +677,8 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
     // Debounce 60s/kênh: một đợt event dồn dập chỉ chạy 1 lần quét (7 ngày).
     // Type 12 mang return_id + return_status, cùng đường với type 2.
     if (pushType === 2 || pushType === 12) {
-        // Debounce không còn vứt push (13/09/2026) — cùng quy ước với code 29 bên Shopee.
-        const debounceKey = `webhook:tiktok:returns:${channel.id}`
-        const quetLuc = Number(await cacheGet(debounceKey)) || 0
-        if (Date.now() - quetLuc < 60_000) {
-            if (quetLuc >= tin.nhanLuc.getTime()) {
-                console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name} — lượt quét bắt đầu sau push này đã bao phủ`)
-                return xongPush('lượt quét trả hàng bắt đầu sau push đã bao phủ')
-            }
-            console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name} — lượt quét chạy TRƯỚC push này, hẹn quét lại`)
-            return hoanPush('đợi hết debounce 60s để quét lại trả hàng', 70)
-        }
-        await cacheSet(debounceKey, Date.now(), 60)
-        try {
-            const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 7 * 86400_000))
-            console.log(`[TikTok Webhook] 🔄 Returns synced (type ${pushType}${data.return_id ? `, vụ ${data.return_id}` : ''}) for ${channel.name}: `
-                + `+${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
-            return xongPush(`trả hàng: +${r.synced} mới, ${r.skipped} đã có, ${r.errors.length} lỗi`)
-        } catch (retErr: any) {
-            await cacheDel(debounceKey).catch(() => { })
-            console.error(`[TikTok Webhook] Returns sync failed for ${channel.name}: ${moTaLoi(retErr)}`)
-            throw retErr
-        }
+        return xuLyPushPhieuTra(tin, channel, storePrisma, 7,
+            `[TikTok Webhook] 🔄 Trả hàng (type ${pushType}${data.return_id ? `, vụ ${data.return_id}` : ''}) kênh ${channel.name}`)
     }
 
     // ── Fetch full order detail from TikTok API ──

@@ -74,3 +74,37 @@ export async function chayNeuLanhDao(ten: string, ttlMs: number, viec: () => Pro
     }
     return true
 }
+
+/* ─── KHOÁ GIÀNH CHỖ, KHÔNG KÈM VIỆC (13/09/2026) ────────────────────────────
+ * Cho việc chạy NỀN lâu hơn một request — vd lượt quét phiếu trả của hộp thư webhook:
+ * mỗi kênh chỉ MỘT lượt. Người gọi tự trả khoá bằng traKhoa() khi xong; chết giữa
+ * chừng thì khoá tự rơi sau ttlMs. Không có Redis → khoá trong bộ nhớ tiến trình
+ * (vẫn chặn được cặp push trùng tới cùng một bản máy — trường hợp hay gặp nhất). */
+const khoaTrongMay = new Map<string, number>()
+
+export async function giuKhoa(ten: string, ttlMs: number): Promise<boolean> {
+    const key = `lock:${ten}`
+    const r = client()
+    if (r && r.status === 'ready') {
+        try {
+            return (await r.set(key, TOKEN, 'PX', Math.max(1000, ttlMs), 'NX')) === 'OK'
+        } catch { /* Redis hắt hơi → rơi xuống khoá trong máy */ }
+    }
+    const nay = Date.now()
+    if ((khoaTrongMay.get(key) || 0) > nay) return false
+    khoaTrongMay.set(key, nay + ttlMs)
+    return true
+}
+
+export async function traKhoa(ten: string): Promise<void> {
+    const key = `lock:${ten}`
+    khoaTrongMay.delete(key)
+    const r = client()
+    if (!r || r.status !== 'ready') return
+    try {
+        await r.eval(
+            'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+            1, key, TOKEN,
+        )
+    } catch { /* hết TTL tự rơi */ }
+}
