@@ -11309,6 +11309,44 @@ router.get('/do-ton-kho', async (req: Request, res: Response) => {
     }
 })
 
+/* BỘ ĐO TRẠNG THÁI ĐƠN SÀN (15/09/2026): đếm đơn theo (platform, status) từng cửa hàng,
+ * kèm số đơn KHÔNG có dòng hàng và số dòng hàng có ảnh — để biết tab nào của app/web
+ * đang "nuốt" trạng thái nào (app 1.0.40 chỉ có 5 tab; đơn 'delivered'/'returned'…
+ * không nằm tab nào). Chỉ đọc. GET /admin/do-trang-thai-don-san?ma=KENGIONLINE */
+router.get('/do-trang-thai-don-san', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || '').trim().toUpperCase()
+        const stores = await registryPrisma.store.findMany({
+            where: ma ? { code: ma } : { status: 'active' },
+            select: { code: true, schema: true }, orderBy: { createdAt: 'desc' },
+        })
+        const kq: any[] = []
+        for (const st of stores) {
+            try {
+                const p: any = getStorePrisma(st.schema)
+                const theoTrangThai: any[] = await p.$queryRawUnsafe(
+                    `SELECT platform, status, COUNT(*)::int AS so, MAX("createdAt") AS "moiNhat"
+                       FROM "OnlineOrder" GROUP BY platform, status ORDER BY so DESC`)
+                const [khongDongHang]: any[] = await p.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS so FROM "OnlineOrder" o
+                      WHERE NOT EXISTS (SELECT 1 FROM "OnlineOrderItem" i WHERE i."onlineOrderId" = o.id)`)
+                const [dongHang]: any[] = await p.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS "tong",
+                            COUNT(*) FILTER (WHERE i."productId" IS NOT NULL)::int AS "coProductId",
+                            COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM "ProductImage" pi WHERE pi."productId" = i."productId"))::int AS "coAnhKho",
+                            COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op."imageUrl" IS NOT NULL AND (op.sku = i.sku OR op."localProductId" = i."productId" OR op."platformProductId" = i."externalItemId")))::int AS "coAnhListing"
+                       FROM "OnlineOrderItem" i`)
+                kq.push({ cuaHang: st.code, tongDon: theoTrangThai.reduce((a, r) => a + Number(r.so), 0), theoTrangThai, donKhongDongHang: Number(khongDongHang?.so || 0), dongHang })
+            } catch (e) {
+                kq.push({ cuaHang: st.code, loi: moTaLoi(e) })
+            }
+        }
+        res.json({ success: true, data: kq })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
 router.get('/do-bo-nho', async (_req: Request, res: Response) => {
     const v8 = await import('v8')
     const m = process.memoryUsage()
