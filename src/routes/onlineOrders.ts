@@ -1162,10 +1162,18 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
 
         // Lợi nhuận tạm tính — chỉ owner/admin thấy, cùng quy ước với phí sàn /
         // thực nhận ở /stats. Tính sau khi lấy đơn để không đụng vào câu query lọc.
-        /* Ảnh cho dòng hàng — luật gom ở lib/anhDongHang.ts, dùng chung với tool MCP */
+        /* Ảnh cho dòng hàng — luật gom ở lib/anhDongHang.ts, dùng chung với tool MCP.
+         * GỌI MỘT LẦN CHO CẢ TRANG (15/09/2026): hàm tải toàn bộ listing có ảnh (tới
+         * 10.000 dòng) mỗi lần gọi, mà bản cũ gọi cho TỪNG ĐƠN → trang 50 đơn là 50
+         * lượt tải bảng listing trên pool 1 kết nối. Gộp dòng của mọi đơn vào một
+         * lượt rồi chia lại theo đơn, giữ nguyên thứ tự dòng trong từng đơn. */
         const anhTheoDon = new Map<string, any[]>()
-        for (const o of orders as any[]) {
-            anhTheoDon.set(o.id, await ganAnhDongHang(prisma, (o.items || []) as any[]))
+        const tatCaDong = (orders as any[]).flatMap(o => ((o.items || []) as any[]).map(it => ({ ...it, __donId: o.id })))
+        for (const dong of await ganAnhDongHang(prisma, tatCaDong)) {
+            const { __donId, ...conLai } = dong as any
+            const ds = anhTheoDon.get(__donId)
+            if (ds) ds.push(conLai)
+            else anhTheoDon.set(__donId, [conLai])
         }
         const ganAnh = (o: any) => ({ ...o, items: anhTheoDon.get(o.id) ?? o.items })
 

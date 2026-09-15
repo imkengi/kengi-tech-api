@@ -10,6 +10,7 @@ import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 import { thongKeHopThu, tuKiemHopThu, chayLaiPushHong } from '../services/hopThuWebhook'
 import { moTaLoi } from '../lib/gomLoi'
+import { apLocTon, lapBaoCaoTonKho } from '../lib/tonKho'
 
 const router = Router()
 
@@ -11261,6 +11262,49 @@ router.post('/hop-thu-webhook/chay-lai-hong', async (req: Request, res: Response
         }
         res.json({ success: true, data: { soDong: await chayLaiPushHong(p ?? undefined) } })
     } catch (e: any) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+/* BỘ ĐO TỒN KHO (15/09/2026): với TỪNG cửa hàng, số đếm của báo cáo tồn kho phải
+ * BẰNG số dòng danh sách /products?stockStatus= lọc ra (cùng vị từ lib/tonKho.ts),
+ * và ba nhóm cộng lại phải bằng tổng số mã hàng hoá. Lệch = có nơi tự viết vị từ
+ * riêng. Chạy TUẦN TỰ từng cửa hàng (pool = 1). GET /admin/do-ton-kho?ma=KENGISTORE */
+router.get('/do-ton-kho', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || '').trim().toUpperCase()
+        const stores = await registryPrisma.store.findMany({
+            where: ma ? { code: ma } : { status: 'active' },
+            select: { code: true, schema: true },
+            orderBy: { createdAt: 'desc' },
+        })
+        const kq: any[] = []
+        for (const st of stores) {
+            const bat = Date.now()
+            try {
+                const p: any = getStorePrisma(st.schema)
+                const bc = await lapBaoCaoTonKho(p)
+                const dem: Record<string, number> = {}
+                for (const tt of ['out_of_stock', 'low_stock', 'in_stock'] as const) {
+                    const where: any = { productType: 'goods' }
+                    await apLocTon(p, where, tt)
+                    dem[tt] = await p.product.count({ where })
+                }
+                const t = bc.tongQuan
+                const khop = dem.out_of_stock === t.hetHang && dem.low_stock === t.sapHet && dem.in_stock === t.conHang
+                    && t.hetHang + t.sapHet + t.conHang === t.soMa
+                kq.push({
+                    cuaHang: st.code, khop, ms: Date.now() - bat,
+                    baoCao: { soMa: t.soMa, het: t.hetHang, sapHet: t.sapHet, con: t.conHang, tonAm: t.tonAm, maGop: t.maGop, thieuGiaVon: t.thieuGiaVon, giaTriVon: t.giaTriVon },
+                    danhSach: { het: dem.out_of_stock, sapHet: dem.low_stock, con: dem.in_stock },
+                    soNhom: bc.theoNhom.length,
+                })
+            } catch (e) {
+                kq.push({ cuaHang: st.code, khop: false, loi: moTaLoi(e) })
+            }
+        }
+        res.json({ success: true, data: { tatCaKhop: kq.every(x => x.khop), cuaHang: kq } })
+    } catch (e) {
         res.status(500).json({ success: false, error: moTaLoi(e) })
     }
 })

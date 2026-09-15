@@ -7,6 +7,7 @@ import { validate } from '../middleware/validate'
 import { CreateProductSchema, UpdateProductSchema } from '../schemas'
 import { emitProductEvent } from '../lib/webhookDispatch'
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { apLocTon, lapBaoCaoTonKho } from '../lib/tonKho'
 
 const router = Router()
 
@@ -45,8 +46,16 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
         if (categoryId) where.categoryId = categoryId as string
         if (brandId) where.brandId = brandId as string
         if (productType) where.productType = productType as string
-        if (stockStatus === 'in_stock') where.stock = { gt: 0 }
-        if (stockStatus === 'out_of_stock') where.stock = 0
+        /* LỌC TỒN PHẢI NẰM TRONG WHERE (15/09/2026). Bản cũ:
+         *  - "Sắp hết" lọc SAU khi đã cắt trang → chỉ soi 20–50 mã của trang đang
+         *    xem, còn `total`/`totalPages` thành số mã sắp hết TRONG TRANG ĐÓ;
+         *  - "Hết hàng" lấy `stock = 0` trong khi /stats đếm `stock <= 0` → mã tồn
+         *    âm biến mất khỏi mọi bộ lọc mà vẫn nằm trong con số "Hết hàng";
+         *  - "Còn hàng" lấy `stock > 0`, gồm luôn mã sắp hết, trong khi /stats và các
+         *    nút lọc đặt nó CẠNH "Sắp hết" như hai nhóm tách rời.
+         * Vị từ ba nhóm nay ở MỘT chỗ: lib/tonKho.ts (dùng chung với báo cáo tồn kho
+         * và bộ đo /admin/do-ton-kho). */
+        await apLocTon(prisma, where, stockStatus)
 
         const pageNum = Math.max(1, parseInt(page as string))
         const size = Math.max(1, Math.min(1000, parseInt(pageSize as string)))
@@ -70,10 +79,6 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
 
         let filteredProducts = products
         let filteredTotal = total
-        if (stockStatus === 'low_stock') {
-            filteredProducts = products.filter((p: any) => p.stock > 0 && p.stock <= p.minStock)
-            filteredTotal = filteredProducts.length
-        }
 
         // When warehouseId is provided (e.g. van sales), replace stock with
         // warehouse-specific quantities and filter to only stocked products.
@@ -272,6 +277,39 @@ router.get('/stats', authMiddleware, requirePermission('products.view'), async (
     } catch (err) {
         console.error('Get product stats error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/* ─── GET /api/products/bao-cao-ton-kho — BÁO CÁO TỒN KHO (15/09/2026) ──────
+ *
+ * Chủ shop: "báo cáo hàng tồn kho chưa có" (app Android). Web có tab Tồn Kho ở
+ * Báo cáo chi tiết nhưng tính TẠI TRÌNH DUYỆT từ toàn bộ mã hàng (vài MB) — trên
+ * điện thoại thì nặng, nên gom sẵn ở máy chủ bằng MỘT câu GROUP BY.
+ *
+ * Chỉ hàng hoá (`productType = 'goods'`, cùng nếp các câu tồn kho khác) — dịch vụ
+ * không có tồn, đếm vào là thành "hết hàng" oan.
+ *
+ * Đếm nhóm DÙNG ĐÚNG VỊ TỪ của bộ lọc /products?stockStatus= để số trên nút lọc
+ * khớp danh sách: hết = stock <= 0 · sắp hết = 0 < stock <= minStock · còn = phần
+ * còn lại. Ba nhóm cộng lại đúng bằng soMa.
+ *
+ * GIÁ TRỊ chỉ cộng tồn DƯƠNG và bỏ MÃ ĐÃ GỘP:
+ *  - tồn âm là số sai cần kiểm kê, không phải "giá trị âm" — cộng vào thì tổng
+ *    giá trị tụt xuống lặng lẽ; nên đếm riêng `tonAm` cho người ta thấy;
+ *  - mã đã gộp (mergedIntoId) giữ hàng ở MÃ ĐÍCH, cộng cả hai là đếm hàng hai lần.
+ * Mã còn tồn mà giá vốn <= 0 thì giá trị vốn bị hụt — đếm `thieuGiaVon` để màn
+ * hình nói ra, đừng để tổng trông như đủ. Câu SQL + vị từ ở lib/tonKho.ts. */
+router.get('/bao-cao-ton-kho', authMiddleware, requirePermission('products.view', 'inventory.view', 'reports.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const cacheKey = `bao-cao-ton-kho:${req.user?.storeSchema || 'default'}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const response = { success: true, data: await lapBaoCaoTonKho(req.storePrisma!) }
+        await cacheSet(cacheKey, response, 60)
+        res.json(response)
+    } catch (err) {
+        console.error('Bao cao ton kho error:', err)
+        res.status(500).json({ success: false, error: 'Không lập được báo cáo tồn kho' })
     }
 })
 
