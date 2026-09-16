@@ -11,6 +11,7 @@ import { invalidateStoreStatus } from '../lib/storeStatusCache'
 import { thongKeHopThu, tuKiemHopThu, chayLaiPushHong } from '../services/hopThuWebhook'
 import { moTaLoi } from '../lib/gomLoi'
 import { apLocTon, lapBaoCaoTonKho } from '../lib/tonKho'
+import { canhWebhookKiotViet } from '../cron/kiotvietWebhookWatchdog'
 
 const router = Router()
 
@@ -11342,6 +11343,40 @@ router.get('/do-trang-thai-don-san', async (req: Request, res: Response) => {
             }
         }
         res.json({ success: true, data: kq })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+/* BỘ ĐO KẾT NỐI DB (16/09/2026): ai đang giữ bao nhiêu kết nối Postgres, theo
+ * application_name (registry = 'registry', mỗi cửa hàng = tên schema). Chỉ đọc. */
+router.get('/do-ket-noi-db', async (_req: Request, res: Response) => {
+    try {
+        const theoUngDung: any[] = await registryPrisma.$queryRawUnsafe(`
+            SELECT COALESCE(NULLIF(application_name, ''), '(không tên)') AS "ungDung",
+                   COALESCE(state, '?') AS "trangThai",
+                   COUNT(*)::int AS so,
+                   COALESCE(round(extract(epoch FROM max(now() - COALESCE(state_change, backend_start))))::int, 0) AS "lauNhatGiay"
+              FROM pg_stat_activity
+             WHERE datname = current_database()
+             GROUP BY 1, 2
+             ORDER BY so DESC`)
+        const [cauHinh]: any[] = await registryPrisma.$queryRawUnsafe(`
+            SELECT current_setting('max_connections')::int AS "maxConnections",
+                   current_setting('superuser_reserved_connections')::int AS "danhChoSuperuser",
+                   (SELECT COUNT(*)::int FROM pg_stat_activity) AS "tongMoiDatabase"`)
+        const tongDbNay = theoUngDung.reduce((a, r) => a + Number(r.so), 0)
+        res.json({ success: true, data: { cauHinh, tongDbNay, theoUngDung } })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+/* BỘ ĐO BỘ CANH WEBHOOK KIOTVIET: chạy THỬ (không xoá/tạo, không ghi nhật ký) —
+ * trả danh sách webhook từng cửa hàng + cái nào bộ canh SẼ bật lại. */
+router.get('/do-canh-webhook-kiotviet', async (_req: Request, res: Response) => {
+    try {
+        res.json({ success: true, data: await canhWebhookKiotViet(true) })
     } catch (e) {
         res.status(500).json({ success: false, error: moTaLoi(e) })
     }

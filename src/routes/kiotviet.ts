@@ -21,6 +21,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
+import { moTaLoi } from '../lib/gomLoi'
 import { tinhTinhTrangDon } from '../lib/kiotvietDonHang'
 import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
 import {
@@ -53,6 +54,28 @@ async function resolveStore(storeCode: string): Promise<{ schema: string; name: 
 
 async function loadConfig(sp: any): Promise<any | null> {
     return sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+}
+
+/* ĐỌC CHẶT CHO ĐƯỜNG WEBHOOK (16/09/2026) — lỗi DB phải NÉM, không được thành null.
+ *
+ * `resolveStore` / `loadConfig` ở trên nuốt lỗi thành null — tạm được cho vùng quản
+ * trị, nhưng ở đường webhook thì null nghĩa là 404/403. Đo 16/09 07:38:30: DB cạn
+ * kết nối ("Too many database connections"), đọc KiotVietConfig hỏng → null → trả
+ * 403 → KiotViet TẮT NGAY hai webhook invoice.update + customer.update → hoá đơn
+ * ngừng về 7,5 giờ. Đọc hỏng ≠ sai token. Cache mã cửa hàng → schema 5 phút để một
+ * đợt dội webhook không hỏi registry hàng trăm lần. */
+const cacheCuaHangWebhook = new Map<string, { schema: string; name: string; het: number }>()
+async function resolveStoreChat(storeCode: string): Promise<{ schema: string; name: string; sp: any } | null> {
+    const khoa = String(storeCode).trim().toLowerCase()
+    const daCo = cacheCuaHangWebhook.get(khoa)
+    if (daCo && daCo.het > Date.now()) return { schema: daCo.schema, name: daCo.name, sp: getStorePrisma(daCo.schema) as any }
+    const store = await registryPrisma.store.findFirst({
+        where: { code: { equals: String(storeCode).trim(), mode: 'insensitive' } },
+        select: { schema: true, name: true },
+    })
+    if (!store) return null
+    cacheCuaHangWebhook.set(khoa, { schema: store.schema, name: store.name, het: Date.now() + 5 * 60_000 })
+    return { schema: store.schema, name: store.name, sp: getStorePrisma(store.schema) as any }
 }
 
 /**
@@ -90,11 +113,22 @@ router.post('/webhook/:storeCode/:token', async (req: Request, res: Response) =>
     const storeCode = String(req.params.storeCode || '')
     const token = String(req.params.token || '')
     try {
-        const store = await resolveStore(storeCode)
+        /* 403/404 CHỈ KHI ĐÃ ĐỌC ĐƯỢC DB mà cửa hàng/token sai thật. Đọc hỏng (DB cạn
+         * kết nối, mất kết nối) → 503 + Retry-After: đó là lỗi TẠM THỜI của mình.
+         * KiotViet tắt webhook ngay khi nhận 403 (đo 16/09: 2 lần 403 → 2 webhook tắt). */
+        let store: { schema: string; name: string; sp: any } | null
+        let cfg: any
+        try {
+            store = await resolveStoreChat(storeCode)
+            cfg = store ? await store.sp.kiotVietConfig.findUnique({ where: { id: 'default' } }) : null
+        } catch (e: any) {
+            console.error(`[KiotViet webhook] ${storeCode}: KHÔNG đọc được DB — trả 503 chứ không 403/404 (kẻo KiotViet tắt webhook): ${moTaLoi(e)}`)
+            res.set('Retry-After', '30').status(503).json({ success: false, tamThoi: true })
+            return
+        }
         if (!store) { res.status(404).json({ success: false }); return }
-
-        const cfg = await loadConfig(store.sp)
         if (!cfg?.webhookToken || !safeEqual(String(token), String(cfg.webhookToken))) {
+            console.warn(`[KiotViet webhook] ${storeCode}: 403 — ${cfg ? 'token không khớp' : 'cửa hàng chưa cấu hình KiotViet'}`)
             res.status(403).json({ success: false }); return
         }
         if (!cfg.enabled) { res.json({ success: true, skipped: 'cong dang tat' }); return }

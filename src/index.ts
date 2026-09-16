@@ -104,6 +104,7 @@ import { nenTangFacebook } from './services/mktNenTangFb'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startHopThuWebhookCron, stopHopThuWebhookCron } from './cron/hopThuWebhookCron'
+import { startKiotVietWebhookWatchdog, stopKiotVietWebhookWatchdog } from './cron/kiotvietWebhookWatchdog'
 import { startTaxAuditCron, stopTaxAuditCron } from './cron/taxAuditCron'
 import { startTaxDeadlineCron, stopTaxDeadlineCron } from './cron/taxDeadlineCron'
 import { startReconcileCron, stopReconcileCron } from './cron/reconcileCron'
@@ -1564,6 +1565,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startAiAgentCron()
                 startWebhookCron()
                 startHopThuWebhookCron()
+                startKiotVietWebhookWatchdog()
                 startEmailReplyCron()
                 startHanThanhToanCron()
                 startFlashSaleScheduler()
@@ -1597,6 +1599,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         stopAiAgentCron()
         stopWebhookCron()
         stopHopThuWebhookCron()
+        stopKiotVietWebhookWatchdog()
         stopEmailReplyCron()
         stopTaxAuditCron()
         stopTaxDeadlineCron()

@@ -84,8 +84,49 @@ function bocThuLai<T extends { $extends: (x: any) => any }>(goc: T): T {
 
 // ─── Registry Client (public schema — Store lookup only) ────────────────────
 
+/* TRẦN KẾT NỐI CHO CẢ CỤM (16/09/2026).
+ *
+ * Postgres db-f1-micro: max_connections 50, 3 slot giữ cho superuser, 2 của
+ * cloudsqladmin → app còn ~45 cho TẤT CẢ bản Cloud Run cộng lại (tối đa 3 bản).
+ *
+ * Đo 16/09 07:36: KiotViet dội ~144 webhook, Cloud Run nhân 1 → 3 bản, kết nối
+ * nhảy 18 → 49 và kẹt 5 phút → "remaining connection slots are reserved" → đọc
+ * cấu hình hỏng → trả 403 → KiotViet tắt webhook hoá đơn. Hai nguồn phình:
+ *  - client REGISTRY không đặt connection_limit → Prisma lấy mặc định
+ *    `số lõi VẬT LÝ × 2 + 1` của MÁY CHỦ VẬT LÝ Cloud Run (không phải 1 vCPU của
+ *    mình) → một đợt request đồng thời nở pool registry tới cả chục kết nối/bản;
+ *  - kết nối nhàn rỗi mặc định giữ 300 giây.
+ *
+ * Nay: registry trần PRISMA_REGISTRY_POOL_SIZE (mặc định 3 — truy vấn registry chỉ
+ * vài ms); mọi client đóng kết nối nhàn rỗi sau PRISMA_IDLE_CONN_S (mặc định 60 s).
+ * `max_idle_connection_lifetime` đóng KẾT NỐI chứ không huỷ CLIENT — nên không quay
+ * lại vụ rò RAM khi tạo/thải client liên tục (13/09). Có sẵn trong bộ máy Prisma 6.4
+ * (đã grep chuỗi tham số trong query engine). Env đã đặt tham số nào thì giữ của env.
+ * Nghiệm thu: GET /api/admin/do-ket-noi-db. */
+const IDLE_CONN_S = Math.max(10, parseInt(process.env.PRISMA_IDLE_CONN_S || '60', 10))
+const REGISTRY_POOL_SIZE = Math.max(1, parseInt(process.env.PRISMA_REGISTRY_POOL_SIZE || '3', 10))
+
+function themThamSoDb(url: string, thamSo: Record<string, string | number>): string {
+    if (!url) return url
+    let out = url
+    for (const [k, v] of Object.entries(thamSo)) {
+        if (new RegExp(`[?&]${k}=`).test(out)) continue
+        out += (out.includes('?') ? '&' : '?') + `${k}=${encodeURIComponent(String(v))}`
+    }
+    return out
+}
+
 const registryPrismaGoc = new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL || '' } },
+    datasources: {
+        db: {
+            url: themThamSoDb(process.env.DATABASE_URL || '', {
+                application_name: 'registry',
+                connection_limit: REGISTRY_POOL_SIZE,
+                pool_timeout: POOL_TIMEOUT,
+                max_idle_connection_lifetime: IDLE_CONN_S,
+            }),
+        },
+    },
     log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['warn', 'error'],
 })
 const registryPrisma = bocThuLai(registryPrismaGoc)
@@ -165,7 +206,7 @@ function getStorePrisma(schemaName: string): StorePrisma {
     const sep = base.includes('?') ? '&' : '?'
     // IMPORTANT: Adding application_name=${schemaName} forces Prisma to treat this as a unique connection pool
     // This prevents the severe bug where multiple PrismaClients share the search_path of the first loaded schema
-    const url = `${base}${sep}schema=${schemaName}&application_name=${schemaName}&connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}`
+    const url = `${base}${sep}schema=${schemaName}&application_name=${schemaName}&connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}&max_idle_connection_lifetime=${IDLE_CONN_S}`
 
     const goc = new StorePrisma({
         datasources: { db: { url } },
