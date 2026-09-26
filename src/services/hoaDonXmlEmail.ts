@@ -219,7 +219,9 @@ export interface KetQuaQuet {
     boQua: number
     loi: string[]
     ghiChu: string[]
-    mau: Array<{ ncc: string; mst: string; so: string; ngay: string; tong: number; loai: string; lyDo: string; ketQua: string }>
+    /** MST của chính cửa hàng dùng để lọc hoá đơn bán ra — rỗng = CHƯA khai, không lọc được */
+    mstCuaHang: string[]
+    mau: Array<{ ncc: string; mst: string; mua: string; so: string; ngay: string; tong: number; loai: string; lyDo: string; ketQua: string; canhBao: string }>
 }
 
 export async function quetHoaDonXmlEmail(prisma: any, opts: { cheDo: CheDoQuet; soNgay?: number }): Promise<KetQuaQuet> {
@@ -243,7 +245,7 @@ export async function quetHoaDonXmlEmail(prisma: any, opts: { cheDo: CheDoQuet; 
 
     const kq: KetQuaQuet = {
         cheDo: opts.cheDo, tuNgay: tuNgay.toISOString(), soThu: 0, soTep: 0,
-        moiHang: 0, moiChiPhi: 0, moiChuaRo: 0, daCo: 0, boQua: 0, loi: [], ghiChu: [], mau: [],
+        moiHang: 0, moiChiPhi: 0, moiChuaRo: 0, daCo: 0, boQua: 0, loi: [], ghiChu: [], mstCuaHang: [], mau: [],
     }
     let luotId: string | null = null
     if (ghi) {
@@ -306,6 +308,8 @@ export async function quetHoaDonXmlEmail(prisma: any, opts: { cheDo: CheDoQuet; 
 
         // ── 3–6. Xử lý TUẦN TỰ (pool 1 kết nối — không Promise.all) ──
         const mstMinh = await mstCuaHang(prisma)
+        kq.mstCuaHang = mstMinh
+        if (!mstMinh.length) kq.ghiChu.push('Cửa hàng CHƯA khai mã số thuế (Cài đặt / HĐĐT) — không lọc được hoá đơn BÁN RA của chính mình')
         const daXuLy = new Set<string>()
         for (const t of tep) {
             try {
@@ -350,8 +354,9 @@ export async function quetHoaDonXmlEmail(prisma: any, opts: { cheDo: CheDoQuet; 
                     : 'chờ nhập hàng'
 
                 if (kq.mau.length < 30) kq.mau.push({
-                    ncc: hd.sellerName.slice(0, 80), mst: mstBan, so: hd.invoiceNumber,
+                    ncc: hd.sellerName.slice(0, 80), mst: mstBan, mua: mstMua, so: hd.invoiceNumber,
                     ngay: hd.invoiceDate, tong: hd.totals.grandTotal, loai: pl.loai, lyDo: pl.lyDo, ketQua,
+                    canhBao: canhBao.join(' · '),
                 })
                 if (trongSo) kq.daCo++
                 else if (tuChiPhi) kq.moiChiPhi++
