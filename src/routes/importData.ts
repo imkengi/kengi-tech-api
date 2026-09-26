@@ -4,6 +4,7 @@ import { createJournalEntriesForTransaction } from '../lib/autoJournal'
 import { postImportReceiptJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
 import multer from 'multer'
+import { parseVnEInvoiceXml, khopSanPhamHoaDon, type ParsedInvoiceItem } from '../lib/hoaDonDauVao'
 import * as XLSX from 'xlsx'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
@@ -897,55 +898,8 @@ router.post('/suppliers', authMiddleware, upload.single('file'), async (req: Aut
 //    (yêu cầu chủ shop: "không có hàng hoá trong kho thì tự tạo mã hàng").
 // ═══════════════════════════════════════════════════════════════════════════
 
-type ParsedInvoiceItem = {
-    name: string; unit: string; quantity: number; unitPrice: number; amount: number
-    // Thuế GTGT theo TỪNG DÒNG — giá nhập kho tính GỒM VAT (HKD không khấu trừ đầu vào)
-    vatRate?: number; vatAmount?: number
-    productId?: string; productSku?: string; matched?: boolean; created?: boolean
-    // Hệ số đã quy đổi từ ĐVT hoá đơn sang ĐVT kho (vd 1 vỉ = 10 cái → 10)
-    convertedBy?: number
-}
-
-function xmlTag(block: string, tag: string): string {
-    const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'))
-    return m ? m[1].trim() : ''
-}
-function xmlNum(block: string, tag: string): number {
-    const raw = xmlTag(block, tag).replace(/,/g, '.')
-    const n = parseFloat(raw)
-    return Number.isFinite(n) ? n : 0
-}
-
-function parseVnEInvoiceXml(xml: string) {
-    const items: ParsedInvoiceItem[] = []
-    const rows = xml.match(/<HHDVu>[\s\S]*?<\/HHDVu>/gi) || []
-    for (const row of rows) {
-        const name = xmlTag(row, 'THHDVu')
-        if (!name) continue
-        const quantity = xmlNum(row, 'SLuong')
-        const unitPrice = xmlNum(row, 'DGia')
-        const amount = xmlNum(row, 'ThTien') || quantity * unitPrice
-        // TSuat dạng "8%"/"10%"/"KCT"; TThue = tiền thuế dòng (có thể thiếu → tự tính)
-        const vatRate = parseFloat(xmlTag(row, 'TSuat').replace('%', '')) || 0
-        const vatAmount = xmlNum(row, 'TThue') || (vatRate > 0 ? Math.round(amount * vatRate / 100) : 0)
-        items.push({ name, unit: xmlTag(row, 'DVTinh') || 'cái', quantity: quantity || 1, unitPrice, amount, vatRate, vatAmount })
-    }
-    const sellerBlock = (xml.match(/<NBan>[\s\S]*?<\/NBan>/i) || [''])[0]
-    return {
-        format: 'xml' as const,
-        invoiceNumber: xmlTag(xml, 'SHDon'),
-        invoiceDate: xmlTag(xml, 'NLap'),
-        sellerName: xmlTag(sellerBlock, 'Ten'),
-        sellerTaxCode: xmlTag(sellerBlock, 'MST'),
-        // Tổng CHUẨN in trên hoá đơn — FE dùng để cân phần lẻ làm tròn từng dòng
-        totals: {
-            subtotal: xmlNum(xml, 'TgTCThue'),
-            vatTotal: xmlNum(xml, 'TgTThue'),
-            grandTotal: xmlNum(xml, 'TgTTTBSo'),
-        },
-        items,
-    }
-}
+// ParsedInvoiceItem / xmlTag / parseVnEInvoiceXml: chuyển sang lib/hoaDonDauVao.ts (26/09/2026)
+// để cron đọc hoá đơn XML từ email dùng CHUNG một bộ đọc với nút chọn file.
 
 /** Số kiểu VN/US: "1.574.074", "78.703,70", "20,00", "1,234,567.89" → number. */
 function vnNum(s: string): number {
@@ -1099,53 +1053,10 @@ router.post('/parse-invoice', authMiddleware, upload.single('file'), async (req:
             res.status(400).json({ success: false, error: 'Chỉ nhận file .xml hoặc .pdf' }); return
         }
 
-        // ── Khớp sản phẩm theo tên (chính xác, không phân biệt hoa thường) hoặc SKU ──
+        // ── Khớp sản phẩm: tên/SKU → liên kết đã nhớ (SkuMapping 'invoice') → ?autoCreate=1 tạo mới.
+        //    Hàm DÙNG CHUNG với hàng đợi hoá đơn XML từ email (lib/hoaDonDauVao.ts).
         const autoCreate = String(req.query.autoCreate || req.body?.autoCreate || '') === '1'
-        let defaultCategory: any = null
-        for (const it of parsed.items) {
-            const found = await prisma.product.findFirst({
-                where: { OR: [{ name: { equals: it.name, mode: 'insensitive' } }, { sku: it.name }] },
-            })
-            if (found) {
-                it.productId = found.id; it.productSku = found.sku; it.matched = true
-                continue
-            }
-            // LIÊN KẾT ĐÃ NHỚ: người dùng từng link dòng hoá đơn cùng tên vào SP kho
-            // (SkuMapping platform='invoice', key = tên dòng) → hoá đơn sau TỰ khớp,
-            // không phải link lại từng lần.
-            const remembered = await prisma.skuMapping.findFirst({
-                where: { platform: 'invoice', platformSku: { equals: it.name, mode: 'insensitive' } },
-                include: { product: { select: { id: true, sku: true, baseUnit: true } } },
-            }).catch(() => null)
-            if (remembered?.product) {
-                it.productId = remembered.product.id; it.productSku = remembered.product.sku; it.matched = true
-                // HỆ SỐ QUY ĐỔI: hoá đơn ghi 5 vỉ, kho đếm cái, vỉ = 10 cái → 50 cái,
-                // đơn giá chia 10. THÀNH TIỀN GIỮ NGUYÊN (không đụng vào tiền của HĐ).
-                const rate = Number((remembered as any).conversionRate) || 1
-                if (rate > 0 && rate !== 1) {
-                    it.quantity = (Number(it.quantity) || 0) * rate
-                    it.unitPrice = it.quantity > 0 ? (Number(it.amount) || 0) / it.quantity : it.unitPrice
-                    it.convertedBy = rate
-                    it.unit = remembered.product.baseUnit || it.unit
-                }
-                continue
-            }
-            if (autoCreate) {
-                if (!defaultCategory) {
-                    defaultCategory = await prisma.category.findFirst({ where: { name: { equals: 'Chưa phân loại', mode: 'insensitive' } } })
-                        || await prisma.category.create({ data: { name: 'Chưa phân loại' } })
-                }
-                const sku = 'SP' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase()
-                const created = await prisma.product.create({
-                    data: {
-                        name: it.name, sku, categoryId: defaultCategory.id,
-                        costPrice: it.unitPrice, sellingPrice: it.unitPrice,
-                        baseUnit: it.unit || 'cái', stock: 0,
-                    },
-                })
-                it.productId = created.id; it.productSku = created.sku; it.created = true
-            }
-        }
+        await khopSanPhamHoaDon(prisma, parsed.items, { autoCreate })
 
         res.json({ success: true, data: parsed })
     } catch (err: any) {

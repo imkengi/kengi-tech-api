@@ -4,6 +4,13 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 
 
 import { errMsg } from '../lib/errorResponse'
+import { moTaLoi } from '../lib/gomLoi'
+import { loadMailboxCfg, withImap, imapHostOf, type MailboxCfg } from '../lib/hopThuImap'
+import { hoaDonDaCo, chuanMst } from '../lib/hoaDonDauVao'
+import {
+    quetHoaDonXmlEmail, danhSachHoaDonXml, phanTichHoaDonXml, danhDauDaNhap,
+    chuyenThanhChiPhi, boQuaHoaDonXml, veNhapHang, trongHangDoiXml,
+} from '../services/hoaDonXmlEmail'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  HỘP THƯ CỬA HÀNG (2026-08-04) — check mail ngay trong dashboard.
@@ -16,43 +23,7 @@ import { errMsg } from '../lib/errorResponse'
 
 const router = Router()
 
-// Cấu hình RIÊNG (StoreSettings.mailboxConfig) — Gmail check thư là tài khoản
-// KHÁC với mail gửi CRM (smtpConfig), không dùng chung, không fallback.
-interface MailboxCfg { user: string; pass: string; host?: string }
-
-async function loadMailboxCfg(prisma: any): Promise<MailboxCfg | null> {
-    try {
-        const s = await prisma.storeSettings.findUnique({ where: { id: 'default' }, select: { mailboxConfig: true } })
-        if (!s?.mailboxConfig) return null
-        const cfg = JSON.parse(s.mailboxConfig)
-        return cfg?.user && cfg?.pass ? cfg : null
-    } catch { return null }
-}
-
-function imapHostOf(cfg: MailboxCfg): string {
-    const h = (cfg.host || '').trim()
-    if (!h) return 'imap.gmail.com'                    // mặc định Gmail
-    return h.startsWith('smtp.') ? h.replace(/^smtp\./i, 'imap.') : h
-}
-
-async function withImap<T>(cfg: MailboxCfg, fn: (client: any) => Promise<T>): Promise<T> {
-    const { ImapFlow } = require('imapflow') as typeof import('imapflow')
-    const client = new ImapFlow({
-        host: imapHostOf(cfg),
-        port: 993,
-        secure: true,
-        auth: { user: cfg.user, pass: cfg.pass },
-        logger: false,
-        // Hộp thư nghẽn không được kéo sập request — fail nhanh còn báo lỗi tử tế
-        socketTimeout: 30_000,
-    })
-    await client.connect()
-    try {
-        return await fn(client)
-    } finally {
-        await client.logout().catch(() => { })
-    }
-}
+// Cấu hình + kết nối IMAP: lib/hopThuImap.ts (dùng chung với cron đọc hoá đơn XML, 26/09/2026)
 
 // GET /api/mailbox/status — đã gắn mail chưa, là địa chỉ nào
 router.get('/status', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
@@ -330,6 +301,12 @@ router.post('/scan-invoices', authMiddleware, requirePermission('mailbox.manage'
         for (const inv of found) {
             if (seen.has(inv.dedupKey)) { duplicate++; continue }
             seen.add(inv.dedupKey)
+            /* 26/09/2026: sourceRef chỉ chặn trùng với CHÍNH đường quét thân thư. Cùng hoá
+             * đơn có thể đã vào sổ qua đường khác — nhập hàng từ file XML (phiếu nhập),
+             * hàng đợi XML tự đọc cuối ngày — tạo thêm phiếu chi là tiền vào sổ hai lần. */
+            const namHd = inv.invoiceDate ? new Date(inv.invoiceDate).getFullYear() : null
+            const trongSo = await hoaDonDaCo(prisma, { mst: chuanMst(inv.sellerTaxCode), so: inv.invoiceNo, kyHieu: inv.invoiceSymbol, tenNcc: inv.sellerName, nam: namHd }).catch(() => null)
+            if (trongSo || await trongHangDoiXml(prisma, inv.sellerTaxCode || '', inv.invoiceNo).catch(() => false)) { duplicate++; continue }
             try {
             await prisma.expense.create({
                 data: {
@@ -409,6 +386,59 @@ router.get('/messages/:uid', authMiddleware, requirePermission('mailbox.view'), 
     } catch (err: any) {
         res.status(500).json({ success: false, error: errMsg(err) })
     }
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ *  HOÁ ĐƠN XML ĐÍNH KÈM THƯ → HÀNG ĐỢI (26/09/2026) — services/hoaDonXmlEmail.ts
+ *  Tự quét 23:00 mỗi ngày (cron/hoaDonXmlEmailCron.ts); các route dưới đây cho
+ *  trang Nhập Hàng (mở hoá đơn vào form) và Hộp Thư (quét ngay, xem lượt cuối).
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+const guiLoi = (res: Response, e: any) => res.status(Number(e?.status) || 500).json({ success: false, error: moTaLoi(e).slice(0, 400) })
+
+// GET /api/mailbox/hoa-don-xml — hoá đơn đang chờ + phiếu chi tự tạo 14 ngày + lượt quét cuối
+router.get('/hoa-don-xml', authMiddleware, requirePermission('import.view', 'mailbox.view'), async (req: AuthRequest, res: Response) => {
+    try { res.json({ success: true, data: await danhSachHoaDonXml(req.storePrisma!) }) }
+    catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/quet {soNgay?} — quét ngay (mặc định từ lượt trước)
+router.post('/hoa-don-xml/quet', authMiddleware, requirePermission('mailbox.manage', 'import.create'), async (req: AuthRequest, res: Response) => {
+    try {
+        const soNgay = Number(req.body?.soNgay) || undefined
+        res.json({ success: true, data: await quetHoaDonXmlEmail(req.storePrisma!, { cheDo: 'tay', soNgay }) })
+    } catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/:id/phan-tich — đọc + khớp mã, cùng dạng /import-data/parse-invoice
+router.post('/hoa-don-xml/:id/phan-tich', authMiddleware, requirePermission('import.view', 'import.create'), async (req: AuthRequest, res: Response) => {
+    try { res.json({ success: true, data: await phanTichHoaDonXml(req.storePrisma!, String(req.params.id)) }) }
+    catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/:id/da-nhap {importReceiptId} — đã lưu phiếu nhập từ hoá đơn này
+router.post('/hoa-don-xml/:id/da-nhap', authMiddleware, requirePermission('import.create'), async (req: AuthRequest, res: Response) => {
+    try {
+        await danhDauDaNhap(req.storePrisma!, String(req.params.id), String(req.body?.importReceiptId || ''))
+        res.json({ success: true })
+    } catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/:id/chi-phi — không phải hàng → phiếu chi CHỜ DUYỆT
+router.post('/hoa-don-xml/:id/chi-phi', authMiddleware, requirePermission('import.create', 'expenses'), async (req: AuthRequest, res: Response) => {
+    try { res.json({ success: true, data: await chuyenThanhChiPhi(req.storePrisma!, String(req.params.id)) }) }
+    catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/:id/bo-qua
+router.post('/hoa-don-xml/:id/bo-qua', authMiddleware, requirePermission('import.create'), async (req: AuthRequest, res: Response) => {
+    try { await boQuaHoaDonXml(req.storePrisma!, String(req.params.id)); res.json({ success: true }) }
+    catch (e: any) { guiLoi(res, e) }
+})
+
+// POST /api/mailbox/hoa-don-xml/:id/ve-nhap-hang — phiếu chi tự tạo nhầm → huỷ (khi còn chờ) + về hàng đợi
+router.post('/hoa-don-xml/:id/ve-nhap-hang', authMiddleware, requirePermission('import.create'), async (req: AuthRequest, res: Response) => {
+    try { await veNhapHang(req.storePrisma!, String(req.params.id)); res.json({ success: true }) }
+    catch (e: any) { guiLoi(res, e) }
 })
 
 export default router

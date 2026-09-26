@@ -12,6 +12,7 @@ import { thongKeHopThu, tuKiemHopThu, chayLaiPushHong } from '../services/hopThu
 import { moTaLoi } from '../lib/gomLoi'
 import { apLocTon, lapBaoCaoTonKho } from '../lib/tonKho'
 import { canhWebhookKiotViet } from '../cron/kiotvietWebhookWatchdog'
+import { quetHoaDonXmlEmail } from '../services/hoaDonXmlEmail'
 
 const router = Router()
 
@@ -11395,6 +11396,34 @@ router.get('/do-ket-noi-db', async (_req: Request, res: Response) => {
 router.get('/do-canh-webhook-kiotviet', async (_req: Request, res: Response) => {
     try {
         res.json({ success: true, data: await canhWebhookKiotViet(true) })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+/* BỘ ĐO HOÁ ĐƠN XML TRONG HỘP THƯ (26/09/2026) — CHẠY THỬ, không ghi gì:
+ * đọc hộp thư đã gắn của cửa hàng, liệt kê hoá đơn XML tìm được + sẽ xử lý thế
+ * nào (chờ nhập hàng / phiếu chi chờ duyệt / đã có trong sổ). Không có ?storeCode
+ * thì chỉ liệt kê cửa hàng nào đã gắn hộp thư.
+ * GET /admin/do-hoa-don-xml-email?storeCode=HUTI&soNgay=14 */
+router.get('/do-hoa-don-xml-email', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.storeCode || '').trim()
+        if (!ma) {
+            const stores = await registryPrisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true } })
+            const coHopThu: string[] = []
+            for (const st of stores) {
+                if (!/^[a-z0-9_]+$/i.test(st.schema)) continue
+                const r: any[] = await registryPrisma.$queryRawUnsafe<any[]>(
+                    `SELECT COALESCE("mailboxConfig", '') <> '' AS co FROM "${st.schema}"."StoreSettings" WHERE id = 'default'`).catch(() => [] as any[])
+                if (r[0]?.co) coHopThu.push(st.code)
+            }
+            return res.json({ success: true, data: { coHopThu } })
+        }
+        const store = await registryPrisma.store.findFirst({ where: { code: ma }, select: { schema: true } })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const soNgay = Math.min(45, Math.max(1, Number(req.query.soNgay) || 7))
+        res.json({ success: true, data: await quetHoaDonXmlEmail(getStorePrisma(store.schema), { cheDo: 'chay-thu', soNgay }) })
     } catch (e) {
         res.status(500).json({ success: false, error: moTaLoi(e) })
     }
