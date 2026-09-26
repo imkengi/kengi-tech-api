@@ -36,7 +36,9 @@ const BANG = '"HoaDonEmailXml"'
 const BANG_LUOT = '"HoaDonEmailLuotQuet"'
 
 /* Chặn cứng để một hộp thư lớn không kéo sập máy 512 MiB / pool 1 kết nối */
-const TOI_DA_THU_XET = 800            // số thư xem cấu trúc mỗi lượt
+/* Xem CẤU TRÚC thư (không tải thân) rất nhẹ — đo 26/09: hộp thư KENGISTORE ~57 thư/ngày,
+ * lượt đầu lùi 30 ngày ≈ 1.700 thư. */
+const TOI_DA_THU_XET = 2500
 const TOI_DA_THU_TAI = 200            // số thư có tệp được tải về
 const TOI_DA_BYTE_THU = 25 * 1024 * 1024
 const TOI_DA_BYTE_XML = 2 * 1024 * 1024
@@ -232,14 +234,16 @@ export async function quetHoaDonXmlEmail(prisma: any, opts: { cheDo: CheDoQuet; 
     const daCoBang = ghi || await coBang(prisma)
 
     /* MỐC: lần quét thành công gần nhất lùi 1 ngày (IMAP SINCE tính theo NGÀY, và
-     * thư có thể tới trễ) — trùng lặp đã có khoá chống; chưa quét bao giờ → 7 ngày. */
+     * thư có thể tới trễ) — trùng lặp đã có khoá chống. Chưa quét bao giờ → 30 ngày:
+     * đo 26/09 hộp thư KENGISTORE có hoá đơn mua vào từ 16/09 chưa nhập, lùi 7 ngày là
+     * bỏ sót; hoá đơn đã nhập rồi thì hoaDonDaCo tự nhận ra, không mời nhập lại. */
     let tuNgay: Date
     if (opts.soNgay) {
         tuNgay = new Date(Date.now() - Math.min(TOI_DA_NGAY, Math.max(1, opts.soNgay)) * 86400_000)
     } else {
         const cuoi: any[] = daCoBang ? await prisma.$queryRawUnsafe(
             `SELECT "batDau" FROM ${BANG_LUOT} WHERE "trangThai" = 'xong' AND "cheDo" <> 'chay-thu' ORDER BY "batDau" DESC LIMIT 1`) : []
-        const moc = cuoi[0]?.batDau ? new Date(cuoi[0].batDau).getTime() - 86400_000 : Date.now() - 7 * 86400_000
+        const moc = cuoi[0]?.batDau ? new Date(cuoi[0].batDau).getTime() - 86400_000 : Date.now() - 30 * 86400_000
         tuNgay = new Date(Math.max(moc, Date.now() - TOI_DA_NGAY * 86400_000))
     }
 
