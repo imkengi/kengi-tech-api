@@ -53,18 +53,26 @@ substitutions:
 
 steps:
   # Step 1: Build Docker image
+  # NHÃN RIÊNG TỪNG BẢN BUILD (26/09/2026): trước đây build/push/deploy đều bằng `:latest`.
+  # Hai lượt push liền nhau (937f584 rồi 867bd53) chạy CHỒNG nhau: lượt cũ push `:latest`
+  # SAU lượt mới → bước deploy của lượt mới lấy nhầm ẢNH CŨ nhưng vẫn gắn BUILD_GIT_SHA
+  # mới → /api/health báo 867bd53 mà route mới trả "Cannot POST" (đo: revision 01797
+  # chạy digest 997a5acd… = ảnh do build 68aafbf0/937f584 push). Deploy bằng $BUILD_ID
+  # thì mỗi revision chạy đúng ảnh của chính lượt build đó; `:latest` vẫn push ở cuối.
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$BUILD_ID'
+      - '-t'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
       - '.'
 
-  # Step 2: Push to Container Registry
+  # Step 2: Push to Container Registry — đúng nhãn riêng của lượt này (xem trên)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$BUILD_ID'
 
   # Step 3: Deploy to Cloud Run with Cloud SQL connector
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -74,7 +82,7 @@ steps:
       - 'deploy'
       - '${_SERVICE_NAME}'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$BUILD_ID'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -167,6 +175,7 @@ steps:
       - '--to-latest'
 
 images:
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$BUILD_ID'
   - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
 
 options:
