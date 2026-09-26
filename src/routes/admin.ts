@@ -6007,7 +6007,13 @@ router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) =
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp: any = getStorePrisma(store.schema)
-        const ch = await sp.onlineChannel.findFirst({ where: { platform: 'shopee', videoUserId: { not: null } } as any })
+        /* ?kenh=<tên gian> chọn đúng gian; không có thì lấy gian uỷ quyền video mới nhất.
+         * Bản cũ `findFirst` không sắp xếp — cửa hàng nhiều gian Shopee là trúng gian tuỳ ý. */
+        const tenKenh = String(req.query.kenh || '').trim()
+        const ch = await sp.onlineChannel.findFirst({
+            where: { platform: 'shopee', videoUserId: { not: null }, ...(tenKenh ? { name: tenKenh } : {}) } as any,
+            orderBy: { updatedAt: 'desc' } as any,
+        })
         if (!ch) { res.json({ success: true, data: { ketLuan: 'Chưa có kênh Shopee nào uỷ quyền video' } }); return }
 
         const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
@@ -6016,12 +6022,24 @@ router.post('/do-trang-thai-video-shopee', async (req: Request, res: Response) =
         const tom = (r: any) => ({ error: r?.error ?? null, message: r?.message ?? null, requestId: r?.request_id ?? null, coDuLieu: !!r?.response })
         const ra: any = { kenh: ch.name, videoUserId: userId }
 
-        /* get_video_list ĐÚNG THAM SỐ (list_type 1 và 2). Chạy được ⇒ app CÓ quyền
-         * nhóm Video cho gian hàng này, đóng luôn giả thuyết "thiếu quyền" — chỉ
-         * riêng post_video bị cổng điều khoản chặn. */
+        /* get_video_list (list_type 1 = nháp, 2 = đã đăng). Tham số là `page_no`, KHÔNG
+         * phải `page` (26/09/2026: gửi `page` thì Shopee trả "page and page_size can not
+         * empty"). Trả kèm số video + vài dòng đầu: sau khi chủ shop đăng tay một video
+         * trong ứng dụng Shopee (điều kiện Shopee đòi để mở cổng điều khoản), list_type=2
+         * cho biết tài khoản ĐÃ UỶ QUYỀN có thật sự đăng được video nào chưa. */
         for (const lt of [1, 2]) {
-            try { ra[`getVideoList_type${lt}`] = tom(await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page: 1, page_size: 10 })) }
-            catch (e: any) { ra[`getVideoList_type${lt}`] = { loiNem: String(e?.message || e).slice(0, 200) } }
+            try {
+                const r = await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page_no: 1, page_size: 20 })
+                const ds: any[] = Array.isArray(r?.response?.list) ? r.response.list : (r?.response?.list ? [r.response.list] : [])
+                ra[`getVideoList_type${lt}`] = {
+                    ...tom(r), tongSo: r?.response?.total_count ?? null,
+                    mau: ds.slice(0, 5).map((v: any) => ({
+                        status: v?.status, caption: String(v?.caption || '').slice(0, 60),
+                        postTime: v?.post_time ? new Date(Number(v.post_time)).toISOString() : null,
+                        updateTime: v?.update_time ? new Date(Number(v.update_time)).toISOString() : null,
+                    })),
+                }
+            } catch (e: any) { ra[`getVideoList_type${lt}`] = { loiNem: String(e?.message || e).slice(0, 200) } }
         }
 
         try { ra.postVideoIdGia = tom(await svc.goiNguoiDung('/api/v2/video/post_video', 'POST', cred, undefined, { video_upload_id_list: ['sg-kengi-khong-co-that'] })) }
