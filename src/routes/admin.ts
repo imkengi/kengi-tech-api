@@ -11429,6 +11429,21 @@ router.get('/do-hoa-don-xml-email', async (req: Request, res: Response) => {
     }
 })
 
+/* QUÉT HOÁ ĐƠN XML NGAY — GHI THẬT (26/09/2026, chủ shop: "quét ngay luôn đi").
+ * Y hệt nút "Quét ngay" ở Hộp Thư: chỉ xếp hàng đợi Nhập Hàng + phiếu chi CHỜ DUYỆT,
+ * không gì vào sổ. POST /admin/quet-hoa-don-xml-email?storeCode=KENGISTORE&soNgay=30 */
+router.post('/quet-hoa-don-xml-email', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.storeCode || '').trim()
+        const store = await registryPrisma.store.findFirst({ where: { code: ma }, select: { schema: true } })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const soNgay = Number(req.query.soNgay) || undefined
+        res.json({ success: true, data: await quetHoaDonXmlEmail(getStorePrisma(store.schema), { cheDo: 'tay', soNgay }) })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
 router.get('/do-bo-nho', async (_req: Request, res: Response) => {
     const v8 = await import('v8')
     const m = process.memoryUsage()
