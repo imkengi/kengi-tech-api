@@ -10,6 +10,7 @@ import { AuthRequest } from './auth'
 // Map route paths to entity names
 const ENTITY_MAP: Record<string, string> = {
     '/api/products': 'products',
+    '/api/thong-tin-san-pham': 'products',
     '/api/customers': 'customers',
     '/api/transactions': 'orders',
     '/api/inventory': 'inventory',

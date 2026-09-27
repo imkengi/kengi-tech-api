@@ -366,6 +366,8 @@ import storageRoutes from './routes/storage'
 app.use('/api/storage', storageRoutes)
 import sanMediaRoutes from './routes/sanMedia'
 app.use('/api/san-media', sanMediaRoutes)   // Media ban hang: video cho Shopee Video / TikTok
+import thongTinSanPhamRoutes from './routes/thongTinSanPham'
+app.use('/api/thong-tin-san-pham', thongTinSanPhamRoutes)   // anh + mo ta san pham (nhan vien) — anh luu bucket cong khai
 
 // Dang video len TikTok qua Content Posting API (developers.tiktok.com) — KHONG
 // phai TikTok Shop: app rieng, token gan voi mot TAI KHOAN TikTok. Xem

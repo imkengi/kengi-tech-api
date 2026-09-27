@@ -31,6 +31,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         'online_orders', 'online_products', 'online_chat', 'packing',
         'tax', 'payroll', 'vehicles', 'employees_sales',
         'mailbox',
+        // 27/09/2026: ảnh + mô tả sản phẩm (routes/thongTinSanPham.ts)
+        'product_info',
     ],
     cashier: [
         'dashboard.view',
@@ -58,6 +60,10 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         // 04/09/2026: quay video đóng hàng là việc của nhân viên bán/kho, và quyền
         // này KHÔNG kéo theo màn đơn hàng online (doanh thu, cấu hình kênh).
         'packing.view',
+        // 27/09/2026: chủ shop "nhân viên sẽ upload hình ảnh, mô tả sản phẩm". Module
+        // RIÊNG, không phải products.edit_* — họ products.edit_* thoả luôn products.edit
+        // (sửa giá/tồn) theo permissionSatisfied.
+        'product_info',
     ],
     warranty: [
         'dashboard.view',

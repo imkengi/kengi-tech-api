@@ -11444,6 +11444,17 @@ router.post('/quet-hoa-don-xml-email', async (req: Request, res: Response) => {
     }
 })
 
+/* TỰ KIỂM KHO ẢNH SẢN PHẨM (27/09/2026): ghi ảnh thử → đọc qua đường công khai → xoá.
+ * POST /admin/thu-kho-anh-san-pham — không đụng dữ liệu cửa hàng nào. */
+router.post('/thu-kho-anh-san-pham', async (_req: Request, res: Response) => {
+    try {
+        const { thuKhoAnh } = await import('../lib/anhSanPham')
+        res.json({ success: true, data: await thuKhoAnh() })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
 router.get('/do-bo-nho', async (_req: Request, res: Response) => {
     const v8 = await import('v8')
     const m = process.memoryUsage()
