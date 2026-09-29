@@ -252,16 +252,25 @@ async function chanLamDung(cauHinh: any, req: TarotAuthRequest): Promise<string 
  *  đã về hay chưa — muốn tự động phải mua thêm dịch vụ đọc biến động số dư.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
+/* GIÁ — chủ trang chốt 29/09/2026: mỗi lượt "Xem chi tiết" khoảng 10.000đ, xem
+ * chỉ tay 30.000đ. Quy về 1 credit = 1.000đ để người xem đọc số dư là biết
+ * tiền: "✦ 40" = 40.000đ. Gói nạp mặc định đúng mệnh giá (không thưởng thêm);
+ * chủ trang vẫn sửa được gói ở admin (creditPackages). Đổi đơn vị lúc chưa có
+ * đơn nạp nào (đã kiểm: 0 đơn) nên không làm mất giá trị credit của ai. */
+const DONG_MOI_CREDIT = 1000
+
 /** Bảng gói mặc định; chủ trang sửa được ở admin (lưu JSON vào creditPackages). */
 const GOI_NAP_MAC_DINH = [
-    { id: 'nc5', vnd: 10000, credits: 5 },
-    { id: 'nc18', vnd: 30000, credits: 18 },
-    { id: 'nc35', vnd: 50000, credits: 35 },
-    { id: 'nc80', vnd: 100000, credits: 80 },
+    { id: 'nc10', vnd: 10000, credits: 10 },
+    { id: 'nc30', vnd: 30000, credits: 30 },
+    { id: 'nc50', vnd: 50000, credits: 50 },
+    { id: 'nc100', vnd: 100000, credits: 100 },
 ]
 
-/** Giá một lượt theo tính năng. Đồng giá, tách ra để sau này chỉnh riêng được. */
-const GIA_LUOT: Record<string, number> = { tarot: 1, cosmic: 1, palm: 1 }
+/** Giá một lượt theo tính năng, tính bằng credit.
+ *  tarot + cosmic = "Xem chi tiết" (Tarot, Tình yêu, Lá số, Thần số học, Tử vi,
+ *  Bản đồ sao) = 10.000đ; palm = xem chỉ tay bằng AI nhìn ảnh = 30.000đ. */
+const GIA_LUOT: Record<string, number> = { tarot: 10, cosmic: 10, palm: 30 }
 
 /** Bảng gói đang hiệu lực — JSON hỏng thì lùi về bảng mặc định, không để trang trắng. */
 function layGoiNap(cauHinh: any): Array<{ id: string; vnd: number; credits: number }> {
@@ -370,10 +379,11 @@ async function thuPhiAi(cauHinh: any, req: TarotAuthRequest, tinhNang: string): 
         data: { balance: { decrement: gia } },
     })
     if (!tru.count) {
+        const canTien = `${gia} credit (${(gia * DONG_MOI_CREDIT).toLocaleString('vi-VN')}đ)`
         return {
             chan: soFree > 0
-                ? `Bạn đã dùng hết ${soFree} lượt miễn phí hôm nay. Nạp thêm credit để xem tiếp nhé.`
-                : 'Bạn chưa đủ credit cho lượt luận giải này. Nạp thêm rồi thử lại nhé.',
+                ? `Bạn đã dùng hết ${soFree} lượt miễn phí hôm nay. Lượt này cần ${canTien} — nạp thêm credit để xem tiếp nhé.`
+                : `Lượt này cần ${canTien}, bạn chưa đủ credit. Nạp thêm rồi thử lại nhé.`,
             ma: 'KHONG_DU_CREDIT',
             status: 402,
         }
@@ -1066,6 +1076,8 @@ router.get('/credits/me', tarotAuth, async (req: TarotAuthRequest, res: Response
                 creditEnabled: !!cauHinh?.creditEnabled,
                 balance: await soDuCua(userId),
                 gia: GIA_LUOT.tarot,
+                // Bảng giá đầy đủ cho panel nạp: "Xem chi tiết" và "Xem chỉ tay" giá khác nhau.
+                bangGia: { xemChiTiet: GIA_LUOT.cosmic, chiTay: GIA_LUOT.palm, dongMoiCredit: DONG_MOI_CREDIT },
                 freeDailyLimit: soFree,
                 freeConLai: Math.max(0, soFree - daDung),
                 packages: layGoiNap(cauHinh),
