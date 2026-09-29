@@ -21,7 +21,6 @@ substitutions:
   # Đăng nhập Super Admin Panel (kengi.vn/admin) — so SERVER-SIDE ở POST /admin/login,
   # KHÔNG bake vào bundle FE. Xem routes/admin.ts.
   _ADMIN_PANEL_USER: superadmin
-  _ADMIN_PANEL_PASS: Kengi@2026
   # Facebook App cho kengi.vn/fanpage-manager (routes/fanpage.ts + webhooks/facebook).
   # Lấy ở developers.facebook.com → App → Settings → Basic.
   #  - _FB_APP_ID / _FB_APP_SECRET: thiếu thì POST /api/fanpage/connect trả 500,
@@ -144,14 +143,18 @@ steps:
       # đừng nâng số này một mình.
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN},GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID},TAROT_GOOGLE_CLIENT_ID=${_TAROT_GOOGLE_CLIENT_ID},PUBLIC_API_URL=https://api.kengi.vn,PUBLIC_WEB_URL=https://kengi.vn,BUILD_GIT_SHA=${_GIT_SHA},BUILD_GIT_TRANG_THAI=${_GIT_TRANG_THAI},BUILD_ID=$BUILD_ID
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN},GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID},TAROT_GOOGLE_CLIENT_ID=${_TAROT_GOOGLE_CLIENT_ID},PUBLIC_API_URL=https://api.kengi.vn,PUBLIC_WEB_URL=https://kengi.vn,BUILD_GIT_SHA=${_GIT_SHA},BUILD_GIT_TRANG_THAI=${_GIT_TRANG_THAI},BUILD_ID=$BUILD_ID
       # ⚠ --set-secrets GHI ĐÈ TOÀN BỘ danh sách secret của service, không cộng
       # thêm. Phải liệt kê ĐỦ MỌI khoá, thiếu cái nào là revision mới mất cái đó.
       # (Đã dính 06/08/2026: chỉ khai GOOGLE_OAUTH_CLIENT_SECRET → mất luôn
       # JWT_SECRET + ADMIN_KEY + SMTP ⇒ đăng nhập hỏng, phải rollback traffic.)
+      # 29/09/2026: mật khẩu trang kengi.vn/admin (ADMIN_PANEL_PASS) chuyển từ substitution
+      # chữ thường trong file này sang Secret Manager `open-retail-admin-panel-pass` (chủ shop
+      # đổi mật khẩu cùng lúc). Đổi mật khẩu = thêm version mới cho secret rồi deploy lại.
+      # ⚠ Thêm/bớt secret ở dòng dưới phải giữ ĐỦ các mục cũ — --set-secrets ghi đè cả danh sách.
       - '--set-secrets'
       - >-
-        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,MARKETING_VAULT_KEY=marketing-vault-key:latest
+        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,MARKETING_VAULT_KEY=marketing-vault-key:latest,ADMIN_PANEL_PASS=open-retail-admin-panel-pass:latest
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather
