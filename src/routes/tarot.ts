@@ -511,6 +511,8 @@ router.get('/config', async (_req: Request, res: Response) => {
              * người xem không thấy bóng dáng chuyện tiền nong ở đâu cả. */
             creditEnabled: thuCredit,
             freeDailyLimit: soFree,
+            // Giá công khai để cổng đăng nhập/trang nói đúng giá ngay cả trước khi đăng nhập.
+            bangGia: { xemChiTiet: GIA_LUOT.cosmic, chiTay: GIA_LUOT.palm, dongMoiCredit: DONG_MOI_CREDIT },
         },
     })
 })
