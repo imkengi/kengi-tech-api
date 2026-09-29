@@ -21,8 +21,9 @@
  *     sửa được: xoá bài thì người theo dõi đã thấy rồi. Phải có người vào xem.
  */
 import { LoiNenTang, trangThaiTuLoi } from '../lib/mktLoiNenTang'
-import { giaiMa } from '../lib/maHoaKhoa'
+import { giaiMa, maHoa } from '../lib/maHoaKhoa'
 import { moTaLoi } from '../lib/gomLoi'
+import { GIA_HAN_TRUOC_MS, giaHanToken } from './mktNenTangKhac'
 
 /** Bao lâu thì coi như worker giữ việc đã chết. */
 const HAN_GIU_MS = 5 * 60_000
@@ -34,7 +35,15 @@ export interface NenTang {
     dang(
         taiKhoan: { externalId: string; platform: string },
         token: string,
-        bai: { body: string; linkUrl?: string | null; assets: any[] },
+        bai: {
+            body: string
+            /** Tiêu đề (YouTube bắt buộc) và tuỳ chọn riêng nền tảng (quyền riêng tư TikTok/YouTube…). */
+            title?: string
+            options?: any
+            linkUrl?: string | null
+            /** [{type:'image'|'video', url, mime, storagePath}] — đúng media của phiên bản kênh này. */
+            assets: any[]
+        },
         moc: string | null,
         luuMoc: (m: string) => Promise<void>
     ): Promise<{ remotePostId: string; remoteRef?: string }>
@@ -159,14 +168,77 @@ export async function dangMotViec(prisma: any, viec: any): Promise<string> {
             return 'token-hong'
         }
 
+        /* GIA HẠN TOKEN trước khi hết (Threads: trước 7 ngày vì chỉ gia hạn được token
+         * còn hạn; YouTube/TikTok: bằng refresh token đã lưu). Gia hạn hỏng mà token cũ
+         * vẫn còn hạn thì cứ đăng bằng token cũ — đừng chặn bài vì một bước "làm sớm". */
+        const han = viec.account.tokenExpiresAt ? new Date(viec.account.tokenExpiresAt).getTime() : null
+        const truoc = GIA_HAN_TRUOC_MS[viec.account.platform]
+        if (han && truoc && han - Date.now() < truoc) {
+            try {
+                let bi: any = null
+                if (viec.account.refreshSecret) bi = JSON.parse(giaiMa(viec.account.refreshSecret))
+                const moi = await giaHanToken(viec.account.platform, token, bi)
+                token = moi.accessToken
+                await prisma.mktAccount.update({
+                    where: { id: viec.account.id },
+                    data: {
+                        accessToken: maHoa(moi.accessToken), tokenExpiresAt: moi.hetHan,
+                        ...(moi.refreshToken && bi ? { refreshSecret: maHoa(JSON.stringify({ ...bi, refreshToken: moi.refreshToken })) } : {}),
+                    },
+                })
+            } catch (e: any) {
+                if (han <= Date.now()) {
+                    await prisma.mktAccount.update({ where: { id: viec.account.id }, data: { status: 'token_expired' } }).catch(() => { })
+                    await ghi({
+                        status: 'failed', leaseUntil: null, workerId: null,
+                        errorCode: 'TOKEN_HET_HAN',
+                        errorMessage: `Token kênh đã hết hạn và không gia hạn được (${moTaLoi(e)}). Nối lại kênh rồi gửi lại.`,
+                    })
+                    return 'token-het-han'
+                }
+                console.warn(`[mkt] gia hạn token ${viec.account.platform} hỏng, dùng token cũ còn hạn:`, moTaLoi(e))
+            }
+        }
+
+        /* Phiên bản RIÊNG của kênh này (Threads 500 ký tự, YouTube cần tiêu đề…);
+         * kênh không có phiên bản riêng thì dùng thân bài chung. */
+        let phienBan: any = null
+        try {
+            const ds = JSON.parse(String(viec.content?.variants || '[]'))
+            if (Array.isArray(ds)) phienBan = ds.find((v: any) => v?.accountId === viec.accountId) || null
+        } catch { /* variants hỏng JSON thì dùng thân bài chung — đã duyệt cả hai */ }
+
+        /* Media của ĐÚNG phiên bản này (không có thì media chung của bài), và chỉ media
+         * cùng thương hiệu với bài. Trước 29/09 chỗ này gửi `assets: []` — ảnh/video
+         * không bao giờ được đăng. */
+        let idsMedia: string[] = Array.isArray(phienBan?.assetIds) ? phienBan.assetIds : []
+        if (!idsMedia.length) { try { idsMedia = JSON.parse(String(viec.content?.assetIds || '[]')) } catch { idsMedia = [] } }
+        const media = idsMedia.length
+            ? await prisma.mktAsset.findMany({ where: { id: { in: idsMedia.map(String) }, brandId: viec.content?.brandId ?? undefined } })
+            : []
+        const assets = idsMedia
+            .map((id: string) => media.find((m: any) => m.id === id))
+            .filter(Boolean)
+            .map((m: any) => ({ type: m.type, url: m.url, mime: m.mime, storagePath: m.storagePath, bytes: m.bytes }))
+        if (assets.length !== idsMedia.length) {
+            await ghi({
+                status: 'failed', leaseUntil: null, workerId: null,
+                errorCode: 'MEDIA_MAT',
+                errorMessage: 'Có media trong bài đã bị xoá khỏi thư viện. Sửa bài, duyệt lại rồi gửi.',
+            })
+            return 'media-mat'
+        }
+
         // ── Gửi thật ──
         const kq = await nt.dang(
             { externalId: viec.account.externalId, platform: viec.account.platform },
             token,
             {
-                body: viec.content?.body || '',
+                body: (phienBan?.text || '').trim() ? phienBan.text : (viec.content?.body || ''),
+                title: (phienBan?.title || '').trim() ? phienBan.title : (viec.content?.title || ''),
+                options: phienBan?.options || {},
                 linkUrl: viec.content?.linkUrl ?? null,
-                assets: [],
+                assets,
             },
             viec.remoteRef ?? null,
             /* Ghi checkpoint NGAY khi nền tảng cấp id container — trước bước cuối.

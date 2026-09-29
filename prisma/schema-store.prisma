@@ -3030,9 +3030,39 @@ model FbContentDraft {
 // chừng có thể đăng trùng lên trang khách hàng mà không ai biết.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// THƯƠNG HIỆU (29/09/2026) — một cửa hàng làm marketing cho tối đa 10 thương hiệu.
+// Mỗi thương hiệu tách hẳn kênh, chiến dịch, bài, media — và là NGUỒN SỰ THẬT cho AI
+// viết content: AI chỉ được viết từ những gì ghi ở đây, ô trống = không biết, không bịa.
+// Dòng Mkt* cũ có brandId NULL được gán vào thương hiệu đầu tiên ở lần mở đầu tiên.
+model MktBrand {
+  id             String    @id @default(cuid())
+  name           String
+  industry       String    @default("")
+  description    String    @default("") // thương hiệu là ai, làm gì, khác đối thủ ở đâu
+  products       String    @default("") // sản phẩm / dịch vụ, giá, điểm nổi bật
+  contentPillars String    @default("") // chủ đề nội dung chính
+  contact        String    @default("") // website, hotline, địa chỉ, giờ mở cửa
+  audience       String    @default("")
+  voice          String    @default("")
+  usp            String    @default("")
+  cta            String    @default("")
+  examples       String    @default("") // bài mẫu đúng giọng để AI bắt chước
+  notes          String    @default("")
+  bannedWords    String    @default("[]") // JSON array
+  timezone       String    @default("Asia/Ho_Chi_Minh")
+  // Xoá MỀM: dữ liệu còn nguyên, chỉ biến khỏi danh sách và không tính vào trần 10.
+  archivedAt     DateTime?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([archivedAt])
+}
+
 model MktAccount {
   id         String  @id @default(cuid())
-  platform   String // facebook | instagram | tiktok | youtube
+  brandId    String? // MktBrand.id — null chỉ ở dữ liệu trước 29/09, được gán khi mở lần đầu
+  platform   String // facebook | instagram | threads | tiktok | youtube
   externalId String // id trang/kênh phía nền tảng
   name       String  @default("")
   avatar     String?
@@ -3045,6 +3075,9 @@ model MktAccount {
   // đĩa Cloud Run là tạm, restart là mất khoá và mọi token thành rác không giải được.
   accessToken    String
   tokenExpiresAt DateTime?
+  // ⛔ MÃ HOÁ như accessToken: JSON {refreshToken, clientId, clientSecret} để máy chủ tự
+  // gia hạn token YouTube/TikTok. Threads tự gia hạn bằng chính accessToken, không cần.
+  refreshSecret  String?
 
   status      String    @default("active") // active | disconnected | token_expired
   lastSyncAt  DateTime?
@@ -3057,10 +3090,12 @@ model MktAccount {
 
   @@unique([platform, externalId])
   @@index([status])
+  @@index([brandId])
 }
 
 model MktCampaign {
   id        String    @id @default(cuid())
+  brandId   String?
   name      String
   goal      String    @default("")
   // paused = GIỮ cả hàng đợi: publication của chiến dịch tạm dừng không được gửi.
@@ -3074,10 +3109,12 @@ model MktCampaign {
   contents MktContent[]
 
   @@index([status])
+  @@index([brandId])
 }
 
 model MktContent {
   id         String  @id @default(cuid())
+  brandId    String?
   campaignId String?
   title      String  @default("")
   body       String  @default("")
@@ -3085,6 +3122,11 @@ model MktContent {
   linkUrl    String?
   assetIds   String  @default("[]") // JSON array MktAsset.id
   productIds String  @default("[]") // JSON array Product.id — truy vết bài nào đẩy hàng nào
+  // Phiên bản RIÊNG cho từng kênh (29/09): JSON [{accountId, text, title, assetIds, options}].
+  // Threads 500 ký tự, YouTube cần tiêu đề, TikTok cần quyền riêng tư… — một thân bài chung
+  // không đăng được cho mọi nơi. Kênh không có phiên bản riêng thì dùng title/body/assetIds.
+  // Nằm trong luật "sửa là mất duyệt" như body.
+  variants   String  @default("[]")
 
   // Khoá lạc quan: SỬA NỘI DUNG LÀ MẤT DUYỆT. Mỗi lần sửa tăng revision, và
   // approvedRevision phải bằng revision hiện tại thì mới được gửi. Thiếu cơ chế
@@ -3106,6 +3148,7 @@ model MktContent {
 
   @@index([status])
   @@index([campaignId])
+  @@index([brandId])
 }
 
 model MktPublication {
@@ -3169,7 +3212,17 @@ model MktAsset {
   createdBy String?
   createdAt DateTime @default(now())
 
+  // 29/09: đĩa Cloud Run là TẠM (restart là mất) nên media nằm ở Cloud Storage
+  // (`storagePath`) hoặc là một URL HTTPS công khai người dùng khai (`url`).
+  // Nền tảng (FB/IG/Threads/TikTok) TỰ TẢI media về từ `url`, nên url phải công khai.
+  brandId     String?
+  name        String  @default("")
+  type        String  @default("image") // image | video
+  url         String?
+  storagePath String?
+
   @@index([createdAt])
+  @@index([brandId])
 }
 
 model MktMetric {

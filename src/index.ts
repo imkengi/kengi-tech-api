@@ -101,6 +101,7 @@ import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
 import { startMktWorker, stopMktWorker } from './cron/mktWorker'
 import { khaiNenTang } from './services/mktDangBai'
 import { nenTangFacebook } from './services/mktNenTangFb'
+import { nenTangInstagram, nenTangThreads, nenTangTiktok, nenTangYoutube } from './services/mktNenTangKhac'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startHopThuWebhookCron, stopHopThuWebhookCron } from './cron/hopThuWebhookCron'
@@ -1564,6 +1565,10 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startAutoSync()
                 startFanpageCron()
                 khaiNenTang('facebook', nenTangFacebook)
+                khaiNenTang('instagram', nenTangInstagram)
+                khaiNenTang('threads', nenTangThreads)
+                khaiNenTang('tiktok', nenTangTiktok)
+                khaiNenTang('youtube', nenTangYoutube)
                 startMktWorker()
                 startAiAgentCron()
                 startWebhookCron()

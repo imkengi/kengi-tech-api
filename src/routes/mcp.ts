@@ -55,6 +55,10 @@ const INSTRUCTIONS =
     'MESSENGER: fanpage_list_conversations (only_unread=true để tìm khách chờ) → fanpage_read_conversation → fanpage_send_message (ngoài 24h cần tag). ' +
     'QUẢNG CÁO: fanpage_ads_accounts → fanpage_ads_campaigns (hiệu quả 30 ngày) → fanpage_ads_insights; fanpage_boost_post tạo boost ở trạng thái TẠM DỪNG, chỉ tiêu tiền khi gọi fanpage_ads_set_campaign_status ACTIVE theo yêu cầu rõ của chủ shop. ' +
     'LÊN CONTENT: marketing_get_brand + marketing_content_material để lấy chất liệu, marketing_suggest_slots chọn giờ, marketing_save_draft đưa vào hàng đợi duyệt (không đăng thẳng). ' +
+    'MARKETING STUDIO (kengi.vn/marketing — đăng Facebook/Instagram/Threads/TikTok/YouTube, tối đa 10 THƯƠNG HIỆU/cửa hàng, tách hẳn nhau): ' +
+    'gọi mkt_danh_sach_thuong_hieu trước; cửa hàng có >1 thương hiệu thì MỌI tool mkt_* phải truyền thuongHieu — chủ shop chưa nói thương hiệu nào thì HỎI, đừng tự chọn. ' +
+    'TRƯỚC KHI VIẾT bất kỳ bài nào: đọc mkt_ho_so_thuong_hieu và viết TỪ hồ sơ đó (giọng văn, sản phẩm, chủ đề, CTA, bài mẫu); ô trống = không biết — KHÔNG bịa sản phẩm, giá, khuyến mãi, địa chỉ, số điện thoại; tránh mọi bannedWords. ' +
+    'mkt_soan_noi_dung chỉ tạo bài CHỜ DUYỆT (có thể kèm phiên bản riêng từng kênh); KHÔNG có tool duyệt — người duyệt ở kengi.vn/marketing, sau đó mới mkt_len_lich_dang. ' +
     'PHÂN TÍCH TỔNG THỂ / SWOT: gọi swot_data(from,to) — MỘT lần gọi gom đủ doanh thu, biên lãi, đà kỳ, khách quay lại, ghi nợ, hàng sắp hết/đã hết, vốn tồn, hàng chết, cơ cấu thanh toán; nhận định dựa trên số đó. ' +
     'TÀI CHÍNH: profit_report cho câu hỏi lãi/lỗ (doanh thu − giá vốn − chi phí; giá vốn là ƯỚC TÍNH theo giá vốn hiện tại, hãy nói rõ điều đó khi báo cáo), '+
     'expense_report cho chi phí theo nhóm, supplier_debt cho công nợ phải trả nhà cung cấp, list_import_receipts cho lịch sử nhập hàng, '+
