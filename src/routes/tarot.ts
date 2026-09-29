@@ -994,6 +994,9 @@ router.post('/palm-reading', tarotAuthMem, async (req: TarotAuthRequest, res: Re
             visionProvider: cauHinh.visionProvider,
             visionApiKey: cauHinh.visionApiKey,
             visionModel: cauHinh.visionModel,
+            // Khoá phần chữ: DeepSeek dùng chung được cho phần nhìn ảnh (deepseek-flash).
+            provider: cauHinh.provider,
+            textApiKey: cauHinh.openaiApiKey,
         })
 
         /* Lưu bản đọc — KHÔNG lưu tấm ảnh.

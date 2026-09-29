@@ -13,6 +13,7 @@ import { moTaLoi } from '../lib/gomLoi'
 import { apLocTon, lapBaoCaoTonKho } from '../lib/tonKho'
 import { canhWebhookKiotViet } from '../cron/kiotvietWebhookWatchdog'
 import { quetHoaDonXmlEmail } from '../services/hoaDonXmlEmail'
+import { chonThiGiac } from '../lib/tarotAi'
 
 const router = Router()
 
@@ -1543,6 +1544,11 @@ router.get('/tarot-config', async (_req: Request, res: Response) => {
                 coKhoaThiGiac: !!cf?.visionApiKey,
                 duoiKhoaThiGiac: cf?.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
                 visionModel: cf?.visionModel || 'gpt-5.6-terra',
+                // Phần nhìn ảnh THỰC SỰ sẽ chạy bằng gì (sau khi tính dùng-chung-khoá)
+                thiGiacThucTe: (() => {
+                    const tg = chonThiGiac({ visionProvider: cf?.visionProvider, visionApiKey: cf?.visionApiKey, visionModel: cf?.visionModel, provider: cf?.provider, textApiKey: cf?.openaiApiKey })
+                    return tg ? { nha: tg.nha, model: tg.model, dungKhoaChu: tg.dungKhoaChu } : null
+                })(),
                 /* ─── Thu tiền lượt luận giải AI ───
                  * Số tài khoản KHÔNG che: nó nằm sẵn trong mã QR mà ai vào trang
                  * cũng quét được, che ở đây chỉ làm chủ trang khó đối chiếu. */
@@ -1625,11 +1631,12 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
         }
         if (req.body?.requireLogin !== undefined) data.requireLogin = !!req.body.requireLogin
 
-        /* Khoá THỊ GIÁC — tách hẳn khoá chữ vì DeepSeek không nhìn được ảnh. */
+        /* Khoá THỊ GIÁC. DeepSeek (deepseek-flash) nhìn được ảnh từ 28/09 và dùng
+         * CHUNG khoá phần chữ khi ô khoá thị giác để trống — xem chonThiGiac. */
         if (req.body?.visionProvider !== undefined) {
             const p2 = String(req.body.visionProvider || '').trim().toLowerCase()
-            if (!['openai', 'gemini'].includes(p2)) {
-                res.status(400).json({ success: false, error: 'Nhà cung cấp AI nhìn ảnh phải là: openai hoặc gemini' })
+            if (!['deepseek', 'openai', 'gemini'].includes(p2)) {
+                res.status(400).json({ success: false, error: 'Nhà cung cấp AI nhìn ảnh phải là: deepseek, openai hoặc gemini' })
                 return
             }
             data.visionProvider = p2
@@ -1731,6 +1738,10 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
                 coKhoaThiGiac: !!cf.visionApiKey,
                 duoiKhoaThiGiac: cf.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
                 visionModel: cf.visionModel || 'gpt-5.6-terra',
+                thiGiacThucTe: (() => {
+                    const tg = chonThiGiac({ visionProvider: cf.visionProvider, visionApiKey: cf.visionApiKey, visionModel: cf.visionModel, provider: cf.provider, textApiKey: cf.openaiApiKey })
+                    return tg ? { nha: tg.nha, model: tg.model, dungKhoaChu: tg.dungKhoaChu } : null
+                })(),
                 creditEnabled: !!cf.creditEnabled,
                 freeDailyLimit: cf.freeDailyLimit ?? 3,
                 bankBin: cf.bankBin || '',

@@ -30,9 +30,12 @@ export interface YeuCauLuanGiai {
 
 export class LoiAi extends Error {
     status: number
-    constructor(message: string, status = 500) {
+    /** Mã máy đọc được — JSON_HONG / RONG: nơi gọi được phép gọi lại một lần. */
+    ma?: string
+    constructor(message: string, status = 500, ma?: string) {
         super(message)
         this.status = status
+        this.ma = ma
     }
 }
 
@@ -296,6 +299,100 @@ function bocJson(text: string): string {
     return t
 }
 
+/* ─── Đọc JSON DeepSeek trả về ──────────────────────────────────────────────
+ * 29/09: ảnh lòng bàn tay THẬT ra 502 "không đúng định dạng json" (ảnh vẽ thì
+ * qua) — và máy chủ không ghi lại DeepSeek đã trả gì nên không biết vì sao.
+ * Giờ: (1) vá nhẹ các lỗi cú pháp hay gặp ở JSON mode rồi mới bỏ cuộc,
+ * (2) hỏng hẳn thì GHI LOG đầu/cuối câu trả lời + finish_reason, (3) báo mã
+ * JSON_HONG/RONG để nơi gọi tự gọi lại một lần (thuLaiKhiJsonHong). */
+
+/** Vá cú pháp, không đoán nội dung: ký tự điều khiển THÔ nằm trong chuỗi
+ *  (xuống dòng, tab…), dấu nháy kép KHÔNG THOÁT giữa câu văn (bài tiếng Việt
+ *  hay viết kiểu: đường chữ "M" rất rõ), và dấu phẩy thừa ngay trước } hoặc ].
+ *  Duyệt từng ký tự theo trạng thái trong/ngoài chuỗi để không đụng vào chữ.
+ *  Chỉ chạy khi JSON.parse đã hỏng, nên không bao giờ làm hỏng JSON đúng. */
+function laNhayDongChuoi(s: string, i: number): boolean {
+    // Nháy đóng chuỗi thật thì theo sau (bỏ khoảng trắng) là : } ] hoặc hết bài,
+    // hoặc dấu phẩy rồi tới khoá/phần tử kế tiếp (" { [). Chữ cái theo sau = nháy
+    // nằm trong câu văn.
+    let j = i + 1
+    while (j < s.length && s.charCodeAt(j) <= 32) j++
+    if (j >= s.length) return true
+    const n = s[j]
+    if (n === ':' || n === '}' || n === ']') return true
+    if (n !== ',') return false
+    j++
+    while (j < s.length && s.charCodeAt(j) <= 32) j++
+    return j >= s.length || s[j] === '"' || s[j] === '{' || s[j] === '[' || s[j] === '}' || s[j] === ']'
+}
+
+function suaJsonNhe(s: string): string {
+    let ra = ''
+    let trongChuoi = false
+    let thoat = false
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i]
+        const ma = s.charCodeAt(i)
+        if (trongChuoi) {
+            if (thoat) { ra += c; thoat = false; continue }
+            if (c === '\\') { ra += c; thoat = true; continue }
+            if (c === '"') {
+                if (laNhayDongChuoi(s, i)) { trongChuoi = false; ra += c }
+                else ra += '\\"'   // nháy trong câu văn → thoát
+                continue
+            }
+            if (ma === 10) { ra += '\\n'; continue }
+            if (ma === 13) { ra += '\\r'; continue }
+            if (ma === 9) { ra += '\\t'; continue }
+            if (ma < 32) continue
+            ra += c
+            continue
+        }
+        if (c === '"') { trongChuoi = true; ra += c; continue }
+        if (c === ',') {
+            let j = i + 1
+            while (j < s.length && s.charCodeAt(j) <= 32) j++
+            if (s[j] === '}' || s[j] === ']') continue   // dấu phẩy thừa
+        }
+        ra += c
+    }
+    return ra
+}
+
+function docJsonDeepSeek(vanBan: string, ketThuc: string | undefined, nguon: string): any {
+    const tho = bocJson(vanBan)
+    for (const ungVien of [tho, suaJsonNhe(tho)]) {
+        try { return JSON.parse(ungVien) } catch { /* thử cách sau */ }
+    }
+    console.error(`[tarotAi] ${nguon}: DeepSeek trả json hỏng`, JSON.stringify({
+        ketThuc: ketThuc || null,
+        doDai: vanBan.length,
+        dau: vanBan.slice(0, 240),
+        cuoi: vanBan.slice(-360),
+    }))
+    throw new LoiAi(
+        ketThuc === 'length'
+            ? 'Bản luận giải dài quá giới hạn nên bị cắt giữa chừng. Hãy bấm thử lại.'
+            : 'DeepSeek trả về nội dung không đúng định dạng json.',
+        502,
+        'JSON_HONG',
+    )
+}
+
+/** Gọi lại MỘT lần khi DeepSeek trả json hỏng hoặc rỗng — tài liệu DeepSeek
+ *  thừa nhận JSON mode thỉnh thoảng trả rỗng; lần sau thường qua. */
+async function thuLaiKhiJsonHong<T>(nguon: string, goi: () => Promise<T>): Promise<T> {
+    try {
+        return await goi()
+    } catch (e: any) {
+        if (e instanceof LoiAi && (e.ma === 'JSON_HONG' || e.ma === 'RONG')) {
+            console.warn(`[tarotAi] ${nguon}: ${e.message} — gọi lại một lần`)
+            return await goi()
+        }
+        throw e
+    }
+}
+
 /* Cấu hình AI dùng chung cho cả tarot lẫn "xem chi tiết" của 3 công cụ kia. */
 export interface CauHinhAi {
     apiKey: string
@@ -325,7 +422,7 @@ function chuanBiCauHinh(c: CauHinhAi): CfChuan {
 /** Gọi đúng nhà cung cấp đang chọn, trả về JSON thô đã parse. */
 async function goiNhaCungCap(cf: CfChuan, nhac: string, schema: any, chiDan: string, tenSchema: string) {
     return cf.nha === 'deepseek'
-        ? goiDeepSeekChung(cf, nhac, schema, chiDan)
+        ? thuLaiKhiJsonHong('chữ', () => goiDeepSeekChung(cf, nhac, schema, chiDan))
         : goiOpenAiChung(cf, nhac, schema, chiDan, tenSchema)
 }
 
@@ -348,7 +445,7 @@ async function goiDeepSeekChung(cf: CfChuan, nhac: string, schema: any, chiDan: 
                     ].join('\n\n'),
                 },
             ],
-            max_tokens: 8000,
+            max_tokens: 16000,
         }
         if (!reasoner) {
             than.response_format = { type: 'json_object' }
@@ -381,12 +478,9 @@ async function goiDeepSeekChung(cf: CfChuan, nhac: string, schema: any, chiDan: 
         }
 
         const vanBan = String(payload?.choices?.[0]?.message?.content || '').trim()
-        if (!vanBan) throw new LoiAi('DeepSeek không trả về nội dung luận giải.', 502)
+        if (!vanBan) throw new LoiAi('DeepSeek không trả về nội dung luận giải.', 502, 'RONG')
 
-        let structured: any
-        try { structured = JSON.parse(bocJson(vanBan)) } catch {
-            throw new LoiAi('DeepSeek trả về nội dung không đúng định dạng json.', 502)
-        }
+        const structured = docJsonDeepSeek(vanBan, payload?.choices?.[0]?.finish_reason, 'chữ')
         return { data: structured, model: payload.model || cauHinh.model }
     } catch (e: any) {
         if (e instanceof LoiAi) throw e
@@ -664,9 +758,14 @@ export async function luanGiaiCosmic(y: YeuCauCosmic, cauHinh: CauHinhAi) {
 //  KHÁC HẲN các công cụ kia: chúng gửi số/sao đã tính sẵn, còn ở đây AI phải TỰ
 //  NHÌN tấm ảnh. Vì vậy phải dùng model có thị giác.
 //
-//  DeepSeek KHÔNG nhìn được ảnh (deepseek-chat / deepseek-reasoner chỉ nhận
-//  chữ), nên phần này đi bằng khoá RIÊNG khai ở admin: OpenAI hoặc Gemini. Chủ
-//  trang vẫn giữ DeepSeek cho phần chữ, chỉ cắm thêm một khoá cho phần ảnh.
+//  Ba nhà cung cấp nhìn ảnh: DeepSeek, OpenAI, Gemini (chọn ở admin).
+//
+//  DeepSeek (từ 28/09): trước đây deepseek-chat / deepseek-reasoner chỉ nhận
+//  chữ nên phần này bắt cắm thêm khoá OpenAI/Gemini. Nay model deepseek-flash
+//  (DeepSeek-V4.1-Flash) nhìn được ảnh — api-docs.deepseek.com/guides/vision —
+//  nên chủ trang dùng CHUNG khoá DeepSeek của phần chữ, không phải mua thêm.
+//  Chưa khai khoá thị giác riêng mà phần chữ đang là DeepSeek thì tự dùng khoá
+//  đó (luanGiaiChiTay) thay vì báo thiếu khoá.
 //
 //  Trả về CÙNG hình dạng với "xem chi tiết" để dùng lại đúng bộ dựng giao diện
 //  (headline / synthesis / chapters / timing / actionPlan / reflection / safetyNote).
@@ -730,6 +829,75 @@ function loiNhacChiTay(y: YeuCauChiTay, doiSauHon: boolean): string {
             banDocCoBanTrangDaIn: y.banDoc || null,
         }, null, 2),
     ].join('\n\n')
+}
+
+/* DeepSeek nhìn ảnh — chat/completions, ảnh là khối image_url mang data URL
+ * base64 và CHỈ được nằm trong tin nhắn user (đặt ở system là 400).
+ *
+ * TẮT chế độ suy nghĩ (mặc định BẬT ở deepseek-flash): việc khó ở đây là NHÌN
+ * ảnh — phần mã hoá ảnh của model lo — chứ không phải suy luận nhiều bước;
+ * bật lên thì mỗi lượt chậm thêm hàng chục giây trong khi trang "Xem chi tiết"
+ * chỉ chờ 120 giây, mà bản chưa đủ sâu còn phải gọi lại lần hai.
+ *
+ * JSON mode (json_object) + schema mô tả trong lời nhắc như đường chữ; tài
+ * liệu báo JSON mode thỉnh thoảng trả nội dung RỖNG — bắt thành lỗi rõ ràng. */
+async function goiDeepSeekThiGiac(y: YeuCauChiTay, doiSauHon: boolean, cf: { apiKey: string; model: string }) {
+    const controller = new AbortController()
+    const hetGio = setTimeout(() => controller.abort(), HET_GIO_MS)
+    try {
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${cf.apiKey}`, 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: cf.model,
+                messages: [
+                    { role: 'system', content: CHI_DAN_CHI_TAY },
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: [
+                                    loiNhacChiTay(y, doiSauHon),
+                                    'Trả lời DUY NHẤT bằng một đối tượng json hợp lệ, không kèm giải thích hay rào ```. Đối tượng json phải khớp đúng schema sau (mọi khoá đều bắt buộc):',
+                                    JSON.stringify(schemaCosmic()),
+                                ].join('\n\n'),
+                            },
+                            { type: 'image_url', image_url: { url: `data:${y.mime};base64,${y.anh}` } },
+                        ],
+                    },
+                ],
+                thinking: { type: 'disabled' },
+                response_format: { type: 'json_object' },
+                max_tokens: 16000,
+            }),
+        })
+        const raw = await res.text()
+        let payload: any = {}
+        try { payload = JSON.parse(raw) } catch { payload = {} }
+        if (!res.ok) {
+            const loiApi = payload?.error?.message || `DeepSeek trả về lỗi ${res.status}.`
+            throw new LoiAi(
+                res.status === 401
+                    ? 'Khoá DeepSeek không hợp lệ. Vào kengi.vn/admin → tab Tarot để nhập lại.'
+                    : res.status === 402
+                        ? 'Tài khoản DeepSeek đã hết số dư.'
+                        : res.status === 429
+                            ? 'DeepSeek đang giới hạn lượt gọi. Thử lại sau ít phút.'
+                            : loiApi,
+                res.status,
+            )
+        }
+        const vanBan = String(payload?.choices?.[0]?.message?.content || '').trim()
+        if (!vanBan) throw new LoiAi('DeepSeek không trả về nội dung (lỗi đôi khi gặp ở JSON mode). Hãy bấm thử lại.', 502, 'RONG')
+        const data = docJsonDeepSeek(vanBan, payload?.choices?.[0]?.finish_reason, 'chỉ tay')
+        return { data, model: payload.model || cf.model }
+    } catch (e: any) {
+        if (e instanceof LoiAi) throw e
+        if (e?.name === 'AbortError') throw new LoiAi('DeepSeek phản hồi quá chậm.', 504)
+        throw new LoiAi(`Không kết nối được DeepSeek: ${e?.message}`, 502)
+    } finally { clearTimeout(hetGio) }
 }
 
 async function goiOpenAiThiGiac(y: YeuCauChiTay, doiSauHon: boolean, cf: { apiKey: string; model: string }) {
@@ -824,22 +992,52 @@ async function goiGeminiThiGiac(y: YeuCauChiTay, doiSauHon: boolean, cf: { apiKe
 }
 
 /** Xem chỉ tay từ ảnh. Trả về cùng hình dạng với "xem chi tiết". */
-export async function luanGiaiChiTay(y: YeuCauChiTay, cauHinh: { visionProvider?: string | null; visionApiKey?: string | null; visionModel?: string | null }) {
-    const nha = String(cauHinh.visionProvider || 'openai').toLowerCase() === 'gemini' ? 'gemini' : 'openai'
-    if (!cauHinh.visionApiKey) {
+/** Chọn nhà cung cấp + khoá cho phần nhìn ảnh. Tách riêng để đọc/kiểm dễ. */
+export function chonThiGiac(cauHinh: {
+    visionProvider?: string | null; visionApiKey?: string | null; visionModel?: string | null
+    provider?: string | null; textApiKey?: string | null
+}): { nha: 'deepseek' | 'openai' | 'gemini'; apiKey: string; model: string; dungKhoaChu: boolean } | null {
+    const chon = String(cauHinh.visionProvider || '').trim().toLowerCase()
+    let nha: 'deepseek' | 'openai' | 'gemini' = chon === 'gemini' ? 'gemini' : chon === 'deepseek' ? 'deepseek' : 'openai'
+    let apiKey = String(cauHinh.visionApiKey || '').trim()
+    let dungKhoaChu = false
+    /* Không có khoá thị giác riêng mà phần chữ đang chạy DeepSeek → dùng luôn
+     * khoá DeepSeek đó (deepseek-flash nhìn được ảnh). Kể cả khi ô chọn còn để
+     * OpenAI mặc định: thiếu khoá OpenAI thì báo lỗi là vô ích, trong khi đã có
+     * sẵn một khoá dùng được. */
+    if (!apiKey && String(cauHinh.provider || '').toLowerCase() === 'deepseek' && cauHinh.textApiKey) {
+        nha = 'deepseek'
+        apiKey = String(cauHinh.textApiKey)
+        dungKhoaChu = true
+    }
+    if (!apiKey) return null
+    const vm = String(cauHinh.visionModel || '').trim()
+    const model = nha === 'deepseek'
+        // deepseek-v4-pro KHÔNG có thị giác — chỉ nhận tên họ Flash, còn lại ép về deepseek-flash
+        ? (/^deepseek[\w.-]*flash/i.test(vm) ? vm : 'deepseek-flash')
+        : (vm && !/^deepseek/i.test(vm) ? vm : (nha === 'gemini' ? 'gemini-2.5-flash' : 'gpt-5.6-terra'))
+    return { nha, apiKey, model, dungKhoaChu }
+}
+
+export async function luanGiaiChiTay(y: YeuCauChiTay, cauHinh: {
+    visionProvider?: string | null; visionApiKey?: string | null; visionModel?: string | null
+    provider?: string | null; textApiKey?: string | null
+}) {
+    const tg = chonThiGiac(cauHinh)
+    if (!tg) {
         throw new LoiAi(
-            'Trang chưa được nhập khoá AI nhìn ảnh. DeepSeek không xem được ảnh nên phần chỉ tay cần thêm một khoá OpenAI hoặc Gemini ở kengi.vn/admin → tab Tarot.',
+            'Trang chưa có khoá AI nhìn ảnh. Vào kengi.vn/admin → tab Tarot: dùng DeepSeek (chung khoá phần chữ), hoặc nhập khoá OpenAI/Gemini.',
             503,
         )
     }
-    const cf = {
-        apiKey: cauHinh.visionApiKey,
-        model: cauHinh.visionModel || (nha === 'gemini' ? 'gemini-2.5-flash' : 'gpt-5.6-terra'),
-    }
+    const nha = tg.nha
+    const cf = { apiKey: tg.apiKey, model: tg.model }
     const goi = async (doiSauHon: boolean) => {
-        const tho = nha === 'gemini'
-            ? await goiGeminiThiGiac(y, doiSauHon, cf)
-            : await goiOpenAiThiGiac(y, doiSauHon, cf)
+        const tho = nha === 'deepseek'
+            ? await thuLaiKhiJsonHong('chỉ tay', () => goiDeepSeekThiGiac(y, doiSauHon, cf))
+            : nha === 'gemini'
+                ? await goiGeminiThiGiac(y, doiSauHon, cf)
+                : await goiOpenAiThiGiac(y, doiSauHon, cf)
         return { reading: chuanHoaCosmic(tho.data), model: tho.model }
     }
 
