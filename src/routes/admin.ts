@@ -15,14 +15,17 @@ import { canhWebhookKiotViet } from '../cron/kiotvietWebhookWatchdog'
 import { quetHoaDonXmlEmail } from '../services/hoaDonXmlEmail'
 import { chonThiGiac } from '../lib/tarotAi'
 
+import * as xm2b from '../lib/xacMinh2BuocAdmin'
 const router = Router()
 
 // ─── Admin Auth ─────────────────────────────────────────────────────────────
 // 2 lối vào:
 //  1. x-admin-key (script/cron/CLI — key ở Secret Manager open-retail-admin-key)
-//  2. Bearer JWT scope 'admin-panel' — cấp bởi POST /admin/login cho trang
+//  2. Bearer JWT scope 'admin-panel' — cấp bởi POST /admin/login/xac-minh cho trang
 //     kengi.vn/admin. User/pass so SERVER-SIDE (env ADMIN_PANEL_*), KHÔNG còn
 //     bake NEXT_PUBLIC_ADMIN_* vào bundle FE công khai (lộ key).
+//     29/09/2026: LUÔN hai bước — mật khẩu rồi mã Google Authenticator
+//     (lib/xacMinh2BuocAdmin.ts). Token thiếu dấu `mfa` (cấp trước ngày này) bị từ chối.
 const ADMIN_KEY = process.env.ADMIN_KEY
 if (!ADMIN_KEY) {
     console.warn('⚠️ ADMIN_KEY not configured — admin routes will reject all requests')
@@ -55,8 +58,39 @@ router.post('/login', async (req: Request, res: Response) => {
         res.status(401).json({ success: false, error: 'Sai tài khoản hoặc mật khẩu' })
         return
     }
-    const token = jwt.sign({ scope: PANEL_SCOPE, username }, JWT_SECRET, { expiresIn: '12h' })
-    res.json({ success: true, data: { token, expiresInSeconds: 12 * 3600 } })
+    // Mật khẩu đúng KHÔNG còn cấp token — luôn qua bước 2 (Google Authenticator).
+    try {
+        const phut = await xm2b.phutConKhoa()
+        if (phut > 0) {
+            res.status(429).json({ success: false, error: `Nhập sai mã quá nhiều lần — tạm khoá đăng nhập admin ${phut} phút` })
+            return
+        }
+        res.json({ success: true, data: await xm2b.moPhien(String(req.ip || ''), PANEL_USER) })
+    } catch (e) {
+        console.error('[admin-login] mở phiên xác minh 2 bước:', e)
+        res.status(500).json({ success: false, error: `Không mở được bước xác minh: ${moTaLoi(e)}` })
+    }
+})
+
+// POST /admin/login/xac-minh {maPhien, ma} — bước 2: mã 6 số trong Google Authenticator
+router.post('/login/xac-minh', async (req: Request, res: Response) => {
+    if (!JWT_SECRET) {
+        res.status(503).json({ success: false, error: 'Admin panel login chưa cấu hình (JWT_SECRET)' })
+        return
+    }
+    try {
+        const { maPhien, ma } = req.body || {}
+        const kq = await xm2b.xacMinh(String(maPhien || ''), String(ma || ''))
+        if (!kq.ok) {
+            res.status(kq.ma).json({ success: false, error: kq.loi })
+            return
+        }
+        const token = jwt.sign({ scope: PANEL_SCOPE, username: PANEL_USER, mfa: true }, JWT_SECRET, { expiresIn: '12h' })
+        res.json({ success: true, data: { token, expiresInSeconds: 12 * 3600, vuaThietLap: kq.vuaThietLap } })
+    } catch (e) {
+        console.error('[admin-login] xác minh 2 bước:', e)
+        res.status(500).json({ success: false, error: `Không kiểm được mã: ${moTaLoi(e)}` })
+    }
 })
 
 function adminKeyAuth(req: Request, res: Response, next: NextFunction): void {
@@ -69,7 +103,8 @@ function adminKeyAuth(req: Request, res: Response, next: NextFunction): void {
     if (auth && auth.startsWith('Bearer ') && JWT_SECRET) {
         try {
             const payload = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] }) as any
-            if (payload?.scope === PANEL_SCOPE) return next()
+            // Chỉ token đã qua bước 2 (mfa) — token mật-khẩu-không cấp trước 29/09 hết hiệu lực
+            if (payload?.scope === PANEL_SCOPE && payload?.mfa === true) return next()
         } catch { /* sai/hết hạn → 403 bên dưới */ }
     }
 
@@ -81,6 +116,45 @@ function adminKeyAuth(req: Request, res: Response, next: NextFunction): void {
 }
 
 router.use(adminKeyAuth)
+
+// GET /admin/xac-minh-2-buoc — đã bật chưa, bật từ lúc nào (KHÔNG bao giờ trả khoá)
+router.get('/xac-minh-2-buoc', async (_req: Request, res: Response) => {
+    try {
+        res.json({ success: true, data: await xm2b.trangThai() })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+// POST /admin/xac-minh-2-buoc/dat-lai — mất điện thoại: xoá khoá, lần đăng nhập sau quét QR lại.
+// CHỈ lối x-admin-key (Secret Manager) — phiên đăng nhập trang admin không tự đặt lại được.
+router.post('/xac-minh-2-buoc/dat-lai', async (req: Request, res: Response) => {
+    const key = req.headers['x-admin-key'] as string
+    if (!ADMIN_KEY || !key || !safeEqual(key, ADMIN_KEY)) {
+        res.status(403).json({ success: false, error: 'Chỉ đặt lại được bằng khoá quản trị (x-admin-key)' })
+        return
+    }
+    try {
+        res.json({ success: true, data: await xm2b.datLai() })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+// POST /admin/xac-minh-2-buoc/tu-kiem — chạy đúng các câu SQL + hàm xacMinh của luồng thật trên
+// khoá thử 'tu-kiem' rồi dọn; KHÔNG đụng khoá thật, không trả khoá bí mật. CHỈ x-admin-key.
+router.post('/xac-minh-2-buoc/tu-kiem', async (req: Request, res: Response) => {
+    const key = req.headers['x-admin-key'] as string
+    if (!ADMIN_KEY || !key || !safeEqual(key, ADMIN_KEY)) {
+        res.status(403).json({ success: false, error: 'Chỉ chạy được bằng khoá quản trị (x-admin-key)' })
+        return
+    }
+    try {
+        res.json({ success: true, data: await xm2b.tuKiem() })
+    } catch (e) {
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
 
 // Use registryPrisma for cross-store operations
 const prisma = registryPrisma

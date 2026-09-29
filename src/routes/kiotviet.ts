@@ -290,7 +290,8 @@ function adminAuth(req: Request, res: Response, next: NextFunction): void {
     if (auth?.startsWith('Bearer ') && JWT_SECRET) {
         try {
             const payload = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] }) as any
-            if (payload?.scope === PANEL_SCOPE) return next()
+            // 29/09/2026: chỉ token trang admin ĐÃ qua xác minh 2 bước (xem routes/admin.ts)
+            if (payload?.scope === PANEL_SCOPE && payload?.mfa === true) return next()
         } catch { /* rơi xuống 403 */ }
     }
     if (!ADMIN_KEY && !JWT_SECRET) {
