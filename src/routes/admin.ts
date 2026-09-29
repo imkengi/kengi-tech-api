@@ -2670,6 +2670,47 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbContentDraft_pageId_status_idx" ON "FbContentDraft"("pageId", "status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbContentDraft_suggestedAt_idx" ON "FbContentDraft"("suggestedAt")`)
 
+                // Marketing Studio: nhiều thương hiệu, phiên bản theo kênh, media Cloud Storage (29/09/2026)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MktBrand" (
+                        "id" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "industry" TEXT NOT NULL DEFAULT '',
+                        "description" TEXT NOT NULL DEFAULT '',
+                        "products" TEXT NOT NULL DEFAULT '',
+                        "contentPillars" TEXT NOT NULL DEFAULT '',
+                        "contact" TEXT NOT NULL DEFAULT '',
+                        "audience" TEXT NOT NULL DEFAULT '',
+                        "voice" TEXT NOT NULL DEFAULT '',
+                        "usp" TEXT NOT NULL DEFAULT '',
+                        "cta" TEXT NOT NULL DEFAULT '',
+                        "examples" TEXT NOT NULL DEFAULT '',
+                        "notes" TEXT NOT NULL DEFAULT '',
+                        "bannedWords" TEXT NOT NULL DEFAULT '[]',
+                        "timezone" TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+                        "archivedAt" TIMESTAMP(3),
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MktBrand_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktBrand_archivedAt_idx" ON "MktBrand"("archivedAt")`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAccount" ADD COLUMN IF NOT EXISTS "brandId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAccount" ADD COLUMN IF NOT EXISTS "refreshSecret" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktAccount_brandId_idx" ON "MktAccount"("brandId")`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktCampaign" ADD COLUMN IF NOT EXISTS "brandId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktCampaign_brandId_idx" ON "MktCampaign"("brandId")`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktContent" ADD COLUMN IF NOT EXISTS "brandId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktContent" ADD COLUMN IF NOT EXISTS "variants" TEXT NOT NULL DEFAULT '[]'`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktContent_brandId_idx" ON "MktContent"("brandId")`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAsset" ADD COLUMN IF NOT EXISTS "brandId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAsset" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT ''`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAsset" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'image'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAsset" ADD COLUMN IF NOT EXISTS "url" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAsset" ADD COLUMN IF NOT EXISTS "storagePath" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktAsset_brandId_idx" ON "MktAsset"("brandId")`)
+
                 // Trợ lý AI tự động theo lịch (2026-07-27). db push là no-op ở prod
                 // nên phải tạo bằng raw SQL như các bảng Fb* ở trên.
                 await (sp as any).$executeRawUnsafe(`
