@@ -351,7 +351,9 @@ export const MKT_TOOLS: Tool[] = [
                 id: c.id, thuongHieu: b.name, trangThai: c.status,
                 canhBaoTuCam: cam.length ? `Bài có từ cấm của thương hiệu: ${cam.join(', ')} — sửa lại, bài như vậy sẽ bị chặn khi lên lịch.` : undefined,
                 /* Nhắc lại quy tắc NGAY sau mỗi bài: qua nhiều bước model hay "quên" dặn dò ở đầu. */
-                doiChieu: quyTac ? `Đối chiếu bài vừa lưu với QUY TẮC VIẾT của chủ shop; sai dòng nào thì soạn lại bài mới cho đúng:\n${quyTac.slice(0, 1500)}` : undefined,
+                /* KHÔNG bảo "sai thì soạn lại": AI không sửa/xoá được bài đã lưu, soạn lại là thêm
+                 * một bài trùng nằm chờ duyệt. Bài sai thì nêu ra để người loại. */
+                doiChieu: quyTac ? `Đối chiếu bài vừa lưu với QUY TẮC VIẾT của chủ shop. Các bài SAU phải đúng từng dòng; nếu bài này còn sai dòng nào thì nêu rõ trong báo cáo cuối để chủ shop loại — đừng soạn thêm bản thứ hai của cùng bài (thành bài trùng):\n${quyTac.slice(0, 1500)}` : undefined,
                 ghiChu: 'Đã lưu vào hàng đợi CHỜ DUYỆT. Bài sẽ KHÔNG lên trang cho tới khi chủ shop tự duyệt ở kengi.vn/marketing — '
                     + 'trợ lý AI không có quyền duyệt, đó là cố ý.',
             }
