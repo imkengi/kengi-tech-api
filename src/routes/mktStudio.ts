@@ -624,10 +624,10 @@ router.post('/analytics/sync', ...mkt, requireRole(...QUAN_LY), async (req: MktR
 async function tongChiSo(prisma: any, brandId: string) {
     const pubs = await prisma.mktPublication.findMany({
         where: { status: 'sent', content: { brandId } },
-        select: { id: true, account: { select: { platform: true } } },
+        select: { id: true, contentId: true, account: { select: { platform: true } } },
         take: 500,
     })
-    if (!pubs.length) return { theoNenTang: [], lanCuoi: null }
+    if (!pubs.length) return { theoNenTang: [], theoBai: [], lanCuoi: null }
     const metrics = await prisma.mktMetric.findMany({
         where: { publicationId: { in: pubs.map((p: any) => p.id) } },
         orderBy: { snapshotAt: 'desc' },
@@ -635,6 +635,9 @@ async function tongChiSo(prisma: any, brandId: string) {
     const moiNhat = new Map<string, any>()
     for (const m of metrics) if (!moiNhat.has(m.publicationId)) moiNhat.set(m.publicationId, m)
     const theo: Record<string, any> = {}
+    /* Số liệu mới nhất TỪNG BÀI — màn Báo cáo liệt kê "bài nào, nền tảng nào, đo lúc nào".
+     * Thiếu danh sách này, giao diện đọc snapshots[].postId của phần tử không có ⇒ vỡ màn. */
+    const theoBai: any[] = []
     for (const p of pubs) {
         const nen = p.account.platform
         const t = theo[nen] ||= { platform: nen, soBai: 0, coSoLieu: 0, views: null, likes: null, comments: null, shares: null }
@@ -644,8 +647,13 @@ async function tongChiSo(prisma: any, brandId: string) {
         t.coSoLieu++
         for (const k of ['views', 'likes', 'comments', 'shares'])
             if (m[k] !== null && m[k] !== undefined) t[k] = (t[k] ?? 0) + m[k]
+        theoBai.push({
+            postId: p.contentId, publicationId: p.id, platform: nen, observedAt: m.snapshotAt,
+            views: m.views ?? null, likes: m.likes ?? null, comments: m.comments ?? null, shares: m.shares ?? null,
+        })
     }
-    return { theoNenTang: Object.values(theo), lanCuoi: metrics[0]?.snapshotAt ?? null }
+    theoBai.sort((a, b) => +new Date(b.observedAt) - +new Date(a.observedAt))
+    return { theoNenTang: Object.values(theo), theoBai, lanCuoi: metrics[0]?.snapshotAt ?? null }
 }
 
 // ─── TÌNH TRẠNG ──────────────────────────────────────────────────────────────
