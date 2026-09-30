@@ -2851,6 +2851,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
 
                 // Key Gemini riêng cửa hàng cho Trợ lý AI (2026-07-19)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT`)
+                // Key DeepSeek DỰ PHÒNG (30/09/2026): Gemini hết hạn mức / quá tải ở mọi model thì
+                // lượt chạy AI chuyển sang DeepSeek thay vì hỏng giữa chừng (HUTI: bài lưu mà chưa duyệt).
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "deepseekApiKey" TEXT`)
 
                 // Thư mục Drive riêng cửa hàng cho video đóng gói (2026-08-01) —
                 // thiếu cột này thì storeSettings.findFirst() (SELECT đủ cột theo
