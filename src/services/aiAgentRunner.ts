@@ -11,13 +11,28 @@ import { TOOLS } from '../routes/mcp'
 import { ToolCtx, ToolError } from '../lib/mcpTypes'
 import { toGeminiSchema } from '../lib/geminiSchema'
 
-/* Model theo thứ tự ưu tiên. Google khoá model cũ với KEY MỚI (30/09/2026: key mới gọi
- * gemini-2.5-flash nhận 404 "no longer available to new users") trong khi key cũ vẫn chạy
- * — nên không được viết cứng một model: 404 thì thử model kế, và nhớ model chạy được
- * cho từng key để lượt sau khỏi thử lại. */
-const DS_MODEL = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-2.5-flash'].filter(Boolean) as string[])]
+/* Model theo thứ tự ưu tiên (bảng model ổn định của Google, 30/09/2026). Không viết cứng
+ * MỘT model vì hai kiểu hỏng đã gặp trong CÙNG một ngày:
+ *   · 404 "no longer available to new users" — Google khoá model cũ với KEY MỚI
+ *   · 503 "experiencing high demand" — model quá tải tạm thời
+ * 404 ⇒ model đó không bao giờ dùng được với key này: nhớ lại, lượt sau bỏ qua.
+ * 503/5xx/mất mạng ⇒ tạm thời: chờ ngắn thử lại CÙNG model một lần, rồi sang model kế.
+ * 429 ⇒ hết hạn mức — hạn mức miễn phí tính RIÊNG từng model nên sang model kế ngay.
+ * Quá tải thì KHÔNG nhớ lại: không vì vài phút quá tải mà hạ cấp model mãi mãi. */
+const DS_MODEL = [...new Set([
+    process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash',
+].filter(Boolean) as string[])]
 const GEMINI_URL = (m: string) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`
-const modelChoKey = new Map<string, string>()
+/** Model trả 404 cho từng key — bỏ qua ở các lượt sau (tới khi khởi động lại). */
+const khongDungChoKey = new Map<string, Set<string>>()
+const MA_TAM_THOI = new Set([500, 502, 503, 504])
+const ngu = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+/** Mọi model đều đang quá tải / hết hạn mức / mất mạng — THỬ LẠI SAU là đúng, không phải
+ *  lỗi cấu hình. Cron dựa vào lớp lỗi này để hẹn chạy lại thay vì bỏ lỡ cả ngày. */
+export class LoiGeminiTamThoi extends Error {
+    readonly tamThoi = true
+}
 
 /**
  * Tool ĐẨY RA NGOÀI cho người lạ thấy hoặc động vào tiền/kho.
@@ -79,35 +94,72 @@ export type ThamSoChay = {
 }
 
 async function callGemini(contents: any[], apiKey: string, systemPrompt: string, tools: any[]): Promise<any> {
-    const daNho = modelChoKey.get(apiKey)
-    const thu = daNho ? [daNho, ...DS_MODEL.filter(m => m !== daNho)] : DS_MODEL
-    let loiCuoi = ''
+    const bo = khongDungChoKey.get(apiKey) || new Set<string>()
+    const conLai = DS_MODEL.filter(m => !bo.has(m))
+    const thu = conLai.length ? conLai : DS_MODEL   // mọi model từng 404 ⇒ thử lại hết (key có thể đã được mở)
+    const vet: string[] = []
+    let coTamThoi = false
+
     for (const model of thu) {
-        const res = await fetch(`${GEMINI_URL(model)}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                contents,
-                tools,
-                generationConfig: { temperature: 0.2 },
-            }),
+        const body = JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            tools,
+            /* Dòng Gemini 3: Google KHUYẾN CÁO giữ temperature mặc định 1.0 — hạ thấp có thể
+             * làm model LẶP VÒNG (với agent nhiều bước là đốt hết số bước). 0.2 chỉ cho 2.x. */
+            ...(/^gemini-2\./.test(model) ? { generationConfig: { temperature: 0.2 } } : {}),
         })
-        const text = await res.text()
-        let data: any
-        try { data = JSON.parse(text) } catch { throw new Error(`Gemini trả về non-JSON (HTTP ${res.status}): ${text.slice(0, 300)}`) }
-        /* CHỈ 404 (model không có / không cho key này) mới thử model kế. Lỗi khác — key sai,
-         * hết hạn mức, nội dung bị chặn — thử model khác cũng vô ích, báo ngay. */
-        if (res.status === 404) {
-            loiCuoi = `${model}: ${data?.error?.message || 'không tìm thấy'}`
-            console.warn(`[AiAgent] model ${model} không dùng được với key này, thử model kế`)
-            continue
+        for (let lan = 0; lan < 2; lan++) {
+            let res: Response
+            try {
+                res = await fetch(`${GEMINI_URL(model)}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body,
+                    signal: AbortSignal.timeout(90_000),
+                })
+            } catch {
+                coTamThoi = true
+                vet.push(`${model}: không nhận được phản hồi`)
+                if (lan === 0) { await ngu(2_000); continue }
+                break
+            }
+            const text = await res.text()
+            let data: any = null
+            try { data = JSON.parse(text) } catch { /* 5xx của Google có khi là trang HTML */ }
+            if (res.ok) {
+                if (!data) throw new Error(`Gemini trả về non-JSON (HTTP ${res.status}, ${model}): ${text.slice(0, 300)}`)
+                return data
+            }
+            const loi = data?.error?.message || text.slice(0, 200)
+            if (res.status === 404) {
+                bo.add(model); khongDungChoKey.set(apiKey, bo)
+                vet.push(`${model}: không dùng được với key này`)
+                console.warn(`[AiAgent] ${model} → 404 với key này, bỏ qua từ giờ: ${loi}`)
+                break
+            }
+            if (res.status === 429) {
+                coTamThoi = true
+                vet.push(`${model}: hết hạn mức (429)`)
+                break
+            }
+            if (MA_TAM_THOI.has(res.status)) {
+                coTamThoi = true
+                vet.push(`${model}: ${res.status} ${/demand|overload/i.test(loi) ? 'quá tải' : 'lỗi tạm thời'}`)
+                if (lan === 0) {
+                    const cho = Number(res.headers.get('retry-after'))
+                    await ngu(Math.min(8_000, cho > 0 ? cho * 1000 : 2_500))
+                    continue
+                }
+                break
+            }
+            /* Lỗi thật (key sai, yêu cầu sai, nội dung bị chặn…): đổi model cũng vô ích — báo ngay. */
+            throw new Error(`Gemini lỗi HTTP ${res.status} (${model}): ${loi}`)
         }
-        if (!res.ok) throw new Error(`Gemini lỗi HTTP ${res.status} (${model}): ${data?.error?.message || text.slice(0, 200)}`)
-        modelChoKey.set(apiKey, model)
-        return data
     }
-    throw new Error(`Không model Gemini nào dùng được với key này (đã thử ${thu.join(', ')}). Lỗi cuối: ${loiCuoi}`)
+    const chiTiet = vet.slice(-8).join('; ')
+    if (coTamThoi) throw new LoiGeminiTamThoi(`Gemini đang quá tải hoặc hết hạn mức ở mọi model đã thử — lỗi TẠM THỜI, thử lại sau ít phút. (${chiTiet})`)
+    throw new Error(`Không model Gemini nào dùng được với key này. (${chiTiet})`)
 }
 
 /** Lọc bộ tool theo quyền + allowlist, rồi bọc thành function declarations Gemini. */
@@ -149,7 +201,17 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
     const toolCalls: KetQuaChay['toolCalls'] = []
 
     for (let step = 0; step < maxSteps; step++) {
-        const data = await callGemini(contents, p.apiKey, p.systemPrompt, declarations)
+        let data: any
+        try {
+            data = await callGemini(contents, p.apiKey, p.systemPrompt, declarations)
+        } catch (e: any) {
+            /* Hỏng GIỮA CHỪNG thì những tool đã chạy (có thể đã soạn/đăng bài) phải còn dấu
+             * vết: người đọc cần biết lượt này đã làm gì, và cron dựa vào đó để KHÔNG chạy lại
+             * một lượt đã ghi dữ liệu (chạy lại là soạn trùng bài). */
+            e.toolCalls = toolCalls
+            e.steps = step
+            throw e
+        }
         const parts: any[] = data?.candidates?.[0]?.content?.parts || []
         const calls = parts.filter(x => x.functionCall).map(x => x.functionCall)
 

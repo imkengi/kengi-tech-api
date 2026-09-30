@@ -10,6 +10,7 @@
     "check:mcp": "npx tsx scripts/check-mcp-tools.ts",
     "check:marketing": "npx tsx scripts/check-marketing-gate.ts",
     "check:mkt": "npx tsx scripts/check-mkt-thuong-hieu.ts && npx tsx scripts/check-mkt-nen-tang.ts",
+    "check:aigemini": "npx tsx scripts/check-ai-agent-gemini.ts",
     "start": "node dist/index.js",
     "postinstall": "npx prisma generate && npx prisma generate --schema=prisma/schema-store.prisma",
     "db:generate": "npx prisma generate && npx prisma generate --schema=prisma/schema-store.prisma",

@@ -13,12 +13,21 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { chayAgent } from '../services/aiAgentRunner'
+import { TOOLS } from '../routes/mcp'
 import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedule'
 import { ToolCtx } from '../lib/mcpTypes'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
 const GEMINI_KEY_ENV = process.env.GEMINI_API_KEY || ''
+
+/* Gemini QUÁ TẢI TẠM THỜI (30/09/2026 đã gặp 503 "high demand") mà cứ hẹn lượt kế theo
+ * lịch thì job "mỗi sáng 7:00" mất trắng cả ngày. Hẹn lại sau 15 phút, tối đa 6 lần LIÊN
+ * TIẾP (~1,5 giờ) — đếm bằng lịch sử AiAgentRun, không cần thêm cột. */
+const THU_LAI_SAU_MS = 15 * 60_000
+const TOI_DA_THU_LAI = 6
+const DAU_THU_LAI = 'Tạm thời — tự thử lại lúc'
+const gioVNNgan = (d: Date) => d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })
 
 let timer: NodeJS.Timeout | null = null
 let dangChay = false
@@ -59,6 +68,7 @@ export async function chayMotJob(
     let toolCalls: any[] = []
     let steps = 0
     let chamTran = false
+    let henThuLai: Date | null = null
 
     try {
         const apiKey = await layApiKey(storePrisma)
@@ -96,6 +106,29 @@ export async function chayMotJob(
     } catch (e: any) {
         status = 'error'
         errorMessage = e?.message || String(e)
+        // Hỏng giữa chừng: giữ dấu vết những tool ĐÃ chạy (runner gắn vào lỗi)
+        if (Array.isArray(e?.toolCalls)) toolCalls = e.toolCalls
+        if (typeof e?.steps === 'number') steps = e.steps
+        /* Lượt đã GHI dữ liệu (soạn/duyệt/lên lịch bài…) thì tuyệt đối không tự chạy lại:
+         * chạy lại cả chỉ thị là soạn trùng bài. Để người đọc kết quả rồi quyết. */
+        const daGhi = toolCalls.some(tc => tc.ok && TOOLS.find(t => t.name === tc.name)?.write)
+        if (e?.tamThoi && trigger === 'cron' && !daGhi) {
+            const truoc: any[] = await storePrisma.aiAgentRun.findMany({
+                where: { jobId: job.id, id: { not: run.id } },
+                orderBy: { startedAt: 'desc' }, take: TOI_DA_THU_LAI,
+                select: { status: true, errorMessage: true },
+            }).catch(() => [])
+            let lienTiep = 0
+            for (const r of truoc) {
+                if (r.status === 'error' && String(r.errorMessage || '').startsWith(DAU_THU_LAI)) lienTiep++
+                else break
+            }
+            if (lienTiep < TOI_DA_THU_LAI) {
+                henThuLai = new Date(Date.now() + THU_LAI_SAU_MS)
+                errorMessage = `${DAU_THU_LAI} ${gioVNNgan(henThuLai)} (lần ${lienTiep + 1}/${TOI_DA_THU_LAI}). ${errorMessage}`
+            }
+        }
+        if (daGhi) errorMessage += ' — Lượt này ĐÃ làm một phần (xem các công cụ đã gọi) nên KHÔNG tự chạy lại, tránh làm trùng.'
         console.error(`[AiAgentCron] job "${job.name}" (${storeCode}) lỗi:`, errorMessage)
     }
 
@@ -109,9 +142,11 @@ export async function chayMotJob(
 
     // Hẹn lượt kế TỪ BÂY GIỜ (không cộng dồn từ nextRunAt cũ) — server ngủ vài
     // tiếng rồi tỉnh dậy sẽ không bắn bù một loạt lượt đã lỡ.
+    const theoLich = tinhLanChayKe(job, new Date())
     await storePrisma.aiAgentJob.update({
         where: { id: job.id },
-        data: { lastRunAt: new Date(), nextRunAt: tinhLanChayKe(job, new Date()) },
+        // Hẹn thử lại chỉ khi SỚM hơn lượt theo lịch (job lặp mỗi 10 phút thì cứ theo lịch)
+        data: { lastRunAt: new Date(), nextRunAt: henThuLai && henThuLai < theoLich ? henThuLai : theoLich },
     }).catch(() => { })
 
     return { runId: run.id, status }
