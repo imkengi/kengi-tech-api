@@ -25,7 +25,7 @@
 import type { Tool, ToolCtx } from '../lib/mcpTypes'
 import { canhBaoCat, ToolError } from '../lib/mcpTypes'
 import { dsThuongHieu, hoSo, kiemBanVaHoSo, LoiMkt, AI_TU_DUYET } from '../lib/mktThuongHieu'
-import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai, loiKhiDangLen, gioVN } from '../lib/mktNoiDung'
+import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai, loiKhiDangLen, loiChuTheoKenh, gioVN } from '../lib/mktNoiDung'
 import { registryPrisma } from '../lib/prisma'
 
 const TRAN = 50
@@ -297,7 +297,7 @@ export const MKT_TOOLS: Tool[] = [
     {
         name: 'mkt_soan_noi_dung',
         write: true,
-        description: 'Soạn một bài mới cho một thương hiệu. Gọi mkt_ho_so_thuong_hieu TRƯỚC và viết từ hồ sơ đó. Có thể gửi phiên bản RIÊNG cho từng kênh (Threads ≤500 ký tự, Instagram/TikTok ≤2200, YouTube cần tieuDe; TikTok/YouTube cần tuyChon quyền riêng tư). Bài LUÔN vào trạng thái CHỜ DUYỆT — không có cách nào để bài này tự lên trang; chủ shop phải đọc và duyệt tay.',
+        description: 'Soạn một bài mới cho một thương hiệu. Gọi mkt_ho_so_thuong_hieu TRƯỚC và viết từ hồ sơ đó. Có thể gửi phiên bản RIÊNG cho từng kênh. GIỚI HẠN CHỮ theo cách nền tảng đếm: Threads ≤500 ký tự và MỖI EMOJI TÍNH 3–8 KÝ TỰ (nhắm ≤430 cho chắc), Instagram/TikTok ≤2200, YouTube ≤5000 + cần tieuDe; TikTok/YouTube cần tuyChon quyền riêng tư. Máy chủ đếm lại và TỪ CHỐI LƯU phiên bản vượt giới hạn, báo số ký tự chính xác — khi đó viết lại NGẮN HƠN rồi gọi lại (bài chưa được lưu nên gọi lại KHÔNG thành bài trùng). Chủ đề Threads đặt ở tuyChon.topicTag, KHÔNG viết "(topic: …)" vào nội dung. Bài vào trạng thái CHỜ DUYỆT.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -313,10 +313,10 @@ export const MKT_TOOLS: Tool[] = [
                         type: 'object',
                         properties: {
                             kenhId: { type: 'string' },
-                            noiDung: { type: 'string' },
+                            noiDung: { type: 'string', description: 'Chữ của bài trên kênh này — trong giới hạn của nền tảng (Threads ≤500, emoji tính 3–8 ký tự)' },
                             tieuDe: { type: 'string' },
                             mediaIds: { type: 'array', items: { type: 'string' } },
-                            tuyChon: { type: 'object', description: 'TikTok: privacy, disableComment…; YouTube: privacy, madeForKids' },
+                            tuyChon: { type: 'object', description: 'Threads: topicTag = MỘT chủ đề cho bài (1–50 ký tự, không có dấu . hay &; vd "12 con giáp") — hiện thành thẻ chủ đề trên Threads. TikTok: privacy, disableComment…; YouTube: privacy, madeForKids' },
                         },
                         required: ['kenhId'],
                         additionalProperties: false,
@@ -334,6 +334,14 @@ export const MKT_TOOLS: Tool[] = [
                 : undefined)
             await kiemMedia(p, b.id, variants.flatMap(v => v.assetIds))
             if (!body && !variants.some(v => v.text.trim() || v.assetIds.length)) throw new ToolError('Nội dung bài không được để trống.')
+            /* CHẶN CỨNG TRƯỚC KHI LƯU. HUTI 30/09: chỉ thị ghi "Threads ≤ 500" mà AI vẫn lưu bài
+             * 545 ký tự — mô hình đếm ký tự rất kém, dặn bằng lời không đủ. Chưa lưu gì nên AI
+             * viết lại rồi gọi lại không sinh bài trùng. */
+            const loiChu = await loiChuTheoKenh(p, b.id, variants, body, String(a?.tieuDe || ''))
+            if ([body, ...variants.map(v => v.text)].some(t => /\(\s*topic\s*:/i.test(t)))
+                loiChu.push('Đừng ghi "(topic: …)" vào nội dung — chủ đề Threads truyền qua tuyChon.topicTag.')
+            if (loiChu.length)
+                throw new ToolError(`CHƯA LƯU — ${loiChu.join(' | ')} Viết lại cho đúng rồi gọi lại mkt_soan_noi_dung (bài này chưa được lưu nên gọi lại KHÔNG thành bài trùng).`)
             if (a?.chienDichId && !await p.mktCampaign.findFirst({ where: { id: a.chienDichId, brandId: b.id }, select: { id: true } }))
                 throw new ToolError('Chiến dịch không thuộc thương hiệu này.')
             const c = await p.mktContent.create({
@@ -354,8 +362,12 @@ export const MKT_TOOLS: Tool[] = [
                 /* KHÔNG bảo "sai thì soạn lại": AI không sửa/xoá được bài đã lưu, soạn lại là thêm
                  * một bài trùng nằm chờ duyệt. Bài sai thì nêu ra để người loại. */
                 doiChieu: quyTac ? `Đối chiếu bài vừa lưu với QUY TẮC VIẾT của chủ shop. Các bài SAU phải đúng từng dòng; nếu bài này còn sai dòng nào thì nêu rõ trong báo cáo cuối để chủ shop loại — đừng soạn thêm bản thứ hai của cùng bài (thành bài trùng):\n${quyTac.slice(0, 1500)}` : undefined,
-                ghiChu: 'Đã lưu vào hàng đợi CHỜ DUYỆT. Bài sẽ KHÔNG lên trang cho tới khi chủ shop tự duyệt ở kengi.vn/marketing — '
-                    + 'trợ lý AI không có quyền duyệt, đó là cố ý.',
+                /* Thương hiệu BẬT "AI tự duyệt" mà vẫn nói "AI không có quyền duyệt" là tự mâu
+                 * thuẫn với mkt_duyet_noi_dung — model dễ bỏ luôn bước duyệt. */
+                ghiChu: b.aiAutoApprove === true
+                    ? 'Đã lưu CHỜ DUYỆT. Thương hiệu này BẬT "AI tự duyệt": nếu nhiệm vụ yêu cầu đăng, gọi mkt_duyet_noi_dung (kèm henLuc) cho bài này.'
+                    : 'Đã lưu vào hàng đợi CHỜ DUYỆT. Bài sẽ KHÔNG lên trang cho tới khi chủ shop tự duyệt ở kengi.vn/marketing — '
+                        + 'trợ lý AI không có quyền duyệt, đó là cố ý.',
             }
         }),
     },

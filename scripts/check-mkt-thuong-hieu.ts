@@ -288,6 +288,17 @@ async function main() {
     const kqAi2 = await dangMotViec(prisma, { id: 'pubAi2', accountId: 'accB', remoteRef: null, content: { ...baiAi2 }, account: { ...bang.mktAccount.find(a => a.id === 'accB') } })
     kiem('công tắc bật ⇒ bài AI tự duyệt đăng bình thường', kqAi2 === 'da-gui' && daGuiAi, kqAi2)
 
+    console.log('━━ Người bấm duyệt bài quá giới hạn ký tự: chặn, nói rõ kênh + số')
+    const dai = 'Mấy bà ơi, '.repeat(48) + '🙈✨'   // JS 531, Threads 535
+    const baiDai = await goi('POST', '/contents', { brand: B, body: { title: 'Can chi', variants: [{ accountId: 'accTh', text: dai }] } })
+    kiem('người vẫn LƯU được bản nháp dài (để sửa dần)', baiDai.success === true, baiDai)
+    const duyetDai = await goi('POST', `/contents/${baiDai.data.id}/approve`, { brand: B, body: { revision: 1 } })
+    kiem('bấm duyệt ⇒ 422 SAI_DINH_DANG, nêu tên kênh + "535/500"', duyetDai.status === 422 && duyetDai.code === 'SAI_DINH_DANG' && /Threads Mây/.test(duyetDai.error) && /535\/500/.test(duyetDai.error), duyetDai)
+    kiem('…và bài KHÔNG thành đã duyệt', bang.mktContent.find(c => c.id === baiDai.data.id).approvedRevision === null)
+    const catNgan = await goi('PATCH', `/contents/${baiDai.data.id}`, { brand: B, body: { variants: [{ accountId: 'accTh', text: 'Mấy bà tin can chi không? 🙈', options: { topicTag: '12 con giáp' } }] } })
+    const duyetNgan = await goi('POST', `/contents/${baiDai.data.id}/approve`, { brand: B, body: { revision: catNgan.data.revision } })
+    kiem('cắt ngắn rồi duyệt được; chủ đề Threads giữ trong phiên bản', duyetNgan.success === true && duyetNgan.data.variants[0].options.topicTag === '12 con giáp', duyetNgan)
+
     console.log('━━ Xoá thương hiệu')
     bang.mktPublication.push({ id: 'pubCho', contentId: id, accountId: 'accB', status: 'queued', idempotencyKey: 'k2', scheduledAt: new Date() })
     const ban = await goi('DELETE', `/brands/${B}`, { brand: A })

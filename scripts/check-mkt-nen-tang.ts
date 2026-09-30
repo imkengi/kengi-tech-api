@@ -37,8 +37,17 @@ async function nhip(nt: any, tk: any, bai: any, moc: string | null, luu: (m: str
     catch (e: any) { return { loi: e } }
 }
 
+/* Bài Threads THẬT AI lưu cho HUTI 30/09 (người đã duyệt): JS `.length` = 545, Threads đếm 549. */
+const HUTI = `Nhiều khi lướt ảnh quẹt trái quẹt phải hoài cũng chán, vì ngoại hình đâu nói lên hai người có hợp tuổi, hợp nết hay không đúng không mấy ông mấy bà? 🙈
+
+Tơ Hồng chọn cách kết nối khác biệt: chấm độ hợp nhau theo ngày sinh và tuổi can chi trước. Nhờ vậy, bạn biết ngay mức độ ăn ý về giao tiếp hay cảm xúc trước khi mở lời.
+
+Tụi mình trò chuyện ẩn danh bằng mã số, khi cả hai sẵn sàng mới lộ diện. Dùng miễn phí trên web, link ở bio nha ✨
+
+Mấy ông mấy bà tin vào độ hợp tuổi can chi hay tin vào ấn tượng đầu tiên qua ảnh hơn? (topic: 12 con giáp)`
+
 async function main() {
-    const { nenTangInstagram, nenTangThreads, nenTangTiktok, nenTangYoutube, kiemDinhDang, xacMinhKenh, giaHanToken, layChiSo } =
+    const { nenTangInstagram, nenTangThreads, nenTangTiktok, nenTangYoutube, kiemDinhDang, xacMinhKenh, giaHanToken, layChiSo, demKyTu, loiPhanChu } =
         await import('../src/services/mktNenTangKhac')
 
     console.log('━━ Instagram: container → chờ FINISHED → publish')
@@ -68,6 +77,12 @@ async function main() {
     hangCho = [{ id: 'thc2' }]
     await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'x', assets: [{ type: 'image', url: 'https://cdn.x/a.png' }] }, null, () => { })
     kiem('ảnh ⇒ IMAGE + image_url', daGoi.at(-1)!.body.media_type === 'IMAGE' && daGoi.at(-1)!.body.image_url === 'https://cdn.x/a.png')
+    hangCho = [{ id: 'thc3' }]
+    await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'Café 🙈', options: { topicTag: ' 12 con giáp ' }, assets: [] }, null, () => { })
+    kiem('chủ đề đi qua tham số topic_tag (không nằm trong chữ), chữ gửi dạng NFC', daGoi.at(-1)!.body.topic_tag === '12 con giáp' && daGoi.at(-1)!.body.text === 'Café 🙈', daGoi.at(-1)!.body)
+    hangCho = [{ id: 'thc4' }]
+    await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'x', options: {}, assets: [] }, null, () => { })
+    kiem('không có chủ đề ⇒ không gửi topic_tag', !('topic_tag' in daGoi.at(-1)!.body), daGoi.at(-1)!.body)
 
     console.log('━━ TikTok: FILE_UPLOAD, privacy theo tài khoản, publish_id ≠ id công khai')
     moc = null
@@ -116,6 +131,17 @@ async function main() {
     console.log('━━ Kiểm định dạng theo nền tảng')
     kiem('Threads > 500 ký tự bị chặn', kiemDinhDang('threads', { text: 'x'.repeat(501) }, []).some(e => e.includes('500')))
     kiem('Threads chữ thuần hợp lệ', kiemDinhDang('threads', { text: 'Chào' }, []).length === 0)
+    const soDem = [demKyTu('threads', 'Chào 🙈'), demKyTu('threads', '❤️'), demKyTu('threads', '🇻🇳'), demKyTu('threads', 'ệ')]
+    kiem('đếm kiểu Threads: chữ Việt có dấu = 1 (kể cả dạng tổ hợp), emoji theo byte UTF-8', soDem.join() === '9,6,8,1', soDem)
+    kiem('nền tảng khác giữ cách đếm cũ (.length)', demKyTu('instagram', 'Chào 🙈') === 7)
+    const loiHuti = loiPhanChu('threads', { text: HUTI })
+    kiem('bài HUTI 30/09 (JS đếm 545) ⇒ "549/500", phải cắt ít nhất 49', HUTI.length === 545 && loiHuti.length === 1 && /549\/500/.test(loiHuti[0]) && /ít nhất 49/.test(loiHuti[0]), loiHuti)
+    const nhieuIcon = 'Mấy bà ơi '.repeat(46) + '✨🙈❤️🔥🎉'.repeat(3)
+    kiem('bài nhiều emoji: JS đếm <500 (tưởng lọt) nhưng Threads >500 ⇒ vẫn chặn', nhieuIcon.length < 500 && kiemDinhDang('threads', { text: nhieuIcon }, []).some(e => /\/500/.test(e)), [nhieuIcon.length, demKyTu('threads', nhieuIcon)])
+    const link = (n: number) => Array(n).fill('https://tohong.kengi.vn/x').join(' ')
+    kiem('Threads > 5 liên kết bị chặn, đúng 5 thì qua', loiPhanChu('threads', { text: link(6) }).some(e => /5 liên kết/.test(e)) && loiPhanChu('threads', { text: link(5) }).length === 0)
+    kiem('topicTag có dấu chấm / dấu & / quá 50 ký tự bị chặn', ['a.b', 'A & B', 'x'.repeat(51)].every(t => loiPhanChu('threads', { text: 'ok', options: { topicTag: t } }).length === 1))
+    kiem('topicTag hợp lệ hoặc bỏ trống thì qua', loiPhanChu('threads', { text: 'ok', options: { topicTag: '12 con giáp' } }).length === 0 && loiPhanChu('threads', { text: 'ok', options: { topicTag: '' } }).length === 0)
     kiem('Instagram không media bị chặn', kiemDinhDang('instagram', { text: 'x' }, []).length > 0)
     kiem('Instagram PNG bị chặn', kiemDinhDang('instagram', { text: 'x' }, [{ type: 'image', url: 'https://a/b.png', mime: 'image/png' }]).some(e => e.includes('JPEG')))
     const yt = kiemDinhDang('youtube', { text: 'x', title: '' }, [{ type: 'video', url: 'https://a/v.mp4' }])
@@ -229,6 +255,37 @@ async function main() {
     let loiLat: any = null
     try { await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: biTuChoi.id }, ctx) } catch (e) { loiLat = e }
     kiem('bài NGƯỜI đã từ chối ⇒ AI không lật lại được', /TỪ CHỐI/.test(loiLat?.message), loiLat?.message)
+
+    console.log('━━ Giới hạn chữ: chặn NGAY lúc AI lưu (HUTI 30/09 lưu được bài Threads 545 ký tự)')
+    const truoc = dl.mktContent.length
+    const loiSoan = async (args: any) => { try { await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', ...args }, ctx); return null } catch (e: any) { return e?.message || String(e) } }
+    const lDai = await loiSoan({ tieuDe: 'Can chi', phienBan: [{ kenhId: 'a1', noiDung: HUTI }] })
+    kiem('bài Threads 549/500 ⇒ "CHƯA LƯU" + đúng số ký tự + số phải cắt', /CHƯA LƯU/.test(lDai || '') && /549\/500/.test(lDai || '') && /ít nhất 49/.test(lDai || ''), lDai)
+    kiem('…và nói rõ gọi lại KHÔNG thành bài trùng', /KHÔNG thành bài trùng/.test(lDai || ''), lDai)
+    kiem('…và thật sự không có bài nào được lưu', dl.mktContent.length === truoc, dl.mktContent.length - truoc)
+    const lIcon = await loiSoan({ phienBan: [{ kenhId: 'a1', noiDung: nhieuIcon }] })
+    kiem('bài nhiều emoji (JS đếm <500) vẫn bị chặn', /CHƯA LƯU/.test(lIcon || ''), lIcon)
+    const lThan = await loiSoan({ noiDung: HUTI, phienBan: [{ kenhId: 'a1', noiDung: '' }] })
+    kiem('phiên bản Threads để trống ⇒ kiểm THÂN CHUNG (thứ sẽ được đăng)', /CHƯA LƯU/.test(lThan || ''), lThan)
+    const lTopic = await loiSoan({ phienBan: [{ kenhId: 'a1', noiDung: 'Mấy bà tin can chi không? (topic: 12 con giáp)' }] })
+    kiem('ghi "(topic: …)" vào nội dung ⇒ chặn, chỉ sang tuyChon.topicTag', /topicTag/.test(lTopic || ''), lTopic)
+    const lTag = await loiSoan({ phienBan: [{ kenhId: 'a1', noiDung: 'Ngắn thôi', tuyChon: { topicTag: 'Can & chi' } }] })
+    kiem('topicTag có dấu & ⇒ chặn', /topicTag/.test(lTag || ''), lTag)
+    kiem('không lưu bài nào trong các lần bị chặn', dl.mktContent.length === truoc, dl.mktContent.length - truoc)
+    const dung: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', phienBan: [{ kenhId: 'a1', noiDung: 'Mấy bà tin tuổi can chi hay tin ảnh hơn? 🙈', tuyChon: { topicTag: '12 con giáp' } }] }, ctx)
+    const luu = dl.mktContent.find((c: any) => c.id === dung.id)
+    kiem('bài đúng giới hạn + chủ đề ⇒ lưu, chủ đề nằm trong tuỳ chọn phiên bản', JSON.parse(luu?.variants || '[]')[0]?.options?.topicTag === '12 con giáp', luu?.variants)
+    kiem('thương hiệu BẬT tự duyệt ⇒ ghi chú chỉ đường mkt_duyet_noi_dung, không nói "AI không có quyền duyệt"', /mkt_duyet_noi_dung/.test(dung.ghiChu) && !/không có quyền duyệt/.test(dung.ghiChu), dung.ghiChu)
+    kiem('mô tả tool nói rõ cách Threads đếm emoji + máy chủ từ chối lưu', /EMOJI/.test(tool('mkt_soan_noi_dung').description) && /TỪ CHỐI LƯU/.test(tool('mkt_soan_noi_dung').description))
+
+    console.log('━━ Giờ hẹn (gioVN)')
+    const { gioVN } = await import('../src/lib/mktNoiDung')
+    const iso = (s: string) => { const d = gioVN(s); return isNaN(+d) ? 'Invalid Date' : d.toISOString() }
+    kiem('không kèm múi giờ ⇒ giờ VN', iso('2026-10-01T08:00') === '2026-10-01T01:00:00.000Z', iso('2026-10-01T08:00'))
+    kiem('có sẵn +07:00 (đúng dạng máy chủ đưa cho AI) ⇒ đúng giờ, KHÔNG Invalid Date', iso('2026-10-01T08:00:00+07:00') === '2026-10-01T01:00:00.000Z', iso('2026-10-01T08:00:00+07:00'))
+    kiem('+0700 (không dấu hai chấm) ⇒ đúng giờ', iso('2026-10-01T08:00:00.000+0700') === '2026-10-01T01:00:00.000Z', iso('2026-10-01T08:00:00.000+0700'))
+    kiem('có Z ⇒ giữ nguyên', iso('2026-10-01T01:00:00Z') === '2026-10-01T01:00:00.000Z')
+    kiem('dấu cách thay chữ T ⇒ vẫn là giờ VN (trước đây bị hiểu là UTC, lệch 7 tiếng)', iso('2026-10-01 08:00') === '2026-10-01T01:00:00.000Z', iso('2026-10-01 08:00'))
 
     console.log(`\n━━ KẾT QUẢ: ${dat} đạt / ${truot} trượt ━━`)
     process.exit(truot ? 1 : 0)

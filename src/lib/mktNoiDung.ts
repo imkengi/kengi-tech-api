@@ -4,14 +4,16 @@
  * thiếu ở MCP (hay ngược lại) là AI đi vòng qua được.
  */
 import { LoiMkt } from './mktThuongHieu'
-import { kiemDinhDang } from '../services/mktNenTangKhac'
+import { kiemDinhDang, loiPhanChu } from '../services/mktNenTangKhac'
 
 /** Giờ hẹn: chuỗi KHÔNG kèm múi giờ là GIỜ VN (+07:00) — Cloud Run chạy UTC, hiểu theo
- *  giờ máy chủ là lệch 7 tiếng (cùng quy ước parseGioHen của fanpage). */
+ *  giờ máy chủ là lệch 7 tiếng (cùng quy ước parseGioHen của fanpage).
+ *  Trước 30/09 regex ở đây mất dấu "\" ⇒ giờ có sẵn "+07:00" (đúng dạng máy chủ đưa cho
+ *  AI) thành Invalid Date, còn "2026-10-01 08:00" bị hiểu là giờ UTC. */
 export function gioVN(raw: any): Date {
-    const s = String(raw ?? '').trim()
+    const s = String(raw ?? '').trim().replace(/^(\d{4}-\d{2}-\d{2}) (?=\d)/, '$1T')
     if (!s) return new Date()
-    return new Date(/([zZ]|[+-]d{2}:?d{2})$/.test(s) || !/T|d:d/.test(s) ? s : s + '+07:00')
+    return new Date(/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(s) || !/\d:\d/.test(s) ? s : s + '+07:00')
 }
 
 export function jsonMang(raw: any): any[] {
@@ -82,6 +84,25 @@ export async function loiKhiDangLen(prisma: any, brand: any, c: any, acc: any): 
     const loi = kiemDinhDang(acc.platform, { text, title, options: pb?.options || {} }, media)
     if (media.length !== ids.length) loi.push('Có media đã bị xoá khỏi thư viện.')
     for (const w of tuCamGapPhai(brand, title, text)) loi.push(`Có từ cấm của thương hiệu: "${w}".`)
+    return loi
+}
+
+/**
+ * Lỗi PHẦN CHỮ (độ dài theo cách nền tảng đếm, liên kết, chủ đề) của từng phiên bản —
+ * chặn NGAY lúc AI lưu và lúc người bấm duyệt, đừng để tới lúc lên lịch mới lộ
+ * (HUTI 30/09: bài Threads 545/500 ký tự vẫn lưu được, vẫn duyệt được).
+ * Phiên bản không có chữ riêng thì dùng thân bài chung — y như lúc đăng.
+ */
+export async function loiChuTheoKenh(prisma: any, brandId: string, variants: any[], body: string, tieuDeChung = ''): Promise<string[]> {
+    const loi: string[] = []
+    for (const v of variants) {
+        const acc = await prisma.mktAccount.findFirst({ where: { id: String(v.accountId), brandId } })
+        if (!acc) continue
+        const text = (v.text || '').trim() ? v.text : (body || '')
+        const title = (v.title || '').trim() ? v.title : (tieuDeChung || '')
+        const l = loiPhanChu(acc.platform, { text, title, options: v.options || {} })
+        if (l.length) loi.push(`${acc.name}: ${l.join(' ')}`)
+    }
     return loi
 }
 

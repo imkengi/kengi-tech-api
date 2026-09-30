@@ -29,7 +29,7 @@ import {
 } from '../lib/mktThuongHieu'
 import { xacMinhKenh } from '../services/mktNenTangKhac'
 import { keoSoLieu, danhDauHong } from '../services/mktSoLieu'
-import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, lenLich } from '../lib/mktNoiDung'
+import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, loiChuTheoKenh, lenLich } from '../lib/mktNoiDung'
 import { TOI_DA_TAI_LEN, nhanDangMedia, luuMedia, xoaMedia, kiemUrlCongKhai } from '../lib/mktMedia'
 
 const taiLen = multer({ storage: multer.memoryStorage(), limits: { fileSize: TOI_DA_TAI_LEN, files: 1 } })
@@ -447,6 +447,11 @@ router.post('/contents/:id/approve', ...mkt, requireRole(...QUAN_LY), async (req
         if (req.body?.revision !== undefined && Number(req.body.revision) !== c.revision) {
             throw new LoiMkt('Bài vừa được sửa sau khi bạn mở. Tải lại để duyệt bản mới nhất.', 409, 'REVISION_CU')
         }
+        /* Duyệt bài mà kênh không nhận nổi là duyệt suông — tới lúc lên lịch mới bị bỏ qua
+         * (HUTI 30/09 duyệt bài Threads 545/500 ký tự). Nói rõ kênh nào dài bao nhiêu. */
+        const loiChu = await loiChuTheoKenh(prisma, req.mktBrand.id, jsonMang(c.variants), c.body, c.title)
+        if (loiChu.length)
+            throw new LoiMkt(`Chưa duyệt được — ${loiChu.join(' | ')} Bấm "Chỉnh sửa" để sửa rồi duyệt lại.`, 422, 'SAI_DINH_DANG')
         const kq = await prisma.mktContent.update({
             where: { id: c.id },
             data: {

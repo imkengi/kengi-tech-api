@@ -102,10 +102,14 @@ export const nenTangThreads: NenTang = {
     async dang(tk, token, bai, moc, luuMoc) {
         const a = bai.assets[0]
         if (!moc) {
+            /* Chủ đề là tham số RIÊNG của API (topic_tag) — không phải chữ "(topic: …)" trong bài. */
+            const chuDe = typeof bai.options?.topicTag === 'string' ? bai.options.topicTag.trim() : ''
             const d = await goiNenTang(th(`/${tk.externalId}/threads`, token), null, {
                 method: 'POST',
                 body: {
-                    text: bai.body,
+                    /* NFC: gửi đúng dạng chữ mà demKyTu đã đếm. */
+                    text: String(bai.body || '').normalize('NFC'),
+                    ...(chuDe ? { topic_tag: chuDe } : {}),
                     ...(a?.type === 'video' ? { media_type: 'VIDEO', video_url: a.url }
                         : a ? { media_type: 'IMAGE', image_url: a.url }
                             : { media_type: 'TEXT' }),
@@ -407,14 +411,54 @@ export async function layChiSo(platform: string, token: string, remotePostId: st
 }
 
 // ─── KIỂM ĐỊNH DẠNG theo nền tảng (trước khi lên lịch) ────────────────────────
-const TRAN_CHU: Record<string, number> = { facebook: 63206, instagram: 2200, threads: 500, tiktok: 2200, youtube: 5000 }
+export const TRAN_CHU: Record<string, number> = { facebook: 63206, instagram: 2200, threads: 500, tiktok: 2200, youtube: 5000 }
 
-/** Lỗi định dạng của MỘT phiên bản trên MỘT nền tảng. Mảng rỗng = đăng được. */
-export function kiemDinhDang(platform: string, pb: { text: string; title?: string; options?: any }, assets: any[]): string[] {
+/* Threads: "Text posts are limited to 500 characters" và EMOJI TÍNH THEO SỐ BYTE UTF-8
+ * (🙈 = 4, ✨ = 3, ❤️ = 6, 🇻🇳 = 8). `.length` của JS đếm thiếu — bài nhiều icon JS báo
+ * 490 mà Threads đếm quá 500. Chữ thường tính theo code point sau NFC (chữ Việt có dấu = 1). */
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣|️/u
+const TACH_CHU: any = (Intl as any).Segmenter ? new (Intl as any).Segmenter('vi', { granularity: 'grapheme' }) : null
+
+/** Độ dài nội dung THEO CÁCH NỀN TẢNG ĐẾM. Giao diện (studio.js demKyTu) đếm y hệt. */
+export function demKyTu(platform: string, text: string): number {
+    const s = String(text || '')
+    if (platform !== 'threads') return s.length
+    const nfc = s.normalize('NFC')
+    const cum: string[] = TACH_CHU ? Array.from(TACH_CHU.segment(nfc), (x: any) => x.segment) : [...nfc]
+    return cum.reduce((n, c) => n + (EMOJI.test(c) ? Buffer.byteLength(c, 'utf8') : [...c].length), 0)
+}
+
+/**
+ * Lỗi PHẦN CHỮ của một phiên bản (độ dài, liên kết, chủ đề) — phần người viết tự sửa
+ * được. Dùng ở cả ba cửa: AI lưu bài (chặn ngay, báo số chính xác), người bấm duyệt,
+ * và lên lịch (qua kiemDinhDang).
+ */
+export function loiPhanChu(platform: string, pb: { text: string; title?: string; options?: any }): string[] {
     const loi: string[] = []
     const chu = pb.text || ''
     const o = pb.options || {}
-    if (chu.length > (TRAN_CHU[platform] ?? 63206)) loi.push(`Nội dung quá ${TRAN_CHU[platform]} ký tự.`)
+    const tran = TRAN_CHU[platform] ?? 63206
+    const dai = demKyTu(platform, chu)
+    if (dai > tran) loi.push(`Nội dung dài ${dai}/${tran} ký tự${platform === 'threads' ? ' (Threads tính mỗi emoji 3–8 ký tự)' : ''} — cần cắt bớt ít nhất ${dai - tran} ký tự.`)
+    if (platform === 'threads') {
+        /* Từ 22/12/2025 bài Threads có hơn 5 liên kết bị từ chối. */
+        const link = (chu.match(/\bhttps?:\/\/\S+|\bwww\.\S+/gi) || []).length
+        if (link > 5) loi.push(`Threads chỉ nhận tối đa 5 liên kết mỗi bài (bài có ${link}).`)
+        if (o.topicTag !== undefined && o.topicTag !== null && o.topicTag !== '') {
+            const t = typeof o.topicTag === 'string' ? o.topicTag.trim() : ''
+            if (!t || [...t].length > 50 || /[.&]/.test(t))
+                loi.push('Chủ đề Threads (topicTag) phải dài 1–50 ký tự, không có dấu chấm (.) hay dấu &.')
+        }
+    }
+    if (platform === 'youtube' && /[<>]/.test((pb.title || '') + chu)) loi.push('YouTube không cho phép ký tự < hoặc >.')
+    return loi
+}
+
+/** Lỗi định dạng của MỘT phiên bản trên MỘT nền tảng. Mảng rỗng = đăng được. */
+export function kiemDinhDang(platform: string, pb: { text: string; title?: string; options?: any }, assets: any[]): string[] {
+    const loi: string[] = loiPhanChu(platform, pb)
+    const chu = pb.text || ''
+    const o = pb.options || {}
     if (!chu.trim() && !assets.length) loi.push('Bài cần nội dung hoặc media.')
     if (assets.length > 1) loi.push('Mỗi phiên bản chỉ dùng một ảnh hoặc một video.')
     const a = assets[0]
@@ -433,7 +477,6 @@ export function kiemDinhDang(platform: string, pb: { text: string; title?: strin
         if (!(pb.title || '').trim()) loi.push('YouTube cần tiêu đề video.')
         if (!['public', 'unlisted', 'private'].includes(o.privacy)) loi.push('Chọn quyền riêng tư YouTube.')
         if (typeof o.madeForKids !== 'boolean') loi.push('Chọn video có dành cho trẻ em hay không.')
-        if (/[<>]/.test((pb.title || '') + chu)) loi.push('YouTube không cho phép ký tự < hoặc >.')
     }
     return loi
 }
