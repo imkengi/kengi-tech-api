@@ -230,4 +230,53 @@ router.put('/gemini', authMiddleware, requireRole('admin'), async (req: AuthRequ
     }
 })
 
+// ─── Key DeepSeek DỰ PHÒNG (CHỈ ADMIN, 30/09/2026) ───────────────────────────
+// Gemini hết hạn mức / quá tải ở mọi model thì tác vụ AI, trợ lý chat, trợ lý content chạy
+// tiếp bằng DeepSeek (services/aiDeepSeek). Cùng cách che như key Gemini: không bao giờ trả full key.
+router.get('/deepseek', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const s = await req.storePrisma!.storeSettings.findFirst({ select: { deepseekApiKey: true } as any }) as any
+        const key: string = s?.deepseekApiKey || ''
+        res.json({ success: true, data: { configured: Boolean(key), mask: key ? `••••••••${key.slice(-4)}` : '' } })
+    } catch (err) {
+        console.error('Get deepseek key error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+router.put('/deepseek', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const raw = req.body?.apiKey
+        if (raw !== undefined && typeof raw !== 'string') {
+            res.status(400).json({ success: false, error: 'apiKey phải là chuỗi' })
+            return
+        }
+        const apiKey = (raw ?? '').trim()
+        if (apiKey && !/^sk-[\w-]{16,}$/.test(apiKey)) {
+            res.status(400).json({ success: false, error: 'Key DeepSeek không hợp lệ (phải bắt đầu bằng "sk-")' })
+            return
+        }
+        /* Thử key NGAY (GET /models không tốn tiền): key sai mà cứ lưu thì chỉ lộ ra đúng lúc
+         * Gemini hết hạn mức — tức là lúc cần dự phòng nhất. Mất mạng thì vẫn lưu. */
+        if (apiKey) {
+            const r = await fetch('https://api.deepseek.com/models', {
+                headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000),
+            }).catch(() => null)
+            if (r && (r.status === 401 || r.status === 403)) {
+                res.status(400).json({ success: false, error: 'DeepSeek từ chối key này (401) — kiểm tra lại key ở platform.deepseek.com' })
+                return
+            }
+        }
+        await req.storePrisma!.storeSettings.upsert({
+            where: { id: 'default' },
+            create: { id: 'default', name: 'My Store', updatedAt: new Date(), deepseekApiKey: apiKey || null } as any,
+            update: { deepseekApiKey: apiKey || null } as any,
+        })
+        res.json({ success: true, data: { configured: Boolean(apiKey), mask: apiKey ? `••••••••${apiKey.slice(-4)}` : '' } })
+    } catch (err) {
+        console.error('Set deepseek key error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router

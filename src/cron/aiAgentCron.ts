@@ -16,10 +16,10 @@ import { chayAgent } from '../services/aiAgentRunner'
 import { TOOLS } from '../routes/mcp'
 import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedule'
 import { ToolCtx } from '../lib/mcpTypes'
+import { layKeyAi } from '../lib/keyAi'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
-const GEMINI_KEY_ENV = process.env.GEMINI_API_KEY || ''
 
 /* Gemini QUÁ TẢI TẠM THỜI (30/09/2026 đã gặp 503 "high demand") mà cứ hẹn lượt kế theo
  * lịch thì job "mỗi sáng 7:00" mất trắng cả ngày. Hẹn lại sau 15 phút, tối đa 6 lần LIÊN
@@ -31,15 +31,6 @@ const gioVNNgan = (d: Date) => d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Ch
 
 let timer: NodeJS.Timeout | null = null
 let dangChay = false
-
-/** Lấy key Gemini của store (admin cấu hình) hoặc key chung ở env. */
-async function layApiKey(storePrisma: any): Promise<string> {
-    try {
-        const s = await storePrisma.storeSettings.findFirst({ select: { geminiApiKey: true } })
-        if (s?.geminiApiKey) return s.geminiApiKey
-    } catch { /* cột chưa migrate → dùng env */ }
-    return GEMINI_KEY_ENV
-}
 
 /** Chọn 1 user làm "người thực hiện" cho tool ghi (Transaction.createdBy là FK bắt buộc). */
 async function layActor(storePrisma: any): Promise<{ id?: string; name?: string; branchId?: string | null }> {
@@ -71,8 +62,8 @@ export async function chayMotJob(
     let henThuLai: Date | null = null
 
     try {
-        const apiKey = await layApiKey(storePrisma)
-        if (!apiKey) throw new Error('Chưa cấu hình Gemini API Key (Cài đặt → Trợ lý AI)')
+        const key = await layKeyAi(storePrisma)
+        if (!key.gemini && !key.deepseek) throw new Error('Chưa cấu hình key AI — nhập key Gemini (và key DeepSeek dự phòng) ở mục AI & MCP')
 
         const actor = await layActor(storePrisma)
         const ctx: ToolCtx = {
@@ -88,7 +79,8 @@ export async function chayMotJob(
         try { allowed = JSON.parse(job.allowedTools || '[]') } catch { allowed = [] }
 
         const kq = await chayAgent({
-            apiKey,
+            apiKey: key.gemini,
+            deepseekKey: key.deepseek,
             systemPrompt: SYSTEM_PROMPT_TU_DONG,
             ctx,
             /* Agent không có đồng hồ: không nói "bây giờ" thì nó đoán ngày (thường sai năm),
@@ -99,7 +91,8 @@ export async function chayMotJob(
             allowWrite: !!job.allowWrite,
             allowedTools: allowed,
         })
-        summary = kq.reply
+        /* Lượt chạy bằng DeepSeek thì NÓI RA — chủ shop cần biết Gemini đang hết hạn mức. */
+        summary = kq.doiSangDeepSeek ? `${kq.reply}\n\n(Chạy bằng DeepSeek dự phòng — ${kq.doiSangDeepSeek.slice(0, 200)})` : kq.reply
         toolCalls = kq.toolCalls
         steps = kq.steps
         chamTran = kq.chamTran

@@ -106,6 +106,8 @@ Kết bằng một dòng nhắc: vào mục Content AI trong fanpage-manager đ�
 
 export type ThamSoLenContent = {
     apiKey: string
+    /** Key DeepSeek dự phòng — Gemini hết hạn mức / quá tải thì chạy tiếp bằng DeepSeek. */
+    deepseekKey?: string
     ctx: ToolCtx
     /** Yêu cầu cụ thể của chủ shop; rỗng = lên kế hoạch tuần theo mặc định. */
     yeuCau?: string
@@ -141,6 +143,7 @@ export async function chayLenContent(p: ThamSoLenContent): Promise<KetQuaChay> {
     const soBai = Math.min(Math.max(p.soBai ?? 7, 1), 30)
     return chayAgent({
         apiKey: p.apiKey,
+        deepseekKey: p.deepseekKey,
         systemPrompt: SYSTEM_PROMPT_MARKETING,
         ctx: p.ctx,
         message: dungChiThi({ ...p, soBai }),

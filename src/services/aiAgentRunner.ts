@@ -10,6 +10,7 @@
 import { TOOLS } from '../routes/mcp'
 import { ToolCtx, ToolError } from '../lib/mcpTypes'
 import { toGeminiSchema } from '../lib/geminiSchema'
+import { goiDeepSeek } from './aiDeepSeek'
 
 /* Model theo thứ tự ưu tiên (bảng model ổn định của Google, 30/09/2026). Không viết cứng
  * MỘT model vì hai kiểu hỏng đã gặp trong CÙNG một ngày:
@@ -68,10 +69,14 @@ export type KetQuaChay = {
     toolCalls: { name: string; args: any; ok: boolean; error?: string }[]
     steps: number
     chamTran: boolean
+    /** Lượt này (từ một bước nào đó) chạy bằng DeepSeek vì Gemini hết hạn mức / quá tải — lý do kèm theo. */
+    doiSangDeepSeek?: string
 }
 
 export type ThamSoChay = {
     apiKey: string
+    /** Key DeepSeek DỰ PHÒNG: Gemini hết hạn mức / quá tải ở mọi model thì chạy tiếp bằng DeepSeek. */
+    deepseekKey?: string
     systemPrompt: string
     ctx: ToolCtx
     /** Lời người dùng hỏi, hoặc chỉ thị của job tự động */
@@ -93,12 +98,28 @@ export type ThamSoChay = {
     onStep?: (info: { step: number; calls: string[] }) => void
 }
 
-async function callGemini(contents: any[], apiKey: string, systemPrompt: string, tools: any[]): Promise<any> {
+/**
+ * 429 của Gemini nói rõ hết hạn mức gì: QuotaFailure.violations[].quotaId (…PerMinute… /
+ * …PerDay…) và RetryInfo.retryDelay ("38s"). Hết theo PHÚT thì chờ vài chục giây là chạy
+ * tiếp được; hết theo NGÀY thì tới khoảng 14:00 giờ VN (nửa đêm giờ Mỹ) mới làm mới.
+ */
+export function doc429(data: any): { theoNgay: boolean; choMs: number | null } {
+    const ds: any[] = Array.isArray(data?.error?.details) ? data.error.details : []
+    const quota = ds.flatMap(d => (Array.isArray(d?.violations) ? d.violations : []).map((v: any) => `${v?.quotaId || ''} ${v?.quotaMetric || ''}`))
+    const tre = ds.find(d => String(d?.['@type'] || '').includes('RetryInfo'))?.retryDelay
+    const giay = parseFloat(String(tre ?? ''))
+    return { theoNgay: quota.some(q => /PerDay/i.test(q)), choMs: Number.isFinite(giay) ? Math.ceil(giay * 1000) : null }
+}
+
+/** `choHetPhut`: hết hạn mức theo phút thì CHỜ rồi thử lại cùng model (chỉ khi không có
+ *  nhà cung cấp dự phòng — có DeepSeek thì chuyển luôn, khỏi bắt tác vụ đứng chờ). */
+async function callGemini(contents: any[], apiKey: string, systemPrompt: string, tools: any[], choHetPhut = true): Promise<any> {
     const bo = khongDungChoKey.get(apiKey) || new Set<string>()
     const conLai = DS_MODEL.filter(m => !bo.has(m))
     const thu = conLai.length ? conLai : DS_MODEL   // mọi model từng 404 ⇒ thử lại hết (key có thể đã được mở)
     const vet: string[] = []
     let coTamThoi = false
+    let hetNgay = 0, hetKhac = 0
 
     for (const model of thu) {
         const body = JSON.stringify({
@@ -140,7 +161,11 @@ async function callGemini(contents: any[], apiKey: string, systemPrompt: string,
             }
             if (res.status === 429) {
                 coTamThoi = true
-                vet.push(`${model}: hết hạn mức (429)`)
+                const q = doc429(data)
+                if (q.theoNgay) { hetNgay++; vet.push(`${model}: hết hạn mức NGÀY (429)`); break }
+                hetKhac++
+                vet.push(`${model}: hết hạn mức theo phút (429${q.choMs ? `, chờ ${Math.ceil(q.choMs / 1000)}s` : ''})`)
+                if (choHetPhut && lan === 0 && q.choMs !== null && q.choMs <= 65_000) { await ngu(q.choMs + 500); continue }
                 break
             }
             if (MA_TAM_THOI.has(res.status)) {
@@ -158,6 +183,8 @@ async function callGemini(contents: any[], apiKey: string, systemPrompt: string,
         }
     }
     const chiTiet = vet.slice(-8).join('; ')
+    if (hetNgay && !hetKhac)
+        throw new LoiGeminiTamThoi(`Key Gemini đã dùng hết hạn mức NGÀY (gói miễn phí) — Google làm mới khoảng 14:00 giờ VN. Thêm key DeepSeek dự phòng (mục AI & MCP) để tác vụ vẫn chạy, hoặc bật thanh toán cho key Gemini. (${chiTiet})`)
     if (coTamThoi) throw new LoiGeminiTamThoi(`Gemini đang quá tải hoặc hết hạn mức ở mọi model đã thử — lỗi TẠM THỜI, thử lại sau ít phút. (${chiTiet})`)
     throw new Error(`Không model Gemini nào dùng được với key này. (${chiTiet})`)
 }
@@ -199,11 +226,28 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
 
     const contents: any[] = [...(p.history || []), { role: 'user', parts: [{ text: p.message }] }]
     const toolCalls: KetQuaChay['toolCalls'] = []
+    /* Không có key Gemini mà có DeepSeek ⇒ chạy DeepSeek luôn. Đã chuyển sang DeepSeek thì GIỮ
+     * tới hết lượt: không quay lại Gemini giữa chừng (Gemini 3 cần "thought signature" của
+     * chính nó ở các lượt gọi tool trước). */
+    let doiSangDeepSeek: string | undefined = !p.apiKey && p.deepseekKey ? 'Chưa có key Gemini — chạy bằng DeepSeek.' : undefined
 
     for (let step = 0; step < maxSteps; step++) {
         let data: any
         try {
-            data = await callGemini(contents, p.apiKey, p.systemPrompt, declarations)
+            if (doiSangDeepSeek) data = await goiDeepSeek(contents, p.deepseekKey!, p.systemPrompt, dung)
+            else {
+                try {
+                    data = await callGemini(contents, p.apiKey, p.systemPrompt, declarations, !p.deepseekKey)
+                } catch (e: any) {
+                    /* "Hết hạn mức thì đổi qua DeepSeek" (chủ shop, 30/09): Gemini quá tải / hết hạn
+                     * mức ở MỌI model thì chạy tiếp bằng DeepSeek từ đúng bước này — không bỏ dở
+                     * lượt (bài đã lưu mà chưa duyệt). */
+                    if (!(e instanceof LoiGeminiTamThoi) || !p.deepseekKey) throw e
+                    doiSangDeepSeek = e.message.slice(0, 400)
+                    console.warn(`[AiAgent] Gemini không dùng được ở bước ${step + 1} → chuyển sang DeepSeek: ${doiSangDeepSeek}`)
+                    data = await goiDeepSeek(contents, p.deepseekKey, p.systemPrompt, dung)
+                }
+            }
         } catch (e: any) {
             /* Hỏng GIỮA CHỪNG thì những tool đã chạy (có thể đã soạn/đăng bài) phải còn dấu
              * vết: người đọc cần biết lượt này đã làm gì, và cron dựa vào đó để KHÔNG chạy lại
@@ -217,7 +261,7 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
 
         if (!calls.length) {
             const reply = parts.filter(x => x.text).map(x => x.text).join('\n').trim()
-            return { reply: reply || '(không có nội dung trả lời)', toolCalls, steps: step + 1, chamTran: false }
+            return { reply: reply || '(không có nội dung trả lời)', toolCalls, steps: step + 1, chamTran: false, doiSangDeepSeek }
         }
 
         p.onStep?.({ step: step + 1, calls: calls.map((c: any) => c.name) })
@@ -252,5 +296,6 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
         toolCalls,
         steps: maxSteps,
         chamTran: true,
+        doiSangDeepSeek,
     }
 }

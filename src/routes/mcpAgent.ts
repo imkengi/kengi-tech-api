@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { type ToolCtx } from '../lib/mcpTypes'
 import { chayAgent } from '../services/aiAgentRunner'
+import { layKeyAi } from '../lib/keyAi'
 
 /**
  * TRỢ LÝ AI trong dashboard — POST /api/mcp-agent/chat
@@ -15,12 +16,12 @@ import { chayAgent } from '../services/aiAgentRunner'
  * = store của user, không cần key riêng. Quyền ghi: chỉ admin/manager/owner mới
  * được gọi tool write (chặn ở đây, độc lập với scope API key).
  *
- * Key: GEMINI_API_KEY (env/Secret Manager). Chưa cấu hình → 503.
+ * Key: Gemini của cửa hàng (hoặc GEMINI_API_KEY env) + DeepSeek dự phòng (lib/keyAi).
+ * Chưa có key nào → 503.
  */
 
 const router = Router()
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
 const MAX_STEPS = 6
 
 const SYSTEM_PROMPT =
@@ -55,12 +56,10 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
     }
 
     // Key theo TỪNG CỬA HÀNG (admin cấu hình trong Cài đặt) → fallback env dùng chung.
-    let apiKey = GEMINI_API_KEY
-    try {
-        const s = await prisma.storeSettings.findFirst({ select: { geminiApiKey: true } as any }) as any
-        if (s?.geminiApiKey) apiKey = s.geminiApiKey
-    } catch { /* cột chưa migrate → dùng env */ }
-    if (!apiKey) {
+    // DeepSeek là dự phòng: Gemini hết hạn mức / quá tải thì câu trả lời vẫn ra.
+    const key = await layKeyAi(prisma)
+    const apiKey = key.gemini
+    if (!apiKey && !key.deepseek) {
         res.status(503).json({ success: false, error: 'Trợ lý AI chưa cấu hình — vào Cài đặt → Trợ lý AI để nhập Gemini API Key (chỉ admin)' })
         return
     }
@@ -94,6 +93,7 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
         // system prompt vẫn buộc agent xin xác nhận cho thao tác công khai.
         const kq = await chayAgent({
             apiKey,
+            deepseekKey: key.deepseek,
             systemPrompt: SYSTEM_PROMPT,
             ctx,
             message,

@@ -1609,6 +1609,9 @@ model StoreSettings {
 
   // Key Gemini riêng của cửa hàng cho Trợ lý AI (chỉ admin cấu hình; API che dạng ••••).
   geminiApiKey String?
+  // Key DeepSeek DỰ PHÒNG (30/09/2026): Gemini hết hạn mức / quá tải ở mọi model thì lượt
+  // chạy AI chuyển sang DeepSeek (services/aiDeepSeek). Che dạng •••• như key Gemini.
+  deepseekApiKey String?
 
   notifyNewOrder Boolean @default(true)
 

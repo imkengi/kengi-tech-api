@@ -15,6 +15,7 @@ import { FacebookService, FbGraphError } from '../services/platforms/facebook'
 import { chayLenContent, DANH_SACH_TOOL } from '../services/marketingAgent'
 import { PILLARS } from './mcpMarketingTools'
 import { ToolCtx } from '../lib/mcpTypes'
+import { layKeyAi } from '../lib/keyAi'
 
 const router = Router()
 
@@ -503,13 +504,10 @@ router.post('/generate', authMiddleware, requireRole(...QUAN_LY), async (req: Au
             return res.status(401).json({ success: false, error: 'Token Facebook hết hạn — kết nối lại fanpage trước khi lên content.', code: 'FB_TOKEN_EXPIRED' })
         }
 
-        // Key Gemini riêng từng cửa hàng (Cài đặt → Trợ lý AI) → fallback env
-        let apiKey = process.env.GEMINI_API_KEY || ''
-        try {
-            const s = await prisma.storeSettings.findFirst({ select: { geminiApiKey: true } as any }) as any
-            if (s?.geminiApiKey) apiKey = s.geminiApiKey
-        } catch { /* cột chưa migrate → dùng env */ }
-        if (!apiKey) {
+        // Key Gemini riêng từng cửa hàng (Cài đặt → Trợ lý AI) → fallback env; DeepSeek dự phòng
+        const key = await layKeyAi(prisma)
+        const apiKey = key.gemini
+        if (!apiKey && !key.deepseek) {
             return res.status(503).json({
                 success: false,
                 error: 'Chưa cấu hình Gemini API Key — vào kengi.vn → Cài đặt → Trợ lý AI để nhập (chỉ admin).',
@@ -527,7 +525,7 @@ router.post('/generate', authMiddleware, requireRole(...QUAN_LY), async (req: Au
 
         const truoc = await prisma.fbContentDraft.count({ where: { pageId: page.pageId } }).catch(() => 0)
         const kq = await chayLenContent({
-            apiKey, ctx,
+            apiKey, deepseekKey: key.deepseek, ctx,
             pageId: page.pageId,
             soBai: Number(req.body?.soBai) || 7,
             soNgay: Number(req.body?.soNgay) || 7,
