@@ -78,7 +78,7 @@ async function main() {
     await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'x', assets: [{ type: 'image', url: 'https://cdn.x/a.png' }] }, null, () => { })
     kiem('ảnh ⇒ IMAGE + image_url', daGoi.at(-1)!.body.media_type === 'IMAGE' && daGoi.at(-1)!.body.image_url === 'https://cdn.x/a.png')
     hangCho = [{ id: 'thc3' }]
-    await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'Café 🙈', options: { topicTag: ' 12 con giáp ' }, assets: [] }, null, () => { })
+    await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'Cafe\u0301 🙈', options: { topicTag: ' 12 con giáp ' }, assets: [] }, null, () => { })
     kiem('chủ đề đi qua tham số topic_tag (không nằm trong chữ), chữ gửi dạng NFC', daGoi.at(-1)!.body.topic_tag === '12 con giáp' && daGoi.at(-1)!.body.text === 'Café 🙈', daGoi.at(-1)!.body)
     hangCho = [{ id: 'thc4' }]
     await nhip(nenTangThreads, { externalId: 'th1' }, { body: 'x', options: {}, assets: [] }, null, () => { })
@@ -131,7 +131,7 @@ async function main() {
     console.log('━━ Kiểm định dạng theo nền tảng')
     kiem('Threads > 500 ký tự bị chặn', kiemDinhDang('threads', { text: 'x'.repeat(501) }, []).some(e => e.includes('500')))
     kiem('Threads chữ thuần hợp lệ', kiemDinhDang('threads', { text: 'Chào' }, []).length === 0)
-    const soDem = [demKyTu('threads', 'Chào 🙈'), demKyTu('threads', '❤️'), demKyTu('threads', '🇻🇳'), demKyTu('threads', 'ệ')]
+    const soDem = [demKyTu('threads', 'Chào 🙈'), demKyTu('threads', '❤️'), demKyTu('threads', '🇻🇳'), demKyTu('threads', 'e\u0323\u0302')]
     kiem('đếm kiểu Threads: chữ Việt có dấu = 1 (kể cả dạng tổ hợp), emoji theo byte UTF-8', soDem.join() === '9,6,8,1', soDem)
     kiem('nền tảng khác giữ cách đếm cũ (.length)', demKyTu('instagram', 'Chào 🙈') === 7)
     const loiHuti = loiPhanChu('threads', { text: HUTI })

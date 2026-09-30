@@ -416,7 +416,7 @@ export const TRAN_CHU: Record<string, number> = { facebook: 63206, instagram: 22
 /* Threads: "Text posts are limited to 500 characters" và EMOJI TÍNH THEO SỐ BYTE UTF-8
  * (🙈 = 4, ✨ = 3, ❤️ = 6, 🇻🇳 = 8). `.length` của JS đếm thiếu — bài nhiều icon JS báo
  * 490 mà Threads đếm quá 500. Chữ thường tính theo code point sau NFC (chữ Việt có dấu = 1). */
-const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣|️/u
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3|\uFE0F/u
 const TACH_CHU: any = (Intl as any).Segmenter ? new (Intl as any).Segmenter('vi', { granularity: 'grapheme' }) : null
 
 /** Độ dài nội dung THEO CÁCH NỀN TẢNG ĐẾM. Giao diện (studio.js demKyTu) đếm y hệt. */
