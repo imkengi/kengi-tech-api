@@ -2783,6 +2783,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktBrand_archivedAt_idx" ON "MktBrand"("archivedAt")`)
                 // Công tắc "AI tự duyệt" từng thương hiệu (30/09/2026) — mặc định TẮT
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktBrand" ADD COLUMN IF NOT EXISTS "aiAutoApprove" BOOLEAN NOT NULL DEFAULT false`)
+                // Khung giờ đăng (30/09/2026): "08:00, 12:00, 20:00" — duyệt xong tự hẹn vào giờ trống
+                // gần nhất, khỏi chọn giờ lại. Của thương hiệu = mặc định; của bài = theo tác vụ AI soạn ra nó.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktBrand" ADD COLUMN IF NOT EXISTS "postSlots" TEXT NOT NULL DEFAULT ''`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktContent" ADD COLUMN IF NOT EXISTS "postSlots" TEXT NOT NULL DEFAULT ''`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAccount" ADD COLUMN IF NOT EXISTS "brandId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MktAccount" ADD COLUMN IF NOT EXISTS "refreshSecret" TEXT`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MktAccount_brandId_idx" ON "MktAccount"("brandId")`)
