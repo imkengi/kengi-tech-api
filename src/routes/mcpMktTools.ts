@@ -1,12 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MCP TOOLS — MARKETING STUDIO (đa nền tảng)   05/09/2026 · nhiều thương hiệu 29/09/2026
 //
-//  ⛔ RANH GIỚI CỐ Ý: KHÔNG CÓ TOOL DUYỆT BÀI.
+//  ⛔ DUYỆT BÀI LÀ CỦA NGƯỜI — trừ khi CHỦ SHOP tự bật "AI tự duyệt" cho từng thương hiệu.
 //
-//  AI soạn được, xem được, lên lịch được bài ĐÃ ĐƯỢC NGƯỜI DUYỆT — nhưng không
-//  có đường nào để tự duyệt. Duyệt là cửa cuối cùng ngăn nội dung do máy sinh ra
-//  đi thẳng lên trang khách hàng, và cửa đó phải do người mở. Nếu sau này ai thêm
-//  `mkt_duyet_noi_dung`, cả tính năng mất ý nghĩa an toàn.
+//  Mặc định AI chỉ soạn + lên lịch bài NGƯỜI đã duyệt. Duyệt là cửa cuối cùng ngăn nội
+//  dung máy sinh đi thẳng lên trang khách hàng. 30/09/2026 chủ shop chọn cho phép AI tự
+//  duyệt — nhưng CHỈ qua công tắc MktBrand.aiAutoApprove, mặc định tắt, và:
+//    · chỉ người đăng nhập bật được (PUT /api/mkt/brand); tool sửa hồ sơ KHÔNG đụng được
+//    · mkt_duyet_noi_dung vẫn chạy đủ kiểm định dạng + từ cấm, bài hỏng thì KHÔNG duyệt
+//    · bài không duyệt lại được nếu NGƯỜI đã từ chối nó
+//    · tắt công tắc ⇒ bài AI đã tự duyệt mà chưa đăng bị worker chặn, trả về chờ người
+//  Đừng nới thêm bất kỳ điều kiện nào ở trên.
 //
 //  Cũng KHÔNG có tool nào trả `accessToken` — token không rời máy chủ.
 //
@@ -20,8 +24,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import type { Tool, ToolCtx } from '../lib/mcpTypes'
 import { canhBaoCat, ToolError } from '../lib/mcpTypes'
-import { dsThuongHieu, hoSo, kiemBanVaHoSo, LoiMkt } from '../lib/mktThuongHieu'
-import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai } from '../lib/mktNoiDung'
+import { dsThuongHieu, hoSo, kiemBanVaHoSo, LoiMkt, AI_TU_DUYET } from '../lib/mktThuongHieu'
+import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai, loiKhiDangLen, gioVN } from '../lib/mktNoiDung'
 import { registryPrisma } from '../lib/prisma'
 
 const TRAN = 50
@@ -336,7 +340,7 @@ export const MKT_TOOLS: Tool[] = [
             const b = await thuongHieu(p, ctx, a)
             const c = await p.mktContent.findFirst({ where: { id: String(a.noiDungId), brandId: b.id } })
             if (!c) throw new ToolError('Không tìm thấy bài trong thương hiệu này.')
-            const khi = a?.henLuc ? new Date(a.henLuc) : new Date()
+            const khi = gioVN(a?.henLuc)
             /* Cửa duyệt nằm TRONG lenLich — lặp lại ở mọi cửa, không tin phía gọi. */
             const { taoRa, boQua } = await lenLich(p, b, c, Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : [], khi)
             /* Worker chỉ chạm cửa hàng có cờ hasMarketing. Trước 29/09 đường MCP không bật cờ
@@ -345,6 +349,55 @@ export const MKT_TOOLS: Tool[] = [
                 await (registryPrisma as any).store.updateMany({ where: { code: ctx.storeCode }, data: { hasMarketing: true } })
                     .catch((e: any) => console.warn('[mkt] MCP không bật được hasMarketing:', e?.message))
             return { thuongHieu: b.name, daLenLich: taoRa.length, boQua, ghiChu: boQua.length ? 'Có kênh bị bỏ qua — xem `boQua`.' : undefined }
+        }),
+    },
+    {
+        name: 'mkt_duyet_noi_dung',
+        write: true,
+        description: 'CHỈ dùng được khi chủ shop đã BẬT "AI tự duyệt" cho thương hiệu này (xem hoSo.aiAutoApprove trong mkt_ho_so_thuong_hieu). Duyệt một bài đang chờ duyệt và (tuỳ chọn) lên lịch đăng luôn. Máy chủ vẫn kiểm định dạng từng kênh và từ cấm — bài có lỗi thì KHÔNG được duyệt, hãy soạn bài mới cho đúng. Công tắc đang tắt thì tool từ chối: để bài chờ chủ shop duyệt, KHÔNG tìm cách khác.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ...THAM_SO_THUONG_HIEU,
+                noiDungId: { type: 'string' },
+                henLuc: { type: 'string', description: 'ISO datetime giờ VN để lên lịch luôn; bỏ trống = chỉ duyệt, chưa lên lịch' },
+                kenhIds: { type: 'array', items: { type: 'string' }, description: 'bỏ trống = các kênh có phiên bản trong bài' },
+            },
+            required: ['noiDungId'],
+            additionalProperties: false,
+        },
+        run: (a: any, ctx: ToolCtx) => chay(async () => {
+            const p: any = ctx.prisma
+            const b = await thuongHieu(p, ctx, a)
+            if (b.aiAutoApprove !== true) {
+                throw new ToolError(`Thương hiệu "${b.name}" CHƯA bật "AI tự duyệt". Bài vẫn nằm trong hàng chờ để chủ shop duyệt ở kengi.vn/marketing — không duyệt được bằng AI.`)
+            }
+            const c = await p.mktContent.findFirst({ where: { id: String(a.noiDungId), brandId: b.id } })
+            if (!c) throw new ToolError('Không tìm thấy bài trong thương hiệu này.')
+            /* NGƯỜI đã từ chối bài này thì AI không được lật lại quyết định đó. */
+            if (c.status === 'rejected') throw new ToolError('Bài này đã bị chủ shop TỪ CHỐI — không được tự duyệt lại. Soạn bài mới nếu cần.')
+            if (!['pending', 'draft'].includes(c.status)) throw new ToolError(`Bài đang ở trạng thái "${c.status}", không phải chờ duyệt.`)
+            const kenh = jsonMang(c.variants).map((v: any) => String(v.accountId))
+            if (!kenh.length) throw new ToolError('Bài chưa có phiên bản cho kênh nào — AI tự duyệt chỉ nhận bài có phiên bản theo kênh.')
+            const loi: string[] = []
+            for (const id of kenh) {
+                const acc = await p.mktAccount.findFirst({ where: { id, brandId: b.id } })
+                if (!acc) { loi.push(`${id}: không có kênh này`); continue }
+                const l = await loiKhiDangLen(p, b, c, acc)
+                if (l.length) loi.push(`${acc.name}: ${l.join(' ')}`)
+            }
+            if (loi.length) throw new ToolError(`KHÔNG duyệt — bài còn lỗi: ${loi.join(' | ')}`)
+            const duyet = await p.mktContent.update({
+                where: { id: c.id },
+                data: { approvedRevision: c.revision, approvedAt: new Date(), approvedBy: AI_TU_DUYET, status: 'approved', rejectReason: null },
+            })
+            if (!a?.henLuc) return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: 0, ghiChu: 'Đã tự duyệt (ghi dấu "AI tự duyệt"). Chưa lên lịch — gọi mkt_len_lich_dang hoặc truyền henLuc.' }
+            const khi = gioVN(a.henLuc)
+            const { taoRa, boQua } = await lenLich(p, b, duyet, Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : [], khi)
+            if (taoRa.length && ctx.storeCode)
+                await (registryPrisma as any).store.updateMany({ where: { code: ctx.storeCode }, data: { hasMarketing: true } })
+                    .catch((e: any) => console.warn('[mkt] MCP không bật được hasMarketing:', e?.message))
+            return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: taoRa.length, boQua, henLuc: khi.toISOString() }
         }),
     },
 ]

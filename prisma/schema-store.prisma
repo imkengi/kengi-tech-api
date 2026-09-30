@@ -3050,6 +3050,12 @@ model MktBrand {
   notes          String    @default("")
   bannedWords    String    @default("[]") // JSON array
   timezone       String    @default("Asia/Ho_Chi_Minh")
+  // "AI TỰ DUYỆT" (30/09/2026, chủ shop chọn): bật thì tác vụ AI tự động được duyệt + lên
+  // lịch bài của CHÍNH thương hiệu này (tool mkt_duyet_noi_dung). Mặc định TẮT. Chỉ người
+  // đăng nhập bật/tắt được qua PUT /api/mkt/brand — tool AI sửa hồ sơ KHÔNG đụng được cột
+  // này (AI không tự cấp quyền cho mình). Tắt đi thì bài AI đã tự duyệt mà chưa đăng bị
+  // worker chặn lại và trả về hàng chờ người duyệt.
+  aiAutoApprove  Boolean   @default(false)
   // Xoá MỀM: dữ liệu còn nguyên, chỉ biến khỏi danh sách và không tính vào trần 10.
   archivedAt     DateTime?
   createdBy      String?

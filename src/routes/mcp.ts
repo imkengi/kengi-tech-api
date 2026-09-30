@@ -58,7 +58,7 @@ const INSTRUCTIONS =
     'MARKETING STUDIO (kengi.vn/marketing — đăng Facebook/Instagram/Threads/TikTok/YouTube, tối đa 10 THƯƠNG HIỆU/cửa hàng, tách hẳn nhau): ' +
     'gọi mkt_danh_sach_thuong_hieu trước; cửa hàng có >1 thương hiệu thì MỌI tool mkt_* phải truyền thuongHieu — chủ shop chưa nói thương hiệu nào thì HỎI, đừng tự chọn. ' +
     'TRƯỚC KHI VIẾT bất kỳ bài nào: đọc mkt_ho_so_thuong_hieu và viết TỪ hồ sơ đó (giọng văn, sản phẩm, chủ đề, CTA, bài mẫu); ô trống = không biết — KHÔNG bịa sản phẩm, giá, khuyến mãi, địa chỉ, số điện thoại; tránh mọi bannedWords. ' +
-    'mkt_soan_noi_dung chỉ tạo bài CHỜ DUYỆT (có thể kèm phiên bản riêng từng kênh); KHÔNG có tool duyệt — người duyệt ở kengi.vn/marketing, sau đó mới mkt_len_lich_dang. ' +
+    'mkt_soan_noi_dung chỉ tạo bài CHỜ DUYỆT (có thể kèm phiên bản riêng từng kênh). Bình thường NGƯỜI duyệt ở kengi.vn/marketing rồi mới mkt_len_lich_dang; RIÊNG thương hiệu có hoSo.aiAutoApprove=true thì được gọi mkt_duyet_noi_dung (kèm henLuc để lên lịch luôn) — công tắc tắt thì để bài chờ người, không tìm đường khác. Giờ không kèm múi giờ = GIỜ VN. ' +
     'PHÂN TÍCH TỔNG THỂ / SWOT: gọi swot_data(from,to) — MỘT lần gọi gom đủ doanh thu, biên lãi, đà kỳ, khách quay lại, ghi nợ, hàng sắp hết/đã hết, vốn tồn, hàng chết, cơ cấu thanh toán; nhận định dựa trên số đó. ' +
     'TÀI CHÍNH: profit_report cho câu hỏi lãi/lỗ (doanh thu − giá vốn − chi phí; giá vốn là ƯỚC TÍNH theo giá vốn hiện tại, hãy nói rõ điều đó khi báo cáo), '+
     'expense_report cho chi phí theo nhóm, supplier_debt cho công nợ phải trả nhà cung cấp, list_import_receipts cho lịch sử nhập hàng, '+

@@ -152,7 +152,7 @@ async function main() {
     const { registryPrisma } = await import('../src/lib/prisma')
     ;(registryPrisma as any).store = { updateMany: async () => ({ count: 1 }) }
     const tool = (n: string) => MKT_TOOLS.find(t => t.name === n)!
-    kiem('KHÔNG có tool duyệt bài', !MKT_TOOLS.some(t => /duyet|approve/i.test(t.name)))
+    kiem('chỉ ĐÚNG MỘT tool duyệt (mkt_duyet_noi_dung, bị công tắc từng thương hiệu chặn)', MKT_TOOLS.filter(t => /duyet|approve/i.test(t.name)).map(t => t.name).join() === 'mkt_duyet_noi_dung')
     for (const n of ['mkt_soan_noi_dung', 'mkt_len_lich_dang', 'mkt_cap_nhat_ho_so_thuong_hieu'])
         kiem(`${n} đánh dấu write (key chỉ-đọc không gọi được)`, tool(n).write === true)
     kiem('tool đọc KHÔNG đánh dấu write', !tool('mkt_ho_so_thuong_hieu').write && !tool('mkt_danh_sach_kenh').write)
@@ -193,6 +193,31 @@ async function main() {
     kiem('đã duyệt nhưng có từ cấm ⇒ kênh bị bỏ qua kèm lý do', lich.daLenLich === 0 && /từ cấm/.test(lich.boQua.join(' ')), lich)
     const cn: any = await tool('mkt_cap_nhat_ho_so_thuong_hieu').run({ thuongHieu: 'b2', products: 'Trà sữa – 35.000đ' }, ctx)
     kiem('cập nhật hồ sơ từng phần', cn.daCapNhat.join() === 'products' && cn.hoSo.products === 'Trà sữa – 35.000đ', cn)
+
+    console.log('━━ AI tự duyệt (công tắc từng thương hiệu)')
+    const { TOOL_NHAY_CAM } = await import('../src/services/aiAgentRunner')
+    kiem('mkt_duyet_noi_dung là tool ghi + nhạy cảm (tác vụ tự động phải gọi đích danh)', tool('mkt_duyet_noi_dung').write === true && TOOL_NHAY_CAM.has('mkt_duyet_noi_dung'))
+    let loiTuCap: any = null
+    try { await tool('mkt_cap_nhat_ho_so_thuong_hieu').run({ thuongHieu: 'b1', aiAutoApprove: true }, ctx) } catch (e) { loiTuCap = e }
+    kiem('AI KHÔNG tự bật được công tắc qua tool sửa hồ sơ', !!loiTuCap && b1.hasOwnProperty('aiAutoApprove') === false, loiTuCap?.message)
+    const baiSach: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', tieuDe: 'Mẹo', phienBan: [{ kenhId: 'a1', noiDung: 'Tráng dầu mỏng rồi đun 10 phút là chảo gang dùng cả đời.' }] }, ctx)
+    let loiTat: any = null
+    try { await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: baiSach.id }, ctx) } catch (e) { loiTat = e }
+    kiem('công tắc TẮT ⇒ AI không duyệt được, bài vẫn chờ người', /CHƯA bật/.test(loiTat?.message) && dl.mktContent.find((c: any) => c.id === baiSach.id).approvedRevision === null, loiTat?.message)
+    ;(b1 as any).aiAutoApprove = true
+    let loiCam: any = null
+    try { await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: soan.id }, ctx) } catch (e) { loiCam = e }
+    kiem('công tắc BẬT nhưng bài có từ cấm ⇒ KHÔNG duyệt', /từ cấm/.test(loiCam?.message), loiCam?.message)
+    const tuDuyet: any = await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: baiSach.id, henLuc: '2026-10-01T08:00' }, ctx)
+    const daDuyet = dl.mktContent.find((c: any) => c.id === baiSach.id)
+    kiem('công tắc BẬT + bài sạch ⇒ duyệt, ghi dấu "ai:tu-duyet"', tuDuyet.daDuyet && daDuyet.approvedBy === 'ai:tu-duyet' && daDuyet.approvedRevision === daDuyet.revision, tuDuyet)
+    const luot = dl.mktPublication.find((x: any) => x.contentId === baiSach.id)
+    kiem('henLuc không kèm múi giờ hiểu là GIỜ VN (08:00 VN = 01:00Z)', luot?.scheduledAt?.toISOString() === '2026-10-01T01:00:00.000Z', luot?.scheduledAt)
+    const biTuChoi: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', phienBan: [{ kenhId: 'a1', noiDung: 'Bài khác' }] }, ctx)
+    dl.mktContent.find((c: any) => c.id === biTuChoi.id).status = 'rejected'
+    let loiLat: any = null
+    try { await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: biTuChoi.id }, ctx) } catch (e) { loiLat = e }
+    kiem('bài NGƯỜI đã từ chối ⇒ AI không lật lại được', /TỪ CHỐI/.test(loiLat?.message), loiLat?.message)
 
     console.log(`\n━━ KẾT QUẢ: ${dat} đạt / ${truot} trượt ━━`)
     process.exit(truot ? 1 : 0)

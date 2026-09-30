@@ -106,7 +106,15 @@ router.get('/brand', ...mkt, async (req: MktRequest, res: Response) => {
 /** Cập nhật TỪNG PHẦN: trường không gửi giữ nguyên (AI sửa "products" không xoá trắng phần còn lại). */
 router.put('/brand', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest, res: Response) => {
     try {
-        const data = kiemBanVaHoSo(req.body)
+        /* Công tắc "AI tự duyệt" CHỈ bật/tắt được ở đây (người đăng nhập, quyền quản lý).
+         * kiemBanVaHoSo từ chối trường này — nên tool MCP sửa hồ sơ không tự cấp quyền được. */
+        const { aiAutoApprove, ...hoSoMoi } = req.body || {}
+        const data: any = kiemBanVaHoSo(hoSoMoi)
+        if (aiAutoApprove !== undefined) {
+            if (typeof aiAutoApprove !== 'boolean') throw new LoiMkt('aiAutoApprove phải là true/false.')
+            data.aiAutoApprove = aiAutoApprove
+            console.log(`[mkt] ${req.user?.userId} ${aiAutoApprove ? 'BẬT' : 'tắt'} AI tự duyệt cho thương hiệu ${req.mktBrand.id}`)
+        }
         const b = await (req.storePrisma as any).mktBrand.update({ where: { id: req.mktBrand.id }, data })
         res.json({ success: true, data: hoSo(b) })
     } catch (err) { traLoi(res, err) }

@@ -81,7 +81,10 @@ export async function chayMotJob(
             apiKey,
             systemPrompt: SYSTEM_PROMPT_TU_DONG,
             ctx,
-            message: job.prompt,
+            /* Agent không có đồng hồ: không nói "bây giờ" thì nó đoán ngày (thường sai năm),
+             * và việc cần giờ cụ thể — như hẹn giờ đăng bài — sẽ lệch. Giờ VN vì chỉ thị
+             * của chủ shop ("8 giờ sáng mai") là giờ VN. */
+            message: `[Thời điểm chạy: ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} (giờ VN, ISO ${new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16)}+07:00)]\n${job.prompt}`,
             maxSteps: job.maxSteps || 8,
             allowWrite: !!job.allowWrite,
             allowedTools: allowed,

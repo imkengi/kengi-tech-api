@@ -207,6 +207,12 @@ async function main() {
     kiem('múi giờ sai bị từ chối', (await goi('PUT', '/brand', { brand: B, body: { timezone: 'Mars/Base' } })).status === 400)
     h = await goi('PUT', '/brand', { brand: B, body: { bannedWords: ['rẻ nhất'] } })
     kiem('bannedWords lưu và trả về dạng mảng', Array.isArray(h.data.bannedWords) && h.data.bannedWords[0] === 'rẻ nhất', h.data)
+    kiem('công tắc AI tự duyệt mặc định TẮT', h.data.aiAutoApprove === false, h.data)
+    kiem('nhân viên (staff) không bật được AI tự duyệt', (await goi('PUT', '/brand', { brand: B, role: 'staff', body: { aiAutoApprove: true } })).status === 403)
+    kiem('aiAutoApprove sai kiểu bị từ chối', (await goi('PUT', '/brand', { brand: B, body: { aiAutoApprove: 'true' } })).status === 400)
+    const bat = await goi('PUT', '/brand', { brand: B, body: { aiAutoApprove: true } })
+    kiem('quản lý bật được, hồ sơ khác giữ nguyên', bat.data?.aiAutoApprove === true && bat.data?.products === 'Trà sữa mây – 35.000đ', bat)
+    await goi('PUT', '/brand', { brand: B, body: { aiAutoApprove: false } })
     kiem('hồ sơ thương hiệu đầu KHÔNG bị đụng', (await goi('GET', '/brand', { brand: A })).data.products === '')
 
     console.log('━━ Không lọt chéo thương hiệu')
@@ -266,6 +272,21 @@ async function main() {
     kiem('token Threads sắp hết được gia hạn TRƯỚC khi đăng và đăng bằng token mới', guiTh?.token === 'tokMoi', guiTh)
     const accTh = bang.mktAccount.find(a => a.id === 'accTh')
     kiem('token mới được lưu (mã hoá) + hạn mới ~60 ngày', accTh.accessToken !== 'tokMoi' && new Date(accTh.tokenExpiresAt).getTime() > Date.now() + 59 * 86400_000)
+
+    // Bài AI TỰ DUYỆT mà công tắc đã tắt ⇒ worker chặn, trả bài về chờ người
+    const baiAi = { id: 'ctAi', ...MAC_DINH.mktContent, brandId: B, revision: 1, approvedRevision: 1, approvedBy: 'ai:tu-duyet', status: 'scheduled', variants: JSON.stringify([{ accountId: 'accB', text: 'AI viết' }]) }
+    bang.mktContent.push(baiAi)
+    bang.mktPublication.push({ id: 'pubAi', contentId: 'ctAi', accountId: 'accB', status: 'processing', idempotencyKey: 'kAi', scheduledAt: new Date() })
+    let daGuiAi = false
+    khaiNenTang('facebook', { dang: async () => { daGuiAi = true; return { remotePostId: 'x' } } })
+    const kqAi = await dangMotViec(prisma, { id: 'pubAi', accountId: 'accB', remoteRef: null, content: { ...baiAi }, account: { ...bang.mktAccount.find(a => a.id === 'accB') } })
+    kiem('công tắc tắt ⇒ bài AI tự duyệt KHÔNG được đăng', kqAi === 'ai-tu-duyet-da-tat' && !daGuiAi, kqAi)
+    kiem('…và bài quay về chờ người duyệt', bang.mktContent.find(c => c.id === 'ctAi').approvedRevision === null && bang.mktContent.find(c => c.id === 'ctAi').status === 'pending')
+    await goi('PUT', '/brand', { brand: B, body: { aiAutoApprove: true } })
+    const baiAi2 = { ...baiAi, id: 'ctAi2', approvedRevision: 1, approvedBy: 'ai:tu-duyet' }
+    bang.mktContent.push(baiAi2)
+    const kqAi2 = await dangMotViec(prisma, { id: 'pubAi2', accountId: 'accB', remoteRef: null, content: { ...baiAi2 }, account: { ...bang.mktAccount.find(a => a.id === 'accB') } })
+    kiem('công tắc bật ⇒ bài AI tự duyệt đăng bình thường', kqAi2 === 'da-gui' && daGuiAi, kqAi2)
 
     console.log('━━ Xoá thương hiệu')
     bang.mktPublication.push({ id: 'pubCho', contentId: id, accountId: 'accB', status: 'queued', idempotencyKey: 'k2', scheduledAt: new Date() })

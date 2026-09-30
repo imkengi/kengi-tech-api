@@ -47,6 +47,7 @@ export function hoSo(b: any) {
     const ra: any = { id: b.id }
     for (const k of TRUONG_CHU) ra[k] = b[k] ?? ''
     ra.bannedWords = cam
+    ra.aiAutoApprove = b.aiAutoApprove === true
     return ra
 }
 
@@ -135,6 +136,9 @@ export interface MktRequest extends AuthRequest {
  * không thuộc cửa hàng / đã xoá thì 404 — KHÔNG lặng lẽ rơi về thương hiệu khác, vì
  * như thế người ta sửa nhầm dữ liệu của thương hiệu khác mà không hay.
  */
+/** Dấu `approvedBy` của bài do AI tự duyệt — worker và giao diện nhận ra bằng dấu này. */
+export const AI_TU_DUYET = 'ai:tu-duyet'
+
 export async function chonThuongHieu(req: MktRequest, res: Response, next: NextFunction) {
     try {
         const prisma: any = req.storePrisma

@@ -24,6 +24,7 @@ import { LoiNenTang, trangThaiTuLoi } from '../lib/mktLoiNenTang'
 import { giaiMa, maHoa } from '../lib/maHoaKhoa'
 import { moTaLoi } from '../lib/gomLoi'
 import { GIA_HAN_TRUOC_MS, giaHanToken } from './mktNenTangKhac'
+import { AI_TU_DUYET } from '../lib/mktThuongHieu'
 
 /** Bao lâu thì coi như worker giữ việc đã chết. */
 const HAN_GIU_MS = 5 * 60_000
@@ -134,6 +135,26 @@ export async function dangMotViec(prisma: any, viec: any): Promise<string> {
                 errorMessage: 'Nội dung đã sửa sau khi duyệt — phải duyệt lại bản mới rồi mới đăng.',
             })
             return 'chua-duyet'
+        }
+        /* Bài do AI TỰ DUYỆT: công tắc của thương hiệu phải CÒN BẬT lúc đăng. Chủ shop tắt
+         * công tắc là muốn dừng ngay — bài AI đã duyệt mà chưa lên phải quay về chờ người
+         * duyệt, không được lọt qua chỉ vì đã vào hàng đợi từ trước. */
+        if (viec.content?.approvedBy === AI_TU_DUYET) {
+            const th = viec.content?.brandId
+                ? await prisma.mktBrand.findUnique({ where: { id: viec.content.brandId }, select: { aiAutoApprove: true, archivedAt: true } })
+                : null
+            if (!th?.aiAutoApprove || th.archivedAt) {
+                await prisma.mktContent.updateMany({
+                    where: { id: viec.content.id, approvedBy: AI_TU_DUYET },
+                    data: { approvedRevision: null, approvedAt: null, approvedBy: null, status: 'pending' },
+                })
+                await ghi({
+                    status: 'cancelled', leaseUntil: null, workerId: null,
+                    errorCode: 'AI_TU_DUYET_DA_TAT',
+                    errorMessage: 'Bài do AI tự duyệt nhưng thương hiệu đã tắt "AI tự duyệt" — đã trả bài về chờ người duyệt.',
+                })
+                return 'ai-tu-duyet-da-tat'
+            }
         }
         if (viec.account?.status !== 'active') {
             await ghi({

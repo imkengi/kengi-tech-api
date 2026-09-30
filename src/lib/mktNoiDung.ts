@@ -6,6 +6,14 @@
 import { LoiMkt } from './mktThuongHieu'
 import { kiemDinhDang } from '../services/mktNenTangKhac'
 
+/** Giờ hẹn: chuỗi KHÔNG kèm múi giờ là GIỜ VN (+07:00) — Cloud Run chạy UTC, hiểu theo
+ *  giờ máy chủ là lệch 7 tiếng (cùng quy ước parseGioHen của fanpage). */
+export function gioVN(raw: any): Date {
+    const s = String(raw ?? '').trim()
+    if (!s) return new Date()
+    return new Date(/([zZ]|[+-]d{2}:?d{2})$/.test(s) || !/T|d:d/.test(s) ? s : s + '+07:00')
+}
+
 export function jsonMang(raw: any): any[] {
     if (Array.isArray(raw)) return raw
     try { const v = JSON.parse(String(raw || '[]')); return Array.isArray(v) ? v : [] } catch { return [] }

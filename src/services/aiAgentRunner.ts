@@ -25,6 +25,8 @@ export const TOOL_NHAY_CAM = new Set([
     // co the dan toi noi dung xuat hien tren trang khach hang.
     'mkt_soan_noi_dung',
     'mkt_len_lich_dang',
+    // 30/09: AI tự duyệt — CHỈ chạy được khi thương hiệu bật công tắc, vẫn phải gọi đích danh
+    'mkt_duyet_noi_dung',
     'create_sale',
     'record_debt_payment',
     'fanpage_create_post',
