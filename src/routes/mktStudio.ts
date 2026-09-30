@@ -30,6 +30,7 @@ import {
 import { xacMinhKenh } from '../services/mktNenTangKhac'
 import { keoSoLieu, danhDauHong } from '../services/mktSoLieu'
 import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, loiChuTheoKenh, lenLich } from '../lib/mktNoiDung'
+import { chuanKhungGio, khungGioCua, gioTrongGanNhat } from '../lib/mktKhungGio'
 import { TOI_DA_TAI_LEN, nhanDangMedia, luuMedia, xoaMedia, kiemUrlCongKhai } from '../lib/mktMedia'
 
 const taiLen = multer({ storage: multer.memoryStorage(), limits: { fileSize: TOI_DA_TAI_LEN, files: 1 } })
@@ -374,6 +375,7 @@ router.post('/contents', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest
         const campaignId = req.body?.campaignId || null
         if (campaignId && !await prisma.mktCampaign.findFirst({ where: { id: campaignId, brandId }, select: { id: true } }))
             throw new LoiMkt('Chiến dịch không thuộc thương hiệu này.', 400, 'SAI_THUONG_HIEU')
+        const postSlots = kiemKhungGio(req.body?.postSlots)
         const c = await prisma.mktContent.create({
             data: {
                 brandId, campaignId,
@@ -382,6 +384,7 @@ router.post('/contents', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest
                 linkUrl: req.body?.linkUrl || null,
                 assetIds: JSON.stringify(assetIds),
                 variants: JSON.stringify(variants),
+                postSlots,
                 productIds: JSON.stringify(req.body?.productIds || []),
                 status: 'pending', source: req.body?.source === 'ai' ? 'ai' : 'manual',
                 createdBy: req.user?.userId,
@@ -423,6 +426,8 @@ router.patch('/contents/:id', ...mkt, requireRole(...QUAN_LY), async (req: MktRe
                 throw new LoiMkt('Chiến dịch không thuộc thương hiệu này.', 400, 'SAI_THUONG_HIEU')
             data.campaignId = cid
         }
+        // Khung giờ KHÔNG nằm trong luật mất duyệt: đổi giờ đăng không đổi chữ người đã duyệt.
+        if (req.body?.postSlots !== undefined) data.postSlots = kiemKhungGio(req.body.postSlots)
 
         const doiChu = ['title', 'body', 'linkUrl', 'hashtags', 'assetIds', 'variants']
             .some(k => data[k] !== undefined && data[k] !== (cu as any)[k])
@@ -459,9 +464,36 @@ router.post('/contents/:id/approve', ...mkt, requireRole(...QUAN_LY), async (req
                 approvedBy: req.user?.userId, status: 'approved', rejectReason: null,
             },
         })
-        res.json({ success: true, data: noiDung(kq) })
+        /* "Duyệt & hẹn đăng": bài có khung giờ (của bài / của thương hiệu) thì hẹn luôn vào giờ
+         * trống gần nhất — HUTI 30/09 đã chọn khung giờ ở tác vụ AI mà duyệt xong vẫn phải
+         * chọn giờ lại. Hẹn không được thì bài VẪN đã duyệt, `lich.loi` nói lý do. */
+        const lich = req.body?.lenLich === true ? await henTheoKhungGio(prisma, req, kq) : null
+        const moi = lich?.daTao ? await prisma.mktContent.findFirst({ where: { id: c.id } }) : kq
+        res.json({ success: true, data: noiDung(moi), lich })
     } catch (err) { traLoi(res, err) }
 })
+
+/** Hẹn bài ĐÃ DUYỆT vào giờ trống gần nhất trong khung giờ của bài (không có thì của thương hiệu). */
+async function henTheoKhungGio(prisma: any, req: MktRequest, c: any, accountIds: string[] = []): Promise<{
+    loi?: string; khungGio?: string; henLuc?: string; daTao?: number; boQua?: string[]
+}> {
+    const khungGio = khungGioCua(c, req.mktBrand)
+    if (!khungGio) return { loi: 'Bài và thương hiệu đều chưa có khung giờ đăng — chọn giờ tay.' }
+    const kenh = accountIds.length ? accountIds : jsonMang(c.variants).map((v: any) => String(v.accountId))
+    if (!kenh.length) return { loi: 'Bài chưa có kênh nào.', khungGio }
+    const khi = await gioTrongGanNhat(prisma, kenh, khungGio)
+    if (!khi) return { loi: `Khung giờ ${khungGio} đã kín lịch 14 ngày tới — chọn giờ tay.`, khungGio }
+    const { taoRa, boQua } = await lenLich(prisma, req.mktBrand, c, kenh, khi)
+    if (taoRa.length) await batCoMarketing(req.user?.branchSchema || req.user?.storeSchema)
+    return { henLuc: khi.toISOString(), khungGio, daTao: taoRa.length, boQua }
+}
+
+/** Khung giờ gửi lên → dạng chuẩn để lưu ("8h, 20h30" → "08:00, 20:30"); không đọc được thì 400. */
+function kiemKhungGio(raw: any): string {
+    const k = chuanKhungGio(raw)
+    if (k === null) throw new LoiMkt('Khung giờ đăng chưa đọc được giờ nào — ví dụ: 08:00, 12:00, 20:00.')
+    return k
+}
 
 router.post('/contents/:id/reject', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest, res: Response) => {
     try {
@@ -491,10 +523,16 @@ router.post('/contents/:id/schedule', ...mkt, requireRole(...QUAN_LY), async (re
         const c = await prisma.mktContent.findFirst({ where: { id: String(req.params.id), brandId } })
         if (!c) throw new LoiMkt('Không tìm thấy nội dung trong thương hiệu này.', 404)
         const accountIds: string[] = Array.isArray(req.body?.accountIds) ? req.body.accountIds.map(String) : []
+        /* Không gửi giờ mà xin `theoKhungGio` ⇒ máy chủ chọn giờ trống gần nhất trong khung. */
+        if (!req.body?.scheduledAt && req.body?.theoKhungGio === true) {
+            const kq = await henTheoKhungGio(prisma, req, c, accountIds)
+            if (kq.loi) throw new LoiMkt(kq.loi, 409, 'HET_GIO_TRONG')
+            return res.json({ success: true, data: { daTao: kq.daTao, boQua: kq.boQua, henLuc: kq.henLuc, khungGio: kq.khungGio } })
+        }
         const khi = req.body?.scheduledAt ? new Date(req.body.scheduledAt) : new Date()
         const { taoRa, boQua } = await lenLich(prisma, req.mktBrand, c, accountIds, khi)
         if (taoRa.length) await batCoMarketing(req.user?.branchSchema || req.user?.storeSchema)
-        res.json({ success: true, data: { daTao: taoRa.length, boQua, publications: taoRa } })
+        res.json({ success: true, data: { daTao: taoRa.length, boQua, publications: taoRa, henLuc: khi.toISOString() } })
     } catch (err) { traLoi(res, err) }
 })
 

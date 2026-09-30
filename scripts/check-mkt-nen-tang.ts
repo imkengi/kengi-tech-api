@@ -287,6 +287,33 @@ async function main() {
     kiem('có Z ⇒ giữ nguyên', iso('2026-10-01T01:00:00Z') === '2026-10-01T01:00:00.000Z')
     kiem('dấu cách thay chữ T ⇒ vẫn là giờ VN (trước đây bị hiểu là UTC, lệch 7 tiếng)', iso('2026-10-01 08:00') === '2026-10-01T01:00:00.000Z', iso('2026-10-01 08:00'))
 
+    console.log('━━ Khung giờ đăng (tính thuần)')
+    const { docKhungGio, chuanKhungGio, chonGio } = await import('../src/lib/mktKhungGio')
+    kiem('đọc "08:00, 12h, 20h30, 7" ⇒ phút trong ngày, tăng dần', docKhungGio('08:00, 12h, 20h30, 7').join() === '420,480,720,1230', docKhungGio('08:00, 12h, 20h30, 7'))
+    kiem('chuẩn hoá "8h, 20h30" → "08:00, 20:30"; rỗng → ""; không có giờ / giờ sai → null',
+        chuanKhungGio('8h, 20h30') === '08:00, 20:30' && chuanKhungGio('  ') === '' && chuanKhungGio('tối nay') === null && chuanKhungGio('25:00') === null)
+    const vnMs = (s: string) => new Date(s + '+07:00').getTime()
+    const vnGio = (d: Date | null) => d ? new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ') : 'null'
+    const khung = docKhungGio('08:00, 12:00, 20:00')
+    const tu = vnMs('2026-10-01T10:00'), den = tu + 14 * 86400_000
+    kiem('10:00 bấm ⇒ 12:00 cùng ngày', vnGio(chonGio(khung, [], tu, den)) === '2026-10-01 12:00', vnGio(chonGio(khung, [], tu, den)))
+    kiem('12:00 đã có bài lúc 12:30 (cách <60 phút) ⇒ nhảy sang 20:00', vnGio(chonGio(khung, [vnMs('2026-10-01T12:30')], tu, den)) === '2026-10-01 20:00')
+    kiem('hết giờ trong ngày ⇒ 08:00 hôm sau', vnGio(chonGio(khung, [], vnMs('2026-10-01T22:00'), vnMs('2026-10-01T22:00') + 14 * 86400_000)) === '2026-10-02 08:00')
+    kiem('kín lịch cả khoảng tìm ⇒ null (để người chọn tay)', chonGio(khung, [], tu, tu + 3600_000) === null)
+
+    console.log('━━ Khung giờ đăng qua tool AI')
+    const soanKhung: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', khungGio: '8h, 20h', phienBan: [{ kenhId: 'a1', noiDung: 'Bài có khung giờ của tác vụ' }] }, ctx)
+    kiem('mkt_soan_noi_dung nhận khungGio, lưu dạng chuẩn vào bài', dl.mktContent.find((c: any) => c.id === soanKhung.id)?.postSlots === '08:00, 20:00' && soanKhung.khungGio === '08:00, 20:00', soanKhung)
+    kiem('ghi chú bảo AI BỎ TRỐNG henLuc khi tự duyệt (máy chủ tự xếp giờ)', /BỎ TRỐNG henLuc/.test(soanKhung.ghiChu), soanKhung.ghiChu)
+    kiem('khungGio không đọc được ⇒ CHƯA LƯU', /khungGio/.test(await loiSoan({ khungGio: 'buổi tối', phienBan: [{ kenhId: 'a1', noiDung: 'x' }] }) || ''))
+    const tuDuyetKhung: any = await tool('mkt_duyet_noi_dung').run({ thuongHieu: 'b1', noiDungId: soanKhung.id }, ctx)
+    const gioH = tuDuyetKhung.henLuc ? new Date(new Date(tuDuyetKhung.henLuc).getTime() + 7 * 3600_000).toISOString().slice(11, 16) : ''
+    kiem('AI tự duyệt KHÔNG truyền henLuc ⇒ máy chủ hẹn vào khung của bài (08:00 / 20:00)', tuDuyetKhung.daLenLich === 1 && ['08:00', '20:00'].includes(gioH) && tuDuyetKhung.khungGio === '08:00, 20:00', tuDuyetKhung)
+    const ngay: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', khungGio: '08:00', phienBan: [{ kenhId: 'a1', noiDung: 'Bài đăng ngay' }] }, ctx)
+    dl.mktContent.find((c: any) => c.id === ngay.id).approvedRevision = 1
+    const lichNgay: any = await tool('mkt_len_lich_dang').run({ thuongHieu: 'b1', noiDungId: ngay.id, henLuc: 'ngay' }, ctx)
+    kiem('henLuc "ngay" ⇒ đăng ngay dù bài có khung giờ', lichNgay.daLenLich === 1 && Math.abs(new Date(lichNgay.henLuc).getTime() - Date.now()) < 60_000, lichNgay)
+
     console.log(`\n━━ KẾT QUẢ: ${dat} đạt / ${truot} trượt ━━`)
     process.exit(truot ? 1 : 0)
 }

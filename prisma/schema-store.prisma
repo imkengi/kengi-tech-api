@@ -3056,6 +3056,9 @@ model MktBrand {
   // này (AI không tự cấp quyền cho mình). Tắt đi thì bài AI đã tự duyệt mà chưa đăng bị
   // worker chặn lại và trả về hàng chờ người duyệt.
   aiAutoApprove  Boolean   @default(false)
+  // Khung giờ đăng MẶC ĐỊNH (30/09/2026): "08:00, 12:00, 20:00" giờ VN. Bài không có khung
+  // riêng thì duyệt xong tự hẹn vào giờ trống gần nhất trong khung này (src/lib/mktKhungGio.ts).
+  postSlots      String    @default("")
   // Xoá MỀM: dữ liệu còn nguyên, chỉ biến khỏi danh sách và không tính vào trần 10.
   archivedAt     DateTime?
   createdBy      String?
@@ -3133,6 +3136,10 @@ model MktContent {
   // không đăng được cho mọi nơi. Kênh không có phiên bản riêng thì dùng title/body/assetIds.
   // Nằm trong luật "sửa là mất duyệt" như body.
   variants   String  @default("[]")
+  // Khung giờ đăng của RIÊNG bài này (30/09/2026) — tác vụ AI soạn ra bài ghi khung giờ của
+  // tác vụ vào đây. Duyệt xong tự hẹn vào giờ trống gần nhất. Trống = dùng khung của thương
+  // hiệu. KHÔNG nằm trong luật "sửa là mất duyệt": đổi giờ không đổi chữ người đã duyệt.
+  postSlots  String  @default("")
 
   // Khoá lạc quan: SỬA NỘI DUNG LÀ MẤT DUYỆT. Mỗi lần sửa tăng revision, và
   // approvedRevision phải bằng revision hiện tại thì mới được gửi. Thiếu cơ chế

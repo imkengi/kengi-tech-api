@@ -12,6 +12,7 @@
 import { Response, NextFunction } from 'express'
 import { AuthRequest } from '../middleware/auth'
 import { errMsg } from './errorResponse'
+import { chuanKhungGio } from './mktKhungGio'
 
 export const MAX_THUONG_HIEU = 10
 
@@ -48,6 +49,7 @@ export function hoSo(b: any) {
     for (const k of TRUONG_CHU) ra[k] = b[k] ?? ''
     ra.bannedWords = cam
     ra.aiAutoApprove = b.aiAutoApprove === true
+    ra.postSlots = b.postSlots ?? ''
     return ra
 }
 
@@ -63,6 +65,12 @@ export function kiemBanVaHoSo(body: any): Record<string, any> {
             if (!Array.isArray(v) || v.length > 100 || v.some(x => typeof x !== 'string' || !x.trim() || x.length > 100))
                 throw new LoiMkt('bannedWords phải là mảng tối đa 100 từ, mỗi từ 1–100 ký tự.')
             data.bannedWords = JSON.stringify(v.map(x => x.trim()))
+            continue
+        }
+        if (k === 'postSlots') {
+            const khung = typeof v === 'string' ? chuanKhungGio(v) : null
+            if (khung === null) throw new LoiMkt('Khung giờ đăng chưa đọc được giờ nào — ví dụ: 08:00, 12:00, 20:00.')
+            data.postSlots = khung
             continue
         }
         if (!(TRUONG_CHU as readonly string[]).includes(k)) throw new LoiMkt(`Trường "${k}" không có trong hồ sơ thương hiệu.`)

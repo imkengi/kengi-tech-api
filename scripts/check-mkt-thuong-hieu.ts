@@ -27,13 +27,13 @@ const MAC_DINH: Record<string, any> = {
     mktBrand: {
         industry: '', description: '', products: '', contentPillars: '', contact: '', audience: '',
         voice: '', usp: '', cta: '', examples: '', notes: '', bannedWords: '[]',
-        timezone: 'Asia/Ho_Chi_Minh', archivedAt: null, brandId: undefined,
+        timezone: 'Asia/Ho_Chi_Minh', archivedAt: null, brandId: undefined, postSlots: '',
     },
     mktAccount: { brandId: null, status: 'active', refreshSecret: null },
     mktCampaign: { brandId: null, status: 'active', goal: '' },
     mktContent: {
         brandId: null, campaignId: null, title: '', body: '', hashtags: '[]', assetIds: '[]',
-        productIds: '[]', variants: '[]', revision: 1, approvedRevision: null, status: 'draft',
+        productIds: '[]', variants: '[]', revision: 1, approvedRevision: null, status: 'draft', postSlots: '',
     },
     mktPublication: { status: 'queued', remoteRef: null, attempts: 0 },
     mktAsset: { brandId: null, localFile: '', name: '', type: 'image' },
@@ -59,6 +59,7 @@ function khop(model: string, dong: any, where: any = {}): boolean {
             if ('in' in o && !o.in.includes(dong[k])) return false
             if ('lt' in o && !(dong[k] < o.lt)) return false
             if ('lte' in o && !(dong[k] <= o.lte)) return false
+            if ('gte' in o && !(dong[k] >= o.gte)) return false
             continue
         }
         if (v === null ? dong[k] != null : dong[k] !== v) return false
@@ -298,6 +299,37 @@ async function main() {
     const catNgan = await goi('PATCH', `/contents/${baiDai.data.id}`, { brand: B, body: { variants: [{ accountId: 'accTh', text: 'Mấy bà tin can chi không? 🙈', options: { topicTag: '12 con giáp' } }] } })
     const duyetNgan = await goi('POST', `/contents/${baiDai.data.id}/approve`, { brand: B, body: { revision: catNgan.data.revision } })
     kiem('cắt ngắn rồi duyệt được; chủ đề Threads giữ trong phiên bản', duyetNgan.success === true && duyetNgan.data.variants[0].options.topicTag === '12 con giáp', duyetNgan)
+
+    console.log('━━ Khung giờ đăng: bấm "Duyệt & hẹn đăng" là tự hẹn, khỏi chọn giờ lại (HUTI 30/09)')
+    const gioVNCua = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(11, 16)
+    const khungTH = await goi('PUT', '/brand', { brand: B, body: { postSlots: '8h, 20h30' } })
+    kiem('thương hiệu lưu khung giờ mặc định, chuẩn hoá "8h, 20h30" → "08:00, 20:30"', khungTH.success && khungTH.data.postSlots === '08:00, 20:30', khungTH)
+    kiem('khung giờ không đọc được giờ nào ⇒ 400', (await goi('PUT', '/brand', { brand: B, body: { postSlots: 'tối nay' } })).status === 400)
+    const lichTruoc = bang.mktPublication.length
+    const baiKhung = await goi('POST', '/contents', { brand: B, body: { title: 'Khung 1', postSlots: '09:00, 21:00', variants: [{ accountId: 'accTh', text: 'Bài có khung giờ riêng 1' }] } })
+    kiem('bài lưu khung giờ RIÊNG (của tác vụ)', baiKhung.data?.postSlots === '09:00, 21:00', baiKhung.data?.postSlots)
+    const dh1 = await goi('POST', `/contents/${baiKhung.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })
+    const h1 = dh1.lich?.henLuc
+    kiem('duyệt + lenLich ⇒ hẹn luôn, đúng một giờ trong khung của BÀI (09:00 / 21:00 giờ VN)', dh1.success && dh1.lich?.daTao === 1 && ['09:00', '21:00'].includes(gioVNCua(h1)), dh1.lich)
+    kiem('…giờ hẹn sau lúc bấm ít nhất 10 phút, bài chuyển "đã lên lịch"', new Date(h1).getTime() > Date.now() + 9 * 60_000 && dh1.data.status === 'scheduled', { h1, st: dh1.data?.status })
+    kiem('…lượt đăng tạo đúng giờ đó', bang.mktPublication.length === lichTruoc + 1 && new Date(bang.mktPublication.at(-1).scheduledAt).toISOString() === h1)
+    const baiKhung2 = await goi('POST', '/contents', { brand: B, body: { title: 'Khung 2', postSlots: '09:00, 21:00', variants: [{ accountId: 'accTh', text: 'Bài có khung giờ riêng 2' }] } })
+    const h2 = (await goi('POST', `/contents/${baiKhung2.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })).lich?.henLuc
+    kiem('bài thứ hai cùng kênh ⇒ giờ trống KẾ TIẾP, cách bài trước ≥ 60 phút', !!h2 && ['09:00', '21:00'].includes(gioVNCua(h2)) && Math.abs(new Date(h2).getTime() - new Date(h1).getTime()) >= 3600_000, { h1, h2 })
+    const baiMacDinh = await goi('POST', '/contents', { brand: B, body: { title: 'Không khung', variants: [{ accountId: 'accTh', text: 'Bài không có khung riêng' }] } })
+    const dh3 = await goi('POST', `/contents/${baiMacDinh.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })
+    kiem('bài không có khung riêng ⇒ dùng khung MẶC ĐỊNH của thương hiệu (08:00 / 20:30)', ['08:00', '20:30'].includes(gioVNCua(dh3.lich?.henLuc)) && dh3.lich?.khungGio === '08:00, 20:30', dh3.lich)
+    await goi('PUT', '/brand', { brand: B, body: { postSlots: '' } })
+    const baiTay = await goi('POST', '/contents', { brand: B, body: { title: 'Chọn tay', variants: [{ accountId: 'accTh', text: 'Bài chọn giờ tay' }] } })
+    const dh4 = await goi('POST', `/contents/${baiTay.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })
+    kiem('không có khung giờ nào ⇒ VẪN duyệt, lich.loi bảo chọn giờ tay (không tự đăng ngay)', dh4.success && dh4.data.status === 'approved' && /chọn giờ tay/.test(dh4.lich?.loi || '') && !bang.mktPublication.some(p => p.contentId === baiTay.data.id), dh4)
+    kiem('duyệt KHÔNG kèm lenLich ⇒ như cũ, không tạo lượt đăng', (await goi('POST', `/contents/${baiDai.data.id}/approve`, { brand: B, body: {} })).lich === null)
+    const doiKhung = await goi('PATCH', `/contents/${baiTay.data.id}`, { brand: B, body: { postSlots: '10:00' } })
+    kiem('đổi khung giờ KHÔNG làm mất duyệt (chữ không đổi)', doiKhung.data?.approvedRevision === 1 && doiKhung.data?.revision === 1 && doiKhung.data?.postSlots === '10:00' && !doiKhung.matDuyet, doiKhung)
+    const henKhung = await goi('POST', `/contents/${baiTay.data.id}/schedule`, { brand: B, body: { theoKhungGio: true } })
+    kiem('bài đã duyệt: "Hẹn đăng" theo khung ⇒ máy chủ chọn giờ (10:00 giờ VN)', henKhung.data?.daTao === 1 && gioVNCua(henKhung.data?.henLuc) === '10:00', henKhung)
+    // dọn: lượt đăng vừa hẹn không được chặn bước xoá thương hiệu phía dưới
+    for (const p of bang.mktPublication) if (p.status === 'queued' && p.accountId === 'accTh') p.status = 'cancelled'
 
     console.log('━━ Xoá thương hiệu')
     bang.mktPublication.push({ id: 'pubCho', contentId: id, accountId: 'accB', status: 'queued', idempotencyKey: 'k2', scheduledAt: new Date() })

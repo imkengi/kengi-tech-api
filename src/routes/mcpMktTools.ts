@@ -26,6 +26,7 @@ import type { Tool, ToolCtx } from '../lib/mcpTypes'
 import { canhBaoCat, ToolError } from '../lib/mcpTypes'
 import { dsThuongHieu, hoSo, kiemBanVaHoSo, LoiMkt, AI_TU_DUYET } from '../lib/mktThuongHieu'
 import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai, loiKhiDangLen, loiChuTheoKenh, gioVN } from '../lib/mktNoiDung'
+import { chuanKhungGio, khungGioCua, gioTrongGanNhat } from '../lib/mktKhungGio'
 import { registryPrisma } from '../lib/prisma'
 
 const TRAN = 50
@@ -155,6 +156,7 @@ export const MKT_TOOLS: Tool[] = [
                 audience: { type: 'string' }, voice: { type: 'string' }, usp: { type: 'string' }, cta: { type: 'string' },
                 examples: { type: 'string' }, notes: { type: 'string' }, timezone: { type: 'string' },
                 bannedWords: { type: 'array', items: { type: 'string' } },
+                postSlots: { type: 'string', description: 'Khung giờ đăng MẶC ĐỊNH (giờ VN), vd "08:00, 12:00, 20:00" — bài không có khung riêng thì duyệt xong tự hẹn vào giờ trống gần nhất trong khung này' },
             },
             additionalProperties: false,
         },
@@ -306,6 +308,7 @@ export const MKT_TOOLS: Tool[] = [
                 noiDung: { type: 'string', description: 'Thân bài chung — dùng cho kênh không có phiên bản riêng' },
                 lienKet: { type: 'string', description: 'URL kèm theo (tuỳ chọn)' },
                 chienDichId: { type: 'string' },
+                khungGio: { type: 'string', description: 'Khung giờ đăng của nhiệm vụ (giờ VN), vd "08:00, 12:00, 20:00" — bài nhớ khung này: duyệt xong tự hẹn vào giờ TRỐNG gần nhất, không ai phải chọn giờ lại' },
                 phienBan: {
                     type: 'array',
                     description: 'Phiên bản riêng theo kênh (kenhId lấy từ mkt_danh_sach_kenh của CÙNG thương hiệu)',
@@ -344,15 +347,19 @@ export const MKT_TOOLS: Tool[] = [
                 throw new ToolError(`CHƯA LƯU — ${loiChu.join(' | ')} Viết lại cho đúng rồi gọi lại mkt_soan_noi_dung (bài này chưa được lưu nên gọi lại KHÔNG thành bài trùng).`)
             if (a?.chienDichId && !await p.mktCampaign.findFirst({ where: { id: a.chienDichId, brandId: b.id }, select: { id: true } }))
                 throw new ToolError('Chiến dịch không thuộc thương hiệu này.')
+            const postSlots = chuanKhungGio(a?.khungGio)
+            if (postSlots === null) throw new ToolError('khungGio chưa đọc được giờ nào — dạng "08:00, 12:00, 20:00".')
             const c = await p.mktContent.create({
                 data: {
                     brandId: b.id,
                     title: String(a?.tieuDe || ''), body,
                     linkUrl: a?.lienKet || null, campaignId: a?.chienDichId || null,
                     variants: JSON.stringify(variants),
+                    postSlots,
                     status: 'pending', source: 'ai', createdBy: ctx.userId,
                 },
             })
+            const khung = khungGioCua(c, b)
             const cam = tuCamGapPhai(b, c.title, body, ...variants.map(v => `${v.title} ${v.text}`))
             const quyTac = quyTacViet(b)
             return {
@@ -364,24 +371,27 @@ export const MKT_TOOLS: Tool[] = [
                 doiChieu: quyTac ? `Đối chiếu bài vừa lưu với QUY TẮC VIẾT của chủ shop. Các bài SAU phải đúng từng dòng; nếu bài này còn sai dòng nào thì nêu rõ trong báo cáo cuối để chủ shop loại — đừng soạn thêm bản thứ hai của cùng bài (thành bài trùng):\n${quyTac.slice(0, 1500)}` : undefined,
                 /* Thương hiệu BẬT "AI tự duyệt" mà vẫn nói "AI không có quyền duyệt" là tự mâu
                  * thuẫn với mkt_duyet_noi_dung — model dễ bỏ luôn bước duyệt. */
+                khungGio: khung || undefined,
                 ghiChu: b.aiAutoApprove === true
-                    ? 'Đã lưu CHỜ DUYỆT. Thương hiệu này BẬT "AI tự duyệt": nếu nhiệm vụ yêu cầu đăng, gọi mkt_duyet_noi_dung (kèm henLuc) cho bài này.'
+                    ? `Đã lưu CHỜ DUYỆT. Thương hiệu này BẬT "AI tự duyệt": nếu nhiệm vụ yêu cầu đăng, gọi mkt_duyet_noi_dung cho bài này${khung ? ` — BỎ TRỐNG henLuc, máy chủ tự xếp vào giờ trống gần nhất trong khung ${khung}` : ' kèm henLuc'}.`
                     : 'Đã lưu vào hàng đợi CHỜ DUYỆT. Bài sẽ KHÔNG lên trang cho tới khi chủ shop tự duyệt ở kengi.vn/marketing — '
-                        + 'trợ lý AI không có quyền duyệt, đó là cố ý.',
+                        + 'trợ lý AI không có quyền duyệt, đó là cố ý.'
+                        + (khung ? ` Chủ shop bấm duyệt là bài tự hẹn vào giờ trống gần nhất trong khung ${khung}.` : ''),
             }
         }),
     },
     {
         name: 'mkt_len_lich_dang',
         write: true,
-        description: 'Lên lịch đăng một bài ĐÃ ĐƯỢC DUYỆT ra các kênh của CÙNG thương hiệu (bỏ trống kenhIds = các kênh có phiên bản riêng trong bài). Từ chối nếu bài chưa duyệt hoặc đã sửa sau khi duyệt; kênh sai định dạng / có từ cấm bị bỏ qua kèm lý do.',
+        description: 'Lên lịch đăng một bài ĐÃ ĐƯỢC DUYỆT ra các kênh của CÙNG thương hiệu (bỏ trống kenhIds = các kênh có phiên bản riêng trong bài). BỎ TRỐNG henLuc = máy chủ tự xếp vào giờ TRỐNG gần nhất trong khung giờ đăng (khungGio → của bài → của thương hiệu; cách bài khác trên cùng kênh ≥60 phút) — không cần tự tính giờ. Từ chối nếu bài chưa duyệt hoặc đã sửa sau khi duyệt; kênh sai định dạng / có từ cấm bị bỏ qua kèm lý do.',
         inputSchema: {
             type: 'object',
             properties: {
                 ...THAM_SO_THUONG_HIEU,
                 noiDungId: { type: 'string' },
                 kenhIds: { type: 'array', items: { type: 'string' }, description: 'id các kênh (lấy từ mkt_danh_sach_kenh)' },
-                henLuc: { type: 'string', description: 'ISO datetime; bỏ trống = đăng ngay' },
+                henLuc: { type: 'string', description: 'Giờ VN dạng 2026-10-01T08:00; "ngay" = đăng ngay; BỎ TRỐNG = giờ trống gần nhất trong khung giờ đăng (không có khung giờ nào thì đăng ngay)' },
+                khungGio: { type: 'string', description: 'Khung giờ dùng thay khung của bài, vd "08:00, 12:00, 20:00"' },
             },
             required: ['noiDungId'],
             additionalProperties: false,
@@ -391,27 +401,33 @@ export const MKT_TOOLS: Tool[] = [
             const b = await thuongHieu(p, ctx, a)
             const c = await p.mktContent.findFirst({ where: { id: String(a.noiDungId), brandId: b.id } })
             if (!c) throw new ToolError('Không tìm thấy bài trong thương hiệu này.')
-            const khi = gioVN(a?.henLuc)
+            const kenhIds: string[] = Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : []
+            const { khi, khungGio } = await gioHenChoAi(p, b, c, kenhIds, a?.henLuc, a?.khungGio)
             /* Cửa duyệt nằm TRONG lenLich — lặp lại ở mọi cửa, không tin phía gọi. */
-            const { taoRa, boQua } = await lenLich(p, b, c, Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : [], khi)
+            const { taoRa, boQua } = await lenLich(p, b, c, kenhIds, khi ?? new Date())
             /* Worker chỉ chạm cửa hàng có cờ hasMarketing. Trước 29/09 đường MCP không bật cờ
              * ⇒ bài lên lịch qua AI ở cửa hàng chưa từng lên lịch qua giao diện KHÔNG BAO GIỜ được đăng. */
             if (taoRa.length && ctx.storeCode)
                 await (registryPrisma as any).store.updateMany({ where: { code: ctx.storeCode }, data: { hasMarketing: true } })
                     .catch((e: any) => console.warn('[mkt] MCP không bật được hasMarketing:', e?.message))
-            return { thuongHieu: b.name, daLenLich: taoRa.length, boQua, ghiChu: boQua.length ? 'Có kênh bị bỏ qua — xem `boQua`.' : undefined }
+            return {
+                thuongHieu: b.name, daLenLich: taoRa.length, boQua,
+                henLuc: taoRa.length ? (khi ?? new Date()).toISOString() : undefined, khungGio,
+                ghiChu: boQua.length ? 'Có kênh bị bỏ qua — xem `boQua`.' : undefined,
+            }
         }),
     },
     {
         name: 'mkt_duyet_noi_dung',
         write: true,
-        description: 'CHỈ dùng được khi chủ shop đã BẬT "AI tự duyệt" cho thương hiệu này (xem hoSo.aiAutoApprove trong mkt_ho_so_thuong_hieu). Duyệt một bài đang chờ duyệt và (tuỳ chọn) lên lịch đăng luôn. Máy chủ vẫn kiểm định dạng từng kênh và từ cấm — bài có lỗi thì KHÔNG được duyệt, hãy soạn bài mới cho đúng. Công tắc đang tắt thì tool từ chối: để bài chờ chủ shop duyệt, KHÔNG tìm cách khác.',
+        description: 'CHỈ dùng được khi chủ shop đã BẬT "AI tự duyệt" cho thương hiệu này (xem hoSo.aiAutoApprove trong mkt_ho_so_thuong_hieu). Duyệt một bài đang chờ duyệt và lên lịch đăng luôn: BỎ TRỐNG henLuc thì máy chủ tự xếp vào giờ TRỐNG gần nhất trong khung giờ đăng của bài / thương hiệu (không cần tự tính giờ); không có khung giờ nào thì chỉ duyệt. Máy chủ vẫn kiểm định dạng từng kênh và từ cấm — bài có lỗi thì KHÔNG được duyệt, hãy soạn bài mới cho đúng. Công tắc đang tắt thì tool từ chối: để bài chờ chủ shop duyệt, KHÔNG tìm cách khác.',
         inputSchema: {
             type: 'object',
             properties: {
                 ...THAM_SO_THUONG_HIEU,
                 noiDungId: { type: 'string' },
-                henLuc: { type: 'string', description: 'ISO datetime giờ VN để lên lịch luôn; bỏ trống = chỉ duyệt, chưa lên lịch' },
+                henLuc: { type: 'string', description: 'Giờ VN dạng 2026-10-01T08:00; "ngay" = đăng ngay; BỎ TRỐNG = giờ trống gần nhất trong khung giờ đăng (không có khung giờ thì chỉ duyệt, chưa lên lịch)' },
+                khungGio: { type: 'string', description: 'Khung giờ dùng thay khung của bài, vd "08:00, 12:00, 20:00"' },
                 kenhIds: { type: 'array', items: { type: 'string' }, description: 'bỏ trống = các kênh có phiên bản trong bài' },
             },
             required: ['noiDungId'],
@@ -438,17 +454,39 @@ export const MKT_TOOLS: Tool[] = [
                 if (l.length) loi.push(`${acc.name}: ${l.join(' ')}`)
             }
             if (loi.length) throw new ToolError(`KHÔNG duyệt — bài còn lỗi: ${loi.join(' | ')}`)
+            const kenhIds: string[] = Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : []
+            /* Tính giờ TRƯỚC khi duyệt: khung giờ kín lịch thì báo lỗi mà chưa ghi gì. */
+            const { khi, khungGio } = await gioHenChoAi(p, b, c, kenhIds.length ? kenhIds : kenh, a?.henLuc, a?.khungGio, null)
             const duyet = await p.mktContent.update({
                 where: { id: c.id },
                 data: { approvedRevision: c.revision, approvedAt: new Date(), approvedBy: AI_TU_DUYET, status: 'approved', rejectReason: null },
             })
-            if (!a?.henLuc) return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: 0, ghiChu: 'Đã tự duyệt (ghi dấu "AI tự duyệt"). Chưa lên lịch — gọi mkt_len_lich_dang hoặc truyền henLuc.' }
-            const khi = gioVN(a.henLuc)
-            const { taoRa, boQua } = await lenLich(p, b, duyet, Array.isArray(a?.kenhIds) ? a.kenhIds.map(String) : [], khi)
+            if (!khi) return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: 0, ghiChu: 'Đã tự duyệt (ghi dấu "AI tự duyệt"). Bài và thương hiệu chưa có khung giờ đăng nên CHƯA lên lịch — gọi mkt_len_lich_dang kèm henLuc.' }
+            const { taoRa, boQua } = await lenLich(p, b, duyet, kenhIds, khi)
             if (taoRa.length && ctx.storeCode)
                 await (registryPrisma as any).store.updateMany({ where: { code: ctx.storeCode }, data: { hasMarketing: true } })
                     .catch((e: any) => console.warn('[mkt] MCP không bật được hasMarketing:', e?.message))
-            return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: taoRa.length, boQua, henLuc: khi.toISOString() }
+            return { id: c.id, thuongHieu: b.name, daDuyet: true, daLenLich: taoRa.length, boQua, henLuc: khi.toISOString(), khungGio }
         }),
     },
 ]
+
+/**
+ * Giờ hẹn cho tool AI. "ngay" = bây giờ; có giờ = giờ đó (giờ VN); BỎ TRỐNG = giờ trống gần
+ * nhất trong khung giờ đăng (tham số khungGio → của bài → của thương hiệu) — máy chủ tính,
+ * không để model tự dò hàng đợi. Không có khung giờ nào thì `macDinh` (lên lịch: đăng ngay
+ * như trước; tự duyệt: null = chỉ duyệt).
+ */
+async function gioHenChoAi(p: any, b: any, c: any, kenh: string[], henLuc: any, khungGioThamSo: any, macDinh: Date | null = new Date()) {
+    const h = String(henLuc ?? '').trim()
+    if (h.toLowerCase() === 'ngay') return { khi: new Date() as Date | null, khungGio: undefined }
+    if (h) return { khi: gioVN(h) as Date | null, khungGio: undefined }
+    const thamSo = chuanKhungGio(khungGioThamSo)
+    if (thamSo === null) throw new ToolError('khungGio chưa đọc được giờ nào — dạng "08:00, 12:00, 20:00".')
+    const khung = thamSo || khungGioCua(c, b)
+    if (!khung) return { khi: macDinh, khungGio: undefined }
+    const dsKenh = kenh.length ? kenh : jsonMang(c.variants).map((v: any) => String(v.accountId))
+    const khi = await gioTrongGanNhat(p, dsKenh, khung)
+    if (!khi) throw new ToolError(`Khung giờ ${khung} đã kín lịch 14 ngày tới — báo chủ shop chọn giờ.`)
+    return { khi: khi as Date | null, khungGio: khung }
+}
