@@ -11,8 +11,13 @@ import { TOOLS } from '../routes/mcp'
 import { ToolCtx, ToolError } from '../lib/mcpTypes'
 import { toGeminiSchema } from '../lib/geminiSchema'
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+/* Model theo thứ tự ưu tiên. Google khoá model cũ với KEY MỚI (30/09/2026: key mới gọi
+ * gemini-2.5-flash nhận 404 "no longer available to new users") trong khi key cũ vẫn chạy
+ * — nên không được viết cứng một model: 404 thì thử model kế, và nhớ model chạy được
+ * cho từng key để lượt sau khỏi thử lại. */
+const DS_MODEL = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-2.5-flash'].filter(Boolean) as string[])]
 const GEMINI_URL = (m: string) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`
+const modelChoKey = new Map<string, string>()
 
 /**
  * Tool ĐẨY RA NGOÀI cho người lạ thấy hoặc động vào tiền/kho.
@@ -74,21 +79,35 @@ export type ThamSoChay = {
 }
 
 async function callGemini(contents: any[], apiKey: string, systemPrompt: string, tools: any[]): Promise<any> {
-    const res = await fetch(`${GEMINI_URL(GEMINI_MODEL)}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents,
-            tools,
-            generationConfig: { temperature: 0.2 },
-        }),
-    })
-    const text = await res.text()
-    let data: any
-    try { data = JSON.parse(text) } catch { throw new Error(`Gemini trả về non-JSON (HTTP ${res.status}): ${text.slice(0, 300)}`) }
-    if (!res.ok) throw new Error(`Gemini lỗi HTTP ${res.status}: ${data?.error?.message || text.slice(0, 200)}`)
-    return data
+    const daNho = modelChoKey.get(apiKey)
+    const thu = daNho ? [daNho, ...DS_MODEL.filter(m => m !== daNho)] : DS_MODEL
+    let loiCuoi = ''
+    for (const model of thu) {
+        const res = await fetch(`${GEMINI_URL(model)}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                tools,
+                generationConfig: { temperature: 0.2 },
+            }),
+        })
+        const text = await res.text()
+        let data: any
+        try { data = JSON.parse(text) } catch { throw new Error(`Gemini trả về non-JSON (HTTP ${res.status}): ${text.slice(0, 300)}`) }
+        /* CHỈ 404 (model không có / không cho key này) mới thử model kế. Lỗi khác — key sai,
+         * hết hạn mức, nội dung bị chặn — thử model khác cũng vô ích, báo ngay. */
+        if (res.status === 404) {
+            loiCuoi = `${model}: ${data?.error?.message || 'không tìm thấy'}`
+            console.warn(`[AiAgent] model ${model} không dùng được với key này, thử model kế`)
+            continue
+        }
+        if (!res.ok) throw new Error(`Gemini lỗi HTTP ${res.status} (${model}): ${data?.error?.message || text.slice(0, 200)}`)
+        modelChoKey.set(apiKey, model)
+        return data
+    }
+    throw new Error(`Không model Gemini nào dùng được với key này (đã thử ${thu.join(', ')}). Lỗi cuối: ${loiCuoi}`)
 }
 
 /** Lọc bộ tool theo quyền + allowlist, rồi bọc thành function declarations Gemini. */
