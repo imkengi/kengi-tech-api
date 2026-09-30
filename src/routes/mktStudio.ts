@@ -27,9 +27,11 @@ import {
     MAX_THUONG_HIEU, LoiMkt, traLoi, hoSo, kiemBanVaHoSo,
     chonThuongHieu, MktRequest,
 } from '../lib/mktThuongHieu'
-import { xacMinhKenh } from '../services/mktNenTangKhac'
+import { xacMinhKenh, loiPhanChu } from '../services/mktNenTangKhac'
 import { keoSoLieu, danhDauHong } from '../services/mktSoLieu'
-import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, loiChuTheoKenh, lenLich } from '../lib/mktNoiDung'
+import { docBinhLuan, traLoiBinhLuan, HO_TRO_BINH_LUAN } from '../services/mktBinhLuan'
+import { LoiNenTang } from '../lib/mktLoiNenTang'
+import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, loiChuTheoKenh, lenLich, tuCamGapPhai } from '../lib/mktNoiDung'
 import { chuanKhungGio, khungGioCua, gioTrongGanNhat } from '../lib/mktKhungGio'
 import { TOI_DA_TAI_LEN, nhanDangMedia, luuMedia, xoaMedia, kiemUrlCongKhai } from '../lib/mktMedia'
 
@@ -567,6 +569,84 @@ router.get('/publications', ...mkt, async (req: MktRequest, res: Response) => {
             },
         })
         res.json({ success: true, data: ds })
+    } catch (err) { traLoi(res, err) }
+})
+
+// ─── BÌNH LUẬN — đọc & trả lời (Threads trước; services/mktBinhLuan) ─────────
+/** Lỗi nền tảng (thiếu quyền, token hết hạn…) → 4xx kèm lời dặn, đừng thành 500 "lỗi hệ thống". */
+const loiNenTangRa = (e: any) =>
+    e instanceof LoiNenTang ? new LoiMkt(e.message, ['THIEU_QUYEN', 'TOKEN_HONG'].includes(e.code) ? 403 : 502, e.code) : e
+
+/** Lượt ĐÃ ĐĂNG của thương hiệu này trên kênh có hỗ trợ bình luận, kèm kênh. */
+async function luotDaDang(prisma: any, brandId: string, id: string) {
+    const p = await prisma.mktPublication.findFirst({
+        where: { id, content: { brandId } },
+        include: { account: true, content: { select: { title: true } } },
+    })
+    if (!p) throw new LoiMkt('Không tìm thấy lượt đăng trong thương hiệu này.', 404)
+    if (p.status !== 'sent' || !p.remotePostId) throw new LoiMkt('Bài chưa đăng xong nên chưa có bình luận.', 409)
+    if (!HO_TRO_BINH_LUAN.has(p.account?.platform))
+        throw new LoiMkt(`Chưa hỗ trợ bình luận trên ${p.account?.platform} — hiện làm Threads trước.`, 400, 'CHUA_HO_TRO')
+    return p
+}
+
+/** Hộp bình luận: 8 bài Threads mới nhất đăng trong 14 ngày, mỗi bài kèm toàn bộ bình luận. */
+router.get('/comments', ...mkt, async (req: MktRequest, res: Response) => {
+    try {
+        const ds = await (req.storePrisma as any).mktPublication.findMany({
+            where: {
+                status: 'sent', remotePostId: { not: null },
+                sentAt: { gte: new Date(Date.now() - 14 * 86400_000) },
+                content: { brandId: req.mktBrand.id },
+            },
+            include: { account: true, content: { select: { title: true } } },
+            orderBy: { sentAt: 'desc' }, take: 40,
+        })
+        const bai = ds.filter((p: any) => HO_TRO_BINH_LUAN.has(p.account?.platform) && p.account?.status === 'active').slice(0, 8)
+        const ra: any[] = []
+        /* TUẦN TỰ: mỗi bài một lời gọi nền tảng — gọi dồn dễ dính giới hạn tốc độ. Một bài
+         * lỗi (thiếu quyền…) không làm hỏng cả hộp. Token KHÔNG bao giờ đi ra ngoài. */
+        for (const p of bai) {
+            const dau = { publicationId: p.id, tieuDe: p.content?.title || '', platform: p.account.platform, kenh: p.account.name, daDangLuc: p.sentAt, baiId: p.remotePostId }
+            try { ra.push({ ...dau, binhLuan: await docBinhLuan(p.account.platform, giaiMa(p.account.accessToken), p.remotePostId) }) }
+            catch (e: any) { ra.push({ ...dau, loi: e?.message || String(e), code: e?.code }) }
+        }
+        res.json({ success: true, data: ra })
+    } catch (err) { traLoi(res, err) }
+})
+
+router.get('/publications/:id/comments', ...mkt, async (req: MktRequest, res: Response) => {
+    try {
+        const p = await luotDaDang(req.storePrisma, req.mktBrand.id, String(req.params.id))
+        const binhLuan = await docBinhLuan(p.account.platform, giaiMa(p.account.accessToken), p.remotePostId).catch(e => { throw loiNenTangRa(e) })
+        res.json({ success: true, data: { publicationId: p.id, tieuDe: p.content?.title || '', platform: p.account.platform, kenh: p.account.name, baiId: p.remotePostId, binhLuan } })
+    } catch (err) { traLoi(res, err) }
+})
+
+/**
+ * Trả lời công khai dưới tên kênh. `commentId` = id bình luận, hoặc id chính bài (viết thêm
+ * vào bài). Chữ qua cùng luật với bài đăng: giới hạn ký tự của nền tảng + từ cấm thương hiệu.
+ */
+router.post('/publications/:id/comments/:commentId/reply', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest, res: Response) => {
+    try {
+        const p = await luotDaDang(req.storePrisma, req.mktBrand.id, String(req.params.id))
+        const text = String(req.body?.text || '').trim()
+        if (!text) throw new LoiMkt('Nhập nội dung trả lời.')
+        const loiChu = loiPhanChu(p.account.platform, { text })
+        if (loiChu.length) throw new LoiMkt(loiChu.join(' '))
+        const cam = tuCamGapPhai(req.mktBrand, text)
+        if (cam.length) throw new LoiMkt(`Có từ cấm của thương hiệu: ${cam.join(', ')}.`)
+        const token = giaiMa(p.account.accessToken)
+        const dich = String(req.params.commentId)
+        /* Chỉ trả lời vào CHÍNH bài này hoặc bình luận của nó — route này không được thành
+         * cửa đăng trả lời vào bài bất kỳ trên Threads. */
+        if (dich !== p.remotePostId) {
+            const ds = await docBinhLuan(p.account.platform, token, p.remotePostId).catch(e => { throw loiNenTangRa(e) })
+            if (!ds.some(b => b.id === dich)) throw new LoiMkt('Không tìm thấy bình luận này trong bài (có thể đã bị xoá).', 404)
+        }
+        const id = await traLoiBinhLuan(p.account.platform, token, String(p.account.externalId), dich, text).catch(e => { throw loiNenTangRa(e) })
+        console.log(`[mkt] ${req.user?.userId} trả lời bình luận ${dich} (${p.account.platform}, lượt ${p.id}) → ${id}`)
+        res.json({ success: true, data: { id } })
     } catch (err) { traLoi(res, err) }
 })
 

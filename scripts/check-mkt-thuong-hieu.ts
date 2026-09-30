@@ -331,6 +331,44 @@ async function main() {
     // dọn: lượt đăng vừa hẹn không được chặn bước xoá thương hiệu phía dưới
     for (const p of bang.mktPublication) if (p.status === 'queued' && p.accountId === 'accTh') p.status = 'cancelled'
 
+    console.log('━━ Bình luận Threads: đọc + trả lời, đúng thương hiệu, đúng bài')
+    bang.mktContent.push({ id: 'ctBl', ...MAC_DINH.mktContent, brandId: B, title: 'Bài có bình luận', revision: 1, approvedRevision: 1, status: 'done' })
+    bang.mktPublication.push({ id: 'pubBl', contentId: 'ctBl', accountId: 'accTh', status: 'sent', remotePostId: 'thPost1', idempotencyKey: 'kBl', scheduledAt: new Date(), sentAt: new Date(Date.now() - 3600_000) })
+    bang.mktPublication.push({ id: 'pubChuaDang', contentId: 'ctBl', accountId: 'accTh', status: 'queued', remotePostId: null, idempotencyKey: 'kBl2', scheduledAt: new Date() })
+    const hoiThoai = { data: [
+        { id: 'k1', text: 'Tuổi Tý hợp tuổi nào vậy shop?', username: 'khach1', timestamp: '2026-09-30T10:00:00+0000', replied_to: { id: 'thPost1' }, is_reply_owned_by_me: false },
+    ] }
+    const goiTh: { url: string; body: any }[] = []
+    let hangTh: any[] = []
+    const fetchTruoc = globalThis.fetch
+    ;(globalThis as any).fetch = async (url: string, opt: any = {}) => {
+        if (!String(url).startsWith('https://graph.threads.net/')) throw new Error('không được gọi mạng khác: ' + url)
+        goiTh.push({ url: String(url), body: opt.body ? JSON.parse(opt.body) : null })
+        const r = String(url).includes('/conversation') ? hoiThoai : hangTh.shift()
+        return new Response(JSON.stringify(r ?? {}), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    const hop = await goi('GET', '/comments', { brand: B })
+    kiem('hộp bình luận: bài Threads đã đăng + bình luận của nó (không kèm token)', hop.success && hop.data.length === 1 && hop.data[0].publicationId === 'pubBl' && hop.data[0].binhLuan[0].nguoi === 'khach1' && !JSON.stringify(hop.data).includes('accessToken'), hop)
+    kiem('bài chưa đăng không vào hộp', !hop.data.some((x: any) => x.publicationId === 'pubChuaDang'))
+    kiem('thương hiệu khác KHÔNG xem được bình luận bài của B', (await goi('GET', '/publications/pubBl/comments', { brand: A })).status === 404)
+    kiem('lượt chưa đăng ⇒ 409, chưa có bình luận', (await goi('GET', '/publications/pubChuaDang/comments', { brand: B })).status === 409)
+    hangTh = [{ id: 'contTL' }, { status: 'FINISHED' }, { id: 'replyTL' }]
+    const tl = await goi('POST', '/publications/pubBl/comments/k1/reply', { brand: B, body: { text: 'Tý hợp Thìn với Thân nha bạn 🐭' } })
+    const taoTl = goiTh.find(g => g.body?.reply_to_id)
+    kiem('trả lời đúng bình luận: reply_to_id = k1, publish, trả id', tl.success && tl.data.id === 'replyTL' && taoTl?.body.reply_to_id === 'k1' && goiTh.some(g => /threads_publish/.test(g.url)), { tl, taoTl })
+    const baiLa = await goi('POST', '/publications/pubBl/comments/bai-la-999/reply', { brand: B, body: { text: 'xin chào' } })
+    kiem('id KHÔNG thuộc bài này ⇒ 404, không đăng gì (route không thành cửa trả lời bài bất kỳ)', baiLa.status === 404 && !goiTh.some(g => g.body?.reply_to_id === 'bai-la-999'), baiLa)
+    const traLoiDai = await goi('POST', '/publications/pubBl/comments/k1/reply', { brand: B, body: { text: 'Mấy bà ơi, '.repeat(48) + '🙈✨' } })
+    kiem('trả lời quá 500 ký tự (cách Threads đếm) ⇒ 400 kèm số', traLoiDai.status === 400 && /535\/500/.test(traLoiDai.error), traLoiDai)
+    bang.mktBrand.find(b => b.id === B).bannedWords = '["link rẻ"]'
+    const cam = await goi('POST', '/publications/pubBl/comments/k1/reply', { brand: B, body: { text: 'Có link rẻ nè' } })
+    kiem('trả lời có từ cấm của thương hiệu ⇒ 400', cam.status === 400 && /từ cấm/.test(cam.error), cam)
+    bang.mktBrand.find(b => b.id === B).bannedWords = '[]'
+    kiem('nhân viên (không phải quản lý) KHÔNG trả lời được', (await goi('POST', '/publications/pubBl/comments/k1/reply', { brand: B, role: 'cashier', body: { text: 'x' } })).status === 403)
+    ;(globalThis as any).fetch = fetchTruoc
+    // dọn: lượt "chưa đăng" dựng để thử không được chặn bước xoá thương hiệu phía dưới
+    bang.mktPublication.find(p => p.id === 'pubChuaDang').status = 'cancelled'
+
     console.log('━━ Xoá thương hiệu')
     bang.mktPublication.push({ id: 'pubCho', contentId: id, accountId: 'accB', status: 'queued', idempotencyKey: 'k2', scheduledAt: new Date() })
     const ban = await goi('DELETE', `/brands/${B}`, { brand: A })

@@ -148,6 +148,35 @@ async function main() {
     kiem('YouTube thiếu tiêu đề / quyền riêng tư / trẻ em', yt.length >= 3, yt)
     kiem('TikTok thiếu đồng ý của chủ kênh bị chặn', kiemDinhDang('tiktok', { text: 'x', options: { privacy: 'SELF_ONLY' } }, [{ type: 'video', url: 'https://a/v.mp4' }]).some(e => e.includes('đồng ý')))
 
+    console.log('━━ Bình luận Threads: đọc cả trả lời lồng nhau, trả lời bằng reply_to_id')
+    const { docBinhLuan, traLoiBinhLuan } = await import('../src/services/mktBinhLuan')
+    hangCho = [{ data: [
+        { id: 'c1', text: 'Hay quá shop ơi', username: 'khach1', timestamp: '2026-09-30T10:00:00+0000', replied_to: { id: 'post1' }, is_reply_owned_by_me: false, hide_status: 'NOT_HUSHED', permalink: 'https://www.threads.net/@khach1/post/c1' },
+        { id: 'c2', text: 'Cảm ơn bạn 🙈', username: 'tohong.kengi.vn', timestamp: '2026-09-30T10:05:00+0000', replied_to: { id: 'c1' }, is_reply_owned_by_me: true },
+        { id: 'c3', text: 'mua link đây', username: 'spam', timestamp: '2026-09-30T10:06:00+0000', replied_to: { id: 'post1' }, hide_status: 'HIDDEN' },
+    ], paging: {} }]
+    const bl = await docBinhLuan('threads', 'TOKEN_GIA', 'post1')
+    const urlBl = daGoi.at(-1)!.url
+    kiem('đọc qua /conversation (mọi tầng trả lời), token ở URL, cũ trước mới sau', /\/post1\/conversation\?/.test(urlBl) && /reverse=false/.test(urlBl) && /access_token=TOKEN_GIA/.test(urlBl), urlBl)
+    kiem('bình luận thẳng vào bài: traLoiCho = null; trả lời lồng: trỏ đúng bình luận cha', bl.length === 3 && bl[0].traLoiCho === null && bl[1].traLoiCho === 'c1', bl)
+    kiem('nhận ra bài trả lời của CHÍNH kênh + bình luận bị ẩn', bl[1].laCuaMinh === true && bl[0].laCuaMinh === false && bl[2].daAn === true && !bl[0].daAn, bl)
+    hangCho = [{ status: 403, body: { error: { code: 10, message: 'Application does not have permission for this action' } } }]
+    let loiBl: any = null
+    try { await docBinhLuan('threads', 'TOKEN_GIA', 'post1') } catch (e) { loiBl = e }
+    kiem('token thiếu quyền đọc ⇒ nói đúng tên quyền threads_read_replies + cách sửa', /threads_read_replies/.test(loiBl?.message) && /nối lại/.test(loiBl?.message) && loiBl?.code === 'THIEU_QUYEN', loiBl?.message)
+    hangCho = [{ id: 'cont9' }, { body: { status: 'FINISHED' } }, { id: 'reply9' }]
+    const truocTl = daGoi.length
+    const idTl = await traLoiBinhLuan('threads', 'TOKEN_GIA', 'th1', 'c1', 'Cảm ơn bạn nha 💕')
+    const [tao, , dang] = daGoi.slice(truocTl)
+    kiem('trả lời: container TEXT có reply_to_id → chờ FINISHED → threads_publish', idTl === 'reply9' && tao.body.reply_to_id === 'c1' && tao.body.media_type === 'TEXT' && /\/th1\/threads\?/.test(tao.url) && dang.body.creation_id === 'cont9' && /threads_publish/.test(dang.url), { idTl, tao, dang })
+    hangCho = [{ status: 403, body: { error: { code: 10, message: 'no permission' } } }]
+    loiBl = null
+    try { await traLoiBinhLuan('threads', 'TOKEN_GIA', 'th1', 'c1', 'x') } catch (e) { loiBl = e }
+    kiem('token thiếu quyền trả lời ⇒ nói đúng tên quyền threads_manage_replies', /threads_manage_replies/.test(loiBl?.message), loiBl?.message)
+    loiBl = null
+    try { await docBinhLuan('tiktok', 'T', 'p') } catch (e) { loiBl = e }
+    kiem('nền tảng khác ⇒ báo chưa hỗ trợ (làm Threads trước), không gọi mạng', loiBl?.code === 'CHUA_HO_TRO', loiBl?.message)
+
     console.log('━━ Xác minh / gia hạn / số liệu')
     hangCho = [{ id: 'th9', username: 'bep' }]
     const xm = await xacMinhKenh('threads', 'T', undefined)
