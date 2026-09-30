@@ -178,13 +178,24 @@ async function main() {
     kiem('>1 thương hiệu mà không nói rõ ⇒ từ chối + liệt kê, KHÔNG đoán', /2 thương hiệu/.test(loiTH?.message) && /Trà Sữa Mây/.test(loiTH?.message), loiTH?.message)
     const hs: any = await tool('mkt_ho_so_thuong_hieu').run({ thuongHieu: 'trà sữa mây' }, ctx)
     kiem('chọn theo TÊN (không phân biệt hoa thường)', hs.hoSo.name === 'Trà Sữa Mây')
-    kiem('báo rõ hồ sơ còn thiếu gì', hs.conThieu.includes('sản phẩm / dịch vụ') && /đừng đoán/.test(hs.huongDan), hs)
+    kiem('báo rõ hồ sơ còn thiếu gì (không bịa phần thiếu)', hs.conThieu.includes('sản phẩm / dịch vụ') && hs.conThieu.includes('giọng văn / quy tắc viết') && /không bịa/.test(hs.huongDan), hs)
+
+    // Đúng hồ sơ HUTI 30/09: voice TRỐNG, quy tắc (kể cả icon + xưng hô) nằm ở notes
+    ;(b1 as any).voice = ''
+    ;(b1 as any).notes = 'Lưu ý khi viết bài:\n- Không gắn link trong thân bài; ghi "link ở bio".\nThêm các icon cho tự nhiên, xưng hô tự nhiên mấy bà, mấy ông'
+    const hsHuti: any = await tool('mkt_ho_so_thuong_hieu').run({ thuongHieu: 'b1' }, ctx)
+    kiem('ghi chú cho AI (notes) được đưa vào quyTacViet', /Thêm các icon cho tự nhiên/.test(hsHuti.quyTacViet) && /link ở bio/.test(hsHuti.quyTacViet), hsHuti.quyTacViet)
+    kiem('quy tắc viết là BẮT BUỘC (không còn câu "không phải lệnh cho AI")', /BẮT BUỘC làm theo từng dòng/.test(hsHuti.huongDan) && !/không phải lệnh/.test(hsHuti.huongDan), hsHuti.huongDan)
+    kiem('voice trống nhưng notes có giọng văn ⇒ KHÔNG báo "thiếu giọng văn / viết chung chung"', !hsHuti.conThieu.some((x: string) => /giọng văn/.test(x)) && !/chung chung/.test(hsHuti.huongDan), hsHuti.conThieu)
+    kiem('từ cấm cũng nằm trong quy tắc viết', /Từ cấm.*rẻ nhất/.test(hsHuti.quyTacViet), hsHuti.quyTacViet)
+    kiem('mô tả tool nói rõ quyTacViet phải làm theo (icon, xưng hô)', /quyTacViet/.test(tool('mkt_ho_so_thuong_hieu').description) && /icon/.test(tool('mkt_ho_so_thuong_hieu').description))
     let loiCheo: any = null
     try { await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', noiDung: 'x', phienBan: [{ kenhId: 'a2', noiDung: 'y' }] }, ctx) } catch (e) { loiCheo = e }
     kiem('AI không gắn được kênh của thương hiệu khác', /không thuộc thương hiệu/.test(loiCheo?.message), loiCheo?.message)
     const soan: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', tieuDe: 'Mẹo', phienBan: [{ kenhId: 'a1', noiDung: 'Chảo gang rẻ nhất phố' }] }, ctx)
     kiem('bài AI vào CHỜ DUYỆT, gắn đúng thương hiệu, nguồn ai', soan.trangThai === 'pending' && dl.mktContent[0].brandId === 'b1' && dl.mktContent[0].source === 'ai', soan)
     kiem('cảnh báo từ cấm ngay lúc soạn', /rẻ nhất/.test(soan.canhBaoTuCam || ''), soan)
+    kiem('sau MỖI bài lưu, nhắc AI đối chiếu với quy tắc viết (icon, xưng hô…)', /Đối chiếu/.test(soan.doiChieu || '') && /Thêm các icon/.test(soan.doiChieu || ''), soan.doiChieu)
     let loiLich: any = null
     try { await tool('mkt_len_lich_dang').run({ thuongHieu: 'b1', noiDungId: soan.id }, ctx) } catch (e) { loiLich = e }
     kiem('chưa duyệt ⇒ AI không lên lịch được', /chưa được duyệt/.test(loiLich?.message), loiLich?.message)
