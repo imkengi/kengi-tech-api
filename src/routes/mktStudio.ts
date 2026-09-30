@@ -27,7 +27,8 @@ import {
     MAX_THUONG_HIEU, LoiMkt, traLoi, hoSo, kiemBanVaHoSo,
     chonThuongHieu, MktRequest,
 } from '../lib/mktThuongHieu'
-import { xacMinhKenh, layChiSo } from '../services/mktNenTangKhac'
+import { xacMinhKenh } from '../services/mktNenTangKhac'
+import { keoSoLieu, danhDauHong } from '../services/mktSoLieu'
 import { jsonMang, noiDungRa as noiDung, kiemPhienBan, kiemMedia, loiKhiDangLen, lenLich } from '../lib/mktNoiDung'
 import { TOI_DA_TAI_LEN, nhanDangMedia, luuMedia, xoaMedia, kiemUrlCongKhai } from '../lib/mktMedia'
 
@@ -592,6 +593,8 @@ router.post('/publications/:id/quyet', ...mkt, requireRole(...QUAN_LY), async (r
  * Kéo số liệu các bài đã đăng (60 ngày gần nhất, tối đa 50 bài / lần) về MktMetric.
  * Nền tảng không trả số nào thì để NULL — "chưa đọc được" khác hẳn "bằng không".
  * Bài hỏng không kéo cả lượt hỏng theo: đếm riêng, báo lại.
+ * Trả CHI TIẾT TỪNG BÀI (số vừa đo + bài đã lên được bao lâu): chỉ thấy "0" trên bảng tổng
+ * thì không phân biệt được "bài mới lên chưa ai xem" với "đọc sai" (HUTI 30/09).
  */
 router.post('/analytics/sync', ...mkt, requireRole(...QUAN_LY), async (req: MktRequest, res: Response) => {
     try {
@@ -603,20 +606,27 @@ router.post('/analytics/sync', ...mkt, requireRole(...QUAN_LY), async (req: MktR
                 content: { brandId: req.mktBrand.id },
             },
             orderBy: { sentAt: 'desc' }, take: 50,
-            include: { account: true },
+            include: { account: true, content: { select: { title: true } } },
         })
         let dongBo = 0
         const hong: string[] = []
+        const chiTiet: any[] = []
         for (const p of ds) {
+            const dong: any = {
+                tieuDe: p.content?.title || '', kenh: p.account.name, platform: p.account.platform,
+                daDangPhut: p.sentAt ? Math.round((Date.now() - +new Date(p.sentAt)) / 60_000) : null,
+            }
             try {
-                const cs = await layChiSo(p.account.platform, giaiMa(p.account.accessToken), p.remotePostId)
-                await prisma.mktMetric.create({ data: { accountId: p.accountId, publicationId: p.id, ...cs } })
+                Object.assign(dong, await keoSoLieu(prisma, p))
                 dongBo++
             } catch (e: any) {
-                hong.push(`${p.account.name}: ${e?.message || 'không đọc được'}`)
+                danhDauHong(p.id)
+                dong.loi = e?.message || 'không đọc được'
+                hong.push(`${p.account.name}: ${dong.loi}`)
             }
+            chiTiet.push(dong)
         }
-        res.json({ success: true, data: { dongBo, tong: ds.length, hong: hong.slice(0, 20), catBot: ds.length === 50 } })
+        res.json({ success: true, data: { dongBo, tong: ds.length, hong: hong.slice(0, 20), chiTiet, catBot: ds.length === 50, luc: new Date() } })
     } catch (err) { traLoi(res, err) }
 })
 

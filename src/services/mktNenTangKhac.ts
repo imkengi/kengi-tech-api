@@ -376,13 +376,19 @@ export async function layChiSo(platform: string, token: string, remotePostId: st
         return { ...rong, likes: so(d?.like_count), comments: so(d?.comments_count) }
     }
     if (platform === 'threads') {
-        const d = await goiNenTang(th(`/${remotePostId}/insights?metric=views,likes,replies,reposts,quotes`, token), null)
+        // 6 chỉ số media hợp lệ theo tài liệu Threads Insights (30/09/2026)
+        const d = await goiNenTang(th(`/${remotePostId}/insights?metric=views,likes,replies,reposts,quotes,shares`, token), null)
         const lay = (ten: string) => {
             const m = (d?.data || []).find((x: any) => x.name === ten)
             return so(m?.values?.[0]?.value ?? m?.total_value?.value)
         }
-        const rp = lay('reposts'), qt = lay('quotes')
-        return { views: lay('views'), likes: lay('likes'), comments: lay('replies'), shares: rp === null && qt === null ? null : (rp || 0) + (qt || 0) }
+        /* "Chia sẻ" = repost + quote + share ra ngoài — cả ba đều là đưa bài tới người khác.
+         * Cả ba null thì null (chưa đọc được), không phải 0. */
+        const lan = [lay('reposts'), lay('quotes'), lay('shares')]
+        return {
+            views: lay('views'), likes: lay('likes'), comments: lay('replies'),
+            shares: lan.every(x => x === null) ? null : lan.reduce((a: number, x) => a + (x || 0), 0),
+        }
     }
     if (platform === 'tiktok') {
         if (remotePostId.startsWith('publish:')) return rong   // chưa có id công khai

@@ -28,12 +28,19 @@
  */
 import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { giatMotViec, dangMotViec } from '../services/mktDangBai'
+import { chonLuotCanLamMoi, keoSoLieu, danhDauHong } from '../services/mktSoLieu'
 import { dangTat } from '../lib/choXong'
 import { moTaLoi } from '../lib/gomLoi'
 
 const NHIP_MS = 60_000
+/* TỰ LÀM MỚI SỐ LIỆU (30/09/2026): 30 phút một lần, mỗi cửa hàng tối đa 2 bài, và CHỈ ở
+ * lượt cửa hàng đó không có bài nào cần đăng (luật 4: một việc mỗi lượt — đăng bài luôn
+ * được trước). Trước đây số liệu chỉ đổi khi người bấm Đồng bộ nên đứng yên ở số lúc bấm. */
+const LAM_MOI_MOI_N_LUOT = 30
+const SO_BAI_LAM_MOI_MOI_LAN = 2
 let hen: NodeJS.Timeout | null = null
 let dangChay = false
+let soLuot = 0
 
 /** Id worker để truy vết ai giữ việc nào — gồm cả revision đang chạy. */
 const WORKER_ID = `${process.env.K_REVISION || 'local'}-${process.pid}`
@@ -43,6 +50,8 @@ async function motLuot(): Promise<void> {
      * thì một cửa hàng chậm sẽ làm các lượt xếp chồng lên nhau và nhân đôi tải. */
     if (dangChay) return
     dangChay = true
+    soLuot++
+    const toiLamMoi = soLuot % LAM_MOI_MOI_N_LUOT === 0
     try {
         const stores = await registryPrisma.store.findMany({
             where: { status: 'active', hasMarketing: true },
@@ -58,10 +67,23 @@ async function motLuot(): Promise<void> {
             try {
                 const prisma: any = getStorePrisma(st.schema)
                 const viec = await giatMotViec(prisma, WORKER_ID)
-                if (!viec) continue
-
-                const kq = await dangMotViec(prisma, viec)
-                console.log(`[MktWorker] ${st.code} · publication ${viec.id} → ${kq}`)
+                if (viec) {
+                    const kq = await dangMotViec(prisma, viec)
+                    console.log(`[MktWorker] ${st.code} · publication ${viec.id} → ${kq}`)
+                    continue
+                }
+                if (!toiLamMoi) continue
+                // Không có bài cần đăng ⇒ tới lượt làm mới số liệu (tuần tự, tối đa 2 bài)
+                for (const pub of await chonLuotCanLamMoi(prisma, SO_BAI_LAM_MOI_MOI_LAN)) {
+                    if (dangTat()) return
+                    try {
+                        const cs = await keoSoLieu(prisma, pub)
+                        console.log(`[MktWorker] ${st.code} · số liệu ${pub.id} (${pub.account?.platform}) → xem ${cs.views ?? '—'} · thích ${cs.likes ?? '—'}`)
+                    } catch (e: any) {
+                        danhDauHong(pub.id)
+                        console.warn(`[MktWorker] ${st.code} · số liệu ${pub.id} hỏng, thử lại sau 3 giờ: ${moTaLoi(e)}`)
+                    }
+                }
             } catch (err: any) {
                 /* Một cửa hàng hỏng KHÔNG được làm chết cả vòng — nhưng phải NÓI RA. */
                 console.error(`[MktWorker] ${st.code}: ${moTaLoi(err)}`)
