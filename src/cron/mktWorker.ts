@@ -98,6 +98,18 @@ async function motLuot(): Promise<void> {
     }
 }
 
+/**
+ * Nhịp do Cloud Scheduler gọi qua POST /api/cron/tick (routes/cronTick.ts) — chạy TRONG
+ * request nên có CPU. Cloud Run chạy cpu-throttling: setInterval bên dưới chỉ có CPU khi
+ * đang có khách dùng; tối muộn / sáng sớm không ai vào là bài hẹn giờ đứng im. Lượt đang
+ * chạy dở (của setInterval hay nhịp trước) thì bỏ qua — y như luật 1 ở đầu file.
+ */
+export async function nhipMktTuNgoai(): Promise<'xong' | 'dang-chay'> {
+    if (dangChay) return 'dang-chay'
+    await motLuot()
+    return 'xong'
+}
+
 export function startMktWorker(): void {
     if (hen) return
     hen = setInterval(() => { void motLuot() }, NHIP_MS)

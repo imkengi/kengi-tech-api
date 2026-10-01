@@ -95,6 +95,11 @@ steps:
       - '0'
       - '--max-instances'
       - '3'
+      # 900s (mặc định 300s): Cloud Scheduler gọi POST /api/cron/tick mỗi phút và tác vụ AI
+      # chạy TRONG request đó (cpu-throttling: ngoài request không có CPU) — một lượt AI vài
+      # bước + chờ Gemini/DeepSeek có thể quá 5 phút (30/09/2026).
+      - '--timeout'
+      - '900'
       - '--port'
       - '8080'
       - '--session-affinity'

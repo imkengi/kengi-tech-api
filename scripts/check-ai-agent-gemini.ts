@@ -218,6 +218,31 @@ async function main() {
     await chayMotJob(sp, job, 'THU', 'cron')
     kiem('cron: cửa hàng có key DeepSeek ⇒ lượt chạy XONG (ok), tóm tắt ghi "chạy bằng DeepSeek"', runs.at(-1).status === 'ok' && /Chạy bằng DeepSeek dự phòng/.test(runs.at(-1).summary || '') && goiDS[0]?.headers?.Authorization === 'Bearer sk-thu-cron', runs.at(-1))
 
+    console.log('━━ Nhịp Cloud Scheduler: giành job nguyên tử, khoá nhịp')
+    const { gianhJob } = await import('../src/cron/aiAgentCron')
+    const hen0 = new Date('2026-10-01T00:00:00Z')
+    const jobDb: any = { id: 'jN', nextRunAt: hen0 }
+    const spGianh: any = { aiAgentJob: { updateMany: async ({ where, data }: any) => {
+        if (where.id !== jobDb.id || +where.nextRunAt !== +jobDb.nextRunAt) return { count: 0 }
+        Object.assign(jobDb, data); return { count: 1 }
+    } } }
+    const banA = await gianhJob(spGianh, { id: 'jN', nextRunAt: hen0 })
+    const banB = await gianhJob(spGianh, { id: 'jN', nextRunAt: hen0 })   // bản máy thứ hai đọc cùng lúc
+    kiem('hai bản máy cùng thấy job tới hạn ⇒ CHỈ MỘT bản giành được (không soạn trùng bài)', banA === true && banB === false, { banA, banB })
+    kiem('giành xong thì dời lịch ~30 phút (chết giữa chừng vẫn tự tới hạn lại)', Math.abs(+jobDb.nextRunAt - (Date.now() + 30 * 60_000)) < 5_000, jobDb.nextRunAt)
+    process.env.ADMIN_KEY = 'admin-thu-123'
+    const nhip = (await import('../src/routes/cronTick')).default as any
+    const { khoaNhip } = await import('../src/routes/cronTick')
+    const tick = nhip.stack.find((l: any) => l.route?.path === '/tick').route.stack[0].handle
+    const goiTick = async (khoa?: string) => {
+        let kq: any = null
+        const res: any = { statusCode: 200, status(c: number) { this.statusCode = c; return this }, json(j: any) { kq = { status: this.statusCode, ...j }; return this } }
+        await tick({ headers: khoa === undefined ? {} : { 'x-cron-key': khoa } }, res)
+        return kq
+    }
+    kiem('thiếu khoá / sai khoá / dùng thẳng ADMIN_KEY ⇒ 401', (await goiTick()).status === 401 && (await goiTick('sai')).status === 401 && (await goiTick('admin-thu-123')).status === 401)
+    kiem('khoá nhịp = HMAC của ADMIN_KEY: cố định, khác ADMIN_KEY (cấu hình Scheduler không chứa key quản trị)', khoaNhip('admin-thu-123') === khoaNhip('admin-thu-123') && khoaNhip('admin-thu-123') !== 'admin-thu-123' && khoaNhip('admin-thu-123').length === 64)
+
     console.log(`\n━━ KẾT QUẢ: ${dat} đạt / ${truot} trượt ━━`)
     process.exit(truot ? 1 : 0)
 }

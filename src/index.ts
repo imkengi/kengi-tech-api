@@ -90,6 +90,7 @@ import aiReportRoutes from './routes/aiReports'
 import fanpageRoutes from './routes/fanpage'
 import mktStudioRoutes from './routes/mktStudio'
 import aiJobRoutes from './routes/aiJobs'
+import cronTickRoutes from './routes/cronTick'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync, choAutoSyncXong } from './cron/autoSync'
 import { startHanThanhToanCron } from './cron/hanThanhToanCron'
@@ -381,6 +382,7 @@ app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)
 app.use('/api/mkt', mktStudioRoutes)   // Marketing Studio (da nen tang)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
+app.use('/api/cron', cronTickRoutes) // Nhip ngoai: Cloud Scheduler goi moi phut (cpu-throttling)
 
 // Content AI (hàng đợi bài chờ duyệt). Từng bị ngắt 04/08/2026 vì file route
 // chưa commit làm Cloud Build fail — đã commit 15/08/2026, mở lại.

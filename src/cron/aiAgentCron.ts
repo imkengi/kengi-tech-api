@@ -145,6 +145,28 @@ export async function chayMotJob(
     return { runId: run.id, status }
 }
 
+/**
+ * GIÀNH một job NGUYÊN TỬ trước khi chạy: dời nextRunAt ra 30 phút, chỉ bản nào dời được
+ * (đúng giá trị nextRunAt vừa đọc) mới chạy; chạy xong chayMotJob đặt lại lịch thật.
+ * Khoá lãnh đạo (chayNeuLanhDao) cần Redis — prod KHÔNG có REDIS_URL nên khoá đó cho qua
+ * hết; thêm nhịp Cloud Scheduler mỗi phút rơi vào bản máy khác là chạy ĐÚP job = soạn trùng
+ * bài. Chết giữa chừng thì 30 phút sau job tự tới hạn lại.
+ */
+export async function gianhJob(sp: any, job: { id: string; nextRunAt: Date | null }): Promise<boolean> {
+    const r = await sp.aiAgentJob.updateMany({
+        where: { id: job.id, nextRunAt: job.nextRunAt },
+        data: { nextRunAt: new Date(Date.now() + 30 * 60_000) },
+    })
+    return r.count === 1
+}
+
+/** Nhịp do Cloud Scheduler gọi qua POST /api/cron/tick (routes/cronTick.ts) — chạy TRONG
+ *  request nên có CPU. Lượt đang chạy dở trên bản máy này thì bỏ qua. */
+export async function quetTuNgoai(): Promise<boolean> {
+    if (dangChay) return false
+    return chayNeuLanhDao('ai-agent', CHU_KY - 30_000, quet)
+}
+
 async function quet(): Promise<void> {
     if (dangChay) return          // lượt trước chưa xong (job có thể chạy lâu) → bỏ lượt này
     dangChay = true
@@ -161,6 +183,7 @@ async function quet(): Promise<void> {
                     take: TRAN_JOB_MOI_LUOT,
                 })
                 for (const job of jobs) {
+                    if (!await gianhJob(sp, job)) continue   // bản máy khác vừa giành — không chạy đúp
                     console.log(`[AiAgentCron] ▶ ${store.code}/${job.name}`)
                     const r = await chayMotJob(sp, job, store.code, 'cron')
                     console.log(`[AiAgentCron] ✔ ${store.code}/${job.name} → ${r.status}`)
