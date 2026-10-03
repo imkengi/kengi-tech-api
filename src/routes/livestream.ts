@@ -167,11 +167,16 @@ router.get('/state', requireToken, async (req: Request, res: Response) => {
         if (!cauHinh) return res.json({ success: true, data: null })
         const runtime = rows.find(r => r.id === 'runtime')
         const data = { ...(cauHinh.data || {}) }
-        // Bản ghi runtime mới hơn khối cấu hình ⇒ nó là "đang phát" thật (dashboard bản mới)
-        if (runtime && new Date(runtime.updated_at) > new Date(cauHinh.updated_at)) {
-            for (const k of RUNTIME_KEYS) if (runtime.data?.[k] !== undefined) data[k] = runtime.data[k]
+        // "Đang phát" lấy từ bản ghi runtime khi nó mới hơn khối cấu hình, HOẶC khi khối không
+        // mang khoá đó (dashboard bản mới ghi khối không kèm "đang phát" — sửa kịch bản lúc
+        // đang live làm khối mới hơn, mà cảnh/sản phẩm vẫn chỉ nằm ở bản ghi runtime).
+        if (runtime) {
+            const runtimeMoiHon = new Date(runtime.updated_at) > new Date(cauHinh.updated_at)
+            for (const k of RUNTIME_KEYS) {
+                if (runtime.data?.[k] !== undefined && (runtimeMoiHon || data[k] === undefined)) data[k] = runtime.data[k]
+            }
         }
-        res.json({ success: true, data, updatedAt: cauHinh.updated_at })
+        res.json({ success: true, data, updatedAt: cauHinh.updated_at, runtimeLuc: runtime?.updated_at ?? null })
     } catch (e: any) {
         res.status(500).json({ success: false, error: e?.message || 'Lỗi đọc state' })
     }
