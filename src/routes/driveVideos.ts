@@ -878,6 +878,18 @@ export async function doVideoDongHang(
                 ketQua[kieu] = { ms: Date.now() - t, loi: String(e?.message || e).slice(0, 200) }
             }
         }
+        // Đúng đường route GET /videos?exact=1 dùng: timVideoTheoMa + ghép đơn
+        const t = Date.now()
+        try {
+            const thay = await timVideoTheoMa(folderId, sach)
+            const ghepThay = await matchVideosWithOrders(prisma, thay)
+            ketQua.duongRoute = {
+                ms: Date.now() - t,
+                video: ghepThay.map(v => ({ ten: v.videoName, ma: v.trackingNumber, don: v.matchedOrder?.orderNumber ?? null, tra: v.matchedReturn?.code ?? null, loai: v.videoType })),
+            }
+        } catch (e: any) {
+            ketQua.duongRoute = { ms: Date.now() - t, loi: String(e?.message || e).slice(0, 200) }
+        }
         thuTimDrive.push(ketQua)
     }
 
