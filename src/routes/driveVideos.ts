@@ -18,11 +18,17 @@ import type { drive_v3 } from 'googleapis'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
+import { mapWithConcurrency } from '../lib/prisma'
 
 const router = Router()
 
 const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 const CACHE_TTL_MS = 5 * 60 * 1000
+// Quá 5 phút vẫn trả bản liệt kê cũ (≤ 6 giờ) rồi làm mới ngầm
+const STALE_MAX_MS = 6 * 60 * 60 * 1000
+// Trần cho bản LIỆT KÊ (trang duyệt video). Thư mục KENGISTORE có 23.610 video (đo
+// 03/10/2026) — liệt kê đủ mất ~60s nên vẫn giữ trần, nhưng KHÔNG im lặng nữa: trả
+// `biCatTran` + ngày video cũ nhất còn thấy. Tra theo MÃ đi đường tìm thẳng, không dính trần.
 const MAX_FILES = 5000
 
 // ─── Kiểu dữ liệu ───────────────────────────────────────────────────────────────
@@ -84,8 +90,14 @@ function getDrive(): drive_v3.Drive {
 
 // ─── Per-folder cache ──────────────────────────────────────────────────────────
 
-const folderCaches = new Map<string, { at: number; files: DriveVideoFile[] }>()
+const folderCaches = new Map<string, { at: number; files: DriveVideoFile[]; capped: boolean }>()
 const folderInFlight = new Map<string, Promise<DriveVideoFile[]>>()
+
+/** Bản liệt kê có bị trần MAX_FILES cắt không, và video cũ nhất còn thấy là ngày nào */
+function thongTinTran(folderId: string): { biCatTran: boolean; videoCuNhatTrongDanhSach: string | null } {
+    const c = folderCaches.get(folderId)
+    return { biCatTran: !!c?.capped, videoCuNhatTrongDanhSach: c?.files[c.files.length - 1]?.createdTime ?? null }
+}
 
 /** Lấy folderId của cửa hàng từ StoreSettings */
 async function getStoreFolderId(prisma: NonNullable<AuthRequest['storePrisma']>): Promise<string | null> {
@@ -93,8 +105,8 @@ async function getStoreFolderId(prisma: NonNullable<AuthRequest['storePrisma']>)
     return s?.driveFolderId || null
 }
 
-/** Đệ quy tìm tất cả subfolder IDs */
-async function listSubfolderIds(drive: drive_v3.Drive, parentId: string): Promise<string[]> {
+/** Thư mục con TRỰC TIẾP của một thư mục */
+async function listDirectSubfolders(drive: drive_v3.Drive, parentId: string): Promise<string[]> {
     const ids: string[] = []
     let pageToken: string | undefined
     do {
@@ -111,27 +123,52 @@ async function listSubfolderIds(drive: drive_v3.Drive, parentId: string): Promis
         }
         pageToken = resp.data.nextPageToken || undefined
     } while (pageToken)
-
-    // Đệ quy vào từng subfolder
-    const nested: string[] = []
-    for (const id of ids) {
-        const sub = await listSubfolderIds(drive, id)
-        nested.push(...sub)
-    }
-    return [...ids, ...nested]
+    return ids
 }
 
+/** Mọi thư mục con (đệ quy) — duyệt THEO TẦNG, mỗi tầng hỏi song song. Đo 03/10/2026:
+ *  24 thư mục con hỏi tuần tự mất 10,5–11s, và lượt tra video nào hết cache cũng trả
+ *  khoản đó (cộng liệt kê = 21–25s/lượt, quá hạn 15s của web). */
+async function listSubfolderIds(drive: drive_v3.Drive, rootId: string): Promise<string[]> {
+    const all: string[] = []
+    let tang = [rootId]
+    for (let sau = 0; tang.length > 0 && sau < 10; sau++) {
+        tang = (await mapWithConcurrency(tang, id => listDirectSubfolders(drive, id), 6)).flat()
+        all.push(...tang)
+    }
+    return all
+}
+
+// Thư mục con hiếm khi đổi — giữ 10 phút, quá hạn thì vẫn dùng bản cũ và làm mới ngầm.
+const SUBFOLDER_TTL_MS = 10 * 60 * 1000
+const subfolderCaches = new Map<string, { at: number; ids: string[] }>()
+const subfolderInFlight = new Map<string, Promise<string[]>>()
+
+async function getSubfolderIds(drive: drive_v3.Drive, folderId: string): Promise<string[]> {
+    const lamMoi = () => {
+        let p = subfolderInFlight.get(folderId)
+        if (!p) {
+            p = listSubfolderIds(drive, folderId)
+                .then(ids => { subfolderCaches.set(folderId, { at: Date.now(), ids }); return ids })
+                .finally(() => { subfolderInFlight.delete(folderId) })
+            subfolderInFlight.set(folderId, p)
+        }
+        return p
+    }
+    const c = subfolderCaches.get(folderId)
+    if (!c) return lamMoi()
+    if (Date.now() - c.at > SUBFOLDER_TTL_MS) lamMoi().catch(err => console.error('Drive subfolder refresh error:', err))
+    return c.ids
+}
+
+const parentsClause = (folderId: string, subIds: string[]) =>
+    `(${[folderId, ...subIds].map(id => `'${id}' in parents`).join(' or ')})`
+
 /** Quét video trong root + tất cả subfolder */
-async function fetchDriveVideos(folderId: string): Promise<DriveVideoFile[]> {
+async function fetchDriveVideos(folderId: string): Promise<{ files: DriveVideoFile[]; capped: boolean }> {
     const drive = getDrive()
-
-    // Lấy tất cả subfolder IDs
-    const subIds = await listSubfolderIds(drive, folderId)
-    const allFolderIds = [folderId, ...subIds]
-
-    // Build query: files in any of these folders
-    const parentClauses = allFolderIds.map(id => `'${id}' in parents`).join(' or ')
-    const query = `(${parentClauses}) and mimeType contains 'video' and trashed = false`
+    const subIds = await getSubfolderIds(drive, folderId)
+    const query = `${parentsClause(folderId, subIds)} and mimeType contains 'video' and trashed = false`
 
     const files: DriveVideoFile[] = []
     let pageToken: string | undefined
@@ -164,7 +201,7 @@ async function fetchDriveVideos(folderId: string): Promise<DriveVideoFile[]> {
         pageToken = resp.data.nextPageToken || undefined
     } while (pageToken && files.length < MAX_FILES)
 
-    return files
+    return { files, capped: !!pageToken }
 }
 
 async function getDriveVideos(folderId: string, forceRefresh = false): Promise<DriveVideoFile[]> {
@@ -173,12 +210,19 @@ async function getDriveVideos(folderId: string, forceRefresh = false): Promise<D
 
     if (!folderInFlight.has(folderId)) {
         const p = fetchDriveVideos(folderId)
-            .then(files => {
-                folderCaches.set(folderId, { at: Date.now(), files })
+            .then(({ files, capped }) => {
+                folderCaches.set(folderId, { at: Date.now(), files, capped })
                 return files
             })
             .finally(() => { folderInFlight.delete(folderId) })
         folderInFlight.set(folderId, p)
+    }
+
+    // Có bản liệt kê chưa quá STALE_MAX_MS thì trả NGAY, làm mới ngầm — trước đây cứ
+    // 5 phút người dùng lại phải chờ một lượt liệt kê 20s+ (quá hạn 15s của web).
+    if (!forceRefresh && cached && Date.now() - cached.at < STALE_MAX_MS) {
+        folderInFlight.get(folderId)!.catch(err => console.error('Drive list refresh error:', err))
+        return cached.files
     }
 
     try {
@@ -192,9 +236,47 @@ async function getDriveVideos(folderId: string, forceRefresh = false): Promise<D
     }
 }
 
+/** Tra THẲNG trên Drive theo một mã — không liệt kê cả thư mục (03/10/2026).
+ *  Đường liệt kê cũ: 21–25s mỗi lượt hết cache (quá hạn 15s của web ⇒ dòng video ở vụ
+ *  trả biến mất) và chỉ thấy 5.000 video mới nhất (thư mục có 23.610 ⇒ mọi video trước
+ *  07/09 coi như không có). Đo: `name contains` ra đúng file trong ~0,5–0,8s, bắt được
+ *  cả mã dính chữ thừa phía trước (vVNGH80400469901); `fullText contains` thì hụt. */
+async function timVideoTheoMa(folderId: string, ma: string): Promise<DriveVideoFile[]> {
+    const drive = getDrive()
+    const subIds = await getSubfolderIds(drive, folderId)
+    const resp = await drive.files.list({
+        q: `${parentsClause(folderId, subIds)} and name contains '${ma}' and mimeType contains 'video' and trashed = false`,
+        fields: 'files(id, name, mimeType, webViewLink, webContentLink, thumbnailLink, createdTime, size)',
+        pageSize: 50,
+        orderBy: 'createdTime desc',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+    })
+    const can = ma.toUpperCase()
+    const daCo = new Set<string>()
+    const files: DriveVideoFile[] = []
+    for (const f of resp.data.files || []) {
+        // Cùng nghĩa "chứa chuỗi" như đường liệt kê; tên trùng (máy quay tải 2 lần) lấy bản mới nhất
+        if (!f.id || !f.name || !f.name.toUpperCase().includes(can) || daCo.has(f.name)) continue
+        daCo.add(f.name)
+        files.push({
+            id: f.id,
+            name: f.name,
+            webViewLink: f.webViewLink || null,
+            webContentLink: f.webContentLink || null,
+            thumbnailLink: f.thumbnailLink || null,
+            createdTime: f.createdTime || null,
+            mimeType: f.mimeType || null,
+            size: f.size != null ? Number(f.size) : null,
+        })
+    }
+    return files
+}
+
 // ─── Phân loại video: đóng hàng vs mở hàng hoàn ─────────────────────────────────
 
-const RETURN_PREFIXES = /^(HOANTRAHANG|RETURN|HTH|UNBOX)/i
+// "HOAN_<mã>_<giờ>.webm" là tên máy quay đặt cho video mở hàng hoàn (đo 03/10/2026)
+const RETURN_PREFIXES = /^(HOANTRAHANG|HOAN|RETURN|HTH|UNBOX)/i
 
 function isReturnVideo(filename: string): boolean {
     const base = filename.replace(/\.[a-z0-9]{2,5}$/i, '')
@@ -203,10 +285,22 @@ function isReturnVideo(filename: string): boolean {
 
 // ─── Rút mã vận đơn từ tên file ─────────────────────────────────────────────────
 
+// Chữ trong tên file không bao giờ là mã vận đơn (tiền tố máy quay đặt)
+const TU_KHONG_PHAI_MA = new Set(['HOANTRAHANG', 'DONGHANG', 'DONGGOI', 'MOHANG', 'UNBOXING'])
+
+/* Tên file máy quay đặt: DON_<mã>_<người đóng>_<giờ quay ms>.webm. Đo 03/10/2026:
+ *  - Mã GHN có khi TOÀN CHỮ (GYRBCRLA — đơn SPE-261001G3J7U1DX). Bản cũ bắt mã phải có
+ *    chữ số ⇒ bỏ mất mã, chỉ còn giờ quay 1790932751647 ⇒ màn hình hiện số đó thay mã,
+ *    "Chưa match" (8 video/3 ngày).
+ *  - Mã dính một chữ thường thừa phía trước (vVNGH80400469901 — gõ/quét lỗi) ⇒ thêm
+ *    bản bỏ chữ đó (VNGH80400469901 = đơn TIK-586362264440898959).
+ *  - Giờ quay (13 số, epoch ms) vẫn giữ làm ứng viên nhưng xếp CUỐI, để mã thật đứng đầu
+ *    (ứng viên đầu là mã hiện ra khi chưa ghép được). */
 export function extractTrackingCandidates(filename: string): string[] {
     const base = filename.replace(/\.[a-z0-9]{2,5}$/i, '')
     const upper = base.toUpperCase()
     const out: string[] = []
+    const cuoi: string[] = []
     const push = (v: string) => { if (v && !out.includes(v)) out.push(v) }
 
     for (const m of upper.matchAll(/SPXVN[A-Z0-9]+/g)) push(m[0])
@@ -214,10 +308,14 @@ export function extractTrackingCandidates(filename: string): string[] {
 
     for (const token of upper.split(/[^A-Z0-9]+/)) {
         if (token.length < 8) continue
-        if (!/\d/.test(token)) continue
         if (/^\d{8}$/.test(token) && /^(19|20)\d{6}$/.test(token)) continue // yyyymmdd
+        if (/^1[5-9]\d{11}$/.test(token)) { cuoi.push(token); continue } // giờ quay epoch ms (2017–2033)
+        if (!/\d/.test(token) && (token.length > 20 || TU_KHONG_PHAI_MA.has(token))) continue
         push(token)
     }
+    // Chữ thường thừa dính đầu mã: "vVNGH80400469901" ⇒ thêm "VNGH80400469901"
+    for (const m of base.matchAll(/(?:^|[^A-Za-z0-9])[a-z]([A-Z0-9]{8,})(?=[^A-Za-z0-9]|$)/g)) push(m[1])
+    for (const t of cuoi) push(t)
 
     return out
 }
@@ -266,17 +364,21 @@ async function matchVideosWithOrders(
     // HÀNG KHÁCH GỬI VỀ, không phải mã gửi đi, nên dò OnlineOrder.trackingNumber
     // không bao giờ trúng → cả đám nằm ở "Chưa match". Mã trả nằm trong notes
     // phiếu trả dạng "Tracking: X" (returnSync ghi/làm tươi).
+    // Ít ứng viên (tra theo mã) ⇒ hỏi đúng mã đó; nhiều (trang duyệt) ⇒ lấy mọi phiếu có mã
+    // trả. Bỏ `take: 1500` cũ — trần cắt âm thầm (đang có 589 phiếu, sẽ vượt).
     const returnByTracking = new Map<string, MatchedReturn>()
     if (allCandidates.size > 0) {
         try {
+            const maHoa = [...new Set([...allCandidates].map(c => c.toUpperCase()))]
             const rets = await prisma.returnOrder.findMany({
-                where: { notes: { contains: 'Tracking: ' } },
+                where: maHoa.length <= 40
+                    ? { OR: maHoa.map(c => ({ notes: { contains: `Tracking: ${c}`, mode: 'insensitive' as const } })) }
+                    : { notes: { contains: 'Tracking: ' } },
                 select: {
                     id: true, code: true, customerName: true,
                     status: true, refundAmount: true, reason: true, notes: true,
                 },
                 orderBy: { createdAt: 'desc' },
-                take: 1500,
             })
             for (const r of rets) {
                 const m = /(?:^|\n)\s*Tracking:\s*(.+?)\s*(?:\n|$)/i.exec(r.notes || '')
@@ -505,7 +607,18 @@ router.get('/videos', authMiddleware, requirePermission('online_orders.view'), a
         const search = String(req.query.search ?? '').trim().toLowerCase()
         const forceRefresh = ['1', 'true'].includes(String(req.query.refresh ?? '').toLowerCase())
 
-        const files = await getDriveVideos(folderId, forceRefresh)
+        // Tra theo MÃ (dòng video ở vụ trả / khiếu nại gửi exact=1; ô tìm của trang gõ mã)
+        // ⇒ tìm thẳng trên Drive: mọi video, không trần, ~1s. Trang gõ mã mà Drive không ra
+        // (gõ dở giữa mã, gõ mã ĐƠN…) ⇒ rơi về đường liệt kê như cũ; exact=1 thì thôi.
+        const exact = ['1', 'true'].includes(String(req.query.exact ?? '').toLowerCase())
+        const searchRaw = String(req.query.search ?? '').trim()
+        let files: DriveVideoFile[] | null = null
+        let timThang = false
+        if (/^[A-Za-z0-9]{6,40}$/.test(searchRaw) && !forceRefresh) {
+            const thay = await timVideoTheoMa(folderId, searchRaw)
+            if (thay.length || exact) { files = thay; timThang = true }
+        }
+        if (!files) files = await getDriveVideos(folderId, forceRefresh)
         let items = await matchVideosWithOrders(prisma, files)
 
         // Filters
@@ -546,7 +659,9 @@ router.get('/videos', authMiddleware, requirePermission('online_orders.view'), a
                 totalPages,
                 dateGroups,
                 configured: true,
-                cachedAt: fc ? new Date(fc.at).toISOString() : null,
+                cachedAt: timThang ? null : fc ? new Date(fc.at).toISOString() : null,
+                timThang,
+                ...(timThang ? { biCatTran: false, videoCuNhatTrongDanhSach: null } : thongTinTran(folderId)),
             },
         })
     } catch (err) {
@@ -637,6 +752,7 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view'), as
                 folderId,
                 configured: true,
                 cachedAt: fc ? new Date(fc.at).toISOString() : null,
+                ...thongTinTran(folderId),
             },
         })
     } catch (err) {
