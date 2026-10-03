@@ -44,7 +44,7 @@ async function listSubfolderIds(drive: any, parentId: string): Promise<string[]>
             fields: 'nextPageToken, files(id)',
             pageSize: 100,
             pageToken,
-        })
+        }, { timeout: 60_000 })
         for (const f of resp.data.files || []) ids.push(f.id!)
         pageToken = resp.data.nextPageToken || undefined
     } while (pageToken)
@@ -98,7 +98,9 @@ async function openDisputeTrackings(sp: any): Promise<{ keep: Set<string>; soPhi
 async function duaVaoThungRac(drive: any, fileId: string): Promise<'ok' | 'mat' | string> {
     for (let lan = 0; ; lan++) {
         try {
-            await drive.files.update({ fileId, requestBody: { trashed: true } })
+            // Hạn 30s/lệnh: googleapis mặc định KHÔNG hạn giờ — một socket treo giữ chân cả
+            // lượt (đo 03/10: lượt hạn 230s chạy 326s, chỉ dọn được 622 video).
+            await drive.files.update({ fileId, requestBody: { trashed: true } }, { timeout: 30_000 })
             return 'ok'
         } catch (e: any) {
             const code = Number(e?.code || e?.response?.status || 0)
@@ -116,7 +118,7 @@ async function duaVaoThungRac(drive: any, fileId: string): Promise<'ok' | 'mat' 
  * apply=false: CHỈ ĐẾM (quét hết video quá hạn, đếm sẽ giữ / sẽ dọn, không đụng gì).
  * apply=true: đưa tối đa `tran` file vào thùng rác, dừng khi chạm trần hoặc hết `hanMs`.
  */
-export async function donVideoCu(sp: any, opts: { apply: boolean; tran: number; hanMs?: number; ngayGiu?: number }) {
+export async function donVideoCu(sp: any, opts: { apply: boolean; tran: number; hanMs?: number; ngayGiu?: number; luong?: number }) {
     const ngayGiu = Math.max(30, opts.ngayGiu ?? RETENTION_DAYS)
     const cutoffISO = new Date(Date.now() - ngayGiu * 86400_000).toISOString()
     const settings = await sp.storeSettings.findFirst({ select: { driveFolderId: true } as any }).catch(() => null) as any
@@ -146,9 +148,9 @@ export async function donVideoCu(sp: any, opts: { apply: boolean; tran: number; 
             const resp = await drive.files.list({
                 q: `'${fid}' in parents and trashed = false and mimeType contains 'video/' and createdTime < '${cutoffISO}'`,
                 fields: 'nextPageToken, files(id, name, createdTime)',
-                pageSize: opts.apply ? 100 : 1000,
+                pageSize: opts.apply ? 200 : 1000,
                 pageToken,
-            })
+            }, { timeout: 60_000 })
             const lo: any[] = []
             for (const f of resp.data.files || []) {
                 quaHan++
@@ -172,7 +174,7 @@ export async function donVideoCu(sp: any, opts: { apply: boolean; tran: number; 
                         // Editor vẫn bị "insufficient permissions". Chuỗi lỗi quyền ⇒ dừng sớm.
                         if (/insufficient permissions|does not have sufficient/i.test(kq) && ++loiQuyen >= 5 && trashed === 0) dungSom = 'loi-quyen'
                     }
-                }, 3)
+                }, Math.min(8, Math.max(1, opts.luong ?? 3)))
                 if (dungSom) break outer
             }
             pageToken = resp.data.nextPageToken || undefined

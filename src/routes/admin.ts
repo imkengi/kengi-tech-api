@@ -5789,6 +5789,9 @@ router.post('/don-video-dong-hang', async (req: Request, res: Response) => {
         const sp: any = getStorePrisma(store.schema)
         const apply = String(req.query.apply || '') === '1'
         const tran = Math.min(4000, Math.max(1, parseInt(String(req.query.tran || '1500'), 10) || 1500))
+        const luong = Math.min(8, Math.max(1, parseInt(String(req.query.luong || '4'), 10) || 4))
+        // Cloud Run hạn request 900s, CPU chỉ cấp trong request ⇒ dọn theo lượt, mỗi lượt ≤ 700s
+        const hanMs = Math.min(700, Math.max(30, parseInt(String(req.query.han || '230'), 10) || 230)) * 1000
         if (apply) {
             const { getStoreDriveWriter } = await import('../lib/driveOAuth')
             const w = await getStoreDriveWriter(sp).catch(() => null)
@@ -5798,7 +5801,7 @@ router.post('/don-video-dong-hang', async (req: Request, res: Response) => {
             }
         }
         const { donVideoCu } = await import('../cron/driveVideoCleanup')
-        const kq = await donVideoCu(sp, { apply, tran, hanMs: 230_000 })
+        const kq = await donVideoCu(sp, { apply, tran, hanMs, luong })
         if (!kq) { res.json({ success: true, data: { cuaHang: store.name, coThuMuc: false } }); return }
         const an = (e?: string) => (e ? e.replace(/^(.{3}).*(@.*)$/, '$1…$2') : null)
         res.json({ success: true, data: { cuaHang: store.name, chayThu: !apply, ...kq, email: an(kq.email) } })
