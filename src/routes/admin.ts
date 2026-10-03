@@ -5774,6 +5774,40 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
 })
 
 /**
+ * DỌN BÙ VIDEO ĐÓNG HÀNG CŨ — POST /admin/don-video-dong-hang?storeCode=X[&apply=1&tran=1500]
+ * (03/10/2026, chủ shop: "dọn video cũ đi"). Cùng lõi với cron đêm (donVideoCu): video quá
+ * 45 ngày vào THÙNG RÁC Drive (khôi phục được 30 ngày), chừa video của phiếu trả còn mở
+ * hoặc mới động tới trong 60 ngày. Cron chỉ 300 video/đêm ⇒ tồn ~15 nghìn mất ~50 đêm.
+ * MẶC ĐỊNH CHẠY THỬ (chỉ đếm). apply=1 mới dọn, mỗi lượt tối đa `tran` (≤ 4000) hoặc
+ * ~230s, gọi lại tới khi hết. Chỉ chạy thật khi đã kết nối Drive bằng tài khoản chủ shop.
+ */
+router.post('/don-video-dong-hang', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const apply = String(req.query.apply || '') === '1'
+        const tran = Math.min(4000, Math.max(1, parseInt(String(req.query.tran || '1500'), 10) || 1500))
+        if (apply) {
+            const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+            const w = await getStoreDriveWriter(sp).catch(() => null)
+            if (w?.nguon !== 'chu-shop') {
+                res.status(409).json({ success: false, error: 'Cửa hàng chưa kết nối Google Drive bằng tài khoản chủ shop — máy chủ không xoá được file My Drive' })
+                return
+            }
+        }
+        const { donVideoCu } = await import('../cron/driveVideoCleanup')
+        const kq = await donVideoCu(sp, { apply, tran, hanMs: 230_000 })
+        if (!kq) { res.json({ success: true, data: { cuaHang: store.name, coThuMuc: false } }); return }
+        const an = (e?: string) => (e ? e.replace(/^(.{3}).*(@.*)$/, '$1…$2') : null)
+        res.json({ success: true, data: { cuaHang: store.name, chayThu: !apply, ...kq, email: an(kq.email) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
  * BỘ ĐO VIDEO ĐÓNG HÀNG — GET /admin/do-video-dong-hang?storeCode=X&ngay=14&ma=SPXVN…,GY…
  * CHỈ ĐỌC (03/10/2026, chủ shop báo "video đóng hàng bị rớt mã"). Theo từng ngày: bao
  * nhiêu video, bao nhiêu tên file không còn mã vận đơn, bao nhiêu có mã mà không ghép
