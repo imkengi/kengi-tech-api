@@ -128,15 +128,109 @@ function ensureTables(): Promise<void> {
 
 // ═══════════════════════════ 1. STATE ═══════════════════════════════════════
 
-router.get('/state', requireToken, async (_req: Request, res: Response) => {
+/* ── GIẢM TẢI DB (03/10/2026) ───────────────────────────────────────────────
+ * Đo: khối state 66,6 KB (61 KB là 100 kịch bản sản phẩm). Khi live với "Đồng bộ
+ * OBS / máy khác", overlay đọc CẢ khối mỗi 15s và dashboard ghi lại CẢ khối mỗi
+ * ≥15s chỉ để đổi ~100 byte "đang phát" (currentMode, currentProductIdx, isLive,
+ * liveStartedAt) ⇒ ~770 MB đọc+ghi/ngày. Nay "đang phát" nằm ở bản ghi riêng
+ * id='runtime' (PUT /state/runtime, GET /state/nhip); GET /state có ETag nên
+ * trình duyệt hỏi lại bằng If-None-Match và nhận 304 mà máy chủ không đọc JSON.
+ * Studio/overlay bản cũ vẫn chạy: GET /state trộn bản ghi runtime nếu nó mới hơn,
+ * PUT /state vẫn nhận nguyên khối như trước. */
+const RUNTIME_KEYS = ['currentMode', 'currentProductIdx', 'isLive', 'liveStartedAt'] as const
+const RUNTIME_MODES = ['talking', 'presenting', 'greeting', 'reacting', 'emphasis', 'idle', 'rest']
+
+async function mocThoiGian(): Promise<{ cauHinh: Date | null; runtime: Date | null }> {
+    const rows = await registryPrisma.$queryRawUnsafe<{ id: string; updated_at: Date }[]>(
+        `SELECT id, updated_at FROM public.livestream_state WHERE id IN ('default', 'runtime')`)
+    return {
+        cauHinh: rows.find(r => r.id === 'default')?.updated_at ?? null,
+        runtime: rows.find(r => r.id === 'runtime')?.updated_at ?? null,
+    }
+}
+const etagState = (m: { cauHinh: Date | null; runtime: Date | null }) =>
+    `"st-${m.cauHinh ? new Date(m.cauHinh).getTime() : 0}-${m.runtime ? new Date(m.runtime).getTime() : 0}"`
+
+router.get('/state', requireToken, async (req: Request, res: Response) => {
     try {
         await ensureTables()
-        const rows = await registryPrisma.$queryRawUnsafe<{ data: unknown; updated_at: Date }[]>(
-            `SELECT data, updated_at FROM public.livestream_state WHERE id = 'default'`)
-        if (rows.length === 0) return res.json({ success: true, data: null })
-        res.json({ success: true, data: rows[0].data, updatedAt: rows[0].updated_at })
+        // Hỏi mốc trước (vài chục byte) — không đổi thì 304, KHÔNG đọc khối JSON
+        const moc = await mocThoiGian()
+        const etag = etagState(moc)
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('ETag', etag)
+        if (moc.cauHinh && req.headers['if-none-match'] === etag) return res.status(304).end()
+
+        const rows = await registryPrisma.$queryRawUnsafe<{ id: string; data: any; updated_at: Date }[]>(
+            `SELECT id, data, updated_at FROM public.livestream_state WHERE id IN ('default', 'runtime')`)
+        const cauHinh = rows.find(r => r.id === 'default')
+        if (!cauHinh) return res.json({ success: true, data: null })
+        const runtime = rows.find(r => r.id === 'runtime')
+        const data = { ...(cauHinh.data || {}) }
+        // Bản ghi runtime mới hơn khối cấu hình ⇒ nó là "đang phát" thật (dashboard bản mới)
+        if (runtime && new Date(runtime.updated_at) > new Date(cauHinh.updated_at)) {
+            for (const k of RUNTIME_KEYS) if (runtime.data?.[k] !== undefined) data[k] = runtime.data[k]
+        }
+        res.json({ success: true, data, updatedAt: cauHinh.updated_at })
     } catch (e: any) {
         res.status(500).json({ success: false, error: e?.message || 'Lỗi đọc state' })
+    }
+})
+
+/** GET /state/nhip — overlay hỏi mỗi 15s: "đang phát" (~100 byte) + mốc cấu hình.
+ *  Mốc cấu hình đổi thì mới tải lại GET /state. */
+router.get('/state/nhip', requireToken, async (_req: Request, res: Response) => {
+    try {
+        await ensureTables()
+        const rows = await registryPrisma.$queryRawUnsafe<{ id: string; data: any; updated_at: Date }[]>(
+            `SELECT id, CASE WHEN id = 'runtime' THEN data END AS data, updated_at
+               FROM public.livestream_state WHERE id IN ('default', 'runtime')`)
+        const cauHinh = rows.find(r => r.id === 'default')
+        const runtime = rows.find(r => r.id === 'runtime')
+        res.setHeader('Cache-Control', 'no-store')
+        res.json({
+            success: true,
+            data: {
+                runtime: runtime?.data ?? null,
+                runtimeLuc: runtime?.updated_at ?? null,
+                cauHinhLuc: cauHinh?.updated_at ?? null,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e?.message || 'Lỗi đọc nhịp' })
+    }
+})
+
+/** PUT /state/runtime — dashboard ghi riêng "đang phát", thay vì ghi lại cả khối 66 KB. */
+router.put('/state/runtime', requireToken, async (req: Request, res: Response) => {
+    try {
+        await ensureTables()
+        const b = req.body ?? {}
+        const r: Record<string, unknown> = {}
+        if (b.currentMode !== undefined) {
+            if (!RUNTIME_MODES.includes(String(b.currentMode))) return res.status(400).json({ success: false, error: 'currentMode không hợp lệ' })
+            r.currentMode = String(b.currentMode)
+        }
+        if (b.currentProductIdx !== undefined) {
+            const n = Number(b.currentProductIdx)
+            if (!Number.isInteger(n) || n < 0 || n > 100_000) return res.status(400).json({ success: false, error: 'currentProductIdx không hợp lệ' })
+            r.currentProductIdx = n
+        }
+        if (b.isLive !== undefined) r.isLive = b.isLive === true
+        if (b.liveStartedAt !== undefined) {
+            const t = b.liveStartedAt === null ? null : Number(b.liveStartedAt)
+            if (t !== null && !Number.isFinite(t)) return res.status(400).json({ success: false, error: 'liveStartedAt không hợp lệ' })
+            r.liveStartedAt = t
+        }
+        const json = JSON.stringify(r)
+        const rows = await registryPrisma.$queryRaw<{ updated_at: Date }[]>`
+            INSERT INTO public.livestream_state (id, data, updated_at)
+            VALUES ('runtime', ${json}::jsonb, now())
+            ON CONFLICT (id) DO UPDATE SET data = ${json}::jsonb, updated_at = now()
+            RETURNING updated_at`
+        res.json({ success: true, data: { runtimeLuc: rows[0]?.updated_at ?? null } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e?.message || 'Lỗi lưu nhịp' })
     }
 })
 
