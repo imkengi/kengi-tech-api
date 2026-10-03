@@ -106,7 +106,7 @@ async function duaVaoThungRac(drive: any, fileId: string): Promise<'ok' | 'mat' 
             const code = Number(e?.code || e?.response?.status || 0)
             const msg = String(e?.message || e)
             if (code === 404) return 'mat' // đã không còn (người dùng tự xoá)
-            const tamThoi = code === 429 || code >= 500 || /rate ?limit|socket hang up|ECONNRESET|ETIMEDOUT|network/i.test(msg)
+            const tamThoi = code === 429 || code >= 500 || /rate ?limit|socket hang up|ECONNRESET|ETIMEDOUT|network|aborted/i.test(msg) // 'aborted' = quá hạn 30s; trash lại vô hại
             if (!tamThoi || lan >= 3) return msg
             await new Promise(r => setTimeout(r, 1000 * 2 ** lan))
         }
