@@ -645,4 +645,133 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view'), as
     }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BỘ ĐO CHỈ ĐỌC (03/10/2026) — gọi từ GET /api/admin/do-video-dong-hang
+//  Trả lời bằng số: tên file còn mang mã vận đơn không, ghép được bao nhiêu đơn
+//  theo từng ngày, trần MAX_FILES có cắt mất video cũ không, quét Drive tốn bao
+//  lâu, và với từng mã cho trước: file nào chứa nó, đứng thứ mấy, ghép ra đơn nào.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ngayVN = (t: string | null) => (t ? new Date(new Date(t).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : 'khong-ro')
+
+export async function doVideoDongHang(
+    prisma: NonNullable<AuthRequest['storePrisma']>,
+    opts: { soNgay: number; ma: string[] },
+) {
+    const folderId = await getStoreFolderId(prisma)
+    if (!folderId) return { configured: false }
+    const drive = getDrive()
+
+    const t0 = Date.now()
+    const subIds = await listSubfolderIds(drive, folderId)
+    const msThuMucCon = Date.now() - t0
+    const q = `(${[folderId, ...subIds].map(id => `'${id}' in parents`).join(' or ')}) and mimeType contains 'video' and trashed = false`
+
+    // Đếm ĐỦ, không trần — để biết MAX_FILES có đang cắt video cũ không.
+    const t1 = Date.now()
+    const tatCa: { id: string; name: string; createdTime: string | null }[] = []
+    let pageToken: string | undefined
+    let soTrang = 0
+    do {
+        const resp = await drive.files.list({
+            q, fields: 'nextPageToken, files(id, name, createdTime)', pageSize: 1000, orderBy: 'createdTime desc',
+            supportsAllDrives: true, includeItemsFromAllDrives: true, pageToken,
+        })
+        for (const f of resp.data.files || []) if (f.id && f.name) tatCa.push({ id: f.id, name: f.name, createdTime: f.createdTime || null })
+        pageToken = resp.data.nextPageToken || undefined
+        soTrang++
+    } while (pageToken && soTrang < 40)
+    const msLietKe = Date.now() - t1
+
+    const moc = Date.now() - opts.soNgay * 86_400_000
+    const trongKhung = tatCa.filter(f => f.createdTime && new Date(f.createdTime).getTime() >= moc)
+    const asFile = (f: typeof tatCa[number]): DriveVideoFile => ({
+        id: f.id, name: f.name, createdTime: f.createdTime,
+        webViewLink: null, webContentLink: null, thumbnailLink: null, mimeType: null, size: null,
+    })
+    const ghep = await matchVideosWithOrders(prisma, trongKhung.map(asFile))
+
+    const theoNgay: Record<string, { tong: number; khongMa: number; coMaKhongKhop: number; khop: number; videoTra: number }> = {}
+    const mauKhongMa: { ten: string; luc: string | null }[] = []
+    const khongKhop: { ten: string; luc: string | null; ma: string[] }[] = []
+    for (let i = 0; i < ghep.length; i++) {
+        const v = ghep[i], f = trongKhung[i]
+        const d = (theoNgay[ngayVN(f.createdTime)] ??= { tong: 0, khongMa: 0, coMaKhongKhop: 0, khop: 0, videoTra: 0 })
+        d.tong++
+        if (v.videoType === 'return') d.videoTra++
+        const ma = extractTrackingCandidates(f.name)
+        if (v.matchedOrder || v.matchedReturn) d.khop++
+        else if (!ma.length) { d.khongMa++; if (mauKhongMa.length < 25) mauKhongMa.push({ ten: f.name, luc: f.createdTime }) }
+        else { d.coMaKhongKhop++; khongKhop.push({ ten: f.name, luc: f.createdTime, ma }) }
+    }
+
+    // Video có mã mà không ghép được: dò xem mã đó là MÃ ĐƠN (quét nhầm mã) hay mã
+    // vận đơn gần giống (rớt/đọc sai ký tự) — mỗi mẫu một truy vấn, tuần tự (pool 1).
+    const p: any = prisma
+    const doKhongKhop: any[] = []
+    for (const k of khongKhop.slice(0, 20)) {
+        const goc = k.ma[0]
+        const theoMaDon = await p.onlineOrder.findFirst({ where: { orderNumber: { in: k.ma } }, select: { orderNumber: true, trackingNumber: true, platform: true, status: true } })
+        const gan = goc.length >= 10
+            ? await p.onlineOrder.findFirst({ where: { trackingNumber: { startsWith: goc.slice(0, goc.length - 3), mode: 'insensitive' } }, select: { orderNumber: true, trackingNumber: true, platform: true, status: true } })
+            : null
+        doKhongKhop.push({ ...k, laMaDon: theoMaDon, maVanDonGanGiong: gan })
+    }
+
+    // Mã cho trước (vd mã vận đơn của vụ khiếu nại không thấy video)
+    const doMa: any[] = []
+    for (const ma of opts.ma.slice(0, 10)) {
+        const m = ma.toUpperCase()
+        const viTri = tatCa.findIndex(f => f.name.toUpperCase().includes(m))
+        const don = await p.onlineOrder.findFirst({
+            where: { OR: [{ trackingNumber: { equals: ma, mode: 'insensitive' } }, { orderNumber: ma }] },
+            select: { orderNumber: true, trackingNumber: true, platform: true, status: true, shippedAt: true, createdAt: true },
+        })
+        doMa.push({
+            ma,
+            file: viTri >= 0 ? { ten: tatCa[viTri].name, luc: tatCa[viTri].createdTime, thuTuMoiNhat: viTri + 1, trongTran: viTri < MAX_FILES, maRutDuoc: extractTrackingCandidates(tatCa[viTri].name) } : null,
+            fileGanGiong: viTri >= 0 ? null : tatCa.filter(f => f.name.toUpperCase().includes(m.slice(0, Math.max(8, m.length - 4)))).slice(0, 3).map(f => f.name),
+            don,
+        })
+    }
+
+    // Đơn đã gửi trong khung mà KHÔNG có mã vận đơn — không có mã thì không ghép được video nào.
+    const daGui = await p.onlineOrder.findMany({
+        where: { shippedAt: { gte: new Date(moc) } },
+        select: { platform: true, trackingNumber: true },
+        take: 20_000,
+    })
+    const donThieuMa: Record<string, { daGui: number; thieuMa: number }> = {}
+    for (const o of daGui) {
+        const r = (donThieuMa[o.platform || 'khac'] ??= { daGui: 0, thieuMa: 0 })
+        r.daGui++
+        if (!String(o.trackingNumber || '').trim()) r.thieuMa++
+    }
+    const phieuTraCoMa = await p.returnOrder.count({ where: { notes: { contains: 'Tracking: ' } } }).catch(() => null)
+
+    return {
+        configured: true,
+        folderId,
+        soThuMucCon: subIds.length,
+        doDaiTruyVan: q.length,
+        msThuMucCon,
+        msLietKe,
+        tongVideo: tatCa.length,
+        danhDuLietKe: !pageToken,
+        tranMaxFiles: MAX_FILES,
+        biCatBoiTran: Math.max(0, tatCa.length - MAX_FILES),
+        videoCuNhatTrongTran: tatCa[Math.min(tatCa.length, MAX_FILES) - 1]?.createdTime ?? null,
+        videoCuNhat: tatCa[tatCa.length - 1]?.createdTime ?? null,
+        khungNgay: opts.soNgay,
+        theoNgay: Object.fromEntries(Object.entries(theoNgay).sort((a, b) => b[0].localeCompare(a[0]))),
+        mauKhongMa,
+        tongCoMaKhongKhop: khongKhop.length,
+        doKhongKhop,
+        doMa,
+        donThieuMa,
+        phieuTraCoMa,
+        tranPhieuTra: 1500,
+    }
+}
+
 export default router

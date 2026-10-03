@@ -5774,6 +5774,28 @@ router.get('/do-kho-media', async (_req: Request, res: Response) => {
 })
 
 /**
+ * BỘ ĐO VIDEO ĐÓNG HÀNG — GET /admin/do-video-dong-hang?storeCode=X&ngay=14&ma=SPXVN…,GY…
+ * CHỈ ĐỌC (03/10/2026, chủ shop báo "video đóng hàng bị rớt mã"). Theo từng ngày: bao
+ * nhiêu video, bao nhiêu tên file không còn mã vận đơn, bao nhiêu có mã mà không ghép
+ * được đơn (kèm dò: có phải mã đơn / mã gần giống không); trần 5.000 file có cắt video
+ * cũ không; quét Drive mất bao lâu; đơn đã gửi mà thiếu mã vận đơn theo sàn.
+ */
+router.get('/do-video-dong-hang', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const soNgay = Math.min(60, Math.max(1, parseInt(String(req.query.ngay || '14'), 10) || 14))
+        const ma = String(req.query.ma || '').split(',').map(s => s.trim()).filter(Boolean)
+        const { doVideoDongHang } = await import('./driveVideos')
+        res.json({ success: true, data: { cuaHang: store.name, ...(await doVideoDongHang(sp, { soNgay, ma })) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+/**
  * BỘ ĐO ĐƯỜNG TẢI KHỐI LÊN DRIVE — POST /admin/do-tai-khoi-drive?storeCode=
  *
  * Chủ shop báo "Mất kết nối khi đang tải lên". Đã đổi sang tải theo KHỐI qua máy
