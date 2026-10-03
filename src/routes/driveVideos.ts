@@ -708,14 +708,61 @@ export async function doVideoDongHang(
     // Video có mã mà không ghép được: dò xem mã đó là MÃ ĐƠN (quét nhầm mã) hay mã
     // vận đơn gần giống (rớt/đọc sai ký tự) — mỗi mẫu một truy vấn, tuần tự (pool 1).
     const p: any = prisma
+    const chonDon = { orderNumber: true, trackingNumber: true, platform: true, status: true, createdAt: true, shippedAt: true }
     const doKhongKhop: any[] = []
-    for (const k of khongKhop.slice(0, 20)) {
+    const daDo = new Set<string>()
+    for (const k of khongKhop) {
+        if (doKhongKhop.length >= 20) break
         const goc = k.ma[0]
-        const theoMaDon = await p.onlineOrder.findFirst({ where: { orderNumber: { in: k.ma } }, select: { orderNumber: true, trackingNumber: true, platform: true, status: true } })
-        const gan = goc.length >= 10
-            ? await p.onlineOrder.findFirst({ where: { trackingNumber: { startsWith: goc.slice(0, goc.length - 3), mode: 'insensitive' } }, select: { orderNumber: true, trackingNumber: true, platform: true, status: true } })
+        if (daDo.has(goc)) continue // video trùng tên (tải 2 lần) chỉ đo một lần
+        daDo.add(goc)
+        const theoMaDon = await p.onlineOrder.findFirst({ where: { orderNumber: { in: k.ma } }, select: chonDon })
+        const gan = goc.length >= 6
+            ? await p.onlineOrder.findMany({ where: { trackingNumber: { startsWith: goc.slice(0, goc.length - 1), mode: 'insensitive' } }, select: chonDon, take: 3 })
+            : []
+        const chua = goc.length >= 6
+            ? await p.onlineOrder.findFirst({ where: { trackingNumber: { contains: goc, mode: 'insensitive' } }, select: chonDon })
             : null
-        doKhongKhop.push({ ...k, laMaDon: theoMaDon, maVanDonGanGiong: gan })
+        doKhongKhop.push({ ...k, laMaDon: theoMaDon, maVanDonGanGiong: gan, maVanDonChuaMa: chua })
+    }
+
+    // Đơn MỚI (3 ngày) chưa có mã vận đơn, theo sàn + trạng thái — đơn vừa đóng mà sync
+    // chưa kéo mã về thì video hôm nay chưa ghép được.
+    const donMoi = await p.onlineOrder.findMany({
+        where: { createdAt: { gte: new Date(Date.now() - 3 * 86_400_000) } },
+        select: chonDon,
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+    })
+    const donMoiThieuMa: Record<string, { tong: number; thieuMa: number }> = {}
+    const mauDonMoiThieuMa: any[] = []
+    for (const o of donMoi) {
+        const r = (donMoiThieuMa[`${o.platform || 'khac'}:${o.status}`] ??= { tong: 0, thieuMa: 0 })
+        r.tong++
+        if (!String(o.trackingNumber || '').trim()) { r.thieuMa++; if (mauDonMoiThieuMa.length < 10) mauDonMoiThieuMa.push(o) }
+    }
+
+    // Tìm THẲNG trên Drive theo mã (không liệt kê cả thư mục) — đo xem Drive có
+    // tách tên theo dấu "_" để name/fullText contains bắt được mã không, và mất bao lâu.
+    const thuTimDrive: any[] = []
+    for (const ma of opts.ma.slice(0, 5)) {
+        const sach = ma.replace(/[^A-Za-z0-9]/g, '')
+        if (!sach) continue
+        const ketQua: any = { ma: sach }
+        for (const kieu of ['name', 'fullText'] as const) {
+            const t = Date.now()
+            try {
+                const resp = await drive.files.list({
+                    q: `(${[folderId, ...subIds].map(id => `'${id}' in parents`).join(' or ')}) and ${kieu} contains '${sach}' and trashed = false`,
+                    fields: 'files(id, name, createdTime)', pageSize: 10,
+                    supportsAllDrives: true, includeItemsFromAllDrives: true,
+                })
+                ketQua[kieu] = { ms: Date.now() - t, so: resp.data.files?.length || 0, ten: (resp.data.files || []).slice(0, 3).map(f => f.name) }
+            } catch (e: any) {
+                ketQua[kieu] = { ms: Date.now() - t, loi: String(e?.message || e).slice(0, 200) }
+            }
+        }
+        thuTimDrive.push(ketQua)
     }
 
     // Mã cho trước (vd mã vận đơn của vụ khiếu nại không thấy video)
@@ -725,13 +772,18 @@ export async function doVideoDongHang(
         const viTri = tatCa.findIndex(f => f.name.toUpperCase().includes(m))
         const don = await p.onlineOrder.findFirst({
             where: { OR: [{ trackingNumber: { equals: ma, mode: 'insensitive' } }, { orderNumber: ma }] },
-            select: { orderNumber: true, trackingNumber: true, platform: true, status: true, shippedAt: true, createdAt: true },
+            select: chonDon,
+        })
+        const donGanGiong = don ? [] : await p.onlineOrder.findMany({
+            where: { trackingNumber: { startsWith: ma.slice(0, Math.max(5, ma.length - 2)), mode: 'insensitive' } },
+            select: chonDon, take: 3,
         })
         doMa.push({
             ma,
             file: viTri >= 0 ? { ten: tatCa[viTri].name, luc: tatCa[viTri].createdTime, thuTuMoiNhat: viTri + 1, trongTran: viTri < MAX_FILES, maRutDuoc: extractTrackingCandidates(tatCa[viTri].name) } : null,
             fileGanGiong: viTri >= 0 ? null : tatCa.filter(f => f.name.toUpperCase().includes(m.slice(0, Math.max(8, m.length - 4)))).slice(0, 3).map(f => f.name),
             don,
+            donGanGiong,
         })
     }
 
@@ -767,8 +819,13 @@ export async function doVideoDongHang(
         mauKhongMa,
         tongCoMaKhongKhop: khongKhop.length,
         doKhongKhop,
+        maKhongKhop: [...daDo],
+        maKhongKhopTatCa: [...new Set(khongKhop.map(k => k.ma[0]))],
         doMa,
         donThieuMa,
+        donMoiThieuMa,
+        mauDonMoiThieuMa,
+        thuTimDrive,
         phieuTraCoMa,
         tranPhieuTra: 1500,
     }

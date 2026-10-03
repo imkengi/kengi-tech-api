@@ -5789,7 +5789,23 @@ router.get('/do-video-dong-hang', async (req: Request, res: Response) => {
         const soNgay = Math.min(60, Math.max(1, parseInt(String(req.query.ngay || '14'), 10) || 14))
         const ma = String(req.query.ma || '').split(',').map(s => s.trim()).filter(Boolean)
         const { doVideoDongHang } = await import('./driveVideos')
-        res.json({ success: true, data: { cuaHang: store.name, ...(await doVideoDongHang(sp, { soNgay, ma })) } })
+        const kq: any = await doVideoDongHang(sp, { soNgay, ma })
+        // Mã không ghép được ở cửa hàng này có phải đơn của CỬA HÀNG KHÁC không (cùng bàn
+        // đóng gói, cùng thư mục Drive)? Chỉ dò các cửa hàng được nêu tên, tuần tự.
+        const khac = String(req.query.cuaHangKhac || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 5)
+        const maDo = [...new Set([...(kq.maKhongKhopTatCa || []), ...ma.map(m => m.toUpperCase())])]
+        const oCuaHangKhac: any[] = []
+        for (const code of khac) {
+            const st = await prisma.store.findFirst({ where: { code }, select: { schema: true } })
+            if (!st || !maDo.length) { oCuaHangKhac.push({ code, coCuaHang: !!st, so: 0 }); continue }
+            const don = await (getStorePrisma(st.schema) as any).onlineOrder.findMany({
+                where: { trackingNumber: { in: maDo } },
+                select: { orderNumber: true, trackingNumber: true, platform: true, status: true, createdAt: true },
+                take: 100,
+            })
+            oCuaHangKhac.push({ code, so: don.length, mau: don.slice(0, 10) })
+        }
+        res.json({ success: true, data: { cuaHang: store.name, ...kq, soMaDoCheo: maDo.length, oCuaHangKhac } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
     }
