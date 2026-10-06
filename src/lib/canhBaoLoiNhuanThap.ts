@@ -84,29 +84,32 @@ export async function canhBaoLoiNhuanThap(prisma: any, orderIds: string[]): Prom
      * sách đầy đủ vẫn xem ở trang Đơn hàng online, nơi có sẵn cột % lợi nhuận. */
     const NGUONG_GOP = 8
     const daGhi: typeof thap = []
+    const idTin: string[] = [] // id các tin vừa ghi — push mang theo để app không vẽ lại
     if (thap.length > NGUONG_GOP) {
         const dsach = thap.slice(0, NGUONG_GOP).map(t => `${t.ma} ${t.pt.toFixed(1)}%`).join(' · ')
         try {
-            await prisma.notification.create({
+            const tin = await prisma.notification.create({
                 data: {
                     title: `${thap.length} đơn lãi dưới ${NGUONG_LOI_NHUAN_THAP}%`,
                     message: `Vừa đối soát phí thật. Thấp nhất: ${dsach} (+${thap.length - NGUONG_GOP} đơn nữa). Vào Đơn hàng online kiểm giá vốn / giá bán / phí.`,
                     type: 'loi_nhuan_thap',
                 },
             })
+            if (tin?.id) idTin.push(tin.id)
             await prisma.onlineOrder.updateMany({ where: { id: { in: thap.map(t => t.id) } }, data: { loiNhuanThapBaoLuc: bayGio } })
             daGhi.push(...thap)
         } catch { ra.loiGhi += thap.length }
     } else {
         for (const t of thap) {
             try {
-                await prisma.notification.create({
+                const tin = await prisma.notification.create({
                     data: {
                         title: `Lợi nhuận thấp: ${t.ma}`,
                         message: `${t.san.toUpperCase()} · lãi ${t.pt.toFixed(1)}% (${fmt(t.ln)} / ${fmt(t.dt)}) — dưới ngưỡng ${NGUONG_LOI_NHUAN_THAP}%, kiểm giá vốn / giá bán / phí.`,
                         type: 'loi_nhuan_thap',
                     },
                 })
+                if (tin?.id) idTin.push(tin.id)
                 await prisma.onlineOrder.updateMany({ where: { id: t.id }, data: { loiNhuanThapBaoLuc: bayGio } })
                 daGhi.push(t)
             } catch { ra.loiGhi++ }
@@ -124,7 +127,7 @@ export async function canhBaoLoiNhuanThap(prisma: any, orderIds: string[]): Prom
     const noiDung = `${dau}${conLai}. Vừa đối soát phí thật. Vào Đơn hàng online kiểm giá vốn / giá bán.`
     try {
         const { sendPushToStore } = await import('../routes/notifications')
-        ra.push = await sendPushToStore(prisma, tieuDe, noiDung)
+        ra.push = await sendPushToStore(prisma, tieuDe, noiDung, { id: idTin.join(','), type: 'loi_nhuan_thap', route: 'online-orders' })
     } catch (e: any) { ra.push = 0; ra.loiPush = String(e?.message || e).slice(0, 160) }
     return ra
 }

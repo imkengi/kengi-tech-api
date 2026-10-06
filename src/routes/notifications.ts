@@ -44,10 +44,18 @@ export async function ensureDeviceTokenTable(prisma: any): Promise<void> {
         )`).catch(() => { })
 }
 
+/** Thông tin kèm theo push (06/10/2026) — app Android dùng để:
+ *  - `id`: id bản ghi Notification ⇒ worker poll 15' KHÔNG vẽ lại lần hai (trước đây
+ *    push không mang id nên mỗi sự kiện hiện HAI lần trên khay);
+ *  - `type`: chọn KÊNH thông báo theo nhóm (khiếu nại/đơn mới có chuông, hoá đơn im);
+ *  - `route`: bấm vào mở thẳng màn liên quan ('returns', 'online-orders', …).
+ *  App cũ chỉ đọc title/message — khoá thêm vô hại. */
+export interface PushExtra { id?: string; type?: string; route?: string }
+
 /** Bắn push FCM tới mọi thiết bị đã đăng ký của store. Token chết (404/400
  * UNREGISTERED) bị xoá luôn. Mọi lỗi nuốt êm — push là phụ, không được làm
  * hỏng luồng chính. */
-export async function sendPushToStore(prisma: any, title: string, body: string): Promise<number> {
+export async function sendPushToStore(prisma: any, title: string, body: string, extra: PushExtra = {}): Promise<number> {
     try {
         await ensureDeviceTokenTable(prisma)
         const rows: any[] = await prisma.$queryRawUnsafe(
@@ -69,7 +77,12 @@ export async function sendPushToStore(prisma: any, title: string, body: string):
                             // "phải vào app mới xem được". Data-only thì onMessageReceived
                             // chạy CẢ KHI NỀN, app tự vẽ từng thông báo + nhóm xoè được.
                             // App cũ vẫn hiện bình thường (đã có fallback đọc data.title/message).
-                            data: { title, message: body },
+                            data: {
+                                title, message: body,
+                                ...(extra.id ? { id: String(extra.id) } : {}),
+                                ...(extra.type ? { type: String(extra.type) } : {}),
+                                ...(extra.route ? { route: String(extra.route) } : {}),
+                            },
                             android: { priority: 'HIGH' },
                         },
                     }),
@@ -133,6 +146,23 @@ router.get('/stream', (_req: Request, res: Response) => {
 })
 
 // GET /api/notifications — list recent in-app notifications (static for now)
+/** NHÓM + MÀN ĐÍCH của một thông báo (06/10/2026) — app Android lọc theo nhóm, chọn kênh
+ *  thông báo, bấm vào mở đúng màn. Trước đây app chỉ biết low_stock/payment_due, mọi loại
+ *  khác (hoá đơn, đơn mới…) hiện chung nhãn "HỆ THỐNG". Thêm trường, KHÔNG đổi trường cũ. */
+export function phanNhomThongBao(type: string, title = ''): { nhom: string; route: string | null } {
+    switch (type) {
+        case 'return_request':
+        case 'dispute_result': return { nhom: 'khieu_nai', route: 'returns' }
+        case 'new_order':
+        case 'loi_nhuan_thap': return { nhom: 'don_hang', route: 'online-orders' }
+        case 'einvoice': return { nhom: 'hoa_don', route: null }
+        case 'payment_due': return { nhom: 'cong_no', route: 'payment-due' }
+        case 'low_stock': return { nhom: 'kho', route: 'inventory' }
+    }
+    if (/hoá đơn XML|hóa đơn XML/i.test(title)) return { nhom: 'hoa_don', route: null }
+    return { nhom: 'he_thong', route: null }
+}
+
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
@@ -151,6 +181,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const lowStockNotifs = lowStock.map((p: any) => ({
             id: `low-${p.id}`,
             type: 'low_stock',
+            // ghim = TÌNH TRẠNG tính lại mỗi lần gọi, không phải sự kiện (createdAt = lúc gọi)
+            ghim: true, nhom: 'kho', route: 'inventory',
             title: 'Sắp hết hàng',
             message: `${p.name} còn ${p.stock} sản phẩm (SKU: ${p.sku})`,
             productId: p.id,
@@ -188,6 +220,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 return {
                     id: `due-${r.id}`,
                     type: 'payment_due',
+                    ghim: true, nhom: 'cong_no', route: 'payment-due',
                     title: overdue ? 'Quá hạn thanh toán NCC' : 'Sắp đến hạn thanh toán NCC',
                     message: `Phiếu ${r.code}${r.supplierName ? ' — ' + r.supplierName : ''}: còn nợ ${remaining.toLocaleString('vi-VN')}₫, hạn ${dueStr}${r.paymentTerm ? ' (' + r.paymentTerm + ')' : ''}`,
                     receiptId: r.id,
@@ -202,7 +235,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         let dbNotifs: any[] = []
         try {
             const rows = await (prisma as any).notification.findMany({
-                orderBy: { createdAt: 'desc' }, take: 30,
+                orderBy: { createdAt: 'desc' }, take: 50,
             })
             dbNotifs = rows.map((n: any) => ({
                 id: n.id,
@@ -210,9 +243,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 title: n.title,
                 message: n.message,
                 severity: n.type === 'error' ? 'critical'
-                    : (n.type === 'loi_nhuan_thap' ? 'warning' : 'info'),
+                    : (['loi_nhuan_thap', 'return_request'].includes(n.type) ? 'warning' : 'info'),
                 read: n.read,
                 createdAt: n.createdAt.toISOString(),
+                ghim: false,
+                ...phanNhomThongBao(n.type || 'info', n.title || ''),
             }))
         } catch { /* bảng chưa có ở schema cũ — bỏ qua */ }
 

@@ -120,7 +120,7 @@ export async function nhacHanChoStore(sp: any, storeCode: string): Promise<KetQu
 
     // Dấu ngày để không nhắc lại trong cùng ngày. Nhắc lại NGÀY MAI nếu vẫn chưa trả — đúng
     // yêu cầu "lặp lại cho đến khi thanh toán đủ".
-    await sp.notification.create({
+    const tin = await sp.notification.create({
         data: { type: 'payment_due', title: tieuDe, message: `${noiDung} [nhac:${dauNgay}]` },
     })
     kq.daGui = true
@@ -128,7 +128,7 @@ export async function nhacHanChoStore(sp: any, storeCode: string): Promise<KetQu
     // Đẩy ra ngoài — phần mà bản cũ thiếu. Push hỏng KHÔNG được làm hỏng lượt nhắc.
     try {
         const { sendPushToStore } = await import('../routes/notifications')
-        kq.pushGui = await sendPushToStore(sp, tieuDe, noiDung.slice(0, 300))
+        kq.pushGui = await sendPushToStore(sp, tieuDe, noiDung.slice(0, 300), { id: tin?.id, type: 'payment_due', route: 'payment-due' })
     } catch (e: any) {
         console.warn(`[HanThanhToan] ${storeCode}: push hỏng — ${moTaLoi(e)} (thông báo trong app vẫn có)`)
     }

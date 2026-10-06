@@ -33,7 +33,6 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
-import { sendPushToStore } from './notifications'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -745,6 +744,10 @@ export async function issueInvoiceForTransaction(
     // Khoá SSE (storeSchema) — có là bắn sự kiện 'einvoice_issued' đẩy toast
     // realtime cho web đang mở (kênh /notifications/stream).
     sseKey?: string,
+    // thongBaoLe=false: KHÔNG tạo tin "Đã xuất hoá đơn số …" cho từng phiếu — xuất theo
+    // LÔ / cron đêm tự tạo MỘT tin tổng kết (06/10/2026: một đêm hàng chục–trăm tin lẻ
+    // chôn mất tin quan trọng trên web lẫn app Android).
+    opts: { thongBaoLe?: boolean } = {},
 ): Promise<{ success: boolean; skipped?: boolean; stockShort?: boolean; error?: string; invoiceNumber?: string; record?: any }> {
     const config = await getActiveConfig(prisma)
     if (!config) return { success: false, error: 'Chưa cấu hình NCC hóa đơn' }
@@ -948,18 +951,22 @@ export async function issueInvoiceForTransaction(
             where: { id: txId },
             data: { vatStatus: 'issued', vatInvoiceNumber: result.invoiceNumber, vatIssuedAt: new Date() },
         }).catch(() => { })
-        // Thông báo trong app (web + Android đọc chung GET /notifications)
+        // Thông báo trong app (web + Android đọc chung GET /notifications) — chỉ cho
+        // phiếu xuất LẺ; lô/cron tự tổng kết (xem opts.thongBaoLe).
         const notifTitle = `🧾 Đã xuất hoá đơn số ${result.invoiceNumber || '?'}`
         const notifMessage = `Phiếu ${tx.receiptNumber || txId} — ${invoiceData.buyerName} — ${Math.round(tx.total || 0).toLocaleString('vi-VN')}₫`
             + (invoiceData.buyerEmail ? ` (gửi email tới ${invoiceData.buyerEmail})` : '')
-        await prisma.notification.create({
-            data: { type: 'einvoice', title: notifTitle, message: notifMessage },
-        }).catch(() => { })
+        if (opts.thongBaoLe !== false) {
+            await prisma.notification.create({
+                data: { type: 'einvoice', title: notifTitle, message: notifMessage },
+            }).catch(() => { })
+        }
         // Web KHÔNG cần đẩy riêng: bản ghi Notification ở trên là nguồn duy nhất,
         // hook poll của FE (15 giây) tự toast tin mới. SSE đã gỡ 02/09/2026 vì
         // giữ instance Cloud Run sống 24/7 — xem routes/notifications.ts.
-        // Push FCM tức thì tới app Android (kể cả khi app đóng) — fire & forget
-        sendPushToStore(prisma, notifTitle, notifMessage).catch(() => { })
+        // KHÔNG push FCM từng hoá đơn (06/10/2026): cron đêm từng dội hàng chục–trăm push
+        // "Đã xuất hoá đơn số …" lên điện thoại; người xuất lẻ đang nhìn màn hình rồi.
+        // Tin tổng kết đêm (cron/einvoiceQueue.ts) mới push.
         // Khách có email → nhờ VNPT gửi hoá đơn. Lỗi email KHÔNG làm hỏng phát
         // hành — chỉ ghi log + đánh dấu vào notes của bản ghi.
         const emailTo = invoiceData.buyerEmail
@@ -2146,7 +2153,8 @@ router.post('/queue/run', einvoiceAuth, requireRole('admin', 'manager'), async (
         for (const r of rows) {
             try {
                 const rs: any = await issueInvoiceForTransaction(prisma, r.id, buyerBody,
-                    (req as any).storeId || req.user?.branchSchema || req.user?.storeSchema)
+                    (req as any).storeId || req.user?.branchSchema || req.user?.storeSchema,
+                    { thongBaoLe: rows.length === 1 })
                 if (rs.success && !rs.skipped) issued++
                 else if (!rs.success) {
                     // THIẾU TỒN KHO THUẾ → CHỪA phiếu đó lại (vẫn nằm trong hàng

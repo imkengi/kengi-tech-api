@@ -338,14 +338,14 @@ async function runAutoSync() {
                         if (result.imported > 0) {
                             const tieuDe = `🛒 ${result.imported} đơn hàng mới`
                             const noiDung = `${channel.name} (${String(channel.platform).toUpperCase()})`
-                            await (storePrisma as any).notification.create({
+                            const tin = await (storePrisma as any).notification.create({
                                 data: { type: 'new_order', title: tieuDe, message: noiDung },
-                            }).catch(() => { })
+                            }).catch(() => null)
                             try {
                                 // Web đọc bản ghi Notification vừa tạo ở trên qua poll;
                                 // chỉ còn push FCM cho app Android (SSE gỡ 02/09/2026).
                                 const { sendPushToStore } = await import('../routes/notifications')
-                                sendPushToStore(storePrisma, tieuDe, noiDung).catch(() => { })
+                                sendPushToStore(storePrisma, tieuDe, noiDung, { id: tin?.id, type: 'new_order', route: 'online-orders' }).catch(() => { })
                             } catch { }
                         }
                         // Convert eligible orders to transactions + inventory

@@ -8765,6 +8765,45 @@ router.get('/returns-raw', async (req: Request, res: Response) => {
 // Chẩn đoán thông báo: ?storeCode=… → 5 bản ghi Notification mới nhất;
 // &emit=1 tạo một bản ghi loại 'einvoice' để nghiệm thu ĐÚNG đường thật của web
 // (poll GET /notifications → toast). SSE đã gỡ 02/09/2026 nên không còn số client.
+/**
+ * BỘ ĐO THÔNG BÁO — GET /admin/do-thong-bao?storeCode=X&ngay=7 (CHỈ ĐỌC, 06/10/2026).
+ * Chủ shop: "phần thông báo của android đang bị lộn xộn". Đếm bản ghi Notification theo
+ * loại, theo MẪU tiêu đề (chữ số thay bằng #) và theo ngày giờ VN — thấy ngay loại nào
+ * đang dội (vd "🧾 Đã xuất hoá đơn số #": một tin/hoá đơn, kèm push).
+ */
+router.get('/do-thong-bao', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const soNgay = Math.min(60, Math.max(1, parseInt(String(req.query.ngay || '7'), 10) || 7))
+        const tu = new Date(Date.now() - soNgay * 86_400_000)
+        const rows: any[] = await sp.notification.findMany({
+            where: { createdAt: { gte: tu } }, select: { type: true, title: true, createdAt: true, read: true }, take: 20_000,
+        })
+        const dem = (key: (r: any) => string) => {
+            const m: Record<string, number> = {}
+            for (const r of rows) { const k = key(r); m[k] = (m[k] || 0) + 1 }
+            return Object.entries(m).sort((a, b) => b[1] - a[1])
+        }
+        const ngayVN = (d: Date) => new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10)
+        const { phanNhomThongBao } = await import('./notifications')
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, soNgay, tong: rows.length, chuaDoc: rows.filter(r => !r.read).length,
+                theoLoai: dem(r => r.type || '(rỗng)'),
+                theoNhom: dem(r => phanNhomThongBao(r.type || 'info', r.title || '').nhom),
+                theoMauTieuDe: dem(r => String(r.title || '').replace(/\d[\d.,]*/g, '#').slice(0, 60)).slice(0, 25),
+                theoNgay: dem(r => ngayVN(new Date(r.createdAt))).sort((a, b) => b[0].localeCompare(a[0])),
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/notif-probe', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()

@@ -70,7 +70,7 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     const tatCaLoi: string[] = []
     for (const r of rows) {
         try {
-            const rs = await issueInvoiceForTransaction(prisma, r.id, {}, schema)
+            const rs = await issueInvoiceForTransaction(prisma, r.id, {}, schema, { thongBaoLe: false })
             if (rs.success && !rs.skipped) issued++
             else if (!rs.success) {
                 failed++
@@ -98,7 +98,8 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
         (errors.length ? ` | vd: ${errors.join('; ')}` : ''))
     // Thông báo tổng kết đêm (web + app Android đọc chung GET /notifications)
     if (issued > 0 || failed > 0) {
-        await (prisma as any).notification.create({
+        // MỘT tin + MỘT push cho cả đêm (06/10/2026) — thay cho push từng hoá đơn.
+        const tin = await (prisma as any).notification.create({
             data: {
                 type: 'einvoice',
                 title: `🧾 Tự động xuất hoá đơn: ${issued} thành công${failed ? `, ${failed} lỗi` : ''}`,
@@ -108,7 +109,11 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
                     + (tomTat ? ` ${tomTat}` : '')
                     + (!gopDuDung && errors.length ? ` · Lỗi: ${errors.join('; ')}` : '')).slice(0, 500),
             },
-        }).catch(() => { })
+        }).catch(() => null)
+        if (tin) {
+            const { sendPushToStore } = await import('../routes/notifications')
+            sendPushToStore(prisma, tin.title, tin.message, { id: tin.id, type: 'einvoice' }).catch(() => { })
+        }
     }
     if (rows.length >= PER_STORE_CAP) {
         console.warn(`[EInvoiceQueue] ${storeName}: chạm trần ${PER_STORE_CAP} phiếu/đêm — phần còn lại xuất đêm sau`)

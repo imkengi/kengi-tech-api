@@ -17,6 +17,70 @@ export interface ReturnsSyncResult {
     errors: string[]
 }
 
+/* ── THÔNG BÁO VỤ TRẢ (06/10/2026) ───────────────────────────────────────────
+ * Chủ shop: "sau khi khiếu nại thì có kết quả khiếu nại có trả về thông báo hay
+ * không" — đo: KHÔNG. Sync chỉ nối một dòng trạng thái vào ghi chú phiếu. Nay báo
+ * (tin + push app Android) hai việc:
+ *  1. Vụ trả MỚI từ khách — gộp MỘT tin cho mỗi kênh mỗi lượt sync.
+ *  2. KẾT QUẢ KHIẾU NẠI — vụ shop đã khiếu nại (ghi chú có "[Khiếu nại]" / "[Từ chối
+ *     TikTok]", do route khiếu nại ghi) đổi sang trạng thái QUYẾT ĐỊNH của sàn.
+ * So TRẠNG THÁI GỐC của sàn chứ không chỉ trạng thái quy đổi: bảng quy đổi TikTok còn
+ * tên cũ (REQUEST_REJECTED… rơi về 'pending') nên so bản quy đổi là lọt kết quả. */
+const DA_KHIEU_NAI = /\[(Khiếu nại|Từ chối TikTok)\]/
+
+/** Trạng thái GỐC cuối cùng đã ghi trong ghi chú ("[Shopee] Status: X" lúc tạo,
+ *  "[Shopee] X (giờ)" mỗi lần đổi). */
+export function trangThaiGocCuoi(notes: string | null | undefined, san: string): string {
+    const re = new RegExp(`\\[${san}\\] (?:Status: )?([A-Z_]+)`, 'g')
+    let cuoi = ''
+    for (const m of String(notes || '').matchAll(re)) cuoi = m[1] || cuoi
+    return cuoi
+}
+
+/** Trạng thái mới có phải QUYẾT ĐỊNH của sàn không (bước trung gian như JUDGING,
+ *  SELLER_DISPUTE, PROCESSING thì chỉ ghi vào phiếu, không báo). */
+export function laQuyetDinh(trangThaiMoi: string, goc: string): boolean {
+    return trangThaiMoi !== 'pending' || /REJECT|CANCEL|CLOS|COMPLETE|SUCCESS|REFUND/i.test(goc)
+}
+
+export function moTaKetQua(trangThaiMoi: string, goc: string): { tieuDe: string; viec: string } {
+    if (trangThaiMoi === 'refunded' || /REFUND_PAID|SUCCESS|COMPLETE/i.test(goc))
+        return { tieuDe: 'Kết quả khiếu nại: sàn đã hoàn tiền cho khách', viec: 'nếu khách gửi hàng về, quay video mở hàng lúc nhận' }
+    if (trangThaiMoi === 'rejected' || /REJECT|CANCEL|CLOS/i.test(goc))
+        return { tieuDe: 'Kết quả khiếu nại: vụ đã đóng, khách không được hoàn tiền', viec: 'không cần làm gì thêm' }
+    if (trangThaiMoi === 'approved')
+        return { tieuDe: 'Kết quả khiếu nại: sàn chấp nhận yêu cầu trả hàng', viec: 'khách sẽ gửi hàng về — quay video mở hàng lúc nhận' }
+    return { tieuDe: 'Vụ đã khiếu nại đổi trạng thái', viec: 'xem chi tiết ở mục Trả hàng' }
+}
+
+const tienVnd = (n: number) => `${Math.round(n || 0).toLocaleString('vi-VN')}đ`
+
+async function baoThongBaoVuTra(
+    prisma: any, channel: any, san: string,
+    vuMoi: { don: string; lyDo: string; daHoan: boolean }[],
+    ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string }[],
+): Promise<void> {
+    const { sendPushToStore } = await import('../routes/notifications')
+    if (vuMoi.length) {
+        const tieuDe = vuMoi.length === 1
+            ? `↩ Yêu cầu trả hàng mới — ${vuMoi[0]!.don}`
+            : `↩ ${vuMoi.length} yêu cầu trả hàng / hoàn tiền mới`
+        const noiDung = (`${channel.name} (${san}) · `
+            + vuMoi.slice(0, 3).map(v => `${v.don}${v.lyDo ? `: ${v.lyDo}` : ''}${v.daHoan ? ' (đã hoàn tiền)' : ''}`).join(' · ')
+            + (vuMoi.length > 3 ? ` (+${vuMoi.length - 3} vụ)` : '')
+            + ' — vào Trả hàng để duyệt hoặc khiếu nại.').slice(0, 500)
+        const tin = await prisma.notification.create({ data: { type: 'return_request', title: tieuDe, message: noiDung } }).catch(() => null)
+        await sendPushToStore(prisma, tieuDe, noiDung.slice(0, 300), { id: tin?.id, type: 'return_request', route: 'returns' })
+    }
+    for (const k of ketQua.slice(0, 10)) {
+        const { tieuDe, viec } = moTaKetQua(k.moi, k.goc)
+        const tieuDeDu = `⚖️ ${tieuDe}`
+        const noiDung = `Vụ ${k.ma} · đơn ${k.don} · ${k.khach}${k.tien ? ` · ${tienVnd(k.tien)}` : ''} — ${viec}. (${san}: ${k.goc || k.moi})`
+        const tin = await prisma.notification.create({ data: { type: 'dispute_result', title: tieuDeDu, message: noiDung.slice(0, 500) } }).catch(() => null)
+        await sendPushToStore(prisma, tieuDeDu, noiDung.slice(0, 300), { id: tin?.id, type: 'dispute_result', route: 'returns' })
+    }
+}
+
 /**
  * Pull return/refund requests from the channel's platform (Shopee or TikTok)
  * since the given date and upsert them as ReturnOrder records. Refunded returns
@@ -94,6 +158,9 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
         if (asked > 0) console.log(`[Sync Returns] ${channel.name}: hỏi chi tiết ${asked} phiếu để lấy mã vận đơn trả`)
     }
 
+    const vuMoi: { don: string; lyDo: string; daHoan: boolean }[] = []
+    const ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string }[] = []
+
     for (const ret of platformReturns) {
         try {
             const nativeStatus = (ret as any).platformStatus || (ret as any).shopeeStatus || ''
@@ -137,20 +204,39 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                         : `${notesMoi}\nTracking: ${ret.trackingNumber}`
                     notesDoi = true
                 }
-                // Update status if changed
-                if (existingReturn.status !== ret.status) {
-                    await prisma.returnOrder.update({
-                        where: { id: existingReturn.id },
+                // Update status if changed — hoặc vụ ĐÃ KHIẾU NẠI mà trạng thái GỐC của sàn đổi
+                // (TikTok: tên mới chưa có trong bảng quy đổi vẫn phải thấy kết quả).
+                const daKhieuNai = DA_KHIEU_NAI.test(existingReturn.notes || '')
+                const gocCu = trangThaiGocCuoi(existingReturn.notes, platformLabel)
+                const doiGoc = daKhieuNai && !!nativeStatus && !!gocCu && gocCu !== nativeStatus
+                const doiTrangThai = existingReturn.status !== ret.status
+                if (doiTrangThai || doiGoc) {
+                    // Chốt bằng trạng thái + ghi chú CŨ: cron và webhook TikTok có thể chạy
+                    // chồng — lượt về sau thấy count=0 thì không ghi đè, không báo lần hai.
+                    const doi = await prisma.returnOrder.updateMany({
+                        where: { id: existingReturn.id, status: existingReturn.status, notes: existingReturn.notes },
                         data: {
                             status: ret.status,
                             notes: `${notesMoi}\n[${platformLabel}] ${nativeStatus} (${new Date().toLocaleString('vi-VN')})`,
-                            ...(ret.status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
+                            ...(doiTrangThai && ret.status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
                         },
                     })
+                    // Trạng thái quy đổi KHÔNG đổi (vd TikTok AWAITING_BUYER_SHIP → BUYER_SHIPPED_ITEM,
+                    // cùng 'approved') thì chỉ báo khi trạng thái gốc là quyết định thật.
+                    const baoKetQua = doiTrangThai
+                        ? laQuyetDinh(ret.status, nativeStatus)
+                        : /REJECT|CANCEL|CLOS|COMPLETE|SUCCESS|REFUND/i.test(nativeStatus)
+                    if (doi.count === 1 && daKhieuNai && baoKetQua) {
+                        ketQua.push({
+                            ma: ret.returnSn, don: existingReturn.originalInvoice || ret.orderSn,
+                            khach: existingReturn.customerName || '', tien: existingReturn.refundAmount || 0,
+                            moi: ret.status, goc: nativeStatus,
+                        })
+                    }
 
                     // If refunded, update order status + đảo hiệu ứng của đơn
                     // (hoàn kho + void HĐ đã convert + đảo bút toán) — idempotent
-                    if (ret.status === 'refunded') {
+                    if (doi.count === 1 && doiTrangThai && ret.status === 'refunded') {
                         const order = await prisma.onlineOrder.findFirst({
                             where: { externalOrderId: ret.orderSn, channelId: channel.id },
                         })
@@ -286,10 +372,21 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                 }
             }
 
+            vuMoi.push({
+                don: order?.orderNumber || ret.orderSn,
+                lyDo: String(ret.reason || ret.textReason || '').slice(0, 60),
+                daHoan: ret.status === 'refunded',
+            })
             synced++
         } catch (itemErr: any) {
             errors.push(`Return ${ret.returnSn}: ${itemErr.message}`)
         }
+    }
+
+    // Báo sau cùng — thông báo hỏng KHÔNG được làm hỏng lượt sync
+    if (vuMoi.length || ketQua.length) {
+        await baoThongBaoVuTra(prisma, channel, platformLabel, vuMoi, ketQua)
+            .catch((e: any) => console.error(`[Sync Returns] thông báo ${channel.name}:`, e?.message || e))
     }
 
     return { total: platformReturns.length, synced, skipped, errors }

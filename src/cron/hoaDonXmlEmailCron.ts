@@ -62,10 +62,10 @@ export async function chayLuotHoaDonXml(): Promise<void> {
                         kq.moiChiPhi ? `${kq.moiChiPhi} phiếu chi chờ duyệt (trang Chi phí)` : '',
                         kq.loi.length ? `${kq.loi.length} tệp đọc lỗi — xem Hộp Thư` : '',
                     ].filter(Boolean).join(' · ')
-                    await sp.notification.create({ data: { type: 'info', title: tieuDe, message: noiDung } }).catch(() => { })
+                    const tin = await sp.notification.create({ data: { type: 'info', title: tieuDe, message: noiDung } }).catch(() => null)
                     try {
                         const { sendPushToStore } = await import('../routes/notifications')
-                        sendPushToStore(sp, tieuDe, noiDung).catch(() => { })
+                        sendPushToStore(sp, tieuDe, noiDung, { id: tin?.id, type: 'info' }).catch(() => { })
                     } catch { /* thông báo web vẫn có */ }
                 }
             } catch (e) {
