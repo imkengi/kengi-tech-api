@@ -2729,6 +2729,28 @@ router.post('/:id/cancel', einvoiceAuth, requireRole('admin', 'manager'), async 
 })
 
 // POST /api/einvoice/:id/replace — create replacement DRAFT, original → REPLACED
+/* GET /einvoice/:id/yeu-cau-khach — thông tin xuất HĐ KHÁCH ĐÃ GỬI trên đơn (Transaction.
+ * vatBuyerInfo: tên/MST/CCCD/địa chỉ/email) để form "Thay thế" điền sẵn. 06/10/2026: màn đơn
+ * hàng hứa "thông tin lưu ở đây sẽ được điền sẵn" mà form thay thế lại lấy thông tin của
+ * chính hoá đơn cũ ("Bán cho người tiêu dùng…", MST trống) — phải gõ lại tay. */
+router.get('/:id/yeu-cau-khach', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const inv = await prisma.eInvoice.findUnique({ where: { id: String(req.params.id) }, select: { transactionId: true } })
+        if (!inv) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        if (!inv.transactionId) return res.json({ success: true, data: null })
+        const tx = await prisma.transaction.findUnique({
+            where: { id: inv.transactionId }, select: { vatBuyerInfo: true, receiptNumber: true },
+        })
+        let info: any = null
+        try { info = tx?.vatBuyerInfo ? JSON.parse(tx.vatBuyerInfo) : null } catch { /* chuỗi hỏng = coi như chưa có */ }
+        res.json({ success: true, data: info ? { ...info, receiptNumber: tx?.receiptNumber || null } : null })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
@@ -2786,7 +2808,11 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
                 })(),
                 buyerTaxCode: bStr(b.buyerTaxCode) || '',
                 buyerAddress: (bStr(b.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || ''),
-                buyerPhone: '', buyerEmail: '',
+                // Email + CCCD khách gửi (06/10/2026) — bản cũ để trống nên HĐ thay thế không
+                // tới tay khách và HĐ cá nhân thiếu CCCD. Cùng bộ dựng buildHDon với lần xuất đầu.
+                buyerPhone: '',
+                buyerEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bStr(b.buyerEmail)) ? bStr(b.buyerEmail) : '',
+                buyerIdNo: /^\d{9,12}$/.test(bStr(b.buyerIdNo)) ? bStr(b.buyerIdNo) : '',
                 paymentMethod: b.paymentMethod || original.paymentMethod || 'TM/CK',
                 currencyCode: 'VND',
                 items: computed.items.map((it: any) => ({
@@ -2841,7 +2867,24 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
                 where: { id },
                 data: { status: 'REPLACED', replacedByInvoiceId: replacement.id, cancelReason: bStr(b.reason) || null },
             })
-            return res.status(201).json({ success: true, data: { original: { id, status: 'REPLACED' }, replacement, invoiceNumber: result.invoiceNumber } })
+            // Khách có email → nhờ VNPT gửi HĐ THAY THẾ (khoá "<id gốc>R" như trên). Lỗi email
+            // KHÔNG làm hỏng phát hành — ghi vào notes, như luồng xuất lần đầu.
+            let email: string | null = null
+            if (replData.buyerEmail) {
+                try {
+                    const mail = await vnpt.sendInvoiceEmail(cfgRow, vnptFkey(`${original.id}R`), replData.buyerEmail)
+                    email = mail.success
+                        ? `Đã gửi email HĐ tới ${replData.buyerEmail}`
+                        : `Gửi email HĐ tới ${replData.buyerEmail} LỖI: ${mail.errorMessage || ''}`.slice(0, 300)
+                } catch (e: any) {
+                    email = `Gửi email HĐ tới ${replData.buyerEmail} LỖI: ${moTaLoi(e)}`.slice(0, 300)
+                }
+                await prisma.eInvoice.update({
+                    where: { id: replacement.id },
+                    data: { notes: `${replacement.notes || ''} · ${email}`.slice(0, 500) },
+                }).catch(() => { })
+            }
+            return res.status(201).json({ success: true, data: { original: { id, status: 'REPLACED' }, replacement, invoiceNumber: result.invoiceNumber, email } })
         }
 
         const replacement = await prisma.eInvoice.create({
