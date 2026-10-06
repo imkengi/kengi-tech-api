@@ -4760,6 +4760,88 @@ router.get('/do-cot', async (req: Request, res: Response) => {
 })
 
 /**
+ * SOÁT TỰ ĐỘNG HOÁ MARKETING — GET /admin/mkt-chan-doan?store=HUTI&ngay=7  (06/10/2026)
+ *
+ * "4 tác vụ soạn 3 bài mà mỗi ngày chỉ lên 5–6 bài?" — máy dev không vào thẳng DB prod được,
+ * nên cần một chỗ đọc: tác vụ AI (tự duyệt? khung giờ?), từng lượt chạy (gọi công cụ nào,
+ * thành/hỏng, lỗi gì), số bài soạn / duyệt / lượt đăng theo NGÀY VN, khung giờ thương hiệu.
+ * CHỈ ĐỌC. Không trả chữ bài, không trả tham số lời gọi công cụ, không trả token.
+ */
+router.get('/mkt-chan-doan', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim()
+        const ngay = Math.min(Math.max(Number(req.query.ngay) || 7, 1), 30)
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: 'Không có cửa hàng này' }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const tu = new Date(Date.now() - ngay * 86400_000)
+        const ngayVN = (d: any) => (d ? new Date(new Date(d).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : 'chưa')
+        const dem = (o: Record<string, any>, k: string, them = 1) => { o[k] = (o[k] || 0) + them }
+
+        const thuongHieu = await sp.mktBrand.findMany({ where: { archivedAt: null }, select: { id: true, name: true, aiAutoApprove: true, postSlots: true } })
+        const kenh = await sp.mktAccount.findMany({ select: { id: true, brandId: true, platform: true, name: true, status: true } })
+        const jobs = await sp.aiAgentJob.findMany({ select: { id: true, name: true, enabled: true, scheduleKind: true, atHour: true, atMinute: true, maxSteps: true, allowedTools: true, prompt: true, nextRunAt: true, lastRunAt: true, createdAt: true } })
+        const tenJob = new Map(jobs.map((j: any) => [j.id, j.name]))
+        const runs = await sp.aiAgentRun.findMany({
+            where: { startedAt: { gte: tu } }, orderBy: { startedAt: 'desc' }, take: 300,
+            select: { jobId: true, startedAt: true, finishedAt: true, status: true, steps: true, chamTran: true, errorMessage: true, toolCalls: true, trigger: true },
+        })
+        const bai = await sp.mktContent.findMany({ where: { createdAt: { gte: tu } }, select: { brandId: true, createdAt: true, status: true, source: true, approvedBy: true, approvedRevision: true, revision: true } })
+        const luot = await sp.mktPublication.findMany({
+            where: { OR: [{ scheduledAt: { gte: tu } }, { createdAt: { gte: tu } }] },
+            select: { accountId: true, status: true, scheduledAt: true, sentAt: true, errorCode: true },
+        })
+
+        const baiTheoNgay: Record<string, any> = {}
+        for (const b of bai) {
+            const n = (baiTheoNgay[ngayVN(b.createdAt)] ||= { tong: 0, ai: 0, aiTuDuyet: 0, trangThai: {} })
+            n.tong++
+            if (b.source === 'ai') n.ai++
+            if (b.approvedBy === 'ai:tu-duyet') n.aiTuDuyet++
+            dem(n.trangThai, b.status)
+        }
+        const luotTheoNgay: Record<string, any> = {}
+        for (const l of luot) dem((luotTheoNgay[ngayVN(l.scheduledAt)] ||= {}), l.status)
+
+        res.json({
+            success: true,
+            data: {
+                store: st.code, ngay,
+                thuongHieu, kenh,
+                tacVu: jobs.map((j: any) => {
+                    let cho: string[] = []
+                    try { cho = JSON.parse(j.allowedTools || '[]') } catch { /* rỗng */ }
+                    return {
+                        id: j.id, ten: j.name, bat: j.enabled, lich: j.scheduleKind === 'daily' ? `${j.atHour}:${String(j.atMinute).padStart(2, '0')}` : j.scheduleKind,
+                        maxSteps: j.maxSteps, tuDuyet: cho.includes('mkt_duyet_noi_dung'),
+                        soBai: Number((String(j.prompt).match(/Soạn (\d+) bài MỚI/) || [])[1]) || null,
+                        khungGio: (String(j.prompt).match(/khungGio="([^"]*)"/) || [])[1] || null,
+                        thuongHieu: (String(j.prompt).match(/thuongHieu="([^"]*)"/) || [])[1] || null,
+                        nextRunAt: j.nextRunAt, lastRunAt: j.lastRunAt, taoLuc: j.createdAt,
+                    }
+                }),
+                luotChay: runs.map((r: any) => {
+                    let tc: any[] = []
+                    try { tc = JSON.parse(r.toolCalls || '[]') } catch { /* rỗng */ }
+                    const cong: Record<string, number> = {}
+                    for (const t of tc) dem(cong, `${t.name}${t.ok ? '' : ' ✗'}`)
+                    return {
+                        tacVu: tenJob.get(r.jobId) || r.jobId, luc: r.startedAt,
+                        giay: r.finishedAt ? Math.round((+new Date(r.finishedAt) - +new Date(r.startedAt)) / 1000) : null,
+                        trangThai: r.status, buoc: r.steps, chamTran: r.chamTran, kichHoat: r.trigger,
+                        loi: r.errorMessage ? String(r.errorMessage).slice(0, 300) : undefined,
+                        cong, loiCong: tc.filter(t => !t.ok).map(t => `${t.name}: ${String(t.error || '').slice(0, 200)}`).slice(0, 8),
+                    }
+                }),
+                baiTheoNgay, luotTheoNgay,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO KHIẾU NẠI TIKTOK — GET /admin/do-khieu-nai-tiktok?storeCode=&returnId=a,b
  *
  * 11/09/2026 chủ shop: "làm tương tự với tiktok" (form lý do + ảnh bằng chứng như
