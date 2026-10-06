@@ -325,10 +325,20 @@ async function main() {
     const vnGio = (d: Date | null) => d ? new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ') : 'null'
     const khung = docKhungGio('08:00, 12:00, 20:00')
     const tu = vnMs('2026-10-01T10:00'), den = tu + 14 * 86400_000
-    kiem('10:00 bấm ⇒ 12:00 cùng ngày', vnGio(chonGio(khung, [], tu, den)) === '2026-10-01 12:00', vnGio(chonGio(khung, [], tu, den)))
-    kiem('12:00 đã có bài lúc 12:30 (cách <60 phút) ⇒ nhảy sang 20:00', vnGio(chonGio(khung, [vnMs('2026-10-01T12:30')], tu, den)) === '2026-10-01 20:00')
-    kiem('hết giờ trong ngày ⇒ 08:00 hôm sau', vnGio(chonGio(khung, [], vnMs('2026-10-01T22:00'), vnMs('2026-10-01T22:00') + 14 * 86400_000)) === '2026-10-02 08:00')
+    const gioK = (daCo: string[], tuS = '2026-10-01T10:00') => vnGio(chonGio(khung, daCo.map(s => vnMs('2026-10-01T' + s)), vnMs(tuS), vnMs(tuS) + 14 * 86400_000))
+    kiem('10:00 bấm ⇒ 12:00 cùng ngày', gioK([]) === '2026-10-01 12:00', gioK([]))
+    // Trùng giờ thì cộng thêm 30 phút (chủ shop 06/10) — trước đó khung kín là đẩy sang NGÀY SAU
+    kiem('12:00 đã có bài ⇒ khung kế 20:00 nhận trước (mỗi khung một bài, trải đều sáng/trưa/tối)', gioK(['12:00']) === '2026-10-01 20:00', gioK(['12:00']))
+    kiem('12:00 và 20:00 đều có bài ⇒ TRÙNG thì cộng 30 phút: 12:30 (không đẩy sang hôm sau)', gioK(['12:00', '20:00']) === '2026-10-01 12:30', gioK(['12:00', '20:00']))
+    kiem('12:30 cũng vướng (bài 12:40, cách <30 phút) ⇒ chia vòng: 20:30 trước', gioK(['12:00', '20:00', '12:40']) === '2026-10-01 20:30', gioK(['12:00', '20:00', '12:40']))
+    kiem('…rồi 13:00 vẫn vướng 12:40 (cách 20 phút) ⇒ 21:00; thêm bài nữa ⇒ 13:30', gioK(['12:00', '20:00', '12:40', '20:30']) === '2026-10-01 21:00' && gioK(['12:00', '20:00', '12:40', '20:30', '21:00']) === '2026-10-01 13:30', [gioK(['12:00', '20:00', '12:40', '20:30']), gioK(['12:00', '20:00', '12:40', '20:30', '21:00'])])
+    kiem('cách 30 phút là đủ (bài 11:30 không chặn 12:00)', gioK(['11:30']) === '2026-10-01 12:00', gioK(['11:30']))
+    kiem('mốc lùi KHÔNG lấn sang khung kế: 08:00 kín tới 11:30 ⇒ chọn 12:00 chứ không 12:00 "của khung 08:00"', gioK(['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'], '2026-10-01T07:00') === '2026-10-01 12:00')
+    kiem('hết giờ trong ngày, mốc đã qua còn TRỐNG ⇒ 08:00 hôm sau (không đăng 22:30 khuya)', gioK([], '2026-10-01T22:00') === '2026-10-02 08:00', gioK([], '2026-10-01T22:00'))
+    kiem('nhưng khung 20:00 đang lùi vì trùng (20:00→22:00 kín) ⇒ tiếp 22:30 cùng tối', gioK(['20:00', '20:30', '21:00', '21:30', '22:00'], '2026-10-01T21:50') === '2026-10-01 22:30', gioK(['20:00', '20:30', '21:00', '21:30', '22:00'], '2026-10-01T21:50'))
     kiem('kín lịch cả khoảng tìm ⇒ null (để người chọn tay)', chonGio(khung, [], tu, tu + 3600_000) === null)
+    const chinBai = (() => { const da: number[] = []; for (let i = 0; i < 9; i++) { const d = chonGio(docKhungGio('10:00, 13:00, 22:00'), da, vnMs('2026-10-06T07:05'), vnMs('2026-10-06T07:05') + 14 * 86400_000); da.push(d!.getTime()) } return da.map(x => vnGio(new Date(x)).slice(11)).join(' ') })()
+    kiem('HUTI 06/10: 9 bài tự duyệt lúc 07:05 với khung 10:00/13:00/22:00 ⇒ đăng HẾT trong ngày, mỗi khung 3 bài', chinBai === '10:00 13:00 22:00 10:30 13:30 22:30 11:00 14:00 23:00', chinBai)
 
     console.log('━━ Khung giờ đăng qua tool AI')
     const soanKhung: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', khungGio: '8h, 20h', phienBan: [{ kenhId: 'a1', noiDung: 'Bài có khung giờ của tác vụ' }] }, ctx)
@@ -342,6 +352,11 @@ async function main() {
     dl.mktContent.find((c: any) => c.id === ngay.id).approvedRevision = 1
     const lichNgay: any = await tool('mkt_len_lich_dang').run({ thuongHieu: 'b1', noiDungId: ngay.id, henLuc: 'ngay' }, ctx)
     kiem('henLuc "ngay" ⇒ đăng ngay dù bài có khung giờ', lichNgay.daLenLich === 1 && Math.abs(new Date(lichNgay.henLuc).getTime() - Date.now()) < 60_000, lichNgay)
+    const tuChon: any = await tool('mkt_soan_noi_dung').run({ thuongHieu: 'b1', phienBan: [{ kenhId: 'a1', noiDung: 'Bài AI tự chọn giờ' }] }, ctx)
+    dl.mktContent.find((c: any) => c.id === tuChon.id).approvedRevision = 1
+    dl.mktPublication.push({ id: 'pubDaCo', contentId: 'khac', accountId: 'a1', status: 'queued', idempotencyKey: 'kDaCo', scheduledAt: new Date('2026-10-20T09:00:00+07:00') })
+    const lichTrung: any = await tool('mkt_len_lich_dang').run({ thuongHieu: 'b1', noiDungId: tuChon.id, henLuc: '2026-10-20T09:00' }, ctx)
+    kiem('giờ AI TỰ CHỌN trùng bài khác cùng kênh ⇒ tự cộng 30 phút (09:00 → 09:30)', lichTrung.henLuc === new Date('2026-10-20T09:30:00+07:00').toISOString(), lichTrung)
 
     console.log(`\n━━ KẾT QUẢ: ${dat} đạt / ${truot} trượt ━━`)
     process.exit(truot ? 1 : 0)

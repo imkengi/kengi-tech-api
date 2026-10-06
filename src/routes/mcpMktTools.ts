@@ -26,7 +26,7 @@ import type { Tool, ToolCtx } from '../lib/mcpTypes'
 import { canhBaoCat, ToolError } from '../lib/mcpTypes'
 import { dsThuongHieu, hoSo, kiemBanVaHoSo, LoiMkt, AI_TU_DUYET } from '../lib/mktThuongHieu'
 import { kiemPhienBan, kiemMedia, jsonMang, lenLich, tuCamGapPhai, loiKhiDangLen, loiChuTheoKenh, gioVN } from '../lib/mktNoiDung'
-import { chuanKhungGio, khungGioCua, gioTrongGanNhat } from '../lib/mktKhungGio'
+import { chuanKhungGio, khungGioCua, gioTrongGanNhat, nhuongGio } from '../lib/mktKhungGio'
 import { registryPrisma } from '../lib/prisma'
 
 const TRAN = 50
@@ -383,7 +383,7 @@ export const MKT_TOOLS: Tool[] = [
     {
         name: 'mkt_len_lich_dang',
         write: true,
-        description: 'Lên lịch đăng một bài ĐÃ ĐƯỢC DUYỆT ra các kênh của CÙNG thương hiệu (bỏ trống kenhIds = các kênh có phiên bản riêng trong bài). BỎ TRỐNG henLuc = máy chủ tự xếp vào giờ TRỐNG gần nhất trong khung giờ đăng (khungGio → của bài → của thương hiệu; cách bài khác trên cùng kênh ≥60 phút) — không cần tự tính giờ. Từ chối nếu bài chưa duyệt hoặc đã sửa sau khi duyệt; kênh sai định dạng / có từ cấm bị bỏ qua kèm lý do.',
+        description: 'Lên lịch đăng một bài ĐÃ ĐƯỢC DUYỆT ra các kênh của CÙNG thương hiệu (bỏ trống kenhIds = các kênh có phiên bản riêng trong bài). BỎ TRỐNG henLuc = máy chủ tự xếp vào giờ TRỐNG gần nhất trong khung giờ đăng (khungGio → của bài → của thương hiệu; trùng giờ bài khác trên cùng kênh thì tự lùi 30 phút) — không cần tự tính giờ. Từ chối nếu bài chưa duyệt hoặc đã sửa sau khi duyệt; kênh sai định dạng / có từ cấm bị bỏ qua kèm lý do.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -479,13 +479,15 @@ export const MKT_TOOLS: Tool[] = [
  */
 async function gioHenChoAi(p: any, b: any, c: any, kenh: string[], henLuc: any, khungGioThamSo: any, macDinh: Date | null = new Date()) {
     const h = String(henLuc ?? '').trim()
+    const dsKenh = kenh.length ? kenh : jsonMang(c.variants).map((v: any) => String(v.accountId))
     if (h.toLowerCase() === 'ngay') return { khi: new Date() as Date | null, khungGio: undefined }
-    if (h) return { khi: gioVN(h) as Date | null, khungGio: undefined }
+    /* Giờ AI tự chọn (tác vụ tạo trước 01/10 vẫn tự dò giờ) mà trùng bài khác trên cùng kênh
+     * ⇒ cộng thêm 30 phút cho tới khi trống (chủ shop 06/10). */
+    if (h) return { khi: await nhuongGio(p, dsKenh, gioVN(h)) as Date | null, khungGio: undefined }
     const thamSo = chuanKhungGio(khungGioThamSo)
     if (thamSo === null) throw new ToolError('khungGio chưa đọc được giờ nào — dạng "08:00, 12:00, 20:00".')
     const khung = thamSo || khungGioCua(c, b)
     if (!khung) return { khi: macDinh, khungGio: undefined }
-    const dsKenh = kenh.length ? kenh : jsonMang(c.variants).map((v: any) => String(v.accountId))
     const khi = await gioTrongGanNhat(p, dsKenh, khung)
     if (!khi) throw new ToolError(`Khung giờ ${khung} đã kín lịch 14 ngày tới — báo chủ shop chọn giờ.`)
     return { khi: khi as Date | null, khungGio: khung }

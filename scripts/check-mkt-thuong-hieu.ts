@@ -315,7 +315,8 @@ async function main() {
     kiem('…lượt đăng tạo đúng giờ đó', bang.mktPublication.length === lichTruoc + 1 && new Date(bang.mktPublication.at(-1).scheduledAt).toISOString() === h1)
     const baiKhung2 = await goi('POST', '/contents', { brand: B, body: { title: 'Khung 2', postSlots: '09:00, 21:00', variants: [{ accountId: 'accTh', text: 'Bài có khung giờ riêng 2' }] } })
     const h2 = (await goi('POST', `/contents/${baiKhung2.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })).lich?.henLuc
-    kiem('bài thứ hai cùng kênh ⇒ giờ trống KẾ TIẾP, cách bài trước ≥ 60 phút', !!h2 && ['09:00', '21:00'].includes(gioVNCua(h2)) && Math.abs(new Date(h2).getTime() - new Date(h1).getTime()) >= 3600_000, { h1, h2 })
+    // 06/10: trùng giờ thì cộng 30 phút (trước là đẩy sang mốc kế / ngày sau) — cùng ngày, cách ≥ 30 phút
+    kiem('bài thứ hai cùng kênh ⇒ mốc khung còn trống hoặc mốc trùng +30 phút, cách bài trước ≥ 30 phút, KHÔNG đẩy sang hôm sau', !!h2 && ['09:00', '21:00', '09:30', '21:30'].includes(gioVNCua(h2)) && Math.abs(new Date(h2).getTime() - new Date(h1).getTime()) >= 1800_000 && Math.abs(new Date(h2).getTime() - new Date(h1).getTime()) <= 12 * 3600_000, { h1, h2 })
     const baiMacDinh = await goi('POST', '/contents', { brand: B, body: { title: 'Không khung', variants: [{ accountId: 'accTh', text: 'Bài không có khung riêng' }] } })
     const dh3 = await goi('POST', `/contents/${baiMacDinh.data.id}/approve`, { brand: B, body: { revision: 1, lenLich: true } })
     kiem('bài không có khung riêng ⇒ dùng khung MẶC ĐỊNH của thương hiệu (08:00 / 20:30)', ['08:00', '20:30'].includes(gioVNCua(dh3.lich?.henLuc)) && dh3.lich?.khungGio === '08:00, 20:30', dh3.lich)
