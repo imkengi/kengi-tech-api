@@ -2437,19 +2437,34 @@ router.get('/', einvoiceAuth, async (req: AuthRequest, res: Response) => {
             if (q.dateFrom) where.invoiceDate.gte = String(q.dateFrom)
             if (q.dateTo) where.invoiceDate.lte = String(q.dateTo)
         }
+        // Ô "Tìm kiếm" của web (Số HĐ, tên người mua, MST…) — trước 06/10/2026 máy chủ
+        // KHÔNG đọc tham số này nên gõ gì cũng ra nguyên danh sách. Tên người mua đơn sàn
+        // mang mã đơn ("Bán cho người tiêu dùng (26092991P2J3H4)") ⇒ tìm theo mã đơn cũng ra.
+        const tim = String(q.search || '').trim()
+        if (tim) {
+            where.OR = [
+                { invoiceNumber: { contains: tim } },
+                { buyerName: { contains: tim, mode: 'insensitive' } },
+                { buyerTaxCode: { contains: tim } },
+            ]
+        }
         const page = Math.max(1, Number(q.page) || 1)
         const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 50))
 
-        const [total, data] = await Promise.all([
-            prisma.eInvoice.count({ where }).catch(() => 0),
-            prisma.eInvoice.findMany({
-                where,
-                orderBy: { createdAt: 'desc' },
-                skip: (page - 1) * pageSize,
-                take: pageSize,
-            }).catch(() => []),
-        ])
-        res.json({ success: true, data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
+        // Tuần tự (pool prod = 1) và KHÔNG nuốt lỗi: bản cũ `.catch(() => 0 / [])` biến
+        // lỗi đọc thành "0 hoá đơn" — đọc hỏng ≠ không có.
+        const total = await prisma.eInvoice.count({ where })
+        const data = await prisma.eInvoice.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+        })
+        // `pagination` là chỗ web đọc tổng — kèm thêm total/page/pageSize ở gốc cho chắc.
+        res.json({
+            success: true, data, total, page, pageSize,
+            pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+        })
     } catch (err: any) {
         console.error('GET /einvoice error:', err)
         console.error('[EInvoiceQueue route]', err?.message || err)
