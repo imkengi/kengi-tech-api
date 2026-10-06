@@ -138,8 +138,12 @@ export async function doiChieuChoStore(
 
     /* Đã nhắc kỳ này rồi thì thôi — dùng chính Notification làm dấu, tránh thêm
      * một bảng trạng thái cho việc chạy mỗi tháng một lần. */
+    // Nhãn kỳ ("tháng 9/2026") nằm ở TIÊU ĐỀ ("🔍 Đối chiếu tháng 9/2026: …"); nội dung chỉ
+    // có khi lệch doanh thu ngưỡng. Bản cũ dò message nên chốt hầu như không bao giờ khớp ⇒
+    // mỗi lần Cloud Run dựng bản mới sau ngày 5 lại nhắc thêm: KENGISTORE 83 tin/30 ngày
+    // (đo 06/10/2026, /admin/do-thong-bao).
     const daNhac = chayThu ? null : await prisma.notification.findFirst({
-        where: { type: LOAI_TB, message: { contains: ky.nhan } },
+        where: { type: LOAI_TB, OR: [{ title: { contains: ky.nhan } }, { message: { contains: ky.nhan } }] },
         select: { id: true },
     }).catch(chuaCoBang)
     if (daNhac) return false

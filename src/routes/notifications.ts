@@ -186,10 +186,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             type: 'low_stock',
             // ghim = TÌNH TRẠNG tính lại mỗi lần gọi, không phải sự kiện (createdAt = lúc gọi)
             ghim: true, nhom: 'kho', route: 'inventory',
-            title: 'Sắp hết hàng',
+            title: p.stock <= 0 ? 'Hết hàng' : 'Sắp hết hàng',
             message: `${p.name} còn ${p.stock} sản phẩm (SKU: ${p.sku})`,
             productId: p.id,
-            severity: p.stock === 0 ? 'critical' : 'warning',
+            severity: p.stock <= 0 ? 'critical' : 'warning',
             createdAt: new Date().toISOString(),
         }))
 
