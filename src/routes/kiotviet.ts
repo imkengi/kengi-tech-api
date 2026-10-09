@@ -26,7 +26,7 @@ import { tinhTinhTrangDon } from '../lib/kiotvietDonHang'
 import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
-    parseWebhookPayload, verifyWebhookSignature,
+    parseWebhookPayload, verifyWebhookSignature, donHoaDonKhach,
 } from '../services/kiotvietSync'
 import { buildOptions, boDemTuyChon, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
 
@@ -579,6 +579,34 @@ router.get('/peek', async (req: Request, res: Response) => {
                 // Tên trường của bản ghi đầu — nhìn phát biết ngay có gì
                 cacTruong: Array.isArray(raw?.data) && raw.data[0] ? Object.keys(raw.data[0]) : [],
                 banGhi: Array.isArray(raw?.data) ? raw.data.slice(0, n) : raw,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/kiotviet/dong-bo-hoa-don-khach {storeCode, apply?, ghiDe?} ───
+// ĐỔ BÙ THÔNG TIN XUẤT HOÁ ĐƠN cho khách đã có (09/10/2026 — chủ shop: "đồng bộ từ kiotviet
+// qua nữa"). Lấy TRỌN danh mục khách (không lọc ngày — khách cũ không sửa gì thì đồng bộ
+// theo phần thay đổi không bao giờ chạm tới). CHỈ ghi cột hoá đơn, không đụng công nợ /
+// tên / SĐT. Mặc định CHẠY THỬ; Kengi trống mới điền, ghiDe mới đè.
+router.post('/dong-bo-hoa-don-khach', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nối KiotViet' }); return }
+        const apply = b.apply === true
+        const t0 = Date.now()
+        const kv = await KV.customers(credsOf(cfg), {})
+        const kq = await donHoaDonKhach(store.sp, kv.items, { apply, ghiDe: b.ghiDe === true })
+        res.json({
+            success: true,
+            data: {
+                cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ — chưa ghi gì', ...kq,
+                tongTrenKV: kv.total, biCatTrang: kv.truncated, ms: Date.now() - t0,
             },
         })
     } catch (e: any) {

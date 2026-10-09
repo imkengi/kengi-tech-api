@@ -9,6 +9,9 @@ export interface EInvoiceData {
     // Buyer info
     buyerName: string
     buyerTaxCode?: string
+    /** Tên ĐƠN VỊ mua (khác họ tên người mua) — hồ sơ khách có thì VNPT ghi vào `Ten`;
+     *  trống thì giữ cách cũ: có MST là `Ten` = buyerName. (09/10/2026) */
+    buyerCompanyName?: string
     buyerAddress?: string
     buyerPhone?: string
     buyerEmail?: string

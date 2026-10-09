@@ -35,6 +35,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 import { moTaLoi } from '../lib/gomLoi'
+import { hoaDonCuaKhach } from '../lib/hoaDonKhach'
 
 const router = Router()
 
@@ -849,8 +850,13 @@ export async function issueInvoiceForTransaction(
     // Tên/SĐT/địa chỉ khách đơn sàn bị che dấu * (vd "D******n") — truyền nguyên
     // lên hoá đơn THẬT là sai (đã dính HĐ số 1). Khách che + không MST = bán lẻ
     // cho người tiêu dùng; trường nào dính dấu * thì bỏ, không gửi nửa vời.
-    const _rawBuyerName = bStr(body.buyerName) || bStr(_vbi.name) || tx.customer?.name || tx.customerName || ''
-    const _rawBuyerTax = bStr(body.buyerTaxCode) || bStr(_vbi.taxCode) || tx.customer?.taxCode || ''
+    // Thông tin xuất HĐ LƯU TRÊN HỒ SƠ KHÁCH (09/10/2026, lib/hoaDonKhach): trường hoá đơn
+    // riêng trước, liên hệ chung sau. Trước đây đọc customer.taxCode — cột chưa từng tồn tại.
+    const _kh = hoaDonCuaKhach(tx.customer)
+    const _rawBuyerName = bStr(body.buyerName) || bStr(_vbi.name) || _kh.ten || tx.customerName || ''
+    const _rawBuyerTax = bStr(body.buyerTaxCode) || bStr(_vbi.taxCode) || _kh.mst || ''
+    // Tên ĐƠN VỊ của khách chỉ đi kèm khi MST cũng là của khách — gọi tay / phiếu đưa MST khác thì không trộn
+    const _tenDonVi = !bStr(body.buyerTaxCode) && !bStr(_vbi.taxCode) && _kh.mst ? _kh.tenDonVi : ''
     const _masked = (s: string) => s.includes('*')
     const _clean = (s: string) => (_masked(s) ? '' : s)
     const invoiceData: EInvoiceData = {
@@ -861,12 +867,13 @@ export async function issueInvoiceForTransaction(
             // 37 hoá đơn KENGISTORE 15–19/08/2026 dính đúng chỗ này. Kèm mã đơn để truy ngược.
             buyerName: tenNguoiMuaHD(_rawBuyerName, _rawBuyerTax, tx.receiptNumber),
             buyerTaxCode: _clean(_rawBuyerTax),
-            buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || tx.customer?.address || ''),
-            buyerPhone: _clean(bStr(body.buyerPhone) || tx.customer?.phone || ''),
-            buyerEmail: _clean(bStr(body.buyerEmail) || bStr(_vbi.email) || tx.customer?.email || ''),
+            buyerCompanyName: _clean(_tenDonVi) || undefined,
+            buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || _kh.diaChi || ''),
+            buyerPhone: _clean(bStr(body.buyerPhone) || _kh.sdt || ''),
+            buyerEmail: _clean(bStr(body.buyerEmail) || bStr(_vbi.email) || _kh.email || ''),
             // CCCD người mua cho HĐ cá nhân — Shopee VN trả `national_id` (từ 28/07/2026),
             // đổ vào vatBuyerInfo.nationalId qua /shopee-buyer-info; người dùng gõ tay cũng được
-            buyerIdNo: _clean(bStr(body.buyerIdNo) || bStr(_vbi.nationalId) || ''),
+            buyerIdNo: _clean(bStr(body.buyerIdNo) || bStr(_vbi.nationalId) || _kh.cccd || ''),
             templateId: config.templateId || undefined,
             serialNo: config.serialNo || undefined,
             /* `Transaction` KHÔNG có cột `paymentMethod` (cột đó thuộc OnlineOrder/EInvoice),
@@ -1827,9 +1834,10 @@ router.get('/queue/receipt/:txId', einvoiceAuth, async (req: AuthRequest, res: R
         // trong khi thực tế cần kiểm các thành phần.
         const items = await expandComboItems(prisma, tx.items || [])
         const warnings: string[] = []
-        if (!tx.customer?.taxCode) warnings.push('Người mua chưa có MÃ SỐ THUẾ — hoá đơn sẽ xuất dạng khách lẻ (không khấu trừ được)')
-        if (!tx.customer?.address && !tx.customerPhone) warnings.push('Thiếu địa chỉ & SĐT người mua')
-        else if (!tx.customer?.address) warnings.push('Thiếu địa chỉ người mua')
+        const khHd = hoaDonCuaKhach(tx.customer)   // trường xuất HĐ của khách trước, liên hệ chung sau
+        if (!khHd.mst) warnings.push('Người mua chưa có MÃ SỐ THUẾ — hoá đơn sẽ xuất dạng khách lẻ (không khấu trừ được)')
+        if (!khHd.diaChi && !tx.customerPhone) warnings.push('Thiếu địa chỉ & SĐT người mua')
+        else if (!khHd.diaChi) warnings.push('Thiếu địa chỉ người mua')
         // Đủ tồn kho thuế mới xuất được HĐ — báo trước ngay trong drawer
         try {
             const shortages = await taxStockShortages(prisma, items)
@@ -1843,10 +1851,13 @@ router.get('/queue/receipt/:txId', einvoiceAuth, async (req: AuthRequest, res: R
             success: true,
             data: {
                 receiptNumber: tx.receiptNumber,
-                customerName: tx.customer?.name || tx.customerName || 'Khách lẻ',
-                customerPhone: tx.customerPhone || tx.customer?.phone || '',
-                buyerTaxCode: tx.customer?.taxCode || '',
-                buyerAddress: tx.customer?.address || '',
+                customerName: khHd.ten || tx.customerName || 'Khách lẻ',
+                customerPhone: tx.customerPhone || khHd.sdt || '',
+                buyerTaxCode: khHd.mst,
+                buyerAddress: khHd.diaChi,
+                buyerCompanyName: khHd.tenDonVi || null,
+                buyerEmail: khHd.email || null,
+                buyerIdNo: khHd.cccd || null,
                 total: tx.total, subtotal: tx.subtotal, discount: tx.discount,
                 transactionDate: tx.transactionDate || tx.createdAt,
                 vatBuyerInfo: vbi, // {name,taxCode,address,email} khách yêu cầu HĐ
@@ -2322,6 +2333,7 @@ router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 
             }
         })
         const computed = computeItems(rawItems)
+        const khNhap = hoaDonCuaKhach(tx.customer)   // thông tin xuất HĐ trên hồ sơ khách (09/10/2026)
 
         const invoice = await prisma.eInvoice.create({
             data: {
@@ -2330,9 +2342,9 @@ router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 
                 status: 'DRAFT',
                 invoiceDate: todayISO(),
                 ...seller,
-                buyerName: tenNguoiMuaHD(tx.customer?.name || tx.customerName, tx.customer?.taxCode || req.body?.buyerTaxCode, tx.receiptNumber),
-                buyerTaxCode: tx.customer?.taxCode || req.body?.buyerTaxCode || '',
-                buyerAddress: tx.customer?.address || req.body?.buyerAddress || '',
+                buyerName: tenNguoiMuaHD(khNhap.ten || tx.customerName, khNhap.mst || req.body?.buyerTaxCode, tx.receiptNumber),
+                buyerTaxCode: khNhap.mst || req.body?.buyerTaxCode || '',
+                buyerAddress: khNhap.diaChi || req.body?.buyerAddress || '',
                 totalBeforeVat: computed.totalBeforeVat,
                 vatAmount: computed.vatAmount,
                 totalAmount: computed.totalAmount,

@@ -11,6 +11,8 @@ import { nextCode } from '../lib/codeGenerator'
 import { postDebtCollectionJournal } from '../lib/autoJournal'
 import { emitEntityEvent } from '../lib/webhookDispatch'
 import { tinhTronBo } from '../lib/diemSucKhoeKhach'
+import { COT_HOA_DON_KHACH } from '../lib/hoaDonKhach'
+import { traMst, LoiTraMst } from '../lib/traMst'
 
 const router = Router()
 
@@ -18,6 +20,36 @@ const router = Router()
 const customerPayload = (c: any) => ({
     id: c?.id, code: c?.code, name: c?.name, phone: c?.phone ?? null,
     email: c?.email ?? null, address: c?.address ?? null, debt: c?.debt ?? null, groupId: c?.groupId ?? null,
+    // Thông tin xuất hoá đơn (09/10/2026) — hệ thống nhận webhook cũng cần để xuất HĐ đúng người mua
+    ...Object.fromEntries(COT_HOA_DON_KHACH.map(k => [k, c?.[k] ?? null])),
+})
+
+/** Trường xuất HĐ từ body: undefined = không đụng, '' / null = xoá. MST bỏ khoảng trắng. */
+function hoaDonTuBody(b: any): Record<string, string | null> {
+    const ra: Record<string, string | null> = {}
+    for (const k of COT_HOA_DON_KHACH) {
+        if (b?.[k] === undefined) continue
+        const v = String(b[k] ?? '').trim()
+        ra[k] = v ? (k === 'taxCode' ? v.replace(/\s+/g, '') : v) : null
+    }
+    return ra
+}
+
+// ─── GET /api/customers/tra-mst?mst= ─────────────────────────────────────────
+// Tra MST → tên + địa chỉ doanh nghiệp cho ô MST ở hồ sơ khách (09/10/2026, lib/traMst).
+// Đặt TRƯỚC '/:id' kẻo bị nuốt thành id "tra-mst".
+router.get('/tra-mst', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const kq = await traMst(String(req.query.mst || ''))
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        if (e instanceof LoiTraMst) {
+            const ma = e.ma === 'khong_hop_le' ? 400 : e.ma === 'khong_co' ? 404 : 502
+            res.status(ma).json({ success: false, error: e.message, ma: e.ma })
+            return
+        }
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
 })
 
 // ─── Customers CRUD ─────────────────────────────────────────────────────────
@@ -53,6 +85,9 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
                 { phone: { contains: search as string, mode: 'insensitive' } },
                 { code: { contains: search as string, mode: 'insensitive' } },
                 { email: { contains: search as string, mode: 'insensitive' } },
+                // Tìm theo MST / tên đơn vị xuất hoá đơn (09/10/2026)
+                { taxCode: { contains: String(search).replace(/\s+/g, '') } },
+                { invoiceCompanyName: { contains: search as string, mode: 'insensitive' } },
             ]
         }
         if (groupId) where.groupId = groupId
@@ -1159,6 +1194,7 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
                 gender: gender || null,
                 salesUserId: salesUserId || null,
                 salesUserName: salesUserName || null,
+                ...hoaDonTuBody(req.body),
             },
             include: { group: true },
         })
@@ -1196,8 +1232,10 @@ router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate
                 ...(email !== undefined && { email }),
                 ...(address !== undefined && { address }),
                 ...(groupId !== undefined && { groupId: groupId || null }),
-                ...(taxCode !== undefined && { taxCode }),
-                ...(note !== undefined && { note }),
+                // taxCode + các trường xuất HĐ — trước 09/10/2026 ghi vào cột KHÔNG tồn tại
+                ...hoaDonTuBody(req.body),
+                // `note` không phải cột (cột là `notes`) — trước đây gửi `note` là Prisma ném lỗi
+                ...(notes === undefined && note !== undefined && { notes: note }),
                 ...(notes !== undefined && { notes }),
                 ...(loyaltyPoints !== undefined && { loyaltyPoints }),
                 ...(birthday !== undefined && { birthday: birthday || null }),

@@ -248,7 +248,7 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
             tieuDe: quaHan > 0
                 ? `${ds.length} kiện hàng hoàn chưa thấy video mở hàng — ${quaHan} kiện quá 14 ngày`
                 : `${ds.length} kiện hàng hoàn đang về`,
-            chiTiet: 'Kho đã được cộng lại lúc sàn hoàn tiền / huỷ đơn — kiện chưa về là kho đang ghi dư. Kiện đã về thì quay video mở hàng (HOAN_<mã vận đơn>) là tự hết khỏi danh sách; quá lâu chưa về thì hỏi ĐVVC / khiếu nại sàn.',
+            chiTiet: 'Kho đã được cộng lại lúc sàn hoàn tiền / huỷ đơn — kiện chưa về là kho đang ghi dư. Kiện đã về thì quay video mở hàng (HOAN_<mã vận đơn>) là tự hết khỏi danh sách; quá lâu chưa về thì hỏi ĐVVC / khiếu nại sàn. Kiện TikTok / GHN / J&T có khi quét mã ngắn trên tem (GYY…, JNTMP…) nên không khớp — mở phiếu kiểm tay.',
             soLuong: ds.length, soTien: ds.reduce((s, k) => s + k.soTien, 0),
             duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Xem hàng hoàn',
             danhSach: vd(ds.map(k => k.dong)),

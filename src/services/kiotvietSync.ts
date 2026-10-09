@@ -668,6 +668,70 @@ async function applyStock(sp: any, product: any, target: number, opts: SyncOptio
 
 // ─── KHÁCH HÀNG ─────────────────────────────────────────────────────────────
 
+/** THÔNG TIN XUẤT HOÁ ĐƠN của khách KiotViet — ĐO 09/10/2026 trên 20 khách HUTI (đọc
+ *  /api/kiotviet/peek): taxCode 11/20, type 0 cá nhân (14) / 1 công ty (6), organization =
+ *  tên đơn vị, nameEInvoice / addressEInvoice / contactNumberEInvoice = tên / địa chỉ / SĐT
+ *  in trên HĐ. administrativeAreaIdEInvoice là mã nội bộ KiotViet, không có bảng tra nên
+ *  KHÔNG lấy; legalName luôn rỗng. Bên KV trống thì không có gì để ghi (thiếu ≠ xoá). */
+export function hoaDonTuKV(kv: any): Record<string, string> {
+    const s = (v: any) => String(v ?? '').trim()
+    const ra: Record<string, string> = {}
+    if (s(kv?.taxCode)) ra.taxCode = s(kv.taxCode).replace(/\s+/g, '').slice(0, 20)
+    // Loại chỉ ghi khi có ý nghĩa cho hoá đơn — gắn 'personal' cho mọi khách lẻ là ghi thừa
+    if (kv?.type === 1) ra.invoiceType = 'company'
+    else if (kv?.type === 0 && ra.taxCode) ra.invoiceType = 'personal'
+    if (s(kv?.organization)) ra.invoiceCompanyName = s(kv.organization).slice(0, 300)
+    if (s(kv?.nameEInvoice)) ra.invoiceBuyerName = s(kv.nameEInvoice).slice(0, 300)
+    if (s(kv?.addressEInvoice)) ra.invoiceAddress = s(kv.addressEInvoice).slice(0, 500)
+    if (s(kv?.contactNumberEInvoice)) ra.invoicePhone = s(kv.contactNumberEInvoice).slice(0, 30)
+    return ra
+}
+
+/** Trường hoá đơn nào được ghi: Kengi đang TRỐNG thì điền; đã có thì chỉ đè khi bật
+ *  ghi đè (overwriteNames — cùng công tắc với tên, vì KiotViet là nơi gõ gốc). */
+export function hoaDonCanGhi(existing: any, tuKV: Record<string, string>, ghiDe: boolean): Record<string, string> {
+    const data: Record<string, string> = {}
+    for (const [k, v] of Object.entries(tuKV)) {
+        const cu = String(existing?.[k] ?? '').trim()
+        if (!cu || (ghiDe && cu !== v)) data[k] = v
+    }
+    return data
+}
+
+/** ĐỔ BÙ thông tin xuất HĐ cho khách ĐÃ CÓ (09/10/2026). Đồng bộ thường chạy theo phần
+ *  thay đổi nên khách cũ không sửa gì trên KV sẽ không bao giờ có MST. CHỈ ghi các cột
+ *  hoá đơn — không đụng công nợ / tên / SĐT. `apply` false = chạy thử, chỉ đếm. */
+export async function donHoaDonKhach(sp: any, items: any[], opts: { apply: boolean; ghiDe: boolean }) {
+    const kq = { tongKV: items.length, coThongTinHD: 0, khongThayKhach: 0, daDu: 0, canGhi: 0, daGhi: 0, loi: 0, mau: [] as any[], mauLoi: [] as string[] }
+    for (const kv of items) {
+        const tuKV = hoaDonTuKV(kv)
+        if (!Object.keys(tuKV).length) continue
+        kq.coThongTinHD++
+        try {
+            const kvId = kv?.id
+            const code = String(kv?.code || '').trim()
+            const phone = firstPhone(kv?.contactNumber)
+            const localId = kvId ? await findMap(sp, 'customer', kvId) : null
+            let kh = localId ? await sp.customer.findUnique({ where: { id: localId } }).catch(() => null) : null
+            if (!kh && code) kh = await sp.customer.findUnique({ where: { code } }).catch(() => null)
+            if (!kh && phone) kh = await sp.customer.findFirst({ where: { phone } }).catch(() => null)
+            if (!kh) { kq.khongThayKhach++; continue }
+            const data = hoaDonCanGhi(kh, tuKV, opts.ghiDe)
+            if (!Object.keys(data).length) { kq.daDu++; continue }
+            kq.canGhi++
+            if (kq.mau.length < 15) kq.mau.push({ ma: kh.code, truong: Object.keys(data) })
+            if (opts.apply) {
+                await sp.customer.update({ where: { id: kh.id }, data })
+                kq.daGhi++
+            }
+        } catch (e: any) {
+            kq.loi++
+            if (kq.mauLoi.length < 10) kq.mauLoi.push(`${kv?.code || kv?.id}: ${String(e?.message || e).slice(0, 160)}`)
+        }
+    }
+    return kq
+}
+
 export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     for (const kv of items) {
         c.fetched++
@@ -716,6 +780,8 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                 if (!existing.phone && phone) data.phone = phone
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
+                // Thông tin xuất hoá đơn (09/10/2026): trống thì điền, ghi đè theo overwriteNames
+                Object.assign(data, hoaDonCanGhi(existing, hoaDonTuKV(kv), !!opts.overwriteNames))
                 if (coDebt && kvDebt !== existing.debt && (!existing.debt || opts.overwritePrices)) data.debt = kvDebt
 
                 if (!Object.keys(data).length) {
@@ -744,6 +810,7 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                             address: kv?.address ? String(kv.address).slice(0, 500) : null,
                             gender: kv?.gender === true ? 'male' : kv?.gender === false ? 'female' : null,
                             debt: kvDebt,
+                            ...hoaDonTuKV(kv),
                             notes: 'Đồng bộ từ KiotViet',
                         },
                     })

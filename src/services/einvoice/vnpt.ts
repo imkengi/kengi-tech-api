@@ -216,7 +216,9 @@ export class VnptProvider implements IEInvoiceProvider {
                 // (Ten); để trống là ValidationException "Tên đơn vị mua hàng không
                 // được bỏ trống" dù HVTNMHang đã có tên. Không MST thì giữ rỗng như
                 // cũ — khách lẻ chỉ cần họ tên người mua.
-                Ten: String(data.buyerTaxCode || '').trim() ? (data.buyerName || '') : '',
+                // Hồ sơ khách có TÊN ĐƠN VỊ riêng (09/10/2026) thì `Ten` = tên đơn vị, HVTNMHang =
+                // người mua; không có thì như cũ (cả hai cùng buyerName).
+                Ten: String(data.buyerTaxCode || '').trim() ? (data.buyerCompanyName || data.buyerName || '') : '',
                 // MST người mua: chỉ gửi khi có; TUYỆT ĐỐI không cắt gọt cho vừa khuôn
                 MST: String(data.buyerTaxCode || '').trim(),
                 MDVQHNSach: null,

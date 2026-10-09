@@ -2331,6 +2331,16 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION`)
+                // Thông tin xuất hoá đơn của khách (09/10/2026) — gõ tay / tra MST / đồng bộ KiotViet
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxCode" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceType" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceCompanyName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceBuyerName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceAddress" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceEmail" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoicePhone" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invoiceIdNo" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Customer_taxCode_idx" ON "Customer"("taxCode")`)
                 // Import receipt return tracking (2026-04-05)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceiptItem" ADD COLUMN IF NOT EXISTS "returnedQuantity" INTEGER NOT NULL DEFAULT 0`)
                 

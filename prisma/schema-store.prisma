@@ -295,6 +295,18 @@ model Customer {
   notes            String?
   salesUserId      String? // NV Sales phụ trách
   salesUserName    String? // Tên NV Sales (denormalized)
+
+  /// THÔNG TIN XUẤT HOÁ ĐƠN (09/10/2026) — đổ lên HĐĐT khi phiếu bán gắn khách này mà
+  /// phiếu không có vatBuyerInfo riêng (lib/hoaDonKhach). KiotViet: taxCode, type (0 cá
+  /// nhân / 1 công ty), organization, nameEInvoice, addressEInvoice, contactNumberEInvoice.
+  taxCode            String? // MST: 10 số, 10-3 (chi nhánh), 12 số (cá nhân theo CCCD), 13 số
+  invoiceType        String? // 'personal' | 'company' — null = chưa rõ
+  invoiceCompanyName String? // Tên đơn vị (KiotViet organization)
+  invoiceBuyerName   String? // Tên người mua in trên HĐ (KiotViet nameEInvoice)
+  invoiceAddress     String? // Địa chỉ xuất HĐ (KiotViet addressEInvoice)
+  invoiceEmail       String? // Email nhận HĐ — trống thì dùng email khách
+  invoicePhone       String? // SĐT trên HĐ (KiotViet contactNumberEInvoice)
+  invoiceIdNo        String? // CCCD / hộ chiếu người mua (HĐ cá nhân)
   totalPurchases   Float     @default(0)
   totalOrders      Int       @default(0)
   debt             Float     @default(0)
@@ -313,6 +325,7 @@ model Customer {
   @@index([phone])
   @@index([tier])
   @@index([salesUserId])
+  @@index([taxCode])
 }
 
 // ─── Transactions ──────────────────────────────────────────────────────────────
