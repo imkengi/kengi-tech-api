@@ -5260,6 +5260,76 @@ router.get('/mkt-chan-doan', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐO VỤ TIKTOK ĐÃ KHIẾU NẠI (chỉ đọc, 09/10/2026) — GET /admin/do-vu-tiktok-da-khieu-nai?storeCode=&n=10
+ * Chủ shop: "với tiktok sau khi khiếu nại thì trong vòng 24 giờ nó bắt xác nhận đã đủ bằng chứng".
+ * Trước khi làm nhắc mỗi giờ: nhìn dữ liệu THẬT của các vụ đã từ chối/khiếu nại — chuỗi trạng thái
+ * sau đó, `seller_next_action_response` (việc người bán phải làm + hạn), `arbitration_status`, lịch sử.
+ * Phiếu: ghi chú có "[Từ chối TikTok]" hoặc trạng thái gốc REJECT; mới nhất trước. */
+router.get('/do-vu-tiktok-da-khieu-nai', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const n = Math.min(20, Math.max(1, parseInt(String(req.query.n || '10'), 10) || 10))
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const phieu: any[] = await sp.returnOrder.findMany({
+            where: {
+                code: { startsWith: 'RTN-TT-' },
+                OR: [{ notes: { contains: '[Từ chối TikTok]' } }, { notes: { contains: 'REJECT' } }, { status: 'rejected' }],
+            },
+            select: { id: true, code: true, status: true, notes: true, channelId: true, createdAt: true, updatedAt: true },
+            orderBy: { updatedAt: 'desc' }, take: n,
+        })
+        const nhatKy = phieu.length ? await sp.auditLog.findMany({
+            where: { action: 'reject_return_tiktok', entityId: { in: phieu.map(p => p.id) } },
+            select: { entityId: true, createdAt: true, userName: true }, orderBy: { createdAt: 'asc' },
+        }).catch(() => []) : []
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const svc = new Map<string, any>()
+        const ra: any[] = []
+        for (const p of phieu) {
+            const rid = String(p.code).replace(/^RTN-TT-/, '')
+            const mot: any = {
+                ma: p.code, trangThai: p.status, capNhat: p.updatedAt,
+                ghiChuCuoi: String(p.notes || '').split(/\r?\n/).filter((d: string) => /^\[(TikTok|Từ chối TikTok|Khiếu nại|Nhận hàng hoàn)\]/.test(d.trim())).slice(-8),
+                tuChoiQuaApp: nhatKy.filter((a: any) => a.entityId === p.id).map((a: any) => ({ luc: a.createdAt, nguoi: a.userName })),
+            }
+            if (p.channelId) {
+                if (!svc.has(p.channelId)) {
+                    const c = await sp.onlineChannel.findUnique({ where: { id: p.channelId } })
+                    svc.set(p.channelId, c ? new TikTokService({
+                        apiKey: c.apiKey || '', apiSecret: c.apiSecret || '',
+                        accessToken: c.accessToken || undefined, refreshToken: c.refreshToken || undefined, shopId: c.shopId || undefined,
+                    }) : null)
+                }
+                const k = svc.get(p.channelId)
+                if (k) {
+                    try {
+                        const s = await k.goiTho('POST', '/return_refund/202309/returns/search', { page_size: '1' }, { return_ids: [rid] })
+                        const r = s?.data?.return_orders?.[0]
+                        mot.tiktok = r ? {
+                            return_status: r.return_status, return_type: r.return_type, arbitration_status: r.arbitration_status,
+                            seller_next_action_response: r.seller_next_action_response, update_time: r.update_time,
+                            khoa: Object.keys(r).sort().join(','),
+                        } : { code: s?.code, message: s?.message }
+                    } catch (e: any) { mot.tiktok = { loi: String(e?.message || e).slice(0, 200) } }
+                    try {
+                        const h = await k.goiTho('GET', `/return_refund/202309/returns/${rid}/records`, { locale: 'vi-VN' })
+                        mot.lichSu = h?.code === 0
+                            ? (h.data?.records || []).slice(0, 10).map((x: any) => ({ role: x.role, event: x.event, desc: x.description || x.note, time: x.create_time }))
+                            : { code: h?.code, message: h?.message }
+                    } catch (e: any) { mot.lichSu = { loi: String(e?.message || e).slice(0, 200) } }
+                }
+            }
+            ra.push(mot)
+        }
+        res.json({ success: true, data: { soPhieu: phieu.length, ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * ĐO KHIẾU NẠI TIKTOK — GET /admin/do-khieu-nai-tiktok?storeCode=&returnId=a,b
  *
  * 11/09/2026 chủ shop: "làm tương tự với tiktok" (form lý do + ảnh bằng chứng như
