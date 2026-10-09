@@ -61,6 +61,12 @@ const DA_VAO_XUONG = ['repairing', 'warranty', 'sent_to_supplier']
 async function ghiTheKho(
     tx: any, r: any, delta: number, lyDo: string, req: AuthRequest,
 ) {
+    /* Token đăng nhập KHÔNG mang tên (AuthPayload chỉ có userId/email) nên `user.name`
+     * luôn rỗng — thẻ kho của mọi phiếu sửa từng ghi người làm là "Hệ thống" (chủ shop
+     * 09/10/2026: kho hư hỏng "chưa hiện người thực hiện"). Tra tên theo userId, hụt thì email. */
+    const nguoi = req.user?.userId
+        ? await tx.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }).catch(() => null)
+        : null
     await tx.inventoryTransaction.create({
         data: {
             // SỐ LƯỢNG CÓ DẤU + từ vựng chuẩn của app: thẻ kho tách cột nhập/xuất
@@ -75,7 +81,7 @@ async function ghiTheKho(
             referenceType: 'repair',
             branchId: r.branchId || null,
             userId: req.user?.userId || null,
-            userName: (req as any).user?.name || 'Hệ thống',
+            userName: nguoi?.name || req.user?.email || 'Hệ thống',
         },
     }).catch(() => { /* thẻ kho hỏng không được giết nghiệp vụ chính */ })
 }

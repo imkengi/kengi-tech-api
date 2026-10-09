@@ -1358,6 +1358,44 @@ router.get('/do-kho-hu-hong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO CHI TIẾT KHO HƯ HỎNG (chỉ đọc, 09/10/2026) ────────────────────────────
+ * Chạy ĐÚNG hàm trang Kho Hư Hỏng trên web dùng (lib/chiTietKhoHuHong) cho mọi kho hư hỏng
+ * đang bật của một cửa hàng: bao nhiêu hàng đã lần ra LÝ DO + NGƯỜI, theo nguồn nào (lô nhập
+ * tay / phiếu sửa / trả hàng / chuyển kho / kiểm kê), bao nhiêu còn chưa rõ, mã nào âm/lệch.
+ * GET /admin/do-chi-tiet-kho-hu-hong?ma=HUTI[&kho=<mã kho>][&het=1]  — het=1 trả đủ mọi mã. */
+router.get('/do-chi-tiet-kho-hu-hong', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { chiTietKhoHuHong } = await import('../lib/chiTietKhoHuHong')
+        const maKho = String(req.query.kho || '').trim()
+        const khos = await sp.warehouse.findMany({
+            where: { type: 'damaged', isActive: true, ...(maKho ? { code: maKho } : {}) },
+            select: { id: true, code: true, name: true, branchId: true },
+            orderBy: { createdAt: 'asc' },
+        })
+        const het = String(req.query.het || '') === '1'
+        const ra: any[] = []
+        for (const k of khos) {
+            const kq = await chiTietKhoHuHong(sp, k.id)
+            const theoNguon: Record<string, { soDong: number; soLuong: number; coNguoi: number }> = {}
+            for (const d of kq.hang.flatMap(h => h.dong)) {
+                const g = theoNguon[d.loai] || (theoNguon[d.loai] = { soDong: 0, soLuong: 0, coNguoi: 0 })
+                g.soDong++; g.soLuong += d.soLuong; if (d.nguoi) g.coNguoi++
+            }
+            ra.push({
+                kho: k.code, ten: k.name, tong: kq.tong, chamTran: kq.chamTran, theoNguon,
+                hang: het ? kq.hang : kq.hang.slice(0, 8),
+            })
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── TẮT KHO HƯ HỎNG TRÙNG ĐANG TRỐNG (09/10/2026) ─────────────────────────────
  * POST /admin/tat-kho-trung {storeCode?, apply?} — mặc định CHỈ BÁO CÁO.
  * Cửa hàng có kho hư hỏng mặc định GẮN CHI NHÁNH CHÍNH mà vẫn còn bản "không

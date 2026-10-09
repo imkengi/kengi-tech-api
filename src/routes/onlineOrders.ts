@@ -5176,6 +5176,12 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             // Đơn sàn không có branchId → null (kho main null-branch).
             const branchId = (returnOrder as any).branchId ?? null
             let khoHuId: string | null | undefined = undefined   // undefined = chưa tra
+            /* Người duyệt cho thẻ kho: token KHÔNG mang tên nên `user.name` luôn rỗng — từng
+             * ghi "Hệ thống" cho mọi lượt (09/10/2026). Tra tên theo userId, hụt thì email. */
+            const nguoiDuyet = req.user?.userId
+                ? await prisma.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }).catch(() => null)
+                : null
+            const tenNguoiDuyet = nguoiDuyet?.name || req.user?.email || 'Hệ thống'
             const loiKho: string[] = []
             for (const item of returnOrder.items) {
                 const chon = xuLyKho[item.id] === 'hu-hong' ? 'hu-hong'
@@ -5219,7 +5225,7 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
                                     referenceType: 'return',
                                     branchId,
                                     userId: req.user?.userId || null,
-                                    userName: (req as any).user?.name || 'Hệ thống',
+                                    userName: tenNguoiDuyet,
                                 },
                             }).catch(() => { /* thẻ kho hỏng không được giết nghiệp vụ chính */ })
                         }

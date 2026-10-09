@@ -35,6 +35,7 @@ import { authMiddleware, AuthRequest, getBranchId } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { guiLoi } from '../lib/errorResponse'
 import { khoHuHong, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
+import { chiTietKhoHuHong } from '../lib/chiTietKhoHuHong'
 
 const router = Router()
 
@@ -196,6 +197,21 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
             data: { khoId, items, chamTran: lo.length >= 500 || tonKho.length >= 1000 },
         })
     } catch (err: any) { guiLoi(res, err, 'GET /damaged-warehouse/ton lỗi:') }
+})
+
+// ─── GET /chi-tiet — web: mỗi đống hàng kèm LÝ DO HƯ + NGƯỜI THỰC HIỆN ─────────
+// 09/10/2026 — chủ shop: "trong phần kho hư hỏng trên web chưa hiện lý do hư và người
+// thực hiện". Khác /ton (chỉ lô nhập tay — app Android dùng, KHÔNG đổi hình dạng kẻo app
+// cũ vỡ): gom cả phiếu sửa, trả hàng hư, chuyển kho, kiểm kê; mã âm kèm lượt RA gần nhất.
+router.get('/chi-tiet', authMiddleware, requirePermission(...QUYEN_XEM), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { khoId, loi } = await layKho(req)
+        if (loi) { res.status(400).json({ success: false, error: loi }); return }
+        if (!khoId) { res.json({ success: true, data: { khoId: null, hang: [], thieuKho: true } }); return }
+        const kq = await chiTietKhoHuHong(prisma, khoId)
+        res.json({ success: true, data: { khoId, ...kq } })
+    } catch (err: any) { guiLoi(res, err, 'GET /damaged-warehouse/chi-tiet lỗi:') }
 })
 
 // ─── GET /nhat-ky ────────────────────────────────────────────────────────────
