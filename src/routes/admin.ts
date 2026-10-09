@@ -1396,6 +1396,69 @@ router.get('/do-chi-tiet-kho-hu-hong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO "BÁN NHẦM TỪ KHO HƯ HỎNG" (chỉ đọc, 09/10/2026) ─────────────────────────
+ * POS web từng mặc định chọn KHO HƯ HỎNG (danh sách kho xếp loại A→Z, "damaged" trước "main")
+ * → phiếu bán trừ kho hư hỏng thay vì kho chính. Với từng mã ÂM trong kho hư hỏng: tồn kho hư
+ * hỏng, Product.stock, tồn kho CHÍNH mặc định cùng chi nhánh, độ lệch kho chính − Product.stock
+ * (bán nhầm mà chưa ai reindex thì lệch này ≈ −tồn kho hư hỏng), và các phiếu bán mã đó từ ngày
+ * tạo kho hư hỏng. Không ghi gì.  GET /admin/do-ban-nham-kho-hu-hong?ma=HUTI */
+router.get('/do-ban-nham-kho-hu-hong', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const chinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+        const khos = await sp.warehouse.findMany({
+            where: { type: 'damaged', isActive: true },
+            select: { id: true, code: true, branchId: true, isDefault: true, createdAt: true },
+        })
+        const ra: any[] = []
+        for (const k of khos) {
+            const am = await sp.warehouseStock.findMany({
+                where: { warehouseId: k.id, quantity: { lt: 0 } },
+                select: { productId: true, productSku: true, productName: true, quantity: true },
+            })
+            if (!am.length) continue
+            const cn = k.branchId || chinh?.id || null
+            const khoChinh = await sp.warehouse.findFirst({
+                where: { type: 'main', isDefault: true, branchId: cn }, select: { id: true, code: true },
+            })
+            const dsMa: any[] = []
+            for (const r of am) {
+                const sp1 = await sp.product.findUnique({ where: { id: r.productId }, select: { stock: true } })
+                const wsChinh = khoChinh ? await sp.warehouseStock.findUnique({
+                    where: { warehouseId_productId: { warehouseId: khoChinh.id, productId: r.productId } },
+                    select: { quantity: true },
+                }) : null
+                const ban = await sp.inventoryTransaction.findMany({
+                    where: { productId: r.productId, type: 'sale', createdAt: { gte: k.createdAt } },
+                    select: { referenceId: true, quantity: true, createdAt: true, userName: true },
+                    orderBy: { createdAt: 'desc' }, take: 300,
+                })
+                const tongBan = ban.reduce((s: number, b: any) => s + Math.abs(b.quantity || 0), 0)
+                dsMa.push({
+                    sku: r.productSku, ten: r.productName, tonHu: r.quantity,
+                    tonSP: sp1?.stock ?? null, tonKhoChinh: wsChinh?.quantity ?? null,
+                    lechChinh: (wsChinh?.quantity ?? 0) - (sp1?.stock ?? 0),
+                    soPhieuBan: ban.length, tongBan,
+                    banLon: [...ban].sort((a: any, b: any) => Math.abs(b.quantity) - Math.abs(a.quantity)).slice(0, 3)
+                        .map((b: any) => ({ phieu: b.referenceId, sl: b.quantity, luc: b.createdAt, nguoi: b.userName })),
+                })
+            }
+            ra.push({
+                khoHu: k.code, macDinh: k.isDefault, taoLuc: k.createdAt, khoChinh: khoChinh?.code ?? null,
+                soMaAm: dsMa.length, tongAm: dsMa.reduce((s, x) => s + x.tonHu, 0),
+                soMaLechKhop: dsMa.filter(x => x.lechChinh === -x.tonHu).length,
+                ma: dsMa,
+            })
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── TẮT KHO HƯ HỎNG TRÙNG ĐANG TRỐNG (09/10/2026) ─────────────────────────────
  * POST /admin/tat-kho-trung {storeCode?, apply?} — mặc định CHỈ BÁO CÁO.
  * Cửa hàng có kho hư hỏng mặc định GẮN CHI NHÁNH CHÍNH mà vẫn còn bản "không

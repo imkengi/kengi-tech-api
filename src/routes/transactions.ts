@@ -729,9 +729,20 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         // warehouseId wins). Van sales decrement the vehicle warehouse instead.
         let defaultWarehouseId: string | null = null
         if (!isVanSale) {
+            /* Kho gửi kèm CHỈ được nhận khi là kho BÁN ĐƯỢC (type 'main') — 09/10/2026.
+             * POS web chọn mặc định kho ĐẦU TIÊN có cờ isDefault, mà GET /warehouses xếp theo
+             * loại A→Z nên "damaged" đứng trước "main": bán hàng trừ vào KHO HƯ HỎNG (HUTI: 12 mã
+             * âm, −548), kho chính không trừ trong khi Product.stock vẫn trừ, rồi huỷ / trả đơn lại
+             * hoàn về kho chính. Kho hư hỏng / bảo hành / xe / khác KHÔNG thuộc tồn bán được (xe đã
+             * trừ Product.stock lúc chất hàng) — rơi về kho chính của chi nhánh. */
             if (txData.warehouseId) {
-                defaultWarehouseId = String(txData.warehouseId)
-            } else {
+                const chon = await (prisma as any).warehouse
+                    .findUnique({ where: { id: String(txData.warehouseId) }, select: { id: true, type: true, isActive: true } })
+                    .catch(() => null)
+                if (chon && chon.type === 'main' && chon.isActive !== false) defaultWarehouseId = chon.id
+                else console.warn(`[transactions] bỏ qua warehouseId ${txData.warehouseId} (loại ${chon?.type ?? 'không thấy'}) — trừ kho chính của chi nhánh`)
+            }
+            if (!defaultWarehouseId) {
                 const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
                 defaultWarehouseId = wh?.id || null
             }
