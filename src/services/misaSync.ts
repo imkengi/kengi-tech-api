@@ -690,14 +690,24 @@ function docJson(v: any): any {
 //
 // ĐO 09/10/2026 (HUTITAX, cổng cũ): bản ghi có bank_account_id, bank_account_number,
 // bank_name, bank_id, inactive — KHÔNG có account_holder dù tài liệu ghi bắt buộc.
-// Khớp theo MisaMap rồi theo SỐ TÀI KHOẢN (bỏ khoảng trắng). Chỉ TẠO MỚI và điền ô
-// trống; số dư (balance) KHÔNG đụng — số dư ngân hàng là việc của sổ/sao kê.
+// Chỉ TẠO MỚI và điền ô trống; số dư (balance) KHÔNG đụng — là việc của sổ/sao kê.
+//
+// ⚠ KHỚP THEO SỐ + TÊN NGÂN HÀNG, không theo số không thôi. Cùng lần đo đó, HUTITAX có
+// BA tài khoản cùng số 968303968 ở ACB, Nam Á, Quân đội — khớp theo số là gộp ba thành
+// một. TK Kengi chưa ghi tên ngân hàng thì mới được nhận một TK MISA cùng số.
 
 const chuanSoTk = (v: any) => String(v || '').replace(/[\s.-]/g, '')
+const chuanTenNh = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+function timTkKhop(ds: any[], so: string, nganHang: string): any | null {
+    const cungSo = ds.filter(b => chuanSoTk(b.accountNumber) === chuanSoTk(so))
+    return cungSo.find(b => chuanTenNh(b.bankName) && chuanTenNh(b.bankName) === chuanTenNh(nganHang))
+        || cungSo.find(b => !chuanTenNh(b.bankName))
+        || null
+}
 
 export async function syncMisaBanks(sp: any, items: any[], opts: MisaOptions, c: MisaCounters): Promise<void> {
-    const coSan = await sp.bankAccount.findMany({ select: { id: true, accountNumber: true, bankName: true, accountName: true, bankBranch: true } })
-    const theoSo = new Map<string, any>(coSan.map((b: any) => [chuanSoTk(b.accountNumber), b]))
+    const coSan: any[] = await sp.bankAccount.findMany({ select: { id: true, accountNumber: true, bankName: true, accountName: true, bankBranch: true } })
     for (const m of items) {
         c.fetched++
         beat(opts, c)
@@ -711,7 +721,7 @@ export async function syncMisaBanks(sp: any, items: any[], opts: MisaOptions, c:
             const ngung = pick(m, 'inactive', 'Inactive') === true
 
             const localId = await findMap(sp, 'bank', misaId)
-            const existing = (localId && coSan.find((b: any) => b.id === localId)) || theoSo.get(chuanSoTk(so))
+            const existing = (localId && coSan.find((b: any) => b.id === localId)) || timTkKhop(coSan, so, nganHang)
             if (existing) {
                 const data: any = {}
                 if (!existing.bankName && nganHang) data.bankName = nganHang
@@ -721,6 +731,7 @@ export async function syncMisaBanks(sp: any, items: any[], opts: MisaOptions, c:
                     if (Object.keys(data).length) await sp.bankAccount.update({ where: { id: existing.id }, data })
                     await saveMap(sp, 'bank', misaId, so, existing.id)
                 }
+                Object.assign(existing, data)   // TK MISA sau cùng số khác NH không được nhận lại TK này
                 if (Object.keys(data).length) { c.updated++; noteSample(c, { so, nganHang, hanhDong: 'điền ô trống', truong: Object.keys(data) }) }
                 else c.skipped++
                 continue
@@ -734,7 +745,10 @@ export async function syncMisaBanks(sp: any, items: any[], opts: MisaOptions, c:
                     },
                 })
                 await saveMap(sp, 'bank', misaId, so, created.id)
-                theoSo.set(chuanSoTk(so), created)
+                coSan.push(created)
+            } else {
+                // Chạy thử vẫn ghi vào bản nhớ — để đếm đúng như lượt ghi thật
+                coSan.push({ id: `__thu_${misaId}`, accountNumber: so, bankName: nganHang || '(chưa rõ ngân hàng)', accountName: chu, bankBranch: chiNhanh })
             }
             c.created++
             noteSample(c, { so, nganHang, ngungTheoDoi: ngung, hanhDong: 'tạo mới' })
