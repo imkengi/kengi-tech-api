@@ -4876,13 +4876,23 @@ router.post('/returns/manual', authMiddleware, async (req: AuthRequest, res: Res
 // Trạm quay là kengi.vn/video-online (một file HTML ngoài repo) — gọi hai đường dưới bằng token
 // của người đóng hàng (chỉ authMiddleware, cùng nếp các route trả hàng khác).
 const DAU_NHAN_HANG_HOAN = '[Nhận hàng hoàn]'
+/* Bộ tình trạng chủ shop chốt 09/10/2026 (8 lựa chọn). `condition` là nhóm thô của ReturnItem
+ * (new | used | damaged) — hàng KHÔNG bán như mới được thì 'damaged' (cùng nếp kho hư hỏng của shop:
+ * "hư vỏ" cũng vào kho hư hỏng); trạng thái chính xác nằm ở dòng "[Nhận hàng hoàn]" trong ghi chú.
+ * "Tráo hàng" / "Thiếu phụ kiện" không đổi condition — đó là chuyện của KIỆN, là bằng chứng khiếu nại. */
 const TINH_TRANG_HOAN: Record<string, { nhan: string; condition?: string }> = {
-    nguyen_ven: { nhan: 'Nguyên vẹn — bán lại được', condition: 'new' },
-    hu_hong: { nhan: 'Hư hỏng / bể vỡ', condition: 'damaged' },
-    loi_ky_thuat: { nhan: 'Lỗi kỹ thuật — không hoạt động', condition: 'damaged' },
-    thieu_hang: { nhan: 'Thiếu hàng / thiếu phụ kiện' },
-    sai_hang: { nhan: 'Sai hàng — không phải hàng của shop' },
+    nguyen_ven: { nhan: 'Nguyên vẹn', condition: 'new' },
+    hu_vo_hop: { nhan: 'Hư vỏ hộp', condition: 'damaged' },
+    vo_hu_hong: { nhan: 'Vỡ, hư hỏng', condition: 'damaged' },
+    loi_ky_thuat: { nhan: 'Lỗi kỹ thuật', condition: 'damaged' },
+    da_qua_su_dung: { nhan: 'Đã qua sử dụng', condition: 'used' },
+    trao_hang: { nhan: 'Tráo hàng' },
+    thieu_phu_kien: { nhan: 'Thiếu phụ kiện' },
     khac: { nhan: 'Khác' },
+    // Trạm quay bản cũ (sáng 09/10) có thể còn trong bộ nhớ đệm trình duyệt — vẫn nhận, đừng báo lỗi
+    hu_hong: { nhan: 'Vỡ, hư hỏng', condition: 'damaged' },
+    thieu_hang: { nhan: 'Thiếu phụ kiện' },
+    sai_hang: { nhan: 'Tráo hàng' },
 }
 
 /** Tìm vụ theo MÃ VẬN ĐƠN quét trên kiện hoàn: mã hàng TRẢ (dòng "Tracking:" trong ghi chú phiếu —
@@ -4966,19 +4976,27 @@ router.post('/returns/nhan-hang-hoan', authMiddleware, async (req: AuthRequest, 
         const { phieu, don } = await timVuTheoVanDon(prisma, ma)
         if (!phieu && !don) { res.status(404).json({ success: false, error: `Không thấy vụ trả / đơn nào khớp mã ${ma} — video vẫn được lưu lên Drive` }); return }
         const ghiChu = String(b.ghiChu || '').trim().slice(0, 300)
+        // "Khác (điền lý do)" — chủ shop 09/10/2026: phải có lý do, thiếu là dòng ghi vô nghĩa
+        const laKhac = String(b.tinhTrang) === 'khac'
+        if (laKhac && !ghiChu) { res.status(400).json({ success: false, error: 'Chọn "Khác" thì phải điền lý do' }); return }
+        const nhanTT = laKhac ? `Khác: ${ghiChu}` : tt.nhan
         const tenVideo = String(b.tenVideo || '').trim().slice(0, 160)
         const nguoi = String(req.user?.email || '').slice(0, 60)
-        const dong = `${DAU_NHAN_HANG_HOAN} ${new Date().toLocaleString('vi-VN')} — ${tt.nhan}`
+        // Giờ VIỆT NAM — máy chủ Cloud Run chạy UTC, để mặc định là lệch 7 tiếng
+        const luc = new Date().toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric',
+        })
+        const dong = `${DAU_NHAN_HANG_HOAN} ${luc} — ${nhanTT}`
             + (b.haiGiaiDoan === true ? ' — video 2 giai đoạn (mở hộp + test kỹ thuật)' : '')
-            + (tenVideo ? ` — video ${tenVideo}` : '') + (ghiChu ? ` — "${ghiChu}"` : '') + (nguoi ? ` — ${nguoi}` : '')
+            + (tenVideo ? ` — video ${tenVideo}` : '') + (!laKhac && ghiChu ? ` — "${ghiChu}"` : '') + (nguoi ? ` — ${nguoi}` : '')
         if (phieu) {
             await prisma.returnOrder.update({ where: { id: phieu.id }, data: { notes: `${phieu.notes || ''}\n${dong}` } })
             if (tt.condition) await prisma.returnItem.updateMany({ where: { returnOrderId: phieu.id }, data: { condition: tt.condition } }).catch(() => null)
-            res.json({ success: true, data: { ghiVao: 'phieu', ma: phieu.code, tinhTrang: tt.nhan } })
+            res.json({ success: true, data: { ghiVao: 'phieu', ma: phieu.code, tinhTrang: nhanTT } })
             return
         }
         await prisma.onlineOrder.update({ where: { id: don.id }, data: { internalNote: `${don.internalNote ? don.internalNote + '\n' : ''}${dong}` } })
-        res.json({ success: true, data: { ghiVao: 'don', ma: don.orderNumber, tinhTrang: tt.nhan } })
+        res.json({ success: true, data: { ghiVao: 'don', ma: don.orderNumber, tinhTrang: nhanTT } })
     } catch (e: any) {
         res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
     }
