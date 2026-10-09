@@ -37,7 +37,77 @@ export function maGocCuoi(notes?: string | null): string {
     return cuoi
 }
 
-export const daKhieuNai = (notes?: string | null) => /\[(Khiếu nại|Từ chối TikTok)\]/.test(String(notes || ''))
+/* ─── TỪNG LƯỢT KHIẾU NẠI (09/10/2026 — chủ shop: "khi khiếu nại lần 2, lần 3 thì chưa hiện lên") ───
+ * Bản cũ chỉ coi dòng "[Khiếu nại]" do APP ghi là khiếu nại và lấy phán quyết cuối sau dòng đó. Khiếu
+ * nại lại trên Seller Center thì sàn chuyển ACCEPTED → SELLER_DISPUTE, phiếu có thêm dòng mà kết quả
+ * vẫn đứng ở "Bị từ chối" của lần 1 — lần 2 coi như không có. Nay: một LƯỢT bắt đầu khi app ghi
+ * "[Khiếu nại]"/"[Từ chối TikTok]" HOẶC sàn sang SELLER_DISPUTE / JUDGING, mà lúc đó không có lượt
+ * nào đang chờ; lượt kết thúc ở phán quyết đầu tiên sau nó. Phán quyết tiếp theo khi CHƯA khiếu nại
+ * lại (vd ACCEPTED → REFUND_PAID) cập nhật kết quả lượt cuối. Bản sao web: ChiTietVuTra.tsx. */
+export type LoaiKetQua = 'thua' | 'thang' | 'cho'
+export interface VongKhieuNai {
+    lan: number
+    /** 'app' = khiếu nại từ Kengi, 'seller_center' = sàn ghi SELLER_DISPUTE / JUDGING */
+    nguon: 'app' | 'seller_center'
+    batDau?: string
+    loai: LoaiKetQua
+    nhan: string
+    luc?: string
+}
+const CHO_PHAN_XU = 'Đang chờ sàn phân xử'
+
+/** Mã gốc của sàn là PHÁN QUYẾT nào — null = bước trung gian. */
+function phanQuyet(ma: string): { loai: LoaiKetQua; nhan: string } | null {
+    if (/REFUND_PAID|SUCCESS|COMPLETE/.test(ma)) return { loai: 'thua', nhan: 'Bị từ chối — sàn đã hoàn tiền cho khách' }
+    if (/^ACCEPTED$|AWAITING_BUYER_SHIP|BUYER_SHIPPED_ITEM/.test(ma)) return { loai: 'thua', nhan: 'Bị từ chối — sàn cho khách trả hàng/hoàn tiền' }
+    if (/CLOSED|CANCEL|REJECT/.test(ma)) return { loai: 'thang', nhan: 'Thắng — vụ đã đóng, khách không được hoàn tiền' }
+    return null
+}
+
+export function vongKhieuNai(notes?: string | null): VongKhieuNai[] {
+    const vong: VongKhieuNai[] = []
+    let mo: VongKhieuNai | null = null
+    for (const tho of String(notes || '').split(/\r?\n/)) {
+        const dong = tho.trim()
+        const app = /^\[(?:Khiếu nại|Từ chối TikTok)\]\s*(.*)$/.exec(dong)
+        if (app) {
+            if (!mo) {
+                mo = { lan: vong.length + 1, nguon: 'app', batDau: String(app[1] || '').split(' — ')[0] || undefined, loai: 'cho', nhan: CHO_PHAN_XU }
+                vong.push(mo)
+            }
+            continue
+        }
+        const m = /^\[(?:Shopee|TikTok)\]\s*(?:Status:\s*)?([A-Z_]+)(?:\s*\(([^)]*)\))?/.exec(dong)
+        if (!m) continue
+        const ma = m[1] || '', luc = m[2]
+        if (/^(SELLER_DISPUTE|JUDGING)$/.test(ma)) {
+            if (!mo) {
+                mo = { lan: vong.length + 1, nguon: 'seller_center', batDau: luc, loai: 'cho', nhan: CHO_PHAN_XU }
+                vong.push(mo)
+            }
+            continue
+        }
+        const pq = phanQuyet(ma)
+        if (!pq) continue
+        const dich = mo || vong[vong.length - 1]
+        if (!dich) continue   // phán quyết TRƯỚC mọi lượt khiếu nại — không phải kết quả khiếu nại
+        dich.loai = pq.loai
+        dich.nhan = pq.nhan
+        dich.luc = luc
+        mo = null
+    }
+    return vong
+}
+
+/** Kết quả lượt khiếu nại CUỐI + tổng số lượt; null = vụ chưa từng khiếu nại (app hay Seller Center). */
+export function ketQuaKhieuNai(notes?: string | null): (VongKhieuNai & { soLan: number }) | null {
+    const v = vongKhieuNai(notes)
+    if (!v.length) return null
+    return { ...v[v.length - 1]!, soLan: v.length }
+}
+
+/** Đã khiếu nại (từ app hay trên Seller Center) — dùng cho việc "chưa khiếu nại". */
+export const daKhieuNai = (notes?: string | null) => vongKhieuNai(notes).length > 0
 
 /** "Tracking: X" — mã vận đơn HÀNG TRẢ; N/A = khách chưa gửi. Cùng luật route /returns/list. */
 export function maVanDonTra(notes?: string | null): string | null {
@@ -48,25 +118,6 @@ export function maVanDonTra(notes?: string | null): string | null {
 
 /** "Need return: Có" — khách phải gửi hàng lại. (\b của JS không hiểu chữ "ó" → dùng lookahead.) */
 export const canGuiHangLai = (notes?: string | null) => /(?:^|\n)\s*Need return:\s*Có(?=\s|$)/.test(String(notes || ''))
-
-/** KẾT QUẢ KHIẾU NẠI — trạng thái QUYẾT ĐỊNH cuối cùng SAU dòng khiếu nại cuối. Sàn chấp nhận
- *  trả / hoàn tiền = THUA; đóng / huỷ / từ chối = THẮNG; chưa có = chờ. Bản sao web. */
-export function ketQuaKhieuNai(notes?: string | null): { loai: 'thua' | 'thang' | 'cho'; nhan: string; luc?: string } | null {
-    const s = String(notes || '')
-    const viTri = Math.max(s.lastIndexOf('[Khiếu nại]'), s.lastIndexOf('[Từ chối TikTok]'))
-    if (viTri < 0) return null
-    let kq: { loai: 'thua' | 'thang' | 'cho'; nhan: string; luc?: string } | null = null
-    const re = /\[(Shopee|TikTok)\] ([A-Z_]+)(?: \(([^)]*)\))?/g
-    const sau = s.slice(viTri)
-    let m: RegExpExecArray | null
-    while ((m = re.exec(sau)) !== null) {
-        const ma = m[2] || '', luc = m[3]
-        if (/REFUND_PAID|SUCCESS|COMPLETE/.test(ma)) kq = { loai: 'thua', nhan: 'Bị từ chối — sàn đã hoàn tiền cho khách', luc }
-        else if (/^ACCEPTED$|AWAITING_BUYER_SHIP|BUYER_SHIPPED_ITEM/.test(ma)) kq = { loai: 'thua', nhan: 'Bị từ chối — sàn cho khách trả hàng/hoàn tiền', luc }
-        else if (/CLOSED|CANCEL|REJECT/.test(ma)) kq = { loai: 'thang', nhan: 'Thắng — vụ đã đóng, khách không được hoàn tiền', luc }
-    }
-    return kq ?? { loai: 'cho', nhan: 'Đang chờ sàn phân xử' }
-}
 
 export interface PhieuTraDoc {
     code: string
