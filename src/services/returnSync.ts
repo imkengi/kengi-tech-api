@@ -43,13 +43,18 @@ export function laQuyetDinh(trangThaiMoi: string, goc: string): boolean {
     return trangThaiMoi !== 'pending' || /REJECT|CANCEL|CLOS|COMPLETE|SUCCESS|REFUND/i.test(goc)
 }
 
+/* Nói theo NGÔN NGỮ NGƯỜI BÁN, khớp Seller Center (09/10/2026): vụ 2610050TDH4QPSJ Shopee
+ * ghi "Khiếu nại của bạn bị từ chối" mà tin cũ lại viết "sàn chấp nhận yêu cầu trả hàng" — chủ
+ * shop đọc ra là "không có thông báo". Sau khi khiếu nại, sàn chấp nhận trả / hoàn tiền = shop
+ * THUA; vụ đóng / huỷ / từ chối = shop THẮNG. Không đoán "khách sẽ gửi hàng về" (vụ đó hàng
+ * đã về shop từ trước). */
 export function moTaKetQua(trangThaiMoi: string, goc: string): { tieuDe: string; viec: string } {
     if (trangThaiMoi === 'refunded' || /REFUND_PAID|SUCCESS|COMPLETE/i.test(goc))
-        return { tieuDe: 'Kết quả khiếu nại: sàn đã hoàn tiền cho khách', viec: 'nếu khách gửi hàng về, quay video mở hàng lúc nhận' }
+        return { tieuDe: 'Khiếu nại bị từ chối — sàn đã hoàn tiền cho khách', viec: 'xem lại hàng trả về ở mục Trả hàng' }
     if (trangThaiMoi === 'rejected' || /REJECT|CANCEL|CLOS/i.test(goc))
-        return { tieuDe: 'Kết quả khiếu nại: vụ đã đóng, khách không được hoàn tiền', viec: 'không cần làm gì thêm' }
+        return { tieuDe: 'Khiếu nại thắng — vụ đã đóng, khách không được hoàn tiền', viec: 'không cần làm gì thêm' }
     if (trangThaiMoi === 'approved')
-        return { tieuDe: 'Kết quả khiếu nại: sàn chấp nhận yêu cầu trả hàng', viec: 'khách sẽ gửi hàng về — quay video mở hàng lúc nhận' }
+        return { tieuDe: 'Khiếu nại bị từ chối — sàn chấp nhận cho khách trả hàng/hoàn tiền', viec: 'xem lại hàng trả về; muốn phản đối tiếp thì làm trên Seller Center nếu sàn còn cho' }
     return { tieuDe: 'Vụ đã khiếu nại đổi trạng thái', viec: 'xem chi tiết ở mục Trả hàng' }
 }
 
