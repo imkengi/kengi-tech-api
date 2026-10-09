@@ -111,6 +111,7 @@ function credsOf(cfg: any): MisaCreds {
         orgCompanyCode: String(cfg.orgCompanyCode || '').trim(),
         baseUrl: cfg.baseUrl ? String(cfg.baseUrl).trim() : undefined,
         clientId: cfg.clientId ? String(cfg.clientId).trim() : undefined,
+        clientSecret: cfg.clientSecret ? String(cfg.clientSecret).trim() : undefined,
     }
 }
 
@@ -127,7 +128,7 @@ function publicConfig(cfg: any) {
         appId: cfg.appId ? `${String(cfg.appId).slice(0, 6)}…` : '',
         daDatAccessCode: !!cfg.accessCode,
         orgCompanyCode: cfg.orgCompanyCode,
-        baseUrl: cfg.baseUrl || 'https://actapp.misa.vn',
+        baseUrl: cfg.clientId ? 'https://developer.misa.vn/apis' : (cfg.baseUrl || 'https://actapp.misa.vn'),
         enabled: !!cfg.enabled,
         syncProducts: !!cfg.syncProducts,
         syncPartners: !!cfg.syncPartners,
@@ -145,6 +146,7 @@ function publicConfig(cfg: any) {
         // Chiều đẩy lên (09/10/2026). clientId không phải bí mật đăng nhập nhưng vẫn che bớt.
         clientId: cfg.clientId ? `${String(cfg.clientId).slice(0, 8)}…` : '',
         congMoi: !!cfg.clientId,
+        daDatClientSecret: !!cfg.clientSecret,
         pushConfig: docCaiDat(cfg.pushConfig),
     }
 }
@@ -193,7 +195,8 @@ router.put('/config', async (req: Request, res: Response) => {
 
         // ClientID cổng mới: chuỗi = đặt, `xoaClientId` = quay về cổng cũ actapp
         setStr('clientId', b.clientId)
-        if (b.xoaClientId === true) data.clientId = null
+        setStr('clientSecret', b.clientSecret)
+        if (b.xoaClientId === true) { data.clientId = null; data.clientSecret = null }
         // Thiết lập đẩy: GỘP lên bản đang lưu rồi chuẩn hoá — gửi thiếu khoá không làm mất khoá cũ
         if (b.pushConfig && typeof b.pushConfig === 'object') {
             const cu = docCaiDat(existing?.pushConfig)
@@ -202,7 +205,7 @@ router.put('/config', async (req: Request, res: Response) => {
         }
 
         // Đổi bí mật thì token cũ trong bộ nhớ phải bỏ, không thì vẫn dùng cái cũ
-        if (existing && (data.appId || data.accessCode || data.orgCompanyCode || 'clientId' in data)) {
+        if (existing && (data.appId || data.accessCode || data.orgCompanyCode || 'clientId' in data || 'clientSecret' in data)) {
             clearMisaToken(credsOf(existing))
             quenDanhMuc(store.schema)
         }
@@ -211,11 +214,12 @@ router.put('/config', async (req: Request, res: Response) => {
         if (existing) {
             cfg = await store.sp.misaConfig.update({ where: { id: 'default' }, data })
         } else {
-            if (!data.appId || !data.accessCode || !data.orgCompanyCode) {
-                res.status(400).json({ success: false, error: 'Lần đầu phải nhập đủ App ID, Access Code và Mã công ty (org_company_code)' })
+            // Cổng mới (developer.misa.vn) không có App ID — ClientID thay chỗ nó
+            if ((!data.appId && !data.clientId) || !data.accessCode || !data.orgCompanyCode) {
+                res.status(400).json({ success: false, error: 'Lần đầu phải nhập đủ Client ID (cổng mới) hoặc App ID (cổng cũ), Access Code và Mã công ty (org_company_code)' })
                 return
             }
-            cfg = await store.sp.misaConfig.create({ data: { id: 'default', ...data } })
+            cfg = await store.sp.misaConfig.create({ data: { id: 'default', appId: '', ...data } })
         }
         res.json({ success: true, data: publicConfig(cfg) })
     } catch (e: any) {

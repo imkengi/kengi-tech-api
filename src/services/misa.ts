@@ -54,6 +54,13 @@ export interface MisaCreds {
     baseUrl?: string
     /** ClientID của cổng developer.misa.vn — có thì đi cổng mới (xem đầu file) */
     clientId?: string
+    /**
+     * Client Secret trang developer.misa.vn cấp cùng ClientID (đổi giao diện 09/10/2026).
+     * Tài liệu AMIS KT V1.0.0 KHÔNG nhắc tới nó (câu "dùng lấy token OAuth 2.0" trên cổng là
+     * của sản phẩm MISA VAN); công cụ thử API của MISA có ô ClientSecret cạnh ClientID nên
+     * có thì gửi kèm header cùng tên — không có thì thôi.
+     */
+    clientSecret?: string
 }
 
 const DEFAULT_BASE = 'https://actapp.misa.vn'
@@ -85,7 +92,10 @@ function pathOf(c: MisaCreds, path: string): string {
 
 function headersOf(c: MisaCreds, token?: string): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (diCongMoi(c)) h.ClientID = String(c.clientId).trim()
+    if (diCongMoi(c)) {
+        h.ClientID = String(c.clientId).trim()
+        if (c.clientSecret && c.clientSecret.trim()) h.ClientSecret = c.clientSecret.trim()
+    }
     if (token) h['X-MISA-AccessToken'] = token
     return h
 }

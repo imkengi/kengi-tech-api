@@ -3541,6 +3541,8 @@ model MisaConfig {
   // 09/10/2026 — CHIỀU ĐẨY LÊN (services/misaPush.ts)
   // clientId: header ClientID của cổng developer.misa.vn; có thì đi cổng mới
   clientId   String?
+  // Client Secret cổng mới — tài liệu AMIS KT V1.0.0 chưa dùng tới; có thì gửi kèm header ClientSecret
+  clientSecret String?
   // JSON thiết lập đẩy: chi nhánh MISA, mã kho, mã khách lẻ, bộ tài khoản…
   pushConfig String?
 

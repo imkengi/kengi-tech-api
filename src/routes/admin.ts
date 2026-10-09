@@ -3474,6 +3474,7 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // 09/10/2026 — chiều ĐẨY LÊN MISA (services/misaPush.ts)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "clientId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "pushConfig" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "clientSecret" TEXT`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaPushItem" (
                         "id" TEXT NOT NULL,
