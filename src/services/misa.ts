@@ -22,8 +22,8 @@
  *   get_dictionary_delete      danh mục đã bị xoá bên MISA
  *   get_company_info           thông tin công ty
  *
- * Hàm ĐẨY LÊN (mục 2.2, 2.3, 2.14, 2.16) — CHƯA DÙNG, ghi lại để khỏi đọc lại
- * tài liệu: `save` (đề nghị sinh chứng từ), `save_dictionary` (sinh danh mục),
+ * Hàm ĐẨY LÊN (mục 2.2, 2.3, 2.14, 2.16) — dùng từ 09/10/2026 ở services/misaPush.ts
+ * (trang admin › MISA › Đẩy lên): `save` (đề nghị sinh chứng từ), `save_dictionary` (sinh danh mục),
  * `delete` (xoá đề nghị), `get_call_back_detail_error` (tra kết quả). Lưu ý
  * `save` là BẤT ĐỒNG BỘ — HTTP 200 chỉ nghĩa là MISA NHẬN ĐƯỢC, chưa phải đã
  * ghi sổ.
@@ -31,6 +31,19 @@
  * Đường dẫn có hai tiền tố khác nhau, dễ nhầm:
  *   `/api/oauth/...`  cho xác thực
  *   `/apir/sync/...`  cho dữ liệu   (apiR — có chữ R)
+ *
+ * ── CỔNG MỚI developer.misa.vn (đọc 09/10/2026) ─────────────────────────────
+ * MISA phát hành tài liệu "AMIS Kế toán DN" V1.0.0 ngày 05/08/2026 tại
+ * developer.misa.vn/products-openapi/AMISKT (bản JSON thô:
+ * developer.misa.vn/backend/api/products/docs/AMISKT). Cùng bộ hàm, cùng tên
+ * trường, nhưng đi qua cổng khác:
+ *   Base   https://developer.misa.vn/apis
+ *   Token  POST /amiskt/v1/token  {access_code, org_company_code}  — KHÔNG có app_id
+ *   Dữ liệu POST /amiskt/v1/<tên hàm>   (get_dictionary, save, save_dictionary, …)
+ *   Header `ClientID` BẮT BUỘC ở MỌI lời gọi (MISA cấp khi duyệt đăng ký sản phẩm)
+ *   Xoá đề nghị dùng DELETE /amiskt/v1/delete (cổng cũ là POST).
+ * Có `clientId` trong cấu hình ⇒ đi cổng mới; không có ⇒ giữ cổng cũ actapp
+ * (đang chạy thật ở HUTITAX — đo 09/10/2026 đọc được chi nhánh HƯNG TÍN SG).
  */
 
 export interface MisaCreds {
@@ -39,10 +52,43 @@ export interface MisaCreds {
     orgCompanyCode: string
     /** Mặc định actapp.misa.vn; cho phép đổi khi MISA cấp máy chủ riêng */
     baseUrl?: string
+    /** ClientID của cổng developer.misa.vn — có thì đi cổng mới (xem đầu file) */
+    clientId?: string
 }
 
 const DEFAULT_BASE = 'https://actapp.misa.vn'
+const GATEWAY_BASE = 'https://developer.misa.vn/apis'
 const MAX_TAKE = 100
+
+const diCongMoi = (c: MisaCreds) => !!(c.clientId && c.clientId.trim())
+
+/** Base URL thật sẽ gọi — cổng mới bỏ qua baseUrl cũ (thường là actapp). */
+function baseOf(c: MisaCreds): string {
+    if (diCongMoi(c)) {
+        const b = (c.baseUrl || '').trim()
+        // baseUrl chỉ được tôn trọng khi nó trỏ đúng cổng mới (MISA cấp máy chủ riêng)
+        return (b && !/actapp\.misa\.vn/i.test(b) ? b : GATEWAY_BASE).replace(/\/+$/, '')
+    }
+    return (c.baseUrl || DEFAULT_BASE).replace(/\/+$/, '')
+}
+
+/**
+ * Đổi đường dẫn cổng cũ sang cổng mới: `/apir/sync/actopen/save` → `/amiskt/v1/save`.
+ * Mọi nơi trong code vẫn viết theo cổng cũ, chỉ chỗ gọi mạng mới đổi — để hai
+ * cổng không tách thành hai bộ hàm trôi lệch nhau.
+ */
+function pathOf(c: MisaCreds, path: string): string {
+    if (!diCongMoi(c)) return path
+    const ten = path.split('/').filter(Boolean).pop() || ''
+    return `/amiskt/v1/${ten}`
+}
+
+function headersOf(c: MisaCreds, token?: string): Record<string, string> {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (diCongMoi(c)) h.ClientID = String(c.clientId).trim()
+    if (token) h['X-MISA-AccessToken'] = token
+    return h
+}
 
 /**
  * Loại danh mục của get_dictionary — chép từ mục 3.3 "Danh sách các loại danh
@@ -98,7 +144,7 @@ export class MisaError extends Error {
 /** Token dùng chung theo appId+công ty — token sống 12h, đừng xin lại mỗi lượt. */
 const tokenCache = new Map<string, { token: string; expiresAt: number }>()
 
-const cacheKeyOf = (c: MisaCreds) => `${c.appId}|${c.orgCompanyCode}`
+const cacheKeyOf = (c: MisaCreds) => `${c.clientId || c.appId}|${c.orgCompanyCode}`
 
 export function clearMisaToken(creds?: MisaCreds): void {
     if (creds) tokenCache.delete(cacheKeyOf(creds))
@@ -111,19 +157,18 @@ export async function getMisaToken(creds: MisaCreds, force = false): Promise<str
     // Trừ hao 10 phút — token hết hạn giữa một đợt quét dài là hỏng cả đợt
     if (!force && cached && cached.expiresAt > Date.now() + 10 * 60_000) return cached.token
 
-    const base = (creds.baseUrl || DEFAULT_BASE).replace(/\/+$/, '')
+    const base = baseOf(creds)
+    const moi = diCongMoi(creds)
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 30_000)
     let resp: Response
     try {
-        resp = await fetch(`${base}/api/oauth/actopen/connect`, {
+        resp = await fetch(moi ? `${base}/amiskt/v1/token` : `${base}/api/oauth/actopen/connect`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                app_id: creds.appId,
-                access_code: creds.accessCode,
-                org_company_code: creds.orgCompanyCode,
-            }),
+            headers: headersOf(creds),
+            body: JSON.stringify(moi
+                ? { access_code: creds.accessCode, org_company_code: creds.orgCompanyCode }
+                : { app_id: creds.appId, access_code: creds.accessCode, org_company_code: creds.orgCompanyCode }),
             signal: ctrl.signal,
         })
     } catch (e: any) {
@@ -171,51 +216,64 @@ export function unwrap(raw: any): any {
     return d
 }
 
+/** Mã lỗi token hết hạn theo mục Authentication của tài liệu cổng mới. */
+const LOI_TOKEN = /InvalidToken|ExpiredToken|InvalidAccessToken/i
+
 /** POST tới MISA kèm token; tự xin token mới đúng một lần khi bị từ chối. */
-async function misaPost(creds: MisaCreds, path: string, body: Record<string, any>, attempt = 0): Promise<any> {
+async function misaPost(
+    creds: MisaCreds, path: string, body: Record<string, any>, attempt = 0, method: 'POST' | 'DELETE' = 'POST',
+): Promise<any> {
     const token = await getMisaToken(creds, attempt > 0)
-    const base = (creds.baseUrl || DEFAULT_BASE).replace(/\/+$/, '')
+    const base = baseOf(creds)
+    const duongDan = pathOf(creds, path)
+    // Cổng cũ đòi app_id trong thân; cổng mới thay bằng header ClientID
+    const than = diCongMoi(creds)
+        ? { org_company_code: creds.orgCompanyCode, ...body }
+        : { app_id: creds.appId, org_company_code: creds.orgCompanyCode, ...body }
 
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 60_000)
     let resp: Response
     try {
-        resp = await fetch(`${base}${path}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-MISA-AccessToken': token,
-            },
-            body: JSON.stringify({ app_id: creds.appId, org_company_code: creds.orgCompanyCode, ...body }),
+        resp = await fetch(`${base}${duongDan}`, {
+            method,
+            headers: headersOf(creds, token),
+            body: JSON.stringify(than),
             signal: ctrl.signal,
         })
     } catch (e: any) {
         if (attempt < 3) {
             await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
-            return misaPost(creds, path, body, attempt + 1)
+            return misaPost(creds, path, body, attempt + 1, method)
         }
-        throw new MisaError(`Lỗi mạng khi gọi MISA ${path} (đã thử ${attempt + 1} lần): ${e?.message || e}`)
+        throw new MisaError(`Lỗi mạng khi gọi MISA ${duongDan} (đã thử ${attempt + 1} lần): ${e?.message || e}`)
     } finally {
         clearTimeout(timer)
     }
 
     if ((resp.status === 401 || resp.status === 403) && attempt === 0) {
         clearMisaToken(creds)
-        return misaPost(creds, path, body, 1)
+        return misaPost(creds, path, body, 1, method)
     }
 
     const text = await resp.text()
     if (!resp.ok) {
-        throw new MisaError(`MISA ${path} lỗi HTTP ${resp.status}`, resp.status, text.slice(0, 400))
+        throw new MisaError(`MISA ${duongDan} lỗi HTTP ${resp.status}`, resp.status, text.slice(0, 400))
     }
     let data: any
     try { data = JSON.parse(text) } catch {
-        throw new MisaError(`MISA ${path} trả về dữ liệu không phải JSON`, resp.status, text.slice(0, 300))
+        throw new MisaError(`MISA ${duongDan} trả về dữ liệu không phải JSON`, resp.status, text.slice(0, 300))
     }
     // Lỗi nghiệp vụ MISA trả HTTP 200 kèm Success=false — không bắt là nuốt lỗi
     if (data?.Success === false || data?.success === false) {
+        const ma = String(data?.ErrorCode || data?.errorCode || '')
+        // Token hết hạn có thể về dạng HTTP 200 + ErrorCode — xin token mới đúng một lần
+        if (attempt === 0 && LOI_TOKEN.test(ma)) {
+            clearMisaToken(creds)
+            return misaPost(creds, path, body, 1, method)
+        }
         const msg = data?.ErrorMessage || data?.errorMessage || 'không rõ nguyên nhân'
-        throw new MisaError(`MISA ${path} báo lỗi: ${msg}`, resp.status, text.slice(0, 400))
+        throw new MisaError(`MISA ${duongDan} báo lỗi${ma ? ` [${ma}]` : ''}: ${msg}`, resp.status, text.slice(0, 400))
     }
     return data
 }
@@ -338,6 +396,34 @@ export const MISA = {
     /** Gọi thẳng một hàm bất kỳ — dùng để soi dữ liệu thô khi chẩn đoán */
     raw: (creds: MisaCreds, path: string, body: Record<string, any> = {}) =>
         misaPost(creds, path, body),
+
+    // ── CHIỀU ĐẨY LÊN (services/misaPush.ts dựng thân) ──────────────────────
+    // Cả ba hàm ghi đều BẤT ĐỒNG BỘ: Success=true chỉ nghĩa là MISA đã XẾP
+    // HÀNG yêu cầu, chưa phải đã thành chứng từ. Kết quả thật tra bằng
+    // `ketQuaXuLy` (hoặc callback — chưa đăng ký).
+
+    /** Đề nghị sinh chứng từ — `voucher` là mảng, mỗi phần tử một chứng từ */
+    save: (creds: MisaCreds, voucher: any[]) =>
+        misaPost(creds, '/apir/sync/actopen/save', { voucher }),
+
+    /** Tạo mới danh mục — `dictionary` là mảng, `dictionary_type` theo bảng CHIỀU ĐẨY (khác chiều lấy) */
+    saveDictionary: (creds: MisaCreds, dictionary: any[]) =>
+        misaPost(creds, '/apir/sync/actopen/save_dictionary', { dictionary }),
+
+    /** Xoá đề nghị CHƯA được lập thành chứng từ — [{voucher_type, org_refid}] */
+    xoaDeNghi: (creds: MisaCreds, voucher: Array<{ voucher_type: number; org_refid: string }>) =>
+        misaPost(creds, '/apir/sync/actopen/delete', { voucher }, 0, diCongMoi(creds) ? 'DELETE' : 'POST'),
+
+    /**
+     * Kết quả xử lý các yêu cầu bất đồng bộ trong khoảng ngày — dùng thay
+     * callback. Tài liệu không nêu cấu trúc từng dòng nên trả THÔ, nơi gọi
+     * tự dò org_refid trong từng dòng.
+     */
+    ketQuaXuLy: async (creds: MisaCreds, tuNgay: string, denNgay: string, skip = 0, take = 100) => {
+        const raw = await misaPost(creds, '/apir/sync/actopen/get_call_back_detail_error',
+            { from_date: tuNgay, to_date: denNgay, skip, take })
+        return { items: toArray(unwrap(raw)), custom: docCustomData(raw), raw }
+    },
 }
 
 /**

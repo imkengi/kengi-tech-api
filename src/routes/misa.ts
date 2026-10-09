@@ -33,6 +33,10 @@ import {
     syncMisaDebt, syncMisaDeleted, type MisaOptions,
 } from '../services/misaSync'
 import { doBanHangMisa, tomTatDeGhiLog } from '../services/misaImportBanHang'
+import {
+    LOAI_DAY, NHAN_LOAI_DAY, MA_LOAI_MISA, docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua,
+    type LoaiDay,
+} from '../services/misaPush'
 
 const router = Router()
 
@@ -89,13 +93,13 @@ function adminAuth(req: Request, res: Response, next: NextFunction): void {
 
 router.use(adminAuth)
 
-async function resolveStore(storeCode: string): Promise<{ name: string; sp: any } | null> {
+async function resolveStore(storeCode: string): Promise<{ name: string; schema: string; sp: any } | null> {
     const store = await registryPrisma.store.findFirst({
         where: { code: { equals: String(storeCode).trim(), mode: 'insensitive' } },
         select: { schema: true, name: true },
     }).catch(() => null)
     if (!store) return null
-    return { name: store.name, sp: getStorePrisma(store.schema) as any }
+    return { name: store.name, schema: store.schema, sp: getStorePrisma(store.schema) as any }
 }
 
 const loadConfig = (sp: any) => sp.misaConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
@@ -106,6 +110,7 @@ function credsOf(cfg: any): MisaCreds {
         accessCode: String(cfg.accessCode || '').trim(),
         orgCompanyCode: String(cfg.orgCompanyCode || '').trim(),
         baseUrl: cfg.baseUrl ? String(cfg.baseUrl).trim() : undefined,
+        clientId: cfg.clientId ? String(cfg.clientId).trim() : undefined,
     }
 }
 
@@ -137,6 +142,10 @@ function publicConfig(cfg: any) {
         defaultWarehouseId: cfg.defaultWarehouseId,
         lastSyncTime: cfg.lastSyncTime || null,
         lastSyncAt: cfg.lastSyncAt,
+        // Chiều đẩy lên (09/10/2026). clientId không phải bí mật đăng nhập nhưng vẫn che bớt.
+        clientId: cfg.clientId ? `${String(cfg.clientId).slice(0, 8)}…` : '',
+        congMoi: !!cfg.clientId,
+        pushConfig: docCaiDat(cfg.pushConfig),
     }
 }
 
@@ -182,8 +191,21 @@ router.put('/config', async (req: Request, res: Response) => {
         if (b.defaultWarehouseId !== undefined) data.defaultWarehouseId = b.defaultWarehouseId || null
         if (b.defaultCategoryId !== undefined) data.defaultCategoryId = b.defaultCategoryId || null
 
+        // ClientID cổng mới: chuỗi = đặt, `xoaClientId` = quay về cổng cũ actapp
+        setStr('clientId', b.clientId)
+        if (b.xoaClientId === true) data.clientId = null
+        // Thiết lập đẩy: GỘP lên bản đang lưu rồi chuẩn hoá — gửi thiếu khoá không làm mất khoá cũ
+        if (b.pushConfig && typeof b.pushConfig === 'object') {
+            const cu = docCaiDat(existing?.pushConfig)
+            const moi = { ...cu, ...b.pushConfig, tk: { ...cu.tk, ...(b.pushConfig.tk || {}) } }
+            data.pushConfig = JSON.stringify(docCaiDat(JSON.stringify(moi)))
+        }
+
         // Đổi bí mật thì token cũ trong bộ nhớ phải bỏ, không thì vẫn dùng cái cũ
-        if (existing && (data.appId || data.accessCode || data.orgCompanyCode)) clearMisaToken(credsOf(existing))
+        if (existing && (data.appId || data.accessCode || data.orgCompanyCode || 'clientId' in data)) {
+            clearMisaToken(credsOf(existing))
+            quenDanhMuc(store.schema)
+        }
 
         let cfg
         if (existing) {
@@ -1697,6 +1719,213 @@ router.get('/doi-chieu', async (req: Request, res: Response) => {
         })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ĐẨY LÊN MISA (09/10/2026) — services/misaPush.ts
+   Trang admin › MISA › "Đẩy lên MISA". Mọi lượt gửi dựng lại kế hoạch TỪ DB;
+   trình duyệt chỉ gửi danh sách id đã chọn, không bao giờ gửi thân chứng từ.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Cửa hàng + cấu hình + creds — dùng chung cho các route đẩy. */
+async function moCongDay(storeCode: string, res: Response) {
+    const store = await resolveStore(storeCode)
+    if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return null }
+    const cfg = await loadConfig(store.sp)
+    if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình kết nối MISA cho cửa hàng này (tab MISA › Kết nối)' }); return null }
+    return { store, cfg, creds: credsOf(cfg), caiDat: docCaiDat(cfg.pushConfig) }
+}
+
+/** 'YYYY-MM-DD' theo giờ Việt Nam → [đầu ngày, cuối ngày]. */
+function khoangNgayVN(tu: any, den: any): { tu: Date; den: Date } | null {
+    const re = /^\d{4}-\d{2}-\d{2}$/
+    if (!re.test(String(tu || '')) || !re.test(String(den || ''))) return null
+    const a = new Date(`${tu}T00:00:00+07:00`), b = new Date(`${den}T23:59:59.999+07:00`)
+    if (isNaN(a.getTime()) || isNaN(b.getTime()) || a > b) return null
+    return { tu: a, den: b }
+}
+
+const laLoaiDay = (x: any): x is LoaiDay => (LOAI_DAY as readonly string[]).includes(String(x))
+
+/** Một cửa hàng một lượt gửi — bấm hai lần không được đẩy hai lần. */
+const dangGui = new Set<string>()
+
+// ─── GET /api/misa/push/danh-muc?storeCode=&lamMoi=1 ────────────────────────
+// Chi nhánh + kho bên MISA để chọn trong Thiết lập, kèm số mã MISA đang có.
+router.get('/push/danh-muc', async (req: Request, res: Response) => {
+    try {
+        const c = await moCongDay(String(req.query.storeCode || ''), res); if (!c) return
+        const dm = await docDanhMucMisa(c.creds, c.store.schema, String(req.query.lamMoi || '') === '1')
+        res.json({
+            success: true,
+            data: {
+                chiNhanh: dm.chiNhanh, kho: dm.kho,
+                soVatTu: dm.vatTuTheoMa.size, soDoiTuong: dm.doiTuongTheoMa.size,
+                layLuc: new Date(dm.layLuc).toISOString(), canhBao: dm.canhBao,
+                congMoi: !!c.creds.clientId,
+            },
+        })
+    } catch (e: any) {
+        console.error('[misa] push/danh-muc:', e?.message || e)
+        res.status(500).json({ success: false, error: misaErr(e) })
+    }
+})
+
+// ─── POST /api/misa/push/xem-truoc {storeCode, loai, tu, den, phamVi?, xemThan?} ─
+// CHỈ ĐỌC. Trả từng dòng kèm trạng thái + lý do; thân gửi MISA chỉ trả cho
+// đúng một dòng `xemThan` (đủ để kế toán soi, không nặng cả trang).
+router.post('/push/xem-truoc', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        if (!laLoaiDay(b.loai)) { res.status(400).json({ success: false, error: `loai phải là một trong: ${LOAI_DAY.join(', ')}` }); return }
+        const k = khoangNgayVN(b.tu, b.den)
+        if (!k) { res.status(400).json({ success: false, error: 'Khoảng ngày không hợp lệ (tu/den dạng YYYY-MM-DD)' }); return }
+        const c = await moCongDay(String(b.storeCode || ''), res); if (!c) return
+        const dm = await docDanhMucMisa(c.creds, c.store.schema, b.lamMoiDanhMuc === true)
+        const kh = await lapKeHoach(c.store.sp, c.creds, c.caiDat, dm, {
+            loai: b.loai, tu: k.tu, den: k.den, phamVi: b.phamVi === 'tat_ca' ? 'tat_ca' : 'trong_ky', schema: c.store.schema,
+        })
+        const xemThan = b.xemThan ? String(b.xemThan) : null
+        res.json({
+            success: true,
+            data: {
+                ...kh,
+                nhan: NHAN_LOAI_DAY[b.loai as LoaiDay],
+                maLoaiMisa: MA_LOAI_MISA[b.loai as LoaiDay],
+                danhMucLayLuc: new Date(dm.layLuc).toISOString(),
+                dong: kh.dong.map(d => ({ ...d, payload: xemThan && d.localId === xemThan ? d.payload : undefined, coThan: !!d.payload })),
+            },
+        })
+    } catch (e: any) {
+        console.error('[misa] push/xem-truoc:', e?.message || e)
+        res.status(500).json({ success: false, error: misaErr(e) })
+    }
+})
+
+// ─── POST /api/misa/push/gui {storeCode, loai, tu, den, phamVi?, ids: string[]} ─
+// GHI THẬT lên MISA. Bắt buộc liệt kê `ids` (localId) — không có "gửi tất cả"
+// ngầm. Mỗi lượt tối đa 100 bản ghi; trả `conLai` để trình duyệt gọi tiếp.
+router.post('/push/gui', async (req: Request, res: Response) => {
+    const b = req.body || {}
+    const khoa = `${String(b.storeCode || '').toUpperCase()}|${b.loai}`
+    try {
+        if (!laLoaiDay(b.loai)) { res.status(400).json({ success: false, error: 'loai không hợp lệ' }); return }
+        const k = khoangNgayVN(b.tu, b.den)
+        if (!k) { res.status(400).json({ success: false, error: 'Khoảng ngày không hợp lệ' }); return }
+        const ids: string[] = Array.isArray(b.ids) ? [...new Set<string>(b.ids.map(String))] : []
+        if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn bản ghi nào để đẩy' }); return }
+        if (dangGui.has(khoa)) { res.status(409).json({ success: false, error: 'Đang có một lượt đẩy cùng loại của cửa hàng này — đợi xong đã' }); return }
+        const c = await moCongDay(String(b.storeCode || ''), res); if (!c) return
+        if (!c.cfg.enabled) { res.status(400).json({ success: false, error: 'Cổng MISA đang TẮT (tab MISA › Kết nối › Bật cổng)' }); return }
+
+        dangGui.add(khoa)
+        const dm = await docDanhMucMisa(c.creds, c.store.schema)
+        const kh = await lapKeHoach(c.store.sp, c.creds, c.caiDat, dm, {
+            loai: b.loai, tu: k.tu, den: k.den, phamVi: b.phamVi === 'tat_ca' ? 'tat_ca' : 'trong_ky', schema: c.store.schema,
+        })
+        const chon = new Set(ids)
+        const duocChon = kh.dong.filter(d => chon.has(d.localId))
+        // Dòng được chọn mà KHÔNG còn sẵn sàng (đã đẩy ở tab khác, vừa thiếu mã…) thì nói ra, không lẳng lặng bỏ
+        const khongGui = duocChon.filter(d => d.trangThai !== 'san_sang')
+            .map(d => ({ refNo: d.refNo, trangThai: d.trangThai, lyDo: d.lyDo.join('; ') }))
+        const sanSang = duocChon.filter(d => d.trangThai === 'san_sang')
+        const MOI_LUOT = 100
+        const luot = sanSang.slice(0, MOI_LUOT)
+        const kq = await guiDi(c.store.sp, c.creds, b.loai, luot)
+        // Danh mục vừa thêm ⇒ lần xem trước sau phải đọc lại MISA, không dùng bản nhớ cũ
+        if (!LA_CHUNG_TU_LOAI(b.loai) && kq.daGui) quenDanhMuc(c.store.schema)
+        console.log(`[misa] push/gui ${c.store.name} ${b.loai}: gửi ${kq.daGui}, lỗi ${kq.loi.length}, còn ${sanSang.length - luot.length}`)
+        res.json({
+            success: true,
+            data: {
+                daGui: kq.daGui, loi: kq.loi, khongGui, xuLy: kq.xuLy,
+                conLai: sanSang.length - luot.length,
+                khongTimThay: ids.length - duocChon.length,
+                ghiChu: 'MISA xử lý BẤT ĐỒNG BỘ: "đã gửi" là MISA đã xếp hàng, chưa phải đã thành chứng từ. Bấm "Hỏi kết quả từ MISA" sau vài phút.',
+            },
+        })
+    } catch (e: any) {
+        console.error('[misa] push/gui:', e?.message || e)
+        res.status(500).json({ success: false, error: misaErr(e) })
+    } finally {
+        dangGui.delete(khoa)
+    }
+})
+
+const LA_CHUNG_TU_LOAI = (l: LoaiDay) => l === 'banhang' || l === 'muahang'
+
+// ─── GET /api/misa/push/so?storeCode=&loai=&trangThai=&take= ────────────────
+// Sổ những gì đã đẩy — kèm đếm theo trạng thái.
+router.get('/push/so', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const where: any = {}
+        if (laLoaiDay(req.query.loai)) where.loai = String(req.query.loai)
+        if (req.query.trangThai) where.trangThai = String(req.query.trangThai)
+        const take = Math.min(500, Math.max(1, Number(req.query.take) || 100))
+        const rows = await store.sp.misaPushItem.findMany({
+            where, orderBy: { guiLuc: 'desc' }, take,
+            select: { id: true, loai: true, localId: true, refNo: true, orgRefid: true, voucherType: true, ngay: true, soTien: true, trangThai: true, loi: true, lanGui: true, guiLuc: true, ketQuaLuc: true },
+        })
+        const dem: any[] = await store.sp.misaPushItem.groupBy({ by: ['loai', 'trangThai'], _count: true })
+        res.json({ success: true, data: { rows, dem: dem.map(d => ({ loai: d.loai, trangThai: d.trangThai, so: d._count })) } })
+    } catch (e: any) {
+        // Bảng chưa tạo (chưa chạy /admin/migrate) phải nói thẳng, không trả sổ rỗng
+        const msg = String(e?.message || e)
+        if (/MisaPushItem/i.test(msg) && /does not exist/i.test(msg)) {
+            res.status(500).json({ success: false, error: 'Bảng MisaPushItem chưa có ở cửa hàng này — chạy POST /api/admin/migrate' }); return
+        }
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/misa/push/ket-qua {storeCode, tu, den} ───────────────────────
+// Hỏi MISA kết quả xử lý (get_call_back_detail_error) rồi khớp về sổ.
+router.post('/push/ket-qua', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const re = /^\d{4}-\d{2}-\d{2}$/
+        if (!re.test(String(b.tu || '')) || !re.test(String(b.den || ''))) {
+            res.status(400).json({ success: false, error: 'Thiếu tu/den (YYYY-MM-DD) — là NGÀY GỬI, không phải ngày chứng từ' }); return
+        }
+        const c = await moCongDay(String(b.storeCode || ''), res); if (!c) return
+        const kq = await hoiKetQua(c.store.sp, c.creds, String(b.tu), String(b.den))
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        console.error('[misa] push/ket-qua:', e?.message || e)
+        res.status(500).json({ success: false, error: misaErr(e) })
+    }
+})
+
+// ─── POST /api/misa/push/xoa-de-nghi {storeCode, ids: MisaPushItem.id[]} ────
+// Xoá đề nghị sinh chứng từ CHƯA được kế toán lập thành chứng từ bên MISA.
+// Chỉ áp cho chứng từ — danh mục MISA không có hàm xoá qua API.
+router.post('/push/xoa-de-nghi', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const ids: string[] = Array.isArray(b.ids) ? b.ids.map(String).slice(0, 100) : []
+        if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn chứng từ nào' }); return }
+        const c = await moCongDay(String(b.storeCode || ''), res); if (!c) return
+        const rows = await c.store.sp.misaPushItem.findMany({ where: { id: { in: ids } } })
+        const ct = rows.filter((r: any) => LA_CHUNG_TU_LOAI(r.loai) && r.trangThai !== 'da_xoa')
+        const boQua = rows.length - ct.length
+        const ketQua: Array<{ refNo: string; ok: boolean; loi?: string }> = []
+        // Từng cái một: một đề nghị đã thành chứng từ (không xoá được) không được kéo cả lô thất bại
+        for (const r of ct) {
+            try {
+                await MISA.xoaDeNghi(c.creds, [{ voucher_type: r.voucherType, org_refid: r.orgRefid }])
+                await c.store.sp.misaPushItem.update({ where: { id: r.id }, data: { trangThai: 'da_xoa', loi: null, ketQuaLuc: new Date() } })
+                ketQua.push({ refNo: r.refNo, ok: true })
+            } catch (e: any) {
+                ketQua.push({ refNo: r.refNo, ok: false, loi: misaErr(e) })
+            }
+        }
+        res.json({ success: true, data: { ketQua, boQua } })
+    } catch (e: any) {
+        console.error('[misa] push/xoa-de-nghi:', e?.message || e)
+        res.status(500).json({ success: false, error: misaErr(e) })
     }
 })
 

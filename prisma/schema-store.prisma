@@ -3538,9 +3538,44 @@ model MisaConfig {
   // dùng cho lần sau chính xác hơn là tự lấy đồng hồ máy mình.
   lastSyncTime String?
 
+  // 09/10/2026 — CHIỀU ĐẨY LÊN (services/misaPush.ts)
+  // clientId: header ClientID của cổng developer.misa.vn; có thì đi cổng mới
+  clientId   String?
+  // JSON thiết lập đẩy: chi nhánh MISA, mã kho, mã khách lẻ, bộ tài khoản…
+  pushConfig String?
+
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+/// Sổ theo dõi từng bản ghi Kengi ĐÃ ĐẨY lên MISA (09/10/2026).
+/// Một (loai, localId) = một dòng ⇒ không bao giờ đẩy hai lần cùng một chứng từ
+/// mà không biết. orgRefid sinh TẤT ĐỊNH từ localId nên đẩy lại vẫn trùng khoá
+/// phía MISA và xoá đề nghị được.
+model MisaPushItem {
+  id          String    @id @default(cuid())
+  loai        String // vattu | doituong | banhang | muahang
+  localId     String
+  refNo       String? // số phiếu / mã hàng / mã khách để người đọc nhận ra
+  orgRefid    String // GUID gửi MISA (org_refid hoặc *_id của danh mục)
+  voucherType Int? // voucher_type (chứng từ) hoặc dictionary_type (danh mục)
+  ngay        DateTime? // ngày chứng từ
+  soTien      Float     @default(0)
+  // da_gui: MISA đã nhận vào hàng đợi · loi_gui: MISA từ chối ngay khi gửi
+  // misa_ok: kết quả xử lý báo xong · misa_bao_loi: kết quả xử lý báo lỗi
+  // da_xoa: đã xoá đề nghị bên MISA
+  trangThai   String    @default("da_gui")
+  loi         String?
+  lanGui      Int       @default(1)
+  payload     String? // thân đã gửi (cắt bớt) — để kế toán đối chiếu
+  guiLuc      DateTime  @default(now())
+  ketQuaLuc   DateTime?
+
+  @@unique([loai, localId])
+  @@index([trangThai])
+  @@index([orgRefid])
+  @@index([guiLuc])
 }
 
 model MisaMap {
