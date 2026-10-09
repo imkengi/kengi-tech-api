@@ -27,6 +27,7 @@
 
 import { khoHuHong, updateWarehouseStock, adjustSellableStock } from './warehouseHelper'
 import { DAU_VAO_KHO_HU, lanNhanCuoi, daVaoKhoHu } from './nhanHangHoan'
+import { moKhoMeHu, nhapKhoHuMe, type KhoMeHu } from './khoMeHu'
 
 const gioVN = () => new Date().toLocaleString('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric',
@@ -51,7 +52,8 @@ export interface KetQuaChuyenKhoHu {
     ok: boolean
     /** vì sao không chuyển (cả phiếu) */
     lyDo?: string
-    daChuyen: { sku: string; ten: string; sl: number; nguon: 'tu-kho' | 'ngoai' }[]
+    /** nguon: bên CỬA HÀNG NÀY (có trừ tồn bán được của nó không); khoMe: mã kho mẹ nếu hàng vào kho hư hỏng của mẹ */
+    daChuyen: { sku: string; ten: string; sl: number; nguon: 'tu-kho' | 'ngoai'; khoMe?: string }[]
     boQua: { sku: string; ten: string; lyDo: string }[]
 }
 
@@ -66,6 +68,10 @@ export async function chuyenHangHoanVaoKhoHu(
     vu: { loai: 'phieu' | 'don'; id: string },
     opts: { vi: string; nguoi?: string | null; userId?: string | null },
 ): Promise<KetQuaChuyenKhoHu> {
+    // KHO MẸ — PHẦN HƯ HỎNG (09/10/2026): cửa hàng khai `khoMeHuMa` ⇒ hàng hư vào Kho Hư Hỏng của MẸ
+    // (nơi hàng nằm thật), không vào kho hư hỏng của chính nó. Xem lib/khoMeHu.ts.
+    const me = await moKhoMeHu(prisma)
+    if (me) return chuyenSangKhoHuMe(prisma, me, vu, opts)
     const ra: KetQuaChuyenKhoHu = { ok: false, daChuyen: [], boQua: [] }
     try {
         return await prisma.$transaction(async (tx: any) => {
@@ -150,4 +156,91 @@ export async function chuyenHangHoanVaoKhoHu(
         }
         throw e
     }
+}
+
+/**
+ * Bản KHO MẸ của chuyenHangHoanVaoKhoHu: hàng vào Kho Hư Hỏng của MẸ. Hai schema ⇒ không chung
+ * giao dịch:
+ *   1. Giành quyền bên CON (dấu tạm "(đang chuyển sang kho mẹ …)" — updateMany theo ghi chú cũ).
+ *   2. Từng món: ghi bên MẸ trước (giao dịch của mẹ, chống trùng — lib/khoMeHu.nhapKhoHuMe), rồi
+ *      món đã được HOÀN kho bán được của con thì trừ lại tồn bán được của con. KHÔNG đòi đủ tồn
+ *      bên con: cửa hàng mượn kho có tồn 0/âm là bình thường.
+ *   3. Không món nào vào được ⇒ trả lại ghi chú cũ, vụ vẫn ở Việc cần làm. Có món ⇒ chốt dấu.
+ */
+export async function chuyenSangKhoHuMe(
+    prisma: any, me: KhoMeHu,
+    vu: { loai: 'phieu' | 'don'; id: string },
+    opts: { vi: string; nguoi?: string | null; userId?: string | null },
+): Promise<KetQuaChuyenKhoHu> {
+    const ra: KetQuaChuyenKhoHu = { ok: false, daChuyen: [], boQua: [] }
+    let ghiChu: string, maVu: string, soDon: string, branchId: string | null
+    let mon: { productId: string | null; sku: string; ten: string; sl: number }[]
+    if (vu.loai === 'phieu') {
+        const p = await prisma.returnOrder.findUnique({ where: { id: vu.id }, include: { items: true } })
+        if (!p) return { ...ra, lyDo: 'Không thấy phiếu trả' }
+        ghiChu = p.notes || ''; maVu = p.code; soDon = p.originalInvoice || ''; branchId = p.branchId ?? null
+        mon = (p.items || []).map((i: any) => ({ productId: i.productId || null, sku: i.sku || '', ten: i.productName || '', sl: Math.max(0, Math.floor(Number(i.quantity) || 0)) }))
+    } else {
+        const d = await prisma.onlineOrder.findUnique({ where: { id: vu.id }, include: { items: true } })
+        if (!d) return { ...ra, lyDo: 'Không thấy đơn' }
+        ghiChu = d.internalNote || ''; maVu = d.orderNumber; soDon = d.orderNumber; branchId = null
+        mon = (d.items || []).map((i: any) => ({ productId: i.productId || null, sku: i.sku || '', ten: i.productName || '', sl: Math.max(0, Math.floor(Number(i.quantity) || 0)) }))
+    }
+    if (daVaoKhoHu(ghiChu)) return { ...ra, lyDo: 'Đã vào kho hư hỏng từ trước' }
+    const nhan = lanNhanCuoi(ghiChu)
+    if (!nhan) return { ...ra, lyDo: 'Chưa nhận hàng hoàn (trạm quay chưa ghi tình trạng)' }
+    if (nhan.nguyenVen) return { ...ra, lyDo: 'Hàng nguyên vẹn — không vào kho hư hỏng' }
+
+    // 1. Giành quyền bên con
+    const dauTam = `${ghiChu}\n${DAU_VAO_KHO_HU} (đang chuyển sang kho mẹ ${me.ma})`
+    const ghi = (cu: string, moi: string) => vu.loai === 'phieu'
+        ? prisma.returnOrder.updateMany({ where: { id: vu.id, notes: cu }, data: { notes: moi } })
+        : prisma.onlineOrder.updateMany({ where: { id: vu.id, internalNote: cu }, data: { internalNote: moi } })
+    const gianh = await ghi(ghiChu, dauTam)
+    if (gianh.count !== 1) return { ...ra, lyDo: 'Ghi chú vừa đổi — thử lại sau' }
+
+    // 2. Từng món: mẹ trước, rồi tồn bán được của con
+    for (const m of mon) {
+        if (m.sl <= 0) continue
+        let productId = m.productId
+        const spCon = productId
+            ? await prisma.product.findUnique({ where: { id: productId }, select: { id: true, sku: true, name: true } })
+            : (m.sku ? await prisma.product.findFirst({ where: { sku: m.sku }, select: { id: true, sku: true, name: true } }) : null)
+        productId = spCon?.id ?? productId
+        const sku = spCon?.sku || m.sku || null
+        const ten = spCon?.name || m.ten
+        try {
+            const kq = await nhapKhoHuMe(me, { sku, ten, sl: m.sl, maDon: soDon }, {
+                khoaVu: maVu,
+                lyDo: nhan.tinhTrang || 'Hàng hoàn không nguyên vẹn',
+                ghiChu: `Hàng hoàn ${me.maCon} ${maVu} — ${opts.vi}`,
+                nguoi: opts.nguoi || nhan.nguoi,
+            })
+            if (!kq.ok) { ra.boQua.push({ sku: sku || '', ten, lyDo: kq.lyDo || 'không vào được kho mẹ' }); continue }
+            let truCon = false
+            if (productId && soDon && !kq.daCo) {
+                const daHoanKho = await prisma.inventoryTransaction.findFirst({
+                    where: { referenceId: `ONLINE-${soDon}`, reason: 'Hoàn kho do hủy/hoàn đơn online', productId },
+                    select: { id: true },
+                })
+                if (daHoanKho) { await adjustSellableStock(prisma, productId, branchId, -m.sl, 'nhap-kho-hu-hong (kho mẹ)'); truCon = true }
+            }
+            ra.daChuyen.push({ sku: kq.skuMe || sku || '', ten, sl: m.sl, nguon: truCon ? 'tu-kho' : 'ngoai', khoMe: me.ma })
+        } catch (e: any) {
+            ra.boQua.push({ sku: sku || '', ten, lyDo: `ghi kho mẹ hỏng: ${String(e?.message || e).slice(0, 120)}` })
+        }
+    }
+
+    // 3. Chốt bên con
+    if (!ra.daChuyen.length) {
+        await ghi(dauTam, ghiChu).catch(() => null)   // trả lại như cũ — vụ vẫn ở Việc cần làm
+        return { ...ra, lyDo: `Không món nào vào được Kho Hư Hỏng của kho mẹ ${me.ma}` }
+    }
+    const dong = `${DAU_VAO_KHO_HU} ${gioVN()} — `
+        + ra.daChuyen.map(x => `${x.sl}×${x.sku || x.ten}${x.nguon === 'tu-kho' ? ' (trừ tồn bán được)' : ''}`).join(', ')
+        + ` → Kho Hư Hỏng ${me.ma} (kho mẹ) — ${opts.vi}`
+        + (ra.boQua.length ? ` — CHƯA chuyển: ${ra.boQua.map(b => `${b.sku || b.ten} (${b.lyDo})`).join(', ')}` : '')
+    const chot = await ghi(dauTam, `${ghiChu}\n${dong}`)
+    if (chot.count !== 1) console.error(`[hangHoanHu] ${maVu}: đã vào kho mẹ ${me.ma} nhưng chốt ghi chú hỏng — dấu tạm còn nguyên`)
+    return { ...ra, ok: true }
 }

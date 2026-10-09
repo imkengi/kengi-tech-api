@@ -306,6 +306,14 @@ exports.Prisma.CustomerScalarFieldEnum = {
   notes: 'notes',
   salesUserId: 'salesUserId',
   salesUserName: 'salesUserName',
+  taxCode: 'taxCode',
+  invoiceType: 'invoiceType',
+  invoiceCompanyName: 'invoiceCompanyName',
+  invoiceBuyerName: 'invoiceBuyerName',
+  invoiceAddress: 'invoiceAddress',
+  invoiceEmail: 'invoiceEmail',
+  invoicePhone: 'invoicePhone',
+  invoiceIdNo: 'invoiceIdNo',
   totalPurchases: 'totalPurchases',
   totalOrders: 'totalOrders',
   debt: 'debt',
@@ -1237,6 +1245,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   smtpConfig: 'smtpConfig',
   mailboxConfig: 'mailboxConfig',
   geminiApiKey: 'geminiApiKey',
+  deepseekApiKey: 'deepseekApiKey',
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
@@ -1264,6 +1273,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   ttPostAvatar: 'ttPostAvatar',
   ttPostAuthAt: 'ttPostAuthAt',
   khoMeMa: 'khoMeMa',
+  khoMeHuMa: 'khoMeHuMa',
   updatedAt: 'updatedAt'
 };
 
@@ -2188,8 +2198,33 @@ exports.Prisma.FbContentDraftScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.MktBrandScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  industry: 'industry',
+  description: 'description',
+  products: 'products',
+  contentPillars: 'contentPillars',
+  contact: 'contact',
+  audience: 'audience',
+  voice: 'voice',
+  usp: 'usp',
+  cta: 'cta',
+  examples: 'examples',
+  notes: 'notes',
+  bannedWords: 'bannedWords',
+  timezone: 'timezone',
+  aiAutoApprove: 'aiAutoApprove',
+  postSlots: 'postSlots',
+  archivedAt: 'archivedAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.MktAccountScalarFieldEnum = {
   id: 'id',
+  brandId: 'brandId',
   platform: 'platform',
   externalId: 'externalId',
   name: 'name',
@@ -2198,6 +2233,7 @@ exports.Prisma.MktAccountScalarFieldEnum = {
   followers: 'followers',
   accessToken: 'accessToken',
   tokenExpiresAt: 'tokenExpiresAt',
+  refreshSecret: 'refreshSecret',
   status: 'status',
   lastSyncAt: 'lastSyncAt',
   connectedBy: 'connectedBy',
@@ -2207,6 +2243,7 @@ exports.Prisma.MktAccountScalarFieldEnum = {
 
 exports.Prisma.MktCampaignScalarFieldEnum = {
   id: 'id',
+  brandId: 'brandId',
   name: 'name',
   goal: 'goal',
   status: 'status',
@@ -2219,6 +2256,7 @@ exports.Prisma.MktCampaignScalarFieldEnum = {
 
 exports.Prisma.MktContentScalarFieldEnum = {
   id: 'id',
+  brandId: 'brandId',
   campaignId: 'campaignId',
   title: 'title',
   body: 'body',
@@ -2226,6 +2264,8 @@ exports.Prisma.MktContentScalarFieldEnum = {
   linkUrl: 'linkUrl',
   assetIds: 'assetIds',
   productIds: 'productIds',
+  variants: 'variants',
+  postSlots: 'postSlots',
   revision: 'revision',
   approvedRevision: 'approvedRevision',
   approvedAt: 'approvedAt',
@@ -2266,7 +2306,12 @@ exports.Prisma.MktAssetScalarFieldEnum = {
   height: 'height',
   durationS: 'durationS',
   createdBy: 'createdBy',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  brandId: 'brandId',
+  name: 'name',
+  type: 'type',
+  url: 'url',
+  storagePath: 'storagePath'
 };
 
 exports.Prisma.MktMetricScalarFieldEnum = {
@@ -2466,9 +2511,29 @@ exports.Prisma.MisaConfigScalarFieldEnum = {
   defaultCategoryId: 'defaultCategoryId',
   defaultWarehouseId: 'defaultWarehouseId',
   lastSyncTime: 'lastSyncTime',
+  clientId: 'clientId',
+  clientSecret: 'clientSecret',
+  pushConfig: 'pushConfig',
   lastSyncAt: 'lastSyncAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MisaPushItemScalarFieldEnum = {
+  id: 'id',
+  loai: 'loai',
+  localId: 'localId',
+  refNo: 'refNo',
+  orgRefid: 'orgRefid',
+  voucherType: 'voucherType',
+  ngay: 'ngay',
+  soTien: 'soTien',
+  trangThai: 'trangThai',
+  loi: 'loi',
+  lanGui: 'lanGui',
+  payload: 'payload',
+  guiLuc: 'guiLuc',
+  ketQuaLuc: 'ketQuaLuc'
 };
 
 exports.Prisma.MisaMapScalarFieldEnum = {
@@ -2647,6 +2712,7 @@ exports.Prisma.SanMediaScalarFieldEnum = {
   kenh: 'kenh',
   channelId: 'channelId',
   henDangLuc: 'henDangLuc',
+  coNoiDungAI: 'coNoiDungAI',
   trangThai: 'trangThai',
   maTrenSan: 'maTrenSan',
   loiCuoi: 'loiCuoi',
@@ -2802,6 +2868,7 @@ exports.Prisma.ModelName = {
   FbBrandProfile: 'FbBrandProfile',
   FbContentPlan: 'FbContentPlan',
   FbContentDraft: 'FbContentDraft',
+  MktBrand: 'MktBrand',
   MktAccount: 'MktAccount',
   MktCampaign: 'MktCampaign',
   MktContent: 'MktContent',
@@ -2819,6 +2886,7 @@ exports.Prisma.ModelName = {
   KiotVietMap: 'KiotVietMap',
   KiotVietSyncLog: 'KiotVietSyncLog',
   MisaConfig: 'MisaConfig',
+  MisaPushItem: 'MisaPushItem',
   MisaMap: 'MisaMap',
   MisaSyncLog: 'MisaSyncLog',
   PrintTemplate: 'PrintTemplate',

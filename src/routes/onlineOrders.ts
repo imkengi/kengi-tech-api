@@ -12,6 +12,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { adjustSellableStock, updateWarehouseStock, khoHuHong } from '../lib/warehouseHelper'
+import { moKhoMeHu, nhapKhoHuMe, type KhoMeHu } from '../lib/khoMeHu'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
@@ -5298,6 +5299,7 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             // Đơn sàn không có branchId → null (kho main null-branch).
             const branchId = (returnOrder as any).branchId ?? null
             let khoHuId: string | null | undefined = undefined   // undefined = chưa tra
+            let khoMeHu: KhoMeHu | null | undefined = undefined  // kho mẹ nhận hàng hư — undefined = chưa tra
             /* Người duyệt cho thẻ kho: token KHÔNG mang tên nên `user.name` luôn rỗng — từng
              * ghi "Hệ thống" cho mọi lượt (09/10/2026). Tra tên theo userId, hụt thì email. */
             const nguoiDuyet = req.user?.userId
@@ -5315,22 +5317,39 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
                     productId = p?.id ?? null
                 }
                 let daGhiKho = false
+                let daVaoMe = false
                 if (productId) {
                     try {
                         if (chon === 'ban-tiep') {
                             await adjustSellableStock(prisma, productId, branchId, item.quantity,
                                 `Trả hàng ${returnOrder.code} — bán tiếp`)
                         } else {
-                            if (khoHuId === undefined) khoHuId = await khoHuHong(prisma, branchId)
-                            if (!khoHuId) {
-                                /* KHÔNG im lặng bỏ qua: hàng hỏng biến mất khỏi mọi sổ thì
-                                 * không ai biết mình đang giữ bao nhiêu hàng lỗi. */
-                                loiKho.push(`${item.sku || item.productName}: cửa hàng CHƯA có kho hư hỏng — chưa ghi được`)
+                            /* KHO MẸ — PHẦN HƯ HỎNG (09/10/2026): cửa hàng khai `khoMeHuMa` ⇒ hàng hư vào Kho
+                             * Hư Hỏng của MẸ (nơi hàng nằm thật). Món không tra ra bên mẹ thì BÁO, không âm
+                             * thầm rơi về kho hư hỏng của cửa hàng này. */
+                            if (khoMeHu === undefined) khoMeHu = await moKhoMeHu(prisma)
+                            if (khoMeHu) {
+                                const skuCon = item.sku || (await prisma.product.findUnique({ where: { id: productId }, select: { sku: true } }))?.sku || null
+                                const kq = await nhapKhoHuMe(khoMeHu, { sku: skuCon, ten: item.productName, sl: item.quantity, maDon: returnOrder.originalInvoice }, {
+                                    khoaVu: `${returnOrder.code}:${item.id}`,
+                                    lyDo: `Khách trả — hư hỏng${returnOrder.reason ? ` (${String(returnOrder.reason).slice(0, 120)})` : ''}`,
+                                    ghiChu: `Duyệt trả hàng ${khoMeHu.maCon} ${returnOrder.code}`,
+                                    nguoi: tenNguoiDuyet,
+                                })
+                                daVaoMe = kq.ok
+                                if (!kq.ok) loiKho.push(`${item.sku || item.productName}: kho hư hỏng mẹ ${khoMeHu.ma} — ${kq.lyDo}`)
                             } else {
-                                await updateWarehouseStock(prisma, khoHuId, productId, item.quantity)
+                                if (khoHuId === undefined) khoHuId = await khoHuHong(prisma, branchId)
+                                if (!khoHuId) {
+                                    /* KHÔNG im lặng bỏ qua: hàng hỏng biến mất khỏi mọi sổ thì
+                                     * không ai biết mình đang giữ bao nhiêu hàng lỗi. */
+                                    loiKho.push(`${item.sku || item.productName}: cửa hàng CHƯA có kho hư hỏng — chưa ghi được`)
+                                } else {
+                                    await updateWarehouseStock(prisma, khoHuId, productId, item.quantity)
+                                }
                             }
                         }
-                        daGhiKho = chon === 'ban-tiep' || !!khoHuId
+                        daGhiKho = chon === 'ban-tiep' || (khoMeHu ? daVaoMe : !!khoHuId)
                         if (daGhiKho) {
                             // Thẻ kho: có dấu + lý do, để sau này lần được hàng đi đâu
                             await prisma.inventoryTransaction.create({
@@ -5342,7 +5361,11 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
                                     quantity: item.quantity,
                                     reason: chon === 'ban-tiep'
                                         ? `Khách trả — bán tiếp (phiếu ${returnOrder.code})`
-                                        : `Khách trả — HƯ HỎNG, vào kho hư hỏng (phiếu ${returnOrder.code})`,
+                                        : khoMeHu
+                                            // Chữ HOA "Kho Hư Hỏng": bộ đọc chi tiết kho hư hỏng của cửa hàng NÀY
+                                            // (lib/chiTietKhoHuHong, so 'vào kho hư hỏng') không được tính món này
+                                            ? `Khách trả — HƯ HỎNG, vào Kho Hư Hỏng ${khoMeHu.ma} (kho mẹ) (phiếu ${returnOrder.code})`
+                                            : `Khách trả — HƯ HỎNG, vào kho hư hỏng (phiếu ${returnOrder.code})`,
                                     referenceId: returnOrder.code,
                                     referenceType: 'return',
                                     branchId,

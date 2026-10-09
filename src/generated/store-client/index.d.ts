@@ -618,6 +618,11 @@ export type FbContentPlan = $Result.DefaultSelection<Prisma.$FbContentPlanPayloa
  */
 export type FbContentDraft = $Result.DefaultSelection<Prisma.$FbContentDraftPayload>
 /**
+ * Model MktBrand
+ * 
+ */
+export type MktBrand = $Result.DefaultSelection<Prisma.$MktBrandPayload>
+/**
  * Model MktAccount
  * 
  */
@@ -702,6 +707,14 @@ export type KiotVietSyncLog = $Result.DefaultSelection<Prisma.$KiotVietSyncLogPa
  * 
  */
 export type MisaConfig = $Result.DefaultSelection<Prisma.$MisaConfigPayload>
+/**
+ * Model MisaPushItem
+ * Sổ theo dõi từng bản ghi Kengi ĐÃ ĐẨY lên MISA (09/10/2026).
+ * Một (loai, localId) = một dòng ⇒ không bao giờ đẩy hai lần cùng một chứng từ
+ * mà không biết. orgRefid sinh TẤT ĐỊNH từ localId nên đẩy lại vẫn trùng khoá
+ * phía MISA và xoá đề nghị được.
+ */
+export type MisaPushItem = $Result.DefaultSelection<Prisma.$MisaPushItemPayload>
 /**
  * Model MisaMap
  * 
@@ -2080,6 +2093,16 @@ export class PrismaClient<
   get fbContentDraft(): Prisma.FbContentDraftDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.mktBrand`: Exposes CRUD operations for the **MktBrand** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MktBrands
+    * const mktBrands = await prisma.mktBrand.findMany()
+    * ```
+    */
+  get mktBrand(): Prisma.MktBrandDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.mktAccount`: Exposes CRUD operations for the **MktAccount** model.
     * Example usage:
     * ```ts
@@ -2248,6 +2271,16 @@ export class PrismaClient<
     * ```
     */
   get misaConfig(): Prisma.MisaConfigDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaPushItem`: Exposes CRUD operations for the **MisaPushItem** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaPushItems
+    * const misaPushItems = await prisma.misaPushItem.findMany()
+    * ```
+    */
+  get misaPushItem(): Prisma.MisaPushItemDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.misaMap`: Exposes CRUD operations for the **MisaMap** model.
@@ -2927,6 +2960,7 @@ export namespace Prisma {
     FbBrandProfile: 'FbBrandProfile',
     FbContentPlan: 'FbContentPlan',
     FbContentDraft: 'FbContentDraft',
+    MktBrand: 'MktBrand',
     MktAccount: 'MktAccount',
     MktCampaign: 'MktCampaign',
     MktContent: 'MktContent',
@@ -2944,6 +2978,7 @@ export namespace Prisma {
     KiotVietMap: 'KiotVietMap',
     KiotVietSyncLog: 'KiotVietSyncLog',
     MisaConfig: 'MisaConfig',
+    MisaPushItem: 'MisaPushItem',
     MisaMap: 'MisaMap',
     MisaSyncLog: 'MisaSyncLog',
     PrintTemplate: 'PrintTemplate',
@@ -2974,7 +3009,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "mktAccount" | "mktCampaign" | "mktContent" | "mktPublication" | "mktAsset" | "mktMetric" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine" | "sanMedia" | "sanMediaSanPham"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "mktBrand" | "mktAccount" | "mktCampaign" | "mktContent" | "mktPublication" | "mktAsset" | "mktMetric" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaPushItem" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine" | "sanMedia" | "sanMediaSanPham"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -11710,6 +11745,80 @@ export namespace Prisma {
           }
         }
       }
+      MktBrand: {
+        payload: Prisma.$MktBrandPayload<ExtArgs>
+        fields: Prisma.MktBrandFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MktBrandFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MktBrandFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          findFirst: {
+            args: Prisma.MktBrandFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MktBrandFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          findMany: {
+            args: Prisma.MktBrandFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>[]
+          }
+          create: {
+            args: Prisma.MktBrandCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          createMany: {
+            args: Prisma.MktBrandCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MktBrandCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>[]
+          }
+          delete: {
+            args: Prisma.MktBrandDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          update: {
+            args: Prisma.MktBrandUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          deleteMany: {
+            args: Prisma.MktBrandDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MktBrandUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MktBrandUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>[]
+          }
+          upsert: {
+            args: Prisma.MktBrandUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MktBrandPayload>
+          }
+          aggregate: {
+            args: Prisma.MktBrandAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMktBrand>
+          }
+          groupBy: {
+            args: Prisma.MktBrandGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MktBrandGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MktBrandCountArgs<ExtArgs>
+            result: $Utils.Optional<MktBrandCountAggregateOutputType> | number
+          }
+        }
+      }
       MktAccount: {
         payload: Prisma.$MktAccountPayload<ExtArgs>
         fields: Prisma.MktAccountFieldRefs
@@ -12968,6 +13077,80 @@ export namespace Prisma {
           }
         }
       }
+      MisaPushItem: {
+        payload: Prisma.$MisaPushItemPayload<ExtArgs>
+        fields: Prisma.MisaPushItemFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaPushItemFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaPushItemFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaPushItemFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaPushItemFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          findMany: {
+            args: Prisma.MisaPushItemFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>[]
+          }
+          create: {
+            args: Prisma.MisaPushItemCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          createMany: {
+            args: Prisma.MisaPushItemCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaPushItemCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaPushItemDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          update: {
+            args: Prisma.MisaPushItemUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaPushItemDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaPushItemUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaPushItemUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaPushItemUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPushItemPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaPushItemAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaPushItem>
+          }
+          groupBy: {
+            args: Prisma.MisaPushItemGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaPushItemGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaPushItemCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaPushItemCountAggregateOutputType> | number
+          }
+        }
+      }
       MisaMap: {
         payload: Prisma.$MisaMapPayload<ExtArgs>
         fields: Prisma.MisaMapFieldRefs
@@ -14070,6 +14253,7 @@ export namespace Prisma {
     fbBrandProfile?: FbBrandProfileOmit
     fbContentPlan?: FbContentPlanOmit
     fbContentDraft?: FbContentDraftOmit
+    mktBrand?: MktBrandOmit
     mktAccount?: MktAccountOmit
     mktCampaign?: MktCampaignOmit
     mktContent?: MktContentOmit
@@ -14087,6 +14271,7 @@ export namespace Prisma {
     kiotVietMap?: KiotVietMapOmit
     kiotVietSyncLog?: KiotVietSyncLogOmit
     misaConfig?: MisaConfigOmit
+    misaPushItem?: MisaPushItemOmit
     misaMap?: MisaMapOmit
     misaSyncLog?: MisaSyncLogOmit
     printTemplate?: PrintTemplateOmit
@@ -31324,6 +31509,14 @@ export namespace Prisma {
     notes: string | null
     salesUserId: string | null
     salesUserName: string | null
+    taxCode: string | null
+    invoiceType: string | null
+    invoiceCompanyName: string | null
+    invoiceBuyerName: string | null
+    invoiceAddress: string | null
+    invoiceEmail: string | null
+    invoicePhone: string | null
+    invoiceIdNo: string | null
     totalPurchases: number | null
     totalOrders: number | null
     debt: number | null
@@ -31349,6 +31542,14 @@ export namespace Prisma {
     notes: string | null
     salesUserId: string | null
     salesUserName: string | null
+    taxCode: string | null
+    invoiceType: string | null
+    invoiceCompanyName: string | null
+    invoiceBuyerName: string | null
+    invoiceAddress: string | null
+    invoiceEmail: string | null
+    invoicePhone: string | null
+    invoiceIdNo: string | null
     totalPurchases: number | null
     totalOrders: number | null
     debt: number | null
@@ -31374,6 +31575,14 @@ export namespace Prisma {
     notes: number
     salesUserId: number
     salesUserName: number
+    taxCode: number
+    invoiceType: number
+    invoiceCompanyName: number
+    invoiceBuyerName: number
+    invoiceAddress: number
+    invoiceEmail: number
+    invoicePhone: number
+    invoiceIdNo: number
     totalPurchases: number
     totalOrders: number
     debt: number
@@ -31419,6 +31628,14 @@ export namespace Prisma {
     notes?: true
     salesUserId?: true
     salesUserName?: true
+    taxCode?: true
+    invoiceType?: true
+    invoiceCompanyName?: true
+    invoiceBuyerName?: true
+    invoiceAddress?: true
+    invoiceEmail?: true
+    invoicePhone?: true
+    invoiceIdNo?: true
     totalPurchases?: true
     totalOrders?: true
     debt?: true
@@ -31444,6 +31661,14 @@ export namespace Prisma {
     notes?: true
     salesUserId?: true
     salesUserName?: true
+    taxCode?: true
+    invoiceType?: true
+    invoiceCompanyName?: true
+    invoiceBuyerName?: true
+    invoiceAddress?: true
+    invoiceEmail?: true
+    invoicePhone?: true
+    invoiceIdNo?: true
     totalPurchases?: true
     totalOrders?: true
     debt?: true
@@ -31469,6 +31694,14 @@ export namespace Prisma {
     notes?: true
     salesUserId?: true
     salesUserName?: true
+    taxCode?: true
+    invoiceType?: true
+    invoiceCompanyName?: true
+    invoiceBuyerName?: true
+    invoiceAddress?: true
+    invoiceEmail?: true
+    invoicePhone?: true
+    invoiceIdNo?: true
     totalPurchases?: true
     totalOrders?: true
     debt?: true
@@ -31581,6 +31814,14 @@ export namespace Prisma {
     notes: string | null
     salesUserId: string | null
     salesUserName: string | null
+    taxCode: string | null
+    invoiceType: string | null
+    invoiceCompanyName: string | null
+    invoiceBuyerName: string | null
+    invoiceAddress: string | null
+    invoiceEmail: string | null
+    invoicePhone: string | null
+    invoiceIdNo: string | null
     totalPurchases: number
     totalOrders: number
     debt: number
@@ -31625,6 +31866,14 @@ export namespace Prisma {
     notes?: boolean
     salesUserId?: boolean
     salesUserName?: boolean
+    taxCode?: boolean
+    invoiceType?: boolean
+    invoiceCompanyName?: boolean
+    invoiceBuyerName?: boolean
+    invoiceAddress?: boolean
+    invoiceEmail?: boolean
+    invoicePhone?: boolean
+    invoiceIdNo?: boolean
     totalPurchases?: boolean
     totalOrders?: boolean
     debt?: boolean
@@ -31655,6 +31904,14 @@ export namespace Prisma {
     notes?: boolean
     salesUserId?: boolean
     salesUserName?: boolean
+    taxCode?: boolean
+    invoiceType?: boolean
+    invoiceCompanyName?: boolean
+    invoiceBuyerName?: boolean
+    invoiceAddress?: boolean
+    invoiceEmail?: boolean
+    invoicePhone?: boolean
+    invoiceIdNo?: boolean
     totalPurchases?: boolean
     totalOrders?: boolean
     debt?: boolean
@@ -31681,6 +31938,14 @@ export namespace Prisma {
     notes?: boolean
     salesUserId?: boolean
     salesUserName?: boolean
+    taxCode?: boolean
+    invoiceType?: boolean
+    invoiceCompanyName?: boolean
+    invoiceBuyerName?: boolean
+    invoiceAddress?: boolean
+    invoiceEmail?: boolean
+    invoicePhone?: boolean
+    invoiceIdNo?: boolean
     totalPurchases?: boolean
     totalOrders?: boolean
     debt?: boolean
@@ -31707,6 +31972,14 @@ export namespace Prisma {
     notes?: boolean
     salesUserId?: boolean
     salesUserName?: boolean
+    taxCode?: boolean
+    invoiceType?: boolean
+    invoiceCompanyName?: boolean
+    invoiceBuyerName?: boolean
+    invoiceAddress?: boolean
+    invoiceEmail?: boolean
+    invoicePhone?: boolean
+    invoiceIdNo?: boolean
     totalPurchases?: boolean
     totalOrders?: boolean
     debt?: boolean
@@ -31717,7 +31990,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type CustomerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "phone" | "email" | "address" | "latitude" | "longitude" | "groupId" | "birthday" | "gender" | "notes" | "salesUserId" | "salesUserName" | "totalPurchases" | "totalOrders" | "debt" | "loyaltyPoints" | "tier" | "lastPurchaseDate" | "createdAt" | "updatedAt", ExtArgs["result"]["customer"]>
+  export type CustomerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "phone" | "email" | "address" | "latitude" | "longitude" | "groupId" | "birthday" | "gender" | "notes" | "salesUserId" | "salesUserName" | "taxCode" | "invoiceType" | "invoiceCompanyName" | "invoiceBuyerName" | "invoiceAddress" | "invoiceEmail" | "invoicePhone" | "invoiceIdNo" | "totalPurchases" | "totalOrders" | "debt" | "loyaltyPoints" | "tier" | "lastPurchaseDate" | "createdAt" | "updatedAt", ExtArgs["result"]["customer"]>
   export type CustomerInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     group?: boolean | Customer$groupArgs<ExtArgs>
     transactions?: boolean | Customer$transactionsArgs<ExtArgs>
@@ -31755,6 +32028,19 @@ export namespace Prisma {
       notes: string | null
       salesUserId: string | null
       salesUserName: string | null
+      /**
+       * THÔNG TIN XUẤT HOÁ ĐƠN (09/10/2026) — đổ lên HĐĐT khi phiếu bán gắn khách này mà
+       * phiếu không có vatBuyerInfo riêng (lib/hoaDonKhach). KiotViet: taxCode, type (0 cá
+       * nhân / 1 công ty), organization, nameEInvoice, addressEInvoice, contactNumberEInvoice.
+       */
+      taxCode: string | null
+      invoiceType: string | null
+      invoiceCompanyName: string | null
+      invoiceBuyerName: string | null
+      invoiceAddress: string | null
+      invoiceEmail: string | null
+      invoicePhone: string | null
+      invoiceIdNo: string | null
       totalPurchases: number
       totalOrders: number
       debt: number
@@ -32204,6 +32490,14 @@ export namespace Prisma {
     readonly notes: FieldRef<"Customer", 'String'>
     readonly salesUserId: FieldRef<"Customer", 'String'>
     readonly salesUserName: FieldRef<"Customer", 'String'>
+    readonly taxCode: FieldRef<"Customer", 'String'>
+    readonly invoiceType: FieldRef<"Customer", 'String'>
+    readonly invoiceCompanyName: FieldRef<"Customer", 'String'>
+    readonly invoiceBuyerName: FieldRef<"Customer", 'String'>
+    readonly invoiceAddress: FieldRef<"Customer", 'String'>
+    readonly invoiceEmail: FieldRef<"Customer", 'String'>
+    readonly invoicePhone: FieldRef<"Customer", 'String'>
+    readonly invoiceIdNo: FieldRef<"Customer", 'String'>
     readonly totalPurchases: FieldRef<"Customer", 'Float'>
     readonly totalOrders: FieldRef<"Customer", 'Int'>
     readonly debt: FieldRef<"Customer", 'Float'>
@@ -96683,6 +96977,7 @@ export namespace Prisma {
     smtpConfig: string | null
     mailboxConfig: string | null
     geminiApiKey: string | null
+    deepseekApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
@@ -96710,6 +97005,7 @@ export namespace Prisma {
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
     khoMeMa: string | null
+    khoMeHuMa: string | null
     updatedAt: Date | null
   }
 
@@ -96736,6 +97032,7 @@ export namespace Prisma {
     smtpConfig: string | null
     mailboxConfig: string | null
     geminiApiKey: string | null
+    deepseekApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
@@ -96763,6 +97060,7 @@ export namespace Prisma {
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
     khoMeMa: string | null
+    khoMeHuMa: string | null
     updatedAt: Date | null
   }
 
@@ -96789,6 +97087,7 @@ export namespace Prisma {
     smtpConfig: number
     mailboxConfig: number
     geminiApiKey: number
+    deepseekApiKey: number
     notifyNewOrder: number
     notifyDailyReport: number
     notifyWeeklyReport: number
@@ -96816,6 +97115,7 @@ export namespace Prisma {
     ttPostAvatar: number
     ttPostAuthAt: number
     khoMeMa: number
+    khoMeHuMa: number
     updatedAt: number
     _all: number
   }
@@ -96856,6 +97156,7 @@ export namespace Prisma {
     smtpConfig?: true
     mailboxConfig?: true
     geminiApiKey?: true
+    deepseekApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -96883,6 +97184,7 @@ export namespace Prisma {
     ttPostAvatar?: true
     ttPostAuthAt?: true
     khoMeMa?: true
+    khoMeHuMa?: true
     updatedAt?: true
   }
 
@@ -96909,6 +97211,7 @@ export namespace Prisma {
     smtpConfig?: true
     mailboxConfig?: true
     geminiApiKey?: true
+    deepseekApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -96936,6 +97239,7 @@ export namespace Prisma {
     ttPostAvatar?: true
     ttPostAuthAt?: true
     khoMeMa?: true
+    khoMeHuMa?: true
     updatedAt?: true
   }
 
@@ -96962,6 +97266,7 @@ export namespace Prisma {
     smtpConfig?: true
     mailboxConfig?: true
     geminiApiKey?: true
+    deepseekApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -96989,6 +97294,7 @@ export namespace Prisma {
     ttPostAvatar?: true
     ttPostAuthAt?: true
     khoMeMa?: true
+    khoMeHuMa?: true
     updatedAt?: true
     _all?: true
   }
@@ -97102,6 +97408,7 @@ export namespace Prisma {
     smtpConfig: string | null
     mailboxConfig: string | null
     geminiApiKey: string | null
+    deepseekApiKey: string | null
     notifyNewOrder: boolean
     notifyDailyReport: boolean
     notifyWeeklyReport: boolean
@@ -97129,6 +97436,7 @@ export namespace Prisma {
     ttPostAvatar: string | null
     ttPostAuthAt: Date | null
     khoMeMa: string | null
+    khoMeHuMa: string | null
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _avg: StoreSettingsAvgAggregateOutputType | null
@@ -97174,6 +97482,7 @@ export namespace Prisma {
     smtpConfig?: boolean
     mailboxConfig?: boolean
     geminiApiKey?: boolean
+    deepseekApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -97201,6 +97510,7 @@ export namespace Prisma {
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
     khoMeMa?: boolean
+    khoMeHuMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97227,6 +97537,7 @@ export namespace Prisma {
     smtpConfig?: boolean
     mailboxConfig?: boolean
     geminiApiKey?: boolean
+    deepseekApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -97254,6 +97565,7 @@ export namespace Prisma {
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
     khoMeMa?: boolean
+    khoMeHuMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97280,6 +97592,7 @@ export namespace Prisma {
     smtpConfig?: boolean
     mailboxConfig?: boolean
     geminiApiKey?: boolean
+    deepseekApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -97307,6 +97620,7 @@ export namespace Prisma {
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
     khoMeMa?: boolean
+    khoMeHuMa?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -97333,6 +97647,7 @@ export namespace Prisma {
     smtpConfig?: boolean
     mailboxConfig?: boolean
     geminiApiKey?: boolean
+    deepseekApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -97360,10 +97675,11 @@ export namespace Prisma {
     ttPostAvatar?: boolean
     ttPostAuthAt?: boolean
     khoMeMa?: boolean
+    khoMeHuMa?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "ttPostClientKey" | "ttPostClientSecret" | "ttPostOpenId" | "ttPostAccessToken" | "ttPostRefreshToken" | "ttPostExpiresAt" | "ttPostScopes" | "ttPostDisplayName" | "ttPostAvatar" | "ttPostAuthAt" | "khoMeMa" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "deepseekApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveAppsScriptUrl" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "ttPostClientKey" | "ttPostClientSecret" | "ttPostOpenId" | "ttPostAccessToken" | "ttPostRefreshToken" | "ttPostExpiresAt" | "ttPostScopes" | "ttPostDisplayName" | "ttPostAvatar" | "ttPostAuthAt" | "khoMeMa" | "khoMeHuMa" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -97391,6 +97707,7 @@ export namespace Prisma {
       smtpConfig: string | null
       mailboxConfig: string | null
       geminiApiKey: string | null
+      deepseekApiKey: string | null
       notifyNewOrder: boolean
       notifyDailyReport: boolean
       notifyWeeklyReport: boolean
@@ -97441,6 +97758,12 @@ export namespace Prisma {
        *    *  lại, và ghi phiếu trên thẻ kho bên đó. Trống = không dùng. Xem lib/khoMe.ts.
        */
       khoMeMa: string | null
+      /**
+       * * KHO MẸ — PHẦN HƯ HỎNG (09/10/2026) — mã cửa hàng nhận HÀNG HƯ của cửa hàng này vào Kho
+       *    *  Hư Hỏng của nó (nơi hàng nằm thật). Bật / tắt độc lập với `khoMeMa`. Trống = hàng hư vào
+       *    *  kho hư hỏng của chính cửa hàng này. Xem lib/khoMeHu.ts.
+       */
+      khoMeHuMa: string | null
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -97887,6 +98210,7 @@ export namespace Prisma {
     readonly smtpConfig: FieldRef<"StoreSettings", 'String'>
     readonly mailboxConfig: FieldRef<"StoreSettings", 'String'>
     readonly geminiApiKey: FieldRef<"StoreSettings", 'String'>
+    readonly deepseekApiKey: FieldRef<"StoreSettings", 'String'>
     readonly notifyNewOrder: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyDailyReport: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyWeeklyReport: FieldRef<"StoreSettings", 'Boolean'>
@@ -97914,6 +98238,7 @@ export namespace Prisma {
     readonly ttPostAvatar: FieldRef<"StoreSettings", 'String'>
     readonly ttPostAuthAt: FieldRef<"StoreSettings", 'DateTime'>
     readonly khoMeMa: FieldRef<"StoreSettings", 'String'>
+    readonly khoMeHuMa: FieldRef<"StoreSettings", 'String'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -157934,6 +158259,1209 @@ export namespace Prisma {
 
 
   /**
+   * Model MktBrand
+   */
+
+  export type AggregateMktBrand = {
+    _count: MktBrandCountAggregateOutputType | null
+    _min: MktBrandMinAggregateOutputType | null
+    _max: MktBrandMaxAggregateOutputType | null
+  }
+
+  export type MktBrandMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    industry: string | null
+    description: string | null
+    products: string | null
+    contentPillars: string | null
+    contact: string | null
+    audience: string | null
+    voice: string | null
+    usp: string | null
+    cta: string | null
+    examples: string | null
+    notes: string | null
+    bannedWords: string | null
+    timezone: string | null
+    aiAutoApprove: boolean | null
+    postSlots: string | null
+    archivedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktBrandMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    industry: string | null
+    description: string | null
+    products: string | null
+    contentPillars: string | null
+    contact: string | null
+    audience: string | null
+    voice: string | null
+    usp: string | null
+    cta: string | null
+    examples: string | null
+    notes: string | null
+    bannedWords: string | null
+    timezone: string | null
+    aiAutoApprove: boolean | null
+    postSlots: string | null
+    archivedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MktBrandCountAggregateOutputType = {
+    id: number
+    name: number
+    industry: number
+    description: number
+    products: number
+    contentPillars: number
+    contact: number
+    audience: number
+    voice: number
+    usp: number
+    cta: number
+    examples: number
+    notes: number
+    bannedWords: number
+    timezone: number
+    aiAutoApprove: number
+    postSlots: number
+    archivedAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MktBrandMinAggregateInputType = {
+    id?: true
+    name?: true
+    industry?: true
+    description?: true
+    products?: true
+    contentPillars?: true
+    contact?: true
+    audience?: true
+    voice?: true
+    usp?: true
+    cta?: true
+    examples?: true
+    notes?: true
+    bannedWords?: true
+    timezone?: true
+    aiAutoApprove?: true
+    postSlots?: true
+    archivedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktBrandMaxAggregateInputType = {
+    id?: true
+    name?: true
+    industry?: true
+    description?: true
+    products?: true
+    contentPillars?: true
+    contact?: true
+    audience?: true
+    voice?: true
+    usp?: true
+    cta?: true
+    examples?: true
+    notes?: true
+    bannedWords?: true
+    timezone?: true
+    aiAutoApprove?: true
+    postSlots?: true
+    archivedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MktBrandCountAggregateInputType = {
+    id?: true
+    name?: true
+    industry?: true
+    description?: true
+    products?: true
+    contentPillars?: true
+    contact?: true
+    audience?: true
+    voice?: true
+    usp?: true
+    cta?: true
+    examples?: true
+    notes?: true
+    bannedWords?: true
+    timezone?: true
+    aiAutoApprove?: true
+    postSlots?: true
+    archivedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MktBrandAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktBrand to aggregate.
+     */
+    where?: MktBrandWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktBrands to fetch.
+     */
+    orderBy?: MktBrandOrderByWithRelationInput | MktBrandOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MktBrandWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktBrands from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktBrands.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MktBrands
+    **/
+    _count?: true | MktBrandCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MktBrandMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MktBrandMaxAggregateInputType
+  }
+
+  export type GetMktBrandAggregateType<T extends MktBrandAggregateArgs> = {
+        [P in keyof T & keyof AggregateMktBrand]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMktBrand[P]>
+      : GetScalarType<T[P], AggregateMktBrand[P]>
+  }
+
+
+
+
+  export type MktBrandGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MktBrandWhereInput
+    orderBy?: MktBrandOrderByWithAggregationInput | MktBrandOrderByWithAggregationInput[]
+    by: MktBrandScalarFieldEnum[] | MktBrandScalarFieldEnum
+    having?: MktBrandScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MktBrandCountAggregateInputType | true
+    _min?: MktBrandMinAggregateInputType
+    _max?: MktBrandMaxAggregateInputType
+  }
+
+  export type MktBrandGroupByOutputType = {
+    id: string
+    name: string
+    industry: string
+    description: string
+    products: string
+    contentPillars: string
+    contact: string
+    audience: string
+    voice: string
+    usp: string
+    cta: string
+    examples: string
+    notes: string
+    bannedWords: string
+    timezone: string
+    aiAutoApprove: boolean
+    postSlots: string
+    archivedAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MktBrandCountAggregateOutputType | null
+    _min: MktBrandMinAggregateOutputType | null
+    _max: MktBrandMaxAggregateOutputType | null
+  }
+
+  type GetMktBrandGroupByPayload<T extends MktBrandGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MktBrandGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MktBrandGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MktBrandGroupByOutputType[P]>
+            : GetScalarType<T[P], MktBrandGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MktBrandSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    industry?: boolean
+    description?: boolean
+    products?: boolean
+    contentPillars?: boolean
+    contact?: boolean
+    audience?: boolean
+    voice?: boolean
+    usp?: boolean
+    cta?: boolean
+    examples?: boolean
+    notes?: boolean
+    bannedWords?: boolean
+    timezone?: boolean
+    aiAutoApprove?: boolean
+    postSlots?: boolean
+    archivedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktBrand"]>
+
+  export type MktBrandSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    industry?: boolean
+    description?: boolean
+    products?: boolean
+    contentPillars?: boolean
+    contact?: boolean
+    audience?: boolean
+    voice?: boolean
+    usp?: boolean
+    cta?: boolean
+    examples?: boolean
+    notes?: boolean
+    bannedWords?: boolean
+    timezone?: boolean
+    aiAutoApprove?: boolean
+    postSlots?: boolean
+    archivedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktBrand"]>
+
+  export type MktBrandSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    industry?: boolean
+    description?: boolean
+    products?: boolean
+    contentPillars?: boolean
+    contact?: boolean
+    audience?: boolean
+    voice?: boolean
+    usp?: boolean
+    cta?: boolean
+    examples?: boolean
+    notes?: boolean
+    bannedWords?: boolean
+    timezone?: boolean
+    aiAutoApprove?: boolean
+    postSlots?: boolean
+    archivedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["mktBrand"]>
+
+  export type MktBrandSelectScalar = {
+    id?: boolean
+    name?: boolean
+    industry?: boolean
+    description?: boolean
+    products?: boolean
+    contentPillars?: boolean
+    contact?: boolean
+    audience?: boolean
+    voice?: boolean
+    usp?: boolean
+    cta?: boolean
+    examples?: boolean
+    notes?: boolean
+    bannedWords?: boolean
+    timezone?: boolean
+    aiAutoApprove?: boolean
+    postSlots?: boolean
+    archivedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MktBrandOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "industry" | "description" | "products" | "contentPillars" | "contact" | "audience" | "voice" | "usp" | "cta" | "examples" | "notes" | "bannedWords" | "timezone" | "aiAutoApprove" | "postSlots" | "archivedAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktBrand"]>
+
+  export type $MktBrandPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MktBrand"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      name: string
+      industry: string
+      description: string
+      products: string
+      contentPillars: string
+      contact: string
+      audience: string
+      voice: string
+      usp: string
+      cta: string
+      examples: string
+      notes: string
+      bannedWords: string
+      timezone: string
+      aiAutoApprove: boolean
+      postSlots: string
+      archivedAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["mktBrand"]>
+    composites: {}
+  }
+
+  type MktBrandGetPayload<S extends boolean | null | undefined | MktBrandDefaultArgs> = $Result.GetResult<Prisma.$MktBrandPayload, S>
+
+  type MktBrandCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MktBrandFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MktBrandCountAggregateInputType | true
+    }
+
+  export interface MktBrandDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MktBrand'], meta: { name: 'MktBrand' } }
+    /**
+     * Find zero or one MktBrand that matches the filter.
+     * @param {MktBrandFindUniqueArgs} args - Arguments to find a MktBrand
+     * @example
+     * // Get one MktBrand
+     * const mktBrand = await prisma.mktBrand.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MktBrandFindUniqueArgs>(args: SelectSubset<T, MktBrandFindUniqueArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MktBrand that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MktBrandFindUniqueOrThrowArgs} args - Arguments to find a MktBrand
+     * @example
+     * // Get one MktBrand
+     * const mktBrand = await prisma.mktBrand.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MktBrandFindUniqueOrThrowArgs>(args: SelectSubset<T, MktBrandFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktBrand that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandFindFirstArgs} args - Arguments to find a MktBrand
+     * @example
+     * // Get one MktBrand
+     * const mktBrand = await prisma.mktBrand.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MktBrandFindFirstArgs>(args?: SelectSubset<T, MktBrandFindFirstArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MktBrand that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandFindFirstOrThrowArgs} args - Arguments to find a MktBrand
+     * @example
+     * // Get one MktBrand
+     * const mktBrand = await prisma.mktBrand.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MktBrandFindFirstOrThrowArgs>(args?: SelectSubset<T, MktBrandFindFirstOrThrowArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MktBrands that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MktBrands
+     * const mktBrands = await prisma.mktBrand.findMany()
+     * 
+     * // Get first 10 MktBrands
+     * const mktBrands = await prisma.mktBrand.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const mktBrandWithIdOnly = await prisma.mktBrand.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MktBrandFindManyArgs>(args?: SelectSubset<T, MktBrandFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MktBrand.
+     * @param {MktBrandCreateArgs} args - Arguments to create a MktBrand.
+     * @example
+     * // Create one MktBrand
+     * const MktBrand = await prisma.mktBrand.create({
+     *   data: {
+     *     // ... data to create a MktBrand
+     *   }
+     * })
+     * 
+     */
+    create<T extends MktBrandCreateArgs>(args: SelectSubset<T, MktBrandCreateArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MktBrands.
+     * @param {MktBrandCreateManyArgs} args - Arguments to create many MktBrands.
+     * @example
+     * // Create many MktBrands
+     * const mktBrand = await prisma.mktBrand.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MktBrandCreateManyArgs>(args?: SelectSubset<T, MktBrandCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MktBrands and returns the data saved in the database.
+     * @param {MktBrandCreateManyAndReturnArgs} args - Arguments to create many MktBrands.
+     * @example
+     * // Create many MktBrands
+     * const mktBrand = await prisma.mktBrand.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MktBrands and only return the `id`
+     * const mktBrandWithIdOnly = await prisma.mktBrand.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MktBrandCreateManyAndReturnArgs>(args?: SelectSubset<T, MktBrandCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MktBrand.
+     * @param {MktBrandDeleteArgs} args - Arguments to delete one MktBrand.
+     * @example
+     * // Delete one MktBrand
+     * const MktBrand = await prisma.mktBrand.delete({
+     *   where: {
+     *     // ... filter to delete one MktBrand
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MktBrandDeleteArgs>(args: SelectSubset<T, MktBrandDeleteArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MktBrand.
+     * @param {MktBrandUpdateArgs} args - Arguments to update one MktBrand.
+     * @example
+     * // Update one MktBrand
+     * const mktBrand = await prisma.mktBrand.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MktBrandUpdateArgs>(args: SelectSubset<T, MktBrandUpdateArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MktBrands.
+     * @param {MktBrandDeleteManyArgs} args - Arguments to filter MktBrands to delete.
+     * @example
+     * // Delete a few MktBrands
+     * const { count } = await prisma.mktBrand.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MktBrandDeleteManyArgs>(args?: SelectSubset<T, MktBrandDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktBrands.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MktBrands
+     * const mktBrand = await prisma.mktBrand.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MktBrandUpdateManyArgs>(args: SelectSubset<T, MktBrandUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MktBrands and returns the data updated in the database.
+     * @param {MktBrandUpdateManyAndReturnArgs} args - Arguments to update many MktBrands.
+     * @example
+     * // Update many MktBrands
+     * const mktBrand = await prisma.mktBrand.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MktBrands and only return the `id`
+     * const mktBrandWithIdOnly = await prisma.mktBrand.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MktBrandUpdateManyAndReturnArgs>(args: SelectSubset<T, MktBrandUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MktBrand.
+     * @param {MktBrandUpsertArgs} args - Arguments to update or create a MktBrand.
+     * @example
+     * // Update or create a MktBrand
+     * const mktBrand = await prisma.mktBrand.upsert({
+     *   create: {
+     *     // ... data to create a MktBrand
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MktBrand we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MktBrandUpsertArgs>(args: SelectSubset<T, MktBrandUpsertArgs<ExtArgs>>): Prisma__MktBrandClient<$Result.GetResult<Prisma.$MktBrandPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MktBrands.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandCountArgs} args - Arguments to filter MktBrands to count.
+     * @example
+     * // Count the number of MktBrands
+     * const count = await prisma.mktBrand.count({
+     *   where: {
+     *     // ... the filter for the MktBrands we want to count
+     *   }
+     * })
+    **/
+    count<T extends MktBrandCountArgs>(
+      args?: Subset<T, MktBrandCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MktBrandCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MktBrand.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MktBrandAggregateArgs>(args: Subset<T, MktBrandAggregateArgs>): Prisma.PrismaPromise<GetMktBrandAggregateType<T>>
+
+    /**
+     * Group by MktBrand.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MktBrandGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MktBrandGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MktBrandGroupByArgs['orderBy'] }
+        : { orderBy?: MktBrandGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MktBrandGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMktBrandGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MktBrand model
+   */
+  readonly fields: MktBrandFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MktBrand.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MktBrandClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MktBrand model
+   */
+  interface MktBrandFieldRefs {
+    readonly id: FieldRef<"MktBrand", 'String'>
+    readonly name: FieldRef<"MktBrand", 'String'>
+    readonly industry: FieldRef<"MktBrand", 'String'>
+    readonly description: FieldRef<"MktBrand", 'String'>
+    readonly products: FieldRef<"MktBrand", 'String'>
+    readonly contentPillars: FieldRef<"MktBrand", 'String'>
+    readonly contact: FieldRef<"MktBrand", 'String'>
+    readonly audience: FieldRef<"MktBrand", 'String'>
+    readonly voice: FieldRef<"MktBrand", 'String'>
+    readonly usp: FieldRef<"MktBrand", 'String'>
+    readonly cta: FieldRef<"MktBrand", 'String'>
+    readonly examples: FieldRef<"MktBrand", 'String'>
+    readonly notes: FieldRef<"MktBrand", 'String'>
+    readonly bannedWords: FieldRef<"MktBrand", 'String'>
+    readonly timezone: FieldRef<"MktBrand", 'String'>
+    readonly aiAutoApprove: FieldRef<"MktBrand", 'Boolean'>
+    readonly postSlots: FieldRef<"MktBrand", 'String'>
+    readonly archivedAt: FieldRef<"MktBrand", 'DateTime'>
+    readonly createdBy: FieldRef<"MktBrand", 'String'>
+    readonly createdAt: FieldRef<"MktBrand", 'DateTime'>
+    readonly updatedAt: FieldRef<"MktBrand", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MktBrand findUnique
+   */
+  export type MktBrandFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter, which MktBrand to fetch.
+     */
+    where: MktBrandWhereUniqueInput
+  }
+
+  /**
+   * MktBrand findUniqueOrThrow
+   */
+  export type MktBrandFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter, which MktBrand to fetch.
+     */
+    where: MktBrandWhereUniqueInput
+  }
+
+  /**
+   * MktBrand findFirst
+   */
+  export type MktBrandFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter, which MktBrand to fetch.
+     */
+    where?: MktBrandWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktBrands to fetch.
+     */
+    orderBy?: MktBrandOrderByWithRelationInput | MktBrandOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktBrands.
+     */
+    cursor?: MktBrandWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktBrands from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktBrands.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktBrands.
+     */
+    distinct?: MktBrandScalarFieldEnum | MktBrandScalarFieldEnum[]
+  }
+
+  /**
+   * MktBrand findFirstOrThrow
+   */
+  export type MktBrandFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter, which MktBrand to fetch.
+     */
+    where?: MktBrandWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktBrands to fetch.
+     */
+    orderBy?: MktBrandOrderByWithRelationInput | MktBrandOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MktBrands.
+     */
+    cursor?: MktBrandWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktBrands from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktBrands.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MktBrands.
+     */
+    distinct?: MktBrandScalarFieldEnum | MktBrandScalarFieldEnum[]
+  }
+
+  /**
+   * MktBrand findMany
+   */
+  export type MktBrandFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter, which MktBrands to fetch.
+     */
+    where?: MktBrandWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MktBrands to fetch.
+     */
+    orderBy?: MktBrandOrderByWithRelationInput | MktBrandOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MktBrands.
+     */
+    cursor?: MktBrandWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MktBrands from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MktBrands.
+     */
+    skip?: number
+    distinct?: MktBrandScalarFieldEnum | MktBrandScalarFieldEnum[]
+  }
+
+  /**
+   * MktBrand create
+   */
+  export type MktBrandCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MktBrand.
+     */
+    data: XOR<MktBrandCreateInput, MktBrandUncheckedCreateInput>
+  }
+
+  /**
+   * MktBrand createMany
+   */
+  export type MktBrandCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MktBrands.
+     */
+    data: MktBrandCreateManyInput | MktBrandCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktBrand createManyAndReturn
+   */
+  export type MktBrandCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * The data used to create many MktBrands.
+     */
+    data: MktBrandCreateManyInput | MktBrandCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MktBrand update
+   */
+  export type MktBrandUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MktBrand.
+     */
+    data: XOR<MktBrandUpdateInput, MktBrandUncheckedUpdateInput>
+    /**
+     * Choose, which MktBrand to update.
+     */
+    where: MktBrandWhereUniqueInput
+  }
+
+  /**
+   * MktBrand updateMany
+   */
+  export type MktBrandUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MktBrands.
+     */
+    data: XOR<MktBrandUpdateManyMutationInput, MktBrandUncheckedUpdateManyInput>
+    /**
+     * Filter which MktBrands to update
+     */
+    where?: MktBrandWhereInput
+    /**
+     * Limit how many MktBrands to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktBrand updateManyAndReturn
+   */
+  export type MktBrandUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * The data used to update MktBrands.
+     */
+    data: XOR<MktBrandUpdateManyMutationInput, MktBrandUncheckedUpdateManyInput>
+    /**
+     * Filter which MktBrands to update
+     */
+    where?: MktBrandWhereInput
+    /**
+     * Limit how many MktBrands to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktBrand upsert
+   */
+  export type MktBrandUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MktBrand to update in case it exists.
+     */
+    where: MktBrandWhereUniqueInput
+    /**
+     * In case the MktBrand found by the `where` argument doesn't exist, create a new MktBrand with this data.
+     */
+    create: XOR<MktBrandCreateInput, MktBrandUncheckedCreateInput>
+    /**
+     * In case the MktBrand was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MktBrandUpdateInput, MktBrandUncheckedUpdateInput>
+  }
+
+  /**
+   * MktBrand delete
+   */
+  export type MktBrandDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+    /**
+     * Filter which MktBrand to delete.
+     */
+    where: MktBrandWhereUniqueInput
+  }
+
+  /**
+   * MktBrand deleteMany
+   */
+  export type MktBrandDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MktBrands to delete
+     */
+    where?: MktBrandWhereInput
+    /**
+     * Limit how many MktBrands to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MktBrand without action
+   */
+  export type MktBrandDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MktBrand
+     */
+    select?: MktBrandSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MktBrand
+     */
+    omit?: MktBrandOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model MktAccount
    */
 
@@ -157955,6 +159483,7 @@ export namespace Prisma {
 
   export type MktAccountMinAggregateOutputType = {
     id: string | null
+    brandId: string | null
     platform: string | null
     externalId: string | null
     name: string | null
@@ -157963,6 +159492,7 @@ export namespace Prisma {
     followers: number | null
     accessToken: string | null
     tokenExpiresAt: Date | null
+    refreshSecret: string | null
     status: string | null
     lastSyncAt: Date | null
     connectedBy: string | null
@@ -157972,6 +159502,7 @@ export namespace Prisma {
 
   export type MktAccountMaxAggregateOutputType = {
     id: string | null
+    brandId: string | null
     platform: string | null
     externalId: string | null
     name: string | null
@@ -157980,6 +159511,7 @@ export namespace Prisma {
     followers: number | null
     accessToken: string | null
     tokenExpiresAt: Date | null
+    refreshSecret: string | null
     status: string | null
     lastSyncAt: Date | null
     connectedBy: string | null
@@ -157989,6 +159521,7 @@ export namespace Prisma {
 
   export type MktAccountCountAggregateOutputType = {
     id: number
+    brandId: number
     platform: number
     externalId: number
     name: number
@@ -157997,6 +159530,7 @@ export namespace Prisma {
     followers: number
     accessToken: number
     tokenExpiresAt: number
+    refreshSecret: number
     status: number
     lastSyncAt: number
     connectedBy: number
@@ -158016,6 +159550,7 @@ export namespace Prisma {
 
   export type MktAccountMinAggregateInputType = {
     id?: true
+    brandId?: true
     platform?: true
     externalId?: true
     name?: true
@@ -158024,6 +159559,7 @@ export namespace Prisma {
     followers?: true
     accessToken?: true
     tokenExpiresAt?: true
+    refreshSecret?: true
     status?: true
     lastSyncAt?: true
     connectedBy?: true
@@ -158033,6 +159569,7 @@ export namespace Prisma {
 
   export type MktAccountMaxAggregateInputType = {
     id?: true
+    brandId?: true
     platform?: true
     externalId?: true
     name?: true
@@ -158041,6 +159578,7 @@ export namespace Prisma {
     followers?: true
     accessToken?: true
     tokenExpiresAt?: true
+    refreshSecret?: true
     status?: true
     lastSyncAt?: true
     connectedBy?: true
@@ -158050,6 +159588,7 @@ export namespace Prisma {
 
   export type MktAccountCountAggregateInputType = {
     id?: true
+    brandId?: true
     platform?: true
     externalId?: true
     name?: true
@@ -158058,6 +159597,7 @@ export namespace Prisma {
     followers?: true
     accessToken?: true
     tokenExpiresAt?: true
+    refreshSecret?: true
     status?: true
     lastSyncAt?: true
     connectedBy?: true
@@ -158154,6 +159694,7 @@ export namespace Prisma {
 
   export type MktAccountGroupByOutputType = {
     id: string
+    brandId: string | null
     platform: string
     externalId: string
     name: string
@@ -158162,6 +159703,7 @@ export namespace Prisma {
     followers: number | null
     accessToken: string
     tokenExpiresAt: Date | null
+    refreshSecret: string | null
     status: string
     lastSyncAt: Date | null
     connectedBy: string | null
@@ -158190,6 +159732,7 @@ export namespace Prisma {
 
   export type MktAccountSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     platform?: boolean
     externalId?: boolean
     name?: boolean
@@ -158198,6 +159741,7 @@ export namespace Prisma {
     followers?: boolean
     accessToken?: boolean
     tokenExpiresAt?: boolean
+    refreshSecret?: boolean
     status?: boolean
     lastSyncAt?: boolean
     connectedBy?: boolean
@@ -158210,6 +159754,7 @@ export namespace Prisma {
 
   export type MktAccountSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     platform?: boolean
     externalId?: boolean
     name?: boolean
@@ -158218,6 +159763,7 @@ export namespace Prisma {
     followers?: boolean
     accessToken?: boolean
     tokenExpiresAt?: boolean
+    refreshSecret?: boolean
     status?: boolean
     lastSyncAt?: boolean
     connectedBy?: boolean
@@ -158227,6 +159773,7 @@ export namespace Prisma {
 
   export type MktAccountSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     platform?: boolean
     externalId?: boolean
     name?: boolean
@@ -158235,6 +159782,7 @@ export namespace Prisma {
     followers?: boolean
     accessToken?: boolean
     tokenExpiresAt?: boolean
+    refreshSecret?: boolean
     status?: boolean
     lastSyncAt?: boolean
     connectedBy?: boolean
@@ -158244,6 +159792,7 @@ export namespace Prisma {
 
   export type MktAccountSelectScalar = {
     id?: boolean
+    brandId?: boolean
     platform?: boolean
     externalId?: boolean
     name?: boolean
@@ -158252,6 +159801,7 @@ export namespace Prisma {
     followers?: boolean
     accessToken?: boolean
     tokenExpiresAt?: boolean
+    refreshSecret?: boolean
     status?: boolean
     lastSyncAt?: boolean
     connectedBy?: boolean
@@ -158259,7 +159809,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type MktAccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "platform" | "externalId" | "name" | "avatar" | "category" | "followers" | "accessToken" | "tokenExpiresAt" | "status" | "lastSyncAt" | "connectedBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktAccount"]>
+  export type MktAccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "brandId" | "platform" | "externalId" | "name" | "avatar" | "category" | "followers" | "accessToken" | "tokenExpiresAt" | "refreshSecret" | "status" | "lastSyncAt" | "connectedBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktAccount"]>
   export type MktAccountInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     publications?: boolean | MktAccount$publicationsArgs<ExtArgs>
     metrics?: boolean | MktAccount$metricsArgs<ExtArgs>
@@ -158276,6 +159826,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
+      brandId: string | null
       platform: string
       externalId: string
       name: string
@@ -158284,6 +159835,7 @@ export namespace Prisma {
       followers: number | null
       accessToken: string
       tokenExpiresAt: Date | null
+      refreshSecret: string | null
       status: string
       lastSyncAt: Date | null
       connectedBy: string | null
@@ -158715,6 +160267,7 @@ export namespace Prisma {
    */
   interface MktAccountFieldRefs {
     readonly id: FieldRef<"MktAccount", 'String'>
+    readonly brandId: FieldRef<"MktAccount", 'String'>
     readonly platform: FieldRef<"MktAccount", 'String'>
     readonly externalId: FieldRef<"MktAccount", 'String'>
     readonly name: FieldRef<"MktAccount", 'String'>
@@ -158723,6 +160276,7 @@ export namespace Prisma {
     readonly followers: FieldRef<"MktAccount", 'Int'>
     readonly accessToken: FieldRef<"MktAccount", 'String'>
     readonly tokenExpiresAt: FieldRef<"MktAccount", 'DateTime'>
+    readonly refreshSecret: FieldRef<"MktAccount", 'String'>
     readonly status: FieldRef<"MktAccount", 'String'>
     readonly lastSyncAt: FieldRef<"MktAccount", 'DateTime'>
     readonly connectedBy: FieldRef<"MktAccount", 'String'>
@@ -159194,6 +160748,7 @@ export namespace Prisma {
 
   export type MktCampaignMinAggregateOutputType = {
     id: string | null
+    brandId: string | null
     name: string | null
     goal: string | null
     status: string | null
@@ -159206,6 +160761,7 @@ export namespace Prisma {
 
   export type MktCampaignMaxAggregateOutputType = {
     id: string | null
+    brandId: string | null
     name: string | null
     goal: string | null
     status: string | null
@@ -159218,6 +160774,7 @@ export namespace Prisma {
 
   export type MktCampaignCountAggregateOutputType = {
     id: number
+    brandId: number
     name: number
     goal: number
     status: number
@@ -159232,6 +160789,7 @@ export namespace Prisma {
 
   export type MktCampaignMinAggregateInputType = {
     id?: true
+    brandId?: true
     name?: true
     goal?: true
     status?: true
@@ -159244,6 +160802,7 @@ export namespace Prisma {
 
   export type MktCampaignMaxAggregateInputType = {
     id?: true
+    brandId?: true
     name?: true
     goal?: true
     status?: true
@@ -159256,6 +160815,7 @@ export namespace Prisma {
 
   export type MktCampaignCountAggregateInputType = {
     id?: true
+    brandId?: true
     name?: true
     goal?: true
     status?: true
@@ -159341,6 +160901,7 @@ export namespace Prisma {
 
   export type MktCampaignGroupByOutputType = {
     id: string
+    brandId: string | null
     name: string
     goal: string
     status: string
@@ -159370,6 +160931,7 @@ export namespace Prisma {
 
   export type MktCampaignSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     name?: boolean
     goal?: boolean
     status?: boolean
@@ -159384,6 +160946,7 @@ export namespace Prisma {
 
   export type MktCampaignSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     name?: boolean
     goal?: boolean
     status?: boolean
@@ -159396,6 +160959,7 @@ export namespace Prisma {
 
   export type MktCampaignSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     name?: boolean
     goal?: boolean
     status?: boolean
@@ -159408,6 +160972,7 @@ export namespace Prisma {
 
   export type MktCampaignSelectScalar = {
     id?: boolean
+    brandId?: boolean
     name?: boolean
     goal?: boolean
     status?: boolean
@@ -159418,7 +160983,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type MktCampaignOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "goal" | "status" | "startAt" | "endAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktCampaign"]>
+  export type MktCampaignOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "brandId" | "name" | "goal" | "status" | "startAt" | "endAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktCampaign"]>
   export type MktCampaignInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     contents?: boolean | MktCampaign$contentsArgs<ExtArgs>
     _count?: boolean | MktCampaignCountOutputTypeDefaultArgs<ExtArgs>
@@ -159433,6 +160998,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
+      brandId: string | null
       name: string
       goal: string
       status: string
@@ -159866,6 +161432,7 @@ export namespace Prisma {
    */
   interface MktCampaignFieldRefs {
     readonly id: FieldRef<"MktCampaign", 'String'>
+    readonly brandId: FieldRef<"MktCampaign", 'String'>
     readonly name: FieldRef<"MktCampaign", 'String'>
     readonly goal: FieldRef<"MktCampaign", 'String'>
     readonly status: FieldRef<"MktCampaign", 'String'>
@@ -160328,6 +161895,7 @@ export namespace Prisma {
 
   export type MktContentMinAggregateOutputType = {
     id: string | null
+    brandId: string | null
     campaignId: string | null
     title: string | null
     body: string | null
@@ -160335,6 +161903,8 @@ export namespace Prisma {
     linkUrl: string | null
     assetIds: string | null
     productIds: string | null
+    variants: string | null
+    postSlots: string | null
     revision: number | null
     approvedRevision: number | null
     approvedAt: Date | null
@@ -160349,6 +161919,7 @@ export namespace Prisma {
 
   export type MktContentMaxAggregateOutputType = {
     id: string | null
+    brandId: string | null
     campaignId: string | null
     title: string | null
     body: string | null
@@ -160356,6 +161927,8 @@ export namespace Prisma {
     linkUrl: string | null
     assetIds: string | null
     productIds: string | null
+    variants: string | null
+    postSlots: string | null
     revision: number | null
     approvedRevision: number | null
     approvedAt: Date | null
@@ -160370,6 +161943,7 @@ export namespace Prisma {
 
   export type MktContentCountAggregateOutputType = {
     id: number
+    brandId: number
     campaignId: number
     title: number
     body: number
@@ -160377,6 +161951,8 @@ export namespace Prisma {
     linkUrl: number
     assetIds: number
     productIds: number
+    variants: number
+    postSlots: number
     revision: number
     approvedRevision: number
     approvedAt: number
@@ -160403,6 +161979,7 @@ export namespace Prisma {
 
   export type MktContentMinAggregateInputType = {
     id?: true
+    brandId?: true
     campaignId?: true
     title?: true
     body?: true
@@ -160410,6 +161987,8 @@ export namespace Prisma {
     linkUrl?: true
     assetIds?: true
     productIds?: true
+    variants?: true
+    postSlots?: true
     revision?: true
     approvedRevision?: true
     approvedAt?: true
@@ -160424,6 +162003,7 @@ export namespace Prisma {
 
   export type MktContentMaxAggregateInputType = {
     id?: true
+    brandId?: true
     campaignId?: true
     title?: true
     body?: true
@@ -160431,6 +162011,8 @@ export namespace Prisma {
     linkUrl?: true
     assetIds?: true
     productIds?: true
+    variants?: true
+    postSlots?: true
     revision?: true
     approvedRevision?: true
     approvedAt?: true
@@ -160445,6 +162027,7 @@ export namespace Prisma {
 
   export type MktContentCountAggregateInputType = {
     id?: true
+    brandId?: true
     campaignId?: true
     title?: true
     body?: true
@@ -160452,6 +162035,8 @@ export namespace Prisma {
     linkUrl?: true
     assetIds?: true
     productIds?: true
+    variants?: true
+    postSlots?: true
     revision?: true
     approvedRevision?: true
     approvedAt?: true
@@ -160553,6 +162138,7 @@ export namespace Prisma {
 
   export type MktContentGroupByOutputType = {
     id: string
+    brandId: string | null
     campaignId: string | null
     title: string
     body: string
@@ -160560,6 +162146,8 @@ export namespace Prisma {
     linkUrl: string | null
     assetIds: string
     productIds: string
+    variants: string
+    postSlots: string
     revision: number
     approvedRevision: number | null
     approvedAt: Date | null
@@ -160593,6 +162181,7 @@ export namespace Prisma {
 
   export type MktContentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     campaignId?: boolean
     title?: boolean
     body?: boolean
@@ -160600,6 +162189,8 @@ export namespace Prisma {
     linkUrl?: boolean
     assetIds?: boolean
     productIds?: boolean
+    variants?: boolean
+    postSlots?: boolean
     revision?: boolean
     approvedRevision?: boolean
     approvedAt?: boolean
@@ -160617,6 +162208,7 @@ export namespace Prisma {
 
   export type MktContentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     campaignId?: boolean
     title?: boolean
     body?: boolean
@@ -160624,6 +162216,8 @@ export namespace Prisma {
     linkUrl?: boolean
     assetIds?: boolean
     productIds?: boolean
+    variants?: boolean
+    postSlots?: boolean
     revision?: boolean
     approvedRevision?: boolean
     approvedAt?: boolean
@@ -160639,6 +162233,7 @@ export namespace Prisma {
 
   export type MktContentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    brandId?: boolean
     campaignId?: boolean
     title?: boolean
     body?: boolean
@@ -160646,6 +162241,8 @@ export namespace Prisma {
     linkUrl?: boolean
     assetIds?: boolean
     productIds?: boolean
+    variants?: boolean
+    postSlots?: boolean
     revision?: boolean
     approvedRevision?: boolean
     approvedAt?: boolean
@@ -160661,6 +162258,7 @@ export namespace Prisma {
 
   export type MktContentSelectScalar = {
     id?: boolean
+    brandId?: boolean
     campaignId?: boolean
     title?: boolean
     body?: boolean
@@ -160668,6 +162266,8 @@ export namespace Prisma {
     linkUrl?: boolean
     assetIds?: boolean
     productIds?: boolean
+    variants?: boolean
+    postSlots?: boolean
     revision?: boolean
     approvedRevision?: boolean
     approvedAt?: boolean
@@ -160680,7 +162280,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type MktContentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "campaignId" | "title" | "body" | "hashtags" | "linkUrl" | "assetIds" | "productIds" | "revision" | "approvedRevision" | "approvedAt" | "approvedBy" | "rejectReason" | "status" | "source" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktContent"]>
+  export type MktContentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "brandId" | "campaignId" | "title" | "body" | "hashtags" | "linkUrl" | "assetIds" | "productIds" | "variants" | "postSlots" | "revision" | "approvedRevision" | "approvedAt" | "approvedBy" | "rejectReason" | "status" | "source" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["mktContent"]>
   export type MktContentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     campaign?: boolean | MktContent$campaignArgs<ExtArgs>
     publications?: boolean | MktContent$publicationsArgs<ExtArgs>
@@ -160701,6 +162301,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
+      brandId: string | null
       campaignId: string | null
       title: string
       body: string
@@ -160708,6 +162309,8 @@ export namespace Prisma {
       linkUrl: string | null
       assetIds: string
       productIds: string
+      variants: string
+      postSlots: string
       revision: number
       approvedRevision: number | null
       approvedAt: Date | null
@@ -161144,6 +162747,7 @@ export namespace Prisma {
    */
   interface MktContentFieldRefs {
     readonly id: FieldRef<"MktContent", 'String'>
+    readonly brandId: FieldRef<"MktContent", 'String'>
     readonly campaignId: FieldRef<"MktContent", 'String'>
     readonly title: FieldRef<"MktContent", 'String'>
     readonly body: FieldRef<"MktContent", 'String'>
@@ -161151,6 +162755,8 @@ export namespace Prisma {
     readonly linkUrl: FieldRef<"MktContent", 'String'>
     readonly assetIds: FieldRef<"MktContent", 'String'>
     readonly productIds: FieldRef<"MktContent", 'String'>
+    readonly variants: FieldRef<"MktContent", 'String'>
+    readonly postSlots: FieldRef<"MktContent", 'String'>
     readonly revision: FieldRef<"MktContent", 'Int'>
     readonly approvedRevision: FieldRef<"MktContent", 'Int'>
     readonly approvedAt: FieldRef<"MktContent", 'DateTime'>
@@ -162897,6 +164503,11 @@ export namespace Prisma {
     durationS: number | null
     createdBy: string | null
     createdAt: Date | null
+    brandId: string | null
+    name: string | null
+    type: string | null
+    url: string | null
+    storagePath: string | null
   }
 
   export type MktAssetMaxAggregateOutputType = {
@@ -162909,6 +164520,11 @@ export namespace Prisma {
     durationS: number | null
     createdBy: string | null
     createdAt: Date | null
+    brandId: string | null
+    name: string | null
+    type: string | null
+    url: string | null
+    storagePath: string | null
   }
 
   export type MktAssetCountAggregateOutputType = {
@@ -162921,6 +164537,11 @@ export namespace Prisma {
     durationS: number
     createdBy: number
     createdAt: number
+    brandId: number
+    name: number
+    type: number
+    url: number
+    storagePath: number
     _all: number
   }
 
@@ -162949,6 +164570,11 @@ export namespace Prisma {
     durationS?: true
     createdBy?: true
     createdAt?: true
+    brandId?: true
+    name?: true
+    type?: true
+    url?: true
+    storagePath?: true
   }
 
   export type MktAssetMaxAggregateInputType = {
@@ -162961,6 +164587,11 @@ export namespace Prisma {
     durationS?: true
     createdBy?: true
     createdAt?: true
+    brandId?: true
+    name?: true
+    type?: true
+    url?: true
+    storagePath?: true
   }
 
   export type MktAssetCountAggregateInputType = {
@@ -162973,6 +164604,11 @@ export namespace Prisma {
     durationS?: true
     createdBy?: true
     createdAt?: true
+    brandId?: true
+    name?: true
+    type?: true
+    url?: true
+    storagePath?: true
     _all?: true
   }
 
@@ -163072,6 +164708,11 @@ export namespace Prisma {
     durationS: number | null
     createdBy: string | null
     createdAt: Date
+    brandId: string | null
+    name: string
+    type: string
+    url: string | null
+    storagePath: string | null
     _count: MktAssetCountAggregateOutputType | null
     _avg: MktAssetAvgAggregateOutputType | null
     _sum: MktAssetSumAggregateOutputType | null
@@ -163103,6 +164744,11 @@ export namespace Prisma {
     durationS?: boolean
     createdBy?: boolean
     createdAt?: boolean
+    brandId?: boolean
+    name?: boolean
+    type?: boolean
+    url?: boolean
+    storagePath?: boolean
   }, ExtArgs["result"]["mktAsset"]>
 
   export type MktAssetSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -163115,6 +164761,11 @@ export namespace Prisma {
     durationS?: boolean
     createdBy?: boolean
     createdAt?: boolean
+    brandId?: boolean
+    name?: boolean
+    type?: boolean
+    url?: boolean
+    storagePath?: boolean
   }, ExtArgs["result"]["mktAsset"]>
 
   export type MktAssetSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -163127,6 +164778,11 @@ export namespace Prisma {
     durationS?: boolean
     createdBy?: boolean
     createdAt?: boolean
+    brandId?: boolean
+    name?: boolean
+    type?: boolean
+    url?: boolean
+    storagePath?: boolean
   }, ExtArgs["result"]["mktAsset"]>
 
   export type MktAssetSelectScalar = {
@@ -163139,9 +164795,14 @@ export namespace Prisma {
     durationS?: boolean
     createdBy?: boolean
     createdAt?: boolean
+    brandId?: boolean
+    name?: boolean
+    type?: boolean
+    url?: boolean
+    storagePath?: boolean
   }
 
-  export type MktAssetOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "localFile" | "mime" | "bytes" | "width" | "height" | "durationS" | "createdBy" | "createdAt", ExtArgs["result"]["mktAsset"]>
+  export type MktAssetOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "localFile" | "mime" | "bytes" | "width" | "height" | "durationS" | "createdBy" | "createdAt" | "brandId" | "name" | "type" | "url" | "storagePath", ExtArgs["result"]["mktAsset"]>
 
   export type $MktAssetPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "MktAsset"
@@ -163156,6 +164817,11 @@ export namespace Prisma {
       durationS: number | null
       createdBy: string | null
       createdAt: Date
+      brandId: string | null
+      name: string
+      type: string
+      url: string | null
+      storagePath: string | null
     }, ExtArgs["result"]["mktAsset"]>
     composites: {}
   }
@@ -163588,6 +165254,11 @@ export namespace Prisma {
     readonly durationS: FieldRef<"MktAsset", 'Float'>
     readonly createdBy: FieldRef<"MktAsset", 'String'>
     readonly createdAt: FieldRef<"MktAsset", 'DateTime'>
+    readonly brandId: FieldRef<"MktAsset", 'String'>
+    readonly name: FieldRef<"MktAsset", 'String'>
+    readonly type: FieldRef<"MktAsset", 'String'>
+    readonly url: FieldRef<"MktAsset", 'String'>
+    readonly storagePath: FieldRef<"MktAsset", 'String'>
   }
     
 
@@ -176575,6 +178246,9 @@ export namespace Prisma {
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
     lastSyncTime: string | null
+    clientId: string | null
+    clientSecret: string | null
+    pushConfig: string | null
     lastSyncAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -176599,6 +178273,9 @@ export namespace Prisma {
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
     lastSyncTime: string | null
+    clientId: string | null
+    clientSecret: string | null
+    pushConfig: string | null
     lastSyncAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -176623,6 +178300,9 @@ export namespace Prisma {
     defaultCategoryId: number
     defaultWarehouseId: number
     lastSyncTime: number
+    clientId: number
+    clientSecret: number
+    pushConfig: number
     lastSyncAt: number
     createdAt: number
     updatedAt: number
@@ -176649,6 +178329,9 @@ export namespace Prisma {
     defaultCategoryId?: true
     defaultWarehouseId?: true
     lastSyncTime?: true
+    clientId?: true
+    clientSecret?: true
+    pushConfig?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -176673,6 +178356,9 @@ export namespace Prisma {
     defaultCategoryId?: true
     defaultWarehouseId?: true
     lastSyncTime?: true
+    clientId?: true
+    clientSecret?: true
+    pushConfig?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -176697,6 +178383,9 @@ export namespace Prisma {
     defaultCategoryId?: true
     defaultWarehouseId?: true
     lastSyncTime?: true
+    clientId?: true
+    clientSecret?: true
+    pushConfig?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -176794,6 +178483,9 @@ export namespace Prisma {
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
     lastSyncTime: string | null
+    clientId: string | null
+    clientSecret: string | null
+    pushConfig: string | null
     lastSyncAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -176835,6 +178527,9 @@ export namespace Prisma {
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
     lastSyncTime?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    pushConfig?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -176859,6 +178554,9 @@ export namespace Prisma {
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
     lastSyncTime?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    pushConfig?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -176883,6 +178581,9 @@ export namespace Prisma {
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
     lastSyncTime?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    pushConfig?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -176907,12 +178608,15 @@ export namespace Prisma {
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
     lastSyncTime?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    pushConfig?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type MisaConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "appId" | "accessCode" | "orgCompanyCode" | "baseUrl" | "enabled" | "syncProducts" | "syncPartners" | "syncStocks" | "syncBalance" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "overwriteDebt" | "negateDebt" | "defaultCategoryId" | "defaultWarehouseId" | "lastSyncTime" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["misaConfig"]>
+  export type MisaConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "appId" | "accessCode" | "orgCompanyCode" | "baseUrl" | "enabled" | "syncProducts" | "syncPartners" | "syncStocks" | "syncBalance" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "overwriteDebt" | "negateDebt" | "defaultCategoryId" | "defaultWarehouseId" | "lastSyncTime" | "clientId" | "clientSecret" | "pushConfig" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["misaConfig"]>
 
   export type $MisaConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "MisaConfig"
@@ -176936,6 +178640,9 @@ export namespace Prisma {
       defaultCategoryId: string | null
       defaultWarehouseId: string | null
       lastSyncTime: string | null
+      clientId: string | null
+      clientSecret: string | null
+      pushConfig: string | null
       lastSyncAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -177380,6 +179087,9 @@ export namespace Prisma {
     readonly defaultCategoryId: FieldRef<"MisaConfig", 'String'>
     readonly defaultWarehouseId: FieldRef<"MisaConfig", 'String'>
     readonly lastSyncTime: FieldRef<"MisaConfig", 'String'>
+    readonly clientId: FieldRef<"MisaConfig", 'String'>
+    readonly clientSecret: FieldRef<"MisaConfig", 'String'>
+    readonly pushConfig: FieldRef<"MisaConfig", 'String'>
     readonly lastSyncAt: FieldRef<"MisaConfig", 'DateTime'>
     readonly createdAt: FieldRef<"MisaConfig", 'DateTime'>
     readonly updatedAt: FieldRef<"MisaConfig", 'DateTime'>
@@ -177746,6 +179456,1160 @@ export namespace Prisma {
      * Omit specific fields from the MisaConfig
      */
     omit?: MisaConfigOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaPushItem
+   */
+
+  export type AggregateMisaPushItem = {
+    _count: MisaPushItemCountAggregateOutputType | null
+    _avg: MisaPushItemAvgAggregateOutputType | null
+    _sum: MisaPushItemSumAggregateOutputType | null
+    _min: MisaPushItemMinAggregateOutputType | null
+    _max: MisaPushItemMaxAggregateOutputType | null
+  }
+
+  export type MisaPushItemAvgAggregateOutputType = {
+    voucherType: number | null
+    soTien: number | null
+    lanGui: number | null
+  }
+
+  export type MisaPushItemSumAggregateOutputType = {
+    voucherType: number | null
+    soTien: number | null
+    lanGui: number | null
+  }
+
+  export type MisaPushItemMinAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    localId: string | null
+    refNo: string | null
+    orgRefid: string | null
+    voucherType: number | null
+    ngay: Date | null
+    soTien: number | null
+    trangThai: string | null
+    loi: string | null
+    lanGui: number | null
+    payload: string | null
+    guiLuc: Date | null
+    ketQuaLuc: Date | null
+  }
+
+  export type MisaPushItemMaxAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    localId: string | null
+    refNo: string | null
+    orgRefid: string | null
+    voucherType: number | null
+    ngay: Date | null
+    soTien: number | null
+    trangThai: string | null
+    loi: string | null
+    lanGui: number | null
+    payload: string | null
+    guiLuc: Date | null
+    ketQuaLuc: Date | null
+  }
+
+  export type MisaPushItemCountAggregateOutputType = {
+    id: number
+    loai: number
+    localId: number
+    refNo: number
+    orgRefid: number
+    voucherType: number
+    ngay: number
+    soTien: number
+    trangThai: number
+    loi: number
+    lanGui: number
+    payload: number
+    guiLuc: number
+    ketQuaLuc: number
+    _all: number
+  }
+
+
+  export type MisaPushItemAvgAggregateInputType = {
+    voucherType?: true
+    soTien?: true
+    lanGui?: true
+  }
+
+  export type MisaPushItemSumAggregateInputType = {
+    voucherType?: true
+    soTien?: true
+    lanGui?: true
+  }
+
+  export type MisaPushItemMinAggregateInputType = {
+    id?: true
+    loai?: true
+    localId?: true
+    refNo?: true
+    orgRefid?: true
+    voucherType?: true
+    ngay?: true
+    soTien?: true
+    trangThai?: true
+    loi?: true
+    lanGui?: true
+    payload?: true
+    guiLuc?: true
+    ketQuaLuc?: true
+  }
+
+  export type MisaPushItemMaxAggregateInputType = {
+    id?: true
+    loai?: true
+    localId?: true
+    refNo?: true
+    orgRefid?: true
+    voucherType?: true
+    ngay?: true
+    soTien?: true
+    trangThai?: true
+    loi?: true
+    lanGui?: true
+    payload?: true
+    guiLuc?: true
+    ketQuaLuc?: true
+  }
+
+  export type MisaPushItemCountAggregateInputType = {
+    id?: true
+    loai?: true
+    localId?: true
+    refNo?: true
+    orgRefid?: true
+    voucherType?: true
+    ngay?: true
+    soTien?: true
+    trangThai?: true
+    loi?: true
+    lanGui?: true
+    payload?: true
+    guiLuc?: true
+    ketQuaLuc?: true
+    _all?: true
+  }
+
+  export type MisaPushItemAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPushItem to aggregate.
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPushItems to fetch.
+     */
+    orderBy?: MisaPushItemOrderByWithRelationInput | MisaPushItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaPushItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPushItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPushItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaPushItems
+    **/
+    _count?: true | MisaPushItemCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaPushItemAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaPushItemSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaPushItemMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaPushItemMaxAggregateInputType
+  }
+
+  export type GetMisaPushItemAggregateType<T extends MisaPushItemAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaPushItem]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaPushItem[P]>
+      : GetScalarType<T[P], AggregateMisaPushItem[P]>
+  }
+
+
+
+
+  export type MisaPushItemGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaPushItemWhereInput
+    orderBy?: MisaPushItemOrderByWithAggregationInput | MisaPushItemOrderByWithAggregationInput[]
+    by: MisaPushItemScalarFieldEnum[] | MisaPushItemScalarFieldEnum
+    having?: MisaPushItemScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaPushItemCountAggregateInputType | true
+    _avg?: MisaPushItemAvgAggregateInputType
+    _sum?: MisaPushItemSumAggregateInputType
+    _min?: MisaPushItemMinAggregateInputType
+    _max?: MisaPushItemMaxAggregateInputType
+  }
+
+  export type MisaPushItemGroupByOutputType = {
+    id: string
+    loai: string
+    localId: string
+    refNo: string | null
+    orgRefid: string
+    voucherType: number | null
+    ngay: Date | null
+    soTien: number
+    trangThai: string
+    loi: string | null
+    lanGui: number
+    payload: string | null
+    guiLuc: Date
+    ketQuaLuc: Date | null
+    _count: MisaPushItemCountAggregateOutputType | null
+    _avg: MisaPushItemAvgAggregateOutputType | null
+    _sum: MisaPushItemSumAggregateOutputType | null
+    _min: MisaPushItemMinAggregateOutputType | null
+    _max: MisaPushItemMaxAggregateOutputType | null
+  }
+
+  type GetMisaPushItemGroupByPayload<T extends MisaPushItemGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaPushItemGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaPushItemGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaPushItemGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaPushItemGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaPushItemSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    localId?: boolean
+    refNo?: boolean
+    orgRefid?: boolean
+    voucherType?: boolean
+    ngay?: boolean
+    soTien?: boolean
+    trangThai?: boolean
+    loi?: boolean
+    lanGui?: boolean
+    payload?: boolean
+    guiLuc?: boolean
+    ketQuaLuc?: boolean
+  }, ExtArgs["result"]["misaPushItem"]>
+
+  export type MisaPushItemSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    localId?: boolean
+    refNo?: boolean
+    orgRefid?: boolean
+    voucherType?: boolean
+    ngay?: boolean
+    soTien?: boolean
+    trangThai?: boolean
+    loi?: boolean
+    lanGui?: boolean
+    payload?: boolean
+    guiLuc?: boolean
+    ketQuaLuc?: boolean
+  }, ExtArgs["result"]["misaPushItem"]>
+
+  export type MisaPushItemSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    localId?: boolean
+    refNo?: boolean
+    orgRefid?: boolean
+    voucherType?: boolean
+    ngay?: boolean
+    soTien?: boolean
+    trangThai?: boolean
+    loi?: boolean
+    lanGui?: boolean
+    payload?: boolean
+    guiLuc?: boolean
+    ketQuaLuc?: boolean
+  }, ExtArgs["result"]["misaPushItem"]>
+
+  export type MisaPushItemSelectScalar = {
+    id?: boolean
+    loai?: boolean
+    localId?: boolean
+    refNo?: boolean
+    orgRefid?: boolean
+    voucherType?: boolean
+    ngay?: boolean
+    soTien?: boolean
+    trangThai?: boolean
+    loi?: boolean
+    lanGui?: boolean
+    payload?: boolean
+    guiLuc?: boolean
+    ketQuaLuc?: boolean
+  }
+
+  export type MisaPushItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "loai" | "localId" | "refNo" | "orgRefid" | "voucherType" | "ngay" | "soTien" | "trangThai" | "loi" | "lanGui" | "payload" | "guiLuc" | "ketQuaLuc", ExtArgs["result"]["misaPushItem"]>
+
+  export type $MisaPushItemPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaPushItem"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      loai: string
+      localId: string
+      refNo: string | null
+      orgRefid: string
+      voucherType: number | null
+      ngay: Date | null
+      soTien: number
+      trangThai: string
+      loi: string | null
+      lanGui: number
+      payload: string | null
+      guiLuc: Date
+      ketQuaLuc: Date | null
+    }, ExtArgs["result"]["misaPushItem"]>
+    composites: {}
+  }
+
+  type MisaPushItemGetPayload<S extends boolean | null | undefined | MisaPushItemDefaultArgs> = $Result.GetResult<Prisma.$MisaPushItemPayload, S>
+
+  type MisaPushItemCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaPushItemFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaPushItemCountAggregateInputType | true
+    }
+
+  export interface MisaPushItemDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaPushItem'], meta: { name: 'MisaPushItem' } }
+    /**
+     * Find zero or one MisaPushItem that matches the filter.
+     * @param {MisaPushItemFindUniqueArgs} args - Arguments to find a MisaPushItem
+     * @example
+     * // Get one MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaPushItemFindUniqueArgs>(args: SelectSubset<T, MisaPushItemFindUniqueArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaPushItem that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaPushItemFindUniqueOrThrowArgs} args - Arguments to find a MisaPushItem
+     * @example
+     * // Get one MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaPushItemFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaPushItemFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPushItem that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemFindFirstArgs} args - Arguments to find a MisaPushItem
+     * @example
+     * // Get one MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaPushItemFindFirstArgs>(args?: SelectSubset<T, MisaPushItemFindFirstArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPushItem that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemFindFirstOrThrowArgs} args - Arguments to find a MisaPushItem
+     * @example
+     * // Get one MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaPushItemFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaPushItemFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaPushItems that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaPushItems
+     * const misaPushItems = await prisma.misaPushItem.findMany()
+     * 
+     * // Get first 10 MisaPushItems
+     * const misaPushItems = await prisma.misaPushItem.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaPushItemWithIdOnly = await prisma.misaPushItem.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaPushItemFindManyArgs>(args?: SelectSubset<T, MisaPushItemFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaPushItem.
+     * @param {MisaPushItemCreateArgs} args - Arguments to create a MisaPushItem.
+     * @example
+     * // Create one MisaPushItem
+     * const MisaPushItem = await prisma.misaPushItem.create({
+     *   data: {
+     *     // ... data to create a MisaPushItem
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaPushItemCreateArgs>(args: SelectSubset<T, MisaPushItemCreateArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaPushItems.
+     * @param {MisaPushItemCreateManyArgs} args - Arguments to create many MisaPushItems.
+     * @example
+     * // Create many MisaPushItems
+     * const misaPushItem = await prisma.misaPushItem.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaPushItemCreateManyArgs>(args?: SelectSubset<T, MisaPushItemCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaPushItems and returns the data saved in the database.
+     * @param {MisaPushItemCreateManyAndReturnArgs} args - Arguments to create many MisaPushItems.
+     * @example
+     * // Create many MisaPushItems
+     * const misaPushItem = await prisma.misaPushItem.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaPushItems and only return the `id`
+     * const misaPushItemWithIdOnly = await prisma.misaPushItem.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaPushItemCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaPushItemCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaPushItem.
+     * @param {MisaPushItemDeleteArgs} args - Arguments to delete one MisaPushItem.
+     * @example
+     * // Delete one MisaPushItem
+     * const MisaPushItem = await prisma.misaPushItem.delete({
+     *   where: {
+     *     // ... filter to delete one MisaPushItem
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaPushItemDeleteArgs>(args: SelectSubset<T, MisaPushItemDeleteArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaPushItem.
+     * @param {MisaPushItemUpdateArgs} args - Arguments to update one MisaPushItem.
+     * @example
+     * // Update one MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaPushItemUpdateArgs>(args: SelectSubset<T, MisaPushItemUpdateArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaPushItems.
+     * @param {MisaPushItemDeleteManyArgs} args - Arguments to filter MisaPushItems to delete.
+     * @example
+     * // Delete a few MisaPushItems
+     * const { count } = await prisma.misaPushItem.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaPushItemDeleteManyArgs>(args?: SelectSubset<T, MisaPushItemDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPushItems.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaPushItems
+     * const misaPushItem = await prisma.misaPushItem.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaPushItemUpdateManyArgs>(args: SelectSubset<T, MisaPushItemUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPushItems and returns the data updated in the database.
+     * @param {MisaPushItemUpdateManyAndReturnArgs} args - Arguments to update many MisaPushItems.
+     * @example
+     * // Update many MisaPushItems
+     * const misaPushItem = await prisma.misaPushItem.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaPushItems and only return the `id`
+     * const misaPushItemWithIdOnly = await prisma.misaPushItem.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaPushItemUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaPushItemUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaPushItem.
+     * @param {MisaPushItemUpsertArgs} args - Arguments to update or create a MisaPushItem.
+     * @example
+     * // Update or create a MisaPushItem
+     * const misaPushItem = await prisma.misaPushItem.upsert({
+     *   create: {
+     *     // ... data to create a MisaPushItem
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaPushItem we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaPushItemUpsertArgs>(args: SelectSubset<T, MisaPushItemUpsertArgs<ExtArgs>>): Prisma__MisaPushItemClient<$Result.GetResult<Prisma.$MisaPushItemPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaPushItems.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemCountArgs} args - Arguments to filter MisaPushItems to count.
+     * @example
+     * // Count the number of MisaPushItems
+     * const count = await prisma.misaPushItem.count({
+     *   where: {
+     *     // ... the filter for the MisaPushItems we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaPushItemCountArgs>(
+      args?: Subset<T, MisaPushItemCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaPushItemCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaPushItem.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaPushItemAggregateArgs>(args: Subset<T, MisaPushItemAggregateArgs>): Prisma.PrismaPromise<GetMisaPushItemAggregateType<T>>
+
+    /**
+     * Group by MisaPushItem.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPushItemGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaPushItemGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaPushItemGroupByArgs['orderBy'] }
+        : { orderBy?: MisaPushItemGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaPushItemGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaPushItemGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaPushItem model
+   */
+  readonly fields: MisaPushItemFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaPushItem.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaPushItemClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaPushItem model
+   */
+  interface MisaPushItemFieldRefs {
+    readonly id: FieldRef<"MisaPushItem", 'String'>
+    readonly loai: FieldRef<"MisaPushItem", 'String'>
+    readonly localId: FieldRef<"MisaPushItem", 'String'>
+    readonly refNo: FieldRef<"MisaPushItem", 'String'>
+    readonly orgRefid: FieldRef<"MisaPushItem", 'String'>
+    readonly voucherType: FieldRef<"MisaPushItem", 'Int'>
+    readonly ngay: FieldRef<"MisaPushItem", 'DateTime'>
+    readonly soTien: FieldRef<"MisaPushItem", 'Float'>
+    readonly trangThai: FieldRef<"MisaPushItem", 'String'>
+    readonly loi: FieldRef<"MisaPushItem", 'String'>
+    readonly lanGui: FieldRef<"MisaPushItem", 'Int'>
+    readonly payload: FieldRef<"MisaPushItem", 'String'>
+    readonly guiLuc: FieldRef<"MisaPushItem", 'DateTime'>
+    readonly ketQuaLuc: FieldRef<"MisaPushItem", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaPushItem findUnique
+   */
+  export type MisaPushItemFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaPushItem to fetch.
+     */
+    where: MisaPushItemWhereUniqueInput
+  }
+
+  /**
+   * MisaPushItem findUniqueOrThrow
+   */
+  export type MisaPushItemFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaPushItem to fetch.
+     */
+    where: MisaPushItemWhereUniqueInput
+  }
+
+  /**
+   * MisaPushItem findFirst
+   */
+  export type MisaPushItemFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaPushItem to fetch.
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPushItems to fetch.
+     */
+    orderBy?: MisaPushItemOrderByWithRelationInput | MisaPushItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPushItems.
+     */
+    cursor?: MisaPushItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPushItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPushItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPushItems.
+     */
+    distinct?: MisaPushItemScalarFieldEnum | MisaPushItemScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPushItem findFirstOrThrow
+   */
+  export type MisaPushItemFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaPushItem to fetch.
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPushItems to fetch.
+     */
+    orderBy?: MisaPushItemOrderByWithRelationInput | MisaPushItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPushItems.
+     */
+    cursor?: MisaPushItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPushItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPushItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPushItems.
+     */
+    distinct?: MisaPushItemScalarFieldEnum | MisaPushItemScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPushItem findMany
+   */
+  export type MisaPushItemFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaPushItems to fetch.
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPushItems to fetch.
+     */
+    orderBy?: MisaPushItemOrderByWithRelationInput | MisaPushItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaPushItems.
+     */
+    cursor?: MisaPushItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPushItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPushItems.
+     */
+    skip?: number
+    distinct?: MisaPushItemScalarFieldEnum | MisaPushItemScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPushItem create
+   */
+  export type MisaPushItemCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MisaPushItem.
+     */
+    data: XOR<MisaPushItemCreateInput, MisaPushItemUncheckedCreateInput>
+  }
+
+  /**
+   * MisaPushItem createMany
+   */
+  export type MisaPushItemCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaPushItems.
+     */
+    data: MisaPushItemCreateManyInput | MisaPushItemCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaPushItem createManyAndReturn
+   */
+  export type MisaPushItemCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaPushItems.
+     */
+    data: MisaPushItemCreateManyInput | MisaPushItemCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaPushItem update
+   */
+  export type MisaPushItemUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MisaPushItem.
+     */
+    data: XOR<MisaPushItemUpdateInput, MisaPushItemUncheckedUpdateInput>
+    /**
+     * Choose, which MisaPushItem to update.
+     */
+    where: MisaPushItemWhereUniqueInput
+  }
+
+  /**
+   * MisaPushItem updateMany
+   */
+  export type MisaPushItemUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaPushItems.
+     */
+    data: XOR<MisaPushItemUpdateManyMutationInput, MisaPushItemUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPushItems to update
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * Limit how many MisaPushItems to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPushItem updateManyAndReturn
+   */
+  export type MisaPushItemUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaPushItems.
+     */
+    data: XOR<MisaPushItemUpdateManyMutationInput, MisaPushItemUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPushItems to update
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * Limit how many MisaPushItems to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPushItem upsert
+   */
+  export type MisaPushItemUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MisaPushItem to update in case it exists.
+     */
+    where: MisaPushItemWhereUniqueInput
+    /**
+     * In case the MisaPushItem found by the `where` argument doesn't exist, create a new MisaPushItem with this data.
+     */
+    create: XOR<MisaPushItemCreateInput, MisaPushItemUncheckedCreateInput>
+    /**
+     * In case the MisaPushItem was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaPushItemUpdateInput, MisaPushItemUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaPushItem delete
+   */
+  export type MisaPushItemDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
+    /**
+     * Filter which MisaPushItem to delete.
+     */
+    where: MisaPushItemWhereUniqueInput
+  }
+
+  /**
+   * MisaPushItem deleteMany
+   */
+  export type MisaPushItemDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPushItems to delete
+     */
+    where?: MisaPushItemWhereInput
+    /**
+     * Limit how many MisaPushItems to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPushItem without action
+   */
+  export type MisaPushItemDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPushItem
+     */
+    select?: MisaPushItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPushItem
+     */
+    omit?: MisaPushItemOmit<ExtArgs> | null
   }
 
 
@@ -189683,6 +192547,7 @@ export namespace Prisma {
     kenh: string | null
     channelId: string | null
     henDangLuc: Date | null
+    coNoiDungAI: boolean | null
     trangThai: string | null
     maTrenSan: string | null
     loiCuoi: string | null
@@ -189707,6 +192572,7 @@ export namespace Prisma {
     kenh: string | null
     channelId: string | null
     henDangLuc: Date | null
+    coNoiDungAI: boolean | null
     trangThai: string | null
     maTrenSan: string | null
     loiCuoi: string | null
@@ -189731,6 +192597,7 @@ export namespace Prisma {
     kenh: number
     channelId: number
     henDangLuc: number
+    coNoiDungAI: number
     trangThai: number
     maTrenSan: number
     loiCuoi: number
@@ -189767,6 +192634,7 @@ export namespace Prisma {
     kenh?: true
     channelId?: true
     henDangLuc?: true
+    coNoiDungAI?: true
     trangThai?: true
     maTrenSan?: true
     loiCuoi?: true
@@ -189791,6 +192659,7 @@ export namespace Prisma {
     kenh?: true
     channelId?: true
     henDangLuc?: true
+    coNoiDungAI?: true
     trangThai?: true
     maTrenSan?: true
     loiCuoi?: true
@@ -189815,6 +192684,7 @@ export namespace Prisma {
     kenh?: true
     channelId?: true
     henDangLuc?: true
+    coNoiDungAI?: true
     trangThai?: true
     maTrenSan?: true
     loiCuoi?: true
@@ -189926,6 +192796,7 @@ export namespace Prisma {
     kenh: string | null
     channelId: string | null
     henDangLuc: Date | null
+    coNoiDungAI: boolean | null
     trangThai: string
     maTrenSan: string | null
     loiCuoi: string | null
@@ -189969,6 +192840,7 @@ export namespace Prisma {
     kenh?: boolean
     channelId?: boolean
     henDangLuc?: boolean
+    coNoiDungAI?: boolean
     trangThai?: boolean
     maTrenSan?: boolean
     loiCuoi?: boolean
@@ -189995,6 +192867,7 @@ export namespace Prisma {
     kenh?: boolean
     channelId?: boolean
     henDangLuc?: boolean
+    coNoiDungAI?: boolean
     trangThai?: boolean
     maTrenSan?: boolean
     loiCuoi?: boolean
@@ -190019,6 +192892,7 @@ export namespace Prisma {
     kenh?: boolean
     channelId?: boolean
     henDangLuc?: boolean
+    coNoiDungAI?: boolean
     trangThai?: boolean
     maTrenSan?: boolean
     loiCuoi?: boolean
@@ -190043,6 +192917,7 @@ export namespace Prisma {
     kenh?: boolean
     channelId?: boolean
     henDangLuc?: boolean
+    coNoiDungAI?: boolean
     trangThai?: boolean
     maTrenSan?: boolean
     loiCuoi?: boolean
@@ -190053,7 +192928,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type SanMediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ten" | "nguon" | "nguonId" | "lienKet" | "mime" | "bytes" | "thoiLuongS" | "anhBia" | "caption" | "kenh" | "channelId" | "henDangLuc" | "trangThai" | "maTrenSan" | "loiCuoi" | "dangLuc" | "tienTrinhDang" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["sanMedia"]>
+  export type SanMediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ten" | "nguon" | "nguonId" | "lienKet" | "mime" | "bytes" | "thoiLuongS" | "anhBia" | "caption" | "kenh" | "channelId" | "henDangLuc" | "coNoiDungAI" | "trangThai" | "maTrenSan" | "loiCuoi" | "dangLuc" | "tienTrinhDang" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["sanMedia"]>
   export type SanMediaInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     sanPham?: boolean | SanMedia$sanPhamArgs<ExtArgs>
     _count?: boolean | SanMediaCountOutputTypeDefaultArgs<ExtArgs>
@@ -190102,6 +192977,13 @@ export namespace Prisma {
        * có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
        */
       henDangLuc: Date | null
+      /**
+       * KHAI NỘI DUNG AI (09/10/2026): video có hình / giọng / avatar / kịch bản do AI
+       * tạo hoặc AI hỗ trợ không. Shopee edit_video_info BẮT BUỘC `aigc_label` và trừ
+       * điểm nếu khai "không" mà sàn phát hiện có — nên null = CHƯA KHAI, chặn đăng chứ
+       * không đoán false. TikTok đăng thẳng gửi `is_aigc` theo cùng lời khai.
+       */
+      coNoiDungAI: boolean | null
       /**
        * nhap | da_len_lich | cho_dang | da_dang | loi
        */
@@ -190559,6 +193441,7 @@ export namespace Prisma {
     readonly kenh: FieldRef<"SanMedia", 'String'>
     readonly channelId: FieldRef<"SanMedia", 'String'>
     readonly henDangLuc: FieldRef<"SanMedia", 'DateTime'>
+    readonly coNoiDungAI: FieldRef<"SanMedia", 'Boolean'>
     readonly trangThai: FieldRef<"SanMedia", 'String'>
     readonly maTrenSan: FieldRef<"SanMedia", 'String'>
     readonly loiCuoi: FieldRef<"SanMedia", 'String'>
@@ -192366,6 +195249,14 @@ export namespace Prisma {
     notes: 'notes',
     salesUserId: 'salesUserId',
     salesUserName: 'salesUserName',
+    taxCode: 'taxCode',
+    invoiceType: 'invoiceType',
+    invoiceCompanyName: 'invoiceCompanyName',
+    invoiceBuyerName: 'invoiceBuyerName',
+    invoiceAddress: 'invoiceAddress',
+    invoiceEmail: 'invoiceEmail',
+    invoicePhone: 'invoicePhone',
+    invoiceIdNo: 'invoiceIdNo',
     totalPurchases: 'totalPurchases',
     totalOrders: 'totalOrders',
     debt: 'debt',
@@ -193462,6 +196353,7 @@ export namespace Prisma {
     smtpConfig: 'smtpConfig',
     mailboxConfig: 'mailboxConfig',
     geminiApiKey: 'geminiApiKey',
+    deepseekApiKey: 'deepseekApiKey',
     notifyNewOrder: 'notifyNewOrder',
     notifyDailyReport: 'notifyDailyReport',
     notifyWeeklyReport: 'notifyWeeklyReport',
@@ -193489,6 +196381,7 @@ export namespace Prisma {
     ttPostAvatar: 'ttPostAvatar',
     ttPostAuthAt: 'ttPostAuthAt',
     khoMeMa: 'khoMeMa',
+    khoMeHuMa: 'khoMeHuMa',
     updatedAt: 'updatedAt'
   };
 
@@ -194563,8 +197456,36 @@ export namespace Prisma {
   export type FbContentDraftScalarFieldEnum = (typeof FbContentDraftScalarFieldEnum)[keyof typeof FbContentDraftScalarFieldEnum]
 
 
+  export const MktBrandScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    industry: 'industry',
+    description: 'description',
+    products: 'products',
+    contentPillars: 'contentPillars',
+    contact: 'contact',
+    audience: 'audience',
+    voice: 'voice',
+    usp: 'usp',
+    cta: 'cta',
+    examples: 'examples',
+    notes: 'notes',
+    bannedWords: 'bannedWords',
+    timezone: 'timezone',
+    aiAutoApprove: 'aiAutoApprove',
+    postSlots: 'postSlots',
+    archivedAt: 'archivedAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MktBrandScalarFieldEnum = (typeof MktBrandScalarFieldEnum)[keyof typeof MktBrandScalarFieldEnum]
+
+
   export const MktAccountScalarFieldEnum: {
     id: 'id',
+    brandId: 'brandId',
     platform: 'platform',
     externalId: 'externalId',
     name: 'name',
@@ -194573,6 +197494,7 @@ export namespace Prisma {
     followers: 'followers',
     accessToken: 'accessToken',
     tokenExpiresAt: 'tokenExpiresAt',
+    refreshSecret: 'refreshSecret',
     status: 'status',
     lastSyncAt: 'lastSyncAt',
     connectedBy: 'connectedBy',
@@ -194585,6 +197507,7 @@ export namespace Prisma {
 
   export const MktCampaignScalarFieldEnum: {
     id: 'id',
+    brandId: 'brandId',
     name: 'name',
     goal: 'goal',
     status: 'status',
@@ -194600,6 +197523,7 @@ export namespace Prisma {
 
   export const MktContentScalarFieldEnum: {
     id: 'id',
+    brandId: 'brandId',
     campaignId: 'campaignId',
     title: 'title',
     body: 'body',
@@ -194607,6 +197531,8 @@ export namespace Prisma {
     linkUrl: 'linkUrl',
     assetIds: 'assetIds',
     productIds: 'productIds',
+    variants: 'variants',
+    postSlots: 'postSlots',
     revision: 'revision',
     approvedRevision: 'approvedRevision',
     approvedAt: 'approvedAt',
@@ -194653,7 +197579,12 @@ export namespace Prisma {
     height: 'height',
     durationS: 'durationS',
     createdBy: 'createdBy',
-    createdAt: 'createdAt'
+    createdAt: 'createdAt',
+    brandId: 'brandId',
+    name: 'name',
+    type: 'type',
+    url: 'url',
+    storagePath: 'storagePath'
   };
 
   export type MktAssetScalarFieldEnum = (typeof MktAssetScalarFieldEnum)[keyof typeof MktAssetScalarFieldEnum]
@@ -194889,12 +197820,35 @@ export namespace Prisma {
     defaultCategoryId: 'defaultCategoryId',
     defaultWarehouseId: 'defaultWarehouseId',
     lastSyncTime: 'lastSyncTime',
+    clientId: 'clientId',
+    clientSecret: 'clientSecret',
+    pushConfig: 'pushConfig',
     lastSyncAt: 'lastSyncAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
 
   export type MisaConfigScalarFieldEnum = (typeof MisaConfigScalarFieldEnum)[keyof typeof MisaConfigScalarFieldEnum]
+
+
+  export const MisaPushItemScalarFieldEnum: {
+    id: 'id',
+    loai: 'loai',
+    localId: 'localId',
+    refNo: 'refNo',
+    orgRefid: 'orgRefid',
+    voucherType: 'voucherType',
+    ngay: 'ngay',
+    soTien: 'soTien',
+    trangThai: 'trangThai',
+    loi: 'loi',
+    lanGui: 'lanGui',
+    payload: 'payload',
+    guiLuc: 'guiLuc',
+    ketQuaLuc: 'ketQuaLuc'
+  };
+
+  export type MisaPushItemScalarFieldEnum = (typeof MisaPushItemScalarFieldEnum)[keyof typeof MisaPushItemScalarFieldEnum]
 
 
   export const MisaMapScalarFieldEnum: {
@@ -195103,6 +198057,7 @@ export namespace Prisma {
     kenh: 'kenh',
     channelId: 'channelId',
     henDangLuc: 'henDangLuc',
+    coNoiDungAI: 'coNoiDungAI',
     trangThai: 'trangThai',
     maTrenSan: 'maTrenSan',
     loiCuoi: 'loiCuoi',
@@ -196364,6 +199319,14 @@ export namespace Prisma {
     notes?: StringNullableFilter<"Customer"> | string | null
     salesUserId?: StringNullableFilter<"Customer"> | string | null
     salesUserName?: StringNullableFilter<"Customer"> | string | null
+    taxCode?: StringNullableFilter<"Customer"> | string | null
+    invoiceType?: StringNullableFilter<"Customer"> | string | null
+    invoiceCompanyName?: StringNullableFilter<"Customer"> | string | null
+    invoiceBuyerName?: StringNullableFilter<"Customer"> | string | null
+    invoiceAddress?: StringNullableFilter<"Customer"> | string | null
+    invoiceEmail?: StringNullableFilter<"Customer"> | string | null
+    invoicePhone?: StringNullableFilter<"Customer"> | string | null
+    invoiceIdNo?: StringNullableFilter<"Customer"> | string | null
     totalPurchases?: FloatFilter<"Customer"> | number
     totalOrders?: IntFilter<"Customer"> | number
     debt?: FloatFilter<"Customer"> | number
@@ -196393,6 +199356,14 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     salesUserId?: SortOrderInput | SortOrder
     salesUserName?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
+    invoiceType?: SortOrderInput | SortOrder
+    invoiceCompanyName?: SortOrderInput | SortOrder
+    invoiceBuyerName?: SortOrderInput | SortOrder
+    invoiceAddress?: SortOrderInput | SortOrder
+    invoiceEmail?: SortOrderInput | SortOrder
+    invoicePhone?: SortOrderInput | SortOrder
+    invoiceIdNo?: SortOrderInput | SortOrder
     totalPurchases?: SortOrder
     totalOrders?: SortOrder
     debt?: SortOrder
@@ -196425,6 +199396,14 @@ export namespace Prisma {
     notes?: StringNullableFilter<"Customer"> | string | null
     salesUserId?: StringNullableFilter<"Customer"> | string | null
     salesUserName?: StringNullableFilter<"Customer"> | string | null
+    taxCode?: StringNullableFilter<"Customer"> | string | null
+    invoiceType?: StringNullableFilter<"Customer"> | string | null
+    invoiceCompanyName?: StringNullableFilter<"Customer"> | string | null
+    invoiceBuyerName?: StringNullableFilter<"Customer"> | string | null
+    invoiceAddress?: StringNullableFilter<"Customer"> | string | null
+    invoiceEmail?: StringNullableFilter<"Customer"> | string | null
+    invoicePhone?: StringNullableFilter<"Customer"> | string | null
+    invoiceIdNo?: StringNullableFilter<"Customer"> | string | null
     totalPurchases?: FloatFilter<"Customer"> | number
     totalOrders?: IntFilter<"Customer"> | number
     debt?: FloatFilter<"Customer"> | number
@@ -196454,6 +199433,14 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     salesUserId?: SortOrderInput | SortOrder
     salesUserName?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
+    invoiceType?: SortOrderInput | SortOrder
+    invoiceCompanyName?: SortOrderInput | SortOrder
+    invoiceBuyerName?: SortOrderInput | SortOrder
+    invoiceAddress?: SortOrderInput | SortOrder
+    invoiceEmail?: SortOrderInput | SortOrder
+    invoicePhone?: SortOrderInput | SortOrder
+    invoiceIdNo?: SortOrderInput | SortOrder
     totalPurchases?: SortOrder
     totalOrders?: SortOrder
     debt?: SortOrder
@@ -196487,6 +199474,14 @@ export namespace Prisma {
     notes?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     salesUserId?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     salesUserName?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    taxCode?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceType?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceCompanyName?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceBuyerName?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceAddress?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceEmail?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoicePhone?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    invoiceIdNo?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     totalPurchases?: FloatWithAggregatesFilter<"Customer"> | number
     totalOrders?: IntWithAggregatesFilter<"Customer"> | number
     debt?: FloatWithAggregatesFilter<"Customer"> | number
@@ -201881,6 +204876,7 @@ export namespace Prisma {
     smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
     mailboxConfig?: StringNullableFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
+    deepseekApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -201908,6 +204904,7 @@ export namespace Prisma {
     ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     khoMeMa?: StringNullableFilter<"StoreSettings"> | string | null
+    khoMeHuMa?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -201934,6 +204931,7 @@ export namespace Prisma {
     smtpConfig?: SortOrderInput | SortOrder
     mailboxConfig?: SortOrderInput | SortOrder
     geminiApiKey?: SortOrderInput | SortOrder
+    deepseekApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -201961,6 +204959,7 @@ export namespace Prisma {
     ttPostAvatar?: SortOrderInput | SortOrder
     ttPostAuthAt?: SortOrderInput | SortOrder
     khoMeMa?: SortOrderInput | SortOrder
+    khoMeHuMa?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
   }
 
@@ -201990,6 +204989,7 @@ export namespace Prisma {
     smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
     mailboxConfig?: StringNullableFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
+    deepseekApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -202017,6 +205017,7 @@ export namespace Prisma {
     ttPostAvatar?: StringNullableFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     khoMeMa?: StringNullableFilter<"StoreSettings"> | string | null
+    khoMeHuMa?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -202043,6 +205044,7 @@ export namespace Prisma {
     smtpConfig?: SortOrderInput | SortOrder
     mailboxConfig?: SortOrderInput | SortOrder
     geminiApiKey?: SortOrderInput | SortOrder
+    deepseekApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -202070,6 +205072,7 @@ export namespace Prisma {
     ttPostAvatar?: SortOrderInput | SortOrder
     ttPostAuthAt?: SortOrderInput | SortOrder
     khoMeMa?: SortOrderInput | SortOrder
+    khoMeHuMa?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _avg?: StoreSettingsAvgOrderByAggregateInput
@@ -202104,6 +205107,7 @@ export namespace Prisma {
     smtpConfig?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     mailboxConfig?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    deepseekApiKey?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
@@ -202131,6 +205135,7 @@ export namespace Prisma {
     ttPostAvatar?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     ttPostAuthAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
     khoMeMa?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    khoMeHuMa?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -207534,11 +210539,144 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"FbContentDraft"> | Date | string
   }
 
+  export type MktBrandWhereInput = {
+    AND?: MktBrandWhereInput | MktBrandWhereInput[]
+    OR?: MktBrandWhereInput[]
+    NOT?: MktBrandWhereInput | MktBrandWhereInput[]
+    id?: StringFilter<"MktBrand"> | string
+    name?: StringFilter<"MktBrand"> | string
+    industry?: StringFilter<"MktBrand"> | string
+    description?: StringFilter<"MktBrand"> | string
+    products?: StringFilter<"MktBrand"> | string
+    contentPillars?: StringFilter<"MktBrand"> | string
+    contact?: StringFilter<"MktBrand"> | string
+    audience?: StringFilter<"MktBrand"> | string
+    voice?: StringFilter<"MktBrand"> | string
+    usp?: StringFilter<"MktBrand"> | string
+    cta?: StringFilter<"MktBrand"> | string
+    examples?: StringFilter<"MktBrand"> | string
+    notes?: StringFilter<"MktBrand"> | string
+    bannedWords?: StringFilter<"MktBrand"> | string
+    timezone?: StringFilter<"MktBrand"> | string
+    aiAutoApprove?: BoolFilter<"MktBrand"> | boolean
+    postSlots?: StringFilter<"MktBrand"> | string
+    archivedAt?: DateTimeNullableFilter<"MktBrand"> | Date | string | null
+    createdBy?: StringNullableFilter<"MktBrand"> | string | null
+    createdAt?: DateTimeFilter<"MktBrand"> | Date | string
+    updatedAt?: DateTimeFilter<"MktBrand"> | Date | string
+  }
+
+  export type MktBrandOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    industry?: SortOrder
+    description?: SortOrder
+    products?: SortOrder
+    contentPillars?: SortOrder
+    contact?: SortOrder
+    audience?: SortOrder
+    voice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    examples?: SortOrder
+    notes?: SortOrder
+    bannedWords?: SortOrder
+    timezone?: SortOrder
+    aiAutoApprove?: SortOrder
+    postSlots?: SortOrder
+    archivedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktBrandWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MktBrandWhereInput | MktBrandWhereInput[]
+    OR?: MktBrandWhereInput[]
+    NOT?: MktBrandWhereInput | MktBrandWhereInput[]
+    name?: StringFilter<"MktBrand"> | string
+    industry?: StringFilter<"MktBrand"> | string
+    description?: StringFilter<"MktBrand"> | string
+    products?: StringFilter<"MktBrand"> | string
+    contentPillars?: StringFilter<"MktBrand"> | string
+    contact?: StringFilter<"MktBrand"> | string
+    audience?: StringFilter<"MktBrand"> | string
+    voice?: StringFilter<"MktBrand"> | string
+    usp?: StringFilter<"MktBrand"> | string
+    cta?: StringFilter<"MktBrand"> | string
+    examples?: StringFilter<"MktBrand"> | string
+    notes?: StringFilter<"MktBrand"> | string
+    bannedWords?: StringFilter<"MktBrand"> | string
+    timezone?: StringFilter<"MktBrand"> | string
+    aiAutoApprove?: BoolFilter<"MktBrand"> | boolean
+    postSlots?: StringFilter<"MktBrand"> | string
+    archivedAt?: DateTimeNullableFilter<"MktBrand"> | Date | string | null
+    createdBy?: StringNullableFilter<"MktBrand"> | string | null
+    createdAt?: DateTimeFilter<"MktBrand"> | Date | string
+    updatedAt?: DateTimeFilter<"MktBrand"> | Date | string
+  }, "id">
+
+  export type MktBrandOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    industry?: SortOrder
+    description?: SortOrder
+    products?: SortOrder
+    contentPillars?: SortOrder
+    contact?: SortOrder
+    audience?: SortOrder
+    voice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    examples?: SortOrder
+    notes?: SortOrder
+    bannedWords?: SortOrder
+    timezone?: SortOrder
+    aiAutoApprove?: SortOrder
+    postSlots?: SortOrder
+    archivedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MktBrandCountOrderByAggregateInput
+    _max?: MktBrandMaxOrderByAggregateInput
+    _min?: MktBrandMinOrderByAggregateInput
+  }
+
+  export type MktBrandScalarWhereWithAggregatesInput = {
+    AND?: MktBrandScalarWhereWithAggregatesInput | MktBrandScalarWhereWithAggregatesInput[]
+    OR?: MktBrandScalarWhereWithAggregatesInput[]
+    NOT?: MktBrandScalarWhereWithAggregatesInput | MktBrandScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MktBrand"> | string
+    name?: StringWithAggregatesFilter<"MktBrand"> | string
+    industry?: StringWithAggregatesFilter<"MktBrand"> | string
+    description?: StringWithAggregatesFilter<"MktBrand"> | string
+    products?: StringWithAggregatesFilter<"MktBrand"> | string
+    contentPillars?: StringWithAggregatesFilter<"MktBrand"> | string
+    contact?: StringWithAggregatesFilter<"MktBrand"> | string
+    audience?: StringWithAggregatesFilter<"MktBrand"> | string
+    voice?: StringWithAggregatesFilter<"MktBrand"> | string
+    usp?: StringWithAggregatesFilter<"MktBrand"> | string
+    cta?: StringWithAggregatesFilter<"MktBrand"> | string
+    examples?: StringWithAggregatesFilter<"MktBrand"> | string
+    notes?: StringWithAggregatesFilter<"MktBrand"> | string
+    bannedWords?: StringWithAggregatesFilter<"MktBrand"> | string
+    timezone?: StringWithAggregatesFilter<"MktBrand"> | string
+    aiAutoApprove?: BoolWithAggregatesFilter<"MktBrand"> | boolean
+    postSlots?: StringWithAggregatesFilter<"MktBrand"> | string
+    archivedAt?: DateTimeNullableWithAggregatesFilter<"MktBrand"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"MktBrand"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MktBrand"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MktBrand"> | Date | string
+  }
+
   export type MktAccountWhereInput = {
     AND?: MktAccountWhereInput | MktAccountWhereInput[]
     OR?: MktAccountWhereInput[]
     NOT?: MktAccountWhereInput | MktAccountWhereInput[]
     id?: StringFilter<"MktAccount"> | string
+    brandId?: StringNullableFilter<"MktAccount"> | string | null
     platform?: StringFilter<"MktAccount"> | string
     externalId?: StringFilter<"MktAccount"> | string
     name?: StringFilter<"MktAccount"> | string
@@ -207547,6 +210685,7 @@ export namespace Prisma {
     followers?: IntNullableFilter<"MktAccount"> | number | null
     accessToken?: StringFilter<"MktAccount"> | string
     tokenExpiresAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    refreshSecret?: StringNullableFilter<"MktAccount"> | string | null
     status?: StringFilter<"MktAccount"> | string
     lastSyncAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
     connectedBy?: StringNullableFilter<"MktAccount"> | string | null
@@ -207558,6 +210697,7 @@ export namespace Prisma {
 
   export type MktAccountOrderByWithRelationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     platform?: SortOrder
     externalId?: SortOrder
     name?: SortOrder
@@ -207566,6 +210706,7 @@ export namespace Prisma {
     followers?: SortOrderInput | SortOrder
     accessToken?: SortOrder
     tokenExpiresAt?: SortOrderInput | SortOrder
+    refreshSecret?: SortOrderInput | SortOrder
     status?: SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     connectedBy?: SortOrderInput | SortOrder
@@ -207581,6 +210722,7 @@ export namespace Prisma {
     AND?: MktAccountWhereInput | MktAccountWhereInput[]
     OR?: MktAccountWhereInput[]
     NOT?: MktAccountWhereInput | MktAccountWhereInput[]
+    brandId?: StringNullableFilter<"MktAccount"> | string | null
     platform?: StringFilter<"MktAccount"> | string
     externalId?: StringFilter<"MktAccount"> | string
     name?: StringFilter<"MktAccount"> | string
@@ -207589,6 +210731,7 @@ export namespace Prisma {
     followers?: IntNullableFilter<"MktAccount"> | number | null
     accessToken?: StringFilter<"MktAccount"> | string
     tokenExpiresAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
+    refreshSecret?: StringNullableFilter<"MktAccount"> | string | null
     status?: StringFilter<"MktAccount"> | string
     lastSyncAt?: DateTimeNullableFilter<"MktAccount"> | Date | string | null
     connectedBy?: StringNullableFilter<"MktAccount"> | string | null
@@ -207600,6 +210743,7 @@ export namespace Prisma {
 
   export type MktAccountOrderByWithAggregationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     platform?: SortOrder
     externalId?: SortOrder
     name?: SortOrder
@@ -207608,6 +210752,7 @@ export namespace Prisma {
     followers?: SortOrderInput | SortOrder
     accessToken?: SortOrder
     tokenExpiresAt?: SortOrderInput | SortOrder
+    refreshSecret?: SortOrderInput | SortOrder
     status?: SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     connectedBy?: SortOrderInput | SortOrder
@@ -207625,6 +210770,7 @@ export namespace Prisma {
     OR?: MktAccountScalarWhereWithAggregatesInput[]
     NOT?: MktAccountScalarWhereWithAggregatesInput | MktAccountScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"MktAccount"> | string
+    brandId?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
     platform?: StringWithAggregatesFilter<"MktAccount"> | string
     externalId?: StringWithAggregatesFilter<"MktAccount"> | string
     name?: StringWithAggregatesFilter<"MktAccount"> | string
@@ -207633,6 +210779,7 @@ export namespace Prisma {
     followers?: IntNullableWithAggregatesFilter<"MktAccount"> | number | null
     accessToken?: StringWithAggregatesFilter<"MktAccount"> | string
     tokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"MktAccount"> | Date | string | null
+    refreshSecret?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
     status?: StringWithAggregatesFilter<"MktAccount"> | string
     lastSyncAt?: DateTimeNullableWithAggregatesFilter<"MktAccount"> | Date | string | null
     connectedBy?: StringNullableWithAggregatesFilter<"MktAccount"> | string | null
@@ -207645,6 +210792,7 @@ export namespace Prisma {
     OR?: MktCampaignWhereInput[]
     NOT?: MktCampaignWhereInput | MktCampaignWhereInput[]
     id?: StringFilter<"MktCampaign"> | string
+    brandId?: StringNullableFilter<"MktCampaign"> | string | null
     name?: StringFilter<"MktCampaign"> | string
     goal?: StringFilter<"MktCampaign"> | string
     status?: StringFilter<"MktCampaign"> | string
@@ -207658,6 +210806,7 @@ export namespace Prisma {
 
   export type MktCampaignOrderByWithRelationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     name?: SortOrder
     goal?: SortOrder
     status?: SortOrder
@@ -207674,6 +210823,7 @@ export namespace Prisma {
     AND?: MktCampaignWhereInput | MktCampaignWhereInput[]
     OR?: MktCampaignWhereInput[]
     NOT?: MktCampaignWhereInput | MktCampaignWhereInput[]
+    brandId?: StringNullableFilter<"MktCampaign"> | string | null
     name?: StringFilter<"MktCampaign"> | string
     goal?: StringFilter<"MktCampaign"> | string
     status?: StringFilter<"MktCampaign"> | string
@@ -207687,6 +210837,7 @@ export namespace Prisma {
 
   export type MktCampaignOrderByWithAggregationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     name?: SortOrder
     goal?: SortOrder
     status?: SortOrder
@@ -207705,6 +210856,7 @@ export namespace Prisma {
     OR?: MktCampaignScalarWhereWithAggregatesInput[]
     NOT?: MktCampaignScalarWhereWithAggregatesInput | MktCampaignScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"MktCampaign"> | string
+    brandId?: StringNullableWithAggregatesFilter<"MktCampaign"> | string | null
     name?: StringWithAggregatesFilter<"MktCampaign"> | string
     goal?: StringWithAggregatesFilter<"MktCampaign"> | string
     status?: StringWithAggregatesFilter<"MktCampaign"> | string
@@ -207720,6 +210872,7 @@ export namespace Prisma {
     OR?: MktContentWhereInput[]
     NOT?: MktContentWhereInput | MktContentWhereInput[]
     id?: StringFilter<"MktContent"> | string
+    brandId?: StringNullableFilter<"MktContent"> | string | null
     campaignId?: StringNullableFilter<"MktContent"> | string | null
     title?: StringFilter<"MktContent"> | string
     body?: StringFilter<"MktContent"> | string
@@ -207727,6 +210880,8 @@ export namespace Prisma {
     linkUrl?: StringNullableFilter<"MktContent"> | string | null
     assetIds?: StringFilter<"MktContent"> | string
     productIds?: StringFilter<"MktContent"> | string
+    variants?: StringFilter<"MktContent"> | string
+    postSlots?: StringFilter<"MktContent"> | string
     revision?: IntFilter<"MktContent"> | number
     approvedRevision?: IntNullableFilter<"MktContent"> | number | null
     approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
@@ -207743,6 +210898,7 @@ export namespace Prisma {
 
   export type MktContentOrderByWithRelationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     campaignId?: SortOrderInput | SortOrder
     title?: SortOrder
     body?: SortOrder
@@ -207750,6 +210906,8 @@ export namespace Prisma {
     linkUrl?: SortOrderInput | SortOrder
     assetIds?: SortOrder
     productIds?: SortOrder
+    variants?: SortOrder
+    postSlots?: SortOrder
     revision?: SortOrder
     approvedRevision?: SortOrderInput | SortOrder
     approvedAt?: SortOrderInput | SortOrder
@@ -207769,6 +210927,7 @@ export namespace Prisma {
     AND?: MktContentWhereInput | MktContentWhereInput[]
     OR?: MktContentWhereInput[]
     NOT?: MktContentWhereInput | MktContentWhereInput[]
+    brandId?: StringNullableFilter<"MktContent"> | string | null
     campaignId?: StringNullableFilter<"MktContent"> | string | null
     title?: StringFilter<"MktContent"> | string
     body?: StringFilter<"MktContent"> | string
@@ -207776,6 +210935,8 @@ export namespace Prisma {
     linkUrl?: StringNullableFilter<"MktContent"> | string | null
     assetIds?: StringFilter<"MktContent"> | string
     productIds?: StringFilter<"MktContent"> | string
+    variants?: StringFilter<"MktContent"> | string
+    postSlots?: StringFilter<"MktContent"> | string
     revision?: IntFilter<"MktContent"> | number
     approvedRevision?: IntNullableFilter<"MktContent"> | number | null
     approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
@@ -207792,6 +210953,7 @@ export namespace Prisma {
 
   export type MktContentOrderByWithAggregationInput = {
     id?: SortOrder
+    brandId?: SortOrderInput | SortOrder
     campaignId?: SortOrderInput | SortOrder
     title?: SortOrder
     body?: SortOrder
@@ -207799,6 +210961,8 @@ export namespace Prisma {
     linkUrl?: SortOrderInput | SortOrder
     assetIds?: SortOrder
     productIds?: SortOrder
+    variants?: SortOrder
+    postSlots?: SortOrder
     revision?: SortOrder
     approvedRevision?: SortOrderInput | SortOrder
     approvedAt?: SortOrderInput | SortOrder
@@ -207821,6 +210985,7 @@ export namespace Prisma {
     OR?: MktContentScalarWhereWithAggregatesInput[]
     NOT?: MktContentScalarWhereWithAggregatesInput | MktContentScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"MktContent"> | string
+    brandId?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
     campaignId?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
     title?: StringWithAggregatesFilter<"MktContent"> | string
     body?: StringWithAggregatesFilter<"MktContent"> | string
@@ -207828,6 +210993,8 @@ export namespace Prisma {
     linkUrl?: StringNullableWithAggregatesFilter<"MktContent"> | string | null
     assetIds?: StringWithAggregatesFilter<"MktContent"> | string
     productIds?: StringWithAggregatesFilter<"MktContent"> | string
+    variants?: StringWithAggregatesFilter<"MktContent"> | string
+    postSlots?: StringWithAggregatesFilter<"MktContent"> | string
     revision?: IntWithAggregatesFilter<"MktContent"> | number
     approvedRevision?: IntNullableWithAggregatesFilter<"MktContent"> | number | null
     approvedAt?: DateTimeNullableWithAggregatesFilter<"MktContent"> | Date | string | null
@@ -207968,6 +211135,11 @@ export namespace Prisma {
     durationS?: FloatNullableFilter<"MktAsset"> | number | null
     createdBy?: StringNullableFilter<"MktAsset"> | string | null
     createdAt?: DateTimeFilter<"MktAsset"> | Date | string
+    brandId?: StringNullableFilter<"MktAsset"> | string | null
+    name?: StringFilter<"MktAsset"> | string
+    type?: StringFilter<"MktAsset"> | string
+    url?: StringNullableFilter<"MktAsset"> | string | null
+    storagePath?: StringNullableFilter<"MktAsset"> | string | null
   }
 
   export type MktAssetOrderByWithRelationInput = {
@@ -207980,6 +211152,11 @@ export namespace Prisma {
     durationS?: SortOrderInput | SortOrder
     createdBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    brandId?: SortOrderInput | SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    url?: SortOrderInput | SortOrder
+    storagePath?: SortOrderInput | SortOrder
   }
 
   export type MktAssetWhereUniqueInput = Prisma.AtLeast<{
@@ -207995,6 +211172,11 @@ export namespace Prisma {
     durationS?: FloatNullableFilter<"MktAsset"> | number | null
     createdBy?: StringNullableFilter<"MktAsset"> | string | null
     createdAt?: DateTimeFilter<"MktAsset"> | Date | string
+    brandId?: StringNullableFilter<"MktAsset"> | string | null
+    name?: StringFilter<"MktAsset"> | string
+    type?: StringFilter<"MktAsset"> | string
+    url?: StringNullableFilter<"MktAsset"> | string | null
+    storagePath?: StringNullableFilter<"MktAsset"> | string | null
   }, "id">
 
   export type MktAssetOrderByWithAggregationInput = {
@@ -208007,6 +211189,11 @@ export namespace Prisma {
     durationS?: SortOrderInput | SortOrder
     createdBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    brandId?: SortOrderInput | SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    url?: SortOrderInput | SortOrder
+    storagePath?: SortOrderInput | SortOrder
     _count?: MktAssetCountOrderByAggregateInput
     _avg?: MktAssetAvgOrderByAggregateInput
     _max?: MktAssetMaxOrderByAggregateInput
@@ -208027,6 +211214,11 @@ export namespace Prisma {
     durationS?: FloatNullableWithAggregatesFilter<"MktAsset"> | number | null
     createdBy?: StringNullableWithAggregatesFilter<"MktAsset"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"MktAsset"> | Date | string
+    brandId?: StringNullableWithAggregatesFilter<"MktAsset"> | string | null
+    name?: StringWithAggregatesFilter<"MktAsset"> | string
+    type?: StringWithAggregatesFilter<"MktAsset"> | string
+    url?: StringNullableWithAggregatesFilter<"MktAsset"> | string | null
+    storagePath?: StringNullableWithAggregatesFilter<"MktAsset"> | string | null
   }
 
   export type MktMetricWhereInput = {
@@ -209095,6 +212287,9 @@ export namespace Prisma {
     defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncTime?: StringNullableFilter<"MisaConfig"> | string | null
+    clientId?: StringNullableFilter<"MisaConfig"> | string | null
+    clientSecret?: StringNullableFilter<"MisaConfig"> | string | null
+    pushConfig?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
@@ -209119,6 +212314,9 @@ export namespace Prisma {
     defaultCategoryId?: SortOrderInput | SortOrder
     defaultWarehouseId?: SortOrderInput | SortOrder
     lastSyncTime?: SortOrderInput | SortOrder
+    clientId?: SortOrderInput | SortOrder
+    clientSecret?: SortOrderInput | SortOrder
+    pushConfig?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -209146,6 +212344,9 @@ export namespace Prisma {
     defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncTime?: StringNullableFilter<"MisaConfig"> | string | null
+    clientId?: StringNullableFilter<"MisaConfig"> | string | null
+    clientSecret?: StringNullableFilter<"MisaConfig"> | string | null
+    pushConfig?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
@@ -209170,6 +212371,9 @@ export namespace Prisma {
     defaultCategoryId?: SortOrderInput | SortOrder
     defaultWarehouseId?: SortOrderInput | SortOrder
     lastSyncTime?: SortOrderInput | SortOrder
+    clientId?: SortOrderInput | SortOrder
+    clientSecret?: SortOrderInput | SortOrder
+    pushConfig?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -209200,9 +212404,112 @@ export namespace Prisma {
     defaultCategoryId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
     lastSyncTime?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    clientId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    clientSecret?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    pushConfig?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableWithAggregatesFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
+  }
+
+  export type MisaPushItemWhereInput = {
+    AND?: MisaPushItemWhereInput | MisaPushItemWhereInput[]
+    OR?: MisaPushItemWhereInput[]
+    NOT?: MisaPushItemWhereInput | MisaPushItemWhereInput[]
+    id?: StringFilter<"MisaPushItem"> | string
+    loai?: StringFilter<"MisaPushItem"> | string
+    localId?: StringFilter<"MisaPushItem"> | string
+    refNo?: StringNullableFilter<"MisaPushItem"> | string | null
+    orgRefid?: StringFilter<"MisaPushItem"> | string
+    voucherType?: IntNullableFilter<"MisaPushItem"> | number | null
+    ngay?: DateTimeNullableFilter<"MisaPushItem"> | Date | string | null
+    soTien?: FloatFilter<"MisaPushItem"> | number
+    trangThai?: StringFilter<"MisaPushItem"> | string
+    loi?: StringNullableFilter<"MisaPushItem"> | string | null
+    lanGui?: IntFilter<"MisaPushItem"> | number
+    payload?: StringNullableFilter<"MisaPushItem"> | string | null
+    guiLuc?: DateTimeFilter<"MisaPushItem"> | Date | string
+    ketQuaLuc?: DateTimeNullableFilter<"MisaPushItem"> | Date | string | null
+  }
+
+  export type MisaPushItemOrderByWithRelationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    localId?: SortOrder
+    refNo?: SortOrderInput | SortOrder
+    orgRefid?: SortOrder
+    voucherType?: SortOrderInput | SortOrder
+    ngay?: SortOrderInput | SortOrder
+    soTien?: SortOrder
+    trangThai?: SortOrder
+    loi?: SortOrderInput | SortOrder
+    lanGui?: SortOrder
+    payload?: SortOrderInput | SortOrder
+    guiLuc?: SortOrder
+    ketQuaLuc?: SortOrderInput | SortOrder
+  }
+
+  export type MisaPushItemWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    loai_localId?: MisaPushItemLoaiLocalIdCompoundUniqueInput
+    AND?: MisaPushItemWhereInput | MisaPushItemWhereInput[]
+    OR?: MisaPushItemWhereInput[]
+    NOT?: MisaPushItemWhereInput | MisaPushItemWhereInput[]
+    loai?: StringFilter<"MisaPushItem"> | string
+    localId?: StringFilter<"MisaPushItem"> | string
+    refNo?: StringNullableFilter<"MisaPushItem"> | string | null
+    orgRefid?: StringFilter<"MisaPushItem"> | string
+    voucherType?: IntNullableFilter<"MisaPushItem"> | number | null
+    ngay?: DateTimeNullableFilter<"MisaPushItem"> | Date | string | null
+    soTien?: FloatFilter<"MisaPushItem"> | number
+    trangThai?: StringFilter<"MisaPushItem"> | string
+    loi?: StringNullableFilter<"MisaPushItem"> | string | null
+    lanGui?: IntFilter<"MisaPushItem"> | number
+    payload?: StringNullableFilter<"MisaPushItem"> | string | null
+    guiLuc?: DateTimeFilter<"MisaPushItem"> | Date | string
+    ketQuaLuc?: DateTimeNullableFilter<"MisaPushItem"> | Date | string | null
+  }, "id" | "loai_localId">
+
+  export type MisaPushItemOrderByWithAggregationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    localId?: SortOrder
+    refNo?: SortOrderInput | SortOrder
+    orgRefid?: SortOrder
+    voucherType?: SortOrderInput | SortOrder
+    ngay?: SortOrderInput | SortOrder
+    soTien?: SortOrder
+    trangThai?: SortOrder
+    loi?: SortOrderInput | SortOrder
+    lanGui?: SortOrder
+    payload?: SortOrderInput | SortOrder
+    guiLuc?: SortOrder
+    ketQuaLuc?: SortOrderInput | SortOrder
+    _count?: MisaPushItemCountOrderByAggregateInput
+    _avg?: MisaPushItemAvgOrderByAggregateInput
+    _max?: MisaPushItemMaxOrderByAggregateInput
+    _min?: MisaPushItemMinOrderByAggregateInput
+    _sum?: MisaPushItemSumOrderByAggregateInput
+  }
+
+  export type MisaPushItemScalarWhereWithAggregatesInput = {
+    AND?: MisaPushItemScalarWhereWithAggregatesInput | MisaPushItemScalarWhereWithAggregatesInput[]
+    OR?: MisaPushItemScalarWhereWithAggregatesInput[]
+    NOT?: MisaPushItemScalarWhereWithAggregatesInput | MisaPushItemScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaPushItem"> | string
+    loai?: StringWithAggregatesFilter<"MisaPushItem"> | string
+    localId?: StringWithAggregatesFilter<"MisaPushItem"> | string
+    refNo?: StringNullableWithAggregatesFilter<"MisaPushItem"> | string | null
+    orgRefid?: StringWithAggregatesFilter<"MisaPushItem"> | string
+    voucherType?: IntNullableWithAggregatesFilter<"MisaPushItem"> | number | null
+    ngay?: DateTimeNullableWithAggregatesFilter<"MisaPushItem"> | Date | string | null
+    soTien?: FloatWithAggregatesFilter<"MisaPushItem"> | number
+    trangThai?: StringWithAggregatesFilter<"MisaPushItem"> | string
+    loi?: StringNullableWithAggregatesFilter<"MisaPushItem"> | string | null
+    lanGui?: IntWithAggregatesFilter<"MisaPushItem"> | number
+    payload?: StringNullableWithAggregatesFilter<"MisaPushItem"> | string | null
+    guiLuc?: DateTimeWithAggregatesFilter<"MisaPushItem"> | Date | string
+    ketQuaLuc?: DateTimeNullableWithAggregatesFilter<"MisaPushItem"> | Date | string | null
   }
 
   export type MisaMapWhereInput = {
@@ -210191,6 +213498,7 @@ export namespace Prisma {
     kenh?: StringNullableFilter<"SanMedia"> | string | null
     channelId?: StringNullableFilter<"SanMedia"> | string | null
     henDangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    coNoiDungAI?: BoolNullableFilter<"SanMedia"> | boolean | null
     trangThai?: StringFilter<"SanMedia"> | string
     maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
@@ -210216,6 +213524,7 @@ export namespace Prisma {
     kenh?: SortOrderInput | SortOrder
     channelId?: SortOrderInput | SortOrder
     henDangLuc?: SortOrderInput | SortOrder
+    coNoiDungAI?: SortOrderInput | SortOrder
     trangThai?: SortOrder
     maTrenSan?: SortOrderInput | SortOrder
     loiCuoi?: SortOrderInput | SortOrder
@@ -210244,6 +213553,7 @@ export namespace Prisma {
     kenh?: StringNullableFilter<"SanMedia"> | string | null
     channelId?: StringNullableFilter<"SanMedia"> | string | null
     henDangLuc?: DateTimeNullableFilter<"SanMedia"> | Date | string | null
+    coNoiDungAI?: BoolNullableFilter<"SanMedia"> | boolean | null
     trangThai?: StringFilter<"SanMedia"> | string
     maTrenSan?: StringNullableFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableFilter<"SanMedia"> | string | null
@@ -210269,6 +213579,7 @@ export namespace Prisma {
     kenh?: SortOrderInput | SortOrder
     channelId?: SortOrderInput | SortOrder
     henDangLuc?: SortOrderInput | SortOrder
+    coNoiDungAI?: SortOrderInput | SortOrder
     trangThai?: SortOrder
     maTrenSan?: SortOrderInput | SortOrder
     loiCuoi?: SortOrderInput | SortOrder
@@ -210301,6 +213612,7 @@ export namespace Prisma {
     kenh?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     channelId?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     henDangLuc?: DateTimeNullableWithAggregatesFilter<"SanMedia"> | Date | string | null
+    coNoiDungAI?: BoolNullableWithAggregatesFilter<"SanMedia"> | boolean | null
     trangThai?: StringWithAggregatesFilter<"SanMedia"> | string
     maTrenSan?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
     loiCuoi?: StringNullableWithAggregatesFilter<"SanMedia"> | string | null
@@ -211660,6 +214972,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -211689,6 +215009,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -211716,6 +215044,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -211745,6 +215081,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -211773,6 +215117,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -211797,6 +215149,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -211822,6 +215182,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -218186,6 +221554,7 @@ export namespace Prisma {
     smtpConfig?: string | null
     mailboxConfig?: string | null
     geminiApiKey?: string | null
+    deepseekApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -218213,6 +221582,7 @@ export namespace Prisma {
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
     khoMeMa?: string | null
+    khoMeHuMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218239,6 +221609,7 @@ export namespace Prisma {
     smtpConfig?: string | null
     mailboxConfig?: string | null
     geminiApiKey?: string | null
+    deepseekApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -218266,6 +221637,7 @@ export namespace Prisma {
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
     khoMeMa?: string | null
+    khoMeHuMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218292,6 +221664,7 @@ export namespace Prisma {
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
     mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    deepseekApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -218319,6 +221692,7 @@ export namespace Prisma {
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
+    khoMeHuMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218345,6 +221719,7 @@ export namespace Prisma {
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
     mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    deepseekApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -218372,6 +221747,7 @@ export namespace Prisma {
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
+    khoMeHuMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218398,6 +221774,7 @@ export namespace Prisma {
     smtpConfig?: string | null
     mailboxConfig?: string | null
     geminiApiKey?: string | null
+    deepseekApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -218425,6 +221802,7 @@ export namespace Prisma {
     ttPostAvatar?: string | null
     ttPostAuthAt?: Date | string | null
     khoMeMa?: string | null
+    khoMeHuMa?: string | null
     updatedAt?: Date | string
   }
 
@@ -218451,6 +221829,7 @@ export namespace Prisma {
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
     mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    deepseekApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -218478,6 +221857,7 @@ export namespace Prisma {
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
+    khoMeHuMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -218504,6 +221884,7 @@ export namespace Prisma {
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
     mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    deepseekApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -218531,6 +221912,7 @@ export namespace Prisma {
     ttPostAvatar?: NullableStringFieldUpdateOperationsInput | string | null
     ttPostAuthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     khoMeMa?: NullableStringFieldUpdateOperationsInput | string | null
+    khoMeHuMa?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -225034,8 +228416,177 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type MktBrandCreateInput = {
+    id?: string
+    name: string
+    industry?: string
+    description?: string
+    products?: string
+    contentPillars?: string
+    contact?: string
+    audience?: string
+    voice?: string
+    usp?: string
+    cta?: string
+    examples?: string
+    notes?: string
+    bannedWords?: string
+    timezone?: string
+    aiAutoApprove?: boolean
+    postSlots?: string
+    archivedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktBrandUncheckedCreateInput = {
+    id?: string
+    name: string
+    industry?: string
+    description?: string
+    products?: string
+    contentPillars?: string
+    contact?: string
+    audience?: string
+    voice?: string
+    usp?: string
+    cta?: string
+    examples?: string
+    notes?: string
+    bannedWords?: string
+    timezone?: string
+    aiAutoApprove?: boolean
+    postSlots?: string
+    archivedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktBrandUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    products?: StringFieldUpdateOperationsInput | string
+    contentPillars?: StringFieldUpdateOperationsInput | string
+    contact?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    voice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    examples?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    aiAutoApprove?: BoolFieldUpdateOperationsInput | boolean
+    postSlots?: StringFieldUpdateOperationsInput | string
+    archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktBrandUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    products?: StringFieldUpdateOperationsInput | string
+    contentPillars?: StringFieldUpdateOperationsInput | string
+    contact?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    voice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    examples?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    aiAutoApprove?: BoolFieldUpdateOperationsInput | boolean
+    postSlots?: StringFieldUpdateOperationsInput | string
+    archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktBrandCreateManyInput = {
+    id?: string
+    name: string
+    industry?: string
+    description?: string
+    products?: string
+    contentPillars?: string
+    contact?: string
+    audience?: string
+    voice?: string
+    usp?: string
+    cta?: string
+    examples?: string
+    notes?: string
+    bannedWords?: string
+    timezone?: string
+    aiAutoApprove?: boolean
+    postSlots?: string
+    archivedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MktBrandUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    products?: StringFieldUpdateOperationsInput | string
+    contentPillars?: StringFieldUpdateOperationsInput | string
+    contact?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    voice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    examples?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    aiAutoApprove?: BoolFieldUpdateOperationsInput | boolean
+    postSlots?: StringFieldUpdateOperationsInput | string
+    archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MktBrandUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    products?: StringFieldUpdateOperationsInput | string
+    contentPillars?: StringFieldUpdateOperationsInput | string
+    contact?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    voice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    examples?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    aiAutoApprove?: BoolFieldUpdateOperationsInput | boolean
+    postSlots?: StringFieldUpdateOperationsInput | string
+    archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type MktAccountCreateInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -225044,6 +228595,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -225055,6 +228607,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedCreateInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -225063,6 +228616,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -225074,6 +228628,7 @@ export namespace Prisma {
 
   export type MktAccountUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -225082,6 +228637,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -225093,6 +228649,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -225101,6 +228658,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -225112,6 +228670,7 @@ export namespace Prisma {
 
   export type MktAccountCreateManyInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -225120,6 +228679,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -225129,6 +228689,7 @@ export namespace Prisma {
 
   export type MktAccountUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -225137,6 +228698,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -225146,6 +228708,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -225154,6 +228717,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -225163,6 +228727,7 @@ export namespace Prisma {
 
   export type MktCampaignCreateInput = {
     id?: string
+    brandId?: string | null
     name: string
     goal?: string
     status?: string
@@ -225176,6 +228741,7 @@ export namespace Prisma {
 
   export type MktCampaignUncheckedCreateInput = {
     id?: string
+    brandId?: string | null
     name: string
     goal?: string
     status?: string
@@ -225189,6 +228755,7 @@ export namespace Prisma {
 
   export type MktCampaignUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -225202,6 +228769,7 @@ export namespace Prisma {
 
   export type MktCampaignUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -225215,6 +228783,7 @@ export namespace Prisma {
 
   export type MktCampaignCreateManyInput = {
     id?: string
+    brandId?: string | null
     name: string
     goal?: string
     status?: string
@@ -225227,6 +228796,7 @@ export namespace Prisma {
 
   export type MktCampaignUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -225239,6 +228809,7 @@ export namespace Prisma {
 
   export type MktCampaignUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -225251,12 +228822,15 @@ export namespace Prisma {
 
   export type MktContentCreateInput = {
     id?: string
+    brandId?: string | null
     title?: string
     body?: string
     hashtags?: string
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -225273,6 +228847,7 @@ export namespace Prisma {
 
   export type MktContentUncheckedCreateInput = {
     id?: string
+    brandId?: string | null
     campaignId?: string | null
     title?: string
     body?: string
@@ -225280,6 +228855,8 @@ export namespace Prisma {
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -225295,12 +228872,15 @@ export namespace Prisma {
 
   export type MktContentUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -225317,6 +228897,7 @@ export namespace Prisma {
 
   export type MktContentUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     campaignId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
@@ -225324,6 +228905,8 @@ export namespace Prisma {
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -225339,6 +228922,7 @@ export namespace Prisma {
 
   export type MktContentCreateManyInput = {
     id?: string
+    brandId?: string | null
     campaignId?: string | null
     title?: string
     body?: string
@@ -225346,6 +228930,8 @@ export namespace Prisma {
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -225360,12 +228946,15 @@ export namespace Prisma {
 
   export type MktContentUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -225380,6 +228969,7 @@ export namespace Prisma {
 
   export type MktContentUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     campaignId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
@@ -225387,6 +228977,8 @@ export namespace Prisma {
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -225540,6 +229132,11 @@ export namespace Prisma {
     durationS?: number | null
     createdBy?: string | null
     createdAt?: Date | string
+    brandId?: string | null
+    name?: string
+    type?: string
+    url?: string | null
+    storagePath?: string | null
   }
 
   export type MktAssetUncheckedCreateInput = {
@@ -225552,6 +229149,11 @@ export namespace Prisma {
     durationS?: number | null
     createdBy?: string | null
     createdAt?: Date | string
+    brandId?: string | null
+    name?: string
+    type?: string
+    url?: string | null
+    storagePath?: string | null
   }
 
   export type MktAssetUpdateInput = {
@@ -225564,6 +229166,11 @@ export namespace Prisma {
     durationS?: NullableFloatFieldUpdateOperationsInput | number | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
+    storagePath?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type MktAssetUncheckedUpdateInput = {
@@ -225576,6 +229183,11 @@ export namespace Prisma {
     durationS?: NullableFloatFieldUpdateOperationsInput | number | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
+    storagePath?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type MktAssetCreateManyInput = {
@@ -225588,6 +229200,11 @@ export namespace Prisma {
     durationS?: number | null
     createdBy?: string | null
     createdAt?: Date | string
+    brandId?: string | null
+    name?: string
+    type?: string
+    url?: string | null
+    storagePath?: string | null
   }
 
   export type MktAssetUpdateManyMutationInput = {
@@ -225600,6 +229217,11 @@ export namespace Prisma {
     durationS?: NullableFloatFieldUpdateOperationsInput | number | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
+    storagePath?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type MktAssetUncheckedUpdateManyInput = {
@@ -225612,6 +229234,11 @@ export namespace Prisma {
     durationS?: NullableFloatFieldUpdateOperationsInput | number | null
     createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
+    storagePath?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type MktMetricCreateInput = {
@@ -226881,6 +230508,9 @@ export namespace Prisma {
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     lastSyncTime?: string | null
+    clientId?: string | null
+    clientSecret?: string | null
+    pushConfig?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -226905,6 +230535,9 @@ export namespace Prisma {
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     lastSyncTime?: string | null
+    clientId?: string | null
+    clientSecret?: string | null
+    pushConfig?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -226929,6 +230562,9 @@ export namespace Prisma {
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
+    clientId?: NullableStringFieldUpdateOperationsInput | string | null
+    clientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    pushConfig?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -226953,6 +230589,9 @@ export namespace Prisma {
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
+    clientId?: NullableStringFieldUpdateOperationsInput | string | null
+    clientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    pushConfig?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -226977,6 +230616,9 @@ export namespace Prisma {
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     lastSyncTime?: string | null
+    clientId?: string | null
+    clientSecret?: string | null
+    pushConfig?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -227001,6 +230643,9 @@ export namespace Prisma {
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
+    clientId?: NullableStringFieldUpdateOperationsInput | string | null
+    clientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    pushConfig?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -227025,9 +230670,131 @@ export namespace Prisma {
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
+    clientId?: NullableStringFieldUpdateOperationsInput | string | null
+    clientSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    pushConfig?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaPushItemCreateInput = {
+    id?: string
+    loai: string
+    localId: string
+    refNo?: string | null
+    orgRefid: string
+    voucherType?: number | null
+    ngay?: Date | string | null
+    soTien?: number
+    trangThai?: string
+    loi?: string | null
+    lanGui?: number
+    payload?: string | null
+    guiLuc?: Date | string
+    ketQuaLuc?: Date | string | null
+  }
+
+  export type MisaPushItemUncheckedCreateInput = {
+    id?: string
+    loai: string
+    localId: string
+    refNo?: string | null
+    orgRefid: string
+    voucherType?: number | null
+    ngay?: Date | string | null
+    soTien?: number
+    trangThai?: string
+    loi?: string | null
+    lanGui?: number
+    payload?: string | null
+    guiLuc?: Date | string
+    ketQuaLuc?: Date | string | null
+  }
+
+  export type MisaPushItemUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    localId?: StringFieldUpdateOperationsInput | string
+    refNo?: NullableStringFieldUpdateOperationsInput | string | null
+    orgRefid?: StringFieldUpdateOperationsInput | string
+    voucherType?: NullableIntFieldUpdateOperationsInput | number | null
+    ngay?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    soTien?: FloatFieldUpdateOperationsInput | number
+    trangThai?: StringFieldUpdateOperationsInput | string
+    loi?: NullableStringFieldUpdateOperationsInput | string | null
+    lanGui?: IntFieldUpdateOperationsInput | number
+    payload?: NullableStringFieldUpdateOperationsInput | string | null
+    guiLuc?: DateTimeFieldUpdateOperationsInput | Date | string
+    ketQuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaPushItemUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    localId?: StringFieldUpdateOperationsInput | string
+    refNo?: NullableStringFieldUpdateOperationsInput | string | null
+    orgRefid?: StringFieldUpdateOperationsInput | string
+    voucherType?: NullableIntFieldUpdateOperationsInput | number | null
+    ngay?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    soTien?: FloatFieldUpdateOperationsInput | number
+    trangThai?: StringFieldUpdateOperationsInput | string
+    loi?: NullableStringFieldUpdateOperationsInput | string | null
+    lanGui?: IntFieldUpdateOperationsInput | number
+    payload?: NullableStringFieldUpdateOperationsInput | string | null
+    guiLuc?: DateTimeFieldUpdateOperationsInput | Date | string
+    ketQuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaPushItemCreateManyInput = {
+    id?: string
+    loai: string
+    localId: string
+    refNo?: string | null
+    orgRefid: string
+    voucherType?: number | null
+    ngay?: Date | string | null
+    soTien?: number
+    trangThai?: string
+    loi?: string | null
+    lanGui?: number
+    payload?: string | null
+    guiLuc?: Date | string
+    ketQuaLuc?: Date | string | null
+  }
+
+  export type MisaPushItemUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    localId?: StringFieldUpdateOperationsInput | string
+    refNo?: NullableStringFieldUpdateOperationsInput | string | null
+    orgRefid?: StringFieldUpdateOperationsInput | string
+    voucherType?: NullableIntFieldUpdateOperationsInput | number | null
+    ngay?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    soTien?: FloatFieldUpdateOperationsInput | number
+    trangThai?: StringFieldUpdateOperationsInput | string
+    loi?: NullableStringFieldUpdateOperationsInput | string | null
+    lanGui?: IntFieldUpdateOperationsInput | number
+    payload?: NullableStringFieldUpdateOperationsInput | string | null
+    guiLuc?: DateTimeFieldUpdateOperationsInput | Date | string
+    ketQuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaPushItemUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    localId?: StringFieldUpdateOperationsInput | string
+    refNo?: NullableStringFieldUpdateOperationsInput | string | null
+    orgRefid?: StringFieldUpdateOperationsInput | string
+    voucherType?: NullableIntFieldUpdateOperationsInput | number | null
+    ngay?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    soTien?: FloatFieldUpdateOperationsInput | number
+    trangThai?: StringFieldUpdateOperationsInput | string
+    loi?: NullableStringFieldUpdateOperationsInput | string | null
+    lanGui?: IntFieldUpdateOperationsInput | number
+    payload?: NullableStringFieldUpdateOperationsInput | string | null
+    guiLuc?: DateTimeFieldUpdateOperationsInput | Date | string
+    ketQuaLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type MisaMapCreateInput = {
@@ -228190,6 +231957,7 @@ export namespace Prisma {
     kenh?: string | null
     channelId?: string | null
     henDangLuc?: Date | string | null
+    coNoiDungAI?: boolean | null
     trangThai?: string
     maTrenSan?: string | null
     loiCuoi?: string | null
@@ -228215,6 +231983,7 @@ export namespace Prisma {
     kenh?: string | null
     channelId?: string | null
     henDangLuc?: Date | string | null
+    coNoiDungAI?: boolean | null
     trangThai?: string
     maTrenSan?: string | null
     loiCuoi?: string | null
@@ -228240,6 +232009,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -228265,6 +232035,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -228290,6 +232061,7 @@ export namespace Prisma {
     kenh?: string | null
     channelId?: string | null
     henDangLuc?: Date | string | null
+    coNoiDungAI?: boolean | null
     trangThai?: string
     maTrenSan?: string | null
     loiCuoi?: string | null
@@ -228314,6 +232086,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -228338,6 +232111,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -229518,6 +233292,14 @@ export namespace Prisma {
     notes?: SortOrder
     salesUserId?: SortOrder
     salesUserName?: SortOrder
+    taxCode?: SortOrder
+    invoiceType?: SortOrder
+    invoiceCompanyName?: SortOrder
+    invoiceBuyerName?: SortOrder
+    invoiceAddress?: SortOrder
+    invoiceEmail?: SortOrder
+    invoicePhone?: SortOrder
+    invoiceIdNo?: SortOrder
     totalPurchases?: SortOrder
     totalOrders?: SortOrder
     debt?: SortOrder
@@ -229552,6 +233334,14 @@ export namespace Prisma {
     notes?: SortOrder
     salesUserId?: SortOrder
     salesUserName?: SortOrder
+    taxCode?: SortOrder
+    invoiceType?: SortOrder
+    invoiceCompanyName?: SortOrder
+    invoiceBuyerName?: SortOrder
+    invoiceAddress?: SortOrder
+    invoiceEmail?: SortOrder
+    invoicePhone?: SortOrder
+    invoiceIdNo?: SortOrder
     totalPurchases?: SortOrder
     totalOrders?: SortOrder
     debt?: SortOrder
@@ -229577,6 +233367,14 @@ export namespace Prisma {
     notes?: SortOrder
     salesUserId?: SortOrder
     salesUserName?: SortOrder
+    taxCode?: SortOrder
+    invoiceType?: SortOrder
+    invoiceCompanyName?: SortOrder
+    invoiceBuyerName?: SortOrder
+    invoiceAddress?: SortOrder
+    invoiceEmail?: SortOrder
+    invoicePhone?: SortOrder
+    invoiceIdNo?: SortOrder
     totalPurchases?: SortOrder
     totalOrders?: SortOrder
     debt?: SortOrder
@@ -233061,6 +236859,7 @@ export namespace Prisma {
     smtpConfig?: SortOrder
     mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
+    deepseekApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -233088,6 +236887,7 @@ export namespace Prisma {
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
     khoMeMa?: SortOrder
+    khoMeHuMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -233120,6 +236920,7 @@ export namespace Prisma {
     smtpConfig?: SortOrder
     mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
+    deepseekApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -233147,6 +236948,7 @@ export namespace Prisma {
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
     khoMeMa?: SortOrder
+    khoMeHuMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -233173,6 +236975,7 @@ export namespace Prisma {
     smtpConfig?: SortOrder
     mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
+    deepseekApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -233200,6 +237003,7 @@ export namespace Prisma {
     ttPostAvatar?: SortOrder
     ttPostAuthAt?: SortOrder
     khoMeMa?: SortOrder
+    khoMeHuMa?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -236775,6 +240579,78 @@ export namespace Prisma {
     updatedAt?: SortOrder
   }
 
+  export type MktBrandCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    industry?: SortOrder
+    description?: SortOrder
+    products?: SortOrder
+    contentPillars?: SortOrder
+    contact?: SortOrder
+    audience?: SortOrder
+    voice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    examples?: SortOrder
+    notes?: SortOrder
+    bannedWords?: SortOrder
+    timezone?: SortOrder
+    aiAutoApprove?: SortOrder
+    postSlots?: SortOrder
+    archivedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktBrandMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    industry?: SortOrder
+    description?: SortOrder
+    products?: SortOrder
+    contentPillars?: SortOrder
+    contact?: SortOrder
+    audience?: SortOrder
+    voice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    examples?: SortOrder
+    notes?: SortOrder
+    bannedWords?: SortOrder
+    timezone?: SortOrder
+    aiAutoApprove?: SortOrder
+    postSlots?: SortOrder
+    archivedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MktBrandMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    industry?: SortOrder
+    description?: SortOrder
+    products?: SortOrder
+    contentPillars?: SortOrder
+    contact?: SortOrder
+    audience?: SortOrder
+    voice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    examples?: SortOrder
+    notes?: SortOrder
+    bannedWords?: SortOrder
+    timezone?: SortOrder
+    aiAutoApprove?: SortOrder
+    postSlots?: SortOrder
+    archivedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
   export type MktPublicationListRelationFilter = {
     every?: MktPublicationWhereInput
     some?: MktPublicationWhereInput
@@ -236802,6 +240678,7 @@ export namespace Prisma {
 
   export type MktAccountCountOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     platform?: SortOrder
     externalId?: SortOrder
     name?: SortOrder
@@ -236810,6 +240687,7 @@ export namespace Prisma {
     followers?: SortOrder
     accessToken?: SortOrder
     tokenExpiresAt?: SortOrder
+    refreshSecret?: SortOrder
     status?: SortOrder
     lastSyncAt?: SortOrder
     connectedBy?: SortOrder
@@ -236823,6 +240701,7 @@ export namespace Prisma {
 
   export type MktAccountMaxOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     platform?: SortOrder
     externalId?: SortOrder
     name?: SortOrder
@@ -236831,6 +240710,7 @@ export namespace Prisma {
     followers?: SortOrder
     accessToken?: SortOrder
     tokenExpiresAt?: SortOrder
+    refreshSecret?: SortOrder
     status?: SortOrder
     lastSyncAt?: SortOrder
     connectedBy?: SortOrder
@@ -236840,6 +240720,7 @@ export namespace Prisma {
 
   export type MktAccountMinOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     platform?: SortOrder
     externalId?: SortOrder
     name?: SortOrder
@@ -236848,6 +240729,7 @@ export namespace Prisma {
     followers?: SortOrder
     accessToken?: SortOrder
     tokenExpiresAt?: SortOrder
+    refreshSecret?: SortOrder
     status?: SortOrder
     lastSyncAt?: SortOrder
     connectedBy?: SortOrder
@@ -236871,6 +240753,7 @@ export namespace Prisma {
 
   export type MktCampaignCountOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     name?: SortOrder
     goal?: SortOrder
     status?: SortOrder
@@ -236883,6 +240766,7 @@ export namespace Prisma {
 
   export type MktCampaignMaxOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     name?: SortOrder
     goal?: SortOrder
     status?: SortOrder
@@ -236895,6 +240779,7 @@ export namespace Prisma {
 
   export type MktCampaignMinOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     name?: SortOrder
     goal?: SortOrder
     status?: SortOrder
@@ -236912,6 +240797,7 @@ export namespace Prisma {
 
   export type MktContentCountOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     campaignId?: SortOrder
     title?: SortOrder
     body?: SortOrder
@@ -236919,6 +240805,8 @@ export namespace Prisma {
     linkUrl?: SortOrder
     assetIds?: SortOrder
     productIds?: SortOrder
+    variants?: SortOrder
+    postSlots?: SortOrder
     revision?: SortOrder
     approvedRevision?: SortOrder
     approvedAt?: SortOrder
@@ -236938,6 +240826,7 @@ export namespace Prisma {
 
   export type MktContentMaxOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     campaignId?: SortOrder
     title?: SortOrder
     body?: SortOrder
@@ -236945,6 +240834,8 @@ export namespace Prisma {
     linkUrl?: SortOrder
     assetIds?: SortOrder
     productIds?: SortOrder
+    variants?: SortOrder
+    postSlots?: SortOrder
     revision?: SortOrder
     approvedRevision?: SortOrder
     approvedAt?: SortOrder
@@ -236959,6 +240850,7 @@ export namespace Prisma {
 
   export type MktContentMinOrderByAggregateInput = {
     id?: SortOrder
+    brandId?: SortOrder
     campaignId?: SortOrder
     title?: SortOrder
     body?: SortOrder
@@ -236966,6 +240858,8 @@ export namespace Prisma {
     linkUrl?: SortOrder
     assetIds?: SortOrder
     productIds?: SortOrder
+    variants?: SortOrder
+    postSlots?: SortOrder
     revision?: SortOrder
     approvedRevision?: SortOrder
     approvedAt?: SortOrder
@@ -237068,6 +240962,11 @@ export namespace Prisma {
     durationS?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
+    brandId?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    url?: SortOrder
+    storagePath?: SortOrder
   }
 
   export type MktAssetAvgOrderByAggregateInput = {
@@ -237087,6 +240986,11 @@ export namespace Prisma {
     durationS?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
+    brandId?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    url?: SortOrder
+    storagePath?: SortOrder
   }
 
   export type MktAssetMinOrderByAggregateInput = {
@@ -237099,6 +241003,11 @@ export namespace Prisma {
     durationS?: SortOrder
     createdBy?: SortOrder
     createdAt?: SortOrder
+    brandId?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    url?: SortOrder
+    storagePath?: SortOrder
   }
 
   export type MktAssetSumOrderByAggregateInput = {
@@ -237765,6 +241674,9 @@ export namespace Prisma {
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
     lastSyncTime?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    pushConfig?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -237789,6 +241701,9 @@ export namespace Prisma {
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
     lastSyncTime?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    pushConfig?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -237813,9 +241728,80 @@ export namespace Prisma {
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
     lastSyncTime?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    pushConfig?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type MisaPushItemLoaiLocalIdCompoundUniqueInput = {
+    loai: string
+    localId: string
+  }
+
+  export type MisaPushItemCountOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    localId?: SortOrder
+    refNo?: SortOrder
+    orgRefid?: SortOrder
+    voucherType?: SortOrder
+    ngay?: SortOrder
+    soTien?: SortOrder
+    trangThai?: SortOrder
+    loi?: SortOrder
+    lanGui?: SortOrder
+    payload?: SortOrder
+    guiLuc?: SortOrder
+    ketQuaLuc?: SortOrder
+  }
+
+  export type MisaPushItemAvgOrderByAggregateInput = {
+    voucherType?: SortOrder
+    soTien?: SortOrder
+    lanGui?: SortOrder
+  }
+
+  export type MisaPushItemMaxOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    localId?: SortOrder
+    refNo?: SortOrder
+    orgRefid?: SortOrder
+    voucherType?: SortOrder
+    ngay?: SortOrder
+    soTien?: SortOrder
+    trangThai?: SortOrder
+    loi?: SortOrder
+    lanGui?: SortOrder
+    payload?: SortOrder
+    guiLuc?: SortOrder
+    ketQuaLuc?: SortOrder
+  }
+
+  export type MisaPushItemMinOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    localId?: SortOrder
+    refNo?: SortOrder
+    orgRefid?: SortOrder
+    voucherType?: SortOrder
+    ngay?: SortOrder
+    soTien?: SortOrder
+    trangThai?: SortOrder
+    loi?: SortOrder
+    lanGui?: SortOrder
+    payload?: SortOrder
+    guiLuc?: SortOrder
+    ketQuaLuc?: SortOrder
+  }
+
+  export type MisaPushItemSumOrderByAggregateInput = {
+    voucherType?: SortOrder
+    soTien?: SortOrder
+    lanGui?: SortOrder
   }
 
   export type MisaMapEntityMisaIdCompoundUniqueInput = {
@@ -238488,6 +242474,11 @@ export namespace Prisma {
     dongSo?: SortOrder
   }
 
+  export type BoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
+  }
+
   export type SanMediaSanPhamListRelationFilter = {
     every?: SanMediaSanPhamWhereInput
     some?: SanMediaSanPhamWhereInput
@@ -238512,6 +242503,7 @@ export namespace Prisma {
     kenh?: SortOrder
     channelId?: SortOrder
     henDangLuc?: SortOrder
+    coNoiDungAI?: SortOrder
     trangThai?: SortOrder
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
@@ -238541,6 +242533,7 @@ export namespace Prisma {
     kenh?: SortOrder
     channelId?: SortOrder
     henDangLuc?: SortOrder
+    coNoiDungAI?: SortOrder
     trangThai?: SortOrder
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
@@ -238565,6 +242558,7 @@ export namespace Prisma {
     kenh?: SortOrder
     channelId?: SortOrder
     henDangLuc?: SortOrder
+    coNoiDungAI?: SortOrder
     trangThai?: SortOrder
     maTrenSan?: SortOrder
     loiCuoi?: SortOrder
@@ -238578,6 +242572,14 @@ export namespace Prisma {
   export type SanMediaSumOrderByAggregateInput = {
     bytes?: SortOrder
     thoiLuongS?: SortOrder
+  }
+
+  export type BoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
   }
 
   export type SanMediaScalarRelationFilter = {
@@ -242702,6 +246704,10 @@ export namespace Prisma {
     connect?: SanMediaSanPhamWhereUniqueInput | SanMediaSanPhamWhereUniqueInput[]
   }
 
+  export type NullableBoolFieldUpdateOperationsInput = {
+    set?: boolean | null
+  }
+
   export type SanMediaSanPhamUpdateManyWithoutMediaNestedInput = {
     create?: XOR<SanMediaSanPhamCreateWithoutMediaInput, SanMediaSanPhamUncheckedCreateWithoutMediaInput> | SanMediaSanPhamCreateWithoutMediaInput[] | SanMediaSanPhamUncheckedCreateWithoutMediaInput[]
     connectOrCreate?: SanMediaSanPhamCreateOrConnectWithoutMediaInput | SanMediaSanPhamCreateOrConnectWithoutMediaInput[]
@@ -242975,6 +246981,19 @@ export namespace Prisma {
     _sum?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedIntNullableFilter<$PrismaModel>
     _max?: NestedIntNullableFilter<$PrismaModel>
+  }
+
+  export type NestedBoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
+  }
+
+  export type NestedBoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
   }
 
   export type UserCreateWithoutBranchInput = {
@@ -244083,6 +248102,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -244111,6 +248138,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -244226,6 +248261,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -244254,6 +248297,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -245813,6 +249864,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -245840,6 +249899,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -245897,6 +249964,14 @@ export namespace Prisma {
     notes?: StringNullableFilter<"Customer"> | string | null
     salesUserId?: StringNullableFilter<"Customer"> | string | null
     salesUserName?: StringNullableFilter<"Customer"> | string | null
+    taxCode?: StringNullableFilter<"Customer"> | string | null
+    invoiceType?: StringNullableFilter<"Customer"> | string | null
+    invoiceCompanyName?: StringNullableFilter<"Customer"> | string | null
+    invoiceBuyerName?: StringNullableFilter<"Customer"> | string | null
+    invoiceAddress?: StringNullableFilter<"Customer"> | string | null
+    invoiceEmail?: StringNullableFilter<"Customer"> | string | null
+    invoicePhone?: StringNullableFilter<"Customer"> | string | null
+    invoiceIdNo?: StringNullableFilter<"Customer"> | string | null
     totalPurchases?: FloatFilter<"Customer"> | number
     totalOrders?: IntFilter<"Customer"> | number
     debt?: FloatFilter<"Customer"> | number
@@ -246242,6 +250317,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -246270,6 +250353,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -246445,6 +250536,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -246473,6 +250572,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -249641,6 +253748,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -249669,6 +253784,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -249814,6 +253937,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -249842,6 +253973,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -254933,12 +259072,15 @@ export namespace Prisma {
 
   export type MktContentCreateWithoutCampaignInput = {
     id?: string
+    brandId?: string | null
     title?: string
     body?: string
     hashtags?: string
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -254954,12 +259096,15 @@ export namespace Prisma {
 
   export type MktContentUncheckedCreateWithoutCampaignInput = {
     id?: string
+    brandId?: string | null
     title?: string
     body?: string
     hashtags?: string
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -255004,6 +259149,7 @@ export namespace Prisma {
     OR?: MktContentScalarWhereInput[]
     NOT?: MktContentScalarWhereInput | MktContentScalarWhereInput[]
     id?: StringFilter<"MktContent"> | string
+    brandId?: StringNullableFilter<"MktContent"> | string | null
     campaignId?: StringNullableFilter<"MktContent"> | string | null
     title?: StringFilter<"MktContent"> | string
     body?: StringFilter<"MktContent"> | string
@@ -255011,6 +259157,8 @@ export namespace Prisma {
     linkUrl?: StringNullableFilter<"MktContent"> | string | null
     assetIds?: StringFilter<"MktContent"> | string
     productIds?: StringFilter<"MktContent"> | string
+    variants?: StringFilter<"MktContent"> | string
+    postSlots?: StringFilter<"MktContent"> | string
     revision?: IntFilter<"MktContent"> | number
     approvedRevision?: IntNullableFilter<"MktContent"> | number | null
     approvedAt?: DateTimeNullableFilter<"MktContent"> | Date | string | null
@@ -255025,6 +259173,7 @@ export namespace Prisma {
 
   export type MktCampaignCreateWithoutContentsInput = {
     id?: string
+    brandId?: string | null
     name: string
     goal?: string
     status?: string
@@ -255037,6 +259186,7 @@ export namespace Prisma {
 
   export type MktCampaignUncheckedCreateWithoutContentsInput = {
     id?: string
+    brandId?: string | null
     name: string
     goal?: string
     status?: string
@@ -255111,6 +259261,7 @@ export namespace Prisma {
 
   export type MktCampaignUpdateWithoutContentsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -255123,6 +259274,7 @@ export namespace Prisma {
 
   export type MktCampaignUncheckedUpdateWithoutContentsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     goal?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
@@ -255151,12 +259303,15 @@ export namespace Prisma {
 
   export type MktContentCreateWithoutPublicationsInput = {
     id?: string
+    brandId?: string | null
     title?: string
     body?: string
     hashtags?: string
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -255172,6 +259327,7 @@ export namespace Prisma {
 
   export type MktContentUncheckedCreateWithoutPublicationsInput = {
     id?: string
+    brandId?: string | null
     campaignId?: string | null
     title?: string
     body?: string
@@ -255179,6 +259335,8 @@ export namespace Prisma {
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -255198,6 +259356,7 @@ export namespace Prisma {
 
   export type MktAccountCreateWithoutPublicationsInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -255206,6 +259365,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -255216,6 +259376,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedCreateWithoutPublicationsInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -255224,6 +259385,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -255250,12 +259412,15 @@ export namespace Prisma {
 
   export type MktContentUpdateWithoutPublicationsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -255271,6 +259436,7 @@ export namespace Prisma {
 
   export type MktContentUncheckedUpdateWithoutPublicationsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     campaignId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
@@ -255278,6 +259444,8 @@ export namespace Prisma {
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -255303,6 +259471,7 @@ export namespace Prisma {
 
   export type MktAccountUpdateWithoutPublicationsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -255311,6 +259480,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -255321,6 +259491,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedUpdateWithoutPublicationsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -255329,6 +259500,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -255339,6 +259511,7 @@ export namespace Prisma {
 
   export type MktAccountCreateWithoutMetricsInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -255347,6 +259520,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -255357,6 +259531,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedCreateWithoutMetricsInput = {
     id?: string
+    brandId?: string | null
     platform: string
     externalId: string
     name?: string
@@ -255365,6 +259540,7 @@ export namespace Prisma {
     followers?: number | null
     accessToken: string
     tokenExpiresAt?: Date | string | null
+    refreshSecret?: string | null
     status?: string
     lastSyncAt?: Date | string | null
     connectedBy?: string | null
@@ -255391,6 +259567,7 @@ export namespace Prisma {
 
   export type MktAccountUpdateWithoutMetricsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -255399,6 +259576,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -255409,6 +259587,7 @@ export namespace Prisma {
 
   export type MktAccountUncheckedUpdateWithoutMetricsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     platform?: StringFieldUpdateOperationsInput | string
     externalId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -255417,6 +259596,7 @@ export namespace Prisma {
     followers?: NullableIntFieldUpdateOperationsInput | number | null
     accessToken?: StringFieldUpdateOperationsInput | string
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    refreshSecret?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -256372,6 +260552,7 @@ export namespace Prisma {
     kenh?: string | null
     channelId?: string | null
     henDangLuc?: Date | string | null
+    coNoiDungAI?: boolean | null
     trangThai?: string
     maTrenSan?: string | null
     loiCuoi?: string | null
@@ -256396,6 +260577,7 @@ export namespace Prisma {
     kenh?: string | null
     channelId?: string | null
     henDangLuc?: Date | string | null
+    coNoiDungAI?: boolean | null
     trangThai?: string
     maTrenSan?: string | null
     loiCuoi?: string | null
@@ -256436,6 +260618,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -256460,6 +260643,7 @@ export namespace Prisma {
     kenh?: NullableStringFieldUpdateOperationsInput | string | null
     channelId?: NullableStringFieldUpdateOperationsInput | string | null
     henDangLuc?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    coNoiDungAI?: NullableBoolFieldUpdateOperationsInput | boolean | null
     trangThai?: StringFieldUpdateOperationsInput | string
     maTrenSan?: NullableStringFieldUpdateOperationsInput | string | null
     loiCuoi?: NullableStringFieldUpdateOperationsInput | string | null
@@ -257904,6 +262088,14 @@ export namespace Prisma {
     notes?: string | null
     salesUserId?: string | null
     salesUserName?: string | null
+    taxCode?: string | null
+    invoiceType?: string | null
+    invoiceCompanyName?: string | null
+    invoiceBuyerName?: string | null
+    invoiceAddress?: string | null
+    invoiceEmail?: string | null
+    invoicePhone?: string | null
+    invoiceIdNo?: string | null
     totalPurchases?: number
     totalOrders?: number
     debt?: number
@@ -257928,6 +262120,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -257955,6 +262155,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -257982,6 +262190,14 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserId?: NullableStringFieldUpdateOperationsInput | string | null
     salesUserName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceCompanyName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceBuyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceIdNo?: NullableStringFieldUpdateOperationsInput | string | null
     totalPurchases?: FloatFieldUpdateOperationsInput | number
     totalOrders?: IntFieldUpdateOperationsInput | number
     debt?: FloatFieldUpdateOperationsInput | number
@@ -260562,12 +264778,15 @@ export namespace Prisma {
 
   export type MktContentCreateManyCampaignInput = {
     id?: string
+    brandId?: string | null
     title?: string
     body?: string
     hashtags?: string
     linkUrl?: string | null
     assetIds?: string
     productIds?: string
+    variants?: string
+    postSlots?: string
     revision?: number
     approvedRevision?: number | null
     approvedAt?: Date | string | null
@@ -260582,12 +264801,15 @@ export namespace Prisma {
 
   export type MktContentUpdateWithoutCampaignInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -260603,12 +264825,15 @@ export namespace Prisma {
 
   export type MktContentUncheckedUpdateWithoutCampaignInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -260624,12 +264849,15 @@ export namespace Prisma {
 
   export type MktContentUncheckedUpdateManyWithoutCampaignInput = {
     id?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
     title?: StringFieldUpdateOperationsInput | string
     body?: StringFieldUpdateOperationsInput | string
     hashtags?: StringFieldUpdateOperationsInput | string
     linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     assetIds?: StringFieldUpdateOperationsInput | string
     productIds?: StringFieldUpdateOperationsInput | string
+    variants?: StringFieldUpdateOperationsInput | string
+    postSlots?: StringFieldUpdateOperationsInput | string
     revision?: IntFieldUpdateOperationsInput | number
     approvedRevision?: NullableIntFieldUpdateOperationsInput | number | null
     approvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

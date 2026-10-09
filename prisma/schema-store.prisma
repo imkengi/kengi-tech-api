@@ -1691,6 +1691,11 @@ model StoreSettings {
    *  lại, và ghi phiếu trên thẻ kho bên đó. Trống = không dùng. Xem lib/khoMe.ts. */
   khoMeMa            String?
 
+  /** KHO MẸ — PHẦN HƯ HỎNG (09/10/2026) — mã cửa hàng nhận HÀNG HƯ của cửa hàng này vào Kho
+   *  Hư Hỏng của nó (nơi hàng nằm thật). Bật / tắt độc lập với `khoMeMa`. Trống = hàng hư vào
+   *  kho hư hỏng của chính cửa hàng này. Xem lib/khoMeHu.ts. */
+  khoMeHuMa          String?
+
   updatedAt DateTime @updatedAt
 }
 

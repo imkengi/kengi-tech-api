@@ -6122,13 +6122,14 @@ router.get('/kho-me', async (_req: Request, res: Response) => {
         const ra: any[] = []
         for (const st of ds) {
             try {
-                const c = await getStorePrisma(st.schema).storeSettings.findFirst({ select: { khoMeMa: true } as any })
-                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: (c as any)?.khoMeMa || null })
+                // Hai mục bật RIÊNG (09/10/2026): kho thường (mượn tồn bán được) + kho hư hỏng (nhận hàng hư)
+                const c = await getStorePrisma(st.schema).storeSettings.findFirst({ select: { khoMeMa: true, khoMeHuMa: true } as any })
+                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: (c as any)?.khoMeMa || null, khoMeHu: (c as any)?.khoMeHuMa || null })
             } catch (e: any) {
-                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: null, loi: String(e?.message || e).slice(0, 120) })
+                ra.push({ ma: st.code, ten: st.name, trangThai: st.status, khoMe: null, khoMeHu: null, loi: String(e?.message || e).slice(0, 120) })
             }
         }
-        res.json({ success: true, data: { cuaHang: ra, dangMuon: ra.filter(r => r.khoMe).length } })
+        res.json({ success: true, data: { cuaHang: ra, dangMuon: ra.filter(r => r.khoMe || r.khoMeHu).length } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
@@ -6136,7 +6137,10 @@ router.get('/kho-me', async (_req: Request, res: Response) => {
 
 /**
  * BẬT / TẮT KHO MẸ — POST /admin/kho-me
- * Body: { con: 'KENGISTORE', me: 'HUTI' | null, apply?: true }
+ * Body: { con: 'KENGISTORE', me: 'HUTI' | null, loai?: 'thuong' | 'hu-hong', apply?: true }
+ * `loai` (09/10/2026 — chủ shop: "có 2 mục là kho bình thường và kho hư hỏng, có thể bật kho hư hỏng
+ * trước"): 'thuong' (mặc định) = mượn tồn bán được (`khoMeMa`); 'hu-hong' = hàng hư của con vào Kho
+ * Hư Hỏng của mẹ (`khoMeHuMa`, lib/khoMeHu.ts). Hai mục bật / tắt độc lập.
  *
  * Không có `apply` → CHẠY THỬ: chỉ nói sẽ đổi gì, không ghi. Bật kho mẹ là đổi
  * hành vi trừ kho của một cửa hàng đang bán thật, nên mặc định phải là chạy thử.
@@ -6148,6 +6152,8 @@ router.post('/kho-me', async (req: Request, res: Response) => {
         const maCon = String(req.body?.con || '').trim()
         const maMe = req.body?.me === null ? null : String(req.body?.me || '').trim()
         const apply = req.body?.apply === true
+        const loai: 'thuong' | 'hu-hong' = req.body?.loai === 'hu-hong' ? 'hu-hong' : 'thuong'
+        const cot = loai === 'hu-hong' ? 'khoMeHuMa' : 'khoMeMa'
         if (!maCon) { res.status(400).json({ success: false, error: 'Cần `con` (mã cửa hàng mượn kho)' }); return }
 
         const con = await prisma.store.findFirst({ where: { code: { equals: maCon, mode: 'insensitive' } }, select: { code: true, name: true, schema: true } })
@@ -6162,16 +6168,36 @@ router.post('/kho-me', async (req: Request, res: Response) => {
         }
 
         const sp: any = getStorePrisma(con.schema)
-        const cai = await sp.storeSettings.findFirst({ select: { id: true, khoMeMa: true } as any })
+        const cai = await sp.storeSettings.findFirst({ select: { id: true, khoMeMa: true, khoMeHuMa: true } as any })
         if (!cai) { res.status(400).json({ success: false, error: `${con.code} chưa có bản ghi cài đặt` }); return }
 
-        const truoc = cai.khoMeMa || null
+        const truoc = (cai as any)[cot] || null
         const sau = maMe ? me.code : null
+        if (!apply && loai === 'hu-hong') {
+            res.json({
+                success: true,
+                data: {
+                    chayThu: true, loai, cuaHang: con.code, truoc, sau,
+                    doi: truoc !== sau,
+                    canhBao: sau
+                        ? [`Bật xong: hàng HƯ của ${con.code} — hàng hoàn không nguyên vẹn (khi khiếu nại thắng hoặc bấm "Đưa vào kho hư hỏng") và trả hàng duyệt "hư hỏng" — vào Kho Hư Hỏng của ${sau}, mỗi món một lô kèm lý do + mã phiếu ${con.code}.`,
+                           cai.khoMeMa
+                               ? `Kho mẹ thường đang BẬT (${cai.khoMeMa}): món đã trừ rồi được hoàn kho mẹ thì trừ lại tồn bán được của ${sau}.`
+                               : `Kho mẹ thường đang TẮT: tồn bán được của ${sau} KHÔNG đổi, chỉ cộng kho hư hỏng của ${sau}.`,
+                           `Món phải khớp ĐÚNG MỘT SKU bên ${sau} — không khớp thì báo trong Việc cần làm, không đoán.`,
+                           `Hàng hư CŨ đang nằm ở kho hư hỏng của ${con.code} KHÔNG tự chuyển sang.`]
+                        : [`Tắt xong: hàng hư của ${con.code} quay về kho hư hỏng của chính nó.`,
+                           `Hàng đã vào kho hư hỏng ${truoc || ''} vẫn nằm đó — tắt chỉ đổi đường cho hàng hư MỚI.`],
+                    cachChay: 'Gửi lại kèm {"apply":true} để ghi thật.',
+                },
+            })
+            return
+        }
         if (!apply) {
             res.json({
                 success: true,
                 data: {
-                    chayThu: true, cuaHang: con.code, truoc, sau,
+                    chayThu: true, loai, cuaHang: con.code, truoc, sau,
                     doi: truoc !== sau,
                     canhBao: sau
                         ? [`Bật xong: MỌI đơn sàn MỚI của ${con.code} sẽ trừ thêm kho ${sau}, và push-stock lấy tồn từ ${sau}.`,
@@ -6185,9 +6211,9 @@ router.post('/kho-me', async (req: Request, res: Response) => {
             return
         }
 
-        await sp.storeSettings.update({ where: { id: cai.id }, data: { khoMeMa: sau } as any })
-        console.log(`[KhoMe] ${con.code}: kho mẹ ${truoc || '(không)'} → ${sau || '(không)'}`)
-        res.json({ success: true, data: { cuaHang: con.code, truoc, sau, daGhi: true } })
+        await sp.storeSettings.update({ where: { id: cai.id }, data: { [cot]: sau } as any })
+        console.log(`[KhoMe] ${con.code}: kho mẹ ${loai === 'hu-hong' ? 'HƯ HỎNG' : 'thường'} ${truoc || '(không)'} → ${sau || '(không)'}`)
+        res.json({ success: true, data: { loai, cuaHang: con.code, truoc, sau, daGhi: true } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }

@@ -210,7 +210,10 @@ router.get('/chi-tiet', authMiddleware, requirePermission(...QUYEN_XEM), async (
         if (loi) { res.status(400).json({ success: false, error: loi }); return }
         if (!khoId) { res.json({ success: true, data: { khoId: null, hang: [], thieuKho: true } }); return }
         const kq = await chiTietKhoHuHong(prisma, khoId)
-        res.json({ success: true, data: { khoId, ...kq } })
+        // Kho mẹ nhận hàng hư của cửa hàng này (09/10/2026) — trang báo để không ai tìm hàng hư ở đây
+        const { moKhoMeHu } = await import('../lib/khoMeHu')
+        const me = await moKhoMeHu(prisma).catch(() => null)
+        res.json({ success: true, data: { khoId, ...kq, khoMeHu: me ? { ma: me.ma, ten: me.ten } : null } })
     } catch (err: any) { guiLoi(res, err, 'GET /damaged-warehouse/chi-tiet lỗi:') }
 })
 

@@ -281,28 +281,40 @@ model CustomerGroup {
 }
 
 model Customer {
-  id               String    @id @default(cuid())
-  code             String    @unique
-  name             String
-  phone            String
-  email            String?
-  address          String?
-  latitude         Float? // Vĩ độ — lưu sau khi geocode địa chỉ
-  longitude        Float? // Kinh độ — lưu sau khi geocode địa chỉ
-  groupId          String?
-  birthday         String?
-  gender           String?
-  notes            String?
-  salesUserId      String? // NV Sales phụ trách
-  salesUserName    String? // Tên NV Sales (denormalized)
-  totalPurchases   Float     @default(0)
-  totalOrders      Int       @default(0)
-  debt             Float     @default(0)
-  loyaltyPoints    Int       @default(0)
-  tier             String    @default("bronze")
-  lastPurchaseDate DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id            String  @id @default(cuid())
+  code          String  @unique
+  name          String
+  phone         String
+  email         String?
+  address       String?
+  latitude      Float? // Vĩ độ — lưu sau khi geocode địa chỉ
+  longitude     Float? // Kinh độ — lưu sau khi geocode địa chỉ
+  groupId       String?
+  birthday      String?
+  gender        String?
+  notes         String?
+  salesUserId   String? // NV Sales phụ trách
+  salesUserName String? // Tên NV Sales (denormalized)
+
+  /// THÔNG TIN XUẤT HOÁ ĐƠN (09/10/2026) — đổ lên HĐĐT khi phiếu bán gắn khách này mà
+  /// phiếu không có vatBuyerInfo riêng (lib/hoaDonKhach). KiotViet: taxCode, type (0 cá
+  /// nhân / 1 công ty), organization, nameEInvoice, addressEInvoice, contactNumberEInvoice.
+  taxCode            String? // MST: 10 số, 10-3 (chi nhánh), 12 số (cá nhân theo CCCD), 13 số
+  invoiceType        String? // 'personal' | 'company' — null = chưa rõ
+  invoiceCompanyName String? // Tên đơn vị (KiotViet organization)
+  invoiceBuyerName   String? // Tên người mua in trên HĐ (KiotViet nameEInvoice)
+  invoiceAddress     String? // Địa chỉ xuất HĐ (KiotViet addressEInvoice)
+  invoiceEmail       String? // Email nhận HĐ — trống thì dùng email khách
+  invoicePhone       String? // SĐT trên HĐ (KiotViet contactNumberEInvoice)
+  invoiceIdNo        String? // CCCD / hộ chiếu người mua (HĐ cá nhân)
+  totalPurchases     Float     @default(0)
+  totalOrders        Int       @default(0)
+  debt               Float     @default(0)
+  loyaltyPoints      Int       @default(0)
+  tier               String    @default("bronze")
+  lastPurchaseDate   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   group         CustomerGroup? @relation(fields: [groupId], references: [id])
   transactions  Transaction[]
@@ -313,6 +325,7 @@ model Customer {
   @@index([phone])
   @@index([tier])
   @@index([salesUserId])
+  @@index([taxCode])
 }
 
 // ─── Transactions ──────────────────────────────────────────────────────────────
@@ -1608,7 +1621,10 @@ model StoreSettings {
   mailboxConfig String?
 
   // Key Gemini riêng của cửa hàng cho Trợ lý AI (chỉ admin cấu hình; API che dạng ••••).
-  geminiApiKey String?
+  geminiApiKey   String?
+  // Key DeepSeek DỰ PHÒNG (30/09/2026): Gemini hết hạn mức / quá tải ở mọi model thì lượt
+  // chạy AI chuyển sang DeepSeek (services/aiDeepSeek). Che dạng •••• như key Gemini.
+  deepseekApiKey String?
 
   notifyNewOrder Boolean @default(true)
 
@@ -1677,6 +1693,13 @@ model StoreSettings {
    * lại, và ghi phiếu trên thẻ kho bên đó. Trống = không dùng. Xem lib/khoMe.ts.
    */
   khoMeMa String?
+
+  /**
+   * KHO MẸ — PHẦN HƯ HỎNG (09/10/2026) — mã cửa hàng nhận HÀNG HƯ của cửa hàng này vào Kho
+   * Hư Hỏng của nó (nơi hàng nằm thật). Bật / tắt độc lập với `khoMeMa`. Trống = hàng hư vào
+   * kho hư hỏng của chính cửa hàng này. Xem lib/khoMeHu.ts.
+   */
+  khoMeHuMa String?
 
   updatedAt DateTime @updatedAt
 }
@@ -3033,9 +3056,48 @@ model FbContentDraft {
 // chừng có thể đăng trùng lên trang khách hàng mà không ai biết.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// THƯƠNG HIỆU (29/09/2026) — một cửa hàng làm marketing cho tối đa 10 thương hiệu.
+// Mỗi thương hiệu tách hẳn kênh, chiến dịch, bài, media — và là NGUỒN SỰ THẬT cho AI
+// viết content: AI chỉ được viết từ những gì ghi ở đây, ô trống = không biết, không bịa.
+// Dòng Mkt* cũ có brandId NULL được gán vào thương hiệu đầu tiên ở lần mở đầu tiên.
+model MktBrand {
+  id             String    @id @default(cuid())
+  name           String
+  industry       String    @default("")
+  description    String    @default("") // thương hiệu là ai, làm gì, khác đối thủ ở đâu
+  products       String    @default("") // sản phẩm / dịch vụ, giá, điểm nổi bật
+  contentPillars String    @default("") // chủ đề nội dung chính
+  contact        String    @default("") // website, hotline, địa chỉ, giờ mở cửa
+  audience       String    @default("")
+  voice          String    @default("")
+  usp            String    @default("")
+  cta            String    @default("")
+  examples       String    @default("") // bài mẫu đúng giọng để AI bắt chước
+  notes          String    @default("")
+  bannedWords    String    @default("[]") // JSON array
+  timezone       String    @default("Asia/Ho_Chi_Minh")
+  // "AI TỰ DUYỆT" (30/09/2026, chủ shop chọn): bật thì tác vụ AI tự động được duyệt + lên
+  // lịch bài của CHÍNH thương hiệu này (tool mkt_duyet_noi_dung). Mặc định TẮT. Chỉ người
+  // đăng nhập bật/tắt được qua PUT /api/mkt/brand — tool AI sửa hồ sơ KHÔNG đụng được cột
+  // này (AI không tự cấp quyền cho mình). Tắt đi thì bài AI đã tự duyệt mà chưa đăng bị
+  // worker chặn lại và trả về hàng chờ người duyệt.
+  aiAutoApprove  Boolean   @default(false)
+  // Khung giờ đăng MẶC ĐỊNH (30/09/2026): "08:00, 12:00, 20:00" giờ VN. Bài không có khung
+  // riêng thì duyệt xong tự hẹn vào giờ trống gần nhất trong khung này (src/lib/mktKhungGio.ts).
+  postSlots      String    @default("")
+  // Xoá MỀM: dữ liệu còn nguyên, chỉ biến khỏi danh sách và không tính vào trần 10.
+  archivedAt     DateTime?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([archivedAt])
+}
+
 model MktAccount {
   id         String  @id @default(cuid())
-  platform   String // facebook | instagram | tiktok | youtube
+  brandId    String? // MktBrand.id — null chỉ ở dữ liệu trước 29/09, được gán khi mở lần đầu
+  platform   String // facebook | instagram | threads | tiktok | youtube
   externalId String // id trang/kênh phía nền tảng
   name       String  @default("")
   avatar     String?
@@ -3048,6 +3110,9 @@ model MktAccount {
   // đĩa Cloud Run là tạm, restart là mất khoá và mọi token thành rác không giải được.
   accessToken    String
   tokenExpiresAt DateTime?
+  // ⛔ MÃ HOÁ như accessToken: JSON {refreshToken, clientId, clientSecret} để máy chủ tự
+  // gia hạn token YouTube/TikTok. Threads tự gia hạn bằng chính accessToken, không cần.
+  refreshSecret  String?
 
   status      String    @default("active") // active | disconnected | token_expired
   lastSyncAt  DateTime?
@@ -3060,10 +3125,12 @@ model MktAccount {
 
   @@unique([platform, externalId])
   @@index([status])
+  @@index([brandId])
 }
 
 model MktCampaign {
   id        String    @id @default(cuid())
+  brandId   String?
   name      String
   goal      String    @default("")
   // paused = GIỮ cả hàng đợi: publication của chiến dịch tạm dừng không được gửi.
@@ -3077,10 +3144,12 @@ model MktCampaign {
   contents MktContent[]
 
   @@index([status])
+  @@index([brandId])
 }
 
 model MktContent {
   id         String  @id @default(cuid())
+  brandId    String?
   campaignId String?
   title      String  @default("")
   body       String  @default("")
@@ -3088,6 +3157,15 @@ model MktContent {
   linkUrl    String?
   assetIds   String  @default("[]") // JSON array MktAsset.id
   productIds String  @default("[]") // JSON array Product.id — truy vết bài nào đẩy hàng nào
+  // Phiên bản RIÊNG cho từng kênh (29/09): JSON [{accountId, text, title, assetIds, options}].
+  // Threads 500 ký tự, YouTube cần tiêu đề, TikTok cần quyền riêng tư… — một thân bài chung
+  // không đăng được cho mọi nơi. Kênh không có phiên bản riêng thì dùng title/body/assetIds.
+  // Nằm trong luật "sửa là mất duyệt" như body.
+  variants   String  @default("[]")
+  // Khung giờ đăng của RIÊNG bài này (30/09/2026) — tác vụ AI soạn ra bài ghi khung giờ của
+  // tác vụ vào đây. Duyệt xong tự hẹn vào giờ trống gần nhất. Trống = dùng khung của thương
+  // hiệu. KHÔNG nằm trong luật "sửa là mất duyệt": đổi giờ không đổi chữ người đã duyệt.
+  postSlots  String  @default("")
 
   // Khoá lạc quan: SỬA NỘI DUNG LÀ MẤT DUYỆT. Mỗi lần sửa tăng revision, và
   // approvedRevision phải bằng revision hiện tại thì mới được gửi. Thiếu cơ chế
@@ -3109,6 +3187,7 @@ model MktContent {
 
   @@index([status])
   @@index([campaignId])
+  @@index([brandId])
 }
 
 model MktPublication {
@@ -3172,7 +3251,17 @@ model MktAsset {
   createdBy String?
   createdAt DateTime @default(now())
 
+  // 29/09: đĩa Cloud Run là TẠM (restart là mất) nên media nằm ở Cloud Storage
+  // (`storagePath`) hoặc là một URL HTTPS công khai người dùng khai (`url`).
+  // Nền tảng (FB/IG/Threads/TikTok) TỰ TẢI media về từ `url`, nên url phải công khai.
+  brandId     String?
+  name        String  @default("")
+  type        String  @default("image") // image | video
+  url         String?
+  storagePath String?
+
   @@index([createdAt])
+  @@index([brandId])
 }
 
 model MktMetric {
@@ -3459,9 +3548,46 @@ model MisaConfig {
   // dùng cho lần sau chính xác hơn là tự lấy đồng hồ máy mình.
   lastSyncTime String?
 
+  // 09/10/2026 — CHIỀU ĐẨY LÊN (services/misaPush.ts)
+  // clientId: header ClientID của cổng developer.misa.vn; có thì đi cổng mới
+  clientId     String?
+  // Client Secret cổng mới — tài liệu AMIS KT V1.0.0 chưa dùng tới; có thì gửi kèm header ClientSecret
+  clientSecret String?
+  // JSON thiết lập đẩy: chi nhánh MISA, mã kho, mã khách lẻ, bộ tài khoản…
+  pushConfig   String?
+
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+/// Sổ theo dõi từng bản ghi Kengi ĐÃ ĐẨY lên MISA (09/10/2026).
+/// Một (loai, localId) = một dòng ⇒ không bao giờ đẩy hai lần cùng một chứng từ
+/// mà không biết. orgRefid sinh TẤT ĐỊNH từ localId nên đẩy lại vẫn trùng khoá
+/// phía MISA và xoá đề nghị được.
+model MisaPushItem {
+  id          String    @id @default(cuid())
+  loai        String // vattu | doituong | banhang | muahang
+  localId     String
+  refNo       String? // số phiếu / mã hàng / mã khách để người đọc nhận ra
+  orgRefid    String // GUID gửi MISA (org_refid hoặc *_id của danh mục)
+  voucherType Int? // voucher_type (chứng từ) hoặc dictionary_type (danh mục)
+  ngay        DateTime? // ngày chứng từ
+  soTien      Float     @default(0)
+  // da_gui: MISA đã nhận vào hàng đợi · loi_gui: MISA từ chối ngay khi gửi
+  // misa_ok: kết quả xử lý báo xong · misa_bao_loi: kết quả xử lý báo lỗi
+  // da_xoa: đã xoá đề nghị bên MISA
+  trangThai   String    @default("da_gui")
+  loi         String?
+  lanGui      Int       @default(1)
+  payload     String? // thân đã gửi (cắt bớt) — để kế toán đối chiếu
+  guiLuc      DateTime  @default(now())
+  ketQuaLuc   DateTime?
+
+  @@unique([loai, localId])
+  @@index([trangThai])
+  @@index([orgRefid])
+  @@index([guiLuc])
 }
 
 model MisaMap {
@@ -3775,6 +3901,12 @@ model SanMedia {
   /// HẸN GIỜ ĐĂNG. Shopee nhận thẳng post time trong edit_video_info; TikTok không
   /// có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
   henDangLuc DateTime?
+
+  /// KHAI NỘI DUNG AI (09/10/2026): video có hình / giọng / avatar / kịch bản do AI
+  /// tạo hoặc AI hỗ trợ không. Shopee edit_video_info BẮT BUỘC `aigc_label` và trừ
+  /// điểm nếu khai "không" mà sàn phát hiện có — nên null = CHƯA KHAI, chặn đăng chứ
+  /// không đoán false. TikTok đăng thẳng gửi `is_aigc` theo cùng lời khai.
+  coNoiDungAI Boolean?
 
   /// nhap | da_len_lich | cho_dang | da_dang | loi
   trangThai String    @default("nhap")
