@@ -168,6 +168,8 @@ export async function moPhienDang(
         disableComment?: boolean
         disableDuet?: boolean
         disableStitch?: boolean
+        /** Video có nội dung AI — TikTok gắn nhãn AI. Chỉ đường đăng thẳng mang được. */
+        isAigc?: boolean
     },
 ): Promise<KetQuaMoPhien> {
     const duong = opts.dangThang
@@ -198,6 +200,7 @@ export async function moPhienDang(
             disable_comment: !!opts.disableComment,
             disable_duet: !!opts.disableDuet,
             disable_stitch: !!opts.disableStitch,
+            is_aigc: !!opts.isAigc,
         }
     }
 

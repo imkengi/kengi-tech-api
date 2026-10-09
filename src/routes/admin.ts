@@ -2325,6 +2325,8 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // ALTER báo lỗi "relation does not exist" — bọc riêng, không chặn phần sau.
                 try {
                     await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "tienTrinhDang" TEXT`)
+                    // Khai nội dung AI cho aigc_label của Shopee Video (09/10/2026) — null = chưa khai
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "coNoiDungAI" BOOLEAN`)
                 } catch { /* cửa hàng chưa có bảng SanMedia → sync-schemas sẽ tạo đủ cột */ }
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
@@ -5200,11 +5202,19 @@ router.get('/do-phieu-tra-shopee', async (req: Request, res: Response) => {
         const thieuKenh = rows.filter((r: any) => !r.coKenh).length
         const tongThieu = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-SH-' }, channelId: null } })
         const tong = await sp.returnOrder.count({ where: { code: { startsWith: 'RTN-SH-' } } })
+        /* PHÂN BỐ MÃ LÝ DO (09/10/2026) — đo xem Shopee thật sự trả những mã nào, mã nào
+         * bảng dịch chưa có (Shopee thêm SPOILED_ROTTEN từ 15/09). Chỉ đọc. */
+        const { LY_DO_SHOPEE_VI } = await import('../lib/lyDoTraHang')
+        const nhom = await sp.returnOrder.groupBy({ by: ['reason'], where: { code: { startsWith: 'RTN-SH-' } }, _count: { _all: true } })
+        const phanBoLyDo = nhom
+            .map((g: any) => ({ ma: g.reason, soPhieu: g._count._all, daDich: !!LY_DO_SHOPEE_VI[String(g.reason || '').trim().toUpperCase()] }))
+            .sort((a: any, b: any) => b.soPhieu - a.soPhieu)
 
         res.json({
             success: true,
             data: {
                 tongPhieuShopee: tong, tongThieuKenh: tongThieu,
+                phanBoLyDo,
                 trongMau: rows.length, mauThieuKenh: thieuKenh, mau: rows,
                 yNghia: tongThieu === 0
                     ? 'Mọi phiếu Shopee đều có kênh ⇒ nút Nộp bằng chứng bấm được ở tất cả.'

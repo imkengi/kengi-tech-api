@@ -113,6 +113,15 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
         return { xong: true, conTiep: false, giaiDoan: 'xong', tienTrinh: tt, thongDiep: `Video này đã ${m.trangThai === 'da_len_lich' ? 'lên lịch' : 'đăng'} rồi (mã ${m.maTrenSan || '?'})` }
     }
 
+    /* KHAI NỘI DUNG AI (09/10/2026). `aigc_label` là trường BẮT BUỘC của
+     * edit_video_info (đo tài liệu Shopee hôm nay), và Shopee trừ điểm nếu khai "không"
+     * mà video có hình / giọng / avatar / kịch bản AI — cửa hàng này có cả công cụ lồng
+     * tiếng AI lẫn studio livestream AI. Bản trước gửi CỨNG false cho mọi video. Chưa
+     * khai thì dừng NGAY, trước khi tải cả GB lên, và không đoán. */
+    if (m.coNoiDungAI !== true && m.coNoiDungAI !== false) {
+        throw new Error('Chưa khai video có dùng AI hay không. Shopee bắt buộc khai, khai sai có thể bị trừ điểm. Chọn "Có AI" hoặc "Không AI" ở dòng video rồi bấm đăng lại.')
+    }
+
     const { svc, accessToken, userId } = await layTokenVideoShopee(prisma, m.channelId)
     const cred = { accessToken, userId }
     const tra = (thongDiep: string, xong = false): KetQuaBuoc => ({ xong, conTiep: !xong, giaiDoan: tt.giaiDoan, tienTrinh: tt, thongDiep })
@@ -249,7 +258,8 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
                     allow_info: { allow_duet: true, allow_stitch: true },
                     scheduled_info: scheduled,
                 }],
-                aigc_label: false,
+                // Cấp NGOÀI CÙNG, cạnh video_upload_list — đúng ví dụ trong tài liệu Shopee
+                aigc_label: m.coNoiDungAI === true,
             }
             const r = await svc.goiNguoiDung('/api/v2/video/edit_video_info', 'POST', cred, undefined, body)
             const fail = r.response?.failure_list?.[0]

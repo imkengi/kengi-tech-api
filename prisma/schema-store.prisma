@@ -3842,6 +3842,12 @@ model SanMedia {
   /// có nên phía mình phải tự canh giờ. null = đăng ngay khi bấm.
   henDangLuc DateTime?
 
+  /// KHAI NỘI DUNG AI (09/10/2026): video có hình / giọng / avatar / kịch bản do AI
+  /// tạo hoặc AI hỗ trợ không. Shopee edit_video_info BẮT BUỘC `aigc_label` và trừ
+  /// điểm nếu khai "không" mà sàn phát hiện có — nên null = CHƯA KHAI, chặn đăng chứ
+  /// không đoán false. TikTok đăng thẳng gửi `is_aigc` theo cùng lời khai.
+  coNoiDungAI Boolean?
+
   /// nhap | da_len_lich | cho_dang | da_dang | loi
   trangThai String    @default("nhap")
   /// Mã video do SÀN trả về — chỉ có khi đăng THẬT thành công

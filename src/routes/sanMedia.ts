@@ -426,6 +426,8 @@ router.post('/', authMiddleware, requirePermission('online_orders.edit', 'online
                 kenh: KENH.includes(b.kenh) ? b.kenh : null,
                 channelId: b.channelId ? String(b.channelId) : null,
                 henDangLuc: b.henDangLuc ? new Date(b.henDangLuc) : null,
+                // Chỉ nhận true/false do NGƯỜI ĐĂNG chọn — thiếu là null (chưa khai), không đoán
+                coNoiDungAI: typeof b.coNoiDungAI === 'boolean' ? b.coNoiDungAI : null,
                 trangThai: 'nhap',
                 createdBy: req.user?.userId || null,
             },
@@ -454,6 +456,9 @@ router.patch('/:id', authMiddleware, requirePermission('online_orders.edit', 'on
         if (b.caption !== undefined) data.caption = b.caption ? String(b.caption).slice(0, 2000) : null
         if (b.kenh !== undefined) data.kenh = KENH.includes(b.kenh) ? b.kenh : null
         if (b.channelId !== undefined) data.channelId = b.channelId ? String(b.channelId) : null
+        /* Khai nội dung AI — Shopee bắt buộc aigc_label (09/10/2026). true/false là lời
+         * khai của người đăng; null = rút lại về "chưa khai". */
+        if (b.coNoiDungAI !== undefined) data.coNoiDungAI = typeof b.coNoiDungAI === 'boolean' ? b.coNoiDungAI : null
         if (b.henDangLuc !== undefined) {
             /* Hẹn giờ vào QUÁ KHỨ là bẫy im lặng: người dùng tưởng đã đặt lịch, bộ chạy
              * nền thấy tới giờ rồi nên đăng ngay lập tức. Chặn ở đây, nói rõ. */

@@ -16,6 +16,7 @@ import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
 import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
+import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
 
 const router = Router()
 
@@ -5416,6 +5417,9 @@ router.get('/returns/:returnId/bang-chung', authMiddleware, async (req: AuthRequ
                 trangThai: d.status || null,
                 hanXuLy: d.return_seller_due_date ? d.return_seller_due_date * 1000 : null,
                 khachLyDo: d.reason || null,
+                /* Lý do do SHOPEE xác định lại sau khi xem xét (thêm 15/09/2026) — khác lý
+                 * do khách chọn thì sàn phân xử theo lý do này. "NONE" = chưa xác định lại. */
+                sanDanhGiaLai: lyDoSanXacDinhLai(d.reassessed_request_reason),
                 khachGhiChu: d.text_reason || null,
                 anhKhach: Array.isArray(d.image) ? d.image : [],
                 videoKhach: Array.isArray(d.buyer_videos) ? d.buyer_videos : [],

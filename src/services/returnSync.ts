@@ -9,6 +9,7 @@ import { postReturnJournal } from '../lib/autoJournalPurchase'
 import { PLATFORM_AR } from '../lib/autoJournal'
 import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { reverseOnlineOrderEffects } from './onlineOrderReversal'
+import { dichLyDoTraHang } from '../lib/lyDoTraHang'
 
 export interface ReturnsSyncResult {
     total: number
@@ -379,7 +380,8 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
 
             vuMoi.push({
                 don: order?.orderNumber || ret.orderSn,
-                lyDo: String(ret.reason || ret.textReason || '').slice(0, 60),
+                // Tin báo đọc bằng tiếng Việt ("Hàng bị ôi thiu, hư thối"), không phải SPOILED_ROTTEN
+                lyDo: dichLyDoTraHang(ret.reason || ret.textReason).slice(0, 60),
                 daHoan: ret.status === 'refunded',
             })
             synced++

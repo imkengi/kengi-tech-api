@@ -152,6 +152,8 @@ export async function buocDangTikTok(
                 totalChunkCount: tongPhan,   // MỘT phép tính dùng chung với vòng tải dưới
                 title: String(m.caption || m.ten || '').slice(0, 2200),
                 privacyLevel: privacy,
+                // Cùng lời khai AI với Shopee (09/10/2026) — TikTok gắn nhãn "AI-generated"
+                isAigc: m.coNoiDungAI === true,
             })
             if (!phien.publishId || !phien.uploadUrl) throw new Error('TikTok không trả publish_id / upload_url')
 
