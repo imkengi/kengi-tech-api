@@ -54,6 +54,11 @@ export interface HangKhoHu {
     lech: number
     /** Lượt RA gần nhất — chỉ kèm khi mã lệch / âm, để biết ai lấy ra và vì sao */
     ra: DongKhoHu[]
+    /** Giá vốn hiện tại của mã — màn hình xử lý báo trước giá vốn sau khi cộng phí sửa */
+    giaVon: number
+    /** Tồn BÁN ĐƯỢC (Product.stock) — "nhập từ kho" cần đủ số này */
+    tonBanDuoc: number
+    donVi: string | null
 }
 
 const TRAN = 2000
@@ -215,6 +220,12 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
     for (const r of [...ws, ...lo, ...suaGiu]) {
         if (!tenHang.has(r.productId)) tenHang.set(r.productId, { productName: r.productName || '', sku: r.productSku || null })
     }
+    // Giá vốn + tồn bán được: màn hình xử lý / nhập báo trước hậu quả (cùng nếp app Android)
+    const sanPham: any[] = await prisma.product.findMany({
+        where: { id: { in: dsMa } },
+        select: { id: true, name: true, sku: true, costPrice: true, stock: true, baseUnit: true },
+    })
+    const spTheoId = new Map(sanPham.map(p => [p.id, p]))
 
     const hang: HangKhoHu[] = []
     for (const pid of dsMa) {
@@ -355,7 +366,11 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
         }
 
         const t = tenHang.get(pid)
-        hang.push({ productId: pid, productName: t?.productName || '', sku: t?.sku || null, ton, dong, lech, ra })
+        const p = spTheoId.get(pid)
+        hang.push({
+            productId: pid, productName: t?.productName || p?.name || '', sku: t?.sku || p?.sku || null, ton, dong, lech, ra,
+            giaVon: Number(p?.costPrice ?? 0), tonBanDuoc: Number(p?.stock ?? 0), donVi: p?.baseUnit ?? null,
+        })
     }
 
     // Mã lệch / âm xuống cuối; còn lại theo tên
