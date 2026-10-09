@@ -4870,6 +4870,120 @@ router.post('/returns/manual', authMiddleware, async (req: AuthRequest, res: Res
 })
 
 // GET /api/online-orders/returns/find-order?code= — tra nhanh đơn để nhập tay
+// ─── HÀNG HOÀN Ở TRẠM QUAY (09/10/2026) ──────────────────────────────────────
+// Chủ shop: "phần đóng hàng khi quay hàng hoàn sẽ phải hiện lý do trả hàng, sau khi quay xong chọn
+// tình trạng hàng luôn, và những hàng do lỗi kỹ thuật sẽ có 2 phase quay video, tự động ghép lại".
+// Trạm quay là kengi.vn/video-online (một file HTML ngoài repo) — gọi hai đường dưới bằng token
+// của người đóng hàng (chỉ authMiddleware, cùng nếp các route trả hàng khác).
+const DAU_NHAN_HANG_HOAN = '[Nhận hàng hoàn]'
+const TINH_TRANG_HOAN: Record<string, { nhan: string; condition?: string }> = {
+    nguyen_ven: { nhan: 'Nguyên vẹn — bán lại được', condition: 'new' },
+    hu_hong: { nhan: 'Hư hỏng / bể vỡ', condition: 'damaged' },
+    loi_ky_thuat: { nhan: 'Lỗi kỹ thuật — không hoạt động', condition: 'damaged' },
+    thieu_hang: { nhan: 'Thiếu hàng / thiếu phụ kiện' },
+    sai_hang: { nhan: 'Sai hàng — không phải hàng của shop' },
+    khac: { nhan: 'Khác' },
+}
+
+/** Tìm vụ theo MÃ VẬN ĐƠN quét trên kiện hoàn: mã hàng TRẢ (dòng "Tracking:" trong ghi chú phiếu —
+ *  returnSync ghi) trước, rồi mã GỬI ĐI của đơn (giao thất bại / đơn có phiếu trả). */
+async function timVuTheoVanDon(prisma: any, ma: string) {
+    const chonDon = { id: true, orderNumber: true, externalOrderId: true, platform: true, status: true, total: true, trackingNumber: true, shippedAt: true, internalNote: true, customerName: true }
+    let phieu = await prisma.returnOrder.findFirst({
+        where: { notes: { contains: `Tracking: ${ma}`, mode: 'insensitive' } },
+        include: { items: true }, orderBy: { createdAt: 'desc' },
+    })
+    const don = phieu
+        ? await prisma.onlineOrder.findFirst({ where: { OR: [{ orderNumber: phieu.originalInvoice }, { externalOrderId: phieu.originalInvoice }] }, select: chonDon })
+        : await prisma.onlineOrder.findFirst({ where: { trackingNumber: { equals: ma, mode: 'insensitive' } }, select: chonDon, orderBy: { createdAt: 'desc' } })
+    if (!phieu && don) {
+        phieu = await prisma.returnOrder.findFirst({
+            where: { OR: [{ originalInvoice: don.orderNumber }, ...(don.externalOrderId ? [{ originalInvoice: don.externalOrderId }] : [])] },
+            include: { items: true }, orderBy: { createdAt: 'desc' },
+        })
+    }
+    return { phieu, don }
+}
+
+/** Lần nhận hàng hoàn GẦN NHẤT ghi trong ghi chú — "[Nhận hàng hoàn] giờ — tình trạng — …". */
+function daNhanHangHoan(text?: string | null): { dong: string } | null {
+    const dong = String(text || '').split(/\r?\n/).filter(d => d.trim().startsWith(DAU_NHAN_HANG_HOAN)).pop()
+    return dong ? { dong: dong.trim() } : null
+}
+
+// GET /online-orders/returns/theo-van-don?ma=<mã vận đơn> — trạm quay hiện lý do trả + có phải lỗi kỹ thuật
+router.get('/returns/theo-van-don', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ma = String(req.query.ma || '').trim()
+        if (ma.length < 5) { res.status(400).json({ success: false, error: 'Mã vận đơn quá ngắn' }); return }
+        const { phieu, don } = await timVuTheoVanDon(prisma, ma)
+        const { dichLyDoTraHang, laLoiKyThuat, benLoiTraHang } = await import('../lib/lyDoTraHang')
+        const { ketQuaKhieuNai } = await import('../lib/viecVuTra')
+        const huy = !!don && /^(CANCELLED|IN_CANCEL|cancelled)$/.test(String(don.status || '')) && !!don.shippedAt
+        res.json({
+            success: true,
+            data: {
+                timThay: !!(phieu || don),
+                loai: phieu ? 'tra_hang' : huy ? 'giao_that_bai' : don ? 'don_thuong' : null,
+                phieu: phieu ? {
+                    code: phieu.code,
+                    returnSn: String(phieu.code || '').replace(/^RTN-(TT|SH)-/, ''),
+                    san: /^RTN-TT-/.test(phieu.code) ? 'TikTok' : /^RTN-SH-/.test(phieu.code) ? 'Shopee' : 'Online',
+                    trangThai: phieu.status,
+                    lyDo: phieu.reason || null,
+                    lyDoViet: dichLyDoTraHang(phieu.reason) || null,
+                    benLoi: benLoiTraHang(phieu.reason),
+                    loiKyThuat: laLoiKyThuat(phieu.reason),
+                    canGuiLai: /(?:^|\n)\s*Need return:\s*Có(?=\s|$)/.test(String(phieu.notes || '')),
+                    soTien: phieu.totalRefund || 0,
+                    sanPham: (phieu.items || []).map((i: any) => ({ ten: i.productName, sku: i.sku || null, sl: i.quantity })),
+                    daNhan: daNhanHangHoan(phieu.notes),
+                    khieuNai: ketQuaKhieuNai(phieu.notes),
+                } : null,
+                don: don ? {
+                    orderNumber: don.orderNumber, san: don.platform, trangThai: don.status, tongTien: don.total,
+                    khach: don.customerName || null, daNhan: daNhanHangHoan(don.internalNote),
+                } : null,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
+})
+
+// POST /online-orders/returns/nhan-hang-hoan {ma, tinhTrang, ghiChu?, tenVideo?, haiGiaiDoan?}
+// Ghi LẦN NHẬN kiện hoàn + tình trạng hàng vào phiếu trả (hoặc ghi chú nội bộ của đơn giao thất bại).
+// Không đụng tồn kho — tồn đã cộng lại lúc sàn hoàn tiền / huỷ đơn; hàng hư thì xử lý ở tab Trả hàng.
+router.post('/returns/nhan-hang-hoan', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const b = req.body || {}
+        const ma = String(b.ma || '').trim()
+        const tt = TINH_TRANG_HOAN[String(b.tinhTrang || '')]
+        if (ma.length < 5) { res.status(400).json({ success: false, error: 'Thiếu mã vận đơn' }); return }
+        if (!tt) { res.status(400).json({ success: false, error: 'Chưa chọn tình trạng hàng' }); return }
+        const { phieu, don } = await timVuTheoVanDon(prisma, ma)
+        if (!phieu && !don) { res.status(404).json({ success: false, error: `Không thấy vụ trả / đơn nào khớp mã ${ma} — video vẫn được lưu lên Drive` }); return }
+        const ghiChu = String(b.ghiChu || '').trim().slice(0, 300)
+        const tenVideo = String(b.tenVideo || '').trim().slice(0, 160)
+        const nguoi = String(req.user?.email || '').slice(0, 60)
+        const dong = `${DAU_NHAN_HANG_HOAN} ${new Date().toLocaleString('vi-VN')} — ${tt.nhan}`
+            + (b.haiGiaiDoan === true ? ' — video 2 giai đoạn (mở hộp + test kỹ thuật)' : '')
+            + (tenVideo ? ` — video ${tenVideo}` : '') + (ghiChu ? ` — "${ghiChu}"` : '') + (nguoi ? ` — ${nguoi}` : '')
+        if (phieu) {
+            await prisma.returnOrder.update({ where: { id: phieu.id }, data: { notes: `${phieu.notes || ''}\n${dong}` } })
+            if (tt.condition) await prisma.returnItem.updateMany({ where: { returnOrderId: phieu.id }, data: { condition: tt.condition } }).catch(() => null)
+            res.json({ success: true, data: { ghiVao: 'phieu', ma: phieu.code, tinhTrang: tt.nhan } })
+            return
+        }
+        await prisma.onlineOrder.update({ where: { id: don.id }, data: { internalNote: `${don.internalNote ? don.internalNote + '\n' : ''}${dong}` } })
+        res.json({ success: true, data: { ghiVao: 'don', ma: don.orderNumber, tinhTrang: tt.nhan } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
+})
+
 router.get('/returns/find-order', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!

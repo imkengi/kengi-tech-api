@@ -231,7 +231,7 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
                 shippedAt: { not: null, gte: new Date(Date.now() - 60 * MOT_NGAY) },
                 trackingNumber: { not: null },
             },
-            select: { orderNumber: true, platform: true, trackingNumber: true, shippedAt: true, total: true },
+            select: { orderNumber: true, platform: true, trackingNumber: true, shippedAt: true, total: true, internalNote: true },
             take: 1000,
         })
         const cho: KienHoan[] = [...(vuTra?.choHoan ?? []), ...kienHoanTuDonHuy(donHuy)]

@@ -58,6 +58,27 @@ export function dichLyDoTraHang(r?: string | null): string {
     return LY_DO_SHOPEE_VI[goc.toUpperCase()] || goc
 }
 
+/** Lý do trả là LỖI KỸ THUẬT (máy không chạy / hỏng chức năng) — trạm quay hàng hoàn bật quay
+ *  HAI GIAI ĐOẠN (mở hộp → test kỹ thuật) cho những vụ này (chủ shop 09/10/2026). Mã Shopee
+ *  FUNCTIONAL_DMG; chữ tự do (TikTok…) thì nhận các cụm "không hoạt động / doesn't work / defective". */
+export function laLoiKyThuat(r?: string | null): boolean {
+    const goc = String(r || '').trim()
+    if (/^(FUNCTIONAL_DMG|ITEM_WRONGDAMAGED)$/i.test(goc)) return true
+    return /defective|malfunction|not work|n['’]t work|kh[oô]ng ho[aạ]t [dđ][oộ]ng|l[oỗ]i k[yỹ] thu[aậ]t|h[oỏ]ng ch[uứ]c n[aă]ng|kh[oô]ng l[eê]n ngu[oồ]n/i.test(goc)
+}
+
+/** Bên có lỗi theo lý do trả — cùng bảng với web (ChiTietVuTra.chieuLyDo). null = không rõ. */
+export function benLoiTraHang(r?: string | null): 'shop' | 'khach' | 'van_chuyen' | null {
+    const ma = String(r || '').trim().toUpperCase()
+    if (['WRONG_ITEM', 'ITEM_DAMAGED', 'DIFF_DESC', 'USED', 'ITEM_WRONGDAMAGED', 'ITEM_MISSING', 'ITEM_FAKE', 'PHYSICAL_DMG',
+        'FUNCTIONAL_DMG', 'EXPIRED_PRODUCT', 'SELLER_SENT_WRONG_ITEM', 'SPILLED_CONTENTS', 'BROKEN_PRODUCTS', 'DAMAGED_PACKAGE',
+        'SCRATCHED', 'DAMAGED_OTHERS', 'SIZE_DEVIATION', 'LOOK_DEVIATION', 'DATE_DEVIATION', 'DIFFERENT_DESCRIPTION',
+        'SPOILED_ROTTEN', 'SLIGHT_SCRATCH_DENTS'].includes(ma)) return 'shop'
+    if (['CHANGE_MIND', 'CHANGE_OF_MIND', 'WRONG_ORDER_INFO', 'WRONG_ADDRESS', 'ITEM_NOT_FIT', 'EXPECTATION_FAILED', 'NO_REASON'].includes(ma)) return 'khach'
+    if (['NONRECEIPT', 'NOT_RECEIPT', 'OUTER_DAMAGED_PACKAGE', 'LONG_DELIVERY_TIME', 'SUSPICIOUS_PARCEL'].includes(ma)) return 'van_chuyen'
+    return null
+}
+
 /** reassessed_request_reason có nghĩa — bỏ "NONE"/rỗng (chưa xác định lại). */
 export function lyDoSanXacDinhLai(r?: string | null): string | null {
     const goc = String(r || '').trim()

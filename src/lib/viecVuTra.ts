@@ -135,6 +135,8 @@ export interface DonHuyDaGiao {
     trackingNumber: string | null
     shippedAt: Date | string | null
     total: number | null
+    /** trạm quay ghi "[Nhận hàng hoàn]" vào đây khi kiện giao thất bại về tới shop */
+    internalNote?: string | null
 }
 
 /** Kiện đang/đã hoàn về: mã vận đơn để dò video mở hàng + dòng hiển thị. */
@@ -171,9 +173,10 @@ export function phanLoaiVuTra(ds: PhieuTraDoc[], homNay = new Date()) {
             })
         }
 
-        // Khách PHẢI gửi hàng lại, đã có mã vận đơn trả, vụ đã được chấp nhận → kiện đang về
+        // Khách PHẢI gửi hàng lại, đã có mã vận đơn trả, vụ đã được chấp nhận → kiện đang về.
+        // Trạm quay đã ghi "[Nhận hàng hoàn]" (09/10/2026) = đã nhận — chắc hơn dò tên video.
         const trk = maVanDonTra(notes)
-        if (trk && canGuiHangLai(notes) && (r.status === 'approved' || r.status === 'refunded')) {
+        if (trk && canGuiHangLai(notes) && (r.status === 'approved' || r.status === 'refunded') && !notes.includes('[Nhận hàng hoàn]')) {
             choHoan.push({
                 maVanDon: trk, soTien,
                 dong: { ma: trk, tuoiNgay: t, duongDan: lienPhieu(r.code), moTa: `Hàng khách trả · ${r.code} · ${t} ngày` },
@@ -192,7 +195,7 @@ export function kienHoanTuDonHuy(ds: DonHuyDaGiao[], homNay = new Date()): KienH
     const ra: KienHoan[] = []
     for (const d of ds) {
         const trk = String(d.trackingNumber || '').trim()
-        if (trk.length < 6 || !d.shippedAt) continue
+        if (trk.length < 6 || !d.shippedAt || String(d.internalNote || '').includes('[Nhận hàng hoàn]')) continue
         const t = tuoi(d.shippedAt, homNay)
         ra.push({
             maVanDon: trk, soTien: Number(d.total) || 0,
