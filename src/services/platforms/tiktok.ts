@@ -1114,6 +1114,9 @@ export class TikTokService extends PlatformService {
             updateTime: r.update_time ? new Date(r.update_time * 1000) : new Date(),
             needReturn: r.return_type === 'RETURN_AND_REFUND',
             disputeReason: '',
+            /** Tranh chấp sàn (đo 09/10/2026: IN_PROGRESS khi khách đưa vụ lên sàn, rồi SUPPORT_BUYER…) —
+             *  returnSync ghi "[Tranh chấp TikTok]" khi đổi để nhắc xác nhận bằng chứng 24 giờ. */
+            arbitrationStatus: r.arbitration_status ? String(r.arbitration_status) : null,
         }
     }
 

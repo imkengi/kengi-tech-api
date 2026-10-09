@@ -18,6 +18,7 @@ import { Router, Request, Response } from 'express'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { nhipMktTuNgoai } from '../cron/mktWorker'
 import { quetTuNgoai } from '../cron/aiAgentCron'
+import { nhacBangChungTuNgoai } from '../cron/nhacBangChungTikTokCron'
 
 const router = Router()
 
@@ -41,6 +42,11 @@ router.post('/tick', async (req: Request, res: Response) => {
      * không chặn phần kia. */
     try { ra.dangBai = await nhipMktTuNgoai() } catch (e: any) { ra.dangBai = 'loi: ' + (e?.message || e) }
     try { ra.tacVuAi = (await quetTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.tacVuAi = 'loi: ' + (e?.message || e) }
+    /* Nhắc TikTok xác nhận đủ bằng chứng (09/10/2026) — mỗi 10 phút; mỗi giờ một tin / cửa hàng do dấu
+     * trong thông báo lo. Chạy ở NHỊP NGOÀI để có CPU cả đêm (cpu-throttling). */
+    if (new Date().getUTCMinutes() % 10 === 0) {
+        try { ra.nhacBangChungTikTok = (await nhacBangChungTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.nhacBangChungTikTok = 'loi: ' + (e?.message || e) }
+    }
     res.json({ success: true, data: { ...ra, ms: Date.now() - batDau } })
 })
 

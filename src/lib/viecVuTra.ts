@@ -11,6 +11,7 @@
 
 import { dichLyDoTraHang } from './lyDoTraHang'
 import { choKhieuNaiThang } from './nhanHangHoan'
+import { canNhacXacNhan, gioVN, conGioChu } from './bangChungTikTok'
 
 export interface DongViec {
     /** mã hiển thị: mã phiếu trả / mã đơn / mã vận đơn */
@@ -174,11 +175,31 @@ export function phanLoaiVuTra(ds: PhieuTraDoc[], homNay = new Date()) {
     const khieuNaiThua: (DongViec & { soTien: number })[] = []
     const choHoan: KienHoan[] = []
     const hangHuChoKhieuNai: (DongViec & { soTien: number })[] = []
+    const choXacNhanBangChung: (DongViec & { soTien: number; hetHan: number })[] = []
     for (const r of ds) {
         const notes = r.notes || ''
         const t = tuoi(r.createdAt, homNay)
         const soTien = Number(r.totalRefund) || 0
         const goc = maGocCuoi(notes)
+
+        /* TikTok: 24 GIỜ xác nhận "đã đủ bằng chứng" sau khi khiếu nại / khách đưa vụ lên sàn
+         * (chủ shop 09/10/2026). Độc lập với các danh sách dưới — một vụ có thể vừa chờ xác nhận
+         * vừa là hàng hư chờ khiếu nại thắng. Nút OK tắt nhắc mỗi giờ. */
+        if (r.code.startsWith('RTN-TT-')) {
+            const bc = canNhacXacNhan(notes, homNay)
+            if (bc) {
+                choXacNhanBangChung.push({
+                    ma: r.code, soTien, tuoiNgay: t, duongDan: lienPhieu(r.code), hetHan: bc.hetHan.getTime(),
+                    moTa: `còn ${conGioChu(bc.conPhut)} · hạn ${gioVN(bc.hetHan)} · ${bc.nguon === 'tranh-chap' ? 'khách đưa vụ lên sàn' : 'shop vừa khiếu nại'}`,
+                    nut: {
+                        nhan: 'OK — đã xác nhận',
+                        duong: '/online-orders/returns/xac-nhan-bang-chung-tiktok',
+                        than: { ma: r.code },
+                        xacNhan: `Đã bấm xác nhận "đủ bằng chứng" trên TikTok Seller Center cho vụ ${r.code}?\n\nBấm OK để tắt nhắc mỗi giờ.`,
+                    },
+                })
+            }
+        }
 
         /* HÀNG HOÀN VỀ KHÔNG NGUYÊN VẸN, chưa vào kho hư hỏng (chủ shop 09/10/2026: chờ khiếu nại
          * thành công mới vào kho hư hỏng, không thì đưa vào việc cần làm để khiếu nại tiếp). Một
@@ -223,7 +244,8 @@ export function phanLoaiVuTra(ds: PhieuTraDoc[], homNay = new Date()) {
     chuaKhieuNai.sort(cuTruoc)
     khieuNaiThua.sort(cuTruoc)
     hangHuChoKhieuNai.sort(cuTruoc)
-    return { chuaKhieuNai, khieuNaiThua, choHoan, hangHuChoKhieuNai }
+    choXacNhanBangChung.sort((a, b) => a.hetHan - b.hetHan)   // gần hạn nhất lên đầu
+    return { chuaKhieuNai, khieuNaiThua, choHoan, hangHuChoKhieuNai, choXacNhanBangChung }
 }
 
 /** Đơn GIAO THẤT BẠI đã về shop mà hàng KHÔNG nguyên vẹn, chưa vào kho hư hỏng. Không có phiếu

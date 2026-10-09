@@ -13,6 +13,7 @@ import { dichLyDoTraHang } from '../lib/lyDoTraHang'
 import { vongKhieuNai, ketQuaKhieuNai } from '../lib/viecVuTra'
 import { choKhieuNaiThang } from '../lib/nhanHangHoan'
 import { chuyenHangHoanVaoKhoHu, baoHangHoanHu } from '../lib/hangHoanHu'
+import { tranhChapCuoi, dongTranhChap } from '../lib/bangChungTikTok'
 
 export interface ReturnsSyncResult {
     total: number
@@ -223,6 +224,16 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                 }
                 // Update status if changed — hoặc vụ ĐÃ KHIẾU NẠI mà trạng thái GỐC của sàn đổi
                 // (TikTok: tên mới chưa có trong bảng quy đổi vẫn phải thấy kết quả).
+                /* TRANH CHẤP TikTok (09/10/2026): khách đưa vụ lên sàn phân xử → shop phải xác nhận ĐỦ BẰNG
+                 * CHỨNG trong 24 giờ (cron nhacBangChungTikTok nhắc mỗi giờ). Ghi mỗi lần arbitration_status
+                 * ĐỔI, mốc = update_time của vụ (lúc khách đưa lên, không phải lúc mình thấy). Dòng KHÔNG mở
+                 * đầu "[TikTok]" — bộ đọc mã trạng thái gốc (trangThaiGocCuoi, maGocCuoi) khỏi hiểu nhầm. */
+                const tranhChap = String((ret as any).arbitrationStatus || '')
+                if (isTikTok && tranhChap && tranhChap !== tranhChapCuoi(notesMoi)) {
+                    const moc = ret.updateTime instanceof Date && !isNaN(ret.updateTime.getTime()) ? ret.updateTime : new Date()
+                    notesMoi = `${notesMoi}\n${dongTranhChap(tranhChap, moc)}`
+                    notesDoi = true
+                }
                 const daKhieuNai = DA_KHIEU_NAI.test(existingReturn.notes || '')
                 const gocCu = trangThaiGocCuoi(existingReturn.notes, platformLabel)
                 // Sàn vừa sang SELLER_DISPUTE / JUDGING (khiếu nại trên Seller Center) cũng phải ghi lại

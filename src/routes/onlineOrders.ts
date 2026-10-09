@@ -5045,6 +5045,34 @@ router.post('/returns/nhan-hang-hoan', authMiddleware, async (req: AuthRequest, 
 // Đưa hàng hoàn KHÔNG nguyên vẹn vào kho hư hỏng NGAY, không chờ khiếu nại thắng nữa — nút ở Việc cần
 // làm / chi tiết vụ trả (09/10/2026). Dùng khi thôi khiếu nại, hoặc sàn đã đền bên ngoài hệ thống, hoặc
 // đơn giao thất bại (không có phiếu trả để đọc kết quả). Cùng hàm với lúc tự chuyển khi thắng.
+// POST /online-orders/returns/xac-nhan-bang-chung-tiktok {ma}
+// Nút OK (09/10/2026): đã bấm "xác nhận đủ bằng chứng" trên TikTok Seller Center → tắt nhắc mỗi giờ
+// (cron nhacBangChungTikTok). Chỉ ghi một dòng vào phiếu — TikTok không có API cho bước này.
+router.post('/returns/xac-nhan-bang-chung-tiktok', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ma = String(req.body?.ma || '').trim()
+        if (!ma) { res.status(400).json({ success: false, error: 'Thiếu mã phiếu trả' }); return }
+        const p = await prisma.returnOrder.findFirst({ where: { code: ma }, select: { id: true, code: true, notes: true } })
+        if (!p) { res.status(404).json({ success: false, error: `Không thấy phiếu trả ${ma}` }); return }
+        const { mocXacNhanBangChung, DAU_XAC_NHAN_BC_TT, gioVN } = await import('../lib/bangChungTikTok')
+        const moc = mocXacNhanBangChung(p.notes)
+        if (!moc) { res.status(400).json({ success: false, error: 'Vụ này không có khiếu nại / tranh chấp TikTok nào đang chờ xác nhận bằng chứng' }); return }
+        if (moc.daXacNhan) { res.json({ success: true, data: { ma: p.code, daCoTruoc: true } }); return }
+        // Tên người bấm — token không mang tên (memory token-khong-mang-ten)
+        const ten = req.user?.userId
+            ? (await prisma.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }).catch(() => null))?.name
+            : null
+        const dong = `${DAU_XAC_NHAN_BC_TT} ${gioVN(new Date())} — ${ten || req.user?.email || 'không rõ người bấm'}`
+        // Ghi có điều kiện ghi chú cũ — returnSync có thể đang nối dòng cùng lúc
+        const ghi = await prisma.returnOrder.updateMany({ where: { id: p.id, notes: p.notes }, data: { notes: `${p.notes || ''}\n${dong}` } })
+        if (ghi.count !== 1) { res.status(409).json({ success: false, error: 'Phiếu vừa được cập nhật — bấm OK lại' }); return }
+        res.json({ success: true, data: { ma: p.code, dong } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
+})
+
 router.post('/returns/hang-hoan-vao-kho-hu', authMiddleware, requirePermission('damaged_warehouse.edit', 'damaged_warehouse.view', 'inventory.adjust'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!

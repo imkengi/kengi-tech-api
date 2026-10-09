@@ -94,6 +94,7 @@ import cronTickRoutes from './routes/cronTick'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync, choAutoSyncXong } from './cron/autoSync'
 import { startHanThanhToanCron } from './cron/hanThanhToanCron'
+import { startNhacBangChungTikTokCron } from './cron/nhacBangChungTikTokCron'
 import { batCoDangTat } from './lib/choXong'
 import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
@@ -1582,6 +1583,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startHoaDonXmlEmailCron()
                 startEmailReplyCron()
                 startHanThanhToanCron()
+                startNhacBangChungTikTokCron()
                 startFlashSaleScheduler()
                 startEInvoiceQueueCron()
                 startKiotVietNightlyCron()

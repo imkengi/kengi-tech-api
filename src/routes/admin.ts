@@ -5259,6 +5259,40 @@ router.get('/mkt-chan-doan', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO NHẮC XÁC NHẬN BẰNG CHỨNG TIKTOK (chỉ đọc, 09/10/2026) ───────────────────
+ * GET /admin/do-nhac-bang-chung-tiktok?storeCode=  — từng vụ TikTok có mốc 24 giờ: bắt đầu, hạn, đã
+ * bấm OK chưa, sàn đã phân xử chưa, có đang phải nhắc không; + tin nhắc gần nhất. Không ghi gì. */
+router.get('/do-nhac-bang-chung-tiktok', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { mocXacNhanBangChung, canNhacXacNhan } = await import('../lib/bangChungTikTok')
+        const ds: any[] = await sp.returnOrder.findMany({
+            where: { code: { startsWith: 'RTN-TT-' }, OR: [{ notes: { contains: '[Từ chối TikTok]' } }, { notes: { contains: '[Tranh chấp TikTok]' } }] },
+            select: { code: true, status: true, notes: true, updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 50,
+        })
+        const now = new Date()
+        const vu = ds.map(p => {
+            const m = mocXacNhanBangChung(p.notes)
+            const c = canNhacXacNhan(p.notes, now)
+            return {
+                ma: p.code, trangThai: p.status, batDau: m?.batDau ?? null, hetHan: m?.hetHan ?? null, nguon: m?.nguon ?? null,
+                daXacNhan: m?.daXacNhan ?? null, daKetThuc: m?.daKetThuc ?? null, dangNhac: !!c, conPhut: c?.conPhut ?? null,
+                dongMoc: String(p.notes || '').split(/\r?\n/).filter((d: string) => /^\[(Từ chối TikTok|Tranh chấp TikTok|Đã xác nhận bằng chứng TikTok)\]/.test(d.trim())).slice(-4),
+            }
+        })
+        const tin = await sp.notification.findMany({
+            where: { type: 'dispute_result', OR: [{ message: { contains: '[nhac-bc-tt:' } }, { message: { contains: '[het-bc-tt:' } }] },
+            select: { title: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 5,
+        }).catch(() => [])
+        res.json({ success: true, data: { soVu: vu.length, dangNhac: vu.filter(v => v.dangNhac).length, vu, tinGanNhat: tin } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /**
  * ĐO VỤ TIKTOK ĐÃ KHIẾU NẠI (chỉ đọc, 09/10/2026) — GET /admin/do-vu-tiktok-da-khieu-nai?storeCode=&n=10
  * Chủ shop: "với tiktok sau khi khiếu nại thì trong vòng 24 giờ nó bắt xác nhận đã đủ bằng chứng".

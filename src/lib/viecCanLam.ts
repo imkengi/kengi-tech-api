@@ -209,6 +209,18 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
         })
         return hangHuTuDonHuy(ds)
     }, hong)
+    // ⏰ TikTok: 24 giờ xác nhận đủ bằng chứng — gấp nhất trong nhóm, đứng đầu (chủ shop 09/10/2026)
+    if (vuTra && vuTra.choXacNhanBangChung.length > 0) {
+        const ds: (DongViec & { soTien: number })[] = vuTra.choXacNhanBangChung
+        items.push({
+            ma: 'tiktok-cho-xac-nhan-bang-chung', nhom: 'online', mucDo: 'khan',
+            tieuDe: `⏰ ${ds.length} vụ TikTok chờ xác nhận ĐỦ BẰNG CHỨNG (hạn 24 giờ)`,
+            chiTiet: 'Sau khi khiếu nại / khách đưa vụ lên sàn, TikTok bắt xác nhận "đã đủ bằng chứng" trong 24 giờ — quá hạn là sàn xử theo bằng chứng đang có. Vào TikTok Seller Center › Trả hàng/Hoàn tiền bấm xác nhận, xong bấm "OK — đã xác nhận" ở dòng dưới để tắt nhắc mỗi giờ.',
+            soLuong: ds.length, soTien: ds.reduce((s, d) => s + d.soTien, 0),
+            duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Mở tab Trả hàng',
+            danhSach: vd(ds),
+        })
+    }
     const hangHu = [...(vuTra?.hangHuChoKhieuNai ?? []), ...(huDon ?? [])]
     if (hangHu.length > 0) {
         items.push({
