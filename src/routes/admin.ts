@@ -1298,6 +1298,66 @@ router.post('/gop-kho-chinh', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO KHO HƯ HỎNG (chỉ đọc, 09/10/2026) ─────────────────────────────────────
+ * Chủ shop hỏi vì sao trang Kho Hư Hỏng có HAI kho ("Chi nhánh chính" và WH-DAMAGED-xxx
+ * "không gắn chi nhánh"). Liệt kê MỌI kho type='damaged' (kể cả đã tắt): chi nhánh, mặc định,
+ * ngày tạo; tồn WarehouseStock (số dòng, tổng, âm/dương) và lô DamagedEntry (lô nhập còn hàng,
+ * tổng conLai) — kèm ĐỐI CHIẾU TỪNG MÃ giữa các kho (mã âm kho này có phải phần cộng nhầm sang
+ * kho kia hồi khoHuHong "bốc đại" trước 22/08 không). Không ghi gì.
+ * GET /admin/do-kho-hu-hong?ma=HUTI */
+router.get('/do-kho-hu-hong', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const khos = await sp.warehouse.findMany({
+            where: { type: 'damaged' },
+            select: { id: true, code: true, name: true, branchId: true, isDefault: true, isActive: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+        })
+        const cn = await sp.branch.findMany({ select: { id: true, name: true, isMainBranch: true } }).catch(() => [])
+        const tenCn = new Map(cn.map((b: any) => [b.id, `${b.name}${b.isMainBranch ? ' (chính)' : ''}`]))
+        const theoMa = new Map<string, Record<string, number>>()
+        const kho: any[] = []
+        for (const k of khos) {
+            const ws = await sp.warehouseStock.findMany({ where: { warehouseId: k.id }, select: { productId: true, productSku: true, quantity: true } })
+            const lo = await sp.damagedEntry.findMany({ where: { warehouseId: k.id }, select: { loai: true, conLai: true, createdAt: true } }).catch(() => null)
+            for (const r of ws) {
+                if (!r.quantity) continue
+                const khoa = r.productSku || r.productId
+                const m = theoMa.get(khoa) || {}
+                m[k.code] = (m[k.code] || 0) + r.quantity
+                theoMa.set(khoa, m)
+            }
+            const am = ws.filter((r: any) => r.quantity < 0), duong = ws.filter((r: any) => r.quantity > 0)
+            kho.push({
+                code: k.code, ten: k.name, chiNhanh: k.branchId ? (tenCn.get(k.branchId) || `(chi nhánh ${k.branchId} không còn)`) : null,
+                macDinh: k.isDefault, dangBat: k.isActive, taoLuc: k.createdAt,
+                ton: {
+                    soDong: ws.length, tong: ws.reduce((s: number, r: any) => s + r.quantity, 0),
+                    dongAm: am.length, tongAm: am.reduce((s: number, r: any) => s + r.quantity, 0),
+                    dongDuong: duong.length, tongDuong: duong.reduce((s: number, r: any) => s + r.quantity, 0),
+                },
+                lo: lo === null ? 'không đọc được' : {
+                    nhap: lo.filter((e: any) => e.loai === 'nhap').length,
+                    conHang: lo.filter((e: any) => e.loai === 'nhap' && (e.conLai ?? 0) > 0).length,
+                    tongConLai: lo.reduce((s: number, e: any) => s + (e.loai === 'nhap' ? (e.conLai ?? 0) : 0), 0),
+                    xuat: lo.filter((e: any) => e.loai === 'xuat').length,
+                    cuoi: lo.reduce((m: any, e: any) => (!m || e.createdAt > m ? e.createdAt : m), null),
+                },
+            })
+        }
+        // Mã có tồn ở từ HAI kho trở lên — xem âm bên này có bù dương bên kia không
+        const chongCheo = [...theoMa.entries()]
+            .filter(([, m]) => Object.keys(m).length > 1)
+            .map(([sku, m]) => ({ sku, ...m, cong: Object.values(m).reduce((s, v) => s + v, 0) }))
+        res.json({ success: true, data: { kho, soMaChongCheo: chongCheo.length, chongCheo: chongCheo.slice(0, 60) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // ─── POST /admin/kho-hu-hong-soat ────────────────────────────────────────────
 /**
  * SOÁT + CHỮA KHO HƯ HỎNG ÂM (đo HUTI 25/08/2026: kho hư hỏng CN01 âm −535 ở 11 mã).
