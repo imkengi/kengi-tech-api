@@ -1459,6 +1459,106 @@ router.get('/do-ban-nham-kho-hu-hong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── SỬA "BÁN NHẦM TỪ KHO HƯ HỎNG" (09/10/2026) ────────────────────────────────
+ * POST /admin/sua-ban-nham-kho-hu-hong {storeCode, apply?} — mặc định CHỈ BÁO CÁO.
+ * Phiếu bán POS web từng trừ vào KHO HƯ HỎNG (lỗi chọn kho, chặn từ 60176fc): kho hư hỏng âm,
+ * kho chính không trừ trong khi Product.stock trừ đúng. Đo HUTI: 12 mã âm −548 = ĐÚNG hai phiếu
+ * HD030373.3 + HD030980.1. Mỗi dòng ÂM chỉ sửa khi số âm được giải thích TRỌN bằng phiếu bán từ
+ * ngày tạo kho (|âm| ≤ Σ bán): kho hư hỏng về 0; kho CHÍNH mặc định cùng chi nhánh nếu đang DƯ so
+ * với Product.stock thì trừ phần dư (tối đa |âm|) cho khớp bất biến. KHÔNG đụng Product.stock,
+ * không bút toán, không thẻ kho (hàng bán đã ghi đủ lúc bán). Mỗi mã sửa ghi một dòng AuditLog có
+ * số TRƯỚC/SAU để hoàn lại được. Dòng đã đổi kể từ lúc đọc thì bỏ qua (chống đua). */
+router.post('/sua-ban-nham-kho-hu-hong', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const apply = b.apply === true
+        const maCH = String(b.storeCode || '').trim()
+        if (!maCH) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        const store = await prisma.store.findFirst({ where: { code: { equals: maCH, mode: 'insensitive' } }, select: { schema: true, code: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const chinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+        const khos = await sp.warehouse.findMany({
+            where: { type: 'damaged', isActive: true }, select: { id: true, code: true, branchId: true, createdAt: true },
+        })
+        const ketQua: any[] = []
+        for (const k of khos) {
+            const am = await sp.warehouseStock.findMany({
+                where: { warehouseId: k.id, quantity: { lt: 0 } },
+                select: { productId: true, productSku: true, productName: true, quantity: true },
+            })
+            if (!am.length) continue
+            const khoChinh = await sp.warehouse.findFirst({
+                where: { type: 'main', isDefault: true, branchId: k.branchId || chinh?.id || null }, select: { id: true, code: true },
+            })
+            for (const r of am) {
+                const ban = await sp.inventoryTransaction.findMany({
+                    where: { productId: r.productId, type: 'sale', createdAt: { gte: k.createdAt } },
+                    select: { referenceId: true, quantity: true },
+                })
+                const tongBan = ban.reduce((s: number, x: any) => s + Math.abs(x.quantity || 0), 0)
+                const soAm = -r.quantity
+                const spham = await sp.product.findUnique({ where: { id: r.productId }, select: { stock: true } })
+                const wsChinh = khoChinh ? await sp.warehouseStock.findUnique({
+                    where: { warehouseId_productId: { warehouseId: khoChinh.id, productId: r.productId } }, select: { quantity: true },
+                }) : null
+                const du = wsChinh && spham ? wsChinh.quantity - spham.stock : 0
+                const truChinh = Math.max(0, Math.min(du, soAm))
+                const dong: any = {
+                    khoHu: k.code, khoChinh: khoChinh?.code ?? null, sku: r.productSku, ten: r.productName,
+                    tonHu: r.quantity, tongBan, phieu: Array.from(new Set(ban.map((x: any) => x.referenceId))),
+                    tonSP: spham?.stock ?? null, tonKhoChinh: wsChinh?.quantity ?? null,
+                }
+                if (tongBan < soAm) {
+                    ketQua.push({ ...dong, viec: 'KHÔNG giải thích trọn bằng phiếu bán — chỉ báo, xem tay' })
+                    continue
+                }
+                dong.khoHuSau = 0
+                dong.khoChinhSau = wsChinh ? wsChinh.quantity - truChinh : null
+                if (!apply) { ketQua.push({ ...dong, viec: 'sẽ sửa khi apply' }); continue }
+                try {
+                    await sp.$transaction(async (tx: any) => {
+                        // Chỉ sửa khi dòng vẫn đúng số đã đọc — ai vừa nhập/xuất thì bỏ qua, đọc lại sau
+                        const u = await tx.warehouseStock.updateMany({
+                            where: { warehouseId: k.id, productId: r.productId, quantity: r.quantity }, data: { quantity: 0 },
+                        })
+                        if (u.count !== 1) throw new Error('DOI_ROI')
+                        if (truChinh > 0 && khoChinh) {
+                            const v = await tx.warehouseStock.updateMany({
+                                where: { warehouseId: khoChinh.id, productId: r.productId, quantity: wsChinh!.quantity },
+                                data: { quantity: { decrement: truChinh } },
+                            })
+                            if (v.count !== 1) throw new Error('DOI_ROI')
+                        }
+                        await tx.auditLog.create({
+                            data: {
+                                userName: 'admin (sửa lỗi hệ thống)', action: 'sua-ban-nham-kho-hu-hong', entity: 'WarehouseStock',
+                                entityId: r.productId,
+                                details: JSON.stringify({
+                                    lyDo: 'POS web bán trừ nhầm kho hư hỏng (lỗi chọn kho, sửa 09/10/2026)',
+                                    sku: r.productSku, phieu: dong.phieu,
+                                    khoHu: { kho: k.code, truoc: r.quantity, sau: 0 },
+                                    khoChinh: khoChinh ? { kho: khoChinh.code, truoc: wsChinh?.quantity ?? null, sau: dong.khoChinhSau } : null,
+                                    tonSanPham: spham?.stock ?? null,
+                                }),
+                            },
+                        })
+                    })
+                    ketQua.push({ ...dong, viec: 'ĐÃ SỬA' })
+                } catch (e: any) {
+                    ketQua.push({ ...dong, viec: e?.message === 'DOI_ROI' ? 'BỎ QUA — tồn vừa đổi, chạy lại' : `LỖI: ${String(e?.message || e).slice(0, 160)}` })
+                }
+            }
+        }
+        res.json({
+            success: true, cheDo: apply ? 'GHI THẬT' : 'CHỈ BÁO CÁO', store: store.code,
+            soDong: ketQua.length, tongAm: ketQua.reduce((s, x) => s + (x.tonHu || 0), 0), ketQua,
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── TẮT KHO HƯ HỎNG TRÙNG ĐANG TRỐNG (09/10/2026) ─────────────────────────────
  * POST /admin/tat-kho-trung {storeCode?, apply?} — mặc định CHỈ BÁO CÁO.
  * Cửa hàng có kho hư hỏng mặc định GẮN CHI NHÁNH CHÍNH mà vẫn còn bản "không
