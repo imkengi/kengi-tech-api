@@ -27,8 +27,16 @@ export interface KetQuaTraMst {
 }
 
 export class LoiTraMst extends Error {
-    constructor(message: string, public ma: 'khong_hop_le' | 'khong_co' | 'loi_nguon') { super(message) }
+    /** `choGiay`: nguồn bảo chờ bao lâu (429 Retry-After) */
+    constructor(message: string, public ma: 'khong_hop_le' | 'khong_co' | 'loi_nguon' | 'qua_tai', public choGiay?: number) { super(message) }
 }
+
+/* GIỚI HẠN LƯỢT của VietQR — ĐO 09/10/2026 (bắn 30 lượt liền từ một IP): X-RateLimit-Limit 2
+ * (~2 lượt/giây, vượt thì 429 Retry-After: 1) và sau ~20 lượt thì KHOÁ 10 PHÚT (429 Retry-After:
+ * 600). Lượt đổ bù đầu tiên dính đúng chỗ này (42/62 khách "429"). Nên: giãn nhịp ≥ 0,6s mỗi
+ * lượt; gặp khoá dài thì NHỚ tới lúc hết khoá — lưu khách / xuất HĐ khỏi chờ vô ích. */
+let LAN_CUOI = 0
+let NGHI_DEN = 0
 
 const NGUON = 'VietQR — tổng hợp từ trang Cục Thuế'
 const BO_NHO = new Map<string, { at: number; kq: KetQuaTraMst }>()
@@ -47,6 +55,14 @@ export async function traMst(vao: string, opts?: { timeoutMs?: number }): Promis
     const kc = KHONG_CO.get(mst)
     if (kc && Date.now() - kc < SONG_MS) throw new LoiTraMst(`Không tìm thấy MST ${mst} trong dữ liệu Cục Thuế`, 'khong_co')
 
+    if (Date.now() < NGHI_DEN) {
+        const giay = Math.ceil((NGHI_DEN - Date.now()) / 1000)
+        throw new LoiTraMst(`Nguồn tra MST đang giới hạn lượt — thử lại sau ${giay >= 60 ? Math.ceil(giay / 60) + ' phút' : giay + ' giây'}`, 'qua_tai', giay)
+    }
+    const cho = LAN_CUOI + 600 - Date.now()
+    if (cho > 0) await new Promise(res => setTimeout(res, cho))
+    LAN_CUOI = Date.now()
+
     let r: Response
     try {
         r = await fetch(`https://api.vietqr.io/v2/business/${encodeURIComponent(mst)}`, {
@@ -55,6 +71,11 @@ export async function traMst(vao: string, opts?: { timeoutMs?: number }): Promis
         })
     } catch (e: any) {
         throw new LoiTraMst(`Không gọi được nguồn tra MST (${e?.name === 'TimeoutError' ? `quá ${Math.round((opts?.timeoutMs ?? 8000) / 1000)} giây` : e?.message || e})`, 'loi_nguon')
+    }
+    if (r.status === 429) {
+        const giay = Math.max(1, Number(r.headers.get('retry-after')) || 60)
+        if (giay >= 30) NGHI_DEN = Date.now() + giay * 1000
+        throw new LoiTraMst(`Nguồn tra MST đang giới hạn lượt (HTTP 429) — thử lại sau ${giay >= 60 ? Math.ceil(giay / 60) + ' phút' : giay + ' giây'}`, 'qua_tai', giay)
     }
     let j: any = null
     try { j = await r.json() } catch { /* để nhánh dưới báo */ }

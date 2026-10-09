@@ -45,7 +45,7 @@ router.get('/tra-mst', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data: kq })
     } catch (e: any) {
         if (e instanceof LoiTraMst) {
-            const ma = e.ma === 'khong_hop_le' ? 400 : e.ma === 'khong_co' ? 404 : 502
+            const ma = e.ma === 'khong_hop_le' ? 400 : e.ma === 'khong_co' ? 404 : e.ma === 'qua_tai' ? 429 : 502
             res.status(ma).json({ success: false, error: e.message, ma: e.ma })
             return
         }

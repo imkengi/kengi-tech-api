@@ -5213,29 +5213,38 @@ router.post('/bo-sung-mst-khach', async (req: Request, res: Response) => {
             orderBy: { code: 'asc' },
             take: toiDa,
         })
-        const kq = { cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ — chưa ghi gì', coMst: ds.length, mstSaiKhuon: 0, daDu: 0, traRaTen: 0, khongCoMst: 0, nguonHong: 0, daGhi: 0, dungSom: false, chuaXet: 0, mau: [] as any[], mauSaiKhuon: [] as string[], mauKhongCo: [] as string[], mauLoi: [] as string[], ms: 0 }
+        const kq = { cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ — chưa ghi gì', coMst: ds.length, mstSaiKhuon: 0, daDu: 0, traRaTen: 0, khongCoMst: 0, nguonHong: 0, daGhi: 0, dungSom: false, chuaXet: 0, khoaGiay: null as number | null, mau: [] as any[], mauSaiKhuon: [] as string[], mauKhongCo: [] as string[], mauLoi: [] as string[], ms: 0 }
         // Ngân sách 10 phút (Cloud Run cắt ở 15'): MST không tồn tại mất ~15s/lượt. Hết giờ thì dừng,
         // báo số chưa xét — gọi lại là chạy tiếp (đã điền thì thành "đủ", không tra lại).
         const HET_GIO = t0 + 600_000
-        for (let i = 0; i < ds.length; i++) {
+        const ngu = (ms: number) => new Promise(r => setTimeout(r, ms))
+        // Nhịp tra (≥ 0,6s/lượt) nằm trong lib/traMst — vòng này chỉ lo chờ khi bị khoá.
+        ngoai: for (let i = 0; i < ds.length; i++) {
             const kh = ds[i]
             if (Date.now() > HET_GIO) { kq.dungSom = true; kq.chuaXet = ds.length - i; break }
-            const data: Record<string, any> = {}
-            let daTra = false
-            try {
-                const r = await boSungTuMst(kh, data, { timeoutMs: 15000 })
-                if (r === 'khong_mst') { kq.mstSaiKhuon++; if (kq.mauSaiKhuon.length < 12) kq.mauSaiKhuon.push(`${kh.code}: ${String(kh.taxCode).length} ký tự`); continue }
-                if (r === 'du') { kq.daDu++; continue }
-                daTra = true
-                kq.traRaTen++
-                if (kq.mau.length < 12) kq.mau.push({ ma: kh.code, truong: Object.keys(data) })
-                if (apply) { await sp.customer.update({ where: { id: kh.id }, data }); kq.daGhi++ }
-            } catch (e: any) {
-                daTra = true
-                if (e instanceof LoiTraMst && e.ma === 'khong_co') { kq.khongCoMst++; if (kq.mauKhongCo.length < 12) kq.mauKhongCo.push(kh.code) }
-                else { kq.nguonHong++; if (kq.mauLoi.length < 8) kq.mauLoi.push(`${kh.code}: ${String(e?.message || e).slice(0, 140)}`) }
+            for (let thu = 0; ; thu++) {
+                const data: Record<string, any> = {}
+                try {
+                    const r = await boSungTuMst(kh, data, { timeoutMs: 15000 })
+                    if (r === 'khong_mst') { kq.mstSaiKhuon++; if (kq.mauSaiKhuon.length < 12) kq.mauSaiKhuon.push(`${kh.code}: ${String(kh.taxCode).length} ký tự`); break }
+                    if (r === 'du') { kq.daDu++; break }
+                    kq.traRaTen++
+                    if (kq.mau.length < 12) kq.mau.push({ ma: kh.code, truong: Object.keys(data) })
+                    if (apply) { await sp.customer.update({ where: { id: kh.id }, data }); kq.daGhi++ }
+                    break
+                } catch (e: any) {
+                    // VietQR khoá ngắn (Retry-After ≤ 5s) thì chờ rồi tra lại; khoá dài (10 phút) thì
+                    // DỪNG và báo — gọi lại sau khi hết khoá là chạy tiếp (khách đã điền thành "đủ").
+                    if (e instanceof LoiTraMst && e.ma === 'qua_tai') {
+                        if ((e.choGiay ?? 999) <= 5 && thu < 3) { await ngu((e.choGiay ?? 1) * 1000 + 300); continue }
+                        kq.dungSom = true; kq.chuaXet = ds.length - i; kq.khoaGiay = e.choGiay ?? null
+                        break ngoai
+                    }
+                    if (e instanceof LoiTraMst && e.ma === 'khong_co') { kq.khongCoMst++; if (kq.mauKhongCo.length < 12) kq.mauKhongCo.push(kh.code) }
+                    else { kq.nguonHong++; if (kq.mauLoi.length < 8) kq.mauLoi.push(`${kh.code}: ${String(e?.message || e).slice(0, 140)}`) }
+                    break
+                }
             }
-            if (daTra) await new Promise(r => setTimeout(r, 300))   // nhẹ tay với nguồn tra
         }
         kq.ms = Date.now() - t0
         res.json({ success: true, data: kq })
