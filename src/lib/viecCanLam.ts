@@ -14,12 +14,15 @@
 //      hàng chứ không nhanh hơn, mà lỗi thì khó lần.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { phanLoaiVuTra, kienHoanTuDonHuy, kienChuaNhan, type DongViec, type KienHoan } from './viecVuTra'
+import { tenVideoHoanTu } from '../routes/driveVideos'
+
 export type MucDo = 'khan' | 'canhBao' | 'nhac'
 
 export interface ViecCanLam {
     /** khoá ổn định để FE nhớ trạng thái ẩn/hiện */
     ma: string
-    nhom: 'kho' | 'tien' | 'don' | 'thue' | 'soSach' | 'dichVu'
+    nhom: 'kho' | 'tien' | 'don' | 'online' | 'thue' | 'soSach' | 'dichVu'
     mucDo: MucDo
     tieuDe: string
     /** câu mô tả ngắn: nói RÕ con số và vì sao phải làm */
@@ -30,6 +33,9 @@ export interface ViecCanLam {
     duongDan: string
     /** nhãn nút hành động */
     nhanNut: string
+    /** VÍ DỤ CỤ THỂ (≤ 20, cũ nhất trước): từng phiếu / đơn, bấm vào mở đúng chỗ.
+     *  Chủ shop 09/10/2026 muốn THẤY đơn nào, không chỉ con số. */
+    danhSach?: { ma: string; moTa: string; duongDan?: string }[]
 }
 
 export interface KetQuaViecCanLam {
@@ -165,10 +171,87 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
     }), hong)
     if (donSan && donSan > 0) {
         items.push({
-            ma: 'don-san-cho', nhom: 'don', mucDo: 'khan',
+            ma: 'don-san-cho', nhom: 'online', mucDo: 'khan',
             tieuDe: `${donSan} đơn sàn chờ xử lý`,
             chiTiet: 'Sàn tính giờ xác nhận — chậm là bị phạt tỉ lệ giao trễ và tụt hiển thị gian hàng.',
             soLuong: donSan, duongDan: '/dashboard-online-orders', nhanNut: 'Xử lý đơn',
+        })
+    }
+
+    // ─── 6b. Vụ trả hàng sàn: chưa khiếu nại / khiếu nại thua ────────────────
+    // Đọc ghi chú phiếu như returnSync ghi (lib/viecVuTra). 90 ngày là đủ: vụ cũ hơn
+    // đã đóng trên sàn, có khiếu nại cũng không còn cửa.
+    const MOT_NGAY = 86_400_000
+    const vuTra = await doAn('Vụ trả hàng sàn', async () => {
+        const ds = await prisma.returnOrder.findMany({
+            where: {
+                OR: [{ code: { startsWith: 'RTN-SH-' } }, { code: { startsWith: 'RTN-TT-' } }],
+                createdAt: { gte: new Date(Date.now() - 90 * MOT_NGAY) },
+            },
+            select: { code: true, status: true, notes: true, reason: true, totalRefund: true, createdAt: true, updatedAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+        })
+        return phanLoaiVuTra(ds)
+    }, hong)
+    const vd = (ds: DongViec[]) => ds.slice(0, 20).map(d => ({ ma: d.ma, moTa: d.moTa, duongDan: d.duongDan }))
+    if (vuTra && vuTra.chuaKhieuNai.length > 0) {
+        const ds: (DongViec & { soTien: number })[] = vuTra.chuaKhieuNai
+        items.push({
+            ma: 'vu-tra-chua-khieu-nai', nhom: 'online', mucDo: 'khan',
+            tieuDe: `${ds.length} vụ trả hàng chưa khiếu nại`,
+            chiTiet: 'Khách đã yêu cầu trả mà shop chưa phản hồi — quá hạn là sàn tự chấp nhận cho khách. Vụ lỗi phía khách (đổi ý, đặt sai…) hoặc có video đóng hàng thì khiếu nại ngay.',
+            soLuong: ds.length, soTien: ds.reduce((s, d) => s + d.soTien, 0),
+            duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Mở tab Trả hàng',
+            danhSach: vd(ds),
+        })
+    }
+    if (vuTra && vuTra.khieuNaiThua.length > 0) {
+        const ds: (DongViec & { soTien: number })[] = vuTra.khieuNaiThua
+        items.push({
+            ma: 'khieu-nai-thua', nhom: 'online', mucDo: 'canhBao',
+            tieuDe: `${ds.length} vụ khiếu nại bị từ chối — xem khiếu nại lại`,
+            chiTiet: 'Sàn đã xử cho khách nhưng chưa hoàn tiền (30 ngày gần nhất). Có bằng chứng mới (video đóng hàng, ảnh hàng trả về) thì khiếu nại lại, hoặc kháng nghị trên Seller Center khi sàn còn cho.',
+            soLuong: ds.length, soTien: ds.reduce((s, d) => s + d.soTien, 0),
+            duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Xem các vụ thua',
+            danhSach: vd(ds),
+        })
+    }
+
+    // ─── 6c. Hàng hoàn chưa nhận ─────────────────────────────────────────────
+    // Kiện đang về shop: hàng khách trả (phải gửi lại, đã có mã vận đơn) + đơn huỷ SAU khi
+    // ĐVVC đã lấy (giao thất bại). "Đã nhận" = có video mở hàng HOAN_<mã> trên Drive — đúng
+    // quy trình quay video mở hàng của shop. Tồn kho đã được CỘNG LẠI lúc sàn hoàn tiền /
+    // huỷ đơn, nên kiện chưa về là kho đang ghi dư. Drive không đọc được thì ghi "không
+    // đọc được", KHÔNG coi mọi kiện là chưa nhận.
+    const hoan = await doAn('Hàng hoàn chưa nhận', async () => {
+        const donHuy = await prisma.onlineOrder.findMany({
+            where: {
+                status: { in: ['CANCELLED', 'IN_CANCEL', 'cancelled'] },
+                shippedAt: { not: null, gte: new Date(Date.now() - 60 * MOT_NGAY) },
+                trackingNumber: { not: null },
+            },
+            select: { orderNumber: true, platform: true, trackingNumber: true, shippedAt: true, total: true },
+            take: 1000,
+        })
+        const cho: KienHoan[] = [...(vuTra?.choHoan ?? []), ...kienHoanTuDonHuy(donHuy)]
+        if (!cho.length) return { chua: [] as KienHoan[] }
+        const ten = await tenVideoHoanTu(prisma, new Date(Date.now() - 120 * MOT_NGAY))
+        if (ten === null) throw new Error('chưa cấu hình thư mục Drive video')
+        return { chua: kienChuaNhan(cho, ten) }
+    }, hong)
+    if (hoan && hoan.chua.length > 0) {
+        const ds: KienHoan[] = hoan.chua
+        const quaHan = ds.filter(k => k.dong.tuoiNgay >= 14).length
+        items.push({
+            ma: 'hang-hoan-chua-nhan', nhom: 'online', mucDo: quaHan > 0 ? 'canhBao' : 'nhac',
+            tieuDe: quaHan > 0
+                ? `${ds.length} kiện hàng hoàn chưa thấy video mở hàng — ${quaHan} kiện quá 14 ngày`
+                : `${ds.length} kiện hàng hoàn đang về`,
+            chiTiet: 'Kho đã được cộng lại lúc sàn hoàn tiền / huỷ đơn — kiện chưa về là kho đang ghi dư. Kiện đã về thì quay video mở hàng (HOAN_<mã vận đơn>) là tự hết khỏi danh sách; quá lâu chưa về thì hỏi ĐVVC / khiếu nại sàn.',
+            soLuong: ds.length, soTien: ds.reduce((s, k) => s + k.soTien, 0),
+            duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Xem hàng hoàn',
+            danhSach: vd(ds.map(k => k.dong)),
         })
     }
 

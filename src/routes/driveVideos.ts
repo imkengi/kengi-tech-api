@@ -959,4 +959,42 @@ export async function doVideoDongHang(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TÊN VIDEO MỞ HÀNG HOÀN (09/10/2026) — cho "Việc cần làm › Hàng hoàn chưa nhận".
+//  MỘT lượt liệt kê theo tiền tố tên (HOAN… / RETURN / HTH / UNBOX) thay vì tra từng
+//  mã: Drive `name contains` khớp theo tiền tố, nên 'HOAN' bắt cả HOAN_ lẫn
+//  HOANTRAHANG_. Có video HOAN_<mã vận đơn> = kiện đã về và đã mở (quy trình quay video
+//  mở hàng của shop). null = cửa hàng chưa cấu hình thư mục Drive. Lỗi Drive thì NÉM để
+//  người gọi ghi "không đọc được" — tuyệt đối không coi là "chưa có video".
+// ═══════════════════════════════════════════════════════════════════════════════
+const hoanCaches = new Map<string, { at: number; ten: string[] }>()
+
+export async function tenVideoHoanTu(prisma: any, tuNgay: Date): Promise<string[] | null> {
+    const folderId = await getStoreFolderId(prisma)
+    if (!folderId) return null
+    const ngay = tuNgay.toISOString().slice(0, 10)
+    const khoa = `${folderId}|${ngay}`
+    const c = hoanCaches.get(khoa)
+    if (c && Date.now() - c.at < CACHE_TTL_MS) return c.ten
+
+    const drive = getDrive()
+    const subIds = await getSubfolderIds(drive, folderId)
+    const q = `${parentsClause(folderId, subIds)} and (name contains 'HOAN' or name contains 'RETURN' or name contains 'HTH' or name contains 'UNBOX')`
+        + ` and mimeType contains 'video' and trashed = false and createdTime > '${ngay}T00:00:00'`
+    const ten: string[] = []
+    let pageToken: string | undefined
+    let soTrang = 0
+    do {
+        const resp = await drive.files.list({
+            q, fields: 'nextPageToken, files(name)', pageSize: 1000,
+            supportsAllDrives: true, includeItemsFromAllDrives: true, pageToken,
+        }, { timeout: 30_000 })
+        for (const f of resp.data.files || []) if (f.name && isReturnVideo(f.name)) ten.push(f.name.toUpperCase())
+        pageToken = resp.data.nextPageToken || undefined
+        soTrang++
+    } while (pageToken && soTrang < 20)
+    hoanCaches.set(khoa, { at: Date.now(), ten })
+    return ten
+}
+
 export default router

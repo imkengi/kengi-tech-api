@@ -5179,6 +5179,32 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
  * báo lỗi. Bộ này đếm trước xem bao nhiêu phiếu đủ điều kiện, thay vì để chủ shop
  * bấm rồi mới biết. CHỈ ĐỌC.
  */
+/* ─── ĐO "VIỆC CẦN LÀM" CỦA MỘT CỬA HÀNG (chỉ đọc, 09/10/2026) ────────────────
+ * Chạy ĐÚNG bộ luật lib/viecCanLam như trang Việc cần làm (kể cả lượt dò video mở
+ * hàng hoàn trên Drive) — để nghiệm thu bằng số thật mà không cần đăng nhập thay
+ * chủ shop. GET /admin/do-viec-can-lam?ma=KENGISTORE[&nhom=online] */
+router.get('/do-viec-can-lam', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.ma || 'KENGISTORE').trim()
+        const nhom = String(req.query.nhom || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const { tinhViecCanLam } = await import('../lib/viecCanLam')
+        const t0 = Date.now()
+        const kq = await tinhViecCanLam(getStorePrisma(store.schema))
+        res.json({
+            success: true,
+            data: {
+                ...kq,
+                items: nhom ? kq.items.filter((i: any) => i.nhom === nhom) : kq.items,
+                msChay: Date.now() - t0,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 router.get('/do-phieu-tra-shopee', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()

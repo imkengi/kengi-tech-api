@@ -311,10 +311,25 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
             tt.phanXong = 0
             msg = `${msg} — phiên tải trên Shopee đã hết hạn, bấm "Tiếp tục đăng" để tải lại từ đầu.`
         }
+        /* copyright_not_agree = "Not Agree Shopee videos Terms of Service" (bảng mã post_video).
+         * Hướng dẫn tích hợp Shopee Video (open.shopee.com/developer-guide/706, mục 6, đọc
+         * 09/10/2026): PHẢI đồng ý Điều khoản Shopee Video TRÊN SELLER CENTER trước mọi API
+         * video. Đăng qua app điện thoại KHÔNG tính — chủ shop đã đăng 145+ video qua app,
+         * không thấy ô tích nào, mà API vẫn chặn. Giữ nguyên tiến trình: đồng ý xong bấm
+         * "Tiếp tục đăng" là gọi lại post_video, không tải lại video. */
+        const chuaDongYDieuKhoan = /copyright_not_agree/i.test(msg)
+        if (chuaDongYDieuKhoan) {
+            const kenh = await prisma.onlineChannel.findUnique({ where: { id: m.channelId }, select: { name: true } }).catch(() => null)
+            msg = `Shopee chưa ghi nhận đồng ý Điều khoản Shopee Video${kenh?.name ? ` của gian "${kenh.name}"` : ''}. `
+                + 'Mở Seller Center bản WEB (banhang.shopee.vn) bằng tài khoản đã uỷ quyền Shopee Video (thường là tài khoản chính), '
+                + 'vào mục Shopee Video và bấm đồng ý điều khoản — đăng qua app điện thoại không tính. Xong bấm "Tiếp tục đăng": '
+                + 'video đã tải lên, không phải tải lại. [post_video: copyright_not_agree]'
+        }
         await prisma.sanMedia.update({
             where: { id: m.id },
             data: { trangThai: 'loi', loiCuoi: msg, tienTrinhDang: JSON.stringify(tt) },
         }).catch(() => { /* ghi lỗi hỏng thì vẫn ném lỗi gốc */ })
+        if (chuaDongYDieuKhoan) throw new Error(msg)
         throw e
     }
 }
