@@ -44,6 +44,12 @@ export const LY_DO_SHOPEE_VI: Record<string, string> = {
     DATE_DEVIATION: 'Sai hạn dùng so với mô tả',
     DIFFERENT_DESCRIPTION: 'Hàng khác mô tả',
     SPOILED_ROTTEN: 'Hàng bị ôi thiu, hư thối',
+    /* 4 mã KHÔNG có trong tài liệu mà ĐO thấy trong DB thật (KENGISTORE 09/10/2026: 25/494
+     * phiếu). Tài liệu ghi NONRECEIPT nhưng Shopee gửi NOT_RECEIPT — giữ cả hai. */
+    NOT_RECEIPT: 'Chưa nhận được hàng',
+    SLIGHT_SCRATCH_DENTS: 'Trầy xước, móp nhẹ',
+    OUTER_DAMAGED_PACKAGE: 'Thùng / bao bì ngoài bị hư hỏng',
+    LONG_DELIVERY_TIME: 'Giao hàng quá lâu',
 }
 
 /** Mã Shopee → tiếng Việt; không phải mã đã biết thì trả nguyên văn. */
