@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { dichLyDoTraHang } from './lyDoTraHang'
+import { choKhieuNaiThang } from './nhanHangHoan'
 
 export interface DongViec {
     /** mã hiển thị: mã phiếu trả / mã đơn / mã vận đơn */
@@ -18,6 +19,8 @@ export interface DongViec {
     /** trang mở đúng phiếu / đơn đó */
     duongDan: string
     tuoiNgay: number
+    /** Thao tác ngay tại dòng — web HỎI LẠI (`xacNhan`) rồi POST `duong` với `than` */
+    nut?: { nhan: string; duong: string; than: Record<string, string>; xacNhan: string }
 }
 
 const MOT_NGAY = 86_400_000
@@ -109,6 +112,25 @@ export function ketQuaKhieuNai(notes?: string | null): (VongKhieuNai & { soLan: 
 /** Đã khiếu nại (từ app hay trên Seller Center) — dùng cho việc "chưa khiếu nại". */
 export const daKhieuNai = (notes?: string | null) => vongKhieuNai(notes).length > 0
 
+/** Trạng thái khiếu nại nói bằng lời — cho dòng việc "hàng hoàn hư chờ khiếu nại thắng". */
+export function moTaKhieuNai(notes?: string | null, daHoanTien = false): string {
+    const kq = ketQuaKhieuNai(notes)
+    if (!kq) return daHoanTien ? 'chưa khiếu nại — sàn đã hoàn tiền cho khách' : 'CHƯA khiếu nại'
+    const lan = kq.soLan > 1 ? ` lần ${kq.lan}` : ''
+    if (kq.loai === 'cho') return `đang chờ sàn phân xử${lan}`
+    if (kq.loai === 'thua') return `khiếu nại${lan} bị từ chối${daHoanTien ? ' — sàn đã hoàn tiền' : ''}`
+    // Thắng mà vẫn còn ở đây = chuyển kho hỏng (thiếu tồn, không rõ mặt hàng…) — cần người xem
+    return `khiếu nại${lan} đã thắng — chưa chuyển được kho, xem tay`
+}
+
+/** Nút "Đưa vào kho hư hỏng" cho một vụ — chủ shop thôi chờ khiếu nại (thua hẳn / đã được đền ngoài hệ thống). */
+const nutVaoKhoHu = (loai: 'phieu' | 'don', ma: string): NonNullable<DongViec['nut']> => ({
+    nhan: 'Đưa vào kho hư hỏng',
+    duong: '/online-orders/returns/hang-hoan-vao-kho-hu',
+    than: { loai, ma },
+    xacNhan: `Đưa hàng của ${ma} vào Kho Hư Hỏng NGAY, không chờ khiếu nại thắng nữa?\n\nDùng khi không khiếu nại tiếp, hoặc sàn đã đền bên ngoài hệ thống.`,
+})
+
 /** "Tracking: X" — mã vận đơn HÀNG TRẢ; N/A = khách chưa gửi. Cùng luật route /returns/list. */
 export function maVanDonTra(notes?: string | null): string | null {
     const m = /(?:^|\n)\s*Tracking:\s*(.+?)\s*(?:\n|$)/i.exec(notes || '')
@@ -146,16 +168,30 @@ export interface KienHoan { maVanDon: string; soTien: number; dong: DongViec }
 // TikTok tên mới REQUEST_REJECTED quy đổi thành 'pending' nên PHẢI chặn bằng mã gốc.
 const DA_QUYET_HOAC_DANG_KHIEU_NAI = /SELLER_DISPUTE|JUDGING|CANCEL|CLOS|REJECT|SUCCESS|COMPLETE|REFUND_PAID/
 
-/** Chia phiếu trả sàn thành ba danh sách việc. Cũ nhất lên đầu (gần hạn nhất / lâu nhất). */
+/** Chia phiếu trả sàn thành bốn danh sách việc. Cũ nhất lên đầu (gần hạn nhất / lâu nhất). */
 export function phanLoaiVuTra(ds: PhieuTraDoc[], homNay = new Date()) {
     const chuaKhieuNai: (DongViec & { soTien: number })[] = []
     const khieuNaiThua: (DongViec & { soTien: number })[] = []
     const choHoan: KienHoan[] = []
+    const hangHuChoKhieuNai: (DongViec & { soTien: number })[] = []
     for (const r of ds) {
         const notes = r.notes || ''
         const t = tuoi(r.createdAt, homNay)
         const soTien = Number(r.totalRefund) || 0
         const goc = maGocCuoi(notes)
+
+        /* HÀNG HOÀN VỀ KHÔNG NGUYÊN VẸN, chưa vào kho hư hỏng (chủ shop 09/10/2026: chờ khiếu nại
+         * thành công mới vào kho hư hỏng, không thì đưa vào việc cần làm để khiếu nại tiếp). Một
+         * vụ một chỗ: đã ở đây thì KHÔNG nhắc lại ở "chưa khiếu nại" / "khiếu nại thua". */
+        const hu = choKhieuNaiThang(notes)
+        if (hu) {
+            hangHuChoKhieuNai.push({
+                ma: r.code, soTien, tuoiNgay: t, duongDan: lienPhieu(r.code),
+                moTa: `${hu.tinhTrang || 'Không nguyên vẹn'} · ${moTaKhieuNai(notes, r.status === 'refunded')}${soTien ? ` · ${fmtTien(soTien)}` : ''}`,
+                nut: nutVaoKhoHu('phieu', r.code),
+            })
+            continue
+        }
 
         if (r.status === 'pending' && !daKhieuNai(notes) && !DA_QUYET_HOAC_DANG_KHIEU_NAI.test(goc)) {
             chuaKhieuNai.push({
@@ -186,7 +222,25 @@ export function phanLoaiVuTra(ds: PhieuTraDoc[], homNay = new Date()) {
     const cuTruoc = (a: { tuoiNgay: number }, b: { tuoiNgay: number }) => b.tuoiNgay - a.tuoiNgay
     chuaKhieuNai.sort(cuTruoc)
     khieuNaiThua.sort(cuTruoc)
-    return { chuaKhieuNai, khieuNaiThua, choHoan }
+    hangHuChoKhieuNai.sort(cuTruoc)
+    return { chuaKhieuNai, khieuNaiThua, choHoan, hangHuChoKhieuNai }
+}
+
+/** Đơn GIAO THẤT BẠI đã về shop mà hàng KHÔNG nguyên vẹn, chưa vào kho hư hỏng. Không có phiếu
+ *  trả nên hệ thống không đọc được kết quả khiếu nại — xong thì chủ shop bấm nút ở dòng này. */
+export function hangHuTuDonHuy(ds: DonHuyDaGiao[], homNay = new Date()): (DongViec & { soTien: number })[] {
+    const ra: (DongViec & { soTien: number })[] = []
+    for (const d of ds) {
+        const hu = choKhieuNaiThang(d.internalNote)
+        if (!hu) continue
+        ra.push({
+            ma: d.orderNumber, soTien: Number(d.total) || 0,
+            tuoiNgay: d.shippedAt ? tuoi(d.shippedAt, homNay) : 0, duongDan: lienDon(d.orderNumber),
+            moTa: `${hu.tinhTrang || 'Không nguyên vẹn'} · giao thất bại — khiếu nại với sàn / đơn vị vận chuyển`,
+            nut: nutVaoKhoHu('don', d.orderNumber),
+        })
+    }
+    return ra.sort((a, b) => b.tuoiNgay - a.tuoiNgay)
 }
 
 /** Đơn bị huỷ SAU KHI ĐVVC đã lấy hàng (shippedAt = pickup_done_time / collection_time / shipped_at)

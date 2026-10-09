@@ -10,7 +10,9 @@ import { PLATFORM_AR } from '../lib/autoJournal'
 import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { reverseOnlineOrderEffects } from './onlineOrderReversal'
 import { dichLyDoTraHang } from '../lib/lyDoTraHang'
-import { vongKhieuNai } from '../lib/viecVuTra'
+import { vongKhieuNai, ketQuaKhieuNai } from '../lib/viecVuTra'
+import { choKhieuNaiThang } from '../lib/nhanHangHoan'
+import { chuyenHangHoanVaoKhoHu, baoHangHoanHu } from '../lib/hangHoanHu'
 
 export interface ReturnsSyncResult {
     total: number
@@ -69,7 +71,7 @@ const tienVnd = (n: number) => `${Math.round(n || 0).toLocaleString('vi-VN')}đ`
 async function baoThongBaoVuTra(
     prisma: any, channel: any, san: string,
     vuMoi: { don: string; lyDo: string; daHoan: boolean }[],
-    ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string; lan?: number }[],
+    ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string; lan?: number; hangHu?: string }[],
 ): Promise<void> {
     const { sendPushToStore } = await import('../routes/notifications')
     if (vuMoi.length) {
@@ -87,7 +89,10 @@ async function baoThongBaoVuTra(
         const { tieuDe, viec } = moTaKetQua(k.moi, k.goc)
         // Lượt thứ mấy — khiếu nại lại trên Seller Center cũng tính (09/10/2026)
         const tieuDeDu = `⚖️ ${k.lan && k.lan > 1 ? `Lần ${k.lan}: ` : ''}${tieuDe}`
-        const noiDung = `Vụ ${k.ma} · đơn ${k.don} · ${k.khach}${k.tien ? ` · ${tienVnd(k.tien)}` : ''} — ${viec}. (${san}: ${k.goc || k.moi})`
+        // Hàng hoàn đã về KHÔNG nguyên vẹn mà vẫn thua → nhắc khiếu nại lại (09/10/2026); thắng thì có tin "đã vào kho hư hỏng" riêng
+        const thua = !/REJECT|CANCEL|CLOS/i.test(k.goc) && k.moi !== 'rejected'
+        const nhacHu = k.hangHu && thua ? ` Hàng hoàn về "${k.hangHu}" — khiếu nại lại (đã có trong Việc cần làm).` : ''
+        const noiDung = `Vụ ${k.ma} · đơn ${k.don} · ${k.khach}${k.tien ? ` · ${tienVnd(k.tien)}` : ''} — ${viec}.${nhacHu} (${san}: ${k.goc || k.moi})`
         const tin = await prisma.notification.create({ data: { type: 'dispute_result', title: tieuDeDu, message: noiDung.slice(0, 500) } }).catch(() => null)
         await sendPushToStore(prisma, tieuDeDu, noiDung.slice(0, 300), { id: tin?.id, type: 'dispute_result', route: 'returns' })
     }
@@ -171,7 +176,7 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
     }
 
     const vuMoi: { don: string; lyDo: string; daHoan: boolean }[] = []
-    const ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string; lan?: number }[] = []
+    const ketQua: { ma: string; don: string; khach: string; tien: number; moi: string; goc: string; lan?: number; hangHu?: string }[] = []
 
     for (const ret of platformReturns) {
         try {
@@ -247,7 +252,31 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                             khach: existingReturn.customerName || '', tien: existingReturn.refundAmount || 0,
                             moi: ret.status, goc: nativeStatus,
                             lan: vongKhieuNai(notesSau).length,
+                            hangHu: choKhieuNaiThang(notesSau)?.tinhTrang,
                         })
+                    }
+
+                    /* KHIẾU NẠI THẮNG mà hàng hoàn đã về KHÔNG nguyên vẹn → giờ mới vào kho hư hỏng
+                     * (chủ shop 09/10/2026). Hàng về SAU khi thắng thì trạm quay tự chuyển. Hỏng ở đây
+                     * không được làm hỏng lượt sync — vụ vẫn nằm trong Việc cần làm để xem tay. */
+                    if (doi.count === 1 && choKhieuNaiThang(notesSau)) {
+                        const kqVong = ketQuaKhieuNai(notesSau)
+                        if (kqVong?.loai === 'thang') {
+                            const maPhieu = existingReturn.code || `${codePrefix}${ret.returnSn}`
+                            try {
+                                const kq = await chuyenHangHoanVaoKhoHu(prisma, { loai: 'phieu', id: existingReturn.id }, {
+                                    vi: `khiếu nại thắng${kqVong.soLan > 1 ? ` lần ${kqVong.lan}` : ''} (${platformLabel})`,
+                                })
+                                const mon = (ds: any[]) => ds.map(x => `${x.sl ?? ''}${x.sl ? '×' : ''}${x.sku || x.ten}${x.lyDo ? ` (${x.lyDo})` : ''}`).join(', ')
+                                await baoHangHoanHu(prisma,
+                                    kq.ok ? `📦 Khiếu nại thắng — ${maPhieu} đã vào Kho Hư Hỏng` : `⚠️ Khiếu nại thắng nhưng chưa vào được Kho Hư Hỏng — ${maPhieu}`,
+                                    kq.ok
+                                        ? `${mon(kq.daChuyen)}${kq.boQua.length ? ` · CHƯA chuyển: ${mon(kq.boQua)}` : ''}`
+                                        : `${kq.lyDo || 'Không chuyển được'}${kq.boQua.length ? `: ${mon(kq.boQua)}` : ''}. Xem tay ở Việc cần làm.`)
+                            } catch (e: any) {
+                                console.error(`[Sync Returns] đưa hàng hoàn ${maPhieu} vào kho hư hỏng hỏng:`, e?.message || e)
+                            }
+                        }
                     }
 
                     // If refunded, update order status + đảo hiệu ứng của đơn

@@ -4964,7 +4964,8 @@ router.get('/returns/theo-van-don', authMiddleware, async (req: AuthRequest, res
 
 // POST /online-orders/returns/nhan-hang-hoan {ma, tinhTrang, ghiChu?, tenVideo?, haiGiaiDoan?}
 // Ghi LẦN NHẬN kiện hoàn + tình trạng hàng vào phiếu trả (hoặc ghi chú nội bộ của đơn giao thất bại).
-// Không đụng tồn kho — tồn đã cộng lại lúc sàn hoàn tiền / huỷ đơn; hàng hư thì xử lý ở tab Trả hàng.
+// Nguyên vẹn: không đụng tồn (tồn đã cộng lại lúc sàn hoàn tiền / huỷ đơn). KHÔNG nguyên vẹn: chờ
+// khiếu nại thắng mới vào kho hư hỏng (lib/hangHoanHu.ts) — thắng sẵn thì chuyển ngay.
 router.post('/returns/nhan-hang-hoan', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
@@ -4989,14 +4990,89 @@ router.post('/returns/nhan-hang-hoan', authMiddleware, async (req: AuthRequest, 
         const dong = `${DAU_NHAN_HANG_HOAN} ${luc} — ${nhanTT}`
             + (b.haiGiaiDoan === true ? ' — video 2 giai đoạn (mở hộp + test kỹ thuật)' : '')
             + (tenVideo ? ` — video ${tenVideo}` : '') + (!laKhac && ghiChu ? ` — "${ghiChu}"` : '') + (nguoi ? ` — ${nguoi}` : '')
+        /* HÀNG KHÔNG NGUYÊN VẸN (09/10/2026 — chủ shop: "phải chờ khiếu nại thành công với Shopee
+         * hoặc tiktok mới trả vào kho hàng hư hỏng, không thì sẽ báo thông báo và đưa vào việc cần
+         * làm để khiếu nại tiếp"). Khiếu nại đã THẮNG từ trước khi hàng về → chuyển ngay; chưa thắng
+         * → báo + Việc cần làm (lib/viecVuTra.ts đọc chính dòng vừa ghi). */
+        const nguyenVen = String(b.tinhTrang) === 'nguyen_ven'
+        const { chuyenHangHoanVaoKhoHu, baoHangHoanHu } = await import('../lib/hangHoanHu')
+        const { daVaoKhoHu } = await import('../lib/nhanHangHoan')
+        const { ketQuaKhieuNai, moTaKhieuNai } = await import('../lib/viecVuTra')
+        const kieuMon = (ds: { sl: number; sku: string; ten: string }[]) => ds.map(x => `${x.sl}×${x.sku || x.ten}`).join(', ')
         if (phieu) {
-            await prisma.returnOrder.update({ where: { id: phieu.id }, data: { notes: `${phieu.notes || ''}\n${dong}` } })
+            const notesMoi = `${phieu.notes || ''}\n${dong}`
+            await prisma.returnOrder.update({ where: { id: phieu.id }, data: { notes: notesMoi } })
             if (tt.condition) await prisma.returnItem.updateMany({ where: { returnOrderId: phieu.id }, data: { condition: tt.condition } }).catch(() => null)
-            res.json({ success: true, data: { ghiVao: 'phieu', ma: phieu.code, tinhTrang: nhanTT } })
+            let khoHu: any = null
+            let choKhieuNai = false
+            if (!nguyenVen && !daVaoKhoHu(notesMoi)) {
+                const kq = ketQuaKhieuNai(notesMoi)
+                if (kq?.loai === 'thang') {
+                    khoHu = await chuyenHangHoanVaoKhoHu(prisma, { loai: 'phieu', id: phieu.id }, {
+                        vi: `khiếu nại thắng${kq.soLan > 1 ? ` lần ${kq.lan}` : ''}`, nguoi, userId: req.user?.userId || null,
+                    }).catch((e: any) => ({ ok: false, daChuyen: [], boQua: [], lyDo: String(e?.message || e).slice(0, 200) }))
+                    if (khoHu.ok) {
+                        await baoHangHoanHu(prisma, `📦 Khiếu nại thắng — ${phieu.code} đã vào Kho Hư Hỏng`,
+                            `${kieuMon(khoHu.daChuyen)} · ${nhanTT}${khoHu.boQua.length ? ` · CHƯA chuyển: ${khoHu.boQua.map((x: any) => `${x.sku || x.ten} (${x.lyDo})`).join(', ')}` : ''}`)
+                    } else {
+                        await baoHangHoanHu(prisma, `⚠️ Khiếu nại thắng nhưng chưa vào được Kho Hư Hỏng — ${phieu.code}`,
+                            `${khoHu.lyDo || 'Không chuyển được'}${khoHu.boQua.length ? `: ${khoHu.boQua.map((x: any) => `${x.sku || x.ten} (${x.lyDo})`).join(', ')}` : ''}. Xem tay ở Việc cần làm.`)
+                    }
+                } else {
+                    choKhieuNai = true
+                    await baoHangHoanHu(prisma, `⚖️ Cần khiếu nại: hàng hoàn ${nhanTT} — ${phieu.code}`,
+                        `Đơn ${phieu.originalInvoice} · ${moTaKhieuNai(notesMoi, phieu.status === 'refunded')}. Hàng chỉ vào Kho Hư Hỏng khi khiếu nại thắng — khiếu nại ngay kèm video mở hàng${tenVideo ? ` ${tenVideo}` : ''}. Đã đưa vào Việc cần làm.`)
+                }
+            }
+            res.json({ success: true, data: { ghiVao: 'phieu', ma: phieu.code, tinhTrang: nhanTT, choKhieuNai, khoHu } })
             return
         }
-        await prisma.onlineOrder.update({ where: { id: don.id }, data: { internalNote: `${don.internalNote ? don.internalNote + '\n' : ''}${dong}` } })
-        res.json({ success: true, data: { ghiVao: 'don', ma: don.orderNumber, tinhTrang: nhanTT } })
+        const ghiMoi = `${don.internalNote ? don.internalNote + '\n' : ''}${dong}`
+        await prisma.onlineOrder.update({ where: { id: don.id }, data: { internalNote: ghiMoi } })
+        // Giao thất bại: không có phiếu trả nên hệ thống không đọc được kết quả khiếu nại — luôn chờ người bấm
+        const choKhieuNaiDon = !nguyenVen && !daVaoKhoHu(ghiMoi)
+        if (choKhieuNaiDon) {
+            await baoHangHoanHu(prisma, `⚖️ Cần khiếu nại: hàng hoàn ${nhanTT} — đơn ${don.orderNumber}`,
+                `Kiện giao thất bại về shop với tình trạng "${nhanTT}". Khiếu nại với sàn / đơn vị vận chuyển kèm video mở hàng${tenVideo ? ` ${tenVideo}` : ''}; xong thì bấm "Đưa vào kho hư hỏng" ở Việc cần làm.`)
+        }
+        res.json({ success: true, data: { ghiVao: 'don', ma: don.orderNumber, tinhTrang: nhanTT, choKhieuNai: choKhieuNaiDon, khoHu: null } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
+})
+
+// POST /online-orders/returns/hang-hoan-vao-kho-hu {loai: 'phieu'|'don', ma}
+// Đưa hàng hoàn KHÔNG nguyên vẹn vào kho hư hỏng NGAY, không chờ khiếu nại thắng nữa — nút ở Việc cần
+// làm / chi tiết vụ trả (09/10/2026). Dùng khi thôi khiếu nại, hoặc sàn đã đền bên ngoài hệ thống, hoặc
+// đơn giao thất bại (không có phiếu trả để đọc kết quả). Cùng hàm với lúc tự chuyển khi thắng.
+router.post('/returns/hang-hoan-vao-kho-hu', authMiddleware, requirePermission('damaged_warehouse.edit', 'damaged_warehouse.view', 'inventory.adjust'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const b = req.body || {}
+        const loai: 'phieu' | 'don' = b.loai === 'don' ? 'don' : 'phieu'
+        const ma = String(b.ma || '').trim()
+        if (!ma) { res.status(400).json({ success: false, error: 'Thiếu mã phiếu / mã đơn' }); return }
+        const vu = loai === 'phieu'
+            ? await prisma.returnOrder.findFirst({ where: { code: ma }, select: { id: true } })
+            : await prisma.onlineOrder.findFirst({ where: { orderNumber: ma }, select: { id: true } })
+        if (!vu) { res.status(404).json({ success: false, error: `Không thấy ${loai === 'phieu' ? 'phiếu trả' : 'đơn'} ${ma}` }); return }
+        // Tên người bấm — token không mang tên (xem memory token-khong-mang-ten)
+        const ten = req.user?.userId
+            ? (await prisma.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }).catch(() => null))?.name
+            : null
+        const { chuyenHangHoanVaoKhoHu } = await import('../lib/hangHoanHu')
+        const kq = await chuyenHangHoanVaoKhoHu(prisma, { loai, id: vu.id }, {
+            vi: 'đưa vào tay — không chờ khiếu nại nữa', nguoi: ten || req.user?.email || null, userId: req.user?.userId || null,
+        })
+        if (!kq.ok) {
+            res.status(400).json({
+                success: false,
+                error: (kq.lyDo || 'Không chuyển được') + (kq.boQua.length ? `: ${kq.boQua.map(x => `${x.sku || x.ten} (${x.lyDo})`).join(', ')}` : ''),
+                data: kq,
+            })
+            return
+        }
+        res.json({ success: true, data: kq })
     } catch (e: any) {
         res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
     }

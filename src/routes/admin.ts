@@ -1559,6 +1559,64 @@ router.post('/sua-ban-nham-kho-hu-hong', async (req: Request, res: Response) => 
     }
 })
 
+/* ─── HÀNG HOÀN HƯ — CHỜ KHIẾU NẠI THẮNG (09/10/2026) ─────────────────────────────
+ * POST /admin/hang-hoan-hu {storeCode, apply?} — mặc định CHỈ BÁO CÁO. Liệt kê phiếu trả / đơn giao
+ * thất bại đã có dòng "[Nhận hàng hoàn]": tình trạng, đã vào kho hư hỏng chưa, khiếu nại tới đâu, việc
+ * sẽ làm. apply=true: đưa vào kho hư hỏng các vụ KHÔNG nguyên vẹn mà khiếu nại ĐÃ THẮNG (bù cho vụ thắng
+ * trước khi có tính năng) — đúng hàm lib/hangHoanHu mà trạm quay + returnSync dùng. Vụ chưa thắng không đụng. */
+router.post('/hang-hoan-hu', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const apply = b.apply === true
+        const maCH = String(b.storeCode || '').trim()
+        if (!maCH) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        const store = await prisma.store.findFirst({ where: { code: { equals: maCH, mode: 'insensitive' } }, select: { schema: true, code: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { lanNhanCuoi, daVaoKhoHu, choKhieuNaiThang } = await import('../lib/nhanHangHoan')
+        const { ketQuaKhieuNai, moTaKhieuNai } = await import('../lib/viecVuTra')
+        const { chuyenHangHoanVaoKhoHu } = await import('../lib/hangHoanHu')
+        const phieu = await sp.returnOrder.findMany({
+            where: { notes: { contains: '[Nhận hàng hoàn]' } },
+            select: { id: true, code: true, status: true, notes: true }, orderBy: { updatedAt: 'desc' }, take: 1000,
+        })
+        const don = await sp.onlineOrder.findMany({
+            where: { internalNote: { contains: '[Nhận hàng hoàn]' } },
+            select: { id: true, orderNumber: true, internalNote: true }, orderBy: { updatedAt: 'desc' }, take: 1000,
+        })
+        const ds: any[] = []
+        for (const p of phieu) {
+            const n = lanNhanCuoi(p.notes)
+            const kq = ketQuaKhieuNai(p.notes)
+            const dong: any = {
+                loai: 'phieu', ma: p.code, tinhTrang: n?.tinhTrang ?? null, nguyenVen: !!n?.nguyenVen,
+                daVaoKhoHu: daVaoKhoHu(p.notes), khieuNai: moTaKhieuNai(p.notes, p.status === 'refunded'), viec: '—',
+            }
+            if (choKhieuNaiThang(p.notes)) {
+                if (kq?.loai === 'thang') {
+                    if (apply) {
+                        const r = await chuyenHangHoanVaoKhoHu(sp, { loai: 'phieu', id: p.id }, { vi: `khiếu nại thắng${kq.soLan > 1 ? ` lần ${kq.lan}` : ''} (bù)` })
+                        dong.viec = r.ok ? 'ĐÃ CHUYỂN vào kho hư hỏng' : `KHÔNG chuyển được: ${r.lyDo || ''}`
+                        dong.ketQua = r
+                    } else dong.viec = 'sẽ chuyển vào kho hư hỏng khi apply'
+                } else dong.viec = 'chờ khiếu nại thắng (đang ở Việc cần làm)'
+            }
+            ds.push(dong)
+        }
+        for (const d of don) {
+            const n = lanNhanCuoi(d.internalNote)
+            ds.push({
+                loai: 'don', ma: d.orderNumber, tinhTrang: n?.tinhTrang ?? null, nguyenVen: !!n?.nguyenVen,
+                daVaoKhoHu: daVaoKhoHu(d.internalNote), khieuNai: 'giao thất bại — không đọc được kết quả',
+                viec: choKhieuNaiThang(d.internalNote) ? 'chờ người bấm "Đưa vào kho hư hỏng"' : '—',
+            })
+        }
+        res.json({ success: true, cheDo: apply ? 'GHI THẬT' : 'CHỈ BÁO CÁO', store: store.code, soPhieu: phieu.length, soDon: don.length, ds })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── TẮT KHO HƯ HỎNG TRÙNG ĐANG TRỐNG (09/10/2026) ─────────────────────────────
  * POST /admin/tat-kho-trung {storeCode?, apply?} — mặc định CHỈ BÁO CÁO.
  * Cửa hàng có kho hư hỏng mặc định GẮN CHI NHÁNH CHÍNH mà vẫn còn bản "không

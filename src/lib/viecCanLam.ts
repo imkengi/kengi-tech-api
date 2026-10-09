@@ -14,7 +14,7 @@
 //      hàng chứ không nhanh hơn, mà lỗi thì khó lần.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { phanLoaiVuTra, kienHoanTuDonHuy, kienChuaNhan, type DongViec, type KienHoan } from './viecVuTra'
+import { phanLoaiVuTra, kienHoanTuDonHuy, kienChuaNhan, hangHuTuDonHuy, type DongViec, type KienHoan } from './viecVuTra'
 import { tenVideoHoanTu } from '../routes/driveVideos'
 
 export type MucDo = 'khan' | 'canhBao' | 'nhac'
@@ -35,7 +35,7 @@ export interface ViecCanLam {
     nhanNut: string
     /** VÍ DỤ CỤ THỂ (≤ 20, cũ nhất trước): từng phiếu / đơn, bấm vào mở đúng chỗ.
      *  Chủ shop 09/10/2026 muốn THẤY đơn nào, không chỉ con số. */
-    danhSach?: { ma: string; moTa: string; duongDan?: string }[]
+    danhSach?: { ma: string; moTa: string; duongDan?: string; nut?: DongViec['nut'] }[]
 }
 
 export interface KetQuaViecCanLam {
@@ -194,7 +194,32 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
         })
         return phanLoaiVuTra(ds)
     }, hong)
-    const vd = (ds: DongViec[]) => ds.slice(0, 20).map(d => ({ ma: d.ma, moTa: d.moTa, duongDan: d.duongDan }))
+    const vd = (ds: DongViec[]) => ds.slice(0, 20).map(d => ({ ma: d.ma, moTa: d.moTa, duongDan: d.duongDan, ...(d.nut ? { nut: d.nut } : {}) }))
+
+    // ─── 6a'. Hàng hoàn về KHÔNG nguyên vẹn — chờ khiếu nại thắng mới vào kho hư hỏng ──────
+    // Chủ shop 09/10/2026: "phải chờ khiếu nại thành công với Shopee hoặc tiktok mới trả vào kho
+    // hàng hư hỏng, không thì … đưa vào việc cần làm để khiếu nại tiếp". Thắng thì returnSync /
+    // trạm quay tự chuyển (lib/hangHoanHu.ts); ở đây là các vụ còn treo. Đơn giao thất bại không có
+    // phiếu trả nên đọc ghi chú nội bộ của đơn.
+    const huDon = await doAn('Hàng hoàn hư (giao thất bại)', async () => {
+        const ds = await prisma.onlineOrder.findMany({
+            where: { internalNote: { contains: '[Nhận hàng hoàn]' }, updatedAt: { gte: new Date(Date.now() - 90 * MOT_NGAY) } },
+            select: { orderNumber: true, platform: true, trackingNumber: true, shippedAt: true, total: true, internalNote: true },
+            take: 500,
+        })
+        return hangHuTuDonHuy(ds)
+    }, hong)
+    const hangHu = [...(vuTra?.hangHuChoKhieuNai ?? []), ...(huDon ?? [])]
+    if (hangHu.length > 0) {
+        items.push({
+            ma: 'hang-hoan-hu-cho-khieu-nai', nhom: 'online', mucDo: 'khan',
+            tieuDe: `${hangHu.length} kiện hàng hoàn bị hư / tráo — chờ khiếu nại thắng`,
+            chiTiet: 'Hàng trả về KHÔNG nguyên vẹn chỉ vào Kho Hư Hỏng khi khiếu nại với sàn thắng — thắng là hệ thống tự chuyển. Khiếu nại ngay kèm video mở hàng (HOAN_<mã vận đơn>); bị từ chối thì khiếu nại lại. Không khiếu nại nữa thì bấm "Đưa vào kho hư hỏng" ở dòng đó.',
+            soLuong: hangHu.length, soTien: hangHu.reduce((s, d) => s + d.soTien, 0),
+            duongDan: '/dashboard-online-orders?tab=returns', nhanNut: 'Mở tab Trả hàng',
+            danhSach: vd(hangHu),
+        })
+    }
     if (vuTra && vuTra.chuaKhieuNai.length > 0) {
         const ds: (DongViec & { soTien: number })[] = vuTra.chuaKhieuNai
         items.push({
