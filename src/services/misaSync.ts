@@ -107,8 +107,27 @@ const soTien = (v: any) => {
 
 // ─── VẬT TƯ / HÀNG HOÁ (data_type = 2) ──────────────────────────────────────
 
+/**
+ * Tên nhóm vật tư của MỘT mã hàng.
+ *
+ * ĐO 09/10/2026 trên HUTITAX: MISA trả `inventory_item_category_name_list` (vd "Hàng hóa"),
+ * KHÔNG có `inventory_category_name` — trường đó chỉ có ở danh mục NHÓM (data_type 14).
+ * Bản trước đọc nhầm trường nên mọi mã tạo từ MISA rơi vào nhóm tạm NHOM_TAM.
+ * `_list` vì một mã có thể thuộc nhiều nhóm (MISA nối bằng ";") — lấy nhóm đầu.
+ */
+function tenNhomVatTu(m: any): string | null {
+    const raw = pick(m, 'inventory_item_category_name_list', 'InventoryItemCategoryNameList', 'inventory_category_name')
+    const ten = String(raw || '').split(/[;,]/)[0].trim()
+    return ten || null
+}
+
+/** Nhóm tạm mà resolveCategory tạo khi không đọc được nhóm — mã nằm đây là nạn nhân của lỗi cũ */
+const NHOM_TAM = 'Nhập từ MISA'
+
 export async function syncMisaProducts(sp: any, items: any[], opts: MisaOptions, c: MisaCounters): Promise<void> {
     const catCache = new Map<string, string>()
+    // Mã nằm ở nhóm tạm thì được CHUYỂN sang đúng nhóm MISA; nhóm người dùng tự chọn thì không đụng
+    const nhomTam = await sp.category.findFirst({ where: { name: NHOM_TAM }, select: { id: true } }).catch(() => null)
 
     for (const m of items) {
         c.fetched++
@@ -144,6 +163,11 @@ export async function syncMisaProducts(sp: any, items: any[], opts: MisaOptions,
                     if (!existing.sellingPrice && giaBan > 0) data.sellingPrice = giaBan
                     if (!existing.costPrice && giaVon > 0) data.costPrice = giaVon
                 }
+                const tenNhom = tenNhomVatTu(m)
+                if (nhomTam && existing.categoryId === nhomTam.id && tenNhom && tenNhom !== NHOM_TAM) {
+                    const catId = await resolveCategory(sp, tenNhom, null, catCache, opts.apply)
+                    if (catId) data.categoryId = catId
+                }
 
                 if (!Object.keys(data).length) {
                     c.skipped++
@@ -157,7 +181,7 @@ export async function syncMisaProducts(sp: any, items: any[], opts: MisaOptions,
                 c.updated++
                 noteSample(c, { sku: code, name, hanhDong: 'cập nhật', truong: Object.keys(data) })
             } else {
-                const categoryId = await resolveCategory(sp, pick(m, 'inventory_category_name', 'InventoryCategoryName'),
+                const categoryId = await resolveCategory(sp, tenNhomVatTu(m),
                     opts.defaultCategoryId, catCache, opts.apply)
                 if (!categoryId) { noteError(c, `Mã ${code}: chưa có nhóm hàng mặc định để gán`); continue }
 
@@ -200,7 +224,7 @@ async function resolveCategory(
     sp: any, name: any, fallbackId: string | null | undefined,
     cache: Map<string, string>, apply: boolean,
 ): Promise<string | null> {
-    const key = String(name || '').trim() || 'Nhập từ MISA'
+    const key = String(name || '').trim() || NHOM_TAM
     if (cache.has(key)) return cache.get(key)!
     const found = await sp.category.findFirst({ where: { name: key }, select: { id: true } }).catch(() => null)
     if (found) { cache.set(key, found.id); return found.id }
@@ -660,4 +684,111 @@ function docJson(v: any): any {
     if (!v) return null
     if (typeof v === 'object') return v
     try { return JSON.parse(String(v)) } catch { return null }
+}
+
+// ─── TÀI KHOẢN NGÂN HÀNG (data_type = 8) → BankAccount ─────────────────────
+//
+// ĐO 09/10/2026 (HUTITAX, cổng cũ): bản ghi có bank_account_id, bank_account_number,
+// bank_name, bank_id, inactive — KHÔNG có account_holder dù tài liệu ghi bắt buộc.
+// Khớp theo MisaMap rồi theo SỐ TÀI KHOẢN (bỏ khoảng trắng). Chỉ TẠO MỚI và điền ô
+// trống; số dư (balance) KHÔNG đụng — số dư ngân hàng là việc của sổ/sao kê.
+
+const chuanSoTk = (v: any) => String(v || '').replace(/[\s.-]/g, '')
+
+export async function syncMisaBanks(sp: any, items: any[], opts: MisaOptions, c: MisaCounters): Promise<void> {
+    const coSan = await sp.bankAccount.findMany({ select: { id: true, accountNumber: true, bankName: true, accountName: true, bankBranch: true } })
+    const theoSo = new Map<string, any>(coSan.map((b: any) => [chuanSoTk(b.accountNumber), b]))
+    for (const m of items) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const misaId = pick(m, 'bank_account_id', 'BankAccountID')
+            const so = String(pick(m, 'bank_account_number', 'BankAccountNumber') || '').trim()
+            const nganHang = String(pick(m, 'bank_name', 'BankName') || '').trim()
+            if (!misaId || !so) { boQua(c, 'thiếu id hoặc số tài khoản'); continue }
+            const chu = String(pick(m, 'account_holder', 'AccountHolder') || '').trim() || null
+            const chiNhanh = String(pick(m, 'bank_branch_name', 'BankBranchName') || '').trim() || null
+            const ngung = pick(m, 'inactive', 'Inactive') === true
+
+            const localId = await findMap(sp, 'bank', misaId)
+            const existing = (localId && coSan.find((b: any) => b.id === localId)) || theoSo.get(chuanSoTk(so))
+            if (existing) {
+                const data: any = {}
+                if (!existing.bankName && nganHang) data.bankName = nganHang
+                if (!existing.accountName && chu) data.accountName = chu
+                if (!existing.bankBranch && chiNhanh) data.bankBranch = chiNhanh
+                if (opts.apply) {
+                    if (Object.keys(data).length) await sp.bankAccount.update({ where: { id: existing.id }, data })
+                    await saveMap(sp, 'bank', misaId, so, existing.id)
+                }
+                if (Object.keys(data).length) { c.updated++; noteSample(c, { so, nganHang, hanhDong: 'điền ô trống', truong: Object.keys(data) }) }
+                else c.skipped++
+                continue
+            }
+            if (opts.apply) {
+                const created = await sp.bankAccount.create({
+                    data: {
+                        bankName: nganHang || '(chưa rõ ngân hàng)', accountNumber: so,
+                        accountName: chu, bankBranch: chiNhanh,
+                        status: ngung ? 'inactive' : 'active',
+                    },
+                })
+                await saveMap(sp, 'bank', misaId, so, created.id)
+                theoSo.set(chuanSoTk(so), created)
+            }
+            c.created++
+            noteSample(c, { so, nganHang, ngungTheoDoi: ngung, hanhDong: 'tạo mới' })
+        } catch (e: any) {
+            noteError(c, `TK ngân hàng ${pick(m, 'bank_account_number') || ''}: ${e?.message || e}`)
+        }
+    }
+}
+
+// ─── HỆ THỐNG TÀI KHOẢN (data_type = 5) → ChartOfAccount ───────────────────
+//
+// ĐO 09/10/2026: data_type 5 trả ĐÚNG hệ thống tài khoản (account_id, account_number,
+// account_name — không có parent_id dù tài liệu ghi) ⇒ chốt mâu thuẫn tài liệu cũ.
+//
+// CHỈ TẠO tài khoản Kengi còn thiếu — tài khoản chi tiết kế toán mở thêm bên MISA
+// (vd 1121xx từng ngân hàng). Tài khoản đã có thì KHÔNG sửa: danh mục Kengi là chuẩn
+// TT99 đã gieo sẵn, tên/loại của nó gánh báo cáo và kết chuyển.
+// type/nature KẾ THỪA từ tài khoản cha (mã dài nhất là tiền tố) — đúng như
+// routes/accounts.ts làm khi tạo tay. Không tìm được cha thì BỎ QUA, không đoán theo
+// chữ số đầu (TK 214, 521… là tài khoản điều chỉnh, đoán theo đầu số là sai dấu).
+
+export async function syncMisaAccounts(sp: any, items: any[], opts: MisaOptions, c: MisaCounters): Promise<void> {
+    const coSan = await sp.chartOfAccount.findMany({ select: { code: true, level: true, type: true, nature: true } })
+    if (!coSan.length) {
+        noteError(c, 'Cửa hàng chưa có danh mục tài khoản Kengi — gieo hệ thống tài khoản TT99 trước (Kế toán › Hệ thống tài khoản) rồi kéo lại')
+        c.fetched += items.length
+        return
+    }
+    const theoMa = new Map<string, any>(coSan.map((a: any) => [String(a.code), a]))
+    // Tạo cha trước con: sắp theo độ dài mã
+    const ds = [...items].sort((a, b) =>
+        String(pick(a, 'account_number') || '').length - String(pick(b, 'account_number') || '').length)
+    for (const m of ds) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const ma = String(pick(m, 'account_number', 'AccountNumber') || '').trim()
+            const ten = String(pick(m, 'account_name', 'AccountName') || '').trim()
+            if (!ma || !ten) { boQua(c, 'thiếu số hoặc tên tài khoản'); continue }
+            if (theoMa.has(ma)) { c.skipped++; continue }
+            let cha: any = null
+            for (let n = ma.length - 1; n >= 3 && !cha; n--) cha = theoMa.get(ma.slice(0, n)) || null
+            if (!cha) { boQua(c, `TK ${ma} "${ten}": không có tài khoản cha bên Kengi để kế thừa loại/tính chất`); continue }
+            const data = {
+                code: ma, name: ten.slice(0, 200), level: (cha.level || 1) + 1, parentCode: cha.code,
+                type: cha.type, nature: cha.nature, isActive: pick(m, 'inactive', 'Inactive') !== true,
+                isSystem: false, description: 'Kéo từ MISA AMIS',
+            }
+            if (opts.apply) await sp.chartOfAccount.create({ data })
+            theoMa.set(ma, data)   // chạy thử cũng ghi vào bản nhớ để TK cháu tìm được cha
+            c.created++
+            noteSample(c, { ma, ten, cha: cha.code, loai: cha.type, hanhDong: 'tạo mới' })
+        } catch (e: any) {
+            noteError(c, `TK ${pick(m, 'account_number') || ''}: ${e?.message || e}`)
+        }
+    }
 }

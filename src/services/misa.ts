@@ -105,8 +105,8 @@ function headersOf(c: MisaCreds, token?: string): Record<string, string> {
  * mục hỗ trợ LẤY từ AMIS kế toán" (EnumOpenGetDictionaryType).
  *
  * ĐỪNG lẫn với `dictionary_type` ở mục 3.2 (danh mục ĐẨY LÊN) — hai bảng số
- * KHÁC NHAU: chiều lấy về Kho = 3, chiều đẩy lên Kho = 5. Trước đây file này có
- * NHOM_VAT_TU: 14 — số đó không nằm trong danh sách nào, đã bỏ.
+ * KHÁC NHAU: chiều lấy về Kho = 3, chiều đẩy lên Kho = 5. NHOM_VAT_TU: 14 từng bị bỏ vì
+ * không có trong tài liệu cũ — tài liệu developer.misa.vn có, và đo 09/10/2026 trả đúng nhóm.
  *
  * CẢNH BÁO: ví dụ trong chính tài liệu (mục 2.4) gửi data_type = 5 mà nhận về
  * bản ghi KHO, tức mâu thuẫn với mục 3.3. Không đoán bên nào đúng — dùng
@@ -117,13 +117,17 @@ export const MISA_DATA_TYPE = {
     VAT_TU: 2,           // vật tư, hàng hoá
     KHO: 3,
     DON_VI_TINH: 4,
-    HE_THONG_TAI_KHOAN: 5,
+    HE_THONG_TAI_KHOAN: 5,   // ĐO 09/10/2026: trả account_number/account_name — chốt mâu thuẫn mục 2.4
     CO_CAU_TO_CHUC: 6,
     TAI_KHOAN_NGAN_HANG: 8,
-    CONG_TRINH: 9,
+    // ĐO 09/10/2026: 9 trả expense_item_* — là KHOẢN MỤC CHI PHÍ (tài liệu developer.misa.vn
+    // ghi đúng), không phải "công trình" như bảng cũ chép
+    KHOAN_MUC_CHI_PHI: 9,
     DOI_TUONG_THCP: 10,
     DIEU_KHOAN_THANH_TOAN: 11,
     NGAN_HANG: 12,
+    // ĐO 09/10/2026: 14 trả inventory_category_* — NHÓM VẬT TƯ (tài liệu mới có, bảng cũ không)
+    NHOM_VAT_TU: 14,
 } as const
 
 /** Nhãn tiếng Việt cho từng data_type — dùng ở màn dò danh mục. */
@@ -135,10 +139,11 @@ export const MISA_DATA_TYPE_LABEL: Record<number, string> = {
     5: 'Hệ thống tài khoản',
     6: 'Cơ cấu tổ chức',
     8: 'Tài khoản ngân hàng',
-    9: 'Công trình',
+    9: 'Khoản mục chi phí',
     10: 'Đối tượng tập hợp chi phí',
     11: 'Điều khoản thanh toán',
     12: 'Ngân hàng',
+    14: 'Nhóm vật tư, hàng hoá',
 }
 
 /** Loại công nợ của get_list_acc_obj_debt — 0 phải thu, 1 phải trả. */
@@ -491,6 +496,8 @@ function doanTenDanhMuc(m: any): string {
         ['job_id', 'Đối tượng tập hợp chi phí'],
         ['organization_unit_id', 'Cơ cấu tổ chức'],
         ['account_number', 'Hệ thống tài khoản'],
+        ['expense_item_id', 'Khoản mục chi phí'],
+        ['inventory_category_id', 'Nhóm vật tư, hàng hoá'],
         ['bank_id', 'Ngân hàng'],
     ]
     for (const [k, ten] of dau) if (k in m) return ten

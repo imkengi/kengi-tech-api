@@ -30,7 +30,7 @@ import {
 } from '../services/misa'
 import {
     newMisaCounters, syncMisaProducts, syncMisaPartners, syncMisaWarehouses, syncMisaStock,
-    syncMisaDebt, syncMisaDeleted, type MisaOptions,
+    syncMisaDebt, syncMisaDeleted, syncMisaBanks, syncMisaAccounts, type MisaOptions,
 } from '../services/misaSync'
 import { doBanHangMisa, tomTatDeGhiLog } from '../services/misaImportBanHang'
 import {
@@ -50,7 +50,7 @@ const PANEL_SCOPE = 'admin-panel'
  * theo dõi một kho rồi mới tạo lại nó ở bước trên thì công cốc.
  */
 export const MISA_ENTITIES = [
-    'products', 'partners', 'stocks', 'balance', 'debtCustomer', 'debtSupplier', 'deleted',
+    'products', 'partners', 'stocks', 'balance', 'debtCustomer', 'debtSupplier', 'banks', 'accounts', 'deleted',
 ] as const
 
 /** Nhãn hiện trên nhật ký, để dòng log đọc được mà không phải tra code. */
@@ -61,6 +61,8 @@ export const MISA_ENTITY_LABEL: Record<string, string> = {
     balance: 'Tồn kho',
     debtCustomer: 'Công nợ phải thu',
     debtSupplier: 'Công nợ phải trả',
+    banks: 'Tài khoản ngân hàng',
+    accounts: 'Hệ thống tài khoản',
     deleted: 'Danh mục đã xoá bên MISA',
     // Đổ từ Excel — không phải thực thể đồng bộ được, nhưng dùng chung nhật ký nên cần nhãn
     salesExcel: 'Bán hàng (đổ Excel)',
@@ -481,6 +483,12 @@ async function chayDongBo(
                 const r = await MISA.congNo(creds, loai, { last_sync_time: null }, pageOpts)
                 if (r.truncated) c.errors.push('Chạm trần 500 trang — dữ liệu công nợ quá lớn')
                 await syncMisaDebt(sp, r.items, loai, opts, c)
+            } else if (entity === 'banks') {
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.TAI_KHOAN_NGAN_HANG, { last_sync_time: null }, pageOpts)
+                await syncMisaBanks(sp, r.items, opts, c)
+            } else if (entity === 'accounts') {
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.HE_THONG_TAI_KHOAN, { last_sync_time: null }, pageOpts)
+                await syncMisaAccounts(sp, r.items, opts, c)
             } else if (entity === 'deleted') {
                 // Chỗ DUY NHẤT dùng mốc ngày — chỉ cần biết cái gì mới bị xoá
                 for (const dt of [MISA_DATA_TYPE.DOI_TUONG, MISA_DATA_TYPE.VAT_TU, MISA_DATA_TYPE.KHO]) {
@@ -490,7 +498,9 @@ async function chayDongBo(
             }
         } catch (e: any) {
             c.failed++
-            c.errors.push(`${entity}: ${misaErr(e)}`.slice(0, 300))
+            // Tài liệu cổng mới (developer.misa.vn, V1.0.0) KHÔNG liệt kê get_dictionary_delete
+            const goiY = entity === 'deleted' && creds.clientId ? ' — cổng mới developer.misa.vn không có hàm "danh mục đã xoá" trong tài liệu' : ''
+            c.errors.push(`${entity}: ${misaErr(e)}${goiY}`.slice(0, 400))
         }
 
         perEntity[entity] = {
