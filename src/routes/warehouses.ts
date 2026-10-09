@@ -60,6 +60,26 @@ export async function ensureDefaultWarehouses(prisma: any, branchId: string | nu
         const existing = await prisma.warehouse.findFirst({
             where: { type: w.type, isDefault: true, branchId: normalizedBranchId },
         })
+        /* CHI NHÁNH CHÍNH NHẬN kho mặc định "không gắn chi nhánh" đã gieo lúc đăng ký / khởi động,
+         * thay vì đẻ bản thứ hai (09/10/2026 — HUTI có WH-DAMAGED-F1KDCZ null-branch TRỐNG nằm cạnh
+         * WH-DAMAGED-4VLNKA của chi nhánh chính; trang Kho Hư Hỏng hiện cả hai, chủ shop hỏi). Đơn
+         * sàn / import không chi nhánh vốn đã quy về chi nhánh chính (khoHuHong) nên gắn là đúng
+         * chỗ. Chi nhánh PHỤ thì không nhận — kho null-branch là của chi nhánh chính. */
+        if (!existing && normalizedBranchId) {
+            const laChinh = await prisma.branch.findFirst({ where: { id: normalizedBranchId, isMainBranch: true }, select: { id: true } }).catch(() => null)
+            if (laChinh) {
+                const moCoi = await prisma.warehouse.findFirst({
+                    where: { type: w.type, isDefault: true, branchId: null, isActive: true },
+                    orderBy: { createdAt: 'asc' }, select: { id: true },
+                }).catch(() => null)
+                if (moCoi) {
+                    try {
+                        await prisma.warehouse.update({ where: { id: moCoi.id }, data: { branchId: normalizedBranchId } })
+                        continue
+                    } catch { /* gắn không được thì đi đường cũ: tạo kho cho chi nhánh */ }
+                }
+            }
+        }
         if (!existing) {
             try {
                 await prisma.warehouse.create({

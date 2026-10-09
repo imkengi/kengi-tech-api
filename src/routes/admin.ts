@@ -1358,6 +1358,66 @@ router.get('/do-kho-hu-hong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── TẮT KHO HƯ HỎNG TRÙNG ĐANG TRỐNG (09/10/2026) ─────────────────────────────
+ * POST /admin/tat-kho-trung {storeCode?, apply?} — mặc định CHỈ BÁO CÁO.
+ * Cửa hàng có kho hư hỏng mặc định GẮN CHI NHÁNH CHÍNH mà vẫn còn bản "không
+ * gắn chi nhánh" của cùng loại (gieo lúc đăng ký/khởi động) → bản không gắn chi nhánh được
+ * TẮT (isActive=false, KHÔNG xoá) nếu và chỉ nếu nó TRỐNG THẬT: không dòng tồn nào khác 0,
+ * không lô hàng hư, không phiếu chuyển kho, không chuyến bán hàng, không gắn xe. Kho có dữ
+ * liệu thì CHỈ BÁO, không đụng (kho chính bị xé đôi phải gộp có kiểm, không tắt bừa). */
+router.post('/tat-kho-trung', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const apply = b.apply === true
+        const ma = String(b.storeCode || '').trim()
+        const stores = await prisma.store.findMany({
+            where: ma ? { code: { equals: ma, mode: 'insensitive' } } : {},
+            select: { code: true, schema: true },
+        })
+        const ketQua: any[] = []
+        for (const st of stores) {
+            try {
+                const sp: any = getStorePrisma(st.schema)
+                const chinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+                if (!chinh) continue
+                /* CHỈ kho HƯ HỎNG: mọi chỗ chọn kho hư hỏng đều lọc isActive (khoHuHong, trang Kho Hư
+                 * Hỏng). Kho CHÍNH thì KHÔNG — getOrCreateDefaultWarehouse / products.ts chọn kho main
+                 * không lọc isActive, tắt bản trống là có đường ghi tồn vào kho đã tắt. */
+                for (const loai of ['damaged']) {
+                    const cuaChinh = await sp.warehouse.findFirst({ where: { type: loai, isActive: true, branchId: chinh.id }, select: { code: true } })
+                    if (!cuaChinh) continue
+                    const moCoi = await sp.warehouse.findMany({
+                        where: { type: loai, isActive: true, branchId: null },
+                        select: { id: true, code: true, vehicleId: true, createdAt: true },
+                    })
+                    for (const w of moCoi) {
+                        const tonKhac0 = await sp.warehouseStock.count({ where: { warehouseId: w.id, quantity: { not: 0 } } })
+                        const lo = await sp.damagedEntry.count({ where: { warehouseId: w.id } }).catch(() => 0)
+                        const chuyen = await sp.stockTransfer.count({ where: { OR: [{ fromWarehouseId: w.id }, { toWarehouseId: w.id }] } }).catch(() => 0)
+                        const chuyenBan = await sp.salesTrip.count({ where: { warehouseId: w.id } }).catch(() => 0)
+                        const trong = tonKhac0 === 0 && lo === 0 && chuyen === 0 && chuyenBan === 0 && !w.vehicleId
+                        let daTat = false
+                        if (trong && apply) {
+                            await sp.warehouse.update({ where: { id: w.id }, data: { isActive: false } })
+                            daTat = true
+                        }
+                        ketQua.push({
+                            store: st.code, loai, khoKhongGanCN: w.code, khoChiNhanhChinh: cuaChinh.code,
+                            tonKhac0, lo, chuyen, chuyenBan, trong, daTat,
+                            viec: trong ? (daTat ? 'ĐÃ TẮT' : 'sẽ tắt khi apply') : 'CÓ DỮ LIỆU — chỉ báo, phải gộp có kiểm',
+                        })
+                    }
+                }
+            } catch (e: any) {
+                ketQua.push({ store: st.code, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+        res.json({ success: true, cheDo: apply ? 'GHI THẬT' : 'CHỈ BÁO CÁO', ketQua })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // ─── POST /admin/kho-hu-hong-soat ────────────────────────────────────────────
 /**
  * SOÁT + CHỮA KHO HƯ HỎNG ÂM (đo HUTI 25/08/2026: kho hư hỏng CN01 âm −535 ở 11 mã).
@@ -3411,6 +3471,32 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "overwriteDebt" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "negateDebt" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "lastSyncTime" TEXT`)
+                // 09/10/2026 — chiều ĐẨY LÊN MISA (services/misaPush.ts)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "clientId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "pushConfig" TEXT`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaPushItem" (
+                        "id" TEXT NOT NULL,
+                        "loai" TEXT NOT NULL,
+                        "localId" TEXT NOT NULL,
+                        "refNo" TEXT,
+                        "orgRefid" TEXT NOT NULL,
+                        "voucherType" INTEGER,
+                        "ngay" TIMESTAMP(3),
+                        "soTien" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "trangThai" TEXT NOT NULL DEFAULT 'da_gui',
+                        "loi" TEXT,
+                        "lanGui" INTEGER NOT NULL DEFAULT 1,
+                        "payload" TEXT,
+                        "guiLuc" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "ketQuaLuc" TIMESTAMP(3),
+                        CONSTRAINT "MisaPushItem_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MisaPushItem_loai_localId_key" ON "MisaPushItem"("loai", "localId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_trangThai_idx" ON "MisaPushItem"("trangThai")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_orgRefid_idx" ON "MisaPushItem"("orgRefid")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_guiLuc_idx" ON "MisaPushItem"("guiLuc")`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,

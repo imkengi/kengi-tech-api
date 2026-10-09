@@ -811,8 +811,11 @@ if (!process.env.PASSENGER_BASE_URI) {
 
                     // Seed default warehouses (idempotent — uses isDefault flag)
                     try {
+                        /* Có BẤT KỲ kho nào của loại đó (gắn chi nhánh hay không) thì thôi gieo — trước
+                         * 09/10/2026 chỉ xét kho null-branch nên cửa hàng đã có kho theo chi nhánh vẫn
+                         * bị gieo thêm một bản "không gắn chi nhánh" trống (HUTI WH-DAMAGED-F1KDCZ). */
                         const existing: any[] = await registryPrisma.$queryRawUnsafe(
-                            `SELECT type FROM "${schema_name}"."Warehouse" WHERE "isDefault" = true AND "branchId" IS NULL`
+                            `SELECT DISTINCT type FROM "${schema_name}"."Warehouse"`
                         )
                         const existingTypes = new Set(existing.map((r: any) => r.type))
                         const defaults: Array<{ code: string; name: string; type: string; description: string }> = [
