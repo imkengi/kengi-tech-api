@@ -3276,6 +3276,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "khoMeMa" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "khoMeTruLuc" TIMESTAMP(3)`)
 
+                /* KHO MẸ — HƯ HỎNG (09/10/2026): chủ shop bật RIÊNG phần kho hư hỏng trước — hàng hư của cửa
+                 * hàng con (hàng hoàn hư…) ghi vào Kho Hư Hỏng của mẹ, nơi hàng nằm thật. Tách khỏi `khoMeMa`
+                 * (mượn tồn bán được) để bật / tắt độc lập. Xem lib/khoMeHu.ts. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "khoMeHuMa" TEXT`)
+
                 // Cờ hoá đơn VAT đầu vào cho phiếu nhập (2026-07-24) — chỉ phiếu có
                 // HĐ GTGT mới tính vào tồn kho thuế (gate xuất HĐ).
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "hasVatInvoice" BOOLEAN NOT NULL DEFAULT false`)
