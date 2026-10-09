@@ -35,7 +35,8 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 import { moTaLoi } from '../lib/gomLoi'
-import { hoaDonCuaKhach } from '../lib/hoaDonKhach'
+import { hoaDonCuaKhach, mstHopLe } from '../lib/hoaDonKhach'
+import { traMst } from '../lib/traMst'
 
 const router = Router()
 
@@ -859,6 +860,15 @@ export async function issueInvoiceForTransaction(
     const _tenDonVi = !bStr(body.buyerTaxCode) && !bStr(_vbi.taxCode) && _kh.mst ? _kh.tenDonVi : ''
     const _masked = (s: string) => s.includes('*')
     const _clean = (s: string) => (_masked(s) ? '' : s)
+    const _diaChiCo = _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || _kh.diaChi || '')
+    /* TỰ LẤY TỪ MST lúc xuất (09/10/2026): có MST mà thiếu tên đơn vị hoặc địa chỉ thì hỏi Cục
+     * Thuế (bộ nhớ 24h, chờ tối đa 4s) — VNPT ghi `Ten` = tên ĐĂNG KÝ thay vì tên người / "khách
+     * lẻ". Chỉ điền chỗ TRỐNG; tra hỏng thì xuất y như trước. */
+    let _theoMst: { ten: string; diaChi: string } | null = null
+    const _mstSach = _clean(_rawBuyerTax).replace(/\s+/g, '')
+    if (mstHopLe(_mstSach) && (!_tenDonVi || !_diaChiCo)) {
+        try { const k = await traMst(_mstSach, { timeoutMs: 4000 }); _theoMst = { ten: k.ten, diaChi: k.diaChi } } catch { /* xuất như cũ */ }
+    }
     const invoiceData: EInvoiceData = {
             sellerTaxCode: config.taxCode || '',
             sellerName: config.companyName || '',
@@ -867,8 +877,8 @@ export async function issueInvoiceForTransaction(
             // 37 hoá đơn KENGISTORE 15–19/08/2026 dính đúng chỗ này. Kèm mã đơn để truy ngược.
             buyerName: tenNguoiMuaHD(_rawBuyerName, _rawBuyerTax, tx.receiptNumber),
             buyerTaxCode: _clean(_rawBuyerTax),
-            buyerCompanyName: _clean(_tenDonVi) || undefined,
-            buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || _kh.diaChi || ''),
+            buyerCompanyName: _clean(_tenDonVi) || _theoMst?.ten || undefined,
+            buyerAddress: _diaChiCo || _theoMst?.diaChi || '',
             buyerPhone: _clean(bStr(body.buyerPhone) || _kh.sdt || ''),
             buyerEmail: _clean(bStr(body.buyerEmail) || bStr(_vbi.email) || _kh.email || ''),
             // CCCD người mua cho HĐ cá nhân — Shopee VN trả `national_id` (từ 28/07/2026),

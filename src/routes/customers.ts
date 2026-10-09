@@ -12,7 +12,7 @@ import { postDebtCollectionJournal } from '../lib/autoJournal'
 import { emitEntityEvent } from '../lib/webhookDispatch'
 import { tinhTronBo } from '../lib/diemSucKhoeKhach'
 import { COT_HOA_DON_KHACH } from '../lib/hoaDonKhach'
-import { traMst, LoiTraMst } from '../lib/traMst'
+import { traMst, LoiTraMst, boSungTuMst } from '../lib/traMst'
 
 const router = Router()
 
@@ -38,9 +38,10 @@ function hoaDonTuBody(b: any): Record<string, string | null> {
 // ─── GET /api/customers/tra-mst?mst= ─────────────────────────────────────────
 // Tra MST → tên + địa chỉ doanh nghiệp cho ô MST ở hồ sơ khách (09/10/2026, lib/traMst).
 // Đặt TRƯỚC '/:id' kẻo bị nuốt thành id "tra-mst".
-router.get('/tra-mst', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+router.get('/tra-mst', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const kq = await traMst(String(req.query.mst || ''))
+        // 15s: MST không tồn tại VietQR mất ~14,6s mới trả "51" (đo 09/10/2026)
+        const kq = await traMst(String(req.query.mst || ''), { timeoutMs: 15000 })
         res.json({ success: true, data: kq })
     } catch (e: any) {
         if (e instanceof LoiTraMst) {
@@ -1181,6 +1182,11 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
             code = await nextCode(prisma, 'customerCodeSeq', 'KH', 3, '', 'Customer', 'code')
         }
 
+        // Thông tin xuất HĐ + TỰ LẤY từ MST (09/10/2026): thiếu tên đơn vị / địa chỉ thì hỏi Cục
+        // Thuế (chờ tối đa 4s); tra hỏng thì lưu đúng như người dùng nhập.
+        const hoaDon = hoaDonTuBody(req.body)
+        await boSungTuMst({}, hoaDon, { timeoutMs: 4000 }).catch(() => null)
+
         const customer = await prisma.customer.create({
             data: {
                 code,
@@ -1194,7 +1200,7 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
                 gender: gender || null,
                 salesUserId: salesUserId || null,
                 salesUserName: salesUserName || null,
-                ...hoaDonTuBody(req.body),
+                ...hoaDon,
             },
             include: { group: true },
         })
@@ -1224,6 +1230,9 @@ router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate
         if (!existing) return res.status(404).json({ success: false, error: 'Customer not found' })
         // Explicitly allowlist updatable fields — prevent overwriting debt/points via mass assignment
         const { name, phone, email, address, groupId, taxCode, note, notes, loyaltyPoints, birthday, gender, salesUserId, salesUserName } = req.body
+        // Thông tin xuất HĐ + TỰ LẤY từ MST cho khách đã có MST mà thiếu tên đơn vị / địa chỉ (09/10/2026)
+        const hoaDon = hoaDonTuBody(req.body)
+        await boSungTuMst(existing, hoaDon, { timeoutMs: 4000 }).catch(() => null)
         const customer = await prisma.customer.update({
             where: { id: existing.id },
             data: {
@@ -1233,7 +1242,7 @@ router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate
                 ...(address !== undefined && { address }),
                 ...(groupId !== undefined && { groupId: groupId || null }),
                 // taxCode + các trường xuất HĐ — trước 09/10/2026 ghi vào cột KHÔNG tồn tại
-                ...hoaDonTuBody(req.body),
+                ...hoaDon,
                 // `note` không phải cột (cột là `notes`) — trước đây gửi `note` là Prisma ném lỗi
                 ...(notes === undefined && note !== undefined && { notes: note }),
                 ...(notes !== undefined && { notes }),

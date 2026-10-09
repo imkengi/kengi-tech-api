@@ -5189,6 +5189,61 @@ router.get('/do-khieu-nai-shopee', async (req: Request, res: Response) => {
  * báo lỗi. Bộ này đếm trước xem bao nhiêu phiếu đủ điều kiện, thay vì để chủ shop
  * bấm rồi mới biết. CHỈ ĐỌC.
  */
+/* ─── LẤY THÔNG TIN XUẤT HĐ CHO KHÁCH ĐÃ CÓ MST (09/10/2026) ────────────────────
+ * Chủ shop: "mới lưu MST à, hãy get những thông tin hoá đơn với những người đã có MST".
+ * POST /admin/bo-sung-mst-khach {storeCode, apply?, toiDa?}
+ * Khách có MST hợp lệ mà thiếu tên đơn vị / địa chỉ xuất HĐ → hỏi Cục Thuế (lib/traMst, VietQR)
+ * TUẦN TỰ, nghỉ 300ms sau mỗi lượt tra, điền CHỖ TRỐNG (không đè chữ đã có). Mặc định CHẠY THỬ
+ * — vẫn tra thật để đếm được bao nhiêu MST ra tên; kết quả tra nằm bộ nhớ 24h nên lượt ghi thật
+ * nhanh. Phân biệt "không có MST này" (Cục Thuế không biết) với "nguồn tra hỏng" (thử lại sau). */
+router.post('/bo-sung-mst-khach', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const ma = String(b.storeCode || '').trim()
+        const apply = b.apply === true
+        const toiDa = Math.min(3000, Math.max(1, Number(b.toiDa) || 1000))
+        const store = await prisma.store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { boSungTuMst, LoiTraMst } = await import('../lib/traMst')
+        const t0 = Date.now()
+        const ds = await sp.customer.findMany({
+            where: { taxCode: { not: null } },
+            select: { id: true, code: true, taxCode: true, invoiceType: true, invoiceCompanyName: true, invoiceAddress: true },
+            orderBy: { code: 'asc' },
+            take: toiDa,
+        })
+        const kq = { cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ — chưa ghi gì', coMst: ds.length, mstSaiKhuon: 0, daDu: 0, traRaTen: 0, khongCoMst: 0, nguonHong: 0, daGhi: 0, dungSom: false, chuaXet: 0, mau: [] as any[], mauSaiKhuon: [] as string[], mauKhongCo: [] as string[], mauLoi: [] as string[], ms: 0 }
+        // Ngân sách 10 phút (Cloud Run cắt ở 15'): MST không tồn tại mất ~15s/lượt. Hết giờ thì dừng,
+        // báo số chưa xét — gọi lại là chạy tiếp (đã điền thì thành "đủ", không tra lại).
+        const HET_GIO = t0 + 600_000
+        for (let i = 0; i < ds.length; i++) {
+            const kh = ds[i]
+            if (Date.now() > HET_GIO) { kq.dungSom = true; kq.chuaXet = ds.length - i; break }
+            const data: Record<string, any> = {}
+            let daTra = false
+            try {
+                const r = await boSungTuMst(kh, data, { timeoutMs: 15000 })
+                if (r === 'khong_mst') { kq.mstSaiKhuon++; if (kq.mauSaiKhuon.length < 12) kq.mauSaiKhuon.push(`${kh.code}: ${String(kh.taxCode).length} ký tự`); continue }
+                if (r === 'du') { kq.daDu++; continue }
+                daTra = true
+                kq.traRaTen++
+                if (kq.mau.length < 12) kq.mau.push({ ma: kh.code, truong: Object.keys(data) })
+                if (apply) { await sp.customer.update({ where: { id: kh.id }, data }); kq.daGhi++ }
+            } catch (e: any) {
+                daTra = true
+                if (e instanceof LoiTraMst && e.ma === 'khong_co') { kq.khongCoMst++; if (kq.mauKhongCo.length < 12) kq.mauKhongCo.push(kh.code) }
+                else { kq.nguonHong++; if (kq.mauLoi.length < 8) kq.mauLoi.push(`${kh.code}: ${String(e?.message || e).slice(0, 140)}`) }
+            }
+            if (daTra) await new Promise(r => setTimeout(r, 300))   // nhẹ tay với nguồn tra
+        }
+        kq.ms = Date.now() - t0
+        res.json({ success: true, data: kq })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── ĐO "VIỆC CẦN LÀM" CỦA MỘT CỬA HÀNG (chỉ đọc, 09/10/2026) ────────────────
  * Chạy ĐÚNG bộ luật lib/viecCanLam như trang Việc cần làm (kể cả lượt dò video mở
  * hàng hoàn trên Drive) — để nghiệm thu bằng số thật mà không cần đăng nhập thay
