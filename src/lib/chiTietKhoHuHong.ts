@@ -15,8 +15,15 @@
 //
 //  Lô (1) và phiếu sửa ĐANG GIỮ hàng (2) là số CHÍNH XÁC. Phần tồn còn lại chia cho các
 //  lượt vào (3)(4)(5) MỚI NHẤT trước — đúng nếp xuất kho cũ trước: thứ còn nằm trong kho
-//  là thứ vào sau cùng. Phần không lần ra nguồn thì NÓI THẲNG là chưa rõ, không bịa lý do.
-//  Mã âm (ghi ra nhiều hơn ghi vào) kèm các lượt RA gần nhất để biết ai, vì sao.
+//  là thứ vào sau cùng.
+//
+//  HÀNG HƯ = HÀNG CÓ PHIẾU (10/10/2026 — chủ shop: "trong kho hư hỏng hàng âm không phải là
+//  hàng hư nha, hàng hư hỏng qua phiếu mới tính nha"). Số SỔ KHO (WarehouseStock) KHÔNG phải
+//  số hàng hư: nó âm khi bị ghi ra mà không qua phiếu (vd POS từng bán trừ nhầm kho hư hỏng),
+//  và dư khi có hàng vào không để lại phiếu nào. Nên:
+//    · `hang` chỉ gồm mã có hàng theo phiếu (`soHu` = Σ đống > 0), mỗi đống là một phiếu.
+//    · Phần sổ kho lệch phiếu (âm, dư không phiếu, thiếu so với phiếu) đi riêng vào
+//      `ngoaiPhieu` — KHÔNG tính là hàng hư, kèm lượt RA gần nhất để biết ai, vì sao.
 //
 //  CHỈ ĐỌC. Prod pool 1 kết nối → truy vấn tuần tự, không Promise.all.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,11 +53,13 @@ export interface HangKhoHu {
     productId: string
     productName: string
     sku: string | null
-    /** Tồn THẬT của mã trong kho này (WarehouseStock) — có thể âm */
+    /** Hàng hư THEO PHIẾU = Σ đống — đây mới là số hàng hư */
+    soHu: number
+    /** Số SỔ KHO của mã trong kho này (WarehouseStock) — có thể âm / lệch phiếu, KHÔNG phải số hàng hư */
     ton: number
-    /** Các đống đang nằm trong kho, kèm lý do + người; tổng = tồn khi sổ khớp */
+    /** Các đống CÓ PHIẾU đang nằm trong kho, kèm lý do + người */
     dong: DongKhoHu[]
-    /** tồn − Σ đống: âm nghĩa là sổ ghi ra nhiều hơn ghi vào */
+    /** sổ kho − hàng theo phiếu: âm = sổ kho ghi ra nhiều hơn phiếu; dương = sổ kho dư, không phiếu */
     lech: number
     /** Lượt RA gần nhất — chỉ kèm khi mã lệch / âm, để biết ai lấy ra và vì sao */
     ra: DongKhoHu[]
@@ -59,6 +68,21 @@ export interface HangKhoHu {
     /** Tồn BÁN ĐƯỢC (Product.stock) — "nhập từ kho" cần đủ số này */
     tonBanDuoc: number
     donVi: string | null
+}
+
+/** Mã có SỔ KHO lệch phiếu — KHÔNG phải hàng hư; để người sửa sổ biết chỗ lệch */
+export interface NgoaiPhieu {
+    productId: string
+    productName: string
+    sku: string | null
+    /** số sổ kho */
+    ton: number
+    /** hàng hư theo phiếu (0 nếu mã không có phiếu nào) */
+    soHu: number
+    /** ton − soHu: âm = sổ kho ghi ra không qua phiếu; dương = sổ kho dư không phiếu */
+    lech: number
+    /** lượt RA gần nhất khi sổ kho thấp hơn phiếu / âm */
+    ra: DongKhoHu[]
 }
 
 const TRAN = 2000
@@ -78,15 +102,27 @@ function dongNhanHangHoan(notes?: string | null): string | null {
     return dong ? dong.trim().replace(/^\[Nhận hàng hoàn\]\s*/, '').slice(0, 240) : null
 }
 
+export interface TongKhoHu {
+    /** mã có hàng hư theo phiếu */
+    soMa: number
+    /** Σ hàng hư theo phiếu */
+    soLuong: number
+    /** Σ hàng hư × giá vốn HIỆN TẠI */
+    giaVon: number
+    /** sổ kho lệch phiếu — không tính là hàng hư */
+    ngoaiPhieu: { soMa: number; am: number; du: number }
+}
+
 export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
     hang: HangKhoHu[]
-    tong: { soMa: number; soLuong: number; coLyDo: number; chuaRo: number; soMaAm: number; tongAm: number; soMaLech: number }
+    ngoaiPhieu: NgoaiPhieu[]
+    tong: TongKhoHu
     chamTran: boolean
 }> {
     let chamTran = false
     const tran = <T>(ds: T[], n = TRAN): T[] => { if (ds.length >= n) chamTran = true; return ds }
 
-    // ── Tồn theo mã: lấy cả ÂM — âm là sổ lệch, phải hiện chứ không giấu ──
+    // ── Sổ kho theo mã: lấy cả ÂM — không tính là hàng hư, nhưng phải biết chỗ lệch ──
     const ws: any[] = tran(await prisma.warehouseStock.findMany({
         where: { warehouseId: khoId, quantity: { not: 0 } },
         select: { productId: true, productName: true, productSku: true, quantity: true },
@@ -125,7 +161,7 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
         ...ws.map(x => x.productId), ...lo.map(x => x.productId), ...suaGiu.map(x => x.productId),
     ]))
     if (!dsMa.length) {
-        return { hang: [], tong: { soMa: 0, soLuong: 0, coLyDo: 0, chuaRo: 0, soMaAm: 0, tongAm: 0, soMaLech: 0 }, chamTran }
+        return { hang: [], ngoaiPhieu: [], tong: { soMa: 0, soLuong: 0, giaVon: 0, ngoaiPhieu: { soMa: 0, am: 0, du: 0 } }, chamTran }
     }
 
     // ── (3) Trả hàng sàn duyệt "hư hỏng" — thẻ kho do onlineOrders ghi ──
@@ -228,6 +264,7 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
     const spTheoId = new Map(sanPham.map(p => [p.id, p]))
 
     const hang: HangKhoHu[] = []
+    const ngoaiPhieu: NgoaiPhieu[] = []
     for (const pid of dsMa) {
         const ton = ws.find(x => x.productId === pid)?.quantity ?? 0
         const dong: DongKhoHu[] = []
@@ -307,17 +344,13 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
                 dong.push({ ...v, soLuong: lay })
                 conLai -= lay
             }
-            if (conLai > 0) {
-                dong.push({
-                    loai: 'chua-ro', soLuong: conLai, lyDo: null, nguoi: null, luc: null, maPhieu: null,
-                    ghiChu: 'Hàng vào kho trước khi có sổ ghi lý do, hoặc qua đường chưa ghi dấu',
-                })
-                conLai = 0
-            }
+            // Phần sổ kho còn dư mà không lần ra phiếu nào: KHÔNG phải hàng hư (chủ shop 10/10/2026)
+            // — đi vào `ngoaiPhieu` qua `lech` > 0, không thành một đống "chưa rõ" như trước.
         }
-        const lech = ton - dong.reduce((s, d) => s + d.soLuong, 0)
+        const soHu = dong.reduce((s, d) => s + d.soLuong, 0)
+        const lech = ton - soHu
 
-        // Lệch / âm: kèm 5 lượt RA gần nhất — ai lấy ra, vì sao
+        // Sổ kho thấp hơn phiếu / âm: kèm 5 lượt RA gần nhất — ai lấy ra, vì sao
         let ra: DongKhoHu[] = []
         if (lech < 0 || ton < 0) {
             for (const x of xuat.filter(e => e.productId === pid)) {
@@ -367,27 +400,34 @@ export async function chiTietKhoHuHong(prisma: any, khoId: string): Promise<{
 
         const t = tenHang.get(pid)
         const p = spTheoId.get(pid)
-        hang.push({
-            productId: pid, productName: t?.productName || p?.name || '', sku: t?.sku || p?.sku || null, ton, dong, lech, ra,
-            giaVon: Number(p?.costPrice ?? 0), tonBanDuoc: Number(p?.stock ?? 0), donVi: p?.baseUnit ?? null,
-        })
+        const ten_ = t?.productName || p?.name || ''
+        const sku = t?.sku || p?.sku || null
+        // Chỉ mã CÓ hàng theo phiếu mới là hàng hư; sổ kho lệch phiếu đi riêng, không tính
+        if (soHu > 0) {
+            hang.push({
+                productId: pid, productName: ten_, sku, soHu, ton, dong, lech, ra,
+                giaVon: Number(p?.costPrice ?? 0), tonBanDuoc: Number(p?.stock ?? 0), donVi: p?.baseUnit ?? null,
+            })
+        }
+        if (lech !== 0) ngoaiPhieu.push({ productId: pid, productName: ten_, sku, ton, soHu, lech, ra })
     }
 
-    // Mã lệch / âm xuống cuối; còn lại theo tên
-    hang.sort((a, b) => Number(a.lech < 0 || a.ton < 0) - Number(b.lech < 0 || b.ton < 0)
-        || a.productName.localeCompare(b.productName, 'vi'))
+    hang.sort((a, b) => a.productName.localeCompare(b.productName, 'vi'))
+    // Sổ kho ÂM trước (ghi ra không qua phiếu — thứ cần sửa nhất), rồi theo độ lệch
+    ngoaiPhieu.sort((a, b) => Number(b.ton < 0) - Number(a.ton < 0) || a.lech - b.lech)
 
-    const tatCaDong = hang.flatMap(h => h.dong)
     return {
         hang,
+        ngoaiPhieu,
         tong: {
-            soMa: hang.filter(h => h.ton !== 0).length,
-            soLuong: hang.reduce((s, h) => s + h.ton, 0),
-            coLyDo: tatCaDong.filter(d => d.loai !== 'chua-ro').reduce((s, d) => s + d.soLuong, 0),
-            chuaRo: tatCaDong.filter(d => d.loai === 'chua-ro').reduce((s, d) => s + d.soLuong, 0),
-            soMaAm: hang.filter(h => h.ton < 0).length,
-            tongAm: hang.filter(h => h.ton < 0).reduce((s, h) => s + h.ton, 0),
-            soMaLech: hang.filter(h => h.lech < 0).length,
+            soMa: hang.length,
+            soLuong: hang.reduce((s, h) => s + h.soHu, 0),
+            giaVon: Math.round(hang.reduce((s, h) => s + h.soHu * h.giaVon, 0)),
+            ngoaiPhieu: {
+                soMa: ngoaiPhieu.length,
+                am: ngoaiPhieu.reduce((s, x) => s + Math.min(0, x.lech), 0),
+                du: ngoaiPhieu.reduce((s, x) => s + Math.max(0, x.lech), 0),
+            },
         },
         chamTran,
     }

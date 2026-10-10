@@ -1385,9 +1385,11 @@ router.get('/do-chi-tiet-kho-hu-hong', async (req: Request, res: Response) => {
                 const g = theoNguon[d.loai] || (theoNguon[d.loai] = { soDong: 0, soLuong: 0, coNguoi: 0 })
                 g.soDong++; g.soLuong += d.soLuong; if (d.nguoi) g.coNguoi++
             }
+            // 10/10/2026: hàng hư = hàng CÓ PHIẾU; sổ kho lệch phiếu (âm / dư không phiếu) đi riêng
             ra.push({
                 kho: k.code, ten: k.name, tong: kq.tong, chamTran: kq.chamTran, theoNguon,
                 hang: het ? kq.hang : kq.hang.slice(0, 8),
+                ngoaiPhieu: het ? kq.ngoaiPhieu : kq.ngoaiPhieu.slice(0, 8),
             })
         }
         res.json({ success: true, data: ra })

@@ -88,20 +88,7 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
             take: 500,
         })
 
-        /* TỒN CŨ CHƯA CÓ LÔ. Hàng vào kho hư hỏng từ trước khi có bảng lô (qua phiếu
-         * sửa chữa, trả hàng…) không có dòng NHẬP nào. Bỏ qua là chúng biến mất khỏi
-         * màn hình dù vẫn nằm trong kho — nên gom phần chênh thành một lô "cũ" cho
-         * mỗi mã, vẫn xử lý được, chỉ là không có lý do đi kèm. */
-        const tonKho = await prisma.warehouseStock.findMany({
-            where: { warehouseId: khoId, quantity: { gt: 0 } }, take: 1000,
-        })
-        const daCoLo = new Map<string, number>()
-        for (const l of lo) daCoLo.set(l.productId, (daCoLo.get(l.productId) || 0) + (l.conLai || 0))
-
-        const dsMa = Array.from(new Set([
-            ...lo.map((x: any) => x.productId),
-            ...tonKho.map((x: any) => x.productId),
-        ]))
+        const dsMa = Array.from(new Set(lo.map((x: any) => x.productId))) as string[]
         const hang = dsMa.length
             ? await prisma.product.findMany({
                 where: { id: { in: dsMa } },
@@ -168,33 +155,60 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
          * kiện conLai > 0 ở trên. */
         const items: any[] = Array.from(nhom.values()).map((g: any) => ({ ...g, entryIds: [...g.entryIds].reverse() }))
 
-        for (const t of tonKho) {
-            const con = (t.quantity || 0) - (daCoLo.get(t.productId) || 0)
-            if (con <= 0) continue
-            const h = chiTiet(t.productId)
-            items.push({
-                id: `cu:${t.productId}`, laLoCu: true,
-                entryIds: [], soLuot: 1,
-                productId: t.productId,
-                productName: t.productName || h?.name || '',
-                productSku: t.productSku || h?.sku || null,
-                quantity: con,
-                soLuongNhap: con,
-                nguon: null,
-                lyDo: null,
-                ghiChu: null,
-                ngayNhap: t.updatedAt,
-                ngayNhapCuoi: t.updatedAt,
-                nguoiNhap: null,
-                donVi: h?.baseUnit || null,
-                giaVonHienTai: h?.costPrice ?? 0,
-                tonKhoChinh: h?.stock ?? 0,
+        /* HÀNG KHÔNG LÔ — CHỈ PHẦN CÓ PHIẾU (10/10/2026 — chủ shop: "trong kho hư hỏng hàng âm
+         * không phải là hàng hư nha, hàng hư hỏng qua phiếu mới tính nha"). Trước: lô ảo =
+         * sổ kho − Σ lô, nên số dư KHÔNG phiếu nào cũng hiện thành hàng hư. Nay đọc đúng bộ
+         * phiếu trang web dùng (lib/chiTietKhoHuHong): phiếu sửa đang giữ, trả hàng duyệt hư
+         * hỏng, chuyển kho vào, kiểm kê thừa. Hình dạng giữ nguyên (`cu:<productId>`, laLoCu)
+         * — app xử theo mã như trước; lý do + mã phiếu nay đi kèm thay vì để trống. */
+        let chamTranCu = false
+        try {
+            const ct = await chiTietKhoHuHong(prisma, khoId)
+            chamTranCu = ct.chamTran
+            const NHAN: Record<string, string> = { sua: 'Phiếu sửa', tra: 'Trả hàng', chuyen: 'Chuyển kho', 'kiem-ke': 'Kiểm kê' }
+            for (const h of ct.hang) {
+                const ngoaiLo = h.dong.filter(d => d.loai !== 'lo' && d.soLuong > 0)
+                const sl = ngoaiLo.reduce((s, d) => s + d.soLuong, 0)
+                if (sl <= 0) continue
+                const luc = ngoaiLo.map(d => d.luc).filter(Boolean).sort() as string[]
+                const nguoi = Array.from(new Set(ngoaiLo.map(d => d.nguoi).filter(Boolean)))
+                items.push({
+                    id: `cu:${h.productId}`, laLoCu: true,
+                    entryIds: [], soLuot: ngoaiLo.length,
+                    productId: h.productId,
+                    productName: h.productName,
+                    productSku: h.sku,
+                    quantity: sl,
+                    soLuongNhap: sl,
+                    nguon: null,
+                    lyDo: ngoaiLo.length === 1
+                        ? (ngoaiLo[0].lyDo || NHAN[ngoaiLo[0].loai] || null)
+                        : `${ngoaiLo.length} phiếu: ${ngoaiLo.map(d => d.lyDo || NHAN[d.loai]).filter(Boolean).slice(0, 3).join('; ')}`,
+                    // Hàng phiếu sửa đang giữ thì xử ở PHIẾU SỬA — rút ở đây, lúc NCC trả phiếu lại trừ lần nữa
+                    ghiChu: ngoaiLo.map(d => `${NHAN[d.loai] || d.loai}${d.maPhieu ? ` ${d.maPhieu}` : ''}: ${d.soLuong}`
+                        + (d.loai === 'sua' ? ' (xử lý ở phiếu sửa)' : '')).join(' · ').slice(0, 500),
+                    ngayNhap: luc[0] || null,
+                    ngayNhapCuoi: luc[luc.length - 1] || null,
+                    nguoiNhap: nguoi.length > 1 ? 'nhiều người' : (nguoi[0] || null),
+                    donVi: h.donVi,
+                    giaVonHienTai: h.giaVon,
+                    tonKhoChinh: h.tonBanDuoc,
+                })
+            }
+        } catch (e: any) {
+            /* Đọc bộ phiếu hỏng thì KHÔNG quay về "sổ kho − lô" (đó chính là số chủ shop bảo không
+             * phải hàng hư) — chỉ trả các lô, kèm cờ để biết danh sách đang thiếu phần không lô. */
+            console.warn('[damaged-warehouse/ton] đọc phiếu không lô hỏng:', e?.message || e)
+            res.json({
+                success: true,
+                data: { khoId, items, chamTran: true, thieuNgoaiLo: true },
             })
+            return
         }
 
         res.json({
             success: true,
-            data: { khoId, items, chamTran: lo.length >= 500 || tonKho.length >= 1000 },
+            data: { khoId, items, chamTran: chamTranCu || lo.length >= 500 },
         })
     } catch (err: any) { guiLoi(res, err, 'GET /damaged-warehouse/ton lỗi:') }
 })
