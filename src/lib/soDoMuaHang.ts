@@ -13,6 +13,7 @@
 //    · Dư nợ theo thời gian = sổ DebtEntry (debt +, payment −, return −) NEO vào Customer.debt. Đối chiếu
 //      số dư không ghi sổ (debt-ledger-conventions) nên phần không giải thích được dồn vào "dư đầu kỳ".
 //    · Lãi = giá bán thực (lineTotal / SL) − giá vốn HIỆN TẠI: phiếu bán không lưu giá vốn lúc bán ⇒ ƯỚC.
+//    · anGiaVon: người xem không có quyền "Giá vốn"/"Lợi nhuận" ⇒ KHÔNG gửi giá vốn (von = null, anGiaVon = true).
 //    · KHÔNG tính "trả trễ bao nhiêu ngày": chưa có nguồn "ngày trả đủ" đáng tin (lib/sucKhoeTaiChinhKhach).
 //  CHỈ ĐỌC. Prod pool 1 kết nối ⇒ truy vấn TUẦN TỰ, không Promise.all.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -49,6 +50,8 @@ export interface SoDoMuaHang {
     no: { hienTai: number; dauKy: number; dong: { ngay: string; loai: string; so: number; du: number; moTa: string }[]; chamTran: boolean }
     /** thangManh: các tháng bán mạnh (theo thứ tự mùa, vd [11, 12, 1]); rỗng = không theo mùa HOẶC ít số liệu —
      *  slNam (tổng SL mọi khách 12 tháng) để FE phân biệt hai trường hợp, không nói "bán đều" khi mới bán lèo tèo */
+    /** true = người xem không có quyền xem giá vốn: mọi `von` là null VÌ ẨN, không phải vì thiếu số liệu */
+    anGiaVon: boolean
     banThem: null | { soKhach: number; nhom: string | null; goiY: { p: string; ten: string; sku: string; ton: number | null; gia: number; so: number; thangManh: number[]; slNam: number }[]; loi?: string }
     chamTran: boolean
 }
@@ -93,7 +96,8 @@ export function dauDongNo(loai: string): number {
     return 0
 }
 
-export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?: number; homNay?: Date } = {}): Promise<SoDoMuaHang | null> {
+export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?: number; homNay?: Date; anGiaVon?: boolean } = {}): Promise<SoDoMuaHang | null> {
+    const anGiaVon = !!opts.anGiaVon
     const homNay = opts.homNay ?? new Date()
     const soThang = Math.max(3, Math.min(36, Math.round(opts.soThang ?? 24)))
     const tu = new Date(homNay.getFullYear(), homNay.getMonth() - soThang + 1, 1)
@@ -140,7 +144,7 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
         for (const p of lo) {
             sp[p.id] = {
                 ten: p.name, sku: p.sku, nhom: p.category?.name || 'Chưa phân nhóm',
-                gia: Number(p.sellingPrice) || 0, von: p.costPrice == null ? null : Number(p.costPrice),
+                gia: Number(p.sellingPrice) || 0, von: anGiaVon || p.costPrice == null ? null : Number(p.costPrice),
                 ton: p.stock == null ? null : Number(p.stock), dv: p.baseUnit || null,
             }
         }
@@ -310,6 +314,7 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
         },
         sp, don, suCo,
         no: { hienTai, dauKy: Math.round(dauKy), dong: dongNo, chamTran: so.length >= TRAN_NO },
+        anGiaVon,
         banThem,
         chamTran: phieu.length >= TRAN_PHIEU,
     }

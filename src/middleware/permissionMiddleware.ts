@@ -20,6 +20,29 @@ import { effectivePermissions, permissionSatisfied, ROLE_PERMISSIONS } from '../
  *   router.get('/', authMiddleware, requirePermission('products.view'), handler)
  *   router.post('/', authMiddleware, requirePermission('products.view', 'products.create'), handler)
  */
+/**
+ * Cùng ngữ nghĩa requirePermission nhưng TRẢ VỀ đúng/sai thay vì chặn — để ẩn BỚT dữ liệu trong một route
+ * đã mở cho người khác (vd giá vốn trong sơ đồ mua hàng: thu ngân xem được khách nhưng không có quyền
+ * "Giá vốn"). Đọc quyền hỏng ⇒ false (ẩn, không lộ).
+ */
+export async function coQuyen(req: AuthRequest, ...permissionKeys: string[]): Promise<boolean> {
+    const user = req.user
+    if (!user) return false
+    const role = String(user.role || '').toLowerCase()
+    if (ROLE_PERMISSIONS[role]?.includes('*')) return true
+    const prisma = req.storePrisma
+    if (!prisma) return false
+    try {
+        const dbUser = await prisma.user.findUnique({ where: { id: user.userId }, select: { permissions: true } })
+        let stored: string[] = []
+        try { stored = JSON.parse(dbUser?.permissions || '[]') } catch { stored = [] }
+        const granted = effectivePermissions(role, stored)
+        return permissionKeys.some(k => permissionSatisfied(k, granted))
+    } catch {
+        return false
+    }
+}
+
 export function requirePermission(...permissionKeys: string[]) {
     return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
         const user = req.user

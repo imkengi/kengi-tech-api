@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { chayTheoDot } from '../lib/poolGuard'
-import { requirePermission } from '../middleware/permissionMiddleware'
+import { requirePermission, coQuyen } from '../middleware/permissionMiddleware'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
@@ -915,7 +915,10 @@ router.get('/:id/financial-health', authMiddleware, requirePermission('customers
 router.get('/:id/so-do-mua-hang', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const { soDoMuaHang } = await import('../lib/soDoMuaHang')
-        const kq = await soDoMuaHang(req.storePrisma!, String(req.params.id), { soThang: Number(req.query.thang) || 24 })
+        // Giá vốn / lãi chỉ cho người có quyền "Giá vốn" hoặc "Lợi nhuận" — thu ngân, nhân viên mặc định xem được
+        // khách (customers.view_*) nhưng KHÔNG có hai quyền này (lib/rolePermissions)
+        const xemVon = await coQuyen(req, 'products.view_cost', 'transactions.view_profit')
+        const kq = await soDoMuaHang(req.storePrisma!, String(req.params.id), { soThang: Number(req.query.thang) || 24, anGiaVon: !xemVon })
         if (!kq) { res.status(404).json({ success: false, error: 'Không có khách này' }); return }
         res.json({ success: true, data: kq })
     } catch (err: any) {
