@@ -906,6 +906,24 @@ router.get('/:id/financial-health', authMiddleware, requirePermission('customers
     }
 })
 
+/**
+ * GET /customers/:id/so-do-mua-hang?thang=24 — tab "Sơ đồ mua hàng" trong chi tiết khách (11/10/2026).
+ * Chủ shop duyệt bản demo rồi "ok gắn dữ liệu thật vào trang khách hàng đi, thêm nó thành 1 mục mới nha".
+ * Đã mua gì / khi nào / bao nhiêu / cùng đơn với gì, trả hàng, bảo hành, dư nợ theo thời gian, tuổi nợ,
+ * giá vốn + tồn hiện tại, bán thêm so với khách cùng nhóm. Logic ở lib/soDoMuaHang.ts — CHỈ ĐỌC.
+ */
+router.get('/:id/so-do-mua-hang', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const { soDoMuaHang } = await import('../lib/soDoMuaHang')
+        const kq = await soDoMuaHang(req.storePrisma!, String(req.params.id), { soThang: Number(req.query.thang) || 24 })
+        if (!kq) { res.status(404).json({ success: false, error: 'Không có khách này' }); return }
+        res.json({ success: true, data: kq })
+    } catch (err: any) {
+        console.error('[so-do-mua-hang]', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/:id/debt-history', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const { customer, history } = await buildDebtHistory(req.storePrisma!, String(req.params.id))
