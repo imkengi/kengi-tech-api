@@ -46,7 +46,9 @@ export interface SoDoMuaHang {
     don: DonSoDo[]
     suCo: SuCoSoDo[]
     no: { hienTai: number; dauKy: number; dong: { ngay: string; loai: string; so: number; du: number; moTa: string }[]; chamTran: boolean }
-    banThem: null | { soKhach: number; nhom: string | null; goiY: { p: string; ten: string; sku: string; ton: number | null; gia: number; so: number; thangManh: number[] }[]; loi?: string }
+    /** thangManh: các tháng bán mạnh (theo thứ tự mùa, vd [11, 12, 1]); rỗng = không theo mùa HOẶC ít số liệu —
+     *  slNam (tổng SL mọi khách 12 tháng) để FE phân biệt hai trường hợp, không nói "bán đều" khi mới bán lèo tèo */
+    banThem: null | { soKhach: number; nhom: string | null; goiY: { p: string; ten: string; sku: string; ton: number | null; gia: number; so: number; thangManh: number[]; slNam: number }[]; loi?: string }
     chamTran: boolean
 }
 
@@ -61,6 +63,26 @@ export function cachTra(t: { status: string; payments?: { type: string }[] }): C
     if (loai.has('card')) return 'the'
     if (loai.has('ewallet')) return 'vi'
     return 'khac'
+}
+
+/**
+ * Tháng bán mạnh của một món từ SL bán theo tháng (mọi khách, 12 tháng): có MỘT cửa sổ 3 tháng LIỀN NHAU
+ * (vòng qua năm: 11-12-1) chiếm ≥ 60% SL, và tổng ≥ 12 — ít hơn thì chưa đủ để nói mùa. Trả các tháng có bán
+ * trong cửa sổ, theo thứ tự mùa.
+ * Bản đầu (top 3 tháng ≥ 50%) cờ oan món bán đều: bán 6 tháng mỗi tháng như nhau thì 3 tháng bất kỳ đã 50%.
+ */
+export function thangBanManh(theoThang: { thang: number; sl: number }[]): number[] {
+    const sl = new Array(13).fill(0)
+    for (const r of theoThang) if (r.thang >= 1 && r.thang <= 12) sl[r.thang] += Math.max(0, Number(r.sl) || 0)
+    const tong = sl.reduce((a, b) => a + b, 0)
+    if (tong < 12) return []
+    let tot = { bd: 0, sl: 0 }
+    for (let bd = 1; bd <= 12; bd++) {
+        const cua = [0, 1, 2].reduce((a, k) => a + sl[((bd - 1 + k) % 12) + 1], 0)
+        if (cua > tot.sl) tot = { bd, sl: cua }
+    }
+    if (tot.sl / tong < 0.6) return []
+    return [0, 1, 2].map(k => ((tot.bd - 1 + k) % 12) + 1).filter(m => sl[m] > 0)
 }
 
 /** Dấu của một dòng sổ công nợ: ghi nợ tăng, thu nợ / trả hàng giảm, điều chỉnh giữ dấu của số ghi. */
@@ -266,11 +288,9 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
             )
             for (const r of ung) {
                 const p = theoMa.get(String(r.p)); if (!p) continue
-                const thang = theoThang.filter(x => String(x.p) === String(r.p)).sort((a, b) => Number(b.sl) - Number(a.sl))
-                const tong = thang.reduce((s, x) => s + Number(x.sl), 0)
-                const top = thang.slice(0, 3)
-                const manh = tong > 0 && top.reduce((s, x) => s + Number(x.sl), 0) / tong >= 0.5 ? top.map(x => Number(x.thang)).sort((a, b) => a - b) : []
-                goiY.push({ p: p.id, ten: p.name, sku: p.sku, ton: p.stock == null ? null : Number(p.stock), gia: Number(p.sellingPrice) || 0, so: Number(r.so), thangManh: manh })
+                const thang = theoThang.filter(x => String(x.p) === String(r.p)).map(x => ({ thang: Number(x.thang), sl: Number(x.sl) || 0 }))
+                const slNam = thang.reduce((s, x) => s + x.sl, 0)
+                goiY.push({ p: p.id, ten: p.name, sku: p.sku, ton: p.stock == null ? null : Number(p.stock), gia: Number(p.sellingPrice) || 0, so: Number(r.so), thangManh: thangBanManh(thang), slNam })
             }
         }
         banThem = { soKhach, nhom: nhomKhach?.name || null, goiY }
@@ -283,7 +303,9 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
         homNay: homNay.toISOString(), tu: tu.toISOString(), soThang,
         khach: {
             id: kh.id, ma: kh.code, ten: kh.name, sdt: kh.phone || null, nhom: nhomKhach?.name || null, no: hienTai,
-            tuoiNoLauNhat: hoSo.ngayNoLauNhat, tuoiNoGanNhat: hoSo.ngayNoGanNhat, soPhieuTreo: hoSo.soPhieuTreo, xepHang: hoSo.xepHang,
+            // soPhieuTreo = tập FIFO neo vào sổ (đúng các phiếu viền đỏ trên sơ đồ). hoSo.soPhieuTreo là số phiếu
+            // 'partial' THÔ — ở cửa hàng khách trả gộp nó phồng hàng chục phiếu đã trả xong (đo mẫu 11/10: 36 vs 3)
+            tuoiNoLauNhat: hoSo.ngayNoLauNhat, tuoiNoGanNhat: hoSo.ngayNoGanNhat, soPhieuTreo: treo.size, xepHang: hoSo.xepHang,
         },
         sp, don, suCo,
         no: { hienTai, dauKy: Math.round(dauKy), dong: dongNo, chamTran: so.length >= TRAN_NO },
