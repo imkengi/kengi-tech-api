@@ -2701,6 +2701,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // App Shopee Video Management là app RIÊNG → cặp khoá riêng (2026-09-08)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoPartnerId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoPartnerKey" TEXT`)
+                // Push của app Video (Set Push trên console: video_upload_result_push, uỷ quyền…) ký bằng
+                // "Live Push Partner Key" — khoá RIÊNG của trang Set Push, khác videoPartnerKey (2026-10-11)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "videoPushKey" TEXT`)
                 // Tiến trình đăng video lên sàn theo từng bước (2026-09-08). Bảng SanMedia
                 // do sync-schemas tạo ở các cửa hàng đã chạy; cửa hàng chưa có bảng thì
                 // ALTER báo lỗi "relation does not exist" — bọc riêng, không chặn phần sau.
