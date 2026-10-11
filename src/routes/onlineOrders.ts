@@ -2953,6 +2953,38 @@ router.put('/channels/:id/video-app', authMiddleware, async (req: AuthRequest, r
     }
 })
 
+// PUT /api/online-orders/channels/:id/video-push-key  (body: { pushKey } | { xoa: true })
+// SET PUSH CỦA APP VIDEO (11/10/2026 — chủ shop: "thêm cái set push của đăng video nha").
+// Khoá RIÊNG của trang Push Mechanism › Set Push ("Live Push Partner Key", nút Generate) —
+// KHÁC Live API Partner Key. Shopee ký mọi push của app Video bằng khoá này; thiếu là push nằm
+// chờ trong hộp thư. Lưu cho mọi gian Shopee dùng CÙNG app Video. Không trả khoá, chỉ 4 ký tự cuối.
+router.put('/channels/:id/video-push-key', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel: any = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Chỉ kênh Shopee' }); return }
+        if (!channel.videoPartnerId) { res.status(400).json({ success: false, error: 'Nhập Partner ID + Partner Key của app Video trước, rồi mới tới khoá push' }); return }
+        const xoa = req.body?.xoa === true
+        const pushKey = String(req.body?.pushKey || '').trim()
+        if (!xoa && (pushKey.length < 16 || pushKey.length > 256 || /\s/.test(pushKey))) {
+            res.status(400).json({ success: false, error: 'Khoá push không hợp lệ — chép nguyên ô "Live Push Partner Key" ở trang Set Push của app Video (bấm Generate nếu ô đang trống)' })
+            return
+        }
+        const dsKenh: any[] = await prisma.onlineChannel.findMany({
+            where: { platform: 'shopee', videoPartnerId: channel.videoPartnerId } as any,
+            select: { id: true } as any,
+        })
+        for (const c of dsKenh) {
+            await prisma.onlineChannel.update({ where: { id: c.id }, data: { videoPushKey: xoa ? null : pushKey } as any })
+        }
+        console.log(`[Push Shopee Video] ${xoa ? 'xoá' : 'lưu'} khoá push app ${channel.videoPartnerId} cho ${dsKenh.length} gian`)
+        res.json({ success: true, data: { pushKeyDuoi4: xoa ? null : pushKey.slice(-4), soKenhDaLuu: dsKenh.length } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // GET /api/online-orders/channels/:id/video-auth-url
 router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {

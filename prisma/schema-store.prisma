@@ -1920,6 +1920,10 @@ model OnlineChannel {
   // màn xin quyền bán hàng và token không gọi được v2.video.*.
   videoPartnerId      String?
   videoPartnerKey     String?
+  // Set Push của app Video (11/10/2026): push (video_upload_result_push, uỷ quyền, điểm phạt…)
+  // ký bằng "Live Push Partner Key" — khoá RIÊNG của trang Set Push, KHÁC videoPartnerKey.
+  // Xem lib/pushShopeeVideo.ts, cửa /api/webhooks/shopee-video.
+  videoPushKey        String?
 }
 
 // ─── Online Orders ──────────────────────────────────────────────────────────

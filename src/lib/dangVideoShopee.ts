@@ -43,6 +43,12 @@ export interface TienTrinh {
     batDauLuc?: string
     capNhatLuc?: string
     ghiChu?: string
+    /** Push 38 báo chuyển mã xong ⇒ máy chủ được phép tự đăng nốt (lib/pushShopeeVideo.ts) */
+    tuDongTiep?: boolean
+    pushLuc?: string
+    /** Hạn giữ chỗ chạy + ai giữ — xem chayBuocDangShopee */
+    dangChayDen?: string
+    dangChayBoi?: string
 }
 
 export interface KetQuaBuoc {
@@ -66,7 +72,7 @@ const GIAI_DOAN_SHOPEE: string[] = ['init', 'parts', 'complete', 'processing', '
  * PHẢI nhận. Đá đi là mất bản nháp đang chờ Shopee mở khoá điều khoản, tải lại từ
  * khối 0 — thứ đã tốn cả buổi mới lên tới nơi.
  */
-function docTienTrinh(s?: string | null): TienTrinh {
+export function docTienTrinh(s?: string | null): TienTrinh {
     try {
         const t = s ? JSON.parse(s) : null
         if (!t || typeof t !== 'object') return { giaiDoan: 'init' }
@@ -331,5 +337,61 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
         }).catch(() => { /* ghi lỗi hỏng thì vẫn ném lỗi gốc */ })
         if (chuaDongYDieuKhoan) throw new Error(msg)
         throw e
+    }
+}
+
+/* ─── GIỮ CHỖ CHẠY (11/10/2026) ───────────────────────────────────────────────
+ * Từ khi có push của app Video (lib/pushShopeeVideo.ts), máy đăng có HAI người chạy: web
+ * (người bấm Đăng, gọi lặp) và máy chủ (lượt thử lại của push 38 — đăng nốt khi web đã
+ * đóng). Hai bản chạy song song là post_video hai lần. Khoá Redis không dùng được (prod
+ * chạy bộ đệm trong bộ nhớ, mỗi bản máy một khoá riêng) nên giữ chỗ ngay trên DÒNG: ghi hạn
+ * `dangChayDen` vào tienTrinhDang bằng so-và-ghi (updateMany theo đúng chuỗi cũ). Máy đăng
+ * đọc tiến trình CÓ kèm hạn rồi ghi lại sau mỗi bước nên hạn còn suốt lượt; xong thì trả.
+ * Chết giữa chừng thì hạn tự hết sau ngân sách + 60 giây. */
+export type KetQuaChay =
+    | (KetQuaBuoc & { banBan?: false })
+    | { banBan: true; xong: false; conTiep: true; giaiDoan: GiaiDoan; tienTrinh: TienTrinh; thongDiep: string }
+
+export async function chayBuocDangShopee(prisma: any, mediaId: string, nganSachMs: number, ai: 'web' | 'push'): Promise<KetQuaChay> {
+    const banBan = (tt: TienTrinh): KetQuaChay => ({
+        banBan: true, xong: false, conTiep: true, giaiDoan: tt.giaiDoan, tienTrinh: tt,
+        thongDiep: String(tt.dangChayBoi || '').startsWith('push')
+            ? 'Máy chủ đang tự đăng tiếp (Shopee đã báo chuyển mã xong) — đợi vài giây'
+            : 'Video này đang được đăng ở một cửa sổ khác — đợi lượt đó xong',
+    })
+    const m = await prisma.sanMedia.findUnique({ where: { id: mediaId }, select: { tienTrinhDang: true } })
+    if (!m) throw new Error('Không có video này trong kho')
+    const truoc: string | null = m.tienTrinhDang ?? null
+    const tt = docTienTrinh(truoc)
+    if (tt.dangChayDen && Date.parse(tt.dangChayDen) > Date.now()) return banBan(tt)
+
+    const ma = `${ai}:${crypto.randomBytes(4).toString('hex')}`
+    const giu: TienTrinh = { ...tt, dangChayDen: new Date(Date.now() + nganSachMs + 60_000).toISOString(), dangChayBoi: ma }
+    /* Bản ghi KHÔNG phải của Shopee (TikTok / hỏng) thì docTienTrinh ra {init} — đừng ghi đè lên nó ở
+     * bước giữ chỗ; buocDangShopee tự quyết như trước (bắt đầu lại từ init). */
+    const laShopee = !truoc || (() => { try { const t = JSON.parse(truoc); return !t?.san || t.san === 'shopee' } catch { return false } })()
+    if (laShopee) {
+        const r = await prisma.sanMedia.updateMany({ where: { id: mediaId, tienTrinhDang: truoc }, data: { tienTrinhDang: JSON.stringify({ ...giu, san: 'shopee' }) } })
+        if (r.count !== 1) return banBan({ ...tt, dangChayBoi: 'khac' })
+    }
+    try {
+        return await buocDangShopee(prisma, mediaId, nganSachMs)
+    } finally {
+        await traCho(prisma, mediaId, ma)
+    }
+}
+
+/** Trả chỗ — chỉ xoá hạn nếu vẫn là của mình (so-và-ghi, thử lại vài lần nếu vừa có ghi chen). */
+async function traCho(prisma: any, id: string, ma: string): Promise<void> {
+    for (let i = 0; i < 3; i++) {
+        const m = await prisma.sanMedia.findUnique({ where: { id }, select: { tienTrinhDang: true } }).catch(() => null)
+        if (!m?.tienTrinhDang) return
+        let t: any
+        try { t = JSON.parse(m.tienTrinhDang) } catch { return }
+        if (t?.dangChayBoi !== ma) return
+        delete t.dangChayDen; delete t.dangChayBoi
+        const r = await prisma.sanMedia.updateMany({ where: { id, tienTrinhDang: m.tienTrinhDang }, data: { tienTrinhDang: JSON.stringify(t) } })
+            .catch(() => ({ count: 0 }))
+        if (r.count === 1) return
     }
 }

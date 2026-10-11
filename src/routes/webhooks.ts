@@ -13,6 +13,7 @@ import { processComment } from '../services/fanpageAutoReply'
 import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
 import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
 import { giuKhoa, traKhoa } from '../lib/leaderLock'
+import { xuLyPushShopeeVideo } from '../lib/pushShopeeVideo'
 
 const router = Router()
 
@@ -512,6 +513,31 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
     return xongPush()
 }
 dangKyBoXuLyPush('shopee', xuLyPushShopee)
+
+/* ═══ PUSH CỦA APP SHOPEE VIDEO — cửa RIÊNG (11/10/2026) ═══════════════════════
+ * Chủ shop: "thêm cái set push của đăng video nha". App Video là app RIÊNG trên console,
+ * ký push bằng khoá RIÊNG của trang Set Push (OnlineChannel.videoPushKey). Khai trên console:
+ *   Live Call Back URL = https://api.kengi.vn/api/webhooks/shopee-video, vùng Singapore.
+ * Cùng nếp cửa /shopee: code 0 (bấm Verify) → 200 thân rỗng ngay; còn lại ghi hộp thư rồi mới
+ * trả 200. Xử lý ở lib/pushShopeeVideo.ts. */
+router.post('/shopee-video', async (req: Request, res: Response) => {
+    const body = req.body || {}
+    if (body.code === 0 || body.code == null) {
+        console.log(`[Push Shopee Video] ✅ Xác minh URL (code=${body.code ?? 'trống'}) — đã trả 200 thân rỗng`)
+        res.status(200).end()
+        return
+    }
+    const rawBody: Buffer | undefined = (req as any).rawBody
+    const signature = String(req.header('authorization') || '').trim()
+    const pushUrl = process.env.SHOPEE_VIDEO_WEBHOOK_URL || `${req.protocol}://${req.get('host')}${req.originalUrl}`
+    console.log(`[Push Shopee Video] code=${body.code} shop=${String(body.shop_id ?? '')} data=${JSON.stringify(body.data || {}).substring(0, 300)}`)
+    await nhanPush(
+        { platform: 'shopee-video', body, rawBody, signature, pushUrl },
+        () => { res.status(200).end() },
+        () => { res.status(503).end() },
+    )
+})
+dangKyBoXuLyPush('shopee-video', xuLyPushShopeeVideo)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TIKTOK SHOP WEBHOOK (PUSH NOTIFICATION)

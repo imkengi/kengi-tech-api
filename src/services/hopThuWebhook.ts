@@ -33,7 +33,8 @@ import crypto from 'crypto'
 import registryPrisma, { laLoiMatKetNoi } from '../lib/prisma'
 import { moTaLoi } from '../lib/gomLoi'
 
-export type NenTangPush = 'shopee' | 'tiktok'
+/** 'shopee-video' = push của APP Shopee Video (Set Push riêng, khoá riêng — lib/pushShopeeVideo.ts, 11/10/2026) */
+export type NenTangPush = 'shopee' | 'tiktok' | 'shopee-video'
 
 export interface TinPush {
     id: string
@@ -128,7 +129,7 @@ async function ghiVaoHopThu(p: {
      * nhau → giữ CẢ HAI; gộp theo thân thôi thì lỡ bản của app kia tới trước là giữ
      * nhầm bản không kiểm được chữ ký và vứt bản thật. */
     const khoaTrung = crypto.createHash('sha256').update(`${p.platform}|${p.signature}|${than}`).digest('hex')
-    const loai = Number(p.platform === 'shopee' ? p.body?.code : p.body?.type)
+    const loai = Number(p.platform.startsWith('shopee') ? p.body?.code : p.body?.type)
     const shopId = p.body?.shop_id == null ? null : String(p.body.shop_id)
     const rows: any[] = await registryPrisma.$queryRawUnsafe(
         `INSERT INTO ${BANG} ("platform","loaiPush","shopId","khoaTrung","than","coThanTho","chuKy","pushUrl","trangThai","soLanThu","batDauLuc")
@@ -272,7 +273,9 @@ export async function nhanPush(
 /* ─── QUÉT HỘP THƯ (cron, mỗi phút, chỉ bản lãnh đạo) ────────────────────── */
 let lanDonGanNhat = 0
 
-export async function quetHopThu(tuyChon: { epDon?: boolean } = {}): Promise<void> {
+/** `chiNenTang` (11/10/2026): nhịp cron ngoài (/api/cron/tick, có CPU cả đêm) quét RIÊNG push app Video
+ *  — lượt thử lại của push 38 là thứ đăng tiếp video lên Shopee; quét chung vẫn chạy ở hopThuWebhookCron. */
+export async function quetHopThu(tuyChon: { epDon?: boolean; chiNenTang?: NenTangPush; nganSachMs?: number } = {}): Promise<void> {
     if (tuyChon.epDon) lanDonGanNhat = 0
     await damBaoBang()
     // 1) Dòng kẹt 'dang' quá 15' = máy bị giết / treo giữa chừng → trả về hàng đợi.
@@ -286,7 +289,7 @@ export async function quetHopThu(tuyChon: { epDon?: boolean } = {}): Promise<voi
         SO_LAN_TOI_DA,
     )
     // 2) Nhặt từng dòng tới hạn, chạy TUẦN TỰ (PRISMA_POOL_SIZE=1 — không Promise.all).
-    const hetGio = Date.now() + 45_000
+    const hetGio = Date.now() + (tuyChon.nganSachMs ?? 45_000)
     let soDong = 0
     while (Date.now() < hetGio) {
         const rows: any[] = await registryPrisma.$queryRawUnsafe(
@@ -295,10 +298,12 @@ export async function quetHopThu(tuyChon: { epDon?: boolean } = {}): Promise<voi
               WHERE w."id" = (
                     SELECT "id" FROM ${BANG}
                      WHERE "trangThai" IN ('cho','loi') AND "henLuc" <= now()
+                       AND ($1::text IS NULL OR "platform" = $1::text)
                      ORDER BY "henLuc" ASC
                      LIMIT 1
                      FOR UPDATE SKIP LOCKED)
           RETURNING w."id"::text AS id, w."platform", w."than", w."coThanTho", w."chuKy", w."pushUrl", w."nhanLuc", w."soLanThu"`,
+            tuyChon.chiNenTang ?? null,
         )
         if (!rows.length) break
         const r = rows[0]
@@ -312,7 +317,8 @@ export async function quetHopThu(tuyChon: { epDon?: boolean } = {}): Promise<voi
         })
         soDong++
     }
-    if (soDong) console.log(`[Hộp thư webhook] lượt quét chạy lại ${soDong} push`)
+    if (soDong) console.log(`[Hộp thư webhook] lượt quét${tuyChon.chiNenTang ? ` (${tuyChon.chiNenTang})` : ''} chạy lại ${soDong} push`)
+    if (tuyChon.chiNenTang) return   // quét riêng một loại: phần dọn để lượt quét chung lo
 
     // 3) Dọn mỗi giờ một lần. Giữ 'xong' 2 ngày (đủ đo nghiệm thu 24 h), 'bo' 1 ngày
     //    (phần lớn là bản của app kia), 'hong' 14 ngày để còn soi.

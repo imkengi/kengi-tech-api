@@ -363,11 +363,15 @@ router.post('/tai-len/chunk',
 router.post('/:id/dang-shopee', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const { buocDangShopee } = await import('../lib/dangVideoShopee')
+        const { chayBuocDangShopee } = await import('../lib/dangVideoShopee')
         /* 75s chứ không 200s: chủ shop nhìn 'Bắt đầu…' đứng im 3 phút tưởng treo (08/09).
          * Lượt ngắn = web nhận tiến trình thường xuyên; trạng thái vẫn nằm ở DB. */
         const nganSach = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 75_000))
-        const kq = await buocDangShopee(prisma, String(req.params.id), nganSach)
+        /* Qua GIỮ CHỖ (11/10/2026): máy chủ có thể đang tự đăng nốt sau push 38 của app Video —
+         * hai lượt song song là post_video hai lần. Bận thì đợi một nhịp rồi trả conTiep; web gọi
+         * lặp ngay nên không đợi là dội máy chủ. */
+        const kq = await chayBuocDangShopee(prisma, String(req.params.id), nganSach, 'web')
+        if (kq.banBan) await new Promise(r => setTimeout(r, 4000))
         res.json({ success: true, data: kq })
     } catch (err: any) {
         if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
@@ -540,7 +544,7 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
         try {
             kenhDs = await prisma.onlineChannel.findMany({
                 where: { status: 'active' },
-                select: { id: true, platform: true, name: true, accessToken: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoRefreshToken: true, videoPartnerId: true, videoPartnerKey: true },
+                select: { id: true, platform: true, name: true, accessToken: true, videoUserId: true, videoAuthAt: true, videoTokenExpiresAt: true, videoRefreshToken: true, videoPartnerId: true, videoPartnerKey: true, videoPushKey: true } as any,
             })
         } catch {
             chuaMigrate = true
@@ -563,6 +567,9 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
             coAppVideo: !!(c.videoPartnerId && c.videoPartnerKey),
             videoPartnerId: c.videoPartnerId || null,
             videoKeyDuoi4: c.videoPartnerKey ? String(c.videoPartnerKey).slice(-4) : null,
+            // Set Push của app Video (11/10/2026) — khoá riêng của trang Set Push, chỉ trả 4 ký tự cuối
+            coPushKey: !!c.videoPushKey,
+            pushKeyDuoi4: c.videoPushKey ? String(c.videoPushKey).slice(-4) : null,
             daUyQuyenVideo: !!c.videoUserId,
             videoUserId: c.videoUserId || null,
             videoRefreshHetHan: c.videoAuthAt
@@ -578,6 +585,26 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
         const videoRefreshHetHan = kenhShopee?.videoAuthAt
             ? new Date(new Date(kenhShopee.videoAuthAt).getTime() + 30 * 86400_000).toISOString()
             : null
+
+        /* SET PUSH APP VIDEO (11/10/2026): URL + vùng để dán vào console, và Shopee có đẩy tới chưa —
+         * đọc hộp thư webhook (bảng chung, mọi cửa hàng dùng chung một app Video). Đọc hỏng ⇒ null,
+         * KHÔNG phải "chưa có push nào". */
+        const pushVideo = await (async () => {
+            const { URL_PUSH_VIDEO, VUNG_PUSH_VIDEO } = await import('../lib/pushShopeeVideo')
+            const goc = { url: URL_PUSH_VIDEO, vung: VUNG_PUSH_VIDEO, maPush: [5, 12, 1, 2, 28, 38] }
+            try {
+                const { registryPrisma } = await import('../lib/prisma')
+                const r: any[] = await registryPrisma.$queryRawUnsafe(
+                    `SELECT max("nhanLuc") AS "lanCuoi",
+                            count(*) FILTER (WHERE "nhanLuc" > now() - interval '24 hours')::int AS "so24h",
+                            count(*) FILTER (WHERE "nhanLuc" > now() - interval '24 hours' AND "trangThai" = 'bo')::int AS "bo24h",
+                            count(*) FILTER (WHERE "trangThai" IN ('cho','loi','dang'))::int AS "dangCho"
+                       FROM "public"."WebhookInbox" WHERE "platform" = 'shopee-video'`)
+                return { ...goc, docDuoc: true, lanCuoi: r[0]?.lanCuoi || null, so24h: r[0]?.so24h ?? 0, bo24h: r[0]?.bo24h ?? 0, dangCho: r[0]?.dangCho ?? 0 }
+            } catch {
+                return { ...goc, docDuoc: false, lanCuoi: null, so24h: null, bo24h: null, dangCho: null }
+            }
+        })()
 
         /* TikTok KHÔNG bám theo OnlineChannel: token gắn với MỘT TÀI KHOẢN TikTok
          * (open_id) chứ không phải gian hàng, nên lưu ở StoreSettings. Cột ttPost*
@@ -633,6 +660,7 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                     coAppVideo: !!(kenhShopee?.videoPartnerId && kenhShopee?.videoPartnerKey),
                     videoPartnerId: kenhShopee?.videoPartnerId || null,
                     videoKeyDuoi4: kenhShopee?.videoPartnerKey ? String(kenhShopee.videoPartnerKey).slice(-4) : null,
+                    pushVideo,
                     chuaMigrate,
                     conThieu: [
                         ...(daUyQuyenVideo ? [] : [

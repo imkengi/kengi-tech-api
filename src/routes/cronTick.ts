@@ -47,6 +47,14 @@ router.post('/tick', async (req: Request, res: Response) => {
     if (new Date().getUTCMinutes() % 10 === 0) {
         try { ra.nhacBangChungTikTok = (await nhacBangChungTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.nhacBangChungTikTok = 'loi: ' + (e?.message || e) }
     }
+    /* Push app Shopee Video (11/10/2026): lượt THỬ LẠI của push 38 là thứ đăng nốt video lên Shopee
+     * (bìa, sản phẩm, post_video) khi web đã đóng — chạy ở nhịp ngoài để có CPU cả đêm. Quét RIÊNG
+     * loại này, ngân sách 40 giây; quét chung vẫn ở hopThuWebhookCron. Xem lib/pushShopeeVideo.ts. */
+    try {
+        const { quetHopThu } = await import('../services/hopThuWebhook')
+        await quetHopThu({ chiNenTang: 'shopee-video', nganSachMs: 40_000 })
+        ra.pushVideo = 'xong'
+    } catch (e: any) { ra.pushVideo = 'loi: ' + (e?.message || e) }
     res.json({ success: true, data: { ...ra, ms: Date.now() - batDau } })
 })
 
