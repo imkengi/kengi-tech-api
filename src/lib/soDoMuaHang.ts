@@ -26,7 +26,8 @@ const TRANG_THAI_DONG_SUA = new Set(['done', 'delivered', 'completed', 'returned
 
 export type CachTra = 'no' | 'ck' | 'mat' | 'the' | 'vi' | 'khac'
 
-export interface SpSoDo { ten: string; sku: string; nhom: string; gia: number; von: number | null; ton: number | null; dv: string | null }
+/** daXoa = hàng đã xoá khỏi danh mục: chỉ còn tên trên phiếu, không bán lại được ⇒ FE không đưa vào đơn gợi ý */
+export interface SpSoDo { ten: string; sku: string; nhom: string; gia: number; von: number | null; ton: number | null; dv: string | null; daXoa?: boolean }
 /** gia = giá thực (lineTotal / SL); giaGoc = đơn giá trên phiếu trước giảm giá dòng */
 export interface DongDon { p: string; sl: number; gia: number; giaGoc: number; tien: number; giam: boolean }
 export interface DonSoDo {
@@ -147,7 +148,7 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
     // Hàng đã xoá khỏi danh mục: vẫn hiện theo tên trên phiếu, không bịa giá vốn / tồn
     for (const t of phieu) for (const i of t.items || []) {
         const ma = String(i.productId)
-        if (!sp[ma]) sp[ma] = { ten: i.productName || ma, sku: i.sku || '', nhom: 'Chưa phân nhóm', gia: Number(i.unitPrice) || 0, von: null, ton: null, dv: null }
+        if (!sp[ma]) sp[ma] = { ten: i.productName || ma, sku: i.sku || '', nhom: 'Chưa phân nhóm', gia: Number(i.unitPrice) || 0, von: null, ton: null, dv: null, daXoa: true }
     }
 
     // ── 3. Tuổi nợ + phiếu còn treo (đúng thước tab Sức khoẻ tài chính) ──
