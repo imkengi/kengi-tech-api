@@ -27,8 +27,12 @@ const TRANG_THAI_DONG_SUA = new Set(['done', 'delivered', 'completed', 'returned
 
 export type CachTra = 'no' | 'ck' | 'mat' | 'the' | 'vi' | 'khac'
 
-/** daXoa = hàng đã xoá khỏi danh mục: chỉ còn tên trên phiếu, không bán lại được ⇒ FE không đưa vào đơn gợi ý */
-export interface SpSoDo { ten: string; sku: string; nhom: string; gia: number; von: number | null; ton: number | null; dv: string | null; daXoa?: boolean }
+/**
+ * nhom = nhóm hàng CƠ BẢN (danh mục gốc, cấp 1); nhomCon = phần đường dẫn dưới gốc ("Nồi cơm › 1.2L"), null khi
+ * hàng nằm thẳng ở nhóm gốc. daXoa = hàng đã xoá khỏi danh mục: chỉ còn tên trên phiếu, không bán lại được ⇒ FE
+ * không đưa vào đơn gợi ý.
+ */
+export interface SpSoDo { ten: string; sku: string; nhom: string; nhomCon: string | null; gia: number; von: number | null; ton: number | null; dv: string | null; daXoa?: boolean }
 /** gia = giá thực (lineTotal / SL); giaGoc = đơn giá trên phiếu trước giảm giá dòng */
 export interface DongDon { p: string; sl: number; gia: number; giaGoc: number; tien: number; giam: boolean }
 export interface DonSoDo {
@@ -134,16 +138,36 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
     })
 
     // ── 2. Sản phẩm — giá vốn, giá bán, tồn, nhóm hàng HIỆN TẠI ──
+    // Nhóm hàng CƠ BẢN = danh mục GỐC của nhóm gắn với sản phẩm. Danh mục KiotViet 3 cấp (HUTI 170 nhóm): xếp theo
+    // nhóm lá là hàng chục chip — chủ shop 11/10: "thêm filter coi nhóm hàng nha, có thể chỉ cần những nhóm hàng cơ
+    // bản". Đọc cây hỏng ⇒ rơi về tên nhóm lá (vẫn đúng, chỉ không gộp lên gốc).
+    let cayDm: Map<string, { ten: string; cha: string | null }> | null = null
+    try {
+        const ds: any[] = await prisma.category.findMany({ select: { id: true, name: true, parentId: true } })
+        cayDm = new Map(ds.map(c => [String(c.id), { ten: String(c.name || '').trim(), cha: c.parentId ? String(c.parentId) : null }]))
+    } catch { cayDm = null }
+    const duongDm = (id: string | null | undefined): string[] => {
+        const ra: string[] = []
+        const daQua = new Set<string>()        // chặn vòng lặp cha–con hỏng
+        for (let cur = id || null; cur && cayDm?.has(cur) && !daQua.has(cur) && ra.length < 10; cur = cayDm.get(cur)!.cha) {
+            daQua.add(cur)
+            ra.unshift(cayDm.get(cur)!.ten)
+        }
+        return ra.filter(Boolean)
+    }
     const sp: Record<string, SpSoDo> = {}
     const dsMa = Array.from(new Set<string>(phieu.flatMap(t => (t.items || []).map((i: any) => String(i.productId)))))
     for (let i = 0; i < dsMa.length; i += KHOI) {
         const lo: any[] = await prisma.product.findMany({
             where: { id: { in: dsMa.slice(i, i + KHOI) } },
-            select: { id: true, name: true, sku: true, costPrice: true, sellingPrice: true, stock: true, baseUnit: true, category: { select: { name: true } } },
+            select: { id: true, name: true, sku: true, costPrice: true, sellingPrice: true, stock: true, baseUnit: true, categoryId: true, category: { select: { name: true } } },
         })
         for (const p of lo) {
+            const duong = duongDm(p.categoryId)
             sp[p.id] = {
-                ten: p.name, sku: p.sku, nhom: p.category?.name || 'Chưa phân nhóm',
+                ten: p.name, sku: p.sku,
+                nhom: duong[0] || p.category?.name || 'Chưa phân loại',
+                nhomCon: duong.length > 1 ? duong.slice(1).join(' › ') : null,
                 gia: Number(p.sellingPrice) || 0, von: anGiaVon || p.costPrice == null ? null : Number(p.costPrice),
                 ton: p.stock == null ? null : Number(p.stock), dv: p.baseUnit || null,
             }
@@ -152,7 +176,7 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
     // Hàng đã xoá khỏi danh mục: vẫn hiện theo tên trên phiếu, không bịa giá vốn / tồn
     for (const t of phieu) for (const i of t.items || []) {
         const ma = String(i.productId)
-        if (!sp[ma]) sp[ma] = { ten: i.productName || ma, sku: i.sku || '', nhom: 'Chưa phân nhóm', gia: Number(i.unitPrice) || 0, von: null, ton: null, dv: null, daXoa: true }
+        if (!sp[ma]) sp[ma] = { ten: i.productName || ma, sku: i.sku || '', nhom: 'Hàng đã xoá', nhomCon: null, gia: Number(i.unitPrice) || 0, von: null, ton: null, dv: null, daXoa: true }
     }
 
     // ── 3. Tuổi nợ + phiếu còn treo (đúng thước tab Sức khoẻ tài chính) ──
