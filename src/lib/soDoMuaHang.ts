@@ -27,7 +27,8 @@ const TRANG_THAI_DONG_SUA = new Set(['done', 'delivered', 'completed', 'returned
 export type CachTra = 'no' | 'ck' | 'mat' | 'the' | 'vi' | 'khac'
 
 export interface SpSoDo { ten: string; sku: string; nhom: string; gia: number; von: number | null; ton: number | null; dv: string | null }
-export interface DongDon { p: string; sl: number; gia: number; tien: number; giam: boolean }
+/** gia = giá thực (lineTotal / SL); giaGoc = đơn giá trên phiếu trước giảm giá dòng */
+export interface DongDon { p: string; sl: number; gia: number; giaGoc: number; tien: number; giam: boolean }
 export interface DonSoDo {
     id: string; ma: string; ngay: string; kenh: string; tt: CachTra; trangThai: string
     tong: number; giamDon: number; noTreo: boolean; hang: DongDon[]
@@ -143,7 +144,8 @@ export async function soDoMuaHang(prisma: any, khachId: string, opts: { soThang?
         hang: (t.items || []).map((i: any) => {
             const sl = Number(i.quantity) || 0
             const tien = Number(i.lineTotal) || 0
-            return { p: String(i.productId), sl, gia: sl ? Math.round(tien / sl) : Number(i.unitPrice) || 0, tien, giam: Number(i.discount) > 0 }
+            const giaGoc = Number(i.unitPrice) || 0
+            return { p: String(i.productId), sl, gia: sl ? Math.round(tien / sl) : giaGoc, giaGoc, tien, giam: Number(i.discount) > 0 }
         }).filter((h: DongDon) => h.sl > 0),
     })).filter(d => d.hang.length).sort((a, b) => a.ngay.localeCompare(b.ngay))
 
