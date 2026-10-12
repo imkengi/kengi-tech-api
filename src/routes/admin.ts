@@ -3626,6 +3626,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                     )
                 `)
                 await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "KiotVietConfig_webhookToken_key" ON "KiotVietConfig"("webhookToken")`)
+                // Kéo MÃ HÀNG MỚI lúc 0h (12/10/2026, chủ shop: "trong admin thêm cron cập nhật mã hàng mới từ kiot
+                // viet qua lúc 0h") — công tắc riêng, mặc định BẬT: chỉ tạo mã KiotViet có mà Kengi chưa có
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "KiotVietConfig" ADD COLUMN IF NOT EXISTS "tuKeoMaMoi" BOOLEAN NOT NULL DEFAULT true`)
 
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "KiotVietMap" (
