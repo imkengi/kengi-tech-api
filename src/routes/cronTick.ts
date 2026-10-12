@@ -41,6 +41,12 @@ router.post('/tick', async (req: Request, res: Response) => {
     /* Đăng bài trước (nhanh, có giờ hẹn), tác vụ AI sau (có thể vài phút). Một phần hỏng
      * không chặn phần kia. */
     try { ra.dangBai = await nhipMktTuNgoai() } catch (e: any) { ra.dangBai = 'loi: ' + (e?.message || e) }
+    /* Kéo mã hàng mới từ KiotViet lúc 0h (12/10/2026): ngoài 00:00–05:59 giờ VN thì về ngay. Trong cửa sổ
+     * chạy NGAY TRONG request này để có CPU — lượt đêm bằng setInterval đo 4–7 tiếng vì bị hãm CPU. */
+    try {
+        const { nhipKeoMaMoi } = await import('../services/kiotvietMaMoi')
+        ra.kvMaMoi = await nhipKeoMaMoi()
+    } catch (e: any) { ra.kvMaMoi = 'loi: ' + (e?.message || e) }
     try { ra.tacVuAi = (await quetTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.tacVuAi = 'loi: ' + (e?.message || e) }
     /* Nhắc TikTok xác nhận đủ bằng chứng (09/10/2026) — mỗi 10 phút; mỗi giờ một tin / cửa hàng do dấu
      * trong thông báo lo. Chạy ở NHỊP NGOÀI để có CPU cả đêm (cpu-throttling). */

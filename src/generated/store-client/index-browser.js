@@ -2451,6 +2451,7 @@ exports.Prisma.KiotVietConfigScalarFieldEnum = {
   syncCustomers: 'syncCustomers',
   syncSuppliers: 'syncSuppliers',
   syncInvoices: 'syncInvoices',
+  tuKeoMaMoi: 'tuKeoMaMoi',
   overwriteNames: 'overwriteNames',
   overwritePrices: 'overwritePrices',
   overwriteStock: 'overwriteStock',

@@ -174811,6 +174811,7 @@ export namespace Prisma {
     syncCustomers: boolean | null
     syncSuppliers: boolean | null
     syncInvoices: boolean | null
+    tuKeoMaMoi: boolean | null
     overwriteNames: boolean | null
     overwritePrices: boolean | null
     overwriteStock: boolean | null
@@ -174836,6 +174837,7 @@ export namespace Prisma {
     syncCustomers: boolean | null
     syncSuppliers: boolean | null
     syncInvoices: boolean | null
+    tuKeoMaMoi: boolean | null
     overwriteNames: boolean | null
     overwritePrices: boolean | null
     overwriteStock: boolean | null
@@ -174861,6 +174863,7 @@ export namespace Prisma {
     syncCustomers: number
     syncSuppliers: number
     syncInvoices: number
+    tuKeoMaMoi: number
     overwriteNames: number
     overwritePrices: number
     overwriteStock: number
@@ -174888,6 +174891,7 @@ export namespace Prisma {
     syncCustomers?: true
     syncSuppliers?: true
     syncInvoices?: true
+    tuKeoMaMoi?: true
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
@@ -174913,6 +174917,7 @@ export namespace Prisma {
     syncCustomers?: true
     syncSuppliers?: true
     syncInvoices?: true
+    tuKeoMaMoi?: true
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
@@ -174938,6 +174943,7 @@ export namespace Prisma {
     syncCustomers?: true
     syncSuppliers?: true
     syncInvoices?: true
+    tuKeoMaMoi?: true
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
@@ -175036,6 +175042,7 @@ export namespace Prisma {
     syncCustomers: boolean
     syncSuppliers: boolean
     syncInvoices: boolean
+    tuKeoMaMoi: boolean
     overwriteNames: boolean
     overwritePrices: boolean
     overwriteStock: boolean
@@ -175078,6 +175085,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -175103,6 +175111,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -175128,6 +175137,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -175153,6 +175163,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -175165,7 +175176,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type KiotVietConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "clientId" | "clientSecret" | "retailer" | "webhookToken" | "webhookSecret" | "strictSignature" | "enabled" | "syncProducts" | "syncCustomers" | "syncSuppliers" | "syncInvoices" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "defaultCategoryId" | "defaultWarehouseId" | "branchIds" | "lastSyncAt" | "lastWebhookAt" | "createdAt" | "updatedAt", ExtArgs["result"]["kiotVietConfig"]>
+  export type KiotVietConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "clientId" | "clientSecret" | "retailer" | "webhookToken" | "webhookSecret" | "strictSignature" | "enabled" | "syncProducts" | "syncCustomers" | "syncSuppliers" | "syncInvoices" | "tuKeoMaMoi" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "defaultCategoryId" | "defaultWarehouseId" | "branchIds" | "lastSyncAt" | "lastWebhookAt" | "createdAt" | "updatedAt", ExtArgs["result"]["kiotVietConfig"]>
 
   export type $KiotVietConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "KiotVietConfig"
@@ -175183,6 +175194,7 @@ export namespace Prisma {
       syncCustomers: boolean
       syncSuppliers: boolean
       syncInvoices: boolean
+      tuKeoMaMoi: boolean
       overwriteNames: boolean
       overwritePrices: boolean
       overwriteStock: boolean
@@ -175628,6 +175640,7 @@ export namespace Prisma {
     readonly syncCustomers: FieldRef<"KiotVietConfig", 'Boolean'>
     readonly syncSuppliers: FieldRef<"KiotVietConfig", 'Boolean'>
     readonly syncInvoices: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly tuKeoMaMoi: FieldRef<"KiotVietConfig", 'Boolean'>
     readonly overwriteNames: FieldRef<"KiotVietConfig", 'Boolean'>
     readonly overwritePrices: FieldRef<"KiotVietConfig", 'Boolean'>
     readonly overwriteStock: FieldRef<"KiotVietConfig", 'Boolean'>
@@ -197764,6 +197777,7 @@ export namespace Prisma {
     syncCustomers: 'syncCustomers',
     syncSuppliers: 'syncSuppliers',
     syncInvoices: 'syncInvoices',
+    tuKeoMaMoi: 'tuKeoMaMoi',
     overwriteNames: 'overwriteNames',
     overwritePrices: 'overwritePrices',
     overwriteStock: 'overwriteStock',
@@ -211986,6 +212000,7 @@ export namespace Prisma {
     syncCustomers?: BoolFilter<"KiotVietConfig"> | boolean
     syncSuppliers?: BoolFilter<"KiotVietConfig"> | boolean
     syncInvoices?: BoolFilter<"KiotVietConfig"> | boolean
+    tuKeoMaMoi?: BoolFilter<"KiotVietConfig"> | boolean
     overwriteNames?: BoolFilter<"KiotVietConfig"> | boolean
     overwritePrices?: BoolFilter<"KiotVietConfig"> | boolean
     overwriteStock?: BoolFilter<"KiotVietConfig"> | boolean
@@ -212011,6 +212026,7 @@ export namespace Prisma {
     syncCustomers?: SortOrder
     syncSuppliers?: SortOrder
     syncInvoices?: SortOrder
+    tuKeoMaMoi?: SortOrder
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
@@ -212039,6 +212055,7 @@ export namespace Prisma {
     syncCustomers?: BoolFilter<"KiotVietConfig"> | boolean
     syncSuppliers?: BoolFilter<"KiotVietConfig"> | boolean
     syncInvoices?: BoolFilter<"KiotVietConfig"> | boolean
+    tuKeoMaMoi?: BoolFilter<"KiotVietConfig"> | boolean
     overwriteNames?: BoolFilter<"KiotVietConfig"> | boolean
     overwritePrices?: BoolFilter<"KiotVietConfig"> | boolean
     overwriteStock?: BoolFilter<"KiotVietConfig"> | boolean
@@ -212064,6 +212081,7 @@ export namespace Prisma {
     syncCustomers?: SortOrder
     syncSuppliers?: SortOrder
     syncInvoices?: SortOrder
+    tuKeoMaMoi?: SortOrder
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
@@ -212095,6 +212113,7 @@ export namespace Prisma {
     syncCustomers?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
     syncSuppliers?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
     syncInvoices?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    tuKeoMaMoi?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
     overwriteNames?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
     overwritePrices?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
     overwriteStock?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
@@ -230143,6 +230162,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -230168,6 +230188,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -230193,6 +230214,7 @@ export namespace Prisma {
     syncCustomers?: BoolFieldUpdateOperationsInput | boolean
     syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
     syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    tuKeoMaMoi?: BoolFieldUpdateOperationsInput | boolean
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
@@ -230218,6 +230240,7 @@ export namespace Prisma {
     syncCustomers?: BoolFieldUpdateOperationsInput | boolean
     syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
     syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    tuKeoMaMoi?: BoolFieldUpdateOperationsInput | boolean
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
@@ -230243,6 +230266,7 @@ export namespace Prisma {
     syncCustomers?: boolean
     syncSuppliers?: boolean
     syncInvoices?: boolean
+    tuKeoMaMoi?: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
@@ -230268,6 +230292,7 @@ export namespace Prisma {
     syncCustomers?: BoolFieldUpdateOperationsInput | boolean
     syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
     syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    tuKeoMaMoi?: BoolFieldUpdateOperationsInput | boolean
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
@@ -230293,6 +230318,7 @@ export namespace Prisma {
     syncCustomers?: BoolFieldUpdateOperationsInput | boolean
     syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
     syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    tuKeoMaMoi?: BoolFieldUpdateOperationsInput | boolean
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
@@ -241509,6 +241535,7 @@ export namespace Prisma {
     syncCustomers?: SortOrder
     syncSuppliers?: SortOrder
     syncInvoices?: SortOrder
+    tuKeoMaMoi?: SortOrder
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
@@ -241534,6 +241561,7 @@ export namespace Prisma {
     syncCustomers?: SortOrder
     syncSuppliers?: SortOrder
     syncInvoices?: SortOrder
+    tuKeoMaMoi?: SortOrder
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
@@ -241559,6 +241587,7 @@ export namespace Prisma {
     syncCustomers?: SortOrder
     syncSuppliers?: SortOrder
     syncInvoices?: SortOrder
+    tuKeoMaMoi?: SortOrder
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder

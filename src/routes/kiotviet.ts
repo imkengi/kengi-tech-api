@@ -319,6 +319,8 @@ function publicConfig(cfg: any, storeCode: string, baseUrl: string) {
         overwriteNames: !!cfg.overwriteNames,
         overwritePrices: !!cfg.overwritePrices,
         overwriteStock: !!cfg.overwriteStock,
+        // Kéo mã hàng mới lúc 0h — cột chưa migrate thì undefined ⇒ coi như BẬT (mặc định của cột)
+        tuKeoMaMoi: cfg.tuKeoMaMoi !== false,
         defaultCategoryId: cfg.defaultCategoryId,
         defaultWarehouseId: cfg.defaultWarehouseId,
         branchIds: cfg.branchIds,
@@ -386,7 +388,7 @@ router.put('/config', async (req: Request, res: Response) => {
         setStr('webhookSecret', b.webhookSecret)
 
         for (const k of ['enabled', 'syncProducts', 'syncCustomers', 'syncSuppliers', 'syncInvoices',
-            'overwriteNames', 'overwritePrices', 'overwriteStock', 'strictSignature']) {
+            'overwriteNames', 'overwritePrices', 'overwriteStock', 'strictSignature', 'tuKeoMaMoi']) {
             if (typeof b[k] === 'boolean') data[k] = b[k]
         }
         if (b.defaultWarehouseId !== undefined) data.defaultWarehouseId = b.defaultWarehouseId || null
@@ -1160,6 +1162,95 @@ router.get('/logs', async (req: Request, res: Response) => {
 
         const mau = [dongHoaDon, dongWebhook, dongGhiDuoc, ...logs].filter(Boolean)
         res.json({ success: true, data: logs, donHang: tinhTinhTrangDon(mau) })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── KÉO MÃ HÀNG MỚI (12/10/2026, services/kiotvietMaMoi.ts) ─────────────────
+// Chủ shop: "trong admin thêm cron cập nhật mã hàng mới từ kiot viet qua lúc 0h". Lượt 0h chạy ở nhịp
+// ngoài /api/cron/tick; ba đường dưới là cho thẻ "Kéo mã hàng mới lúc 0h" trong tab KiotViet của admin.
+
+/** Cấu hình đủ để gọi KiotViet chưa — thiếu thì trả lý do bằng lời. */
+function thieuCauHinh(cfg: any): string | null {
+    if (!cfg) return 'Cửa hàng chưa cấu hình KiotViet'
+    if (!cfg.clientId || !cfg.clientSecret || !cfg.retailer) return 'Thiếu Client ID / Client Secret / Retailer'
+    return null
+}
+
+// GET /api/kiotviet/ma-moi/xem?storeCode= — CHỈ ĐỌC: mã KiotViet có mà Kengi chưa có (tải trọn danh sách hàng)
+router.get('/ma-moi/xem', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        const thieu = thieuCauHinh(cfg)
+        if (thieu) { res.status(400).json({ success: false, error: thieu }); return }
+        const { timMaHangMoi, moTaMa } = await import('../services/kiotvietMaMoi')
+        const { items, moi, biCatTran } = await timMaHangMoi(store.sp, cfg)
+        let branchIds: number[] | undefined
+        try { branchIds = cfg.branchIds ? JSON.parse(cfg.branchIds) : undefined } catch { branchIds = undefined }
+        res.json({ success: true, data: { layVe: items.length, moi: moi.slice(0, 500).map(kv => moTaMa(kv, branchIds)), soMoi: moi.length, biCatTran } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// POST /api/kiotviet/ma-moi/chay {storeCode} — TẠO NGAY các mã mới (chỉ tạo, không ghi đè). Chạy trong request
+// để có CPU (cpu-throttling) — trang admin chờ tới khi xong (~30–90 giây với 3.600 mã).
+router.post('/ma-moi/chay', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.body?.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        const thieu = thieuCauHinh(cfg)
+        if (thieu) { res.status(400).json({ success: false, error: thieu }); return }
+        const { keoMaHangMoi, dotKhacDangChay, ENTITY_MA_MOI } = await import('../services/kiotvietMaMoi')
+        const ban = await dotKhacDangChay(store.sp)
+        if (ban) {
+            res.status(409).json({ success: false, error: `Đang có đợt đồng bộ khác chạy (${String(ban.entity).slice(0, 80)}) — chờ xong rồi bấm lại` })
+            return
+        }
+        // mode 'tay' — KHÔNG phải 'manual': bộ tự chạy tiếp (resumeStalledSyncs) chỉ nhận 'manual'
+        const log = await store.sp.kiotVietSyncLog.create({
+            data: { entity: ENTITY_MA_MOI, mode: 'tay', dryRun: false, status: 'running', startedAt: new Date(), heartbeatAt: new Date() },
+        })
+        try {
+            const kq = await keoMaHangMoi(store.sp, cfg, log.id)
+            res.json({ success: true, data: { ...kq, logId: log.id } })
+        } catch (e: any) {
+            await store.sp.kiotVietSyncLog.update({
+                where: { id: log.id }, data: { status: 'failed', finishedAt: new Date(), errors: errMsg(e).slice(0, 2000) },
+            }).catch(() => { })
+            throw e
+        }
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// GET /api/kiotviet/ma-moi/lich-su?storeCode=&limit= — các lượt mã mới (0h + bấm tay), mới nhất trước
+router.get('/ma-moi/lich-su', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const limit = Math.min(30, Math.max(1, Number(req.query.limit) || 10))
+        const { ENTITY_MA_MOI } = await import('../services/kiotvietMaMoi')
+        const rows: any[] = await store.sp.kiotVietSyncLog.findMany({
+            where: { entity: { startsWith: ENTITY_MA_MOI } }, orderBy: { startedAt: 'desc' }, take: limit,
+        })
+        res.json({
+            success: true,
+            data: rows.map(r => {
+                let chiTiet: any = null
+                try { chiTiet = r.details ? JSON.parse(r.details) : null } catch { chiTiet = null }
+                return {
+                    id: r.id, mode: r.mode, status: r.status, entity: r.entity, startedAt: r.startedAt, finishedAt: r.finishedAt,
+                    heartbeatAt: r.heartbeatAt, attempts: r.attempts, fetched: r.fetched, created: r.created, failed: r.failed,
+                    errors: r.errors, chiTiet,
+                }
+            }),
+        })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }

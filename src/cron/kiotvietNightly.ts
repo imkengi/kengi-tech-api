@@ -35,7 +35,8 @@ let timer: NodeJS.Timeout | null = null
 let lastRunDate = ''
 let running = false
 
-async function runForStore(schema: string, storeName: string): Promise<void> {
+/** 'ban' = có đợt khác đang sống (vd lượt "mã hàng mới" lúc 0h) ⇒ runAll cho chạy lại ở nhịp 10 phút sau. */
+async function runForStore(schema: string, storeName: string): Promise<'ban' | void> {
     const sp: any = getStorePrisma(schema)
     const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
     if (!cfg || !cfg.enabled || !cfg.clientId || !cfg.clientSecret || !cfg.retailer) return
@@ -55,8 +56,9 @@ async function runForStore(schema: string, storeName: string): Promise<void> {
                 data: { status: 'failed', finishedAt: new Date(), errors: 'Mất tín hiệu quá 2 phút — cron đêm tự đóng để chạy tiếp.' },
             }).catch(() => { })
         } else {
-            console.log(`[KVNightly] ${storeName}: đang có đợt khác còn sống — bỏ qua đêm nay`)
-            return
+            // Trước 12/10/2026 là "bỏ qua đêm nay" — lượt mã hàng mới chạy lúc 0h mà trùng giờ là mất cả đêm
+            console.log(`[KVNightly] ${storeName}: đang có đợt khác còn sống — thử lại sau 10 phút`)
+            return 'ban'
         }
     }
 
@@ -90,16 +92,20 @@ async function runAll(): Promise<void> {
         }) as any[]
         // TUẦN TỰ từng store — PROD PRISMA_POOL_SIZE=1; giữ client suốt lượt vì
         // một đợt HUTI (3.6k sản phẩm) chạy vài phút, quá hạn thải nhàn rỗi.
+        let ban = false
         for (const st of stores) {
             const nha = giuClient(st.schema)
             try {
-                await runForStore(st.schema, st.name || st.code)
+                if ((await runForStore(st.schema, st.name || st.code)) === 'ban') ban = true
             } catch (e: any) {
                 console.error(`[KVNightly] Lỗi store ${st.code}:`, e?.message || e)
             } finally {
                 nha()
             }
         }
+        // Có cửa hàng đang bận ⇒ trả cờ để nhịp 10 phút sau chạy lại (cửa hàng đã xong thì chạy lại chỉ
+        // ra "cập nhật" — idempotent theo bảng nối)
+        if (ban) lastRunDate = ''
     } catch (e: any) {
         /* Cùng bài học với cron hoá đơn 27/08: P1001 thoáng qua lúc nửa đêm không
          * được đốt cả đêm — trả cờ để tick 10' sau chạy bù (idempotent). */

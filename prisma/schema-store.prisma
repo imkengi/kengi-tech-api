@@ -3454,6 +3454,10 @@ model KiotVietConfig {
   syncSuppliers Boolean @default(true)
   syncInvoices  Boolean @default(false) // mặc định TẮT: hoá đơn đụng doanh thu
 
+  // Kéo MÃ HÀNG MỚI lúc 0h (12/10/2026, services/kiotvietMaMoi.ts) — chỉ tạo mã KiotViet có mà Kengi chưa có,
+  // không ghi đè; chạy trong nhịp ngoài /api/cron/tick nên có CPU (khác lượt đêm đầy đủ)
+  tuKeoMaMoi Boolean @default(true)
+
   // Mặc định KHÔNG ghi đè dữ liệu Kengi — chỉ tạo mới và điền chỗ trống
   overwriteNames  Boolean @default(false)
   overwritePrices Boolean @default(false)

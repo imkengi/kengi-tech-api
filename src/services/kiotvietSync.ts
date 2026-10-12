@@ -136,6 +136,11 @@ export interface SyncOptions {
      * vụ mở rộng phạm vi 9.012 phiếu đang treo quyết định (11/08/2026).
      */
     updateOnly?: boolean
+    /**
+     * CHỈ TẠO MÃ HÀNG MỚI — hàng đã có (theo bảng nối / SKU / mã vạch) thì bỏ qua tuyệt đối, kể cả khi cấu
+     * hình bật ghi đè. Dùng cho lượt "kéo mã hàng mới lúc 0h" (services/kiotvietMaMoi.ts, 12/10/2026).
+     */
+    chiTaoMoi?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     branchIds?: number[]
@@ -510,6 +515,12 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
             const brandName = String(kv?.tradeMarkName || '').trim()
 
             if (existing) {
+                if (opts.chiTaoMoi) {
+                    // Lượt "mã hàng mới": hàng đã có thì để nguyên tuyệt đối; chạy thật thì chỉ nối mã cho chắc
+                    c.skipped++
+                    if (opts.apply) await saveMap(sp, 'product', kvId, code, existing.id)
+                    continue
+                }
                 const data: any = {}
                 if (opts.overwriteNames && name && name !== existing.name) data.name = name
                 if (opts.overwritePrices) {
