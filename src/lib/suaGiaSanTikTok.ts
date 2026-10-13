@@ -319,7 +319,13 @@ export async function suaGiaSanTikTok(
                 // 5d. Bút toán điều chỉnh — MỘT dòng, khoá theo reference riêng
                 if (opts.ghiSo && chenhSo !== 0) {
                     const { khoaSoChan } = await import('./periodLock')
-                    const ngay = String(phieu.transactionDate || phieu.createdAt || new Date()).slice(0, 10)
+                    /* Điều chỉnh rơi ĐÚNG kỳ của bút toán SALE gốc. Trước 13/10/2026 là
+                     * `String(Date).slice(0, 10)` ⇒ "Wed Aug 26": 881 bút toán (98,7tr, KENGISTORE
+                     * 06/09) nằm ngoài mọi báo cáo lọc theo ngày, và khoá sổ so chuỗi đó cũng sai. */
+                    const butGoc = await sp.journalEntry.findUnique({ where: { reference: `SALE-${soPhieu}` }, select: { date: true } }).catch(() => null)
+                    const ngay = /^\d{4}-\d{2}-\d{2}/.test(String(butGoc?.date || ''))
+                        ? String(butGoc!.date).slice(0, 10)
+                        : new Date(phieu.transactionDate || phieu.createdAt || Date.now()).toISOString().slice(0, 10)
                     const khoa = await khoaSoChan(sp, phieu.branchId ?? null, ngay).catch(() => null)
                     if (khoa) {
                         k.khoaSo++
