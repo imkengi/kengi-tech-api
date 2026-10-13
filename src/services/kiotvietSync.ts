@@ -25,7 +25,7 @@
  */
 
 import crypto from 'crypto'
-import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, reverseJournalEntriesForTransaction } from '../lib/autoJournal'
 import { postImportReceiptJournal, postReturnJournal, postExpenseJournal } from '../lib/autoJournalPurchase'
 import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
 import { KV } from './kiotviet'
@@ -966,6 +966,17 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (daCo && daCo.status !== 'voided') {
                     if (opts.apply) {
                         await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
+                        /* SỔ: hoá đơn ĐÃ HUỶ (2) bên KiotViet phải rút khỏi 511/3331/632/131 — trước 14/10/2026 chỉ
+                         * đổi trạng thái, đo HUTI: ~295 phiếu voided còn SALE- chưa đảo (T8–T10). CHỈ huỷ thật: "Đang
+                         * xử lý" (3, đơn HDTTS) quay về hoàn thành ở lượt sau, đảo rồi không ghi lại được (SALE- là
+                         * khoá unique) ⇒ để nguyên sổ. Lỗi đảo thì ghi vào lượt, không chặn đồng bộ. */
+                        if (Number(kv?.status) === 2) {
+                            try {
+                                await reverseJournalEntriesForTransaction(sp, code, { branchId: null, userId: opts.systemUserId ?? null })
+                            } catch (e: any) {
+                                c.errors.push(`HĐ ${code}: đã huỷ bên KiotViet nhưng KHÔNG đảo được bút toán — ${String(e?.message || e).slice(0, 160)}`)
+                            }
+                        }
                         await lamTuoiNoKhach(sp, opts, kv?.customerId)
                         // Đơn nợ bị huỷ thì phần chưa thu phải RÚT khỏi số dư khách,
                         // không thì khách gánh nợ của một hoá đơn không còn tồn tại

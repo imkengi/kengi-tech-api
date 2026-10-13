@@ -261,6 +261,31 @@ async function main() {
         } else console.log('✓ Tiền mặt vào sổ khớp đúng số thực thu của đơn giảm %')
     }
     {
+        /* Payload THẬT của máy bán hàng web khi bấm nút %: discount là SỐ TIỀN đã quy (100.000),
+         * nhãn vẫn 'percent'. Bản 14/08 hiểu là 100.000% ⇒ DISC 1 TỶ, Có 111 âm theo (soát 13/10/2026). */
+        const { createJournalEntriesForTransaction } = await import('../src/lib/autoJournal')
+        const c = fakeClient()
+        await createJournalEntriesForTransaction(c as any, {
+            id: 'tx-pos', receiptNumber: 'HD502',
+            subtotal: 1_000_000, discount: 100_000, discountType: 'percent',
+            tax: 0, total: 900_000, amountReceived: 900_000,
+            createdAt: new Date('2026-08-10'), items: [],
+        } as any, { skipDupCheck: true })
+        const disc = c.rows.find(r => r.reference === 'DISC-HD502')
+        soCa++
+        if (!disc || disc.amount !== 100_000) {
+            soLoi++
+            console.log(`✗ POS gửi số tiền 100.000đ kèm nhãn % — phải ghi 100.000đ (ghi ${disc?.amount})`)
+        } else console.log('✓ Nhãn % mà con số là tiền (POS web) — ghi đúng số tiền, không nhân thành tỷ')
+        const no = c.rows.reduce((s, r) => s + (r.debitAccount.startsWith('111') ? r.amount : 0), 0)
+        const co = c.rows.reduce((s, r) => s + (r.creditAccount.startsWith('111') ? r.amount : 0), 0)
+        soCa++
+        if (no - co !== 900_000) {
+            soLoi++
+            console.log(`✗ Tiền mặt ghi sổ phải bằng thực thu 900.000đ (đang ${no - co})`)
+        } else console.log('✓ Tiền mặt vào sổ khớp thực thu của phiếu POS giảm %')
+    }
+    {
         // Giảm giá số tiền tuyệt đối vẫn giữ nguyên hành vi cũ
         const { createJournalEntriesForTransaction } = await import('../src/lib/autoJournal')
         const c = fakeClient()

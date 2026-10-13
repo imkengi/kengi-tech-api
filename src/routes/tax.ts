@@ -5,7 +5,7 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { chayTheoDot } from '../lib/poolGuard'
-import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR, tienGiamGiaPhieu } from '../lib/autoJournal'
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
@@ -341,9 +341,7 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
      * tờ khai" kêu mỗi kỳ khiến kế toán đi tìm một sai sót không tồn tại.
      *
      * `discount` có thể là SỐ TIỀN hoặc PHẦN TRĂM tùy `discountType`. */
-    const tienGiamGia = (t: any) => String(t.discountType || '') === 'percent'
-        ? Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
-        : Math.round(t.discount || 0)
+    const tienGiamGia = (t: any) => tienGiamGiaPhieu(t)
     const totalSalesSubtotal = transactions.reduce(
         (s: number, t: any) => s + (t.subtotal || 0) - tienGiamGia(t), 0)
     const totalSalesTax = transactions.reduce((s: number, t: any) => s + (t.tax || 0), 0)
@@ -712,10 +710,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
                 const defaultRate = taxConfigs.find(t => t.isDefault)?.rate ?? 10
                 // Doanh thu kê khai là doanh thu THUẦN — trừ giảm giá, và `discount`
                 // có thể là phần trăm tùy `discountType` (xem chú thích ở nhánh cả kỳ)
-                const totalSubtotal = selectedTx.reduce((s, t: any) => s + (t.subtotal || 0)
-                    - (String(t.discountType || '') === 'percent'
-                        ? Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
-                        : Math.round(t.discount || 0)), 0)
+                const totalSubtotal = selectedTx.reduce((s, t: any) => s + (t.subtotal || 0) - tienGiamGiaPhieu(t), 0)
                 const totalTax = selectedTx.reduce((s, t) => s + (t.tax || 0), 0)
                 let ct21 = 0, ct22 = 0, ct23 = 0, ct24 = 0, ct25 = 0, ct26 = 0, ct27 = 0, ct28 = 0
                 if (defaultRate === 0) { ct22 = totalSubtotal }
@@ -2663,6 +2658,9 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             }
         } catch (e) { console.error('Backfill bút toán trả hàng lỗi (bỏ qua):', e) }
 
+        // Tháng hiện tại (giờ VN) — không ghi lương/khấu hao cho tháng chưa tới
+        const thangNayVN = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7)
+
         // ═══ 4. PAYROLL → Salary expense journal entries ═══
         try {
             const payrollRecords = await prisma.payrollRecord.findMany({
@@ -2675,6 +2673,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                 for (const pr of payrollRecords) {
                     const ref = `PAY-${pr.employeeId}-${pr.year}-${pr.month}`
                     if (existingRefs.has(ref)) continue
+                    if (`${pr.year}-${String(pr.month).padStart(2, '0')}` > thangNayVN) continue
 
                     const date = `${pr.year}-${String(pr.month).padStart(2, '0')}-25`
                     try {
@@ -2711,38 +2710,10 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                         }
                     }
                 }
-            } else {
-                // Fallback: auto-compute from User.salary for active employees
-                const months = month ? [month] : Array.from({ length: 12 }, (_, i) => i + 1)
-                const activeEmployees = await prisma.user.findMany({
-                    where: { employeeStatus: 'active', salary: { gt: 0 } },
-                    select: { id: true, name: true, salary: true, code: true },
-                })
-
-                for (const m of months) {
-                    for (const emp of activeEmployees) {
-                        const ref = `PAY-${emp.id}-${year}-${m}`
-                        if (existingRefs.has(ref)) continue
-                        if (!emp.salary || emp.salary <= 0) continue
-
-                        const date = `${year}-${String(m).padStart(2, '0')}-25`
-                        // Simple payroll: salary is the total cost
-                        const salaryAmount = emp.salary
-                        try {
-                            await prisma.journalEntry.create({
-                                data: {
-                                    date, description: `Lương T${m}/${year} - ${emp.name}`,
-                                    debitAccount: '622', debitAccountName: 'CP nhân công trực tiếp',
-                                    creditAccount: '334', creditAccountName: 'Phải trả người lao động',
-                                    amount: salaryAmount, reference: ref, referenceType: 'payroll',
-                                    branchId, createdBy: userId,
-                                }
-                            })
-                            created.push({ type: 'payroll', ref, amount: salaryAmount })
-                        } catch (_) { }
-                    }
-                }
             }
+            /* Bỏ 13/10/2026: nhánh "không có bảng lương thì lấy User.salary" BỊA lương cho cả 12 tháng
+             * (kể cả tháng chưa tới) mỗi lần mở trang Thuế, rồi giữ luôn khoá PAY-<người>-<năm>-<tháng>
+             * nên bảng lương lưu sau không vào sổ được. Không có bảng lương = không ghi lương. */
         } catch (_) { /* PayrollRecord or User table might not exist */ }
 
         // ═══ 5. ONLINE ORDERS → E-commerce revenue journal entries ═══
@@ -2824,11 +2795,23 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             })
 
             // Only create depreciation entries for the specific month (or each month in year)
-            const depMonths = month ? [month] : Array.from({ length: 12 }, (_, i) => i + 1)
+            const depMonths = (month ? [month] : Array.from({ length: 12 }, (_, i) => i + 1))
+                .filter(m => `${year}-${String(m).padStart(2, '0')}` <= thangNayVN)
             for (const asset of assets) {
+                /* Soát 13/10/2026: lượt này từng ghi khấu hao cho tháng CHƯA TỚI, tháng TRƯỚC ngày ghi tăng,
+                 * quá thời gian khấu hao, và trùng với trang TSCĐ (khoá khác dạng DEP-<mã>-<YYYYMM>). */
+                const batDau = String(asset.acquisitionDate || '').slice(0, 7)
+                const soThang = Number(asset.usefulLifeMonths) || 0
                 for (const m of depMonths) {
+                    const ky = `${year}-${String(m).padStart(2, '0')}`
+                    if (!/^\d{4}-\d{2}$/.test(batDau) || ky < batDau) continue
+                    if (soThang > 0) {
+                        const [y0, m0] = batDau.split('-').map(Number)
+                        if ((year - y0) * 12 + (m - m0) >= soThang) continue
+                    }
                     const depRef = `DEP-${asset.code}-${year}-${String(m).padStart(2, '0')}`
                     if (existingRefs.has(depRef)) continue
+                    if (existingRefs.has(`DEP-${asset.code}-${year}${String(m).padStart(2, '0')}`)) continue
 
                     const depDate = `${year}-${String(m).padStart(2, '0')}-28` // End of month
                     try {

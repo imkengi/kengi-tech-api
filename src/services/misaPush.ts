@@ -32,7 +32,7 @@
 
 import crypto from 'crypto'
 import { MISA, MisaError, misaTime, type MisaCreds } from './misa'
-import { detectOnlinePlatform } from '../lib/autoJournal'
+import { detectOnlinePlatform, tienGiamGiaPhieu } from '../lib/autoJournal'
 
 export const LOAI_DAY = ['vattu', 'doituong', 'banhang', 'muahang'] as const
 export type LoaiDay = typeof LOAI_DAY[number]
@@ -461,9 +461,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
 
         // ── Tiền: khớp ĐÚNG cách autoJournal ghi sổ Kengi ──
         const subtotal = Number(tx.subtotal) || items.reduce((s: number, i: any) => s + (Number(i.lineTotal) || 0), 0)
-        const giamGiaPhieu = String(tx.discountType || '') === 'percent'
-            ? lam(subtotal * (Number(tx.discount) || 0) / 100)
-            : lam(Number(tx.discount) || 0)
+        const giamGiaPhieu = lam(tienGiamGiaPhieu({ ...tx, subtotal }))
         const thue = lam(Number(tx.tax) || 0)
         const tongDong = items.reduce((s: number, i: any) => s + (Number(i.lineTotal) || 0), 0)
         if (Math.abs(tongDong - subtotal) > 1) d.canhBao.push(`Tổng dòng hàng ${lam(tongDong)} ≠ tiền hàng phiếu ${lam(subtotal)}`)

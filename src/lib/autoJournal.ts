@@ -44,6 +44,31 @@ export type TxWithRelations = {
 
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
 
+/**
+ * SỐ TIỀN giảm giá CẢ PHIẾU — dùng chung cho sổ, tờ khai, tiền hoàn, đẩy MISA.
+ *
+ * Máy bán hàng web (từ 05/2026, pos/page.tsx handleUpdateDiscount) và app Android đều gửi `discount` là
+ * SỐ TIỀN; web chỉ gắn nhãn discountType 'percent' khi người bán bấm nút %. Bản 14/08/2026 (4de1508) hiểu
+ * nhãn đó là phần trăm ⇒ giảm 10% trên 1tr ghi DISC 1 TỶ (soát nghiệp vụ 13/10/2026; prod lúc đo chưa có
+ * phiếu nào dính). Nay suy theo TỔNG phiếu: chỉ coi là phần trăm khi tổng khớp công thức phần trăm mà
+ * KHÔNG khớp công thức số tiền; còn lại (kể cả tổng có phí ship, không khớp cả hai) là số tiền.
+ */
+export function tienGiamGiaPhieu(t: {
+    subtotal?: number | null; discount?: number | null; discountType?: string | null
+    tax?: number | null; total?: number | null
+}): number {
+    const giam = Number(t.discount) || 0
+    if (giam <= 0) return 0
+    if (String(t.discountType || '') !== 'percent' || giam > 100) return Math.round(giam)
+    const tienHang = Number(t.subtotal) || 0
+    const thue = Number(t.tax) || 0
+    const tong = Number(t.total)
+    if (!Number.isFinite(tong)) return Math.round(giam)
+    const khopSoTien = Math.abs(tong - (tienHang - giam + thue)) <= 1
+    const khopPhanTram = Math.abs(tong - (Math.round(tienHang * (100 - giam) / 100) + thue)) <= 1
+    return khopPhanTram && !khopSoTien ? Math.round(tienHang * giam / 100) : Math.round(giam)
+}
+
 // ─── Đơn sàn TMĐT: hạch toán qua PHÁP NHÂN SÀN ───────────────────────────────
 // Bán qua sàn thì người nợ tiền shop là CÔNG TY SÀN (Shopee/TikTok), không phải
 // khách lẻ: doanh thu ghi Nợ 131-<SÀN>, phí sàn ghi Nợ 641 / Có 131-<SÀN>,
@@ -230,9 +255,7 @@ export async function createJournalEntriesForTransaction(
      * vao TK 521, nen don giam 10% bi ghi la 10 DONG. Hau qua khong dung o cho
      * doanh thu sai: but toan thu tien (No 111 = subtotal + thue - giam gia)
      * cung lech, nen SO DU TIEN MAT tren so troi dan khoi thuc te sau moi don. */
-    const discountAmount = String(tx.discountType || '') === 'percent'
-        ? Math.round(revenue * (tx.discount || 0) / 100)
-        : Math.round(tx.discount || 0)
+    const discountAmount = tienGiamGiaPhieu(tx)
     const vatAmount = tx.tax || 0
     const branchId = opts.branchId ?? tx.branchId ?? null
     const userId = opts.userId ?? null
@@ -393,8 +416,11 @@ export async function reverseJournalEntriesForTransaction(
         entries = await prisma.journalEntry.findMany({
             where: {
                 OR: [
-                    { reference: { in: [`SALE-${receiptNumber}`, `VAT-${receiptNumber}`, `DISC-${receiptNumber}`, `COGS-${receiptNumber}`] } },
-                    { reference: { startsWith: `COLLECT-${receiptNumber}` } },
+                    // ADJ-SALE- (sửa giá đơn sàn) cũng là doanh thu của phiếu này — sót thì huỷ xong 511 còn dư
+                    { reference: { in: [`SALE-${receiptNumber}`, `VAT-${receiptNumber}`, `DISC-${receiptNumber}`, `COGS-${receiptNumber}`, `ADJ-SALE-${receiptNumber}`, `COLLECT-${receiptNumber}`] } },
+                    // Thu nợ từng lần: COLLECT-<số>-<paymentId>. Trước 13/10/2026 là startsWith `COLLECT-<số>` trơn
+                    // ⇒ huỷ HD12 đảo luôn tiền thu của HD123, huỷ HD031492 đảo cả HD031492.01
+                    { reference: { startsWith: `COLLECT-${receiptNumber}-` } },
                 ],
             },
         })

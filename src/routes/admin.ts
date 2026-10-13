@@ -10683,7 +10683,10 @@ router.post('/fix-percent-discount-journal', async (req: Request, res: Response)
         const canSua: any[] = []
         let daSua = 0
         for (const t of dsGiam) {
-            const dung = Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
+            // 13/10/2026: đích = số tiền suy theo TỔNG phiếu (POS web gửi SỐ TIỀN kèm nhãn %) — bản cũ
+            // lấy subtotal × discount / 100 nên chạy apply sẽ ghi DISC hàng tỷ cho phiếu POS.
+            const { tienGiamGiaPhieu } = await import('../lib/autoJournal')
+            const dung = tienGiamGiaPhieu({ ...t, discountType: 'percent' })
             const bt = await sp.journalEntry.findFirst({
                 where: { reference: `DISC-${t.receiptNumber}` },
                 select: { id: true, amount: true },

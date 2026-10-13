@@ -5,7 +5,7 @@ import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
-import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction, tienGiamGiaPhieu } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
@@ -1588,9 +1588,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // Tiền hoàn theo giá THỰC TRẢ: đơn giá hiệu lực = lineTotal/quantity (đã gồm
         // chiết khấu dòng), trừ thêm phần giảm giá cấp đơn phân bổ theo tỷ trọng
         // lineTotal — không dùng unitPrice thô (hoàn dư cho đơn có giảm giá).
-        const orderDiscountAmount = existing.discountType === 'percent'
-            ? Math.round((existing.subtotal || 0) * (existing.discount || 0) / 100)
-            : (existing.discount || 0)
+        const orderDiscountAmount = tienGiamGiaPhieu(existing as any)
         const returnTotal = itemsToReturn.reduce((sum, item) => {
             const qty = returnQtyMap.get(item.productId) || item.quantity
             if (!item.quantity) return sum
