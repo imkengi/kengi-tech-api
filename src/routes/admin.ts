@@ -5405,6 +5405,16 @@ router.get('/do-du-but-toan', async (req: Request, res: Response) => {
                       GROUP BY 1, 2 ORDER BY 1, 2`, tu)
                 return { phieuCongNo: phieu, butToanThu: but }
             })
+            /* Lượt "Đồng bộ bút toán" (/tax/auto-journal) từng tự chạy mỗi lần mở trang Thuế (bỏ 14/10/2026): bịa lương
+             * PAY- từ User.salary cho cả năm, khấu hao DEP- tháng chưa tới / trùng khoá trang TSCĐ. Đếm phần còn trên sổ. */
+            await doc('dongBoTuDong', () => sp.$queryRawUnsafe(
+                `SELECT CASE WHEN reference LIKE 'PAY-%' THEN 'PAY' WHEN reference LIKE 'BH-%' THEN 'BH'
+                             WHEN reference ~ '^DEP-.+-[0-9]{4}-[0-9]{2}$' THEN 'DEP-dongbo' WHEN reference LIKE 'DEP-%' THEN 'DEP-trangTSCD'
+                             ELSE coalesce("referenceType", '?') END AS loai,
+                        (date > to_char(now() AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD')) AS "tuongLai",
+                        count(*)::int AS so, round(sum(amount)::numeric)::float AS tien, min(date) AS "tuNgay", max(date) AS "denNgay"
+                   FROM "JournalEntry" WHERE "referenceType" IN ('payroll', 'depreciation') OR date > to_char(now() AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD')
+                  GROUP BY 1, 2 ORDER BY 1, 2`))
             await doc('butToanTheoLoai', () => sp.$queryRawUnsafe(
                 `SELECT ${KY('"createdAt"')} AS ky, "referenceType" AS loai, count(*)::int AS so, round(sum(amount)::numeric)::float AS tien
                    FROM "JournalEntry" WHERE "createdAt" >= $1::timestamp GROUP BY 1, 2 ORDER BY 1, 2`, tu))
