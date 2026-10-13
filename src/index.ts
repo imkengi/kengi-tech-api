@@ -65,6 +65,7 @@ import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
 import kiotvietRoutes from './routes/kiotviet'
 import misaRoutes from './routes/misa'
+import zaloRoutes from './routes/zalo'
 import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
@@ -312,6 +313,8 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/kiotviet', kiotvietRoutes)
 // Cổng đồng bộ MISA AMIS Kế toán — toàn bộ sau adminAuth, không có webhook công khai
 app.use('/api/misa', misaRoutes)
+// Nhóm Zalo ↔ khách + tin nhóm Zalo do n8n chuyển vào (thay Google Sheet) — 13/10/2026
+app.use('/api/zalo', zaloRoutes)
 app.use('/api/import-data', importDataRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/livestream', livestreamRoutes) // Kengi Stream studio (kengi.vn/ai-livestream)

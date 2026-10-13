@@ -3770,6 +3770,40 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_trangThai_idx" ON "MisaPushItem"("trangThai")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_orgRefid_idx" ON "MisaPushItem"("orgRefid")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPushItem_guiLuc_idx" ON "MisaPushItem"("guiLuc")`)
+                // 13/10/2026 — nhóm Zalo ↔ khách + tin nhóm Zalo do n8n chuyển vào (routes/zalo.ts)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloNhom" (
+                        "id" TEXT NOT NULL,
+                        "groupId" TEXT NOT NULL,
+                        "tenNhom" TEXT,
+                        "maKhach" TEXT NOT NULL,
+                        "customerId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "ZaloNhom_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ZaloNhom_groupId_key" ON "ZaloNhom"("groupId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloNhom_customerId_idx" ON "ZaloNhom"("customerId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloNhom_maKhach_idx" ON "ZaloNhom"("maKhach")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloTin" (
+                        "id" TEXT NOT NULL,
+                        "msgId" TEXT,
+                        "groupId" TEXT NOT NULL,
+                        "customerId" TEXT,
+                        "nguoiGui" TEXT,
+                        "noiDung" TEXT NOT NULL,
+                        "yeuCauHoaDon" BOOLEAN,
+                        "thoiDiem" TIMESTAMP(3) NOT NULL,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "ZaloTin_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ZaloTin_msgId_key" ON "ZaloTin"("msgId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_groupId_idx" ON "ZaloTin"("groupId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_customerId_idx" ON "ZaloTin"("customerId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_thoiDiem_idx" ON "ZaloTin"("thoiDiem")`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,

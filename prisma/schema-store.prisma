@@ -3961,3 +3961,40 @@ model SanMediaSanPham {
   @@index([productId])
   @@index([sku])
 }
+
+/// Nhóm Zalo (Zalo CÁ NHÂN của công ty) ↔ khách hàng — 13/10/2026.
+/// HUTI bán sỉ: mỗi đại lý một nhóm Zalo chung với tài khoản Hưng Tín. Tin đến từ nhóm nào
+/// thì biết là khách nào, khách không phải ghi mã. MỘT khách có thể có NHIỀU nhóm (đo file
+/// kh.xlsx: 8/142 mã có 2 nhóm) nên không gắn cột vào Customer.
+/// groupId là CHUỖI 19 chữ số — vượt Number.MAX_SAFE_INTEGER, để số là mất chữ số cuối.
+model ZaloNhom {
+  id         String   @id @default(cuid())
+  groupId    String   @unique
+  tenNhom    String?
+  maKhach    String // mã khách như trong file nguồn — giữ để soát khi chưa khớp được
+  customerId String? // null = mã không có trên Kengi (báo lại, KHÔNG tự tạo khách)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([maKhach])
+}
+
+/// Tin nhắn nhóm Zalo do n8n chuyển vào (thay Google Sheet trung gian) — 13/10/2026.
+/// Ghi TRƯỚC rồi mới trả 200; msgId chống ghi trùng khi n8n gửi lại.
+model ZaloTin {
+  id           String   @id @default(cuid())
+  msgId        String?  @unique
+  groupId      String
+  customerId   String? // khớp qua ZaloNhom lúc nhận
+  nguoiGui     String?
+  noiDung      String
+  // Khách có muốn lấy hoá đơn không: true / false / null = tin này không nói chuyện đó
+  yeuCauHoaDon Boolean?
+  thoiDiem     DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([groupId])
+  @@index([customerId])
+  @@index([thoiDiem])
+}
