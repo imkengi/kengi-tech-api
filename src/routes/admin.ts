@@ -5237,6 +5237,143 @@ router.get('/do-so-thue', async (req: Request, res: Response) => {
                 const r: any[] = await sp.$queryRawUnsafe(`SELECT count(*)::int AS n FROM "HkdRevenueEntry"`)
                 return r[0]?.n ?? null
             })
+            /* Đo 13/10: KENGISTORE có ~1.200 bút toán mà `date` KHÔNG phải YYYY-MM-DD ("Fri Aug ...") — mọi báo
+             * cáo lọc theo khoảng ngày bỏ sót chúng. Đếm + mẫu để lần ra đường ghi. */
+            await doc('ngayKhongChuan', async () => {
+                const dem: any[] = await sp.$queryRawUnsafe(
+                    `SELECT count(*)::int AS n, round(sum(amount)::numeric)::float AS tien FROM "JournalEntry" WHERE date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'`)
+                const theoLoai: any[] = await sp.$queryRawUnsafe(
+                    `SELECT "referenceType" AS loai, "debitAccount" AS no, "creditAccount" AS co, count(*)::int AS n,
+                            min("createdAt") AS "tuLuc", max("createdAt") AS "denLuc"
+                       FROM "JournalEntry" WHERE date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                      GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 20`)
+                const mau: any[] = await sp.$queryRawUnsafe(
+                    `SELECT date, reference, "referenceType", description, "createdBy", "createdAt" FROM "JournalEntry"
+                      WHERE date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' ORDER BY "createdAt" DESC LIMIT 8`)
+                return { ...dem[0], theoLoai, mau }
+            })
+            ra.push(muc)
+        }
+        res.json({ success: true, data: { tu, thang, cuaHang: ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/* ─── NGHIỆP VỤ ĐÃ GHI SỔ ĐỦ VẾ CHƯA (chỉ đọc) — GET /admin/do-du-but-toan?store=HUTI&thang=6 (13/10/2026) ───
+ * Chủ shop hỏi "các nghiệp vụ ghi đã đủ hay chưa". Đếm theo CHỨNG TỪ, nối sang JournalEntry.reference theo đúng
+ * khoá mà hàm ghi sổ dùng (autoJournal: SALE-/VAT-/DISC-/COGS-<số phiếu>; autoJournalPurchase: IMP-/IMPVAT-/
+ * IMPPAY-/PAYSUP-<mã>-, EXP-/EXPVAT-<id>, RET-/RETVAT-/RETCOGS-<mã>; đảo: VOID-<ref>, REV-<ref>). Chia theo tháng
+ * (giờ VN) × trạng thái để không gộp phiếu huỷ vào "thiếu". Giá vốn: chỉ đếm phiếu có dòng hàng mà giá vốn HIỆN
+ * TẠI > 0 (lúc ghi có thể là 0 — xem như dấu hiệu, không phải kết luận). Đọc hỏng ghi `loi`, KHÔNG ra 0. */
+router.get('/do-du-but-toan', async (req: Request, res: Response) => {
+    try {
+        const thang = Math.max(1, Math.min(24, Number(req.query.thang) || 6))
+        const chiMot = String(req.query.store || '').trim().toUpperCase()
+        const moc = new Date()
+        moc.setUTCDate(1)
+        moc.setUTCHours(0, 0, 0, 0)
+        moc.setUTCMonth(moc.getUTCMonth() - (thang - 1))
+        const tu = moc.toISOString()
+        const KY = (cot: string) => `to_char((${cot} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM')`
+
+        const ds = await prisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true } })
+        const ra: any[] = []
+        for (const st of ds) {
+            if (chiMot && String(st.code).toUpperCase() !== chiMot) continue
+            const sp: any = getStorePrisma(st.schema)
+            const muc: any = { cuaHang: st.code }
+            const doc = async (ten: string, f: () => Promise<any>) => {
+                try { muc[ten] = await f() } catch (e: any) { muc[ten] = { loi: String(e?.message || e).slice(0, 200) } }
+            }
+            await doc('loaiHinh', async () => {
+                const r: any[] = await sp.$queryRawUnsafe(`SELECT "businessType" FROM "StoreSettings" LIMIT 1`)
+                return r[0]?.businessType ?? null
+            })
+            await doc('ban', () => sp.$queryRawUnsafe(
+                `WITH t AS (
+                    SELECT t.id, t."receiptNumber" AS rn, t.status, ${KY('t."createdAt"')} AS ky,
+                           COALESCE(NULLIF(t.subtotal, 0), t.total - COALESCE(t.tax, 0)) AS dt,
+                           COALESCE(t.tax, 0) AS thue, COALESCE(t.discount, 0) AS gg
+                      FROM "Transaction" t WHERE t."createdAt" >= $1::timestamp)
+                 SELECT t.ky, t.status, count(*)::int AS so,
+                        count(*) FILTER (WHERE t.dt > 0 AND s.id IS NULL)::int AS "thieuDoanhThu",
+                        round(COALESCE(sum(t.dt) FILTER (WHERE t.dt > 0 AND s.id IS NULL), 0)::numeric)::float AS "tienThieuDoanhThu",
+                        count(*) FILTER (WHERE t.thue > 0 AND v.id IS NULL)::int AS "thieuThue",
+                        count(*) FILTER (WHERE t.gg > 0 AND d.id IS NULL)::int AS "thieuGiamGia",
+                        count(*) FILTER (WHERE c.id IS NULL AND EXISTS (
+                            SELECT 1 FROM "TransactionItem" ti JOIN "Product" p ON p.id = ti."productId"
+                             WHERE ti."transactionId" = t.id AND p."costPrice" > 0))::int AS "thieuGiaVon",
+                        count(*) FILTER (WHERE s.id IS NOT NULL AND abs(s.amount - t.dt) > 1)::int AS "lechDoanhThu",
+                        round(COALESCE(sum(s.amount - t.dt) FILTER (WHERE s.id IS NOT NULL AND abs(s.amount - t.dt) > 1), 0)::numeric)::float AS "tienLechDoanhThu",
+                        count(*) FILTER (WHERE v.id IS NOT NULL AND abs(v.amount - t.thue) > 1)::int AS "lechThue",
+                        count(*) FILTER (WHERE s.id IS NOT NULL AND dao.id IS NULL)::int AS "coDoanhThuChuaDao",
+                        count(*) FILTER (WHERE adj.id IS NOT NULL)::int AS "coDieuChinh"
+                   FROM t
+                   LEFT JOIN "JournalEntry" s ON s.reference = 'SALE-' || t.rn
+                   LEFT JOIN "JournalEntry" v ON v.reference = 'VAT-' || t.rn
+                   LEFT JOIN "JournalEntry" d ON d.reference = 'DISC-' || t.rn
+                   LEFT JOIN "JournalEntry" c ON c.reference = 'COGS-' || t.rn
+                   LEFT JOIN "JournalEntry" dao ON dao.reference IN ('VOID-SALE-' || t.rn, 'REV-SALE-' || t.rn)
+                   LEFT JOIN "JournalEntry" adj ON adj.reference = 'ADJ-SALE-' || t.rn
+                  GROUP BY 1, 2 ORDER BY 1, 2`, tu))
+            await doc('nhap', () => sp.$queryRawUnsafe(
+                `SELECT ${KY('r."createdAt"')} AS ky, r.status, count(*)::int AS so,
+                        count(*) FILTER (WHERE i.id IS NULL)::int AS "thieuNhapKho",
+                        round(COALESCE(sum(r."totalCost") FILTER (WHERE i.id IS NULL), 0)::numeric)::float AS "tienThieuNhapKho",
+                        count(*) FILTER (WHERE r."hasVatInvoice" AND COALESCE(r."vatAmount", 0) > 0 AND iv.id IS NULL)::int AS "thieuThueVao",
+                        count(*) FILTER (WHERE NOT r."hasVatInvoice" AND COALESCE(r."vatAmount", 0) > 0)::int AS "coThueMaKhongHoaDon",
+                        count(*) FILTER (WHERE COALESCE(r."paidAmount", 0) > 0 AND NOT EXISTS (
+                            SELECT 1 FROM "JournalEntry" j WHERE j.reference = 'IMPPAY-' || r.code OR j.reference LIKE 'PAYSUP-' || r.code || '-%'))::int AS "daTraMaChuaGhiTra",
+                        count(*) FILTER (WHERE i.id IS NOT NULL AND dao.id IS NULL)::int AS "coNhapKhoChuaDao"
+                   FROM "ImportReceipt" r
+                   LEFT JOIN "JournalEntry" i ON i.reference = 'IMP-' || r.code
+                   LEFT JOIN "JournalEntry" iv ON iv.reference = 'IMPVAT-' || r.code
+                   LEFT JOIN "JournalEntry" dao ON dao.reference = 'VOID-IMP-' || r.code
+                  WHERE r."createdAt" >= $1::timestamp
+                  GROUP BY 1, 2 ORDER BY 1, 2`, tu))
+            await doc('chi', () => sp.$queryRawUnsafe(
+                `SELECT ${KY('e."createdAt"')} AS ky, e.status, e.category, count(*)::int AS so,
+                        round(sum(e.amount)::numeric)::float AS tien,
+                        count(*) FILTER (WHERE x.id IS NULL)::int AS "thieuChiPhi",
+                        round(COALESCE(sum(e.amount) FILTER (WHERE x.id IS NULL), 0)::numeric)::float AS "tienThieuChiPhi",
+                        count(*) FILTER (WHERE COALESCE(e."vatAmount", 0) > 0 AND xv.id IS NULL)::int AS "thieuThueVao",
+                        count(*) FILTER (WHERE x.id IS NOT NULL AND dao.id IS NULL)::int AS "coChiPhiChuaDao"
+                   FROM "Expense" e
+                   LEFT JOIN "JournalEntry" x ON x.reference = 'EXP-' || e.id
+                   LEFT JOIN "JournalEntry" xv ON xv.reference = 'EXPVAT-' || e.id
+                   LEFT JOIN "JournalEntry" dao ON dao.reference = 'VOID-EXP-' || e.id
+                  WHERE e."createdAt" >= $1::timestamp
+                  GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, tu))
+            await doc('traHang', () => sp.$queryRawUnsafe(
+                `SELECT ${KY('r."createdAt"')} AS ky, r.status, count(*)::int AS so,
+                        round(sum(r."totalRefund")::numeric)::float AS "tienTra",
+                        count(*) FILTER (WHERE x.id IS NULL)::int AS "thieuTraHang",
+                        round(COALESCE(sum(r."totalRefund") FILTER (WHERE x.id IS NULL), 0)::numeric)::float AS "tienThieuTraHang",
+                        count(*) FILTER (WHERE xv.id IS NULL)::int AS "khongCoThueTra",
+                        count(*) FILTER (WHERE xc.id IS NULL)::int AS "khongCoGiaVonTra"
+                   FROM "ReturnOrder" r
+                   LEFT JOIN "JournalEntry" x ON x.reference = 'RET-' || r.code
+                   LEFT JOIN "JournalEntry" xv ON xv.reference = 'RETVAT-' || r.code
+                   LEFT JOIN "JournalEntry" xc ON xc.reference = 'RETCOGS-' || r.code
+                  WHERE r."createdAt" >= $1::timestamp
+                  GROUP BY 1, 2 ORDER BY 1, 2`, tu))
+            await doc('congNoKhach', async () => {
+                const phieu: any[] = await sp.$queryRawUnsafe(
+                    `SELECT ${KY('"createdAt"')} AS ky, type, count(*)::int AS so, round(sum(amount)::numeric)::float AS tien
+                       FROM "DebtEntry" WHERE "createdAt" >= $1::timestamp GROUP BY 1, 2 ORDER BY 1, 2`, tu)
+                const but: any[] = await sp.$queryRawUnsafe(
+                    `SELECT ${KY('"createdAt"')} AS ky,
+                            CASE WHEN reference LIKE 'COLLECT-DEBT-%' THEN 'COLLECT-DEBT' WHEN reference LIKE 'COLLECT-CUST-%' THEN 'COLLECT-CUST'
+                                 WHEN reference LIKE 'COLLECT-CR-%' THEN 'COLLECT-CR' ELSE 'COLLECT-<so phieu>' END AS loai,
+                            count(*)::int AS so, round(sum(amount)::numeric)::float AS tien
+                       FROM "JournalEntry" WHERE reference LIKE 'COLLECT-%' AND "createdAt" >= $1::timestamp
+                      GROUP BY 1, 2 ORDER BY 1, 2`, tu)
+                return { phieuCongNo: phieu, butToanThu: but }
+            })
+            await doc('butToanTheoLoai', () => sp.$queryRawUnsafe(
+                `SELECT ${KY('"createdAt"')} AS ky, "referenceType" AS loai, count(*)::int AS so, round(sum(amount)::numeric)::float AS tien
+                   FROM "JournalEntry" WHERE "createdAt" >= $1::timestamp GROUP BY 1, 2 ORDER BY 1, 2`, tu))
             ra.push(muc)
         }
         res.json({ success: true, data: { tu, thang, cuaHang: ra } })
