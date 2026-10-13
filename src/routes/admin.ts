@@ -5190,6 +5190,61 @@ router.get('/do-cot', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── SỔ THUẾ ĐANG CÓ GÌ (chỉ đọc) — GET /admin/do-so-thue?thang=12&store=HUTI (13/10/2026) ──────
+ * Soát "hạch toán thuế còn thiếu gì" cần SỐ THẬT, không chỉ đọc mã: từng tháng, các cặp Nợ/Có chạm
+ * 333x/133x/821x/911/421 (thuế đầu ra, đầu vào, kết chuyển khấu trừ, nộp thuế, TNDN, khoá sổ), doanh
+ * thu Có 511 để so tỷ lệ thuế, tờ khai đã lưu, khoá sổ, loại hình. Đọc hỏng ghi `loi`, KHÔNG ra 0.
+ * Tuần tự từng cửa hàng (pool 1). */
+router.get('/do-so-thue', async (req: Request, res: Response) => {
+    try {
+        const thang = Math.max(1, Math.min(36, Number(req.query.thang) || 12))
+        const chiMot = String(req.query.store || '').trim().toUpperCase()
+        const moc = new Date()
+        moc.setUTCDate(1)
+        moc.setUTCMonth(moc.getUTCMonth() - (thang - 1))
+        const tu = moc.toISOString().slice(0, 10)
+
+        const ds = await prisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true } })
+        const ra: any[] = []
+        for (const st of ds) {
+            if (chiMot && String(st.code).toUpperCase() !== chiMot) continue
+            const sp: any = getStorePrisma(st.schema)
+            const muc: any = { cuaHang: st.code }
+            const doc = async (ten: string, f: () => Promise<any>) => {
+                try { muc[ten] = await f() } catch (e: any) { muc[ten] = { loi: String(e?.message || e).slice(0, 200) } }
+            }
+            await doc('loaiHinh', async () => {
+                const r: any[] = await sp.$queryRawUnsafe(`SELECT "businessType" FROM "StoreSettings" LIMIT 1`)
+                return r[0]?.businessType ?? null
+            })
+            await doc('capThue', () => sp.$queryRawUnsafe(
+                `SELECT substr(date, 1, 7) AS ky, "debitAccount" AS no, "creditAccount" AS co,
+                        count(*)::int AS n, round(sum(amount)::numeric)::float AS tien
+                   FROM "JournalEntry"
+                  WHERE date >= $1
+                    AND ("debitAccount" ~ '^(333|133|821|911|421)' OR "creditAccount" ~ '^(333|133|821|911|421)')
+                  GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, tu))
+            await doc('theoThang', () => sp.$queryRawUnsafe(
+                `SELECT substr(date, 1, 7) AS ky, count(*)::int AS "soButToan",
+                        round(sum(CASE WHEN "creditAccount" LIKE '511%' THEN amount ELSE 0 END)::numeric)::float AS "co511",
+                        round(sum(CASE WHEN "debitAccount" LIKE '511%' THEN amount ELSE 0 END)::numeric)::float AS "no511"
+                   FROM "JournalEntry" WHERE date >= $1 GROUP BY 1 ORDER BY 1`, tu))
+            await doc('toKhai', () => sp.$queryRawUnsafe(
+                `SELECT "formType", period, "periodType", "createdAt" FROM "TaxDeclaration" ORDER BY "createdAt" DESC LIMIT 40`))
+            await doc('khoaSo', () => sp.$queryRawUnsafe(
+                `SELECT "lockDate", "periodType", "isActive", "createdAt" FROM "PeriodLock" ORDER BY "createdAt" DESC LIMIT 10`))
+            await doc('soDongSoDoanhThuHkd', async () => {
+                const r: any[] = await sp.$queryRawUnsafe(`SELECT count(*)::int AS n FROM "HkdRevenueEntry"`)
+                return r[0]?.n ?? null
+            })
+            ra.push(muc)
+        }
+        res.json({ success: true, data: { tu, thang, cuaHang: ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /**
  * SOÁT TỰ ĐỘNG HOÁ MARKETING — GET /admin/mkt-chan-doan?store=HUTI&ngay=7  (06/10/2026)
  *
