@@ -123,7 +123,7 @@ export async function chiTietLamVideo(prisma: any, id: string) {
     if (!p) return null
     const listing: any[] = p.sku ? await prisma.onlineProduct.findMany({
         where: { sku: p.sku },
-        select: { channelId: true, platform: true, platformProductId: true, name: true, status: true, price: true, stock: true,
+        select: { id: true, channelId: true, platform: true, platformProductId: true, name: true, status: true, price: true, stock: true, imageUrl: true,
             channel: { select: { name: true, status: true } } },
         take: 20,
     }) : []
@@ -143,6 +143,13 @@ export async function chiTietLamVideo(prisma: any, id: string) {
             tonTrenSan: Number(l.stock) || 0,
         })),
         video: video.map(v => v.media).filter(Boolean),
+        /* ẢNH TRÊN SÀN (14/10/2026): ảnh chính listing — đo KENGISTORE: 1024×1024, poster shop tự thiết kế (logo
+         * KENGI STORE, nền đời sống, huy hiệu thông số) — nét hơn hẳn ảnh kho 610×409. Máy dựng chiếu nguyên tấm.
+         * Một ảnh một lần dù nhiều gian dùng chung; chỉ host CDN đã biết (lấy qua /anh-san/:id). */
+        anhSan: listing
+            .filter((l, i, ds) => l.imageUrl && hostAnhDuocPhep(l.imageUrl) && ds.findIndex(x => x.imageUrl === l.imageUrl) === i)
+            .slice(0, 3)
+            .map(l => ({ id: l.id, url: l.imageUrl, san: l.platform, tenGian: l.channel?.name || null })),
     }
 }
 
@@ -166,7 +173,18 @@ export class LoiAnh extends Error { constructor(msg: string, public ma: number) 
 export async function layAnhSanPham(prisma: any, anhId: string): Promise<{ buf: Buffer; loai: string }> {
     const a = await prisma.productImage.findFirst({ where: { id: String(anhId) }, select: { url: true } })
     if (!a?.url) throw new LoiAnh('Không thấy ảnh này trong kho', 404)
-    let url = String(a.url)
+    return layAnhTheoUrl(String(a.url))
+}
+
+/** Ảnh chính của một listing trên sàn (theo id OnlineProduct) — cùng luật host + chuyển hướng như ảnh kho. */
+export async function layAnhTrenSan(prisma: any, onlineProductId: string): Promise<{ buf: Buffer; loai: string }> {
+    const a = await prisma.onlineProduct.findFirst({ where: { id: String(onlineProductId) }, select: { imageUrl: true } })
+    if (!a?.imageUrl) throw new LoiAnh('Listing này không có ảnh', 404)
+    return layAnhTheoUrl(String(a.imageUrl))
+}
+
+async function layAnhTheoUrl(urlGoc: string): Promise<{ buf: Buffer; loai: string }> {
+    let url = urlGoc
     for (let buoc = 0; buoc < 4; buoc++) {
         if (!hostAnhDuocPhep(url)) throw new LoiAnh(`Ảnh nằm ở nơi máy chủ không lấy hộ (${(() => { try { return new URL(url).hostname } catch { return 'đường dẫn hỏng' } })()}) — tải ảnh vào kho Thông tin sản phẩm`, 422)
         const r = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15_000), headers: { accept: 'image/*' } } as any)
