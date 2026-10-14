@@ -61,16 +61,22 @@ export function oTrongNgay(xep: CauHinhXep): string[] {
     const gio = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
     const moc = Array.from(new Set(xep.khung)).sort().map(phut)
     const buoc = Math.max(15, xep.cachPhut || 30)
-    const ra: string[] = []
-    for (let k = 0; ra.length < Math.max(xep.moiNgay, moc.length) && k < 96; k++) {
+    /* Ô quá sát ô đã nhận (< cachPhut) thì BỎ — hai mốc 14:01 và 14:02 với khoảng cách 30 phút không dùng chung một ngày
+     * được; bản trước vẫn đếm là hai ô ⇒ "Thực tế: N ô/ngày" báo cao hơn số video thật xếp được (đo cấu hình 14/10). */
+    const cach = Math.max(1, xep.cachPhut)
+    const nhan: number[] = []
+    for (let k = 0; nhan.length < Math.max(xep.moiNgay, moc.length) && k < 96; k++) {
         let them = false
         moc.forEach((m, i) => {
             const t = m + k * buoc, tran = i + 1 < moc.length ? moc[i + 1]! : 23 * 60 + 30
-            if (k === 0 || t < tran) { ra.push(gio(t)); them = true }
+            if (k === 0 || t < tran) {
+                them = true
+                if (nhan.every(x => Math.abs(x - t) >= cach)) nhan.push(t)
+            }
         })
         if (!them) break
     }
-    return ra
+    return nhan.map(gio)
 }
 
 export type DongKe = { id: string; ten: string; sku: string[]; channelId: string; tenGian: string; henDangLuc: string }
