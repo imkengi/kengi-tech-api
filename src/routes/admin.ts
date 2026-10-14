@@ -5224,6 +5224,40 @@ router.get('/do-cot', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── KHO THÔNG TIN SẢN PHẨM ĐỦ LÀM VIDEO CHƯA (chỉ đọc) — GET /admin/do-thong-tin-sp (14/10/2026) ──────
+ * Máy dựng video Frame sẽ lấy NGẪU NHIÊN mô tả + ảnh từ kho Thông tin sản phẩm. Đếm từng cửa hàng: bao
+ * nhiêu mã có mô tả, có ảnh, có cả hai (đủ làm video), và đang bán trên gian Shopee nào. Đọc hỏng ⇒ `loi`. */
+router.get('/do-thong-tin-sp', async (_req: Request, res: Response) => {
+    try {
+        const ds = await prisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true } })
+        const ra: any[] = []
+        for (const st of ds) {
+            const sp: any = getStorePrisma(st.schema)
+            try {
+                const r: any[] = await sp.$queryRawUnsafe(
+                    `SELECT count(*)::int AS "tongMa",
+                            count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '')::int AS "coMoTa",
+                            count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::int AS "coAnh",
+                            count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::int AS "duLamVideo",
+                            count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND (SELECT count(*) FROM "ProductImage" i WHERE i."productId" = p.id) >= 3)::int AS "duVa3Anh"
+                       FROM "Product" p WHERE coalesce(p."isActive", true) = true`)
+                const mau: any[] = await sp.$queryRawUnsafe(
+                    `SELECT p.sku, left(p.name, 60) AS ten, length(p.description)::int AS "doDaiMoTa",
+                            (SELECT count(*)::int FROM "ProductImage" i WHERE i."productId" = p.id) AS "soAnh"
+                       FROM "Product" p
+                      WHERE coalesce(trim(p.description), '') <> '' AND EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)
+                      ORDER BY p."updatedAt" DESC LIMIT 5`)
+                ra.push({ cuaHang: st.code, ...r[0], mau })
+            } catch (e: any) {
+                ra.push({ cuaHang: st.code, loi: String(e?.message || e).slice(0, 160) })
+            }
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── SỔ THUẾ ĐANG CÓ GÌ (chỉ đọc) — GET /admin/do-so-thue?thang=12&store=HUTI (13/10/2026) ──────
  * Soát "hạch toán thuế còn thiếu gì" cần SỐ THẬT, không chỉ đọc mã: từng tháng, các cặp Nợ/Có chạm
  * 333x/133x/821x/911/421 (thuế đầu ra, đầu vào, kết chuyển khấu trừ, nộp thuế, TNDN, khoá sổ), doanh
