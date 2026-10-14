@@ -2711,7 +2711,31 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                     await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "tienTrinhDang" TEXT`)
                     // Khai nội dung AI cho aigc_label của Shopee Video (09/10/2026) — null = chưa khai
                     await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "coNoiDungAI" BOOLEAN`)
+                    /* Video dựng từ sản phẩm KHÔNG TRÙNG NỘI DUNG trên một mã (14/10/2026): biến thể đã dựng (JSON)
+                     * + vân tay nội dung (băm kịch bản + ảnh) để máy chủ chặn video thứ hai giống hệt; `tuDong` =
+                     * ngày (giờ VN) máy dựng tự động làm ra video, null = người bấm tay. */
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "bienThe" TEXT`)
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "vanTay" TEXT`)
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "SanMedia" ADD COLUMN IF NOT EXISTS "tuDong" TEXT`)
+                    await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SanMedia_vanTay_idx" ON "SanMedia"("vanTay")`)
+                    await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SanMedia_tuDong_idx" ON "SanMedia"("tuDong")`)
                 } catch { /* cửa hàng chưa có bảng SanMedia → sync-schemas sẽ tạo đủ cột */ }
+                /* Lịch TỰ TẠO video từ sản phẩm (14/10/2026): một dòng cấu hình mỗi cửa hàng + chỗ giữ của máy
+                 * dựng (trình duyệt — Cloud Run không dựng được video) + nhật ký ngắn. */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "SanMediaTuDong" (
+                        "id" TEXT NOT NULL,
+                        "bat" BOOLEAN NOT NULL DEFAULT false,
+                        "cauHinh" TEXT,
+                        "giuChoBoi" TEXT,
+                        "giuChoDen" TIMESTAMP(3),
+                        "mayDung" TEXT,
+                        "nhatKy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "SanMediaTuDong_pkey" PRIMARY KEY ("id")
+                    )
+                `)
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION`)
