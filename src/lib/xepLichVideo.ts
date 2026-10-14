@@ -49,9 +49,32 @@ export function chuanXep(x: any): CauHinhXep {
     }
 }
 
+/**
+ * Ô giờ trong MỘT ngày theo thứ tự ưu tiên (giờ VN 'HH:MM'). Số video/ngày ≤ số mốc ⇒ chỉ đúng các mốc (như trước).
+ * Nhiều hơn ⇒ thêm ô SAU từng mốc, cách nhau `cachPhut` (≥15, 0 thì 30), XOAY VÒNG giữa các mốc (11:30, 17:00, 20:00,
+ * 12:00, 17:30, 20:30…), không lấn sang mốc kế tiếp, không quá 23:30. Bản đầu chỉ đặt đúng mốc ⇒ chủ shop đặt 12
+ * video/ngày với 3 mốc mà thật ra chỉ được 3 — trần cắt âm thầm (14/10/2026).
+ */
+export function oTrongNgay(xep: CauHinhXep): string[] {
+    const phut = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5))
+    const gio = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    const moc = Array.from(new Set(xep.khung)).sort().map(phut)
+    const buoc = Math.max(15, xep.cachPhut || 30)
+    const ra: string[] = []
+    for (let k = 0; ra.length < Math.max(xep.moiNgay, moc.length) && k < 96; k++) {
+        let them = false
+        moc.forEach((m, i) => {
+            const t = m + k * buoc, tran = i + 1 < moc.length ? moc[i + 1]! : 23 * 60 + 30
+            if (k === 0 || t < tran) { ra.push(gio(t)); them = true }
+        })
+        if (!them) break
+    }
+    return ra
+}
+
 export type DongKe = { id: string; ten: string; sku: string[]; channelId: string; tenGian: string; henDangLuc: string }
 export type DongBo = { id: string; ten: string; lyDo: string }
-export type KeHoach = { ke: DongKe[]; boQua: DongBo[]; daChiem: number; xep: CauHinhXep }
+export type KeHoach = { ke: DongKe[]; boQua: DongBo[]; daChiem: number; xep: CauHinhXep; /** số ô thật sự mỗi gian mỗi ngày */ oMoiNgay: number }
 
 /** Lý do video chưa tự xếp lịch được — cùng điều kiện với datHenGio, nói bằng lời người dùng làm được */
 function lyDoChuaDu(m: any, gian: Map<string, any>): string | null {
@@ -111,6 +134,8 @@ export async function lapLich(prisma: any, o: { ids?: string[]; xep: CauHinhXep;
 
     const ke: DongKe[] = [], boQua: DongBo[] = []
     const som = now + 20 * 60_000, muon = now + 30 * NGAY_MS - 3600_000
+    const oNgay = oTrongNgay(xep)
+    const oMoiNgay = Math.min(xep.moiNgay, oNgay.length)
     const cachNgay = (a: string, b: string) => Math.round(Math.abs(Date.parse(a) - Date.parse(b)) / NGAY_MS)
     for (const m of ung) {
         const ly = lyDoChuaDu(m, gian)
@@ -123,7 +148,7 @@ export async function lapLich(prisma: any, o: { ids?: string[]; xep: CauHinhXep;
             const trongNgay = ds.filter(x => x.ngay === ngay)
             if (trongNgay.length >= xep.moiNgay) continue
             if (xep.cungMaCachNgay > 0 && skus.length && ds.some(x => x.skus.some(s => skus.includes(s)) && cachNgay(x.ngay, ngay) < xep.cungMaCachNgay)) continue
-            for (const hhmm of xep.khung) {
+            for (const hhmm of oNgay) {
                 const t = mocVN(ngay, hhmm)
                 if (t < som || t > muon) continue
                 if (ds.some(x => Math.abs(x.t - t) < Math.max(1, xep.cachPhut) * 60_000)) continue
@@ -132,13 +157,13 @@ export async function lapLich(prisma: any, o: { ids?: string[]; xep: CauHinhXep;
             }
         }
         if (chon == null) {
-            boQua.push({ id: m.id, ten: m.ten, lyDo: `Hết ô trống trong 30 ngày tới (${xep.moiNgay} video/ngày, khung ${xep.khung.join(', ')})` })
+            boQua.push({ id: m.id, ten: m.ten, lyDo: `Hết ô trống trong 30 ngày tới (${oMoiNgay} video/ngày/gian, mốc ${xep.khung.join(', ')})` })
             continue
         }
         them(m.channelId, chon, skus)
         ke.push({ id: m.id, ten: m.ten, sku: skus, channelId: m.channelId, tenGian: gian.get(m.channelId)?.name || '', henDangLuc: new Date(chon).toISOString() })
     }
-    return { ke, boQua, daChiem, xep }
+    return { ke, boQua, daChiem, xep, oMoiNgay }
 }
 
 /** Áp dụng kế hoạch: hẹn TỪNG video qua datHenGio (kiểm lại đủ điều kiện ngay lúc hẹn), tuần tự. */

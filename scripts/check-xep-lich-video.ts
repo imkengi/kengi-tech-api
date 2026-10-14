@@ -2,7 +2,7 @@
  *   npx tsx scripts/check-xep-lich-video.ts
  * Mỗi luật có ca "phải xếp" lẫn ca "phải chừa": không hai video một giờ trên cùng gian, tối đa N/gian/ngày (tính
  * cả video đã hẹn/đã đăng), cùng mã cách ≥ Y ngày, ≥20 phút tới, video thiếu điều kiện thì nói lý do. */
-import { lapLich, mocVN, ngayVN, chuanXep } from '../src/lib/xepLichVideo'
+import { lapLich, mocVN, ngayVN, chuanXep, oTrongNgay } from '../src/lib/xepLichVideo'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -77,9 +77,22 @@ const xep = chuanXep({ khung: ['20:00', '11:30'], moiNgay: 2, cachPhut: 120, cun
     const kh4 = await lapLich(prismaGia([nhap('s1', 'Q')], kenh), { xep, now: mocVN(homNay, '11:20') })
     dung('11:20 ⇒ bỏ ô 11:30, vào 20:00', kh4.ke[0]?.henDangLuc === new Date(mocVN(homNay, '20:00')).toISOString(), kh4.ke[0]?.henDangLuc)
 
-    // 5. Khoảng cách tối thiểu: khung 11:30 + 12:00 với cách 120 phút ⇒ một ngày chỉ dùng được 11:30
+    // 5. Khoảng cách tối thiểu: mốc 11:30 + 12:00, cách 120 phút, 3/ngày ⇒ k2 KHÔNG vào 12:00 (cách 11:30 chỉ 30 phút)
+    //    mà vào ô sau mốc 12:00 cách 120 phút (14:00) — vẫn trong ngày vì còn chỉ tiêu
     const kh5 = await lapLich(prismaGia([nhap('k1', 'K1'), nhap('k2', 'K2')], kenh), { xep: chuanXep({ khung: ['11:30', '12:00'], moiNgay: 3, cachPhut: 120, cungMaCachNgay: 0 }), now: nay })
-    dung('cách 120 phút ⇒ k2 không vào 12:00 cùng ngày', kh5.ke.find(k => k.id === 'k2')?.henDangLuc === new Date(mocVN(mai, '11:30')).toISOString(), kh5.ke.find(k => k.id === 'k2')?.henDangLuc)
+    dung('cách 120 phút ⇒ k2 không vào 12:00, vào 14:00', kh5.ke.find(k => k.id === 'k2')?.henDangLuc === new Date(mocVN(homNay, '14:00')).toISOString(), kh5.ke.find(k => k.id === 'k2')?.henDangLuc)
+
+    // 5b. Ô QUANH MỐC: 12 video/ngày với 3 mốc cách 30 phút ⇒ đủ 12 ô, xoay vòng giữa các mốc, không lấn mốc sau
+    const o12 = oTrongNgay(chuanXep({ khung: ['11:30', '17:00', '20:00'], moiNgay: 12, cachPhut: 30, cungMaCachNgay: 0 }))
+    dung('3 mốc, 12/ngày ⇒ 12 ô', o12.length === 12, o12.join(' '))
+    dung('xoay vòng: 3 ô đầu là đúng 3 mốc', o12.slice(0, 3).join() === '11:30,17:00,20:00', o12.slice(0, 6).join(' '))
+    dung('ô thứ 4–6 là mốc + 30 phút', o12.slice(3, 6).join() === '12:00,17:30,20:30')
+    dung('số/ngày ≤ số mốc ⇒ chỉ đúng các mốc', oTrongNgay(chuanXep({ khung: ['11:30', '20:00'], moiNgay: 2, cachPhut: 120, cungMaCachNgay: 0 })).join() === '11:30,20:00')
+    const o40 = oTrongNgay(chuanXep({ khung: ['20:00'], moiNgay: 12, cachPhut: 60, cungMaCachNgay: 0 }))
+    dung('không quá 23:30', o40.every(g => g <= '23:30') && o40.length === 4, o40.join(' '))
+    const kh5b = await lapLich(prismaGia(Array.from({ length: 12 }, (_, i) => nhap('q' + i, 'Q' + i)), kenh), { xep: chuanXep({ khung: ['11:30', '17:00', '20:00'], moiNgay: 12, cachPhut: 30, cungMaCachNgay: 0 }), now: mocVN(homNay, '06:00') })
+    const ngayQ = new Set(kh5b.ke.map(k => ngayVN(Date.parse(k.henDangLuc))))
+    dung('12 video ⇒ cùng một ngày, 12 giờ khác nhau', kh5b.ke.length === 12 && ngayQ.size === 1 && new Set(kh5b.ke.map(k => k.henDangLuc)).size === 12, `${kh5b.ke.length} video, ${ngayQ.size} ngày, ô/ngày ${kh5b.oMoiNgay}`)
 
     // 6. Thiếu điều kiện ⇒ nói lý do, KHÔNG xếp
     const media6 = [
