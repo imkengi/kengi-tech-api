@@ -5486,6 +5486,49 @@ router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── THỬ AI SOÁT NỘI DUNG — GET /admin/thu-soat-noi-dung?store=KENGISTORE&sku=A,B (14/10/2026) ──
+ * Chạy soatNoiDung (lib/aiSoatNoiDung.ts) cho vài mã như máy dựng sẽ chạy, trả kho nội dung AI + đoạn đầu mô tả để soát
+ * chất lượng. Không đụng video nào; kết quả được LƯU vào SanMediaNoiDung như đường thật (lần dựng sau dùng lại, không
+ * gọi AI lần hai). Không có ?sku thì lấy 2 mã kế tiếp của mỗi gian (ít video nhất trước). */
+router.get('/thu-soat-noi-dung', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const { chiTietLamVideo, chonSanPham } = await import('../lib/lamVideoSanPham')
+        const { soatNoiDung } = await import('../lib/aiSoatNoiDung')
+        let ids: string[] = []
+        const skus = String(req.query.sku || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 6)
+        if (skus.length) {
+            const ds: any[] = await sp.product.findMany({ where: { sku: { in: skus }, mergedIntoId: null }, select: { id: true } })
+            ids = ds.map(d => d.id)
+        } else {
+            const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, select: { id: true } })
+            for (const c of kenh) {
+                const uv = await chonSanPham(sp, { soLuong: 2, chiConHang: true, chiTrenSan: true, channelId: c.id, san: 'shopee', sapXep: 'it-video' })
+                ids.push(...uv.map(u => u.id).filter(id => !ids.includes(id)))
+            }
+            ids = ids.slice(0, 6)
+        }
+        const ra: any[] = []
+        for (const id of ids) {
+            const ct = await chiTietLamVideo(sp, id)
+            if (!ct) continue
+            try {
+                const kq = await soatNoiDung(sp, { id: ct.id, ten: ct.ten, sku: ct.sku, moTa: ct.moTa, thuongHieu: ct.thuongHieu, nhom: ct.nhom,
+                    tenTrenSan: ct.gian.find((g: any) => g.tenTrenSan)?.tenTrenSan || null }, req.query.lamMoi === '1')
+                ra.push({ sku: ct.sku, ten: ct.ten, moTaDau: ct.moTa.slice(0, 500), ...kq })
+            } catch (e: any) {
+                ra.push({ sku: ct.sku, ten: ct.ten, loi: String(e?.message || e).slice(0, 300), tamThoi: e?.tamThoi, khongCoKey: e?.khongCoKey })
+            }
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ ĐƯỜNG PHÁT VIDEO MEDIA (chỉ đọc) — GET /admin/thu-xem-video?store=KENGISTORE (14/10/2026) ──
  * Ký đường phát cho video Drive MỚI NHẤT của cửa hàng (như GET /san-media/:id/xem-link) để tự tải thử vài
  * khúc Range từ ngoài vào — kiểm luồng Drive thật mà không cần đăng nhập cửa hàng. Không trả byte video. */
