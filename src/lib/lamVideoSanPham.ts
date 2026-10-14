@@ -171,10 +171,12 @@ export async function chiTietLamVideo(prisma: any, id: string) {
         /* ẢNH TRÊN SÀN (14/10/2026): ảnh chính listing — đo KENGISTORE: 1024×1024, poster shop tự thiết kế (logo
          * KENGI STORE, nền đời sống, huy hiệu thông số) — nét hơn hẳn ảnh kho 610×409. Máy dựng chiếu nguyên tấm.
          * Một ảnh một lần dù nhiều gian dùng chung; chỉ host CDN đã biết (lấy qua /anh-san/:id). */
+        /* Ghi rõ GIAN của từng ảnh (14/10/2026): bản đầu gộp ảnh listing mọi gian ⇒ video làm cho Kengi Tools chèn poster mang
+         * logo KENGI STORE của gian khác. Máy dựng chỉ lấy poster của ĐÚNG gian đang làm video. */
         anhSan: listing
-            .filter((l, i, ds) => l.imageUrl && hostAnhDuocPhep(l.imageUrl) && ds.findIndex(x => x.imageUrl === l.imageUrl) === i)
-            .slice(0, 3)
-            .map(l => ({ id: l.id, url: l.imageUrl, san: l.platform, tenGian: l.channel?.name || null })),
+            .filter((l, i, ds) => l.imageUrl && hostAnhDuocPhep(l.imageUrl) && ds.findIndex(x => x.imageUrl === l.imageUrl && x.channelId === l.channelId) === i)
+            .slice(0, 6)
+            .map(l => ({ id: l.id, url: l.imageUrl, san: l.platform, channelId: l.channelId, tenGian: l.channel?.name || null })),
     }
 }
 
