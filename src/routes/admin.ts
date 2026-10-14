@@ -5240,7 +5240,7 @@ router.get('/do-thong-tin-sp', async (_req: Request, res: Response) => {
                             count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::int AS "coAnh",
                             count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::int AS "duLamVideo",
                             count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND (SELECT count(*) FROM "ProductImage" i WHERE i."productId" = p.id) >= 3)::int AS "duVa3Anh"
-                       FROM "Product" p WHERE coalesce(p."isActive", true) = true`)
+                       FROM "Product" p WHERE p."mergedIntoId" IS NULL`)
                 const mau: any[] = await sp.$queryRawUnsafe(
                     `SELECT p.sku, left(p.name, 60) AS ten, length(p.description)::int AS "doDaiMoTa",
                             (SELECT count(*)::int FROM "ProductImage" i WHERE i."productId" = p.id) AS "soAnh"
