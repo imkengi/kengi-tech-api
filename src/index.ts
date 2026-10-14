@@ -370,6 +370,8 @@ app.use('/api/ebanking', ebankingRoutes)
 
 import storageRoutes from './routes/storage'
 app.use('/api/storage', storageRoutes)
+import sanMediaLamVideoRoutes from './routes/sanMediaLamVideo'
+app.use('/api/san-media/lam-video', sanMediaLamVideoRoutes)   // chon san pham + chuyen anh cho may dung video Frame (truoc /api/san-media)
 import sanMediaRoutes from './routes/sanMedia'
 app.use('/api/san-media', sanMediaRoutes)   // Media ban hang: video cho Shopee Video / TikTok
 import thongTinSanPhamRoutes from './routes/thongTinSanPham'

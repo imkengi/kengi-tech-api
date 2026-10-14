@@ -5258,6 +5258,48 @@ router.get('/do-thong-tin-sp', async (_req: Request, res: Response) => {
     }
 })
 
+/* ─── THỬ CHỌN SẢN PHẨM LÀM VIDEO (chỉ đọc) — GET /admin/thu-lam-video?store=KENGISTORE&so=3 (14/10/2026) ──
+ * Chạy ĐÚNG hàm của /api/san-media/lam-video (lib/lamVideoSanPham) trên dữ liệu thật: đếm kho theo từng
+ * bộ lọc, chọn ngẫu nhiên, chi tiết từng mã, và lấy thử ảnh đầu qua đường chuyển byte (báo cỡ/loại, không
+ * trả byte). Kèm phân bố host ảnh của cả kho — host nào ngoài danh sách CDN thì ảnh đó máy dựng không lấy được. */
+router.get('/thu-lam-video', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const L = await import('../lib/lamVideoSanPham')
+        const so = Math.min(5, Math.max(1, Number(req.query.so) || 3))
+        const ra: any = { cuaHang: st.code }
+        const doc = async (ten: string, f: () => Promise<any>) => {
+            try { ra[ten] = await f() } catch (e: any) { ra[ten] = { loi: String(e?.message || e).slice(0, 300) } }
+        }
+        await doc('demMacDinh', () => L.demKho(sp, {}))
+        await doc('demKhongCanTon', () => L.demKho(sp, { chiConHang: false }))
+        await doc('demKhongCanSan', () => L.demKho(sp, { chiConHang: false, chiTrenSan: false }))
+        await doc('hostAnh', async () => {
+            const r: any[] = await sp.$queryRawUnsafe(
+                `SELECT substring(url from '^[a-z]+://([^/]+)') AS host, count(*)::int AS n FROM "ProductImage" GROUP BY 1 ORDER BY 2 DESC LIMIT 15`)
+            return r.map(x => ({ ...x, duocPhep: L.hostAnhDuocPhep(`https://${x.host}/`) }))
+        })
+        await doc('chon', () => L.chonSanPham(sp, { soLuong: so }))
+        const chiTiet: any[] = []
+        for (const u of (Array.isArray(ra.chon) ? ra.chon : [])) {
+            const d: any = await L.chiTietLamVideo(sp, u.id).catch((e: any) => ({ loi: String(e?.message || e) }))
+            let thuAnh: any = null
+            if (d?.anh?.[0]) {
+                try { const a = await L.layAnhSanPham(sp, d.anh[0].id); thuAnh = { bytes: a.buf.length, loai: a.loai } }
+                catch (e: any) { thuAnh = { loi: String(e?.message || e) } }
+            }
+            chiTiet.push({ ...d, thuAnh })
+        }
+        ra.chiTiet = chiTiet
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── SỔ THUẾ ĐANG CÓ GÌ (chỉ đọc) — GET /admin/do-so-thue?thang=12&store=HUTI (13/10/2026) ──────
  * Soát "hạch toán thuế còn thiếu gì" cần SỐ THẬT, không chỉ đọc mã: từng tháng, các cặp Nợ/Có chạm
  * 333x/133x/821x/911/421 (thuế đầu ra, đầu vào, kết chuyển khấu trừ, nộp thuế, TNDN, khoá sổ), doanh
