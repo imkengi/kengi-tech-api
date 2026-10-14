@@ -42,7 +42,7 @@ function docMay(b: any): MayDung | null {
 
 async function trangThai(prisma: any) {
     const td = await docTuDong(prisma)
-    const homNay = await chiTieuHomNay(prisma, td.cauHinh, td.nhatKy)
+    const homNay = await chiTieuHomNay(prisma, td.cauHinh, td.nhatKy, Date.now(), true)
     return {
         bat: td.bat, cauHinh: td.cauHinh, homNay, mayDung: td.mayDung,
         giuCho: td.giuChoBoi && td.giuChoDen && Date.parse(td.giuChoDen) > Date.now() ? { boi: td.giuChoBoi, den: td.giuChoDen } : null,

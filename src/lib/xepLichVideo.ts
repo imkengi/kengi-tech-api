@@ -43,7 +43,8 @@ export function chuanXep(x: any): CauHinhXep {
     const khung = Array.from(new Set((Array.isArray(x?.khung) ? x.khung : XEP_MAC_DINH.khung).filter(laGio) as string[])).sort().slice(0, 12)
     return {
         khung: khung.length ? khung : [...XEP_MAC_DINH.khung],
-        moiNgay: soNguyen(x?.moiNgay, XEP_MAC_DINH.moiNgay, 1, 12),
+        // trần 48 (bản đầu 12); số ô THẬT do mốc + khoảng cách quyết (oTrongNgay), giao diện ghi rõ
+        moiNgay: soNguyen(x?.moiNgay, XEP_MAC_DINH.moiNgay, 1, 48),
         cachPhut: soNguyen(x?.cachPhut, XEP_MAC_DINH.cachPhut, 0, 720),
         cungMaCachNgay: soNguyen(x?.cungMaCachNgay, XEP_MAC_DINH.cungMaCachNgay, 0, 30),
     }

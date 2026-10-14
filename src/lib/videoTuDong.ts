@@ -10,7 +10,7 @@
  *      thể chưa trùng nội dung của mã, tải lên Drive, POST /san-media (tuDong = ngày), rồi xong-viec.
  *  Không có máy dựng nào mở thì việc nằm chờ — /api/cron/tick báo chuông một lần mỗi ngày (nhipNhacMayDung).
  * ═══════════════════════════════════════════════════════════════════════════════ */
-import { chonSanPham } from './lamVideoSanPham'
+import { chonSanPham, demKho } from './lamVideoSanPham'
 import { chuanXep, laGio, mocVN, ngayVN, XEP_MAC_DINH, type CauHinhXep } from './xepLichVideo'
 
 export const MAU_KENGI = ['thuong-hieu', 'studio', 'den', 'gia-soc', 'tap-chi'] as const
@@ -52,7 +52,8 @@ export function chuanTuDong(x: any): CauHinhTuDong {
     const giong = bool(x?.giong, m.giong)
     return {
         gioTao: laGio(x?.gioTao) ? x.gioTao : m.gioTao,
-        moiGian: so(x?.moiGian, m.moiGian, 1, 10),
+        // trần 50 (bản đầu 10 — chủ shop 14/10: "sao chỗ này bị giới hạn thế"); trần THẬT là số mã đủ điều kiện của gian (soMaDu)
+        moiGian: so(x?.moiGian, m.moiGian, 1, 50),
         gian: Array.from(new Set((Array.isArray(x?.gian) ? x.gian : []).map(String).filter((s: string) => /^[A-Za-z0-9_-]{4,64}$/.test(s)))).slice(0, 20) as string[],
         mau: Array.from(new Set((Array.isArray(x?.mau) ? x.mau : []).filter((s: any) => (MAU_KENGI as readonly string[]).includes(s)))) as string[],
         doDai: ['ngan', 'day-du', 'xen-ke'].includes(x?.doDai) ? x.doDai : m.doDai,
@@ -115,9 +116,10 @@ export async function traCho(prisma: any, mayId: string) {
     await prisma.sanMediaTuDong.updateMany({ where: { id: ID, giuChoBoi: mayId }, data: { giuChoBoi: null, giuChoDen: null } })
 }
 
-export type GianHomNay = { channelId: string; tenGian: string; uyQuyen: boolean; can: number; daTao: number; hetMa: boolean }
-/** Chỉ tiêu hôm nay của từng gian (đếm video tuDong = hôm nay) + đã tới giờ tạo chưa */
-export async function chiTieuHomNay(prisma: any, cauHinh: CauHinhTuDong, nhatKy: DongNhatKy[], now = Date.now()) {
+export type GianHomNay = { channelId: string; tenGian: string; uyQuyen: boolean; can: number; daTao: number; hetMa: boolean; /** số mã đủ điều kiện làm video ở gian (chỉ khi demMa) */ soMaDu?: number }
+/** Chỉ tiêu hôm nay của từng gian (đếm video tuDong = hôm nay) + đã tới giờ tạo chưa. `demMa` = đếm thêm số mã đủ điều kiện
+ *  của từng gian (trần THẬT: mỗi mã một video mỗi gian mỗi ngày) — chỉ cho màn hình, máy dựng xin việc thì khỏi đếm. */
+export async function chiTieuHomNay(prisma: any, cauHinh: CauHinhTuDong, nhatKy: DongNhatKy[], now = Date.now(), demMa = false) {
     const ngay = ngayVN(now)
     const gioTao = mocVN(ngay, cauHinh.gioTao)
     const kenh: any[] = await prisma.onlineChannel.findMany({
@@ -132,12 +134,17 @@ export async function chiTieuHomNay(prisma: any, cauHinh: CauHinhTuDong, nhatKy:
     const gian: GianHomNay[] = chon.map(c => ({
         channelId: c.id, tenGian: c.name, uyQuyen: !!c.videoUserId, can: cauHinh.moiGian, daTao: daTao.get(c.id) || 0, hetMa: hetMa.has(c.id),
     }))
+    if (demMa) for (const g of gian) {   // POOL 1 ⇒ tuần tự
+        g.soMaDu = (await demKho(prisma, { chiConHang: cauHinh.chiConHang, chiTrenSan: true, channelId: g.channelId, san: 'shopee' })).du
+    }
     return { ngay, gioTao: new Date(gioTao).toISOString(), denGio: now >= gioTao, gian }
 }
 
-/** SKU không giao cho máy dựng: đã làm tự động hôm nay, hỏng vì chính mã đó gần đây, hết biến thể / mô tả lệch mã */
-async function skuBoQua(prisma: any, nhatKy: DongNhatKy[], ngay: string, now: number): Promise<string[]> {
-    const homNay: any[] = await prisma.sanMediaSanPham.findMany({ where: { media: { tuDong: ngay } }, select: { sku: true } })
+/** SKU không giao cho máy dựng: đã làm tự động hôm nay CHO GIAN NÀY, hỏng vì chính mã đó gần đây, hết biến thể / mô tả lệch
+ *  mã. Bản đầu tính "hôm nay" trên MỌI gian ⇒ mã bán ở hai gian thì gian thứ hai không được làm — trần ngầm (14/10/2026).
+ *  Mỗi gian một video/mã/ngày; nội dung vẫn không trùng nhờ biến thể + vân tay trên SKU. */
+async function skuBoQua(prisma: any, nhatKy: DongNhatKy[], ngay: string, now: number, channelId: string): Promise<string[]> {
+    const homNay: any[] = await prisma.sanMediaSanPham.findMany({ where: { media: { tuDong: ngay, channelId } }, select: { sku: true } })
     const ra = new Set<string>(homNay.map(x => x.sku))
     for (const d of nhatKy) {
         if (!d.sku) continue
@@ -173,8 +180,8 @@ export async function nhanViec(prisma: any, may: MayDung, now = Date.now()) {
     if (!(await giuCho(prisma, may.id, now))) {
         return { viec: null, lyDo: 'may-khac' as const, mayKhac: td.mayDung && td.mayDung.id !== may.id ? td.mayDung.ten : null, den: td.giuChoDen }
     }
-    const boQuaSku = await skuBoQua(prisma, td.nhatKy, ct.ngay, now)
     for (const g of thieu) {
+        const boQuaSku = await skuBoQua(prisma, td.nhatKy, ct.ngay, now, g.channelId)
         const uv = await chonSanPham(prisma, {
             soLuong: 1, chiConHang: td.cauHinh.chiConHang, chiTrenSan: true, channelId: g.channelId, san: 'shopee', sapXep: 'it-video', boQuaSku,
         })
