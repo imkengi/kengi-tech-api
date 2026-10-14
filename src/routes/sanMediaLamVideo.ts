@@ -26,6 +26,7 @@ function docLoc(q: any): LocChon {
         chiConHang: coKhong(q.chiConHang, true),
         chiTrenSan: coKhong(q.chiTrenSan, true),
         channelId: q.channelId ? String(q.channelId) : null,
+        san: q.san ? String(q.san) : null,
         boQua: String(q.boQua || '').split(',').map(s => s.trim()).filter(Boolean),
         sapXep: q.sapXep ? String(q.sapXep) : 'ngau-nhien',
     }

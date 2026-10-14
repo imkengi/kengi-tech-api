@@ -28,6 +28,8 @@ export type LocChon = {
     chiTrenSan?: boolean
     /** Gian đang làm video cho — có thì chỉ lấy mã đang bán ở gian này */
     channelId?: string | null
+    /** Chỉ mã có listing trên SÀN này ('shopee'): video TikTok chưa gắn được sản phẩm nên tạm làm Shopee trước (14/10) */
+    san?: string | null
     /** Bỏ các mã vừa lấy (bấm "Đổi mã khác" không ra lại đúng mã đó) */
     boQua?: string[]
     /** 'ngau-nhien' (mặc định) | 'moi' | 'ten' */
@@ -49,12 +51,16 @@ function dieuKien(loc: LocChon, thamSo: any[]): string {
         `EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)`,
     ]
     let gian = ''
+    if (loc.san && /^[a-z]{2,16}$/.test(String(loc.san))) {
+        thamSo.push(String(loc.san))
+        gian = ` AND op.platform = $${thamSo.length}`
+    }
     if (loc.channelId) {
         thamSo.push(String(loc.channelId))
-        gian = ` AND op."channelId" = $${thamSo.length}`
+        gian += ` AND op."channelId" = $${thamSo.length}`
         w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku${gian})`)
-    } else if (loc.chiTrenSan !== false) {
-        w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku)`)
+    } else if (loc.chiTrenSan !== false || gian) {
+        w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku${gian})`)
     }
     /* CÒN HÀNG = tồn kho mình > 0 HOẶC listing trên sàn còn tồn. Cửa hàng bán sàn bằng KHO MẸ
      * (KENGISTORE mượn tồn HUTI — StoreSettings.khoMeMa) có Product.stock 0/âm trong khi sàn vẫn bán:
