@@ -275,6 +275,7 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
  * helmet đặt Cross-Origin-Resource-Policy: same-origin ⇒ thẻ <video> ở kengi.vn bị chặn khi tải từ
  * api.kengi.vn; đường phát đặt lại 'same-site' (kengi.vn và api.kengi.vn cùng site). */
 const KHOI_XEM = 8 * 1024 * 1024
+const driveXemCache = new Map<string, { drive: any; luc: number }>()
 
 router.get('/:id/xem-link', authMiddleware, requirePermission('online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -303,8 +304,15 @@ router.get('/xem/:id', async (req: Request, res: Response) => {
         const prisma: any = getStorePrisma(schema)
         const m = await prisma.sanMedia.findUnique({ where: { id }, select: { nguonId: true, mime: true, bytes: true } })
         if (!m?.nguonId) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
-        const { getStoreDriveWriter } = await import('../lib/driveOAuth')
-        const { drive } = await getStoreDriveWriter(prisma)
+        // Giữ client Drive 10 phút mỗi cửa hàng: tạo mới mỗi khúc Range là mỗi lần xin lại access token
+        // (đo 14/10: khúc đầu 6 giây). Client googleapis tự giữ + làm mới token bên trong.
+        let dc = driveXemCache.get(schema)
+        if (!dc || Date.now() - dc.luc > 10 * 60 * 1000) {
+            const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+            dc = { drive: (await getStoreDriveWriter(prisma)).drive, luc: Date.now() }
+            driveXemCache.set(schema, dc)
+        }
+        const drive = dc.drive
         let co = Number(m.bytes) || 0, loai = m.mime || ''
         if (!co || !loai) {
             const meta = await drive.files.get({ fileId: m.nguonId, fields: 'size,mimeType', supportsAllDrives: true })
