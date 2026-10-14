@@ -9,7 +9,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { moTaLoi } from '../lib/gomLoi'
-import { chonSanPham, demKho, chiTietLamVideo, layAnhSanPham, layAnhTrenSan, LoiAnh, type LocChon } from '../lib/lamVideoSanPham'
+import { chonSanPham, demKho, chiTietLamVideo, layAnhSanPham, layAnhTrenSan, danhSachGianShopee, layLogoGian, LoiAnh, type LocChon } from '../lib/lamVideoSanPham'
 
 const router = Router()
 const QUYEN = requirePermission('online_orders.edit', 'online_orders.view')
@@ -75,6 +75,35 @@ router.get('/anh/:anhId', authMiddleware, QUYEN, async (req: AuthRequest, res: R
         if (e instanceof LoiAnh) { res.status(e.ma).json({ success: false, error: e.message }); return }
         console.error('[lam-video] anh:', e?.message || e)
         res.status(502).json({ success: false, error: `Không lấy được ảnh: ${moTaLoi(e)}` })
+    }
+})
+
+// ─── GET /gian — các gian Shopee + logo (ảnh đại diện gian, v2.shop.get_profile) ──
+//  ?lamMoi=1 bỏ bộ nhớ đệm 6 giờ (vừa đổi ảnh đại diện trên Shopee)
+router.get('/gian', authMiddleware, QUYEN, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ds = await danhSachGianShopee(prisma, String(req.query.lamMoi || '') === '1')
+        res.json({ success: true, data: ds.map(g => ({ channelId: g.channelId, ten: g.ten, tenShop: g.tenShop, coLogo: !!g.logo, loi: g.loi })) })
+    } catch (e: any) {
+        console.error('[lam-video] gian:', e)
+        res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+// ─── GET /gian/:channelId/logo — byte logo gian cho máy dựng ──────────────────
+router.get('/gian/:channelId/logo', authMiddleware, QUYEN, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { buf, loai } = await layLogoGian(prisma, String(req.params.channelId))
+        res.setHeader('Content-Type', loai)
+        res.setHeader('Content-Length', String(buf.length))
+        res.setHeader('Cache-Control', 'private, max-age=3600')
+        res.end(buf)
+    } catch (e: any) {
+        if (e instanceof LoiAnh) { res.status(e.ma).json({ success: false, error: e.message }); return }
+        console.error('[lam-video] logo gian:', e?.message || e)
+        res.status(502).json({ success: false, error: `Không lấy được logo gian: ${moTaLoi(e)}` })
     }
 })
 

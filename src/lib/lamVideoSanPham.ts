@@ -17,6 +17,7 @@
  *  danh sách CDN ảnh đã biết, theo từng bước chuyển hướng, nhận dạng ảnh theo byte đầu.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 import { nhanDangAnh } from './anhSanPham'
+import { ShopeeService } from '../services/platforms/shopee'
 
 export type LocChon = {
     soLuong?: number
@@ -181,6 +182,72 @@ export async function layAnhTrenSan(prisma: any, onlineProductId: string): Promi
     const a = await prisma.onlineProduct.findFirst({ where: { id: String(onlineProductId) }, select: { imageUrl: true } })
     if (!a?.imageUrl) throw new LoiAnh('Listing này không có ảnh', 404)
     return layAnhTheoUrl(String(a.imageUrl))
+}
+
+/* ─── LOGO TỪNG GIAN SHOPEE (14/10/2026) ──────────────────────────────────────────
+ * Chủ shop: "khi 1 cái video nào thì nó sẽ tự xem có trên sàn nào rồi tự gắn logo ứng với cửa hàng đó".
+ * KENGISTORE có 3 gian Shopee, mỗi gian một ảnh đại diện. Lấy qua v2.shop.get_profile bằng token bán hàng
+ * sẵn có của gian (không cần app Video), giữ 6 giờ trong bộ nhớ (prod không có Redis — mỗi bản máy tự giữ).
+ * Đọc hỏng ⇒ trả `loi` để giao diện nói, KHÔNG coi như "gian không có logo". */
+type HoSoGian = { channelId: string; ten: string; tenShop: string | null; logo: string | null; loi: string | null; luc: number }
+const hoSoCache = new Map<string, HoSoGian>()
+const SAU_GIO = 6 * 3600_000
+
+async function dichVuShopee(prisma: any, channel: any): Promise<ShopeeService> {
+    const svc = new ShopeeService({
+        apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+        accessToken: channel.accessToken || undefined, refreshToken: channel.refreshToken || undefined,
+        shopId: channel.shopId || undefined,
+    })
+    // Làm mới token nếu sắp hết hạn (đệm 5 phút) — cùng cách dayTonLenSan / returnSync
+    if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+        try {
+            const tk = await svc.refreshAccessToken()
+            ;(svc as any).credentials.accessToken = tk.accessToken
+            ;(svc as any).credentials.refreshToken = tk.refreshToken
+            await prisma.onlineChannel.update({
+                where: { id: channel.id },
+                data: { accessToken: tk.accessToken, refreshToken: tk.refreshToken, tokenExpiresAt: new Date(Date.now() + tk.expiresIn * 1000) },
+            })
+        } catch (e: any) { console.warn('[lam-video] làm mới token gian', channel.id, e?.message || e) }
+    }
+    return svc
+}
+
+/** Các gian Shopee đang hoạt động + logo (ảnh đại diện gian trên Shopee). `lamMoi` = bỏ bộ nhớ đệm. */
+export async function danhSachGianShopee(prisma: any, lamMoi = false): Promise<HoSoGian[]> {
+    const ds: any[] = await prisma.onlineChannel.findMany({
+        where: { platform: 'shopee', status: { not: 'inactive' } },
+        select: { id: true, name: true, apiKey: true, apiSecret: true, accessToken: true, refreshToken: true, shopId: true, tokenExpiresAt: true },
+        orderBy: { createdAt: 'asc' },
+    })
+    const ra: HoSoGian[] = []
+    for (const c of ds) {   // POOL 1 + proxy Tino ⇒ lần lượt
+        const cu = hoSoCache.get(c.id)
+        if (cu && !lamMoi && Date.now() - cu.luc < SAU_GIO && !cu.loi) { ra.push({ ...cu, ten: c.name }); continue }
+        const hs: HoSoGian = { channelId: c.id, ten: c.name, tenShop: null, logo: null, loi: null, luc: Date.now() }
+        if (!c.accessToken || !c.shopId) hs.loi = 'Gian chưa kết nối API bán hàng (thiếu token) — không đọc được logo'
+        else {
+            try {
+                const p = await (await dichVuShopee(prisma, c)).getShopProfile()
+                hs.tenShop = p.shopName
+                hs.logo = p.shopLogo && hostAnhDuocPhep(p.shopLogo) ? p.shopLogo : null
+                if (p.shopLogo && !hs.logo) hs.loi = 'Logo gian nằm ở nơi máy chủ không lấy hộ'
+            } catch (e: any) { hs.loi = String(e?.message || e).slice(0, 300) }
+        }
+        hoSoCache.set(c.id, hs)
+        ra.push(hs)
+    }
+    return ra
+}
+
+/** Byte logo một gian (đã đọc qua danhSachGianShopee) */
+export async function layLogoGian(prisma: any, channelId: string): Promise<{ buf: Buffer; loai: string }> {
+    let hs = hoSoCache.get(String(channelId))
+    if (!hs || Date.now() - hs.luc > SAU_GIO) hs = (await danhSachGianShopee(prisma)).find(x => x.channelId === String(channelId))
+    if (!hs) throw new LoiAnh('Không thấy gian này (hoặc không phải gian Shopee đang hoạt động)', 404)
+    if (!hs.logo) throw new LoiAnh(hs.loi || 'Gian này chưa đặt ảnh đại diện trên Shopee', 404)
+    return layAnhTheoUrl(hs.logo)
 }
 
 async function layAnhTheoUrl(urlGoc: string): Promise<{ buf: Buffer; loai: string }> {

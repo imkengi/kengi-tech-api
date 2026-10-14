@@ -442,6 +442,14 @@ export class ShopeeService extends PlatformService {
         return detail ? this.mapOrder(detail, await this.getInstantChannelIdsSafe()) : null
     }
 
+    /** Hồ sơ gian (v2.shop.get_profile): ảnh đại diện + tên hiển thị — máy dựng video gắn logo ĐÚNG gian
+     *  (một cửa hàng nhiều gian Shopee, mỗi gian một logo). Lỗi của Shopee ném NGUYÊN VĂN. */
+    async getShopProfile(): Promise<{ shopLogo: string | null; shopName: string | null }> {
+        const data = await this.httpGet(this.apiUrl('/api/v2/shop/get_profile'))
+        if (data?.error) throw new Error(`Shopee get_profile: ${data.error}${data.message ? ' — ' + data.message : ''}`)
+        return { shopLogo: data?.response?.shop_logo || null, shopName: data?.response?.shop_name || null }
+    }
+
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {
         try {
             const path = '/api/v2/shop/get_shop_info'

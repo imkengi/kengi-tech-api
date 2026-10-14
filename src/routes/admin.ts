@@ -5294,6 +5294,7 @@ router.get('/thu-lam-video', async (req: Request, res: Response) => {
             const reg = await prisma.store.findFirst({ where: { code }, select: { logo: true, name: true } })
             return { caiDat: tomTatAnh(r[0]?.logo), tenCaiDat: r[0]?.name ?? null, soDangKy: tomTatAnh(reg?.logo), tenSoDangKy: reg?.name ?? null }
         })
+        await doc('gianShopee', async () => (await L.danhSachGianShopee(sp, true)).map(g => ({ ten: g.ten, tenShop: g.tenShop, logo: g.logo ? g.logo.slice(0, 120) : null, loi: g.loi })))
         await doc('chon', () => L.chonSanPham(sp, { soLuong: so }))
         const chiTiet: any[] = []
         for (const u of (Array.isArray(ra.chon) ? ra.chon : [])) {
