@@ -2989,9 +2989,28 @@ router.put('/channels/:id/video-push-key', authMiddleware, async (req: AuthReque
 router.get('/channels/:id/video-auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        let channel: any = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
         if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Chỉ kênh Shopee có luồng uỷ quyền video kiểu này' }); return }
+
+        /* App Video là MỘT app cho cả cửa hàng (14/10/2026): gian chưa có khoá — lưu khoá từ trước khi có "áp
+         * cho mọi gian" — thì CHÉP khoá app (và khoá push) từ gian đã có, rồi mới uỷ quyền. Không chép thì
+         * nút mờ "Chưa có khoá app Video" và đổi mã / đăng sau đó đều không có khoá để ký. */
+        if (!(channel as any).videoPartnerId || !(channel as any).videoPartnerKey) {
+            const nguon: any = await prisma.onlineChannel.findFirst({
+                where: { platform: 'shopee', id: { not: channel.id }, videoPartnerId: { not: null }, videoPartnerKey: { not: null } } as any,
+                select: { videoPartnerId: true, videoPartnerKey: true, videoPushKey: true } as any,
+            })
+            if (nguon) {
+                channel = await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: {
+                        videoPartnerId: nguon.videoPartnerId, videoPartnerKey: nguon.videoPartnerKey,
+                        ...(nguon.videoPushKey ? { videoPushKey: nguon.videoPushKey } : {}),
+                    } as any,
+                })
+            }
+        }
 
         // Khoá của APP VIDEO (app riêng trên console), KHÔNG phải khoá app bán hàng.
         const { credVideoShopee } = await import('../lib/shopeeVideoAuth')

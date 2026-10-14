@@ -723,13 +723,19 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
          * theo CÙNG MỘT kênh — trước đây mỗi thứ rơi vào một kênh khác nhau nên
          * không kênh nào đủ điều kiện. Trả trạng thái video của TỪNG kênh để web
          * cho chọn, thay vì đoán một kênh. */
+        /* App Video là MỘT app cho cả cửa hàng. Gian nào chưa có khoá (lưu khoá từ trước khi có "áp cho mọi
+         * gian") thì dùng chung khoá của gian đã có — nút Uỷ quyền chép khoá sang lúc bấm (onlineOrders
+         * video-auth-url). Trước 14/10/2026 hai gian Kengi Tools/Electric hiện "Chưa có khoá app Video",
+         * nút Uỷ quyền mờ, chủ shop hết đường uỷ quyền. */
+        const appChung: any = kenhDs.find((c: any) => c.platform === 'shopee' && c.videoPartnerId && c.videoPartnerKey) || null
         const kenhShopeeDs = kenhDs.filter((c: any) => c.platform === 'shopee').map((c: any) => ({
             id: c.id,
             ten: c.name,
             daNoiBanHang: !!c.accessToken,
-            coAppVideo: !!(c.videoPartnerId && c.videoPartnerKey),
-            videoPartnerId: c.videoPartnerId || null,
-            videoKeyDuoi4: c.videoPartnerKey ? String(c.videoPartnerKey).slice(-4) : null,
+            coAppVideo: !!(c.videoPartnerId && c.videoPartnerKey) || !!appChung,
+            khoaDungChung: !(c.videoPartnerId && c.videoPartnerKey) && !!appChung,
+            videoPartnerId: c.videoPartnerId || appChung?.videoPartnerId || null,
+            videoKeyDuoi4: (c.videoPartnerKey || appChung?.videoPartnerKey) ? String(c.videoPartnerKey || appChung.videoPartnerKey).slice(-4) : null,
             // Set Push của app Video (11/10/2026) — khoá riêng của trang Set Push, chỉ trả 4 ký tự cuối
             coPushKey: !!c.videoPushKey,
             pushKeyDuoi4: c.videoPushKey ? String(c.videoPushKey).slice(-4) : null,
