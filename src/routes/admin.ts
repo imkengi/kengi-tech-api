@@ -5282,6 +5282,18 @@ router.get('/thu-lam-video', async (req: Request, res: Response) => {
                 `SELECT substring(url from '^[a-z]+://([^/]+)') AS host, count(*)::int AS n FROM "ProductImage" GROUP BY 1 ORDER BY 2 DESC LIMIT 15`)
             return r.map(x => ({ ...x, duocPhep: L.hostAnhDuocPhep(`https://${x.host}/`) }))
         })
+        // Logo cửa hàng (máy dựng gắn lên video): chỉ báo DẠNG + cỡ, không trả nguyên chuỗi
+        const tomTatAnh = (v: any) => {
+            const s = String(v || '')
+            if (!s) return null
+            if (s.startsWith('data:')) return { dang: s.slice(0, s.indexOf(';')), doDai: s.length }
+            return { dang: 'url', url: s.slice(0, 160) }
+        }
+        await doc('logo', async () => {
+            const r: any[] = await sp.$queryRawUnsafe(`SELECT name, logo FROM "StoreSettings" LIMIT 1`)
+            const reg = await prisma.store.findFirst({ where: { code }, select: { logo: true, name: true } })
+            return { caiDat: tomTatAnh(r[0]?.logo), tenCaiDat: r[0]?.name ?? null, soDangKy: tomTatAnh(reg?.logo), tenSoDangKy: reg?.name ?? null }
+        })
         await doc('chon', () => L.chonSanPham(sp, { soLuong: so }))
         const chiTiet: any[] = []
         for (const u of (Array.isArray(ra.chon) ? ra.chon : [])) {
@@ -5291,7 +5303,11 @@ router.get('/thu-lam-video', async (req: Request, res: Response) => {
                 try { const a = await L.layAnhSanPham(sp, d.anh[0].id); thuAnh = { bytes: a.buf.length, loai: a.loai } }
                 catch (e: any) { thuAnh = { loi: String(e?.message || e) } }
             }
-            chiTiet.push({ ...d, thuAnh })
+            // Ảnh TRÊN SÀN của cùng SKU (listing Shopee/TikTok) — so độ nét với ảnh kho
+            const anhSan: any[] = d?.sku ? await sp.onlineProduct.findMany({
+                where: { sku: d.sku, imageUrl: { not: null } }, select: { platform: true, channelId: true, imageUrl: true }, take: 6,
+            }).catch(() => []) : []
+            chiTiet.push({ ...d, thuAnh, anhSan })
         }
         ra.chiTiet = chiTiet
         res.json({ success: true, data: ra })
