@@ -5365,6 +5365,77 @@ router.post('/sua-khai-ai-video-tu-dong', async (req: Request, res: Response) =>
     }
 })
 
+/* ─── NHÃN AI TRÊN SHOPEE CỦA VIDEO TỰ ĐỘNG (chỉ đọc) — GET /admin/do-nhan-ai-video-tu-dong?store=KENGISTORE (14/10/2026) ──
+ * 19 video tự động đã LÊN LỊCH trên Shopee, trong CSDL đều "Không AI" — nhưng nhãn đi lên sàn ở bước edit_video_info,
+ * nên video bấm "Không AI" SAU lúc lên lịch thì Shopee vẫn giữ "Có AI". Đo hai cách:
+ *   · so `updatedAt` của dòng với `capNhatLuc` lần ghi cuối của máy đăng (bước xong): sửa dòng sau đó ⇒ sửa sau khi lên lịch
+ *   · hỏi thẳng Shopee: get_video_list (list_type 1,2) + get_video_detail(post_id) — trả NGUYÊN tên trường để xem sàn có
+ *     trả nhãn AI không (không đoán tên trường). Không ghi gì, không gọi API nào làm đổi video. */
+router.get('/do-nhan-ai-video-tu-dong', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const ds: any[] = await sp.sanMedia.findMany({
+            where: { tuDong: { not: null } },
+            select: { id: true, ten: true, trangThai: true, coNoiDungAI: true, maTrenSan: true, henDangLuc: true, dangLuc: true, channelId: true, tienTrinhDang: true, createdAt: true, updatedAt: true },
+            orderBy: { createdAt: 'asc' },
+        })
+        const video = ds.map(m => {
+            let t: any = {}
+            try { t = m.tienTrinhDang ? JSON.parse(m.tienTrinhDang) || {} : {} } catch { t = {} }
+            const xongLuc = t.capNhatLuc ? Date.parse(t.capNhatLuc) : NaN
+            const sua = new Date(m.updatedAt).getTime()
+            return {
+                id: m.id, ten: m.ten, trangThai: m.trangThai, coNoiDungAI: m.coNoiDungAI, postId: m.maTrenSan, channelId: m.channelId,
+                henDangLuc: m.henDangLuc, dangLuc: m.dangLuc, giaiDoan: t.giaiDoan || null,
+                mayDangGhiCuoi: Number.isFinite(xongLuc) ? new Date(xongLuc).toISOString() : null, dongSuaLuc: new Date(sua).toISOString(),
+                // dòng còn bị sửa > 3 giây SAU lần ghi cuối của máy đăng (lúc Shopee nhận lịch) ⇒ nhãn đổi sau khi đã lên sàn
+                suaSauKhiLenLich: Number.isFinite(xongLuc) ? sua - xongLuc > 3000 : null,
+            }
+        })
+        // Hỏi Shopee: mỗi gian một lần get_video_list + get_video_detail cho video đầu tiên của gian
+        const shopee: any[] = []
+        const { layTokenVideoShopee } = await import('../lib/shopeeVideoAuth')
+        for (const chId of Array.from(new Set(video.filter(v => v.postId && v.channelId).map(v => v.channelId as string)))) {
+            const o: any = { channelId: chId }
+            try {
+                const { svc, accessToken, userId } = await layTokenVideoShopee(sp, chId)
+                const cred = { accessToken, userId }
+                for (const lt of [1, 2]) {
+                    try {
+                        const r = await svc.goiNguoiDung('/api/v2/video/get_video_list', 'GET', cred, { list_type: lt, page_no: 1, page_size: 50 })
+                        const list: any[] = Array.isArray(r?.response?.list) ? r.response.list : []
+                        const cuaMinh = list.filter(v => video.some(x => x.postId && String(x.postId) === String(v?.post_id ?? v?.video_id ?? '')))
+                        o[`list${lt}`] = { error: r?.error || null, message: r?.message || null, tong: r?.response?.total_count ?? list.length,
+                            truong: list[0] ? Object.keys(list[0]) : [], khopPostId: cuaMinh.length, mau: (cuaMinh[0] || list[0]) ?? null }
+                    } catch (e: any) { o[`list${lt}`] = { loiNem: String(e?.message || e).slice(0, 200) } }
+                }
+                const dau = video.find(v => v.channelId === chId && v.postId)
+                if (dau) {
+                    try {
+                        const r = await svc.goiNguoiDung('/api/v2/video/get_video_detail', 'GET', cred, { post_id: dau.postId })
+                        o.chiTiet = { postId: dau.postId, error: r?.error || null, message: r?.message || null, truong: r?.response ? Object.keys(r.response) : [], response: r?.response ?? null }
+                    } catch (e: any) { o.chiTiet = { postId: dau.postId, loiNem: String(e?.message || e).slice(0, 200) } }
+                }
+            } catch (e: any) { o.loiToken = String(e?.message || e).slice(0, 200) }
+            shopee.push(o)
+        }
+        res.json({
+            success: true,
+            data: {
+                tong: video.length,
+                suaSauKhiLenLich: video.filter(v => v.suaSauKhiLenLich === true).length,
+                suaTruoc: video.filter(v => v.suaSauKhiLenLich === false).length,
+                video, shopee,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ ĐƯỜNG PHÁT VIDEO MEDIA (chỉ đọc) — GET /admin/thu-xem-video?store=KENGISTORE (14/10/2026) ──
  * Ký đường phát cho video Drive MỚI NHẤT của cửa hàng (như GET /san-media/:id/xem-link) để tự tải thử vài
  * khúc Range từ ngoài vào — kiểm luồng Drive thật mà không cần đăng nhập cửa hàng. Không trả byte video. */
