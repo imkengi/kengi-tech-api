@@ -5309,6 +5309,56 @@ router.get('/thu-xep-lich', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── KHAI "KHÔNG AI" CHO VIDEO TỰ ĐỘNG — POST /admin/sua-khai-ai-video-tu-dong?store=KENGISTORE (14/10/2026) ──
+ * Chủ shop 14/10 18:4x (ảnh trang Media): "sửa lại các video tạo ra phải tick không AI". Bản đầu máy dựng tự động khai
+ * "Có AI" (ép theo giọng máy). Mặc định CHẠY THỬ; {"apDung":true} mới ghi. Chỉ sửa được video CHƯA gửi nhãn lên Shopee
+ * (nhãn đi ở bước edit_video_info): Nháp / Lỗi / Hẹn giờ chưa tới bước đăng. So-và-ghi trên tienTrinhDang — máy đăng
+ * giữ chỗ (ghi tienTrinhDang) TRƯỚC khi đọc video, nên ghi được nghĩa là lượt đăng sau đọc "Không AI"; video đang chạy
+ * dở thì để lượt sau. Video đã lên lịch / đã đăng trên Shopee thì chỉ BÁO — nhãn trên sàn không đổi được từ đây. */
+router.post('/sua-khai-ai-video-tu-dong', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || req.body?.store || '').trim().toUpperCase()
+        const apDung = req.body?.apDung === true
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const ds: any[] = await sp.sanMedia.findMany({
+            where: { tuDong: { not: null }, coNoiDungAI: true },
+            select: { id: true, ten: true, trangThai: true, tienTrinhDang: true, maTrenSan: true, henDangLuc: true },
+            orderBy: { createdAt: 'asc' },
+        })
+        const now = Date.now()
+        const nhom: Record<string, any[]> = { sua: [], daSua: [], dangChay: [], daGuiShopee: [] }
+        for (const m of ds) {
+            let t: any = {}
+            try { t = m.tienTrinhDang ? JSON.parse(m.tienTrinhDang) || {} : {} } catch { t = {} }
+            const giaiDoan = String(t.giaiDoan || 'init')
+            const dong = { id: m.id, ten: m.ten, trangThai: m.trangThai, giaiDoan, maTrenSan: m.maTrenSan || null, henDangLuc: m.henDangLuc }
+            if (['da_len_lich', 'da_dang'].includes(m.trangThai) || ['post', 'xong'].includes(giaiDoan)) { nhom.daGuiShopee!.push(dong); continue }
+            if (t.dangChayDen && Date.parse(t.dangChayDen) > now) { nhom.dangChay!.push(dong); continue }
+            if (!apDung) { nhom.sua!.push(dong); continue }
+            const r = await sp.sanMedia.updateMany({ where: { id: m.id, tienTrinhDang: m.tienTrinhDang ?? null, coNoiDungAI: true }, data: { coNoiDungAI: false } })
+            ;(r.count === 1 ? nhom.daSua! : nhom.dangChay!).push(dong)
+        }
+        let cauHinh: string | null = null
+        if (apDung) {
+            const { docTuDong, luuTuDong } = await import('../lib/videoTuDong')
+            const td = await docTuDong(sp)
+            if (td.coDong && td.cauHinh.khaiAI !== false) { await luuTuDong(sp, td.bat, { ...td.cauHinh, khaiAI: false }); cauHinh = 'khaiAI → false' }
+        }
+        res.json({
+            success: true,
+            data: {
+                apDung, tong: ds.length, cauHinh,
+                dem: Object.fromEntries(Object.entries(nhom).map(([k, v]) => [k, v.length])),
+                ...nhom,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ ĐƯỜNG PHÁT VIDEO MEDIA (chỉ đọc) — GET /admin/thu-xem-video?store=KENGISTORE (14/10/2026) ──
  * Ký đường phát cho video Drive MỚI NHẤT của cửa hàng (như GET /san-media/:id/xem-link) để tự tải thử vài
  * khúc Range từ ngoài vào — kiểm luồng Drive thật mà không cần đăng nhập cửa hàng. Không trả byte video. */

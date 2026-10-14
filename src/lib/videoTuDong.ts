@@ -28,7 +28,8 @@ export type CauHinhTuDong = {
     hienGia: boolean
     giong: boolean
     giongMau: string
-    /** lời khai AI cho Shopee (aigc_label). Có giọng máy ⇒ BẮT BUỘC true. null = chưa khai ⇒ video để Nháp, không tự hẹn */
+    /** lời khai AI cho Shopee (aigc_label) — CHỦ SHOP quyết (14/10 18:4x: "các video tạo ra phải tick không AI").
+     *  null = chưa khai ⇒ video để Nháp, không tự hẹn */
     khaiAI: boolean | null
     /** dựng xong tự xếp lịch đăng */
     henGio: boolean
@@ -37,7 +38,7 @@ export type CauHinhTuDong = {
 }
 export const TU_DONG_MAC_DINH: CauHinhTuDong = {
     gioTao: '06:00', moiGian: 1, gian: [], mau: [], doDai: 'xen-ke', dungPoster: true, hienGia: true,
-    giong: true, giongMau: '', khaiAI: true, henGio: true, chiConHang: true, xepLich: { ...XEP_MAC_DINH },
+    giong: true, giongMau: '', khaiAI: false, henGio: true, chiConHang: true, xepLich: { ...XEP_MAC_DINH },
 }
 
 const ID = 'mac-dinh'
@@ -59,8 +60,8 @@ export function chuanTuDong(x: any): CauHinhTuDong {
         hienGia: bool(x?.hienGia, m.hienGia),
         giong,
         giongMau: typeof x?.giongMau === 'string' ? x.giongMau.slice(0, 120) : '',
-        // giọng đọc là giọng MÁY (TTS) ⇒ khai "không AI" là khai sai — ép true
-        khaiAI: giong ? true : (typeof x?.khaiAI === 'boolean' ? x.khaiAI : null),
+        // Lời khai của CHỦ SHOP, không ép theo giọng (bản đầu ép "Có AI" khi có giọng — chủ shop 14/10 bảo phải "Không AI")
+        khaiAI: typeof x?.khaiAI === 'boolean' ? x.khaiAI : m.khaiAI,
         henGio: bool(x?.henGio, m.henGio),
         chiConHang: bool(x?.chiConHang, m.chiConHang),
         xepLich: chuanXep(x?.xepLich),

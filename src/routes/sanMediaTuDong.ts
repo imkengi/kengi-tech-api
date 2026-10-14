@@ -8,6 +8,7 @@
  *    POST /tu-dong/nhan-viec    máy dựng (tab kengi.vn được chỉ định) xin việc — lib/videoTuDong.ts
  *    POST /tu-dong/xong-viec    báo xong / hỏng một việc (xong thì tự xếp lịch đăng nếu bật)
  *    POST /tu-dong/tra-cho      máy dựng thôi làm (đóng tab, tắt máy dựng)
+ *    GET  /thong-ke             đếm theo trạng thái, tạo hôm nay, lịch sắp tới theo ngày, từng gian
  *    GET  /kiem-van-tay         cùng SKU đã có video cùng vân tay nội dung chưa (kiểm trước khi tải lên Drive)
  *    POST /xep-lich             TỰ XẾP LỊCH video Nháp — mặc định chạy thử, {apDung:true} mới hẹn thật
  * ═══════════════════════════════════════════════════════════════════════════════ */
@@ -15,7 +16,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { chuanTuDong, chiTieuHomNay, docTuDong, luuTuDong, nhanViec, traCho, xongViec, type MayDung } from '../lib/videoTuDong'
-import { apDungLich, chuanXep, lapLich } from '../lib/xepLichVideo'
+import { apDungLich, chuanXep, lapLich, mocVN, ngayVN } from '../lib/xepLichVideo'
 
 const router = Router()
 const XEM = requirePermission('online_orders.view')
@@ -96,6 +97,54 @@ router.post('/tu-dong/tra-cho', authMiddleware, SUA, async (req: AuthRequest, re
         if (may) await traCho(req.storePrisma!, may.id)
         res.json({ success: true })
     } catch (e) { traLoi(res, e, 'POST /san-media/tu-dong/tra-cho') }
+})
+
+/** THỐNG KÊ kho Media (14/10/2026, chủ shop: "hiện thống kê đã tạo bao nhiêu video, đã lên lịch bao nhiêu"): đếm theo
+ *  trạng thái, tạo hôm nay (tay / tự động), lịch sắp tới theo ngày, từng gian. POOL 1 ⇒ tuần tự. Đọc hỏng ⇒ 500, không
+ *  trả số 0 (0 là "chưa có video nào", khác hẳn "không đọc được"). */
+router.get('/thong-ke', authMiddleware, XEM, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const now = Date.now()
+        const ngay = ngayVN(now)
+        const dauNgay = new Date(mocVN(ngay, '00:00'))
+        const tt: any[] = await prisma.sanMedia.groupBy({ by: ['trangThai'], _count: { _all: true } })
+        const theoTrangThai: Record<string, number> = Object.fromEntries(tt.map(x => [x.trangThai, x._count?._all || 0]))
+        const tong = Object.values(theoTrangThai).reduce((a, b) => a + b, 0)
+        const taoHomNay = await prisma.sanMedia.count({ where: { createdAt: { gte: dauNgay } } })
+        const tuDongHomNay = await prisma.sanMedia.count({ where: { tuDong: ngay } })
+        const tuDongTong = await prisma.sanMedia.count({ where: { tuDong: { not: null } } })
+        const daDangHomNay = await prisma.sanMedia.count({ where: { trangThai: 'da_dang', dangLuc: { gte: dauNgay } } })
+        // Lịch SẮP TỚI: Kengi giữ (hen_gio) + Shopee giữ (da_len_lich), giờ hẹn từ bây giờ
+        const lich: any[] = await prisma.sanMedia.findMany({
+            where: { trangThai: { in: ['hen_gio', 'da_len_lich'] }, henDangLuc: { gte: new Date(now) } },
+            select: { henDangLuc: true, channelId: true, trangThai: true }, orderBy: { henDangLuc: 'asc' }, take: 2000,
+        })
+        const theoNgay = new Map<string, number>()
+        for (const l of lich) { const k = ngayVN(new Date(l.henDangLuc).getTime()); theoNgay.set(k, (theoNgay.get(k) || 0) + 1) }
+        const gian: any[] = await prisma.sanMedia.groupBy({ by: ['channelId', 'trangThai'], where: { channelId: { not: null } }, _count: { _all: true } })
+        const ten: any[] = gian.length ? await prisma.onlineChannel.findMany({ where: { id: { in: Array.from(new Set(gian.map(g => g.channelId))) } }, select: { id: true, name: true } }) : []
+        const tenGian = new Map<string, string>(ten.map(c => [c.id, c.name]))
+        const lichGian = new Map<string, number>()
+        for (const l of lich) if (l.channelId) lichGian.set(l.channelId, (lichGian.get(l.channelId) || 0) + 1)
+        const theoGian = Array.from(new Set(gian.map(g => g.channelId as string))).map(id => {
+            const so = (t: string) => gian.filter(g => g.channelId === id && g.trangThai === t).reduce((a, g) => a + (g._count?._all || 0), 0)
+            return { channelId: id, ten: tenGian.get(id) || '?', nhap: so('nhap'), lichSapToi: lichGian.get(id) || 0, daDang: so('da_dang'), loi: so('loi') }
+        }).sort((a, b) => a.ten.localeCompare(b.ten))
+        res.json({
+            success: true,
+            data: {
+                tong, theoTrangThai, tuDongTong,
+                homNay: { ngay, tao: taoHomNay, tuDong: tuDongHomNay, daDang: daDangHomNay },
+                lich: {
+                    tong: lich.length, kengiGiu: lich.filter(l => l.trangThai === 'hen_gio').length, shopeeGiu: lich.filter(l => l.trangThai === 'da_len_lich').length,
+                    ganNhat: lich[0]?.henDangLuc ? new Date(lich[0].henDangLuc).toISOString() : null,
+                    theoNgay: Array.from(theoNgay.entries()).slice(0, 10).map(([n, so]) => ({ ngay: n, so })),
+                },
+                theoGian,
+            },
+        })
+    } catch (e) { traLoi(res, e, 'GET /san-media/thong-ke') }
 })
 
 /** Kiểm vân tay TRƯỚC khi tải video lên Drive: trùng thì POST /san-media sẽ từ chối, file đã lên Drive thành mồ côi. */
