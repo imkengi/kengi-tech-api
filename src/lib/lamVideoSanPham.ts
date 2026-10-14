@@ -21,7 +21,7 @@ import { nhanDangAnh } from './anhSanPham'
 export type LocChon = {
     soLuong?: number
     q?: string
-    /** true (mặc định) = chỉ mã còn tồn > 0 */
+    /** true (mặc định) = chỉ mã còn hàng: tồn kho mình > 0 HOẶC listing trên sàn còn tồn (kho mẹ) */
     chiConHang?: boolean
     /** true (mặc định) = chỉ mã có listing trên ít nhất một gian (OnlineProduct cùng SKU) */
     chiTrenSan?: boolean
@@ -34,7 +34,7 @@ export type LocChon = {
 }
 
 export type UngVien = {
-    id: string; sku: string; ten: string; giaBan: number; ton: number
+    id: string; sku: string; ten: string; giaBan: number; ton: number; tonTrenSan: number | null
     doDaiMoTa: number; soAnh: number; anhDaiDien: string | null
     soVideo: number; soGian: number
 }
@@ -47,13 +47,18 @@ function dieuKien(loc: LocChon, thamSo: any[]): string {
         `coalesce(trim(p.description), '') <> ''`,
         `EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)`,
     ]
-    if (loc.chiConHang !== false) w.push(`p.stock > 0`)
+    let gian = ''
     if (loc.channelId) {
         thamSo.push(String(loc.channelId))
-        w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND op."channelId" = $${thamSo.length})`)
+        gian = ` AND op."channelId" = $${thamSo.length}`
+        w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku${gian})`)
     } else if (loc.chiTrenSan !== false) {
         w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku)`)
     }
+    /* CÒN HÀNG = tồn kho mình > 0 HOẶC listing trên sàn còn tồn. Cửa hàng bán sàn bằng KHO MẸ
+     * (KENGISTORE mượn tồn HUTI — StoreSettings.khoMeMa) có Product.stock 0/âm trong khi sàn vẫn bán:
+     * chỉ xét p.stock thì 36/174 mã (đo 14/10) và loại oan đúng hàng đang bán chạy. */
+    if (loc.chiConHang !== false) w.push(`(p.stock > 0 OR EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND op.stock > 0${gian}))`)
     const q = String(loc.q || '').trim().slice(0, 100)
     if (q) {
         thamSo.push(`%${q.replace(/[\\%_]/g, m => '\\' + m)}%`)
@@ -72,21 +77,26 @@ export async function chonSanPham(prisma: any, loc: LocChon): Promise<UngVien[]>
     const thamSo: any[] = []
     const where = dieuKien(loc, thamSo)
     const so = Math.min(50, Math.max(1, Math.round(Number(loc.soLuong) || 1)))
-    const sx = loc.sapXep === 'ten' ? `p.name ASC`
-        : loc.sapXep === 'moi' ? `p."updatedAt" DESC`
-        : `("soVideo" > 0), random()`
+    /* Bí danh cột ("soVideo") KHÔNG dùng được trong biểu thức ORDER BY của cùng tầng (42703 — đo
+     * 14/10 bằng /admin/thu-lam-video) ⇒ bọc một tầng rồi mới xếp. */
+    const sx = loc.sapXep === 'ten' ? `t.ten ASC`
+        : loc.sapXep === 'moi' ? `t."capNhat" DESC`
+        : `(t."soVideo" > 0), random()`
     const rows: any[] = await prisma.$queryRawUnsafe(
-        `SELECT p.id, p.sku, p.name AS ten, p."sellingPrice" AS "giaBan", p.stock AS ton,
-                length(trim(p.description))::int AS "doDaiMoTa",
-                (SELECT count(*)::int FROM "ProductImage" i WHERE i."productId" = p.id) AS "soAnh",
-                (SELECT i.url FROM "ProductImage" i WHERE i."productId" = p.id ORDER BY i."isPrimary" DESC, i.id ASC LIMIT 1) AS "anhDaiDien",
-                (SELECT count(*)::int FROM "SanMediaSanPham" s WHERE s.sku = p.sku) AS "soVideo",
-                (SELECT count(DISTINCT op."channelId")::int FROM "OnlineProduct" op WHERE op.sku = p.sku) AS "soGian"
-           FROM "Product" p
-          WHERE ${where}
-          ORDER BY ${sx}
-          LIMIT ${so}`, ...thamSo)
-    return rows.map(r => ({ ...r, giaBan: Number(r.giaBan) || 0, ton: Number(r.ton) || 0 }))
+        `SELECT * FROM (
+            SELECT p.id, p.sku, p.name AS ten, p."sellingPrice" AS "giaBan", p.stock AS ton, p."updatedAt" AS "capNhat",
+                   length(trim(p.description))::int AS "doDaiMoTa",
+                   (SELECT count(*)::int FROM "ProductImage" i WHERE i."productId" = p.id) AS "soAnh",
+                   (SELECT i.url FROM "ProductImage" i WHERE i."productId" = p.id ORDER BY i."isPrimary" DESC, i.id ASC LIMIT 1) AS "anhDaiDien",
+                   (SELECT count(*)::int FROM "SanMediaSanPham" s WHERE s.sku = p.sku) AS "soVideo",
+                   (SELECT count(DISTINCT op."channelId")::int FROM "OnlineProduct" op WHERE op.sku = p.sku) AS "soGian",
+                   (SELECT max(op.stock)::int FROM "OnlineProduct" op WHERE op.sku = p.sku) AS "tonTrenSan"
+              FROM "Product" p
+             WHERE ${where}
+         ) t
+         ORDER BY ${sx}
+         LIMIT ${so}`, ...thamSo)
+    return rows.map(r => ({ ...r, capNhat: undefined, giaBan: Number(r.giaBan) || 0, ton: Number(r.ton) || 0 }))
 }
 
 /** Đếm kho: bao nhiêu mã đủ làm video theo bộ lọc, bao nhiêu chưa có video — để giao diện nói thật. */
@@ -113,7 +123,7 @@ export async function chiTietLamVideo(prisma: any, id: string) {
     if (!p) return null
     const listing: any[] = p.sku ? await prisma.onlineProduct.findMany({
         where: { sku: p.sku },
-        select: { channelId: true, platform: true, platformProductId: true, name: true, status: true, price: true,
+        select: { channelId: true, platform: true, platformProductId: true, name: true, status: true, price: true, stock: true,
             channel: { select: { name: true, status: true } } },
         take: 20,
     }) : []
@@ -130,6 +140,7 @@ export async function chiTietLamVideo(prisma: any, id: string) {
             channelId: l.channelId, san: l.platform, tenGian: l.channel?.name || null,
             gianHoatDong: (l.channel?.status || 'active') === 'active',
             maTrenSan: l.platformProductId, tenTrenSan: l.name, trangThai: l.status, giaTrenSan: Number(l.price) || 0,
+            tonTrenSan: Number(l.stock) || 0,
         })),
         video: video.map(v => v.media).filter(Boolean),
     }
