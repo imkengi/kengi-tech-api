@@ -32,7 +32,9 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 
 const router = Router()
 
-const TRANG_THAI = ['nhap', 'da_len_lich', 'cho_dang', 'da_dang', 'loi'] as const
+/* 'hen_gio' (14/10/2026) = KENGI giữ lịch: máy chủ tự đăng đúng giờ (lib/henGioDangVideo.ts), khác
+ * 'da_len_lich' = SÀN đã nhận lịch (Shopee scheduled_post, có mã trên sàn). */
+const TRANG_THAI = ['nhap', 'da_len_lich', 'cho_dang', 'da_dang', 'loi', 'hen_gio'] as const
 const KENH = ['shopee', 'tiktok'] as const
 const NGUON = ['drive', 'lien_ket'] as const
 
@@ -53,6 +55,30 @@ const loiThieuBang = {
     success: false,
     error: 'Bảng SanMedia chưa có trên cửa hàng này. Chạy POST /api/admin/sync-schemas rồi thử lại.',
     canSyncSchema: true,
+}
+
+const gioVN = (d: Date | string) => new Date(d).toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
+})
+
+/** Hạn giữ chỗ chạy máy đăng còn sống không (đọc từ tienTrinhDang — xem dangVideoShopee.chayBuocDangShopee). */
+function dangCoNguoiChay(tienTrinhDang?: string | null): boolean {
+    try {
+        const t = tienTrinhDang ? JSON.parse(tienTrinhDang) : null
+        return !!t?.dangChayDen && Date.parse(t.dangChayDen) > Date.now()
+    } catch { return false }
+}
+
+/** Video đang HẸN GIỜ thì web không được đăng tay — máy chạy theo lịch là người duy nhất chạy nó,
+ *  hai người cùng chạy là đăng hai lần. Trả true nếu đã trả lời 409. */
+async function dangHenGio(prisma: any, id: string, res: Response): Promise<boolean> {
+    const m = await prisma.sanMedia.findUnique({ where: { id }, select: { trangThai: true, henDangLuc: true } }).catch(() => null)
+    if (m?.trangThai !== 'hen_gio') return false
+    res.status(409).json({
+        success: false,
+        error: `Video đang hẹn đăng lúc ${m.henDangLuc ? gioVN(m.henDangLuc) : '?'} — máy chủ sẽ tự đăng. Muốn đăng ngay thì bấm "Bỏ hẹn" trước.`,
+    })
+    return true
 }
 
 /**
@@ -367,6 +393,7 @@ router.post('/:id/dang-shopee', authMiddleware, requirePermission('online_orders
         /* 75s chứ không 200s: chủ shop nhìn 'Bắt đầu…' đứng im 3 phút tưởng treo (08/09).
          * Lượt ngắn = web nhận tiến trình thường xuyên; trạng thái vẫn nằm ở DB. */
         const nganSach = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 75_000))
+        if (await dangHenGio(prisma, String(req.params.id), res)) return
         /* Qua GIỮ CHỖ (11/10/2026): máy chủ có thể đang tự đăng nốt sau push 38 của app Video —
          * hai lượt song song là post_video hai lần. Bận thì đợi một nhịp rồi trả conTiep; web gọi
          * lặp ngay nên không đợi là dội máy chủ. */
@@ -389,6 +416,7 @@ router.post('/:id/dang-tiktok', authMiddleware, requirePermission('online_orders
         const prisma: any = req.storePrisma!
         const { buocDangTikTok } = await import('../lib/dangVideoTikTok')
         const nganSachMs = Math.min(240_000, Math.max(20_000, Number(req.body?.nganSachMs) || 75_000))
+        if (await dangHenGio(prisma, String(req.params.id), res)) return
         const kq = await buocDangTikTok(prisma, String(req.params.id), {
             dangThang: req.body?.dangThang === true,
             nganSachMs,
@@ -398,6 +426,120 @@ router.post('/:id/dang-tiktok', authMiddleware, requirePermission('online_orders
         if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
         console.error('POST /san-media/:id/dang-tiktok lỗi:', err?.message || err)
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 600) })
+    }
+})
+
+/* ─── HẸN GIỜ ĐĂNG (14/10/2026) ──────────────────────────────────────────────────
+ * Chủ shop: "chưa có hẹn giờ đăng". Bản trước chỉ có ô giờ trong form Sửa, lưu xong gắn nhãn
+ * 'da_len_lich' mà không gửi gì lên sàn ⇒ video nằm im mãi. Nay hẹn = trạng thái 'hen_gio', máy chủ
+ * tự chạy ở nhịp ngoài /api/cron/tick (lib/henGioDangVideo.ts), không cần mở trang:
+ *   · Shopee: tải lên NGAY; giờ hẹn cách ≥16 phút thì Shopee giữ video và tự đăng đúng giờ
+ *     (scheduled_info, khung 15 phút–30 ngày), gần hơn thì máy chủ đợi tới giờ mới post_video.
+ *   · TikTok: Content Posting API không có hẹn giờ ⇒ tới giờ máy chủ mới bắt đầu tải + đăng.
+ * Kiểm đủ điều kiện NGAY lúc hẹn — để tới giờ mới vỡ là hỏng lời hứa với chủ shop. */
+router.post('/:id/hen-gio', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = String(req.params.id)
+        const m = await prisma.sanMedia.findUnique({ where: { id } })
+        if (!m) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
+        if (m.trangThai === 'da_dang' || m.trangThai === 'da_len_lich') {
+            res.status(400).json({ success: false, error: 'Video này đã lên sàn rồi.' }); return
+        }
+        if (m.kenh !== 'shopee' && m.kenh !== 'tiktok') {
+            res.status(400).json({ success: false, error: 'Chưa chọn kênh đăng — bấm Sửa, chọn Shopee hoặc TikTok trước.' }); return
+        }
+        if (m.nguon !== 'drive' || !m.nguonId) {
+            res.status(400).json({ success: false, error: 'Chỉ hẹn được video nằm trong Drive của cửa hàng.' }); return
+        }
+        const t = new Date(req.body?.henDangLuc)
+        if (isNaN(t.getTime())) { res.status(400).json({ success: false, error: 'Chưa chọn giờ đăng.' }); return }
+        if (t.getTime() < Date.now() + 2 * 60_000) {
+            res.status(400).json({ success: false, error: 'Giờ hẹn phải sau bây giờ ít nhất 2 phút. Muốn đăng liền thì bấm nút Đăng.' }); return
+        }
+        if (t.getTime() > Date.now() + 30 * 86400_000) {
+            res.status(400).json({ success: false, error: 'Chỉ hẹn được trong vòng 30 ngày (Shopee giới hạn 30 ngày; refresh token video cũng sống 30 ngày).' }); return
+        }
+        if (dangCoNguoiChay(m.tienTrinhDang)) {
+            res.status(409).json({ success: false, error: 'Video đang được đăng ở cửa sổ khác — đợi lượt đó xong.' }); return
+        }
+
+        const dangThang = req.body?.dangThang === true
+        let tienTrinhDang: string | null = m.tienTrinhDang ?? null
+        let san: any = null
+        try { san = m.tienTrinhDang ? JSON.parse(m.tienTrinhDang)?.san : null } catch { san = null }
+        if (m.kenh === 'shopee') {
+            if (m.coNoiDungAI !== true && m.coNoiDungAI !== false) {
+                res.status(400).json({ success: false, error: 'Chưa khai video có dùng AI hay không — Shopee bắt buộc. Chọn "Có AI" / "Không AI" dưới tên video trước.' }); return
+            }
+            if (!m.channelId) { res.status(400).json({ success: false, error: 'Chưa chọn gian hàng Shopee — bấm Sửa, chọn gian trước.' }); return }
+            const ch = await prisma.onlineChannel.findUnique({ where: { id: m.channelId }, select: { name: true, videoUserId: true } as any })
+            if (!ch?.videoUserId) {
+                res.status(400).json({ success: false, error: `Gian "${ch?.name || '?'}" chưa uỷ quyền Shopee Video — uỷ quyền ở ô vàng đầu trang trước khi hẹn.` }); return
+            }
+            // Tiến trình đang là của TikTok (đổi kênh) ⇒ bỏ, để máy đăng Shopee giữ chỗ được trên dòng
+            if (san && san !== 'shopee') tienTrinhDang = null
+        } else {
+            const st = await prisma.storeSettings.findFirst({ select: { ttPostOpenId: true, ttPostScopes: true } as any }).catch(() => null)
+            const sc = String(st?.ttPostScopes || '').split(',').map((s: string) => s.trim())
+            if (!st?.ttPostOpenId) { res.status(400).json({ success: false, error: 'Chưa kết nối tài khoản TikTok — bấm "Kết nối TikTok" ở ô vàng đầu trang.' }); return }
+            if (dangThang && !sc.includes('video.publish')) { res.status(400).json({ success: false, error: 'Tài khoản TikTok chưa cấp quyền đăng thẳng (video.publish) — bỏ chọn "đăng thẳng" hoặc kết nối lại có bật.' }); return }
+            if (!dangThang && !sc.includes('video.upload')) { res.status(400).json({ success: false, error: 'Tài khoản TikTok chưa cấp quyền video.upload — kết nối lại TikTok.' }); return }
+            // Lời chọn đăng thẳng/hộp thư nằm trong tiến trình TikTok để máy chạy đọc lại lúc tới giờ
+            let tt: any = null
+            try { tt = san === 'tiktok' ? JSON.parse(m.tienTrinhDang) : null } catch { tt = null }
+            tienTrinhDang = JSON.stringify({ ...(tt || { giaiDoan: 'init' }), san: 'tiktok', dangThang })
+        }
+
+        const day = await prisma.sanMedia.update({
+            where: { id },
+            data: { henDangLuc: t, trangThai: 'hen_gio', loiCuoi: null, tienTrinhDang },
+            include: { sanPham: { orderBy: { thuTu: 'asc' } } },
+        })
+        const conPhut = Math.round((t.getTime() - Date.now()) / 60_000)
+        res.json({
+            success: true,
+            data: {
+                media: day,
+                ghiChu: m.kenh === 'shopee'
+                    ? (conPhut >= 16
+                        ? `Máy chủ bắt đầu tải video lên Shopee ngay; Shopee giữ và tự đăng lúc ${gioVN(t)}.`
+                        : `Máy chủ tải video lên Shopee ngay rồi đợi tới ${gioVN(t)} mới đăng.`)
+                    : `Tới ${gioVN(t)} máy chủ bắt đầu tải lên TikTok${dangThang ? ' và đăng thẳng' : ' (vào hộp thư TikTok — mở app bấm hoàn tất)'}; video lên trễ vài phút tuỳ dung lượng.`,
+            },
+        })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('POST /san-media/:id/hen-gio lỗi:', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+router.delete('/:id/hen-gio', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = String(req.params.id)
+        const m = await prisma.sanMedia.findUnique({ where: { id }, select: { trangThai: true, tienTrinhDang: true } })
+        if (!m) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
+        if (m.trangThai !== 'hen_gio') { res.status(400).json({ success: false, error: 'Video không ở trạng thái hẹn giờ.' }); return }
+        /* Máy chạy đang tải giữa chừng: bỏ hẹn lúc này mà lượt đó chạy tới post_video là vẫn đăng.
+         * Bắt đợi hạn giữ chỗ hết (≤ ngân sách lượt + 60 giây) cho chắc. */
+        if (dangCoNguoiChay(m.tienTrinhDang)) {
+            res.status(409).json({ success: false, error: 'Máy chủ đang tải video theo lịch — đợi 1–2 phút rồi bấm Bỏ hẹn lại.' }); return
+        }
+        let giaiDoan = 'init'
+        try { giaiDoan = m.tienTrinhDang ? (JSON.parse(m.tienTrinhDang)?.giaiDoan || 'init') : 'init' } catch { giaiDoan = 'init' }
+        const day = await prisma.sanMedia.update({
+            where: { id },
+            // Đã tải được một phần thì để 'cho_dang' — nút "Tiếp tục đăng" chạy tiếp, không tải lại
+            data: { trangThai: giaiDoan !== 'init' ? 'cho_dang' : 'nhap', henDangLuc: null },
+            include: { sanPham: { orderBy: { thuTu: 'asc' } } },
+        })
+        res.json({ success: true, data: { media: day } })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('DELETE /san-media/:id/hen-gio lỗi:', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
 })
 
@@ -456,6 +598,8 @@ router.patch('/:id', authMiddleware, requirePermission('online_orders.edit', 'on
         const prisma: any = req.storePrisma!
         const b = req.body || {}
         const data: any = {}
+        const hienTai = await prisma.sanMedia.findUnique({ where: { id: String(req.params.id) }, select: { trangThai: true } })
+        if (!hienTai) { res.status(404).json({ success: false, error: 'Không thấy media' }); return }
         if (b.ten !== undefined) data.ten = String(b.ten).slice(0, 200)
         if (b.caption !== undefined) data.caption = b.caption ? String(b.caption).slice(0, 2000) : null
         if (b.kenh !== undefined) data.kenh = KENH.includes(b.kenh) ? b.kenh : null
@@ -463,6 +607,13 @@ router.patch('/:id', authMiddleware, requirePermission('online_orders.edit', 'on
         /* Khai nội dung AI — Shopee bắt buộc aigc_label (09/10/2026). true/false là lời
          * khai của người đăng; null = rút lại về "chưa khai". */
         if (b.coNoiDungAI !== undefined) data.coNoiDungAI = typeof b.coNoiDungAI === 'boolean' ? b.coNoiDungAI : null
+        /* GIỜ HẸN chỉ đặt qua POST /:id/hen-gio (14/10/2026). Form Sửa cũ gửi kèm trangThai 'da_len_lich'
+         * ⇒ video mang nhãn "Đã lên lịch" mà KHÔNG gì gửi lên sàn, nút Đăng biến mất, máy đăng coi là xong:
+         * hẹn giờ giả. Video đang hẹn thì đổi giờ qua nút Hẹn giờ (máy chạy giữ chỗ theo giờ đó). */
+        if (b.henDangLuc !== undefined && hienTai.trangThai === 'hen_gio') {
+            res.status(400).json({ success: false, error: 'Video đang hẹn giờ — đổi giờ bằng nút "Hẹn giờ" ở dòng video (hoặc Bỏ hẹn).' })
+            return
+        }
         if (b.henDangLuc !== undefined) {
             /* Hẹn giờ vào QUÁ KHỨ là bẫy im lặng: người dùng tưởng đã đặt lịch, bộ chạy
              * nền thấy tới giờ rồi nên đăng ngay lập tức. Chặn ở đây, nói rõ. */
@@ -479,6 +630,18 @@ router.patch('/:id', authMiddleware, requirePermission('online_orders.edit', 'on
              * đăng" mà trên sàn chẳng có gì. */
             if (b.trangThai === 'da_dang') {
                 res.status(400).json({ success: false, error: '"Đã đăng" chỉ được đặt khi sàn trả về mã video, không đánh dấu tay được.' })
+                return
+            }
+            // 'da_len_lich' = SÀN đã nhận lịch (có mã); 'hen_gio' đặt qua POST /:id/hen-gio để kiểm đủ điều kiện
+            if (b.trangThai === 'da_len_lich' || b.trangThai === 'hen_gio') {
+                res.status(400).json({ success: false, error: 'Hẹn giờ đăng bằng nút "Hẹn giờ" ở dòng video — không đặt tay trạng thái lịch.' })
+                return
+            }
+            if (['da_dang', 'da_len_lich', 'hen_gio'].includes(hienTai.trangThai) && b.trangThai !== hienTai.trangThai) {
+                res.status(400).json({
+                    success: false,
+                    error: hienTai.trangThai === 'hen_gio' ? 'Video đang hẹn giờ — bấm "Bỏ hẹn" trước.' : 'Video đã lên sàn — không đổi trạng thái được.',
+                })
                 return
             }
             if (!TRANG_THAI.includes(b.trangThai)) { res.status(400).json({ success: false, error: 'trangThai không hợp lệ' }); return }
@@ -670,8 +833,13 @@ router.get('/san-sang', authMiddleware, requirePermission('online_orders.view'),
                             'Trong console Shopee, app Video phải khai Live Redirect URL Domain = kengi.vn — để trống là Shopee từ chối đường về.',
                             'Bấm "Uỷ quyền Shopee Video" và đăng nhập bằng tài khoản CHỦ shop: API video ký bằng user_id chứ không phải shop_id.',
                         ]),
-                        'Cửa hàng phải đồng ý Điều khoản Shopee Video trong Seller Center.',
-                        ...(daUyQuyenVideo ? ['Đường đăng (init_video_upload → post_video) đang được nối — uỷ quyền đã xong, việc còn lại ở phía mã.'] : []),
+                        /* Nhiều gian mà mới uỷ quyền MỘT (KENGISTORE 14/10/2026: Kengi Store xong, Tools + Electric
+                         * chưa) — nói tên gian còn thiếu. Dòng "đường đăng đang được nối" cũ đã sai từ khi đăng chạy được. */
+                        ...(daUyQuyenVideo && kenhShopeeDs.some((c: any) => !c.daUyQuyenVideo) ? [
+                            `Gian ${kenhShopeeDs.filter((c: any) => !c.daUyQuyenVideo).map((c: any) => c.ten).join(', ')} chưa uỷ quyền Shopee Video — `
+                            + 'bấm "Uỷ quyền" ở dòng gian đó và đăng nhập đúng tài khoản Shopee CHỦ của gian (mỗi gian một tài khoản thì làm riêng từng gian).',
+                        ] : []),
+                        'Mỗi tài khoản Shopee phải đồng ý Điều khoản Shopee Video trong Seller Center bản web.',
                     ],
                     duongApi: ['v2.media.init_video_upload', 'v2.media.upload_video_part', 'v2.media.complete_video_upload', 'v2.video.get_cover_list', 'v2.video.edit_video_info', 'v2.video.post_video'],
                     gioiHan: GIOI_HAN.shopee,

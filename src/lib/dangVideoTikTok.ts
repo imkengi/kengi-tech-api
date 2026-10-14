@@ -35,6 +35,9 @@ export interface TienTrinhTT {
     tongPhan?: number
     phanXong?: number
     dangThang?: boolean
+    /** Giữ chỗ chạy của máy chạy theo lịch (lib/henGioDangVideo.ts) — luu() ghi lại nguyên đối tượng nên hạn còn suốt lượt */
+    dangChayDen?: string
+    dangChayBoi?: string
     batDauLuc?: string
     capNhatLuc?: string
     ghiChu?: string
@@ -164,7 +167,8 @@ export async function buocDangTikTok(
                 fileSize, chunkSize, tongPhan, phanXong: 0, dangThang,
                 ghiChu: `Mở phiên ${dangThang ? 'đăng thẳng' : 'hộp thư'} — ${tongPhan} khối`,
             })
-            await luu(prisma, mediaId, tt, { trangThai: 'cho_dang', loiCuoi: null })
+            // Video HẸN GIỜ giữ 'hen_gio' tới khi xong — máy chạy theo lịch chỉ quét trạng thái đó (lib/henGioDangVideo.ts)
+            await luu(prisma, mediaId, tt, { trangThai: m.trangThai === 'hen_gio' ? 'hen_gio' : 'cho_dang', loiCuoi: null })
         }
 
         // ─── parts: đẩy từng khối Drive → TikTok, hết giờ thì dừng đúng chỗ ────

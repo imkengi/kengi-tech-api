@@ -47,6 +47,12 @@ router.post('/tick', async (req: Request, res: Response) => {
         const { nhipKeoMaMoi } = await import('../services/kiotvietMaMoi')
         ra.kvMaMoi = await nhipKeoMaMoi()
     } catch (e: any) { ra.kvMaMoi = 'loi: ' + (e?.message || e) }
+    /* Hẹn giờ đăng video lên Shopee Video / TikTok (14/10/2026) — đứng TRƯỚC tác vụ AI (có thể chạy vài
+     * phút) để video lên đúng giờ. Ngân sách 40 giây; video lớn tải qua nhiều nhịp. lib/henGioDangVideo.ts */
+    try {
+        const { nhipDangHenGio } = await import('../lib/henGioDangVideo')
+        ra.henGioVideo = await nhipDangHenGio(40_000)
+    } catch (e: any) { ra.henGioVideo = 'loi: ' + (e?.message || e) }
     try { ra.tacVuAi = (await quetTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.tacVuAi = 'loi: ' + (e?.message || e) }
     /* Nhắc TikTok xác nhận đủ bằng chứng (09/10/2026) — mỗi 10 phút; mỗi giờ một tin / cửa hàng do dấu
      * trong thông báo lo. Chạy ở NHỊP NGOÀI để có CPU cả đêm (cpu-throttling). */

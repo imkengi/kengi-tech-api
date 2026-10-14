@@ -49,6 +49,8 @@ export interface TienTrinh {
     /** Hạn giữ chỗ chạy + ai giữ — xem chayBuocDangShopee */
     dangChayDen?: string
     dangChayBoi?: string
+    /** edit_video_info đã gửi scheduled_post=true ⇒ post_video xong là SHOPEE giữ lịch ('da_len_lich') */
+    henQuaShopee?: boolean
 }
 
 export interface KetQuaBuoc {
@@ -164,7 +166,9 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
                 tongPhan: Math.ceil(fileSize / partSize), phanXong: 0,
                 batDauLuc: new Date().toISOString(), ghiChu: undefined,
             })
-            await luu(prisma, m.id, tt, { trangThai: 'cho_dang', loiCuoi: null, thoiLuongS: duration, bytes: fileSize })
+            // Video HẸN GIỜ (máy chủ tự chạy) giữ nguyên 'hen_gio' suốt lúc tải — máy chạy theo lịch chỉ
+            // quét 'hen_gio', đổi sang 'cho_dang' là nó buông giữa chừng (lib/henGioDangVideo.ts)
+            await luu(prisma, m.id, tt, { trangThai: m.trangThai === 'hen_gio' ? 'hen_gio' : 'cho_dang', loiCuoi: null, thoiLuongS: duration, bytes: fileSize })
         }
 
         // ── 2. PARTS ───────────────────────────────────────────────────────────
@@ -249,9 +253,20 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
             if (m.henDangLuc) {
                 const t = new Date(m.henDangLuc).getTime()
                 const gio = Date.now()
-                if (t > gio + 15 * 60_000 && t < gio + 30 * 86400_000) scheduled = { scheduled_post: true, scheduled_post_time: t }
-                else ghi.push('Giờ hẹn ngoài khung 15 phút–30 ngày của Shopee → đăng ngay')
+                /* Tài liệu edit_video_info (đọc 14/10/2026): scheduled_post_time là MILI GIÂY, phải sau lúc gọi
+                 * ≥15 phút và trong 30 ngày. Lấy 16 phút: edit → post mất vài giây, sát mép là error_param. */
+                if (t > gio + 16 * 60_000 && t < gio + 30 * 86400_000) scheduled = { scheduled_post: true, scheduled_post_time: t }
+                else if (m.trangThai === 'hen_gio' && t > gio) {
+                    /* Hẹn qua máy chủ mà còn < 16 phút: Shopee không nhận lịch gần vậy ⇒ ĐỢI tới giờ rồi
+                     * đăng ngay (máy chạy gọi lại mỗi phút). Đăng sớm hơn giờ hẹn là sai lời hứa. */
+                    const gioHen = new Date(t).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+                    tt.ghiChu = `Đã tải xong — đợi tới ${gioHen} để đăng`
+                    await luu(prisma, m.id, tt)
+                    return tra(tt.ghiChu)
+                }
+                else if (m.trangThai !== 'hen_gio') ghi.push('Giờ hẹn ngoài khung 15 phút–30 ngày của Shopee → đăng ngay')
             }
+            tt.henQuaShopee = !!scheduled.scheduled_post
             if (thieu.length) ghi.push(`Bỏ qua SKU chưa tra ra hàng trên sàn: ${thieu.join(', ')}`)
             if (coMa.length > 6) ghi.push(`Shopee chỉ nhận 6 sản phẩm, bỏ ${coMa.length - 6} mã cuối`)
 
@@ -287,7 +302,8 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
             if (!ok?.post_id) throw new Error('post_video không trả post_id')
 
             tt.giaiDoan = 'xong'
-            const daHen = !!m.henDangLuc && new Date(m.henDangLuc).getTime() > Date.now() + 15 * 60_000
+            // Theo ĐÚNG lời gửi ở edit_video_info, đừng tính lại theo đồng hồ lúc này (hai phép tính là hai kết quả)
+            const daHen = !!tt.henQuaShopee
             await luu(prisma, m.id, tt, {
                 trangThai: daHen ? 'da_len_lich' : 'da_dang',
                 maTrenSan: String(ok.post_id),
@@ -352,12 +368,14 @@ export type KetQuaChay =
     | (KetQuaBuoc & { banBan?: false })
     | { banBan: true; xong: false; conTiep: true; giaiDoan: GiaiDoan; tienTrinh: TienTrinh; thongDiep: string }
 
-export async function chayBuocDangShopee(prisma: any, mediaId: string, nganSachMs: number, ai: 'web' | 'push'): Promise<KetQuaChay> {
+export async function chayBuocDangShopee(prisma: any, mediaId: string, nganSachMs: number, ai: 'web' | 'push' | 'hen'): Promise<KetQuaChay> {
     const banBan = (tt: TienTrinh): KetQuaChay => ({
         banBan: true, xong: false, conTiep: true, giaiDoan: tt.giaiDoan, tienTrinh: tt,
         thongDiep: String(tt.dangChayBoi || '').startsWith('push')
             ? 'Máy chủ đang tự đăng tiếp (Shopee đã báo chuyển mã xong) — đợi vài giây'
-            : 'Video này đang được đăng ở một cửa sổ khác — đợi lượt đó xong',
+            : String(tt.dangChayBoi || '').startsWith('hen')
+                ? 'Máy chủ đang tải video theo giờ hẹn — đợi vài giây'
+                : 'Video này đang được đăng ở một cửa sổ khác — đợi lượt đó xong',
     })
     const m = await prisma.sanMedia.findUnique({ where: { id: mediaId }, select: { tienTrinhDang: true } })
     if (!m) throw new Error('Không có video này trong kho')

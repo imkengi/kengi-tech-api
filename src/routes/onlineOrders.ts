@@ -3081,13 +3081,37 @@ router.post('/channels/:id/video-exchange-token', authMiddleware, async (req: Au
             daGan.push({ kenh: c.name, shopId: String(c.shopId), userId: uid })
         }
 
-        // Kênh bấm nút mà shopId không khớp shop nào: vẫn ghi để không mất công uỷ quyền.
-        if (!daGan.some(x => x.kenh === channel.name)) {
+        /* Gian BẤM NÚT mà tài khoản vừa đăng nhập KHÔNG sở hữu (14/10/2026). Bản trước "vẫn ghi để không
+         * mất công": gắn user_id của tài khoản KHÁC vào gian này ⇒ video của gian đó (API video ký theo
+         * user_id) lên nhầm Shopee Video của shop kia. KENGISTORE có 3 gian, mỗi gian một tài khoản: bấm
+         * uỷ quyền gian Kengi Tools mà trình duyệt đang đăng nhập sẵn Kengi Store là dính đúng ca này.
+         * Nay KHÔNG ghi; các gian tài khoản đó sở hữu thì vẫn được làm mới ở trên (vô hại). */
+        if (channel.shopId && !daGan.some(x => x.kenh === channel.name)) {
+            const tenSoHuu = daGan.map(x => x.kenh)
+            await prisma.syncLog.create({
+                data: {
+                    channelId: channel.id, action: 'video_auth', status: 'error',
+                    details: `Shopee Video: tài khoản vừa đăng nhập sở hữu shop ${t.shopIdList.join(', ') || '?'}`
+                        + `${tenSoHuu.length ? ` (${tenSoHuu.join(', ')})` : ''} — KHÔNG có gian ${channel.name} (${channel.shopId}); không ghi token`,
+                },
+            }).catch(() => { })
+            res.status(409).json({
+                success: false,
+                error: `Tài khoản Shopee vừa đăng nhập không phải chủ gian "${channel.name}"`
+                    + `${tenSoHuu.length ? ` (đó là tài khoản của ${tenSoHuu.join(', ')})` : ` (nó sở hữu shop ${t.shopIdList.join(', ') || 'khác'})`}, `
+                    + `nên gian "${channel.name}" CHƯA được uỷ quyền. Đăng xuất Shopee trên trình duyệt này (banhang.shopee.vn → Đăng xuất) `
+                    + `hoặc chọn "Đổi tài khoản" ở trang Shopee, rồi bấm "Uỷ quyền" ở dòng ${channel.name} và đăng nhập tài khoản CHỦ của gian đó.`,
+                daUyQuyenLai: tenSoHuu,
+            })
+            return
+        }
+        // Gian cũ chưa lưu shopId: không đối chiếu được — giữ cách cũ (gắn phần tử đầu, web cảnh báo shopKhop)
+        if (!channel.shopId && !daGan.some(x => x.kenh === channel.name)) {
             await prisma.onlineChannel.update({
                 where: { id: channel.id },
                 data: { videoUserId: userId, ...boToken } as any,
             })
-            daGan.push({ kenh: channel.name, shopId: String(channel.shopId || '?'), userId })
+            daGan.push({ kenh: channel.name, shopId: '?', userId })
         }
 
         await prisma.syncLog.create({
