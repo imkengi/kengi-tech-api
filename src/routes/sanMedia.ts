@@ -25,8 +25,10 @@
 //  sang 'da_dang' khi SÀN thật sự trả về mã video — không tự đánh dấu.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import express, { Router, Response } from 'express'
+import express, { Router, Request, Response } from 'express'
+import crypto from 'crypto'
 import { errMsg } from '../lib/errorResponse'
+import { getStorePrisma } from '../lib/prisma'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 
@@ -260,6 +262,94 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
         // Lỗi Drive phải hiện NGUYÊN VĂN: "chưa share thư mục" và "sai folderId" là
         // hai chuyện khác nhau, che thành "lỗi hệ thống" là không sửa được.
         res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được thư mục Drive') })
+    }
+})
+
+/* ─── XEM LẠI VIDEO (14/10/2026, chủ shop: "không xem lại video được à") ─────────────────
+ *
+ * Video nằm ở Drive cửa hàng. Thẻ <video> KHÔNG gửi được header Authorization ⇒ hai bước:
+ *   1. GET /:id/xem-link  (đăng nhập)  → đường phát ký HMAC, sống 30 phút, gắn đúng schema + id
+ *   2. GET /xem/:id?s&h&k (không đăng nhập, chữ ký thay) → chuyển byte Drive theo Range, mỗi lượt ≤ 8MB
+ *      (tua được; Cloud Run không phải giữ cả file 1GB trong một phản hồi). Nhân viên không cần đăng nhập Google.
+ * Không đưa JWT đăng nhập vào URL — link chỉ mở được đúng một video, hết hạn sau 30 phút.
+ * helmet đặt Cross-Origin-Resource-Policy: same-origin ⇒ thẻ <video> ở kengi.vn bị chặn khi tải từ
+ * api.kengi.vn; đường phát đặt lại 'same-site' (kengi.vn và api.kengi.vn cùng site). */
+const KHOI_XEM = 8 * 1024 * 1024
+function kyXem(schema: string, id: string, het: number) {
+    const bi = process.env.JWT_SECRET || ''
+    return crypto.createHmac('sha256', `${bi}:xem-video`).update(`${schema}|${id}|${het}`).digest('hex').slice(0, 40)
+}
+
+router.get('/:id/xem-link', authMiddleware, requirePermission('online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const schema = req.user?.branchSchema || req.user?.storeSchema || ''
+        if (!/^[a-z0-9_]+$/.test(schema)) { res.status(400).json({ success: false, error: 'Thiếu cửa hàng trong phiên đăng nhập' }); return }
+        const m = await prisma.sanMedia.findUnique({ where: { id: String(req.params.id) }, select: { id: true, nguon: true, nguonId: true, lienKet: true } })
+        if (!m) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
+        if (m.nguon === 'lien_ket') { res.json({ success: true, data: { ngoai: m.lienKet } }); return }
+        if (!m.nguonId) { res.status(400).json({ success: false, error: 'Video này không có file Drive' }); return }
+        const het = Date.now() + 30 * 60 * 1000
+        res.json({
+            success: true,
+            data: {
+                duong: `/san-media/xem/${encodeURIComponent(m.id)}?s=${schema}&h=${het}&k=${kyXem(schema, m.id, het)}`,
+                drive: `https://drive.google.com/file/d/${encodeURIComponent(m.nguonId)}/view`,
+                het,
+            },
+        })
+    } catch (err: any) {
+        if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
+        console.error('GET /san-media/:id/xem-link lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không tạo được link xem') })
+    }
+})
+
+router.get('/xem/:id', async (req: Request, res: Response) => {
+    const id = String(req.params.id || ''), schema = String(req.query.s || ''), het = Number(req.query.h) || 0, k = String(req.query.k || '')
+    try {
+        const dung = kyXem(schema, id, het)
+        if (!/^[a-z0-9_]+$/.test(schema) || !het || k.length !== dung.length || !crypto.timingSafeEqual(Buffer.from(k), Buffer.from(dung))) {
+            res.status(403).json({ success: false, error: 'Link xem không hợp lệ' }); return
+        }
+        if (Date.now() > het) { res.status(403).json({ success: false, error: 'Link xem đã hết hạn — mở lại video' }); return }
+        const prisma: any = getStorePrisma(schema)
+        const m = await prisma.sanMedia.findUnique({ where: { id }, select: { nguonId: true, mime: true, bytes: true } })
+        if (!m?.nguonId) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
+        const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+        const { drive } = await getStoreDriveWriter(prisma)
+        let co = Number(m.bytes) || 0, loai = m.mime || ''
+        if (!co || !loai) {
+            const meta = await drive.files.get({ fileId: m.nguonId, fields: 'size,mimeType', supportsAllDrives: true })
+            co = co || Number(meta.data?.size) || 0
+            loai = loai || meta.data?.mimeType || 'video/mp4'
+        }
+        if (!co) { res.status(502).json({ success: false, error: 'Drive không trả dung lượng file' }); return }
+        // Range: "bytes=X-" / "bytes=X-Y" — mỗi lượt tối đa 8MB, trình duyệt tự xin tiếp
+        const r = /^bytes=(\d+)-(\d*)$/.exec(String(req.headers.range || 'bytes=0-'))
+        let tu = r ? Number(r[1]) : 0
+        let den = r && r[2] ? Math.min(Number(r[2]), co - 1) : co - 1
+        if (tu >= co) { res.status(416).setHeader('Content-Range', `bytes */${co}`); res.end(); return }
+        if (den - tu + 1 > KHOI_XEM) den = tu + KHOI_XEM - 1
+        const dl = await drive.files.get(
+            { fileId: m.nguonId, alt: 'media', supportsAllDrives: true },
+            { responseType: 'stream', headers: { Range: `bytes=${tu}-${den}` } },
+        )
+        res.status(206)
+        res.setHeader('Content-Type', loai || 'video/mp4')
+        res.setHeader('Content-Length', String(den - tu + 1))
+        res.setHeader('Content-Range', `bytes ${tu}-${den}/${co}`)
+        res.setHeader('Accept-Ranges', 'bytes')
+        res.setHeader('Cache-Control', 'private, max-age=1800')
+        res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
+        const luong: any = dl.data
+        luong.on('error', (e: any) => { console.error('[xem-video] luồng Drive gãy:', e?.message || e); res.destroy(e) })
+        req.on('close', () => { try { luong.destroy() } catch { /* đã đóng */ } })
+        luong.pipe(res)
+    } catch (err: any) {
+        console.error('GET /san-media/xem/:id lỗi:', err?.message || err)
+        if (!res.headersSent) res.status(502).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+        else res.destroy()
     }
 })
 
