@@ -3924,6 +3924,15 @@ model SanMedia {
   /// đứt giữa chừng thì bước sau đọc ra chạy tiếp, không tải lại từ khối 0.
   tienTrinhDang String?
 
+  /// BIẾN THỂ nội dung của video dựng từ sản phẩm (JSON {bt, mau, doDai, poster, nhac, giong, dv[]}) — 14/10/2026.
+  /// Chủ shop: "nội dung các video không được trùng nhau trên 1 mã hàng". null = video tải tay.
+  bienThe String?
+  /// VÂN TAY nội dung (băm kịch bản + ảnh; bỏ qua màu mẫu, giá, nhạc, độ dài) — POST /san-media chặn video thứ hai
+  /// cùng vân tay trên cùng SKU.
+  vanTay  String?
+  /// Ngày (giờ VN, YYYY-MM-DD) máy dựng TỰ ĐỘNG làm ra video (đếm chỉ tiêu mỗi gian mỗi ngày); null = người bấm tay
+  tuDong  String?
+
   createdBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3934,6 +3943,26 @@ model SanMedia {
   @@index([kenh])
   @@index([henDangLuc])
   @@index([createdAt])
+  @@index([vanTay])
+  @@index([tuDong])
+}
+
+/// LỊCH TỰ TẠO VIDEO từ sản phẩm (14/10/2026) — một dòng mỗi cửa hàng (id 'mac-dinh'). Video chỉ dựng được trên
+/// trình duyệt (WebCodecs + giọng đọc ở máy shop), nên máy chủ giữ lịch + chọn việc, còn một tab kengi.vn được chỉ
+/// định làm "máy dựng" nhận việc khi tới giờ. giuCho* = chỗ giữ chống hai máy cùng làm (so-và-ghi trên dòng này).
+model SanMediaTuDong {
+  id        String    @id
+  bat       Boolean   @default(false)
+  /// JSON cấu hình: giờ tạo, số video/gian/ngày, gian, mẫu, độ dài, giọng, khai AI, xếp lịch đăng
+  cauHinh   String?
+  giuChoBoi String?
+  giuChoDen DateTime?
+  /// JSON nhịp gần nhất của máy dựng {id, ten, luc, coGiong, phienBan, trangThai}
+  mayDung   String?
+  /// JSON nhật ký ngắn (≤60 dòng mới nhất): xong / lỗi / bỏ qua từng mã
+  nhatKy    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 /// Sản phẩm gắn vào video. BẢNG RIÊNG chứ không nhét JSON vào một cột chuỗi:

@@ -35,7 +35,7 @@ function docTt(s?: string | null): any {
 }
 
 /** Báo chuông (một lần cho mỗi dấu) + đẩy thông báo — cùng cách lib/pushShopeeVideo.ts báo. */
-async function baoChuong(sp: any, loai: 'success' | 'warning', tieuDe: string, noiDung: string, dau: string): Promise<void> {
+export async function baoChuong(sp: any, loai: 'success' | 'warning', tieuDe: string, noiDung: string, dau: string): Promise<void> {
     try {
         const da = await sp.notification.findFirst({ where: { message: { contains: dau } }, select: { id: true } })
         if (da) return
@@ -197,4 +197,64 @@ export async function nhipDangHenGio(nganSachMs = 40_000): Promise<string> {
         dangChay = false
     }
     return ra.join('; ') || 'khong-co-viec'
+}
+
+/* ─── ĐẶT HẸN GIỜ MỘT VIDEO (14/10/2026) ─────────────────────────────────────────────────────────
+ * Lõi của POST /san-media/:id/hen-gio, tách ra để "Tự xếp lịch" (lib/xepLichVideo.ts) và máy dựng tự động hẹn
+ * đúng y các điều kiện như người bấm tay. Kiểm đủ điều kiện NGAY lúc hẹn — để tới giờ mới vỡ là hỏng lời hứa. */
+export type KetQuaHen = { ok: true; media: any; ghiChu: string } | { ok: false; ma: number; loi: string }
+
+function dangGiuCho(tienTrinhDang?: string | null): boolean {
+    const t = docTt(tienTrinhDang)
+    return !!t.dangChayDen && Date.parse(t.dangChayDen) > Date.now()
+}
+
+export async function datHenGio(prisma: any, id: string, t: Date, opt: { dangThang?: boolean } = {}): Promise<KetQuaHen> {
+    const m = await prisma.sanMedia.findUnique({ where: { id } })
+    if (!m) return { ok: false, ma: 404, loi: 'Không thấy video' }
+    if (m.trangThai === 'da_dang' || m.trangThai === 'da_len_lich') return { ok: false, ma: 400, loi: 'Video này đã lên sàn rồi.' }
+    if (m.kenh !== 'shopee' && m.kenh !== 'tiktok') return { ok: false, ma: 400, loi: 'Chưa chọn kênh đăng — bấm Sửa, chọn Shopee hoặc TikTok trước.' }
+    if (m.nguon !== 'drive' || !m.nguonId) return { ok: false, ma: 400, loi: 'Chỉ hẹn được video nằm trong Drive của cửa hàng.' }
+    if (isNaN(t.getTime())) return { ok: false, ma: 400, loi: 'Chưa chọn giờ đăng.' }
+    if (t.getTime() < Date.now() + 2 * 60_000) return { ok: false, ma: 400, loi: 'Giờ hẹn phải sau bây giờ ít nhất 2 phút. Muốn đăng liền thì bấm nút Đăng.' }
+    if (t.getTime() > Date.now() + BA_MUOI_NGAY_MS) return { ok: false, ma: 400, loi: 'Chỉ hẹn được trong vòng 30 ngày (Shopee giới hạn 30 ngày; refresh token video cũng sống 30 ngày).' }
+    if (dangGiuCho(m.tienTrinhDang)) return { ok: false, ma: 409, loi: 'Video đang được đăng ở cửa sổ khác — đợi lượt đó xong.' }
+
+    const dangThang = opt.dangThang === true
+    let tienTrinhDang: string | null = m.tienTrinhDang ?? null
+    const san = docTt(m.tienTrinhDang).san ?? null
+    if (m.kenh === 'shopee') {
+        if (m.coNoiDungAI !== true && m.coNoiDungAI !== false) {
+            return { ok: false, ma: 400, loi: 'Chưa khai video có dùng AI hay không — Shopee bắt buộc. Chọn "Có AI" / "Không AI" dưới tên video trước.' }
+        }
+        if (!m.channelId) return { ok: false, ma: 400, loi: 'Chưa chọn gian hàng Shopee — bấm Sửa, chọn gian trước.' }
+        const ch = await prisma.onlineChannel.findUnique({ where: { id: m.channelId }, select: { name: true, videoUserId: true } as any })
+        if (!ch?.videoUserId) return { ok: false, ma: 400, loi: `Gian "${ch?.name || '?'}" chưa uỷ quyền Shopee Video — uỷ quyền ở ô vàng đầu trang trước khi hẹn.` }
+        // Tiến trình đang là của TikTok (đổi kênh) ⇒ bỏ, để máy đăng Shopee giữ chỗ được trên dòng
+        if (san && san !== 'shopee') tienTrinhDang = null
+    } else {
+        const st = await prisma.storeSettings.findFirst({ select: { ttPostOpenId: true, ttPostScopes: true } as any }).catch(() => null)
+        const sc = String(st?.ttPostScopes || '').split(',').map((s: string) => s.trim())
+        if (!st?.ttPostOpenId) return { ok: false, ma: 400, loi: 'Chưa kết nối tài khoản TikTok — bấm "Kết nối TikTok" ở ô vàng đầu trang.' }
+        if (dangThang && !sc.includes('video.publish')) return { ok: false, ma: 400, loi: 'Tài khoản TikTok chưa cấp quyền đăng thẳng (video.publish) — bỏ chọn "đăng thẳng" hoặc kết nối lại có bật.' }
+        if (!dangThang && !sc.includes('video.upload')) return { ok: false, ma: 400, loi: 'Tài khoản TikTok chưa cấp quyền video.upload — kết nối lại TikTok.' }
+        // Lời chọn đăng thẳng/hộp thư nằm trong tiến trình TikTok để máy chạy đọc lại lúc tới giờ
+        const tt = san === 'tiktok' ? docTt(m.tienTrinhDang) : null
+        tienTrinhDang = JSON.stringify({ ...(tt || { giaiDoan: 'init' }), san: 'tiktok', dangThang })
+    }
+
+    const day = await prisma.sanMedia.update({
+        where: { id },
+        data: { henDangLuc: t, trangThai: 'hen_gio', loiCuoi: null, tienTrinhDang },
+        include: { sanPham: { orderBy: { thuTu: 'asc' } } },
+    })
+    const conPhut = Math.round((t.getTime() - Date.now()) / 60_000)
+    return {
+        ok: true, media: day,
+        ghiChu: m.kenh === 'shopee'
+            ? (conPhut >= 16
+                ? `Máy chủ bắt đầu tải video lên Shopee ngay; Shopee giữ và tự đăng lúc ${gioVN(t)}.`
+                : `Máy chủ tải video lên Shopee ngay rồi đợi tới ${gioVN(t)} mới đăng.`)
+            : `Tới ${gioVN(t)} máy chủ bắt đầu tải lên TikTok${dangThang ? ' và đăng thẳng' : ' (vào hộp thư TikTok — mở app bấm hoàn tất)'}; video lên trễ vài phút tuỳ dung lượng.`,
+    }
 }

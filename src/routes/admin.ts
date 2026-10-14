@@ -5282,6 +5282,33 @@ router.get('/do-thong-tin-sp', async (_req: Request, res: Response) => {
     }
 })
 
+/* ─── THỬ TỰ XẾP LỊCH + TỰ TẠO VIDEO (chỉ đọc) — GET /admin/thu-xep-lich?store=KENGISTORE (14/10/2026) ──
+ * Lập kế hoạch xếp lịch cho video Nháp (KHÔNG hẹn gì — apDungLich không được gọi ở đây), đếm chỉ tiêu tự tạo hôm
+ * nay và thử chọn mã kế tiếp cho từng gian như máy dựng sẽ nhận (không giữ chỗ, không ghi nhật ký). */
+router.get('/thu-xep-lich', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const { lapLich } = await import('../lib/xepLichVideo')
+        const { docTuDong, chiTieuHomNay } = await import('../lib/videoTuDong')
+        const { chonSanPham } = await import('../lib/lamVideoSanPham')
+        const td = await docTuDong(sp)
+        const keHoach = await lapLich(sp, { xep: td.cauHinh.xepLich })
+        const homNay = await chiTieuHomNay(sp, td.cauHinh, td.nhatKy)
+        const maKeTiep: any[] = []
+        for (const g of homNay.gian) {
+            const uv = await chonSanPham(sp, { soLuong: 3, chiConHang: true, chiTrenSan: true, channelId: g.channelId, san: 'shopee', sapXep: 'it-video' })
+            maKeTiep.push({ gian: g.tenGian, ma: uv.map(u => ({ sku: u.sku, ten: u.ten.slice(0, 60), soVideo: u.soVideo })) })
+        }
+        const vanTay: any[] = await sp.sanMedia.findMany({ where: { vanTay: { not: null } }, select: { id: true, vanTay: true, tuDong: true }, take: 5, orderBy: { createdAt: 'desc' } })
+        res.json({ success: true, data: { bat: td.bat, cauHinh: td.cauHinh, keHoach, homNay, maKeTiep, coVanTay: vanTay.length } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ ĐƯỜNG PHÁT VIDEO MEDIA (chỉ đọc) — GET /admin/thu-xem-video?store=KENGISTORE (14/10/2026) ──
  * Ký đường phát cho video Drive MỚI NHẤT của cửa hàng (như GET /san-media/:id/xem-link) để tự tải thử vài
  * khúc Range từ ngoài vào — kiểm luồng Drive thật mà không cần đăng nhập cửa hàng. Không trả byte video. */

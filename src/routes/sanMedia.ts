@@ -525,74 +525,10 @@ router.post('/:id/dang-tiktok', authMiddleware, requirePermission('online_orders
 router.post('/:id/hen-gio', authMiddleware, requirePermission('online_orders.edit', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const id = String(req.params.id)
-        const m = await prisma.sanMedia.findUnique({ where: { id } })
-        if (!m) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
-        if (m.trangThai === 'da_dang' || m.trangThai === 'da_len_lich') {
-            res.status(400).json({ success: false, error: 'Video này đã lên sàn rồi.' }); return
-        }
-        if (m.kenh !== 'shopee' && m.kenh !== 'tiktok') {
-            res.status(400).json({ success: false, error: 'Chưa chọn kênh đăng — bấm Sửa, chọn Shopee hoặc TikTok trước.' }); return
-        }
-        if (m.nguon !== 'drive' || !m.nguonId) {
-            res.status(400).json({ success: false, error: 'Chỉ hẹn được video nằm trong Drive của cửa hàng.' }); return
-        }
-        const t = new Date(req.body?.henDangLuc)
-        if (isNaN(t.getTime())) { res.status(400).json({ success: false, error: 'Chưa chọn giờ đăng.' }); return }
-        if (t.getTime() < Date.now() + 2 * 60_000) {
-            res.status(400).json({ success: false, error: 'Giờ hẹn phải sau bây giờ ít nhất 2 phút. Muốn đăng liền thì bấm nút Đăng.' }); return
-        }
-        if (t.getTime() > Date.now() + 30 * 86400_000) {
-            res.status(400).json({ success: false, error: 'Chỉ hẹn được trong vòng 30 ngày (Shopee giới hạn 30 ngày; refresh token video cũng sống 30 ngày).' }); return
-        }
-        if (dangCoNguoiChay(m.tienTrinhDang)) {
-            res.status(409).json({ success: false, error: 'Video đang được đăng ở cửa sổ khác — đợi lượt đó xong.' }); return
-        }
-
-        const dangThang = req.body?.dangThang === true
-        let tienTrinhDang: string | null = m.tienTrinhDang ?? null
-        let san: any = null
-        try { san = m.tienTrinhDang ? JSON.parse(m.tienTrinhDang)?.san : null } catch { san = null }
-        if (m.kenh === 'shopee') {
-            if (m.coNoiDungAI !== true && m.coNoiDungAI !== false) {
-                res.status(400).json({ success: false, error: 'Chưa khai video có dùng AI hay không — Shopee bắt buộc. Chọn "Có AI" / "Không AI" dưới tên video trước.' }); return
-            }
-            if (!m.channelId) { res.status(400).json({ success: false, error: 'Chưa chọn gian hàng Shopee — bấm Sửa, chọn gian trước.' }); return }
-            const ch = await prisma.onlineChannel.findUnique({ where: { id: m.channelId }, select: { name: true, videoUserId: true } as any })
-            if (!ch?.videoUserId) {
-                res.status(400).json({ success: false, error: `Gian "${ch?.name || '?'}" chưa uỷ quyền Shopee Video — uỷ quyền ở ô vàng đầu trang trước khi hẹn.` }); return
-            }
-            // Tiến trình đang là của TikTok (đổi kênh) ⇒ bỏ, để máy đăng Shopee giữ chỗ được trên dòng
-            if (san && san !== 'shopee') tienTrinhDang = null
-        } else {
-            const st = await prisma.storeSettings.findFirst({ select: { ttPostOpenId: true, ttPostScopes: true } as any }).catch(() => null)
-            const sc = String(st?.ttPostScopes || '').split(',').map((s: string) => s.trim())
-            if (!st?.ttPostOpenId) { res.status(400).json({ success: false, error: 'Chưa kết nối tài khoản TikTok — bấm "Kết nối TikTok" ở ô vàng đầu trang.' }); return }
-            if (dangThang && !sc.includes('video.publish')) { res.status(400).json({ success: false, error: 'Tài khoản TikTok chưa cấp quyền đăng thẳng (video.publish) — bỏ chọn "đăng thẳng" hoặc kết nối lại có bật.' }); return }
-            if (!dangThang && !sc.includes('video.upload')) { res.status(400).json({ success: false, error: 'Tài khoản TikTok chưa cấp quyền video.upload — kết nối lại TikTok.' }); return }
-            // Lời chọn đăng thẳng/hộp thư nằm trong tiến trình TikTok để máy chạy đọc lại lúc tới giờ
-            let tt: any = null
-            try { tt = san === 'tiktok' ? JSON.parse(m.tienTrinhDang) : null } catch { tt = null }
-            tienTrinhDang = JSON.stringify({ ...(tt || { giaiDoan: 'init' }), san: 'tiktok', dangThang })
-        }
-
-        const day = await prisma.sanMedia.update({
-            where: { id },
-            data: { henDangLuc: t, trangThai: 'hen_gio', loiCuoi: null, tienTrinhDang },
-            include: { sanPham: { orderBy: { thuTu: 'asc' } } },
-        })
-        const conPhut = Math.round((t.getTime() - Date.now()) / 60_000)
-        res.json({
-            success: true,
-            data: {
-                media: day,
-                ghiChu: m.kenh === 'shopee'
-                    ? (conPhut >= 16
-                        ? `Máy chủ bắt đầu tải video lên Shopee ngay; Shopee giữ và tự đăng lúc ${gioVN(t)}.`
-                        : `Máy chủ tải video lên Shopee ngay rồi đợi tới ${gioVN(t)} mới đăng.`)
-                    : `Tới ${gioVN(t)} máy chủ bắt đầu tải lên TikTok${dangThang ? ' và đăng thẳng' : ' (vào hộp thư TikTok — mở app bấm hoàn tất)'}; video lên trễ vài phút tuỳ dung lượng.`,
-            },
-        })
+        const { datHenGio } = await import('../lib/henGioDangVideo')
+        const kq = await datHenGio(prisma, String(req.params.id), new Date(req.body?.henDangLuc), { dangThang: req.body?.dangThang === true })
+        if (!kq.ok) { res.status(kq.ma).json({ success: false, error: kq.loi }); return }
+        res.json({ success: true, data: { media: kq.media, ghiChu: kq.ghiChu } })
     } catch (err: any) {
         if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
         console.error('POST /san-media/:id/hen-gio lỗi:', err?.message || err)
@@ -642,6 +578,29 @@ router.post('/', authMiddleware, requirePermission('online_orders.edit', 'online
             const da = await prisma.sanMedia.findFirst({ where: { nguon: 'drive', nguonId: String(b.nguonId) }, select: { id: true, ten: true } })
             if (da) { res.status(409).json({ success: false, error: `Video này đã có trong kho: ${da.ten}`, id: da.id }); return }
         }
+        /* KHÔNG TRÙNG NỘI DUNG TRÊN MỘT MÃ (14/10/2026, chủ shop: "nội dung các video không được trùng nhau trên 1 mã
+         * hàng"): video dựng từ sản phẩm mang vân tay nội dung (máy dựng băm kịch bản + ảnh, bỏ qua màu/giá/nhạc/độ
+         * dài). Cùng SKU đã có video cùng vân tay ⇒ từ chối, trang Media dựng biến thể khác. */
+        const vanTay = /^[0-9a-f]{16}$/.test(String(b.vanTay || '')) ? String(b.vanTay) : null
+        const skuGan: string[] = (Array.isArray(b.skus) ? b.skus : []).map((x: any) => String(x || '').trim()).filter(Boolean)
+        if (vanTay && skuGan.length) {
+            const trung = await prisma.sanMedia.findFirst({
+                where: { vanTay, sanPham: { some: { sku: { in: skuGan } } } },
+                select: { id: true, ten: true, createdAt: true },
+            })
+            if (trung) {
+                res.status(409).json({
+                    success: false, trungNoiDung: trung,
+                    error: `Trùng nội dung với video "${trung.ten}" của cùng mã (tạo ${gioVN(trung.createdAt)}) — dựng biến thể khác.`,
+                })
+                return
+            }
+        }
+        let bienThe: string | null = null
+        if (b.bienThe && typeof b.bienThe === 'object') {
+            try { const j = JSON.stringify(b.bienThe); bienThe = j.length <= 4000 ? j : null } catch { bienThe = null }
+        }
+        const tuDong = /^\d{4}-\d{2}-\d{2}$/.test(String(b.tuDong || '')) ? String(b.tuDong) : null
 
         const m = await prisma.sanMedia.create({
             data: {
@@ -660,6 +619,7 @@ router.post('/', authMiddleware, requirePermission('online_orders.edit', 'online
                 // Chỉ nhận true/false do NGƯỜI ĐĂNG chọn — thiếu là null (chưa khai), không đoán
                 coNoiDungAI: typeof b.coNoiDungAI === 'boolean' ? b.coNoiDungAI : null,
                 trangThai: 'nhap',
+                bienThe, vanTay, tuDong,
                 createdBy: req.user?.userId || null,
             },
         })

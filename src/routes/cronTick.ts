@@ -54,6 +54,14 @@ router.post('/tick', async (req: Request, res: Response) => {
         ra.henGioVideo = await nhipDangHenGio(40_000)
     } catch (e: any) { ra.henGioVideo = 'loi: ' + (e?.message || e) }
     try { ra.tacVuAi = (await quetTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.tacVuAi = 'loi: ' + (e?.message || e) }
+    /* Tự tạo video theo giờ (14/10/2026): video DỰNG trên trình duyệt (máy dựng = tab kengi.vn được chỉ định). Quá
+     * giờ tạo 45 phút mà không máy nào xin việc ⇒ báo chuông một lần mỗi ngày. Mỗi 10 phút. lib/videoTuDong.ts */
+    if (new Date().getUTCMinutes() % 10 === 5) {
+        try {
+            const { nhipNhacMayDung } = await import('../lib/videoTuDong')
+            ra.mayDungVideo = await nhipNhacMayDung()
+        } catch (e: any) { ra.mayDungVideo = 'loi: ' + (e?.message || e) }
+    }
     /* Nhắc TikTok xác nhận đủ bằng chứng (09/10/2026) — mỗi 10 phút; mỗi giờ một tin / cửa hàng do dấu
      * trong thông báo lo. Chạy ở NHỊP NGOÀI để có CPU cả đêm (cpu-throttling). */
     if (new Date().getUTCMinutes() % 10 === 0) {

@@ -32,7 +32,9 @@ export type LocChon = {
     san?: string | null
     /** Bỏ các mã vừa lấy (bấm "Đổi mã khác" không ra lại đúng mã đó) */
     boQua?: string[]
-    /** 'ngau-nhien' (mặc định) | 'moi' | 'ten' */
+    /** Bỏ các SKU này (máy dựng tự động: mã đã làm hôm nay, mã vừa hỏng, mã hết biến thể) */
+    boQuaSku?: string[]
+    /** 'ngau-nhien' (mặc định) | 'moi' | 'ten' | 'it-video' (ít video nhất trước — máy dựng tự động) */
     sapXep?: string
 }
 
@@ -76,6 +78,11 @@ function dieuKien(loc: LocChon, thamSo: any[]): string {
         thamSo.push(boQua)
         w.push(`NOT (p.id = ANY($${thamSo.length}::text[]))`)
     }
+    const boQuaSku = (loc.boQuaSku || []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 500)
+    if (boQuaSku.length) {
+        thamSo.push(boQuaSku)
+        w.push(`NOT (coalesce(p.sku, '') = ANY($${thamSo.length}::text[]))`)
+    }
     return w.join(' AND ')
 }
 
@@ -88,6 +95,7 @@ export async function chonSanPham(prisma: any, loc: LocChon): Promise<UngVien[]>
      * 14/10 bằng /admin/thu-lam-video) ⇒ bọc một tầng rồi mới xếp. */
     const sx = loc.sapXep === 'ten' ? `t.ten ASC`
         : loc.sapXep === 'moi' ? `t."capNhat" DESC`
+        : loc.sapXep === 'it-video' ? `t."soVideo" ASC, random()`
         : `(t."soVideo" > 0), random()`
     const rows: any[] = await prisma.$queryRawUnsafe(
         `SELECT * FROM (
@@ -134,10 +142,13 @@ export async function chiTietLamVideo(prisma: any, id: string) {
             channel: { select: { name: true, status: true } } },
         take: 20,
     }) : []
+    /* Video ĐÃ CÓ của mã (≤40, mới trước) kèm biến thể + vân tay — trang Media chọn biến thể khác xa nhất các video
+     * này (14/10/2026: "nội dung các video không được trùng nhau trên 1 mã hàng"). Đọc hỏng ⇒ ném, không trả rỗng:
+     * rỗng là trang tưởng mã chưa có video nào và dựng lại đúng nội dung cũ. */
     const video: any[] = p.sku ? await prisma.sanMediaSanPham.findMany({
-        where: { sku: p.sku }, orderBy: { id: 'desc' }, take: 10,
-        select: { media: { select: { id: true, ten: true, trangThai: true, kenh: true, channelId: true, createdAt: true } } },
-    }).catch(() => []) : []
+        where: { sku: p.sku }, orderBy: { id: 'desc' }, take: 40,
+        select: { media: { select: { id: true, ten: true, trangThai: true, kenh: true, channelId: true, createdAt: true, bienThe: true, vanTay: true, tuDong: true } } },
+    }) : []
     return {
         id: p.id, sku: p.sku, ten: p.name, giaBan: Number(p.sellingPrice) || 0, ton: Number(p.stock) || 0,
         donVi: p.baseUnit || null, moTa: String(p.description || ''), nhom: p.category?.name || null,
@@ -149,7 +160,11 @@ export async function chiTietLamVideo(prisma: any, id: string) {
             maTrenSan: l.platformProductId, tenTrenSan: l.name, trangThai: l.status, giaTrenSan: Number(l.price) || 0,
             tonTrenSan: Number(l.stock) || 0,
         })),
-        video: video.map(v => v.media).filter(Boolean),
+        video: video.map(v => v.media).filter(Boolean).map((m: any) => {
+            let bt: any = null
+            try { bt = m.bienThe ? JSON.parse(m.bienThe) : null } catch { bt = null }
+            return { ...m, bienThe: bt }
+        }),
         /* ẢNH TRÊN SÀN (14/10/2026): ảnh chính listing — đo KENGISTORE: 1024×1024, poster shop tự thiết kế (logo
          * KENGI STORE, nền đời sống, huy hiệu thông số) — nét hơn hẳn ảnh kho 610×409. Máy dựng chiếu nguyên tấm.
          * Một ảnh một lần dù nhiều gian dùng chung; chỉ host CDN đã biết (lấy qua /anh-san/:id). */
