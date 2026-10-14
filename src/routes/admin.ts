@@ -5346,10 +5346,16 @@ router.post('/sua-khai-ai-video-tu-dong', async (req: Request, res: Response) =>
             const td = await docTuDong(sp)
             if (td.coDong && td.cauHinh.khaiAI !== false) { await luuTuDong(sp, td.bat, { ...td.cauHinh, khaiAI: false }); cauHinh = 'khaiAI → false' }
         }
+        // Bức tranh TOÀN BỘ video tự động (mọi nhãn) — "0 cần sửa" phải phân biệt được với "không đọc thấy video nào"
+        const tatCa: any[] = await sp.sanMedia.groupBy({ by: ['trangThai', 'coNoiDungAI'], where: { tuDong: { not: null } }, _count: { _all: true } })
+        const { docTuDong } = await import('../lib/videoTuDong')
+        const td = await docTuDong(sp)
         res.json({
             success: true,
             data: {
                 apDung, tong: ds.length, cauHinh,
+                cauHinhHienTai: { bat: td.bat, khaiAI: td.cauHinh.khaiAI, moiGian: td.cauHinh.moiGian, gioTao: td.cauHinh.gioTao },
+                tatCaVideoTuDong: tatCa.map(g => ({ trangThai: g.trangThai, coNoiDungAI: g.coNoiDungAI, so: g._count?._all || 0 })),
                 dem: Object.fromEntries(Object.entries(nhom).map(([k, v]) => [k, v.length])),
                 ...nhom,
             },
