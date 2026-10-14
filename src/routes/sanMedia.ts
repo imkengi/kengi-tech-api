@@ -26,8 +26,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import express, { Router, Request, Response } from 'express'
-import crypto from 'crypto'
 import { errMsg } from '../lib/errorResponse'
+import { duongXem, kiemXem } from '../lib/linkXemVideo'
 import { getStorePrisma } from '../lib/prisma'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
@@ -275,10 +275,6 @@ router.get('/drive', authMiddleware, requirePermission('online_orders.view'), as
  * helmet đặt Cross-Origin-Resource-Policy: same-origin ⇒ thẻ <video> ở kengi.vn bị chặn khi tải từ
  * api.kengi.vn; đường phát đặt lại 'same-site' (kengi.vn và api.kengi.vn cùng site). */
 const KHOI_XEM = 8 * 1024 * 1024
-function kyXem(schema: string, id: string, het: number) {
-    const bi = process.env.JWT_SECRET || ''
-    return crypto.createHmac('sha256', `${bi}:xem-video`).update(`${schema}|${id}|${het}`).digest('hex').slice(0, 40)
-}
 
 router.get('/:id/xem-link', authMiddleware, requirePermission('online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -289,15 +285,8 @@ router.get('/:id/xem-link', authMiddleware, requirePermission('online_orders.vie
         if (!m) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }
         if (m.nguon === 'lien_ket') { res.json({ success: true, data: { ngoai: m.lienKet } }); return }
         if (!m.nguonId) { res.status(400).json({ success: false, error: 'Video này không có file Drive' }); return }
-        const het = Date.now() + 30 * 60 * 1000
-        res.json({
-            success: true,
-            data: {
-                duong: `/san-media/xem/${encodeURIComponent(m.id)}?s=${schema}&h=${het}&k=${kyXem(schema, m.id, het)}`,
-                drive: `https://drive.google.com/file/d/${encodeURIComponent(m.nguonId)}/view`,
-                het,
-            },
-        })
+        const { duong, het } = duongXem(schema, m.id)
+        res.json({ success: true, data: { duong, drive: `https://drive.google.com/file/d/${encodeURIComponent(m.nguonId)}/view`, het } })
     } catch (err: any) {
         if (laThieuBang(err)) { res.status(503).json(loiThieuBang); return }
         console.error('GET /san-media/:id/xem-link lỗi:', err)
@@ -308,11 +297,9 @@ router.get('/:id/xem-link', authMiddleware, requirePermission('online_orders.vie
 router.get('/xem/:id', async (req: Request, res: Response) => {
     const id = String(req.params.id || ''), schema = String(req.query.s || ''), het = Number(req.query.h) || 0, k = String(req.query.k || '')
     try {
-        const dung = kyXem(schema, id, het)
-        if (!/^[a-z0-9_]+$/.test(schema) || !het || k.length !== dung.length || !crypto.timingSafeEqual(Buffer.from(k), Buffer.from(dung))) {
-            res.status(403).json({ success: false, error: 'Link xem không hợp lệ' }); return
-        }
-        if (Date.now() > het) { res.status(403).json({ success: false, error: 'Link xem đã hết hạn — mở lại video' }); return }
+        const kq = kiemXem(schema, id, het, k)
+        if (kq === 'sai') { res.status(403).json({ success: false, error: 'Link xem không hợp lệ' }); return }
+        if (kq === 'het-han') { res.status(403).json({ success: false, error: 'Link xem đã hết hạn — mở lại video' }); return }
         const prisma: any = getStorePrisma(schema)
         const m = await prisma.sanMedia.findUnique({ where: { id }, select: { nguonId: true, mime: true, bytes: true } })
         if (!m?.nguonId) { res.status(404).json({ success: false, error: 'Không thấy video' }); return }

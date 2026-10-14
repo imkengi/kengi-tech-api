@@ -5258,6 +5258,24 @@ router.get('/do-thong-tin-sp', async (_req: Request, res: Response) => {
     }
 })
 
+/* ─── THỬ ĐƯỜNG PHÁT VIDEO MEDIA (chỉ đọc) — GET /admin/thu-xem-video?store=KENGISTORE (14/10/2026) ──
+ * Ký đường phát cho video Drive MỚI NHẤT của cửa hàng (như GET /san-media/:id/xem-link) để tự tải thử vài
+ * khúc Range từ ngoài vào — kiểm luồng Drive thật mà không cần đăng nhập cửa hàng. Không trả byte video. */
+router.get('/thu-xem-video', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const m = await sp.sanMedia.findFirst({ where: { nguon: 'drive', nguonId: { not: null } }, orderBy: { createdAt: 'desc' }, select: { id: true, ten: true, bytes: true, mime: true } })
+        if (!m) { res.json({ success: true, data: { coVideo: false } }); return }
+        const { duongXem } = await import('../lib/linkXemVideo')
+        res.json({ success: true, data: { coVideo: true, id: m.id, ten: m.ten, bytes: m.bytes, mime: m.mime, ...duongXem(st.schema, m.id) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ CHỌN SẢN PHẨM LÀM VIDEO (chỉ đọc) — GET /admin/thu-lam-video?store=KENGISTORE&so=3 (14/10/2026) ──
  * Chạy ĐÚNG hàm của /api/san-media/lam-video (lib/lamVideoSanPham) trên dữ liệu thật: đếm kho theo từng
  * bộ lọc, chọn ngẫu nhiên, chi tiết từng mã, và lấy thử ảnh đầu qua đường chuyển byte (báo cỡ/loại, không
