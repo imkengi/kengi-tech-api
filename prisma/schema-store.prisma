@@ -3947,6 +3947,20 @@ model SanMedia {
   @@index([tuDong])
 }
 
+/// AI SOÁT NỘI DUNG video từ sản phẩm (14/10/2026, chủ shop: "cho AI double check nội dung… lên nhiều cái xàm quá"):
+/// kho nội dung sạch (tên ngắn, khẩu hiệu, điểm mạnh, thông số — chỉ từ mô tả) theo MÃ. Khoá `bam` = băm tên + mô tả +
+/// phiên bản hướng dẫn: mô tả đổi thì soát lại; không đổi thì mọi video sau của mã dùng cùng kho ⇒ vân tay ổn định.
+model SanMediaNoiDung {
+  id         String   @id @default(cuid())
+  productId  String   @unique
+  bam        String
+  /// JSON NoiDungSoat (lib/aiSoatNoiDung.ts)
+  ketQua     String
+  nhaCungCap String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 /// LỊCH TỰ TẠO VIDEO từ sản phẩm (14/10/2026) — một dòng mỗi cửa hàng (id 'mac-dinh'). Video chỉ dựng được trên
 /// trình duyệt (WebCodecs + giọng đọc ở máy shop), nên máy chủ giữ lịch + chọn việc, còn một tab kengi.vn được chỉ
 /// định làm "máy dựng" nhận việc khi tới giờ. giuCho* = chỗ giữ chống hai máy cùng làm (so-và-ghi trên dòng này).

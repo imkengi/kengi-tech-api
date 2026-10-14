@@ -50,7 +50,6 @@ function dieuKien(loc: LocChon, thamSo: any[]): string {
         `p."mergedIntoId" IS NULL`,
         `coalesce(p."productType", 'goods') <> 'service'`,
         `coalesce(trim(p.description), '') <> ''`,
-        `EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)`,
     ]
     let gian = ''
     if (loc.san && /^[a-z]{2,16}$/.test(String(loc.san))) {
@@ -64,6 +63,10 @@ function dieuKien(loc: LocChon, thamSo: any[]): string {
     } else if (loc.chiTrenSan !== false || gian) {
         w.push(`EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku${gian})`)
     }
+    /* ẢNH: ảnh kho (Thông tin sản phẩm) HOẶC ảnh listing trên sàn (14/10/2026, chủ shop: "có 1 ảnh sản phẩm thì dùng đi dùng
+     * lại chứ"). Bản đầu đòi ảnh kho ⇒ mã chỉ có ảnh trên Shopee bị loại hết, gian Tools/Electric "hết mã" sau vài video;
+     * máy dựng dùng ảnh listing làm ảnh sản phẩm cho mọi cảnh khi mã không có ảnh kho. */
+    w.push(`(EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id) OR EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND coalesce(op."imageUrl", '') <> ''${gian}))`)
     /* CÒN HÀNG = tồn kho mình > 0 HOẶC listing trên sàn còn tồn. Cửa hàng bán sàn bằng KHO MẸ
      * (KENGISTORE mượn tồn HUTI — StoreSettings.khoMeMa) có Product.stock 0/âm trong khi sàn vẫn bán:
      * chỉ xét p.stock thì 36/174 mã (đo 14/10) và loại oan đúng hàng đang bán chạy. */

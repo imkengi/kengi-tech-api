@@ -10,6 +10,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { moTaLoi } from '../lib/gomLoi'
 import { chonSanPham, demKho, chiTietLamVideo, layAnhSanPham, layAnhTrenSan, danhSachGianShopee, layLogoGian, LoiAnh, type LocChon } from '../lib/lamVideoSanPham'
+import { soatNoiDung, LoiAiSoat } from '../lib/aiSoatNoiDung'
 
 const router = Router()
 const QUYEN = requirePermission('online_orders.edit', 'online_orders.view')
@@ -121,6 +122,31 @@ router.get('/anh-san/:id', authMiddleware, QUYEN, async (req: AuthRequest, res: 
         if (e instanceof LoiAnh) { res.status(e.ma).json({ success: false, error: e.message }); return }
         console.error('[lam-video] anh-san:', e?.message || e)
         res.status(502).json({ success: false, error: `Không lấy được ảnh trên sàn: ${moTaLoi(e)}` })
+    }
+})
+
+/* ─── POST /san-pham/:id/soat — AI SOÁT NỘI DUNG trước khi dựng (14/10/2026) ──────────────────────────────
+ * Chủ shop: "lúc tạo video có thể cho AI double check nội dung được không, lên nhiều cái xàm quá". Trả kho nội dung
+ * sạch của mã (lib/aiSoatNoiDung.ts); đã soát mà mô tả chưa đổi thì lấy bản đã lưu. {lamMoi:true} = soát lại.
+ * Không có key AI ⇒ 400 khongCoKey; AI quá tải/hết hạn mức ⇒ 503 tamThoi (máy dựng tự động tạm dừng, không dựng bừa). */
+router.post('/san-pham/:id/soat', authMiddleware, QUYEN, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ct = await chiTietLamVideo(prisma, String(req.params.id))
+        if (!ct) { res.status(404).json({ success: false, error: 'Không thấy sản phẩm' }); return }
+        if (!ct.moTa.trim()) { res.status(400).json({ success: false, error: 'Mã chưa có mô tả ở Thông tin sản phẩm' }); return }
+        const kq = await soatNoiDung(prisma, {
+            id: ct.id, ten: ct.ten, sku: ct.sku, moTa: ct.moTa, thuongHieu: ct.thuongHieu, nhom: ct.nhom,
+            tenTrenSan: ct.gian.find((g: any) => g.tenTrenSan)?.tenTrenSan || null,
+        }, req.body?.lamMoi === true)
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        if (e instanceof LoiAiSoat) {
+            res.status(e.khongCoKey ? 400 : e.tamThoi ? 503 : 502).json({ success: false, error: e.message, khongCoKey: e.khongCoKey, tamThoi: e.tamThoi })
+            return
+        }
+        console.error('POST /san-media/lam-video/san-pham/:id/soat lỗi:', moTaLoi(e))
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
     }
 })
 

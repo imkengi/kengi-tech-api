@@ -2720,6 +2720,20 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                     await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SanMedia_vanTay_idx" ON "SanMedia"("vanTay")`)
                     await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SanMedia_tuDong_idx" ON "SanMedia"("tuDong")`)
                 } catch { /* cửa hàng chưa có bảng SanMedia → sync-schemas sẽ tạo đủ cột */ }
+                /* AI SOÁT NỘI DUNG video từ sản phẩm (14/10/2026): kho nội dung sạch theo mã (lib/aiSoatNoiDung.ts) */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "SanMediaNoiDung" (
+                        "id" TEXT NOT NULL,
+                        "productId" TEXT NOT NULL,
+                        "bam" TEXT NOT NULL,
+                        "ketQua" TEXT NOT NULL,
+                        "nhaCungCap" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "SanMediaNoiDung_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SanMediaNoiDung_productId_key" ON "SanMediaNoiDung"("productId")`)
                 /* Lịch TỰ TẠO video từ sản phẩm (14/10/2026): một dòng cấu hình mỗi cửa hàng + chỗ giữ của máy
                  * dựng (trình duyệt — Cloud Run không dựng được video) + nhật ký ngắn. */
                 await (sp as any).$executeRawUnsafe(`
@@ -5431,6 +5445,42 @@ router.get('/do-nhan-ai-video-tu-dong', async (req: Request, res: Response) => {
                 video, shopee,
             },
         })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/* ─── ỨNG VIÊN LÀM VIDEO THEO NGUỒN ẢNH (chỉ đọc) — GET /admin/do-ung-vien-video?store=KENGISTORE (14/10/2026) ──
+ * Mỗi gian Shopee: mã đang bán + còn hàng + có mô tả — bao nhiêu có ảnh kho, bao nhiêu CHỈ có ảnh listing trên sàn,
+ * bao nhiêu không có ảnh nào; đã soát AI bao nhiêu mã; cửa hàng có key AI không (chỉ đúng/sai, không bao giờ trả key). */
+router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, select: { id: true, name: true } })
+        const gian: any[] = []
+        for (const c of kenh) {
+            const r: any[] = await sp.$queryRawUnsafe(`
+                SELECT count(*)::int AS "dangBan",
+                       count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '')::int AS "coMoTa",
+                       count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::int AS "coAnhKho",
+                       count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND NOT EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)
+                                          AND EXISTS (SELECT 1 FROM "OnlineProduct" o2 WHERE o2.sku = p.sku AND o2."channelId" = $1 AND coalesce(o2."imageUrl", '') <> ''))::int AS "chiAnhSan",
+                       count(*) FILTER (WHERE coalesce(trim(p.description), '') <> '' AND NOT EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)
+                                          AND NOT EXISTS (SELECT 1 FROM "OnlineProduct" o2 WHERE o2.sku = p.sku AND o2."channelId" = $1 AND coalesce(o2."imageUrl", '') <> ''))::int AS "khongAnh"
+                  FROM "Product" p
+                 WHERE p."mergedIntoId" IS NULL AND coalesce(p."productType", 'goods') <> 'service'
+                   AND EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND op."channelId" = $1)
+                   AND (p.stock > 0 OR EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND op.stock > 0 AND op."channelId" = $1))`, c.id)
+            gian.push({ gian: c.name, ...(r[0] || {}) })
+        }
+        let daSoat: number | string = 0
+        try { daSoat = await sp.sanMediaNoiDung.count() } catch (e: any) { daSoat = 'chưa có bảng: ' + String(e?.message || e).slice(0, 80) }
+        const { layKeyAi } = await import('../lib/keyAi')
+        const key = await layKeyAi(sp)
+        res.json({ success: true, data: { gian, daSoat, coKeyAi: { gemini: !!key.gemini, deepseek: !!key.deepseek } } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
