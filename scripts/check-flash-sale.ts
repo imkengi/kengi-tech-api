@@ -5,6 +5,7 @@
  * nhận lại hoặc dọn — KHÔNG tạo đợt thứ hai; chủ shop huỷ giữa chừng thì gỡ đợt vừa bật, không lật 'cancelled'. */
 import { _kiemThu } from '../src/cron/flashSaleScheduler'
 import { docDieuKienTheoNganh, kiemGiaFlashSale, phanTramGiam } from '../src/lib/flashSaleKiemGia'
+import { bocTuLamMoi } from '../src/routes/flashSales'
 
 const { activatePlan, napVaBat, chuanBiHang, themVaBat, LoiKhongThuLai } = _kiemThu
 let loi = 0
@@ -330,6 +331,45 @@ async function main() {
         const k81 = kq.find(x => x.itemId === 81), k82 = kq.find(x => x.itemId === 82)
         dung('soát giá trả giá hiển thị 800 + tên chương trình', k81?.giaDangBan === 800 && k81?.khuyenMai === 'Discount Promotions', JSON.stringify(k81))
         dung('soát giá từng phân loại theo chương trình', k82?.phanLoai.map(p => p.giaDangBan).join() === '1500,2000', JSON.stringify(k82?.phanLoai))
+    }
+    // ── 3i. TOKEN hết hạn giữa chừng (15/10 10:35 Kengi Electric "invalid_acceess_token") ⇒ làm mới + thử lại một lần ──
+    {
+        const taoDichVu = () => {
+            const goi: string[] = []
+            return {
+                goi, credentials: { accessToken: 'cu', refreshToken: 'r1' },
+                async flashSaleGet(id: number) {
+                    goi.push(`get:${this.credentials.accessToken}`)
+                    if (this.credentials.accessToken === 'cu') throw new Error('Shopee get_shop_flash_sale: invalid_acceess_token - Invalid access_token, please have a check.')
+                    return { flash_sale_id: id, status: 1 }
+                },
+                async flashSaleDelete() { throw new Error('Shopee delete_shop_flash_sale: shop_flash_sale_not_exist') },
+                async refreshAccessToken() { goi.push('lamMoi'); return { accessToken: 'moi', refreshToken: 'r2', expiresIn: 14400 } },
+            }
+        }
+        const prismaKenh = (tokenTrongCsdl: string) => {
+            const ghi: any[] = []
+            return { ghi, onlineChannel: {
+                async findUnique() { return { id: 'ch', accessToken: tokenTrongCsdl, refreshToken: 'rX' } },
+                async update(a: any) { ghi.push(a.data); return a.data },
+            } }
+        }
+        {
+            const dv = taoDichVu(), pr = prismaKenh('cu')
+            const r = await bocTuLamMoi(pr, { id: 'ch', name: 'Kengi Electric' }, dv).flashSaleGet(5)
+            dung('token hỏng ⇒ tự làm mới, LƯU token mới, thử lại được', r?.status === 1 && dv.goi.join() === 'get:cu,lamMoi,get:moi' && pr.ghi[0]?.accessToken === 'moi', dv.goi.join())
+        }
+        {
+            const dv = taoDichVu(), pr = prismaKenh('moi-tu-autosync')
+            await bocTuLamMoi(pr, { id: 'ch', name: 'Kengi Electric' }, dv).flashSaleGet(5).catch(() => null)
+            dung('nơi khác vừa làm mới ⇒ dùng token trong CSDL, KHÔNG làm mới chồng', !dv.goi.includes('lamMoi') && dv.credentials.accessToken === 'moi-tu-autosync', dv.goi.join())
+        }
+        {
+            const dv = taoDichVu(), pr = prismaKenh('cu')
+            let loi = ''
+            try { await bocTuLamMoi(pr, { id: 'ch' }, dv).flashSaleDelete(5) } catch (e: any) { loi = e.message }
+            dung('lỗi KHÁC token ⇒ ném nguyên văn, không làm mới', /shop_flash_sale_not_exist/.test(loi) && !dv.goi.includes('lamMoi'), loi)
+        }
     }
     // ── 4. đường thường: tạo → ghi id NGAY → thêm hàng → bật → active ──
     {

@@ -85,6 +85,56 @@ export function shopeeServiceFromChannel(channel: any): ShopeeService {
     } as any)
 }
 
+/* TOKEN CÒN HẠN (15/10/2026). Token Shopee sống 4 giờ; luồng flash sale dùng token đã lưu, không tự làm mới ⇒ 10:35 Kengi
+ * Electric "invalid_acceess_token" GIỮA lúc đẩy: đợt đã tạo mà thêm hàng/xoá đều hỏng ⇒ sót một đợt rỗng trên Shopee.
+ * Sắp hết hạn (đệm 5 phút) ⇒ làm mới + lưu như autoSync/dayTonLenSan. */
+async function lamMoiTokenKenh(prisma: any, channel: any, service: any): Promise<boolean> {
+    try {
+        const tk = await service.refreshAccessToken()
+        service.credentials.accessToken = tk.accessToken
+        service.credentials.refreshToken = tk.refreshToken
+        await prisma.onlineChannel.update({
+            where: { id: channel.id },
+            data: { accessToken: tk.accessToken, refreshToken: tk.refreshToken, tokenExpiresAt: new Date(Date.now() + tk.expiresIn * 1000) },
+        })
+        channel.accessToken = tk.accessToken
+        channel.refreshToken = tk.refreshToken
+        console.log(`[FlashSale] Làm mới token Shopee ${channel.name || channel.id}`)
+        return true
+    } catch (e: any) {
+        console.warn(`[FlashSale] Làm mới token Shopee ${channel.name || channel.id} hỏng:`, e?.message || e)
+        return false
+    }
+}
+export async function shopeeServiceTokenMoi(prisma: any, channel: any): Promise<ShopeeService> {
+    const service: any = shopeeServiceFromChannel(channel)
+    const het = channel?.tokenExpiresAt ? new Date(channel.tokenExpiresAt).getTime() : 0
+    if (het && het < Date.now() + 5 * 60_000) await lamMoiTokenKenh(prisma, channel, service)
+    return bocTuLamMoi(prisma, channel, service) as ShopeeService
+}
+/** Lời gọi Shopee nào gặp invalid_access_token ⇒ đọc lại token trong CSDL (autoSync có thể vừa làm mới — token cũ mất hiệu
+ *  lực ngay), vẫn cũ thì tự làm mới; rồi thử lại MỘT lần. Shopee viết sai chính tả "acceess" ⇒ bắt cả hai. */
+export function bocTuLamMoi(prisma: any, channel: any, service: any): any {
+    const TOKEN_HONG = /invalid_ac+e+s+_token/i
+    return new Proxy(service, {
+        get(dich: any, ten: string | symbol) {
+            const v = dich[ten]
+            if (typeof v !== 'function' || ten === 'refreshAccessToken' || ten === 'constructor') return v
+            return async (...thamSo: any[]) => {
+                try { return await v.apply(dich, thamSo) } catch (e: any) {
+                    if (!TOKEN_HONG.test(String(e?.message || e))) throw e
+                    const moi = await prisma.onlineChannel.findUnique({ where: { id: channel.id } }).catch(() => null)
+                    if (moi?.accessToken && moi.accessToken !== dich.credentials?.accessToken) {
+                        dich.credentials.accessToken = moi.accessToken
+                        dich.credentials.refreshToken = moi.refreshToken
+                    } else if (!(await lamMoiTokenKenh(prisma, channel, dich))) throw e
+                    return await v.apply(dich, thamSo)
+                }
+            }
+        },
+    })
+}
+
 async function getShopeeChannel(prisma: any, channelId: string) {
     const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
     if (!channel) throw new Error('Không tìm thấy kênh')
@@ -110,7 +160,7 @@ router.get('/slots', async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const channel = await getShopeeChannel(prisma, String(req.query.channelId || ''))
-        const service = shopeeServiceFromChannel(channel)
+        const service = await shopeeServiceTokenMoi(prisma, channel)
         const now = Math.floor(Date.now() / 1000)
         const days = Math.min(Number(req.query.days) || 7, 7) // Shopee giới hạn ~7 ngày
         /* start_time PHẢI ≥ giờ Shopee lúc nhận (đo 15/10: gọi trễ vài giây là "shop_flash_sale_param_error — start_time
@@ -133,7 +183,7 @@ router.post('/kiem-gia', async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const channel = await getShopeeChannel(prisma, String(req.body?.channelId || ''))
-        const service = shopeeServiceFromChannel(channel)
+        const service = await shopeeServiceTokenMoi(prisma, channel)
         const itemIds: number[] = (Array.isArray(req.body?.itemIds) ? req.body.itemIds : []).map(Number).filter((n: number) => n > 0).slice(0, 50)
         const { docDieuKienTheoNganh, kiemGiaFlashSale } = await import('../lib/flashSaleKiemGia')
         let theoNganh: Map<number, any> | undefined
@@ -234,7 +284,7 @@ router.delete('/plans/:id', async (req: AuthRequest, res: Response) => {
         // Còn đợt trên Shopee (đang chạy, hoặc đợt dở của lượt bị đứt nằm ở plan 'queued'/'failed') → tắt + xoá bên Shopee trước
         if (plan.shopeeFlashSaleId && !['ended', 'cancelled'].includes(plan.status)) {
             const channel = await getShopeeChannel(prisma, plan.channelId)
-            const service = shopeeServiceFromChannel(channel)
+            const service = await shopeeServiceTokenMoi(prisma, channel)
             try { await service.flashSaleUpdateStatus(Number(plan.shopeeFlashSaleId), 2) } catch { /* đã tắt/đang chạy */ }
             try { await service.flashSaleDelete(Number(plan.shopeeFlashSaleId)) } catch { /* sale đang chạy không xoá được */ }
         }

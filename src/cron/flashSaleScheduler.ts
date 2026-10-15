@@ -1,6 +1,6 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
-import { ensureFlashSaleTable, shopeeServiceFromChannel } from '../routes/flashSales'
+import { ensureFlashSaleTable, shopeeServiceFromChannel, shopeeServiceTokenMoi } from '../routes/flashSales'
 import { tonSanPham, docDieuKienTheoNganh, phanTramGiam, docGiaKhuyenMai, giaHienThi, type DieuKienFlashSale, type GiaKhuyenMai } from '../lib/flashSaleKiemGia'
 
 /**
@@ -299,6 +299,27 @@ async function tickStore(schema: string): Promise<void> {
         `UPDATE "FlashSalePlan" SET status='queued', attempts=attempts+1, error='Lượt kích hoạt trước bị đứt giữa chừng — thử lại', "updatedAt"=now()
          WHERE status='dang_kich_hoat' AND "updatedAt" < now() - interval '10 minutes'`)
 
+    // 1c. Đợt RỖNG còn sót trên Shopee của plan đã hỏng/bỏ (lượt dọn trước gặp lỗi token — 15/10 Kengi Electric #514765382824014)
+    //     ⇒ dọn lại. Chỉ xoá đợt 0 sản phẩm; đợt CÓ hàng thì để nguyên (không tự xoá thứ đang bán).
+    const sot: any[] = await prisma.$queryRawUnsafe(
+        `SELECT id, "channelId", "shopeeFlashSaleId" FROM "FlashSalePlan"
+         WHERE status IN ('failed','skipped') AND "shopeeFlashSaleId" IS NOT NULL AND "endTime" > now() LIMIT 5`)
+    for (const r of sot) {
+        try {
+            const ch = await prisma.onlineChannel.findUnique({ where: { id: r.channelId } })
+            if (!ch?.accessToken) continue
+            const sv = await shopeeServiceTokenMoi(prisma, ch)
+            const id = Number(r.shopeeFlashSaleId)
+            const cu = await sv.flashSaleGet(id)
+            if (Number(cu?.status) !== 0) {
+                if (Number(cu?.item_count) > 0) continue
+                await sv.flashSaleDelete(id)
+            }
+            await prisma.$executeRawUnsafe(`UPDATE "FlashSalePlan" SET "shopeeFlashSaleId"=NULL, "updatedAt"=now() WHERE id=$1`, r.id)
+            console.log(`[FlashSale] Dọn đợt rỗng còn sót #${id} (plan ${r.id})`)
+        } catch (e: any) { console.warn(`[FlashSale] Chưa dọn được đợt sót của plan ${r.id}:`, e?.message || e) }
+    }
+
     // 2. Từng kênh: chưa có active → promote plan kế tiếp
     const channels: any[] = await prisma.$queryRawUnsafe(
         `SELECT DISTINCT "channelId" FROM "FlashSalePlan" WHERE status IN ('queued','active','dang_kich_hoat')`)
@@ -333,7 +354,7 @@ async function tickStore(schema: string): Promise<void> {
             `UPDATE "FlashSalePlan" SET status='dang_kich_hoat', "updatedAt"=now() WHERE id=$1 AND status='queued' RETURNING id`, plan.id)
         if (!gianh.length) continue
         try {
-            await activatePlan(prisma, plan, channel)
+            await activatePlan(prisma, plan, channel, await shopeeServiceTokenMoi(prisma, channel))
         } catch (e: any) {
             const attempts = (Number(plan.attempts) || 0) + 1
             // Lỗi chắc chắn (không mã nào đạt điều kiện giá/tồn của Shopee) ⇒ dừng ngay; lỗi mạng/Shopee ⇒ thử tối đa MAX_ATTEMPTS
