@@ -211,8 +211,8 @@ router.delete('/plans/:id', async (req: AuthRequest, res: Response) => {
         const plan = rows[0]
         if (!plan) { res.status(404).json({ success: false, error: 'Không tìm thấy kế hoạch' }); return }
 
-        if (plan.status === 'active' && plan.shopeeFlashSaleId) {
-            // Đang giữ tồn trên Shopee → tắt + xoá bên Shopee trước
+        // Còn đợt trên Shopee (đang chạy, hoặc đợt dở của lượt bị đứt nằm ở plan 'queued'/'failed') → tắt + xoá bên Shopee trước
+        if (plan.shopeeFlashSaleId && !['ended', 'cancelled'].includes(plan.status)) {
             const channel = await getShopeeChannel(prisma, plan.channelId)
             const service = shopeeServiceFromChannel(channel)
             try { await service.flashSaleUpdateStatus(Number(plan.shopeeFlashSaleId), 2) } catch { /* đã tắt/đang chạy */ }

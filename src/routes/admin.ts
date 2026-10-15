@@ -5530,19 +5530,28 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                 // Giá trong vài đợt cũ có item: giá gốc vs giá flash sale ⇒ mức giảm thật Shopee đã nhận
                 if (req.query.giaCu === '1') {
                     try {
-                        const r = await svc.flashSaleList(3, 0, 30)
-                        const list: any[] = (r.flash_sale_list || []).filter((f: any) => Number(f.item_count) > 0).slice(0, 3)
+                        // Quét tới 5 trang × 100 đợt đã kết thúc, lấy tối đa 4 đợt CÓ item (đa số đợt cũ rỗng)
+                        const list: any[] = []
+                        for (let off = 0; off < 500 && list.length < 4; off += 100) {
+                            const r = await svc.flashSaleList(3, off, 100)
+                            const trang: any[] = r.flash_sale_list || []
+                            list.push(...trang.filter((f: any) => Number(f.item_count) > 0))
+                            if (trang.length < 100) break
+                        }
                         o.giaDotCu = []
-                        for (const f of list) {
+                        const tinh = (x: any) => {
+                            const goc = Number(x.original_price) || 0, km = Number(x.input_promo_price ?? x.promotion_price ?? 0) || 0
+                            return { item: String(x.item_id), model: x.model_id != null ? String(x.model_id) : null, giaGoc: goc, giaFlash: km, giam: goc && km ? `${Math.round((1 - km / goc) * 1000) / 10}%` : null, chenh: goc && km ? goc - km : null }
+                        }
+                        for (const f of list.slice(0, 4)) {
                             const it = await svc.flashSaleItems(Number(f.flash_sale_id), 0, 50)
                             const models: any[] = it.models || []
+                            // Hàng KHÔNG phân loại: giá nằm ở item_info, models rỗng (đo 15/10/2026: 2 đợt 1 item ra models [])
+                            const itemInfo: any[] = it.item_info || []
                             o.giaDotCu.push({
                                 id: String(f.flash_sale_id), batDau: f.start_time ? vn(f.start_time * 1000) : null, soItem: f.item_count,
-                                truongModel: models[0] ? Object.keys(models[0]) : [],
-                                mau: models.slice(0, 8).map((m: any) => {
-                                    const goc = Number(m.original_price) || 0, km = Number(m.input_promo_price ?? m.promotion_price ?? 0) || 0
-                                    return { item: String(m.item_id), model: String(m.model_id), giaGoc: goc, giaFlash: km, giam: goc && km ? `${Math.round((1 - km / goc) * 1000) / 10}%` : null, chenh: goc && km ? goc - km : null }
-                                }),
+                                khoa: Object.keys(it), truongModel: models[0] ? Object.keys(models[0]) : [], truongItem: itemInfo[0] ? Object.keys(itemInfo[0]) : [],
+                                mau: [...models.slice(0, 8).map(tinh), ...itemInfo.slice(0, 8).map(tinh)],
                             })
                         }
                     } catch (e: any) { o.giaDotCu = { loi: String(e?.message || e).slice(0, 250) } }

@@ -26,14 +26,50 @@ function roundPrice(v: number): number {
     return Math.max(100, Math.floor(v / 100) * 100)
 }
 
-async function activatePlan(prisma: any, plan: any, channel: any): Promise<void> {
-    const service = shopeeServiceFromChannel(channel)
+// `service` mặc định là Shopee thật của kênh; bộ kiểm chứng (scripts/check-flash-sale.ts) truyền Shopee giả
+async function activatePlan(prisma: any, plan: any, channel: any, service: any = shopeeServiceFromChannel(channel)): Promise<void> {
     const pct = Number(plan.discountPercent) || 0
     const stockPer = Math.max(1, Number(plan.stockPerItem) || 1)
     const limit = Math.max(0, Number(plan.purchaseLimit) || 0)
     const items: any[] = Array.isArray(plan.items) ? plan.items : JSON.parse(plan.items || '[]')
 
+    /* ĐỢT DỞ TỪ LƯỢT TRƯỚC (15/10/2026): lượt trước đã tạo đợt trên Shopee rồi đứt (mất CSDL — log có P1001 —, máy tắt) trước
+     * khi ghi 'active' ⇒ lượt này KHÔNG được tạo đợt thứ hai (hai đợt = giam tồn hai lần, phá luật tuần tự).
+     * Đợt cũ đã bật + có hàng ⇒ nhận lại làm đợt đang chạy. Chưa bật / rỗng ⇒ xoá rồi làm lại. Không đọc được mà cũng không
+     * xoá được ⇒ ném lỗi, giữ id cho lượt sau — thà chậm còn hơn hai đợt. */
+    if (plan.shopeeFlashSaleId) {
+        const idCu = Number(plan.shopeeFlashSaleId)
+        let cu: any = null, loiDoc = ''
+        try { cu = await service.flashSaleGet(idCu) } catch (e: any) { loiDoc = String(e?.message || e) }
+        if (cu && Number(cu.status) === 1 && Number(cu.item_count) > 0) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "FlashSalePlan" SET status='active', error=NULL, "updatedAt"=now() WHERE id=$1 AND status='dang_kich_hoat'`, plan.id)
+            console.log(`[FlashSale] Nhận lại đợt Shopee #${idCu} đã bật từ lượt bị đứt trước (plan ${plan.id})`)
+            return
+        }
+        if (!cu || Number(cu.status) !== 0) { // status 0 = đã xoá
+            try { await service.flashSaleDelete(idCu) } catch (e: any) {
+                throw new Error(`Đợt dở #${idCu} từ lượt trước chưa dọn được${loiDoc ? ` (đọc: ${loiDoc.slice(0, 120)})` : ''}: ${String(e?.message || e).slice(0, 160)}`)
+            }
+        }
+        await prisma.$executeRawUnsafe(`UPDATE "FlashSalePlan" SET "shopeeFlashSaleId"=NULL, "updatedAt"=now() WHERE id=$1`, plan.id)
+        if (new Date(plan.startTime).getTime() <= Date.now() + 2 * 60_000) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "FlashSalePlan" SET status='skipped', error='Lỡ khung giờ — lượt trước bị đứt giữa chừng, đợt dở đã xoá trên Shopee', "updatedAt"=now() WHERE id=$1 AND status='dang_kich_hoat'`, plan.id)
+            return
+        }
+    }
+
     const flashSaleId = await service.flashSaleCreate(Number(plan.timeslotId))
+    /* Ghi NGAY id đợt vừa tạo: đứt ở bất kỳ bước nào sau đây thì lượt thử lại biết mà dọn / nhận lại (khối trên).
+     * Không còn ở 'dang_kich_hoat' (chủ shop huỷ đúng lúc máy đang đẩy) ⇒ xoá đợt vừa tạo, dừng. */
+    const giu: any[] = await prisma.$queryRawUnsafe(
+        `UPDATE "FlashSalePlan" SET "shopeeFlashSaleId"=$1, "updatedAt"=now() WHERE id=$2 AND status='dang_kich_hoat' RETURNING id`, flashSaleId, plan.id)
+    if (!giu.length) {
+        try { await service.flashSaleDelete(flashSaleId) } catch { /* rỗng, chưa bật — xoá được; hỏng thì Shopee tự hết hạn */ }
+        console.warn(`[FlashSale] Plan ${plan.id} bị huỷ trong lúc đang đẩy — đã xoá đợt Shopee #${flashSaleId} vừa tạo`)
+        return
+    }
     /* Hỏng ở bước SAU khi đã tạo trên Shopee (lấy model, thêm item, bật) ⇒ xoá đợt vừa tạo rồi mới báo lỗi (15/10/2026):
      * để lại thì Shopee giữ một đợt rỗng, lượt thử lại tạo thêm đợt rỗng nữa. */
     let failedItems: any[] = []
@@ -41,16 +77,26 @@ async function activatePlan(prisma: any, plan: any, channel: any): Promise<void>
     try {
         ;({ failedItems, soItem } = await napVaBat(service, flashSaleId, items, pct, stockPer, limit, plan.kieuGia === 'tru-1d'))
     } catch (e) {
-        try { await service.flashSaleDelete(flashSaleId) } catch { /* đợt đã bật/đang chạy thì không xoá được */ }
+        let daXoa = false
+        try { await service.flashSaleDelete(flashSaleId); daXoa = true } catch { /* đợt đã bật/đang chạy thì không xoá được */ }
+        // Xoá được thì bỏ id (lượt sau tạo mới sạch); xoá hỏng thì GIỮ id để lượt sau dọn tiếp chứ không tạo đợt thứ hai
+        if (daXoa) await prisma.$executeRawUnsafe(`UPDATE "FlashSalePlan" SET "shopeeFlashSaleId"=NULL WHERE id=$1`, plan.id).catch(() => {})
         throw e
     }
 
-    await prisma.$executeRawUnsafe(
+    const ghi: any[] = await prisma.$queryRawUnsafe(
         `UPDATE "FlashSalePlan"
          SET status='active', "shopeeFlashSaleId"=$1, "failedItems"=$2::jsonb, error=NULL, "updatedAt"=now()
-         WHERE id=$3`,
+         WHERE id=$3 AND status='dang_kich_hoat' RETURNING id`,
         flashSaleId, JSON.stringify(failedItems), plan.id
     )
+    if (!ghi.length) {
+        // Chủ shop huỷ trong lúc máy đang đẩy (màn hình còn hiện "chờ") ⇒ gỡ đợt vừa bật, đừng để nó giam tồn
+        try { await service.flashSaleUpdateStatus(flashSaleId, 2) } catch { /* noop */ }
+        try { await service.flashSaleDelete(flashSaleId) } catch { /* noop */ }
+        console.warn(`[FlashSale] Plan ${plan.id} bị huỷ trong lúc đang đẩy — đã tắt + xoá đợt Shopee #${flashSaleId}`)
+        return
+    }
     console.log(`[FlashSale] Kích hoạt "${plan.title}" (${plan.id}) → Shopee #${flashSaleId}, ${soItem} item gửi lên (${failedItems.length} dòng không vào đợt — bỏ qua hoặc Shopee từ chối)`)
 }
 
@@ -143,7 +189,7 @@ async function tickStore(schema: string): Promise<void> {
         // Dọn plan lỡ khung giờ (không kịp đăng ký — cần đệm 2 phút)
         const skipped: any[] = await prisma.$queryRawUnsafe(
             `UPDATE "FlashSalePlan" SET status='skipped', error='Lỡ khung giờ — khung đã bắt đầu/quá sát giờ khi tới lượt', "updatedAt"=now()
-             WHERE "channelId"=$1 AND status='queued' AND "startTime" <= now() + interval '2 minutes'
+             WHERE "channelId"=$1 AND status='queued' AND "startTime" <= now() + interval '2 minutes' AND "shopeeFlashSaleId" IS NULL
              RETURNING id, title, "startTime"`, channelId)
         if (skipped.length > 0) {
             console.warn(`[FlashSale] Bỏ ${skipped.length} plan lỡ khung giờ (kênh ${channelId}):`,
@@ -170,8 +216,9 @@ async function tickStore(schema: string): Promise<void> {
         } catch (e: any) {
             const attempts = (Number(plan.attempts) || 0) + 1
             const failed = attempts >= MAX_ATTEMPTS
+            // Chỉ ghi khi plan còn ở 'dang_kich_hoat' — chủ shop huỷ giữa chừng thì 'cancelled' không bị lật lại thành 'queued'
             await prisma.$executeRawUnsafe(
-                `UPDATE "FlashSalePlan" SET attempts=$1, error=$2, status=$3, "updatedAt"=now() WHERE id=$4`,
+                `UPDATE "FlashSalePlan" SET attempts=$1, error=$2, status=$3, "updatedAt"=now() WHERE id=$4 AND status='dang_kich_hoat'`,
                 attempts, String(e?.message || e).slice(0, 500), failed ? 'failed' : 'queued', plan.id)
             console.error(`[FlashSale] Lỗi kích hoạt plan ${plan.id} (lần ${attempts}${failed ? ' — BỎ' : ''}):`, e?.message || e)
         }
@@ -226,3 +273,6 @@ export function startFlashSaleScheduler(): void {
 export function stopFlashSaleScheduler(): void {
     if (timer) { clearInterval(timer); timer = null }
 }
+
+/** Chỉ cho bộ kiểm chứng scripts/check-flash-sale.ts — đường chạy thật không dùng. */
+export const _kiemThu = { activatePlan, napVaBat }
