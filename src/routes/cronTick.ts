@@ -54,6 +54,14 @@ router.post('/tick', async (req: Request, res: Response) => {
         ra.henGioVideo = await nhipDangHenGio(40_000)
     } catch (e: any) { ra.henGioVideo = 'loi: ' + (e?.message || e) }
     try { ra.tacVuAi = (await quetTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.tacVuAi = 'loi: ' + (e?.message || e) }
+    /* Flash sale Shopee hàng đợi (15/10/2026): đẩy plan kế tiếp + đóng plan hết giờ mỗi 3 phút. setInterval cũ vẫn chạy bổ
+     * sung ban ngày; giành plan trên dòng CSDL nên chạy đôi không đẩy trùng. cron/flashSaleScheduler.ts */
+    if (new Date().getUTCMinutes() % 3 === 0) {
+        try {
+            const { nhipFlashSale } = await import('../cron/flashSaleScheduler')
+            ra.flashSale = await nhipFlashSale()
+        } catch (e: any) { ra.flashSale = 'loi: ' + (e?.message || e) }
+    }
     /* Tự tạo video theo giờ (14/10/2026): video DỰNG trên trình duyệt (máy dựng = tab kengi.vn được chỉ định). Quá
      * giờ tạo 45 phút mà không máy nào xin việc ⇒ báo chuông một lần mỗi ngày. Mỗi 10 phút. lib/videoTuDong.ts */
     if (new Date().getUTCMinutes() % 10 === 5) {

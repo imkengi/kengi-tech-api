@@ -5511,12 +5511,12 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
         const { shopeeServiceFromChannel } = await import('./flashSales')
         const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { name: 'asc' } })
         ra.gian = []
-        const now = Math.floor(Date.now() / 1000)
         for (const c of kenh) {
             const o: any = { gian: c.name, shopId: c.shopId, trangThai: c.status, coToken: !!c.accessToken }
             if (c.accessToken && c.status !== 'inactive') {
                 const svc = shopeeServiceFromChannel(c)
                 try {
+                    const now = Math.floor(Date.now() / 1000) + 60   // Shopee đòi start_time ≥ giờ Shopee lúc nhận
                     const ds = await svc.flashSaleGetTimeSlots(now, now + 3 * 86400)
                     o.khungGio3Ngay = { so: ds.length, mau: ds.slice(0, 4).map(k => `${vn(k.start_time * 1000)}→${vn(k.end_time * 1000)?.slice(11)}`) }
                 } catch (e: any) { o.khungGio3Ngay = { loi: String(e?.message || e).slice(0, 250) } }

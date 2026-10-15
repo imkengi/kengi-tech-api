@@ -110,13 +110,16 @@ router.get('/slots', async (req: AuthRequest, res: Response) => {
         const service = shopeeServiceFromChannel(channel)
         const now = Math.floor(Date.now() / 1000)
         const days = Math.min(Number(req.query.days) || 7, 7) // Shopee giới hạn ~7 ngày
-        const slots = await service.flashSaleGetTimeSlots(now, now + days * 86400)
+        /* start_time PHẢI ≥ giờ Shopee lúc nhận (đo 15/10: gọi trễ vài giây là "shop_flash_sale_param_error — start_time
+         * should be >= now") ⇒ hỏi từ 1 phút sau; khung sắp bắt đầu vốn đã bị lọc bỏ bên dưới. */
+        const slots = await service.flashSaleGetTimeSlots(now + 60, now + days * 86400)
         // Shopee trả cả khung ĐANG chạy / sắp bắt đầu — không còn kịp đăng ký
         // (cron cần đệm ≥2') → lọc bỏ để người dùng không chọn nhầm rồi bị skip.
         const usable = slots.filter(s => Number(s.start_time) > now + 5 * 60)
         res.json({ success: true, data: usable })
     } catch (err: any) {
-        res.status(400).json({ success: false, error: errMsg(err) })
+        // Lỗi của Shopee phải hiện NGUYÊN VĂN (errMsg che thành câu chung chung trên prod)
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 400) })
     }
 })
 

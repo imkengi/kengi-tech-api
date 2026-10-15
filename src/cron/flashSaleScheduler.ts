@@ -34,7 +34,28 @@ async function activatePlan(prisma: any, plan: any, channel: any): Promise<void>
     const items: any[] = Array.isArray(plan.items) ? plan.items : JSON.parse(plan.items || '[]')
 
     const flashSaleId = await service.flashSaleCreate(Number(plan.timeslotId))
+    /* Hỏng ở bước SAU khi đã tạo trên Shopee (lấy model, thêm item, bật) ⇒ xoá đợt vừa tạo rồi mới báo lỗi (15/10/2026):
+     * để lại thì Shopee giữ một đợt rỗng, lượt thử lại tạo thêm đợt rỗng nữa. */
+    let failedItems: any[] = []
+    let soItem = 0
+    try {
+        ;({ failedItems, soItem } = await napVaBat(service, flashSaleId, items, pct, stockPer, limit))
+    } catch (e) {
+        try { await service.flashSaleDelete(flashSaleId) } catch { /* đợt đã bật/đang chạy thì không xoá được */ }
+        throw e
+    }
 
+    await prisma.$executeRawUnsafe(
+        `UPDATE "FlashSalePlan"
+         SET status='active', "shopeeFlashSaleId"=$1, "failedItems"=$2::jsonb, error=NULL, "updatedAt"=now()
+         WHERE id=$3`,
+        flashSaleId, JSON.stringify(failedItems), plan.id
+    )
+    console.log(`[FlashSale] Kích hoạt "${plan.title}" (${plan.id}) → Shopee #${flashSaleId}, ${soItem} item (${failedItems.length} bị từ chối)`)
+}
+
+/** Lấy model từng item, thêm item vào đợt, bật đợt. Ném lỗi để activatePlan xoá đợt rỗng. */
+async function napVaBat(service: any, flashSaleId: number, items: any[], pct: number, stockPer: number, limit: number): Promise<{ failedItems: any[]; soItem: number }> {
     // Build payload từng item: cần model list để đặt giá/tồn theo model.
     const shopeeItems: any[] = []
     for (const it of items) {
@@ -76,19 +97,11 @@ async function activatePlan(prisma: any, plan: any, channel: any): Promise<void>
 
     const { failedItems } = await service.flashSaleAddItems(flashSaleId, shopeeItems)
     if (failedItems.length >= shopeeItems.length) {
-        // Toàn bộ bị từ chối → xoá sale rỗng cho sạch, báo lỗi
-        try { await service.flashSaleDelete(flashSaleId) } catch { /* noop */ }
+        // Toàn bộ bị từ chối → activatePlan xoá sale rỗng cho sạch, báo lỗi
         throw new Error(`Shopee từ chối toàn bộ ${failedItems.length} item: ${JSON.stringify(failedItems).slice(0, 400)}`)
     }
     await service.flashSaleUpdateStatus(flashSaleId, 1) // enable
-
-    await prisma.$executeRawUnsafe(
-        `UPDATE "FlashSalePlan"
-         SET status='active', "shopeeFlashSaleId"=$1, "failedItems"=$2::jsonb, error=NULL, "updatedAt"=now()
-         WHERE id=$3`,
-        flashSaleId, JSON.stringify(failedItems), plan.id
-    )
-    console.log(`[FlashSale] Kích hoạt "${plan.title}" (${plan.id}) → Shopee #${flashSaleId}, ${shopeeItems.length} item (${failedItems.length} bị từ chối)`)
+    return { failedItems, soItem: shopeeItems.length }
 }
 
 async function tickStore(schema: string): Promise<void> {
@@ -99,13 +112,17 @@ async function tickStore(schema: string): Promise<void> {
     await prisma.$executeRawUnsafe(
         `UPDATE "FlashSalePlan" SET status='ended', "updatedAt"=now()
          WHERE status='active' AND "endTime" < now()`)
+    // 1b. Lượt kích hoạt bị đứt giữa chừng (máy tắt, mất kết nối) ⇒ trả về hàng đợi để thử lại
+    await prisma.$executeRawUnsafe(
+        `UPDATE "FlashSalePlan" SET status='queued', attempts=attempts+1, error='Lượt kích hoạt trước bị đứt giữa chừng — thử lại', "updatedAt"=now()
+         WHERE status='dang_kich_hoat' AND "updatedAt" < now() - interval '10 minutes'`)
 
     // 2. Từng kênh: chưa có active → promote plan kế tiếp
     const channels: any[] = await prisma.$queryRawUnsafe(
-        `SELECT DISTINCT "channelId" FROM "FlashSalePlan" WHERE status IN ('queued','active')`)
+        `SELECT DISTINCT "channelId" FROM "FlashSalePlan" WHERE status IN ('queued','active','dang_kich_hoat')`)
     for (const { channelId } of channels) {
         const activeCnt: any[] = await prisma.$queryRawUnsafe(
-            `SELECT COUNT(*)::int AS n FROM "FlashSalePlan" WHERE "channelId"=$1 AND status='active'`, channelId)
+            `SELECT COUNT(*)::int AS n FROM "FlashSalePlan" WHERE "channelId"=$1 AND status IN ('active','dang_kich_hoat')`, channelId)
         if ((activeCnt[0]?.n ?? 0) > 0) continue // tuần tự: đợi sale hiện tại kết thúc
 
         // Dọn plan lỡ khung giờ (không kịp đăng ký — cần đệm 2 phút)
@@ -127,6 +144,12 @@ async function tickStore(schema: string): Promise<void> {
 
         const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
         if (!channel?.accessToken) continue
+        /* GIÀNH plan trên dòng CSDL (15/10/2026): khoá "một máy chạy" (chayNeuLanhDao) dựa Redis mà prod KHÔNG có Redis
+         * ⇒ hai bản Cloud Run cùng tick có thể cùng đẩy một plan ⇒ hai flash sale trên Shopee, giam tồn hai lần. Ai đổi
+         * được queued → dang_kich_hoat thì người đó làm. */
+        const gianh: any[] = await prisma.$queryRawUnsafe(
+            `UPDATE "FlashSalePlan" SET status='dang_kich_hoat', "updatedAt"=now() WHERE id=$1 AND status='queued' RETURNING id`, plan.id)
+        if (!gianh.length) continue
         try {
             await activatePlan(prisma, plan, channel)
         } catch (e: any) {
@@ -138,6 +161,14 @@ async function tickStore(schema: string): Promise<void> {
             console.error(`[FlashSale] Lỗi kích hoạt plan ${plan.id} (lần ${attempts}${failed ? ' — BỎ' : ''}):`, e?.message || e)
         }
     }
+}
+
+/** Gọi từ /api/cron/tick (mỗi 3 phút, 15/10/2026): Cloud Run bóp CPU khi không có request ⇒ setInterval đứng im ban đêm,
+ *  plan khung 0h–2h tới lượt mà không ai đẩy ⇒ bị bỏ "lỡ khung giờ". Nhịp ngoài có CPU cả đêm. */
+export async function nhipFlashSale(): Promise<string> {
+    if (running) return 'dang-chay'
+    await runScheduler()
+    return 'xong'
 }
 
 async function runScheduler(): Promise<void> {
