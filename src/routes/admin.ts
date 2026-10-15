@@ -5527,6 +5527,21 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                         mau: list.slice(0, 6).map((f: any) => ({ id: String(f.flash_sale_id), status: f.status, type: f.type, batDau: f.start_time ? vn(f.start_time * 1000) : null,
                             ketThuc: f.end_time ? vn(f.end_time * 1000) : null, item: f.enabled_item_count ?? f.item_count ?? null })) }
                 } catch (e: any) { o.flashSaleTrenShopee = { loi: String(e?.message || e).slice(0, 250) } }
+                // Điều kiện flash sale theo ngành của gian: min_discount (%) / need_lowest_price quyết định "giá đang bán −1đ" có lọt không
+                try {
+                    const c = await svc.flashSaleItemCriteria()
+                    const nganh = new Map<string, string[]>()
+                    for (const p of (c.pair_ids || [])) nganh.set(String(p.criteria_id), (p.category_list || []).map((k: any) => `${k.name || ''}#${k.category_id}`))
+                    o.dieuKien = (c.criteria || []).map((k: any) => ({
+                        id: String(k.criteria_id), giamToiThieu: k.min_discount, giamToiDa: k.max_discount,
+                        giaToiThieu: k.min_discount_price != null && k.min_discount_price >= 0 ? k.min_discount_price / 100000 : k.min_discount_price,
+                        giaToiDa: k.max_discount_price != null && k.max_discount_price >= 0 ? k.max_discount_price / 100000 : k.max_discount_price,
+                        phaiThapNhat7Ngay: k.need_lowest_price, tonToiThieu: k.min_promo_stock, tonToiDa: k.max_promo_stock,
+                        cachNgayLapLai: k.min_repetition_day, saoToiThieu: k.min_product_rating, donToiThieu30Ngay: k.min_order_total,
+                        nganh: (nganh.get(String(k.criteria_id)) || []).slice(0, 8), soNganh: (nganh.get(String(k.criteria_id)) || []).length,
+                    }))
+                    o.nganhBiChan = (c.overlap_block_category_ids || []).length
+                } catch (e: any) { o.dieuKien = { loi: String(e?.message || e).slice(0, 250) } }
                 // Giá trong vài đợt cũ có item: giá gốc vs giá flash sale ⇒ mức giảm thật Shopee đã nhận
                 if (req.query.giaCu === '1') {
                     try {
@@ -5539,9 +5554,14 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                             if (trang.length < 100) break
                         }
                         o.giaDotCu = []
+                        // get_shop_flash_sale_items trả `input_promotion_price` (+ `promotion_price_with_tax`), KHÁC tên trường lúc gửi lên
                         const tinh = (x: any) => {
-                            const goc = Number(x.original_price) || 0, km = Number(x.input_promo_price ?? x.promotion_price ?? 0) || 0
-                            return { item: String(x.item_id), model: x.model_id != null ? String(x.model_id) : null, giaGoc: goc, giaFlash: km, giam: goc && km ? `${Math.round((1 - km / goc) * 1000) / 10}%` : null, chenh: goc && km ? goc - km : null }
+                            const goc = Number(x.original_price) || 0
+                            const km = Number(x.input_promotion_price ?? x.input_promo_price ?? x.promotion_price ?? 0) || 0
+                            return { item: String(x.item_id), model: x.model_id != null ? String(x.model_id) : null, giaGoc: goc, giaFlash: km,
+                                giaCoThue: x.promotion_price_with_tax ?? null, tonCampaign: x.campaign_stock ?? null, trangThai: x.status ?? null,
+                                lyDoTuChoi: x.reject_reason || null,
+                                giam: goc && km ? `${Math.round((1 - km / goc) * 1000) / 10}%` : null, chenh: goc && km ? goc - km : null }
                         }
                         for (const f of list.slice(0, 4)) {
                             const it = await svc.flashSaleItems(Number(f.flash_sale_id), 0, 50)

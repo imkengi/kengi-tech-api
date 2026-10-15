@@ -1706,6 +1706,13 @@ export class ShopeeService extends PlatformService {
         return data.response || {}
     }
 
+    /** Điều kiện flash sale của gian theo ngành (min_discount %, need_lowest_price, giới hạn tồn…) + ngành áp dụng. Trả nguyên response. */
+    async flashSaleItemCriteria(): Promise<any> {
+        const data = await this.httpGet(this.apiUrl('/api/v2/shop_flash_sale/get_item_criteria'))
+        if (data.error) throw new Error(`Shopee get_item_criteria: ${data.error} - ${data.message}`)
+        return data.response || {}
+    }
+
     /** Tạo flash sale rỗng cho 1 khung giờ → flash_sale_id. */
     async flashSaleCreate(timeslotId: number): Promise<number> {
         const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/create_shop_flash_sale'), {

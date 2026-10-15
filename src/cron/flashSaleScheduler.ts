@@ -126,8 +126,8 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
         // Đọc phân loại hỏng ≠ không có phân loại: giữ lời Shopee để nếu bước sau phải bỏ mã thì nói đúng lý do
         let loiPhanLoai = ''
         try { models = await service.getModelList(itemId) } catch (e: any) { loiPhanLoai = String(e?.message || e).slice(0, 160) }
-        const entry: any = { item_id: itemId }
-        if (limit > 0) entry.purchase_limit = limit
+        // purchase_limit là trường BẮT BUỘC theo tài liệu (0 = không giới hạn) — bản đầu bỏ trống khi 0
+        const entry: any = { item_id: itemId, purchase_limit: limit }
         if (models.length > 0) {
             entry.models = models
                 .filter(m => m.stock > 0 && m.price > 0)
@@ -143,12 +143,14 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
                 boQua.push({ item_id: itemId, name: it.name, err_msg: loiPhanLoai ? `Không đọc được phân loại: ${loiPhanLoai}` : 'Chưa có giá đang bán (đồng bộ lại sản phẩm)' })
                 continue
             }
-            entry.models = [{
-                model_id: 0,
-                // tru1d: FE gửi `price` = giá đang bán; % : gửi giá gốc ở `giaGoc` (bản cũ gửi giá gốc ở `price`)
-                input_promo_price: tru1d ? giaTru1d(base) : promoFor(Number(it.giaGoc) || base),
-                stock: stockPer,
-            }]
+            /* HÀNG KHÔNG PHÂN LOẠI (đọc tài liệu add_shop_flash_sale_items 15/10/2026, mục "Support single item" 2025-01-10):
+             * giá + tồn đặt ở CẤP SẢN PHẨM — `item_input_promo_price` + `item_stock` — và KHÔNG gửi `models`. Bản đầu gửi
+             * `models: [{ model_id: 0 }]` ⇒ Shopee trả "item-model invalid" cho mọi mã không phân loại (đợt thử 14/07 ra 0 item).
+             * tru1d: FE gửi `price` = giá đang bán; %: giá gốc ở `giaGoc` (bản cũ gửi giá gốc ở `price`).
+             * Tồn: FE gửi tồn trên sàn lúc chọn (`ton`) ⇒ không xin quá số đang có; thiếu thì Shopee báo trong failedItems. */
+            const ton = Number(it.ton) || 0
+            entry.item_input_promo_price = tru1d ? giaTru1d(base) : promoFor(Number(it.giaGoc) || base)
+            entry.item_stock = Math.max(1, ton > 0 ? Math.min(ton, stockPer) : stockPer)
         }
         shopeeItems.push(entry)
     }

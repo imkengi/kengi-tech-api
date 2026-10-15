@@ -92,17 +92,21 @@ async function main() {
             { itemId: 6, name: 'Giá điền tay thấp hơn', price: 1000, promoPrice: 900 },
             { itemId: 7, name: 'Giá điền tay không thấp hơn', price: 1000, promoPrice: 1200 },
             { itemId: 0, name: 'Thiếu mã sàn', price: 1000 },
+            { itemId: 8, name: 'Tồn sàn ít hơn tồn/SP', price: 1000, ton: 2 },
         ]
         const { failedItems, soItem } = await napVaBat(sv, 5001, items, 0, 3, 1, true)
         const gui = sv.hangGui
         const m = (id: number) => gui.find((g: any) => g.item_id === id)
-        dung('gửi đúng 4 mã hợp lệ (1, 2, 6, 7)', soItem === 4 && gui.map((g: any) => g.item_id).join() === '1,2,6,7', gui.map((g: any) => g.item_id).join())
+        dung('gửi đúng 5 mã hợp lệ (1, 2, 6, 7, 8)', soItem === 5 && gui.map((g: any) => g.item_id).join() === '1,2,6,7,8', gui.map((g: any) => g.item_id).join())
         dung('phân loại: giá ĐANG BÁN 1200 − 1đ = 1199 (không phải giá gốc 1500)', m(1)?.models?.[0]?.input_promo_price === 1199, JSON.stringify(m(1)?.models))
         dung('phân loại hết tồn bị loại khỏi đợt', m(1)?.models?.length === 1)
         dung('tồn campaign = min(tồn phân loại, tồn/SP)', m(1)?.models?.[0]?.stock === 3)
-        dung('không phân loại: 1000 − 1đ = 999, không làm tròn trăm', m(2)?.models?.[0]?.input_promo_price === 999 && m(2)?.models?.[0]?.model_id === 0)
-        dung('giá điền tay thấp hơn giá đang bán ⇒ dùng y nguyên 900', m(6)?.models?.[0]?.input_promo_price === 900)
-        dung('giá điền tay ≥ giá đang bán ⇒ bỏ, về 999', m(7)?.models?.[0]?.input_promo_price === 999)
+        dung('không phân loại: 1000 − 1đ = 999 ở item_input_promo_price, không làm tròn trăm', m(2)?.item_input_promo_price === 999, JSON.stringify(m(2)))
+        dung('không phân loại: KHÔNG gửi models (tài liệu: "don\'t use" — model_id 0 bị từ chối)', m(2)?.models === undefined)
+        dung('không phân loại: item_stock = tồn/SP khi không biết tồn sàn', m(2)?.item_stock === 3)
+        dung('không phân loại: item_stock không vượt tồn trên sàn', m(8)?.item_stock === 2, JSON.stringify(m(8)))
+        dung('giá điền tay thấp hơn giá đang bán ⇒ dùng y nguyên 900', m(6)?.item_input_promo_price === 900)
+        dung('giá điền tay ≥ giá đang bán ⇒ bỏ, về 999', m(7)?.item_input_promo_price === 999)
         dung('giới hạn mua gắn vào từng mã', m(2)?.purchase_limit === 1)
         const ly = (ten: string) => failedItems.find((f: any) => f.name === ten)?.err_msg || ''
         dung('bỏ qua có lý do: chưa có giá', /Chưa có giá/.test(ly('Chưa có giá')), ly('Chưa có giá'))
@@ -118,8 +122,8 @@ async function main() {
         await napVaBat(sv, 5002, [{ itemId: 1, name: 'A', price: 0 }, { itemId: 2, name: 'B', price: 1000, giaGoc: 1250 }], 20, 3, 0, false)
         const g = sv.hangGui
         dung('%: phân loại tính từ GIÁ GỐC 1500 × 80% = 1200', g[0]?.models?.[0]?.input_promo_price === 1200, JSON.stringify(g[0]?.models))
-        dung('%: không phân loại tính từ giaGoc 1250 × 80% = 1000', g[1]?.models?.[0]?.input_promo_price === 1000)
-        dung('%: không gửi purchase_limit khi = 0', g[1]?.purchase_limit === undefined)
+        dung('%: không phân loại tính từ giaGoc 1250 × 80% = 1000', g[1]?.item_input_promo_price === 1000, JSON.stringify(g[1]))
+        dung('%: vẫn gửi purchase_limit = 0 (trường bắt buộc, 0 = không giới hạn)', g[1]?.purchase_limit === 0)
     }
     // ── 3. không mã nào gửi được ⇒ lỗi nêu lý do, không gọi thêm hàng ──
     {
