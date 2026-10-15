@@ -114,13 +114,30 @@ async function activatePlan(prisma: any, plan: any, channel: any, service: any =
 /** Lỗi chắc chắn (giá/tồn không đạt điều kiện Shopee) — thử lại cũng vậy ⇒ plan 'failed' ngay, khỏi đọc Shopee thêm 2 lượt. */
 class LoiKhongThuLai extends Error {}
 
+/* Gom lý do theo NHÓM, nhóm quan trọng trước (15/10: liệt kê 5 mã đầu thì toàn "hết tồn", che mất lý do chính "giá chưa giảm
+ * đủ 5%" của 24 mã còn hàng). Hết hàng chỉ đếm; nhóm khác kèm một ví dụ nguyên văn. */
+const NHOM_LY_DO: [string, RegExp, string][] = [
+    ['gia', /Shopee đòi|Shopee cho tối đa/, 'giá chưa đạt mức giảm của Shopee'],
+    ['ton', /tồn campaign/, 'tồn campaign dưới mức tối thiểu của Shopee'],
+    ['doc', /^Không đọc được|không trả/i, 'không đọc được trên Shopee'],
+    ['het', /hết tồn/i, 'hết hàng'],
+]
 const loiKhongMaNao = (boQua: any[]) => {
     const ds = boQua.filter(b => !b.motPhan)
-    const thongBao = `Không có mã nào gửi được: ${ds.slice(0, 5).map(b => `${b.name || b.item_id} — ${b.err_msg}`).join(' · ')}` +
-        `${ds.length > 5 ? ` · …(+${ds.length - 5} mã)` : ''}`
+    const theoNhom = new Map<string, any[]>()
+    for (const b of ds) {
+        const m = String(b.err_msg || '')
+        const k = NHOM_LY_DO.find(([, re]) => re.test(m))?.[0] || 'khac'
+        theoNhom.set(k, [...(theoNhom.get(k) || []), b])
+    }
+    const ten = (k: string) => NHOM_LY_DO.find(([id]) => id === k)?.[2] || 'lý do khác'
+    const phan = ['gia', 'ton', 'doc', 'khac', 'het'].filter(k => theoNhom.has(k)).map(k => {
+        const v = theoNhom.get(k)!
+        return k === 'het' ? `${v.length} mã hết hàng` : `${v.length} mã ${ten(k)} (vd ${v[0].name || v[0].item_id}: ${v[0].err_msg})`
+    })
+    const thongBao = `Không có mã nào gửi được — ${phan.join(' · ')}`.slice(0, 600)
     // Có mã hỏng vì ĐỌC không được (mạng, Shopee lỗi) ⇒ còn hy vọng ở lượt sau; toàn lý do giá/tồn ⇒ dừng luôn
-    const docHong = ds.some(b => /^Không đọc được|không trả/i.test(String(b.err_msg || '')))
-    return docHong ? new Error(thongBao.slice(0, 600)) : new LoiKhongThuLai(thongBao.slice(0, 600))
+    return theoNhom.has('doc') ? new Error(thongBao) : new LoiKhongThuLai(thongBao)
 }
 
 /* ─── BƯỚC 1 · CHUẨN BỊ — chỉ ĐỌC Shopee, chưa đụng đợt nào ──────────────────────────────────────────────────────── */

@@ -154,7 +154,7 @@ async function main() {
         const sv = shopeeGia()
         let thongBao = ''
         try { await napVaBat(sv, 5003, [{ itemId: 3, name: 'Chưa có giá', price: 0 }], 0, 3, 0, true) } catch (e: any) { thongBao = e.message }
-        dung('hết mã ⇒ ném lỗi kèm lý do từng mã', /Chưa có giá — Chưa có giá đang bán/.test(thongBao), thongBao)
+        dung('hết mã ⇒ ném lỗi kèm lý do (gom nhóm, có ví dụ nguyên văn)', /1 mã lý do khác \(vd Chưa có giá: Chưa có giá đang bán/.test(thongBao), thongBao)
         dung('hết mã ⇒ không gọi add items', !sv.goi.some(g => g.startsWith('add:')))
     }
     // ── 3b. giá + tồn SỐNG lúc đẩy (get_item_base_info) thắng số FE gửi lúc xếp; has_model chắc chắn ──
@@ -272,6 +272,22 @@ async function main() {
         try { await activatePlan(prismaGia(dong), dong, {}, sv) } catch (e) { loiBat = e }
         dung('không mã nào đạt ⇒ KHÔNG tạo đợt trên Shopee', !sv.goi.some(x => x.startsWith('create:')), sv.goi.join(' '))
         dung('lỗi chắc chắn (giá) ⇒ LoiKhongThuLai (plan failed ngay)', loiBat instanceof LoiKhongThuLai, String(loiBat?.message).slice(0, 120))
+    }
+    {
+        // 2 mã hết hàng + 1 mã giá chưa đạt ⇒ lý do GIÁ đứng trước, hết hàng chỉ đếm
+        const dong = planMau({ items: [{ itemId: 91, name: 'Hết 1', price: 500 }, { itemId: 92, name: 'Hết 2', price: 500 }, { itemId: 93, name: 'Quạt đứng', price: 1000 }] })
+        const sv = shopeeGia({
+            dieuKien: { criteria: [{ criteria_id: 4, min_discount: 5, max_discount: 90 }], pair_ids: [{ criteria_id: 4, category_list: [{ category_id: 0 }] }] },
+            coSo: {
+                91: { has_model: false, price_info: [{ original_price: 500, current_price: 500 }], stock_info_v2: { summary_info: { total_available_stock: 0 } } },
+                92: { has_model: false, price_info: [{ original_price: 500, current_price: 500 }], stock_info_v2: { summary_info: { total_available_stock: 0 } } },
+                93: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 5 } } },
+            },
+        })
+        let loiBat: any = null
+        try { await activatePlan(prismaGia(dong), dong, {}, sv) } catch (e) { loiBat = e }
+        const m = String(loiBat?.message || '')
+        dung('gom lý do: "1 mã giá chưa đạt … (vd Quạt đứng: …)" đứng TRƯỚC "2 mã hết hàng"', /1 mã giá chưa đạt mức giảm của Shopee \(vd Quạt đứng: .*Shopee đòi ≥ 5%\) · 2 mã hết hàng$/.test(m), m)
     }
     {
         const dong = planMau({ items: [{ itemId: 22, name: 'Có phân loại, đọc hỏng', price: 0 }] })
