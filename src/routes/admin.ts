@@ -5548,8 +5548,17 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                     try {
                         const { docDieuKienTheoNganh, kiemGiaFlashSale, phanTramGiam } = await import('../lib/flashSaleKiemGia')
                         const soMa = Math.min(200, Math.max(1, Number(req.query.soMa) || 100))
+                        // ?planId= ⇒ soát đúng các mã chủ shop đã xếp trong plan đó (chỉ gian của plan)
+                        let maPlan: number[] | null = null
+                        if (req.query.planId) {
+                            const pl: any[] = await sp.$queryRawUnsafe(`SELECT "channelId", items FROM "FlashSalePlan" WHERE id=$1`, String(req.query.planId))
+                            if (!pl[0] || pl[0].channelId !== c.id) { ra.gian.push(o); continue }
+                            const its: any[] = Array.isArray(pl[0].items) ? pl[0].items : JSON.parse(pl[0].items || '[]')
+                            maPlan = its.map(x => Number(x.itemId)).filter(n => n > 0)
+                        }
                         const sps: any[] = await sp.onlineProduct.findMany({
-                            where: { channelId: c.id, status: 'NORMAL' }, orderBy: { updatedAt: 'desc' }, take: soMa,
+                            where: maPlan ? { channelId: c.id, platformProductId: { in: maPlan.map(String) } } : { channelId: c.id, status: 'NORMAL' },
+                            orderBy: { updatedAt: 'desc' }, take: maPlan ? 200 : soMa,
                             select: { platformProductId: true, name: true, sku: true, price: true },
                         })
                         const ten = new Map(sps.map(x => [Number(x.platformProductId), `${x.sku || ''} ${String(x.name || '').slice(0, 40)}`.trim()]))
@@ -5557,7 +5566,12 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                         const kq: any[] = []
                         const ids = sps.map(x => Number(x.platformProductId)).filter(n => n > 0)
                         for (let i = 0; i < ids.length; i += 50) kq.push(...await kiemGiaFlashSale(svc, ids.slice(i, i + 50), theoNganh))
-                        const dem = { soMa: kq.length, khongPhanLoai: { dat: 0, khongDat: 0, hetTon: 0 }, coPhanLoai: { datHet: 0, datMotPhan: 0, khongDat: 0, hetTon: 0 }, loiDoc: 0, giaSyncLech: 0 }
+                        const dem = { soMa: kq.length, khongPhanLoai: { dat: 0, khongDat: 0, hetTon: 0 }, coPhanLoai: { datHet: 0, datMotPhan: 0, khongDat: 0, hetTon: 0 }, loiDoc: 0, giaSyncLech: 0,
+                            // mã/phân loại có chương trình ĐANG CHẠY làm giá hiển thị thấp hơn current_price (theo loại chương trình)
+                            khuyenMaiThapHonCurrent: {} as Record<string, number> }
+                        for (const k of kq) {
+                            for (const l of [k.khuyenMai, ...k.phanLoai.map((p: any) => p.khuyenMai)].filter(Boolean)) dem.khuyenMaiThapHonCurrent[l as string] = (dem.khuyenMaiThapHonCurrent[l as string] || 0) + 1
+                        }
                         const mauKhongDat: any[] = [], mauDat: any[] = []
                         for (const k of kq) {
                             if (k.loi) { dem.loiDoc++; continue }

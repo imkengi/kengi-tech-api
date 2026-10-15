@@ -6,7 +6,7 @@
 import { _kiemThu } from '../src/cron/flashSaleScheduler'
 import { docDieuKienTheoNganh, kiemGiaFlashSale, phanTramGiam } from '../src/lib/flashSaleKiemGia'
 
-const { activatePlan, napVaBat } = _kiemThu
+const { activatePlan, napVaBat, chuanBiHang, themVaBat, LoiKhongThuLai } = _kiemThu
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
 
@@ -16,6 +16,12 @@ function shopeeGia(o: {
     getLoi?: boolean; deleteLoi?: boolean; tuChoiHet?: boolean; khiThemHang?: () => void
     /** get_item_base_info giả: item_id → bản ghi (has_model, price_info, stock_info_v2, category_id) */
     coSo?: Record<number, any>; dieuKien?: any
+    /** trần số mã mỗi đợt giả (vượt ⇒ ném shop_flash_sale_exceed_max_item_criteria như Shopee thật 15/10) */
+    tranMa?: number
+    /** "itemId:modelId" Shopee từ chối khi thêm */
+    tuChoiPhanLoai?: string[]
+    /** get_item_promotion giả: success_list */
+    khuyenMai?: any[]
 } = {}) {
     const goi: string[] = []
     const sales = new Map<number, Sale>(o.sales || [])
@@ -41,10 +47,17 @@ function shopeeGia(o: {
             return o.models?.[itemId] ?? []
         },
         async flashSaleAddItems(id: number, items: any[]) {
-            goi.push(`add:${id}:${items.length}`); hangGui = items
+            goi.push(`add:${id}:${items.length}`)
+            const s = sales.get(id)
+            if (o.tranMa != null && (s?.item_count || 0) + items.length > o.tranMa) {
+                throw new Error('Shopee add_shop_flash_sale_items: shop_flash_sale_exceed_max_item_criteria - exceed the max number of item limit per promotion')
+            }
+            hangGui = [...hangGui, ...items]
             o.khiThemHang?.()
-            const s = sales.get(id); if (s) s.item_count += items.length
-            return { failedItems: o.tuChoiHet ? items.map(i => ({ item_id: i.item_id, err_code: 1, err_msg: 'Shopee từ chối' })) : [] }
+            if (s) s.item_count += items.length
+            if (o.tuChoiHet) return { failedItems: items.map(i => ({ item_id: i.item_id, err_code: 1, err_msg: 'Shopee từ chối' })) }
+            const tc = new Set(o.tuChoiPhanLoai || [])
+            return { failedItems: items.flatMap(i => (i.models || []).filter((m: any) => tc.has(`${i.item_id}:${m.model_id}`)).map((m: any) => ({ item_id: i.item_id, model_id: m.model_id, err_code: 2, err_msg: 'phân loại bị từ chối' }))) }
         },
         async flashSaleUpdateStatus(id: number, st: number) { goi.push(`status:${id}:${st}`); const s = sales.get(id); if (s) s.status = st },
         async getItemBaseInfo(ids: number[]) {
@@ -53,6 +66,7 @@ function shopeeGia(o: {
             return ids.map(id => o.coSo![id] && { item_id: id, ...o.coSo![id] }).filter(Boolean)
         },
         async flashSaleItemCriteria() { goi.push('dieuKien'); return o.dieuKien || {} },
+        async getItemPromotion(ids: number[]) { goi.push(`km:${ids.join(',')}`); return (o.khuyenMai || []).filter((x: any) => ids.includes(x.item_id)) },
     }
 }
 
@@ -202,6 +216,120 @@ async function main() {
         dung('mã Shopee không trả ⇒ có lý do, không im lặng', /không trả thông tin/.test(k(43)?.loi || ''), k(43)?.loi)
         dung('940 − 1đ so với gốc 1000 = giảm 6,1% ⇒ đạt 5%', phanTramGiam(1000, 939) === 6.1)
         dung('bán đúng giá gốc mà −1đ ⇒ giảm 0% (Shopee từ chối)', phanTramGiam(2000, 1999) === 0)
+    }
+    // ── 3e. soát theo ĐIỀU KIỆN của gian (đo 15/10: giảm 5–90% so với giá gốc) — mã chắc chắn bị từ chối thì bỏ kèm lý do ──
+    {
+        const dieuKien = {
+            criteria: [{ criteria_id: 4, min_discount: 5, max_discount: 90, min_promo_stock: 1, max_promo_stock: 2 }],
+            pair_ids: [{ criteria_id: 4, category_list: [{ category_id: 0, name: 'All' }] }],
+        }
+        const sv = shopeeGia({
+            dieuKien,
+            coSo: {
+                51: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } },
+                52: { has_model: false, price_info: [{ original_price: 1000, current_price: 900 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } },
+                53: { has_model: true },
+            },
+            models: { 53: [{ model_id: 531, price: 1000, giaHienTai: 900, stock: 3 }, { model_id: 532, price: 1000, giaHienTai: 1000, stock: 2 }] },
+        })
+        const { shopeeItems, boQua } = await chuanBiHang(sv, [
+            { itemId: 51, name: 'Bán đúng giá gốc', price: 1000 },
+            { itemId: 52, name: 'Đang khuyến mãi', price: 900 },
+            { itemId: 53, name: 'Phân loại lẫn', price: 0 },
+        ], 0, 5, 1, true)
+        const g = (id: number) => shopeeItems.find((x: any) => x.item_id === id)
+        const ly = (ten: string) => boQua.find((b: any) => b.name === ten)
+        dung('bán đúng giá gốc mà −1đ ⇒ KHÔNG gửi, lý do "chỉ thấp hơn giá gốc 0,1% — Shopee đòi ≥ 5%"', !g(51) && /999đ chỉ thấp hơn giá gốc 1\.000đ 0,1% — Shopee đòi ≥ 5%/.test(ly('Bán đúng giá gốc')?.err_msg || ''), ly('Bán đúng giá gốc')?.err_msg)
+        dung('đang khuyến mãi: 900 − 1đ = 899 (giảm 10,1%) ⇒ gửi', g(52)?.item_input_promo_price === 899)
+        dung('tồn campaign kẹp theo tối đa của Shopee (2)', g(52)?.item_stock === 2, JSON.stringify(g(52)))
+        dung('phân loại lẫn: chỉ gửi phân loại đạt', g(53)?.models?.length === 1 && g(53)?.models?.[0]?.model_id === 531, JSON.stringify(g(53)))
+        dung('phân loại bị bỏ ghi motPhan (mã vẫn vào đợt)', ly('Phân loại lẫn')?.motPhan === true && /bỏ 1\/2 phân loại/.test(ly('Phân loại lẫn')?.err_msg || ''), ly('Phân loại lẫn')?.err_msg)
+    }
+    {
+        const sv = shopeeGia({
+            dieuKien: { criteria: [{ criteria_id: 39, min_discount: 5, max_discount: 90, min_promo_stock: 5, max_promo_stock: 10000 }], pair_ids: [{ criteria_id: 39, category_list: [{ category_id: 0 }] }] },
+            coSo: { 61: { has_model: false, price_info: [{ original_price: 1000, current_price: 800 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } } },
+        })
+        const { shopeeItems, boQua } = await chuanBiHang(sv, [{ itemId: 61, name: 'Tồn ít', price: 800 }], 0, 1, 0, true)
+        dung('tồn campaign 1 < tối thiểu 5 của Shopee ⇒ bỏ kèm lý do', !shopeeItems.length && /tồn campaign 1 < tối thiểu 5/.test(boQua[0]?.err_msg || ''), boQua[0]?.err_msg)
+    }
+    {
+        // không đọc được điều kiện ⇒ không soát (Shopee quyết)
+        const sv = shopeeGia({ coSo: { 71: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 3 } } } } })
+        ;(sv as any).flashSaleItemCriteria = async () => { throw new Error('Shopee get_item_criteria: error_server') }
+        const { shopeeItems } = await chuanBiHang(sv, [{ itemId: 71, name: 'A', price: 1000 }], 0, 5, 0, true)
+        dung('không đọc được điều kiện ⇒ vẫn gửi (không đoán thay Shopee)', shopeeItems.length === 1 && shopeeItems[0].item_input_promo_price === 999)
+    }
+    // ── 3f. KHÔNG mã nào đạt ⇒ không tạo đợt trên Shopee; lỗi chắc chắn ⇒ không thử lại; đọc hỏng ⇒ còn thử lại ──
+    {
+        const dong = planMau({ items: [{ itemId: 51, name: 'Bán đúng giá gốc', price: 1000 }] })
+        const sv = shopeeGia({
+            dieuKien: { criteria: [{ criteria_id: 4, min_discount: 5, max_discount: 90 }], pair_ids: [{ criteria_id: 4, category_list: [{ category_id: 0 }] }] },
+            coSo: { 51: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } } },
+        })
+        let loiBat: any = null
+        try { await activatePlan(prismaGia(dong), dong, {}, sv) } catch (e) { loiBat = e }
+        dung('không mã nào đạt ⇒ KHÔNG tạo đợt trên Shopee', !sv.goi.some(x => x.startsWith('create:')), sv.goi.join(' '))
+        dung('lỗi chắc chắn (giá) ⇒ LoiKhongThuLai (plan failed ngay)', loiBat instanceof LoiKhongThuLai, String(loiBat?.message).slice(0, 120))
+    }
+    {
+        const dong = planMau({ items: [{ itemId: 22, name: 'Có phân loại, đọc hỏng', price: 0 }] })
+        const sv = shopeeGia({ coSo: { 22: { has_model: true } }, modelLoi: [22] })
+        let loiBat: any = null
+        try { await activatePlan(prismaGia(dong), dong, {}, sv) } catch (e) { loiBat = e }
+        dung('hỏng vì ĐỌC (mạng/Shopee) ⇒ lỗi thường, còn thử lại', !!loiBat && !(loiBat instanceof LoiKhongThuLai), String(loiBat?.message).slice(0, 120))
+    }
+    // ── 3g. TRẦN số mã mỗi đợt (Shopee 15/10: exceed_max_item_criteria) ⇒ thêm theo lô, chia đôi, phần vượt ghi lý do ──
+    {
+        const sv = shopeeGia({ sales: [[7001, { status: 1, item_count: 0 }]], tranMa: 13 })
+        const hang = Array.from({ length: 25 }, (_, i) => ({ item_id: 100 + i, purchase_limit: 0, item_input_promo_price: 999, item_stock: 1 }))
+        const r = await themVaBat(sv, 7001, hang)
+        dung('vào đúng 13 mã (bằng trần)', r.soItem === 13 && sv.sales.get(7001)?.item_count === 13, `${r.soItem}`)
+        dung('12 mã vượt trần ghi lý do "xếp sang đợt khác"', r.failedItems.filter((f: any) => /Vượt số mã tối đa/.test(f.err_msg)).length === 12)
+        dung('báo chạm trần', r.chamTran === true)
+        dung('vẫn bật đợt với phần đã vào', sv.goi.includes('status:7001:1'))
+        dung('số lần gọi thêm hàng có chừng mực (≤ 12)', sv.goi.filter(x => x.startsWith('add:')).length <= 12, String(sv.goi.filter(x => x.startsWith('add:')).length))
+    }
+    {
+        // Shopee từ chối MỘT phân loại ⇒ mã vẫn tính là vào đợt
+        const sv = shopeeGia({ sales: [[7002, { status: 1, item_count: 0 }]], tuChoiPhanLoai: ['1:12'] })
+        const r = await themVaBat(sv, 7002, [{ item_id: 1, purchase_limit: 0, models: [{ model_id: 11, input_promo_price: 9, stock: 1 }, { model_id: 12, input_promo_price: 9, stock: 1 }] }])
+        dung('một phân loại bị từ chối ⇒ mã vẫn vào đợt', r.soItem === 1 && r.failedItems.length === 1, JSON.stringify(r))
+    }
+    // ── 3h. GIÁ ĐANG HIỂN THỊ (chủ shop 15/10: "giá là giá đang hiển thị chứ") = min(current_price, chương trình ĐANG CHẠY) ──
+    {
+        const dieuKien = { criteria: [{ criteria_id: 4, min_discount: 5, max_discount: 90 }], pair_ids: [{ criteria_id: 4, category_list: [{ category_id: 0 }] }] }
+        const ongoing = (gia: number, model_id = 0, loai = 'Discount Promotions') => ({ promotion_type: loai, model_id, promotion_staging: 'ongoing', promotion_price_info: [{ promotion_price: gia }] })
+        const sv = shopeeGia({
+            dieuKien,
+            coSo: {
+                81: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } },
+                82: { has_model: true },
+                83: { has_model: false, price_info: [{ original_price: 1000, current_price: 1000 }], stock_info_v2: { summary_info: { total_available_stock: 9 } } },
+            },
+            models: { 82: [{ model_id: 821, price: 2000, giaHienTai: 2000, stock: 3 }, { model_id: 822, price: 2000, giaHienTai: 2000, stock: 3 }] },
+            khuyenMai: [
+                { item_id: 81, promotion: [ongoing(800)] },
+                { item_id: 82, promotion: [ongoing(1500, 821)] },
+                // sắp chạy + chính flash sale ⇒ KHÔNG tính là giá hiển thị
+                { item_id: 83, promotion: [{ ...ongoing(500), promotion_staging: 'upcoming' }, ongoing(400, 0, 'In ShopFlash Sale')] },
+            ],
+        })
+        const { shopeeItems, boQua } = await chuanBiHang(sv, [
+            { itemId: 81, name: 'KM không vào current', price: 1000 },
+            { itemId: 82, name: 'KM một phân loại', price: 0 },
+            { itemId: 83, name: 'Chỉ có KM sắp chạy', price: 1000 },
+        ], 0, 5, 0, true)
+        const g = (id: number) => shopeeItems.find((x: any) => x.item_id === id)
+        const ly = (ten: string) => boQua.find((b: any) => b.name === ten)
+        dung('giá hiển thị 800 (chương trình đang chạy) − 1đ = 799, không phải 1000 − 1đ', g(81)?.item_input_promo_price === 799, JSON.stringify(g(81)))
+        dung('phân loại có KM đang chạy: 1500 − 1đ = 1499 ⇒ đạt; phân loại bán giá gốc bị bỏ', g(82)?.models?.length === 1 && g(82)?.models?.[0]?.input_promo_price === 1499, JSON.stringify(g(82)))
+        dung('phân loại bán giá gốc ghi motPhan', ly('KM một phân loại')?.motPhan === true)
+        dung('KM sắp chạy / chính flash sale KHÔNG tính ⇒ 999 không đạt 5%', !g(83) && /Shopee đòi ≥ 5%/.test(ly('Chỉ có KM sắp chạy')?.err_msg || ''), ly('Chỉ có KM sắp chạy')?.err_msg)
+        const kq = await kiemGiaFlashSale(sv, [81, 82])
+        const k81 = kq.find(x => x.itemId === 81), k82 = kq.find(x => x.itemId === 82)
+        dung('soát giá trả giá hiển thị 800 + tên chương trình', k81?.giaDangBan === 800 && k81?.khuyenMai === 'Discount Promotions', JSON.stringify(k81))
+        dung('soát giá từng phân loại theo chương trình', k82?.phanLoai.map(p => p.giaDangBan).join() === '1500,2000', JSON.stringify(k82?.phanLoai))
     }
     // ── 4. đường thường: tạo → ghi id NGAY → thêm hàng → bật → active ──
     {

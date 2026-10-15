@@ -1,7 +1,7 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { ensureFlashSaleTable, shopeeServiceFromChannel } from '../routes/flashSales'
-import { tonSanPham } from '../lib/flashSaleKiemGia'
+import { tonSanPham, docDieuKienTheoNganh, phanTramGiam, docGiaKhuyenMai, giaHienThi, type DieuKienFlashSale, type GiaKhuyenMai } from '../lib/flashSaleKiemGia'
 
 /**
  * FLASH SALE SCHEDULER — chạy ngầm mỗi 3 phút, đảm bảo TUẦN TỰ:
@@ -61,6 +61,11 @@ async function activatePlan(prisma: any, plan: any, channel: any, service: any =
         }
     }
 
+    /* CHUẨN BỊ TRƯỚC KHI TẠO ĐỢT (15/10/2026): đọc giá/tồn sống + điều kiện flash sale của gian; không mã nào đạt ⇒ báo lỗi
+     * ngay, KHÔNG tạo đợt trên Shopee (bản trước tạo đợt rồi mới biết hỏng ⇒ mỗi lượt thử tạo + xoá một đợt vô ích). */
+    const { shopeeItems, boQua } = await chuanBiHang(service, items, pct, stockPer, limit, plan.kieuGia === 'tru-1d')
+    if (!shopeeItems.length) throw loiKhongMaNao(boQua)
+
     const flashSaleId = await service.flashSaleCreate(Number(plan.timeslotId))
     /* Ghi NGAY id đợt vừa tạo: đứt ở bất kỳ bước nào sau đây thì lượt thử lại biết mà dọn / nhận lại (khối trên).
      * Không còn ở 'dang_kich_hoat' (chủ shop huỷ đúng lúc máy đang đẩy) ⇒ xoá đợt vừa tạo, dừng. */
@@ -75,8 +80,12 @@ async function activatePlan(prisma: any, plan: any, channel: any, service: any =
      * để lại thì Shopee giữ một đợt rỗng, lượt thử lại tạo thêm đợt rỗng nữa. */
     let failedItems: any[] = []
     let soItem = 0
+    let chamTran = false
     try {
-        ;({ failedItems, soItem } = await napVaBat(service, flashSaleId, items, pct, stockPer, limit, plan.kieuGia === 'tru-1d'))
+        const r = await themVaBat(service, flashSaleId, shopeeItems)
+        failedItems = [...boQua, ...r.failedItems]
+        soItem = r.soItem
+        chamTran = r.chamTran
     } catch (e) {
         let daXoa = false
         try { await service.flashSaleDelete(flashSaleId); daXoa = true } catch { /* đợt đã bật/đang chạy thì không xoá được */ }
@@ -98,23 +107,49 @@ async function activatePlan(prisma: any, plan: any, channel: any, service: any =
         console.warn(`[FlashSale] Plan ${plan.id} bị huỷ trong lúc đang đẩy — đã tắt + xoá đợt Shopee #${flashSaleId}`)
         return
     }
-    console.log(`[FlashSale] Kích hoạt "${plan.title}" (${plan.id}) → Shopee #${flashSaleId}, ${soItem} item gửi lên (${failedItems.length} dòng không vào đợt — bỏ qua hoặc Shopee từ chối)`)
+    console.log(`[FlashSale] Kích hoạt "${plan.title}" (${plan.id}) → Shopee #${flashSaleId}, ${soItem}/${shopeeItems.length} mã vào đợt` +
+        ` (${failedItems.length} dòng không vào — bỏ qua hoặc Shopee từ chối)${chamTran ? ` — CHẠM TRẦN số mã/đợt của Shopee ở ${soItem} mã` : ''}`)
 }
 
-/** Lấy model từng item, thêm item vào đợt, bật đợt. Ném lỗi để activatePlan xoá đợt rỗng. */
-async function napVaBat(service: any, flashSaleId: number, items: any[], pct: number, stockPer: number, limit: number, tru1d = false): Promise<{ failedItems: any[]; soItem: number }> {
-    // Build payload từng item: cần model list để đặt giá/tồn theo model.
+/** Lỗi chắc chắn (giá/tồn không đạt điều kiện Shopee) — thử lại cũng vậy ⇒ plan 'failed' ngay, khỏi đọc Shopee thêm 2 lượt. */
+class LoiKhongThuLai extends Error {}
+
+const loiKhongMaNao = (boQua: any[]) => {
+    const ds = boQua.filter(b => !b.motPhan)
+    const thongBao = `Không có mã nào gửi được: ${ds.slice(0, 5).map(b => `${b.name || b.item_id} — ${b.err_msg}`).join(' · ')}` +
+        `${ds.length > 5 ? ` · …(+${ds.length - 5} mã)` : ''}`
+    // Có mã hỏng vì ĐỌC không được (mạng, Shopee lỗi) ⇒ còn hy vọng ở lượt sau; toàn lý do giá/tồn ⇒ dừng luôn
+    const docHong = ds.some(b => /^Không đọc được|không trả/i.test(String(b.err_msg || '')))
+    return docHong ? new Error(thongBao.slice(0, 600)) : new LoiKhongThuLai(thongBao.slice(0, 600))
+}
+
+/* ─── BƯỚC 1 · CHUẨN BỊ — chỉ ĐỌC Shopee, chưa đụng đợt nào ──────────────────────────────────────────────────────── */
+/** Dựng payload từng mã từ giá + tồn SỐNG và điều kiện flash sale của gian. Mã/phân loại không gửi được ⇒ `boQua` kèm lý do. */
+async function chuanBiHang(service: any, items: any[], pct: number, stockPer: number, limit: number, tru1d = false): Promise<{ shopeeItems: any[]; boQua: any[] }> {
     const shopeeItems: any[] = []
     /* Mã KHÔNG gửi lên Shopee + lý do (15/10/2026). Trước đây bỏ im lặng ⇒ chủ shop chọn 30 mã, đợt chỉ có 22 mà không ai biết
-     * vì sao. Nay gộp vào failedItems (cùng dạng err_msg với mã Shopee từ chối) để tab Hàng đợi hiện ra. */
+     * vì sao. Nay gộp vào failedItems (cùng dạng err_msg với mã Shopee từ chối) để tab Hàng đợi hiện ra.
+     * `motPhan: true` = mã vẫn vào đợt, chỉ bỏ bớt vài phân loại. */
     const boQua: any[] = []
     /* Giá + tồn SỐNG trên Shopee lúc đẩy (15/10/2026): plan nằm hàng đợi hàng giờ, giá đang bán có thể đã đổi — số FE gửi lúc
-     * xếp chỉ là dự phòng khi Shopee không trả. `has_model` cho biết CHẮC mã có phân loại không (khỏi đoán khi get_model_list lỗi). */
+     * xếp chỉ là dự phòng khi Shopee không trả. `has_model` cho biết CHẮC mã có phân loại không (khỏi đoán khi get_model_list lỗi).
+     * (Đo 15/10: tồn đồng bộ OnlineProduct.stock = 0 cho cả 50 mã Kengi Electric trong khi 24 mã còn hàng — đừng tin số FE gửi.) */
     const coSo = new Map<number, any>()
     const ids = [...new Set(items.map(it => Number(it.itemId)).filter(n => n > 0))]
     for (let i = 0; i < ids.length; i += 50) {
         try { for (const x of await service.getItemBaseInfo(ids.slice(i, i + 50))) coSo.set(Number(x.item_id), x) } catch { /* thiếu thì dùng số FE gửi */ }
     }
+    /* ĐIỀU KIỆN FLASH SALE của gian (get_item_criteria): giảm tối thiểu/tối đa so với GIÁ GỐC + tồn campaign, theo ngành. Đo
+     * 15/10 cả 3 gian: giảm 5–90%. Soát ở đây ⇒ mã chắc chắn bị từ chối thì bỏ kèm lý do, không tạo đợt hỏng trên Shopee (lần
+     * đẩy thật đầu tiên — Kengi Electric — 24/24 mã còn hàng bán đúng giá gốc ⇒ −1đ = giảm 0%). Không đọc được điều kiện ⇒
+     * không soát, để Shopee quyết. */
+    let theoNganh: Map<number, DieuKienFlashSale> | null = null
+    try { theoNganh = await docDieuKienTheoNganh(service) } catch { theoNganh = null }
+    /* "Giá là giá đang hiển thị" (chủ shop 15/10/2026): −1đ tính từ giá người mua đang thấy = min(current_price, giá chương
+     * trình ĐANG CHẠY trên mã/phân loại). Không đọc được chương trình ⇒ dùng current_price. */
+    let km: Map<string, GiaKhuyenMai> | null = null
+    if (tru1d) { try { km = await docGiaKhuyenMai(service, ids) } catch { km = null } }
+
     for (const it of items) {
         const itemId = Number(it.itemId)
         if (!itemId) { boQua.push({ item_id: it.itemId ?? null, name: it.name, err_msg: 'Thiếu mã sản phẩm trên sàn' }); continue }
@@ -127,8 +162,7 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
             return roundPrice(raw)
         }
         /* "Giá đang bán − 1đ" (chủ shop 15/10/2026): giá ĐANG BÁN của từng phân loại trừ đúng 1đ — không làm tròn trăm, không
-         * ép ≤95% giá gốc. Giá điền tay thì dùng y nguyên nếu thấp hơn giá đang bán. Shopee không nhận (mức giảm so với giá gốc
-         * ngoài khoảng sàn cho phép…) thì nằm trong failedItems kèm lý do của Shopee — không đoán thay. */
+         * ép ≤95% giá gốc. Giá điền tay thì dùng y nguyên nếu thấp hơn giá đang bán. */
         const giaTru1d = (dangBan: number) => Math.max(1, override > 0 && override < dangBan ? Math.round(override) : Math.round(dangBan) - 1)
         let models: { model_id: number; price: number; giaHienTai?: number; stock: number }[] = []
         // Đọc phân loại hỏng ≠ không có phân loại: giữ lời Shopee để nếu bước sau phải bỏ mã thì nói đúng lý do
@@ -138,24 +172,44 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
         if (coPhanLoai !== false) {
             try { models = await service.getModelList(itemId) } catch (e: any) { loiPhanLoai = String(e?.message || e).slice(0, 160) }
         }
+        const dk = theoNganh ? (theoNganh.get(Number(cs?.category_id)) ?? theoNganh.get(0) ?? null) : null
+        /** Lý do một mức giá/tồn không đạt điều kiện của gian (null = đạt) */
+        const khongDat = (goc: number, gia: number, ton: number): string | null => {
+            if (!dk) return null
+            const g = phanTramGiam(goc, gia)
+            const pt = String(g).replace('.', ',')
+            if (g < dk.giamToiThieu) return `giá flash sale ${Math.round(gia).toLocaleString('vi-VN')}đ chỉ thấp hơn giá gốc ${Math.round(goc).toLocaleString('vi-VN')}đ ${pt}% — Shopee đòi ≥ ${dk.giamToiThieu}%`
+            if (g > dk.giamToiDa) return `giảm ${pt}% so với giá gốc — Shopee cho tối đa ${dk.giamToiDa}%`
+            if (ton < dk.tonToiThieu) return `tồn campaign ${ton} < tối thiểu ${dk.tonToiThieu} của Shopee`
+            return null
+        }
+        const kepTon = (ton: number) => dk && dk.tonToiDa > 0 ? Math.min(ton, dk.tonToiDa) : ton
         // purchase_limit là trường BẮT BUỘC theo tài liệu (0 = không giới hạn) — bản đầu bỏ trống khi 0
         const entry: any = { item_id: itemId, purchase_limit: limit }
         if (models.length > 0) {
-            entry.models = models
-                .filter(m => m.stock > 0 && m.price > 0)
-                .map(m => ({
-                    model_id: m.model_id,
-                    input_promo_price: tru1d ? giaTru1d(Number(m.giaHienTai) || m.price) : promoFor(m.price),
-                    stock: Math.min(m.stock, stockPer),
-                }))
-            if (entry.models.length === 0) { boQua.push({ item_id: itemId, name: it.name, err_msg: 'Hết tồn ở mọi phân loại (hoặc phân loại chưa có giá)' }); continue }
+            const coTon = models.filter(m => m.stock > 0 && m.price > 0)
+            if (!coTon.length) { boQua.push({ item_id: itemId, name: it.name, err_msg: 'Hết tồn ở mọi phân loại (hoặc phân loại chưa có giá)' }); continue }
+            const dat: any[] = [], lyDo: string[] = []
+            for (const m of coTon) {
+                const gia = tru1d ? giaTru1d(giaHienThi(km, itemId, Number(m.model_id), Number(m.giaHienTai) || m.price).gia) : promoFor(m.price)
+                const ton = kepTon(Math.min(m.stock, stockPer))
+                const ld = khongDat(m.price, gia, ton)
+                if (ld) { lyDo.push(ld); continue }
+                dat.push({ model_id: m.model_id, input_promo_price: gia, stock: ton })
+            }
+            if (!dat.length) { boQua.push({ item_id: itemId, name: it.name, err_msg: coTon.length > 1 ? `${coTon.length} phân loại: ${lyDo[0]}` : lyDo[0] }); continue }
+            if (dat.length < coTon.length) {
+                boQua.push({ item_id: itemId, name: it.name, motPhan: true, err_msg: `bỏ ${coTon.length - dat.length}/${coTon.length} phân loại: ${lyDo[0]}` })
+            }
+            entry.models = dat
         } else if (coPhanLoai === true) {
             // Chắc chắn có phân loại mà không đọc được ⇒ đừng gửi như hàng không phân loại (Shopee từ chối, lại sai giá)
             boQua.push({ item_id: itemId, name: it.name, err_msg: loiPhanLoai ? `Không đọc được phân loại: ${loiPhanLoai}` : 'Mã có phân loại nhưng Shopee không trả phân loại nào' })
             continue
         } else {
             const pi = cs?.price_info?.[0]
-            const base = Number(pi?.current_price) || Number(it.price) || 0   // giá ĐANG BÁN sống; dự phòng số FE gửi lúc xếp
+            // giá ĐANG HIỂN THỊ sống (min current_price, chương trình đang chạy); dự phòng số FE gửi lúc xếp
+            const base = giaHienThi(km, itemId, 0, Number(pi?.current_price) || Number(it.price) || 0).gia
             const goc = Number(pi?.original_price) || Number(it.giaGoc) || base
             if (base <= 0) {
                 boQua.push({ item_id: itemId, name: it.name, err_msg: loiPhanLoai ? `Không đọc được phân loại: ${loiPhanLoai}` : 'Chưa có giá đang bán (đồng bộ lại sản phẩm)' })
@@ -164,26 +218,72 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
             /* HÀNG KHÔNG PHÂN LOẠI (đọc tài liệu add_shop_flash_sale_items 15/10/2026, mục "Support single item" 2025-01-10):
              * giá + tồn đặt ở CẤP SẢN PHẨM — `item_input_promo_price` + `item_stock` — và KHÔNG gửi `models`. Bản đầu gửi
              * `models: [{ model_id: 0 }]` ⇒ Shopee trả "item-model invalid" cho mọi mã không phân loại (đợt thử 14/07 ra 0 item).
-             * tru1d: FE gửi `price` = giá đang bán; %: giá gốc ở `giaGoc` (bản cũ gửi giá gốc ở `price`).
-             * Tồn: FE gửi tồn trên sàn lúc chọn (`ton`) ⇒ không xin quá số đang có; thiếu thì Shopee báo trong failedItems. */
+             * tru1d: chuẩn là giá đang bán; %: giá gốc. */
             const ton = cs ? tonSanPham(cs) : (Number(it.ton) || 0)
             if (cs && ton <= 0) { boQua.push({ item_id: itemId, name: it.name, err_msg: 'Hết tồn trên sàn' }); continue }
-            entry.item_input_promo_price = tru1d ? giaTru1d(base) : promoFor(goc)
-            entry.item_stock = Math.max(1, ton > 0 ? Math.min(ton, stockPer) : stockPer)
+            const gia = tru1d ? giaTru1d(base) : promoFor(goc)
+            const tonGui = kepTon(Math.max(1, ton > 0 ? Math.min(ton, stockPer) : stockPer))
+            const ld = khongDat(goc, gia, tonGui)
+            if (ld) { boQua.push({ item_id: itemId, name: it.name, err_msg: ld }); continue }
+            entry.item_input_promo_price = gia
+            entry.item_stock = tonGui
         }
         shopeeItems.push(entry)
     }
-    if (shopeeItems.length === 0) {
-        throw new Error(`Không có mã nào gửi được: ${boQua.slice(0, 5).map(b => `${b.name || b.item_id} — ${b.err_msg}`).join(' · ')}`.slice(0, 600))
-    }
+    return { shopeeItems, boQua }
+}
 
-    const { failedItems } = await service.flashSaleAddItems(flashSaleId, shopeeItems)
-    if (failedItems.length >= shopeeItems.length) {
-        // Toàn bộ bị từ chối → activatePlan xoá sale rỗng cho sạch, báo lỗi
-        throw new Error(`Shopee từ chối toàn bộ ${failedItems.length} item: ${JSON.stringify(failedItems).slice(0, 400)}`)
+/* ─── BƯỚC 2 · THÊM HÀNG + BẬT ĐỢT ─────────────────────────────────────────────────────────────────────────────────── */
+/* TRẦN SỐ MÃ MỖI ĐỢT (15/10/2026): lần đẩy thật đầu tiên (Kengi Electric, ≤ 24 mã còn hàng gửi một lượt) Shopee trả
+ * `shop_flash_sale_exceed_max_item_criteria — exceed the max number of item limit per promotion`; tài liệu chỉ ghi "bật tối đa
+ * 50 mã", get_item_criteria / get_time_slot_id không khai trần nào ⇒ thêm THEO LÔ, lô nào vượt trần thì chia đôi thử tiếp; mã
+ * không thêm được vì trần ⇒ failedItems "vượt số mã tối đa — xếp sang đợt khác". Log ghi số mã vào được = trần thật. */
+const LO_THEM = 10
+async function themVaBat(service: any, flashSaleId: number, shopeeItems: any[]): Promise<{ failedItems: any[]; soItem: number; chamTran: boolean }> {
+    const failedItems: any[] = []
+    const daThem: any[] = []
+    let chamTran = false, tranLienTiep = 0
+    const vuotTran = (x: any) => ({ item_id: x.item_id, err_msg: 'Vượt số mã tối đa Shopee cho một đợt — xếp mã này sang đợt khác' })
+    const them = async (lo: any[]): Promise<void> => {
+        if (!lo.length) return
+        if (chamTran) { failedItems.push(...lo.map(vuotTran)); return }
+        try {
+            const r = await service.flashSaleAddItems(flashSaleId, lo)
+            failedItems.push(...(r?.failedItems || []))
+            daThem.push(...lo)
+            tranLienTiep = 0
+        } catch (e: any) {
+            if (!/exceed_max_item/i.test(String(e?.message || e))) throw e
+            if (lo.length === 1) {
+                failedItems.push(vuotTran(lo[0]))
+                if (++tranLienTiep >= 2) chamTran = true   // hai mã lẻ liền nhau cũng vượt ⇒ đã chạm trần, khỏi thử từng mã
+                return
+            }
+            const giua = Math.ceil(lo.length / 2)
+            await them(lo.slice(0, giua))
+            await them(lo.slice(giua))
+        }
     }
-    await service.flashSaleUpdateStatus(flashSaleId, 1) // enable
-    return { failedItems: [...boQua, ...failedItems], soItem: shopeeItems.length }
+    for (let i = 0; i < shopeeItems.length; i += LO_THEM) await them(shopeeItems.slice(i, i + LO_THEM))
+    // Mã được nhận = đã thêm và còn ít nhất một phân loại (hoặc chính nó, nếu không phân loại) không nằm trong failed_items
+    const hongPhanLoai = new Set(failedItems.filter(f => f?.model_id).map(f => `${f.item_id}:${f.model_id}`))
+    const hongMa = new Set(failedItems.filter(f => !f?.model_id).map(f => String(f.item_id)))
+    const nhan = daThem.filter(x => !hongMa.has(String(x.item_id)) &&
+        (!Array.isArray(x.models) || x.models.some((m: any) => !hongPhanLoai.has(`${x.item_id}:${m.model_id}`)))).length
+    if (nhan === 0) {
+        // Toàn bộ bị từ chối → activatePlan xoá đợt rỗng cho sạch, báo lỗi
+        throw new Error(`Shopee từ chối toàn bộ ${shopeeItems.length} item: ${JSON.stringify(failedItems).slice(0, 400)}`)
+    }
+    await service.flashSaleUpdateStatus(flashSaleId, 1) // bật
+    return { failedItems, soItem: nhan, chamTran }
+}
+
+/** Chuẩn bị + thêm + bật trong một lượt (bộ kiểm chứng dùng; đường thật đi qua activatePlan để chuẩn bị TRƯỚC khi tạo đợt). */
+async function napVaBat(service: any, flashSaleId: number, items: any[], pct: number, stockPer: number, limit: number, tru1d = false): Promise<{ failedItems: any[]; soItem: number }> {
+    const { shopeeItems, boQua } = await chuanBiHang(service, items, pct, stockPer, limit, tru1d)
+    if (!shopeeItems.length) throw loiKhongMaNao(boQua)
+    const r = await themVaBat(service, flashSaleId, shopeeItems)
+    return { failedItems: [...boQua, ...r.failedItems], soItem: r.soItem }
 }
 
 async function tickStore(schema: string): Promise<void> {
@@ -236,7 +336,8 @@ async function tickStore(schema: string): Promise<void> {
             await activatePlan(prisma, plan, channel)
         } catch (e: any) {
             const attempts = (Number(plan.attempts) || 0) + 1
-            const failed = attempts >= MAX_ATTEMPTS
+            // Lỗi chắc chắn (không mã nào đạt điều kiện giá/tồn của Shopee) ⇒ dừng ngay; lỗi mạng/Shopee ⇒ thử tối đa MAX_ATTEMPTS
+            const failed = e instanceof LoiKhongThuLai || attempts >= MAX_ATTEMPTS
             // Chỉ ghi khi plan còn ở 'dang_kich_hoat' — chủ shop huỷ giữa chừng thì 'cancelled' không bị lật lại thành 'queued'
             await prisma.$executeRawUnsafe(
                 `UPDATE "FlashSalePlan" SET attempts=$1, error=$2, status=$3, "updatedAt"=now() WHERE id=$4 AND status='dang_kich_hoat'`,
@@ -296,4 +397,4 @@ export function stopFlashSaleScheduler(): void {
 }
 
 /** Chỉ cho bộ kiểm chứng scripts/check-flash-sale.ts — đường chạy thật không dùng. */
-export const _kiemThu = { activatePlan, napVaBat }
+export const _kiemThu = { activatePlan, napVaBat, chuanBiHang, themVaBat, LoiKhongThuLai }

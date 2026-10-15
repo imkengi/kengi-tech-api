@@ -1716,6 +1716,16 @@ export class ShopeeService extends PlatformService {
         return data.response?.item_list || []
     }
 
+    /** get_item_promotion ≤ 50 mã: chương trình đang/sắp chạy trên từng mã/phân loại (promotion_type, promotion_price_info,
+     *  promotion_staging ongoing|upcoming, model_id). Trả success_list. */
+    async getItemPromotion(itemIds: number[]): Promise<any[]> {
+        const ids = itemIds.slice(0, 50)
+        if (!ids.length) return []
+        const data = await this.httpGet(`${this.apiUrl('/api/v2/product/get_item_promotion')}&item_id_list=${ids.join(',')}`)
+        if (data.error) throw new Error(`Shopee get_item_promotion: ${data.error} - ${data.message}`)
+        return data.response?.success_list || []
+    }
+
     /** Điều kiện flash sale của gian theo ngành (min_discount %, need_lowest_price, giới hạn tồn…) + ngành áp dụng. Trả nguyên response. */
     async flashSaleItemCriteria(): Promise<any> {
         const data = await this.httpGet(this.apiUrl('/api/v2/shop_flash_sale/get_item_criteria'))
