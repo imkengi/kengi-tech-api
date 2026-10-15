@@ -5486,6 +5486,84 @@ router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── KHÁCH YÊU CẦU HOÁ ĐƠN TRÊN SHOPEE (chỉ đọc) — GET /admin/do-hoa-don-khach-shopee?store=KENGISTORE&ngay=30&soDon=300 ──
+ * (15/10/2026, chủ shop: "xem phần khách yêu cầu hoá đơn có webhook không, mỗi lần khách nhắn rồi sửa hoá đơn cực"). Shopee KHÔNG
+ * có push cho yêu cầu hoá đơn (29 loại push) ⇒ tự động = hỏi get_buyer_invoice_info theo lô. Đo trong soDon đơn Shopee gần nhất
+ * mỗi gian: bao nhiêu đơn khách khai thông tin HĐ, đã vào phiếu chưa (vatBuyerInfo), HĐ đã xuất THIẾU thông tin (phải thay thế),
+ * bị Shopee che (A****b) theo trạng thái đơn. CHỈ trả số đếm + mã đơn mẫu — không trả tên/MST/CCCD của khách. */
+router.get('/do-hoa-don-khach-shopee', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } as any }) as any
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const ngay = Math.min(90, Math.max(1, Number(req.query.ngay) || 30))
+        const soDon = Math.min(1000, Math.max(1, Number(req.query.soDon) || 300))
+        const lo = Math.min(100, Math.max(1, Number(req.query.lo) || 50))
+        const { shopeeServiceTokenMoi } = await import('./flashSales')
+        const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { name: 'asc' } })
+        const ra: any = { cuaHang: st.code, ngay, soDonToiDa: soDon, lo, gian: [] }
+        const maDon = (d: any) => String(d.externalOrderId || d.orderNumber || '').replace(/^SPE-/i, '')
+        for (const c of kenh) {
+            const o: any = { gian: c.name, coToken: !!c.accessToken }
+            ra.gian.push(o)
+            if (!c.accessToken || c.status === 'inactive') continue
+            const dons: any[] = await sp.onlineOrder.findMany({
+                where: { channelId: c.id, createdAt: { gte: new Date(Date.now() - ngay * 86400_000) } },
+                orderBy: { createdAt: 'desc' }, take: soDon,
+                select: { orderNumber: true, externalOrderId: true, status: true },
+            })
+            const svc: any = await shopeeServiceTokenMoi(sp, c)
+            const thongTin = new Map<string, any>()
+            const loiLo: string[] = []
+            const loiDong: Record<string, number> = {}
+            let daHoi = 0
+            for (let i = 0; i < dons.length; i += lo) {
+                const sns = dons.slice(i, i + lo).map(maDon).filter(Boolean)
+                try {
+                    const r = await svc.getBuyerInvoiceInfoBatch(sns)
+                    daHoi += sns.length
+                    for (const [k, v] of r.thongTin) thongTin.set(k, v)
+                    for (const [k, n] of Object.entries(r.loiDong)) loiDong[k] = (loiDong[k] || 0) + (n as number)
+                } catch (e: any) { loiLo.push(String(e?.message || e).slice(0, 200)); if (loiLo.length >= 3) break }
+            }
+            const theoLoai: Record<string, number> = {}
+            const cheTheoTrangThai: Record<string, string> = {}
+            let coKhai = 0, biChe = 0, daCoTrenPhieu = 0, chuaXuat = 0, daXuat = 0, xuatThieu = 0, khongPhieu = 0
+            const mauThieu: any[] = []
+            for (const d of dons) {
+                const v = thongTin.get(maDon(d))
+                if (!v) continue
+                coKhai++
+                theoLoai[v.invoiceType || '?'] = (theoLoai[v.invoiceType || '?'] || 0) + 1
+                const che = /\*{2,}/.test([v.name, v.taxId, v.companyName, v.companyTaxId, v.address, v.companyAddress, v.email, v.companyEmail, v.nationalId].filter(Boolean).join('|'))
+                if (che) biChe++
+                const tt = String(d.status || '?')
+                const [a, b] = (cheTheoTrangThai[tt] || '0/0').split('/').map(Number)
+                cheTheoTrangThai[tt] = `${a + (che ? 1 : 0)}/${b + 1}`
+                const tx = await sp.transaction.findFirst({ where: { receiptNumber: { in: [`ONLINE-${d.orderNumber}`, d.orderNumber] } }, select: { id: true, vatBuyerInfo: true } })
+                if (!tx) { khongPhieu++; continue }
+                if (tx.vatBuyerInfo) daCoTrenPhieu++
+                const hd = await sp.eInvoice.findFirst({
+                    where: { transactionId: tx.id, status: { in: ['ISSUING', 'issued', 'SIGNED', 'SENT'] } },
+                    select: { buyerTaxCode: true, buyerName: true },
+                })
+                if (!hd) { chuaXuat++; continue }
+                daXuat++
+                const mst = String((v.invoiceType === 'company' ? v.companyTaxId : v.taxId) || '').replace(/\D/g, '')
+                const thieu = mst
+                    ? String(hd.buyerTaxCode || '').replace(/\D/g, '') !== mst
+                    : (!hd.buyerName || /khách lẻ|không lấy|người mua/i.test(String(hd.buyerName)))
+                if (thieu) { xuatThieu++; if (mauThieu.length < 8) mauThieu.push({ don: d.orderNumber, loai: v.invoiceType, trangThai: d.status, coMst: !!mst, coPhieuThongTin: !!tx.vatBuyerInfo }) }
+            }
+            o.kq = { soDon: dons.length, daHoi, coKhai, theoLoai, biChe, cheTheoTrangThai, khongPhieu, daCoTrenPhieu, chuaXuat, daXuat, xuatThieuThongTin: xuatThieu, mauThieu, loiDong, loiLo }
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── FLASH SALE CÓ CHẠY KHÔNG (chỉ đọc) — GET /admin/do-flash-sale?store=KENGISTORE (15/10/2026) ──
  * Chủ shop: "check xem flash sale đã hoạt động chưa". Log 30 ngày: bộ hẹn giờ chạy nhưng báo lỗi kết nối CSDL chập chờn,
  * KHÔNG có lần kích hoạt nào, không ai gọi /api/flash-sales. Đo: hàng đợi FlashSalePlan (đếm theo trạng thái + 10 plan mới

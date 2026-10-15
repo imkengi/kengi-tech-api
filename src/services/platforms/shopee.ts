@@ -580,7 +580,35 @@ export class ShopeeService extends PlatformService {
         const url = this.apiUrl('/api/v2/order/get_buyer_invoice_info')
         const data = await this.httpPost(url, { queries: [{ order_sn: orderSn }] })
         if (data?.error) throw new Error(`Shopee ${data.error}: ${data.message || ''}`)
-        const row = data?.invoice_info_list?.[0]
+        return this.docDongHoaDonKhach(data?.invoice_info_list?.[0])
+    }
+
+    /**
+     * Như getBuyerInvoiceInfo nhưng hỏi NHIỀU đơn một lượt (queries[]) — Shopee KHÔNG có push cho yêu cầu hoá đơn (đọc 29 loại
+     * push 15/10/2026), get_pending_buyer_invoice_order_list chỉ cho PH/BR ⇒ muốn tự động phải hỏi theo lô. `loiDong` đếm lỗi
+     * từng dòng (vd đơn khách không khai) để đo, không nuốt.
+     */
+    async getBuyerInvoiceInfoBatch(orderSns: string[]): Promise<{ thongTin: Map<string, NonNullable<Awaited<ReturnType<ShopeeService['getBuyerInvoiceInfo']>>> | null>; loiDong: Record<string, number> }> {
+        const url = this.apiUrl('/api/v2/order/get_buyer_invoice_info')
+        const data = await this.httpPost(url, { queries: orderSns.map(sn => ({ order_sn: sn })) })
+        if (data?.error) throw new Error(`Shopee ${data.error}: ${data.message || ''}`)
+        const thongTin = new Map<string, any>()
+        const loiDong: Record<string, number> = {}
+        for (const row of (data?.invoice_info_list || [])) {
+            if (row?.error) loiDong[String(row.error)] = (loiDong[String(row.error)] || 0) + 1
+            thongTin.set(String(row?.order_sn || ''), this.docDongHoaDonKhach(row))
+        }
+        return { thongTin, loiDong }
+    }
+
+    /** Một dòng invoice_info_list → thông tin xuất HĐ (null = khách không khai / Shopee báo lỗi dòng) */
+    private docDongHoaDonKhach(row: any): {
+        invoiceType: string
+        name?: string; email?: string; phone?: string; taxId?: string; address?: string
+        nationalId?: string
+        companyName?: string; companyTaxId?: string; companyAddress?: string; companyEmail?: string
+        raw: any
+    } | null {
         if (!row || row.error || !row.invoice_detail) return null
         const d = row.invoice_detail || {}
         const t = String(row.invoice_type || '').toLowerCase()
