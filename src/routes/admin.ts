@@ -5529,6 +5529,10 @@ router.get('/do-hoa-don-khach-shopee', async (req: Request, res: Response) => {
             }
             const theoLoai: Record<string, number> = {}
             const cheTheoTrangThai: Record<string, string> = {}
+            /* Từng TRƯỜNG theo loại HĐ: có giá trị / bị che (A****b) — đo 15/10 lần 1: 310/310 HĐ cá nhân bị che ⇒ cần biết trường
+             * nào còn dùng được (tên? email? CCCD?) trước khi tự động. Chỉ đếm. */
+            const theoTruong: Record<string, Record<string, string>> = {}
+            const TRUONG = ['name', 'email', 'taxId', 'address', 'nationalId', 'companyName', 'companyTaxId', 'companyAddress', 'companyEmail']
             let coKhai = 0, biChe = 0, daCoTrenPhieu = 0, chuaXuat = 0, daXuat = 0, xuatThieu = 0, khongPhieu = 0
             const mauThieu: any[] = []
             for (const d of dons) {
@@ -5537,6 +5541,12 @@ router.get('/do-hoa-don-khach-shopee', async (req: Request, res: Response) => {
                 coKhai++
                 theoLoai[v.invoiceType || '?'] = (theoLoai[v.invoiceType || '?'] || 0) + 1
                 const che = /\*{2,}/.test([v.name, v.taxId, v.companyName, v.companyTaxId, v.address, v.companyAddress, v.email, v.companyEmail, v.nationalId].filter(Boolean).join('|'))
+                const bang = (theoTruong[v.invoiceType || '?'] ||= {})
+                for (const t of TRUONG) {
+                    const gt = String((v as any)[t] || '')
+                    const [coGt, biCheT] = (bang[t] || '0/0').split('/').map(Number)
+                    bang[t] = `${coGt + (gt ? 1 : 0)}/${biCheT + (/\*{2,}/.test(gt) ? 1 : 0)}`
+                }
                 if (che) biChe++
                 const tt = String(d.status || '?')
                 const [a, b] = (cheTheoTrangThai[tt] || '0/0').split('/').map(Number)
@@ -5556,7 +5566,7 @@ router.get('/do-hoa-don-khach-shopee', async (req: Request, res: Response) => {
                     : (!hd.buyerName || /khách lẻ|không lấy|người mua/i.test(String(hd.buyerName)))
                 if (thieu) { xuatThieu++; if (mauThieu.length < 8) mauThieu.push({ don: d.orderNumber, loai: v.invoiceType, trangThai: d.status, coMst: !!mst, coPhieuThongTin: !!tx.vatBuyerInfo }) }
             }
-            o.kq = { soDon: dons.length, daHoi, coKhai, theoLoai, biChe, cheTheoTrangThai, khongPhieu, daCoTrenPhieu, chuaXuat, daXuat, xuatThieuThongTin: xuatThieu, mauThieu, loiDong, loiLo }
+            o.kq = { soDon: dons.length, daHoi, coKhai, theoLoai, biChe, cheTheoTrangThai, theoTruong_coGiaTri_biChe: theoTruong, khongPhieu, daCoTrenPhieu, chuaXuat, daXuat, xuatThieuThongTin: xuatThieu, mauThieu, loiDong, loiLo }
         }
         res.json({ success: true, data: ra })
     } catch (err: any) {
