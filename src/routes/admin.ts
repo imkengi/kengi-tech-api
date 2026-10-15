@@ -5486,6 +5486,56 @@ router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── FLASH SALE CÓ CHẠY KHÔNG (chỉ đọc) — GET /admin/do-flash-sale?store=KENGISTORE (15/10/2026) ──
+ * Chủ shop: "check xem flash sale đã hoạt động chưa". Log 30 ngày: bộ hẹn giờ chạy nhưng báo lỗi kết nối CSDL chập chờn,
+ * KHÔNG có lần kích hoạt nào, không ai gọi /api/flash-sales. Đo: hàng đợi FlashSalePlan (đếm theo trạng thái + 10 plan mới
+ * nhất), cờ hasOnlineChannels (cron chỉ quét cửa hàng có cờ), và hỏi Shopee từng gian: khung giờ đăng ký được 3 ngày tới +
+ * danh sách flash sale hiện có (biết app có quyền Marketing không, chủ shop có tạo tay trên Seller Center không). Chỉ GET. */
+router.get('/do-flash-sale', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true, hasOnlineChannels: true } as any }) as any
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const vn = (d: any) => d ? new Date(new Date(d).getTime() + 7 * 3600_000).toISOString().replace('T', ' ').slice(0, 16) : null
+        const ra: any = { cuaHang: st.code, hasOnlineChannels: st.hasOnlineChannels ?? null }
+        try {
+            const dem: any[] = await sp.$queryRawUnsafe(`SELECT status, count(*)::int AS so, max("updatedAt") AS "capNhat" FROM "FlashSalePlan" GROUP BY status`)
+            ra.hangDoi = dem.map(d => ({ status: d.status, so: d.so, capNhat: vn(d.capNhat) }))
+            const moi: any[] = await sp.$queryRawUnsafe(`SELECT id, "channelId", title, status, "startTime", "endTime", attempts, error, "shopeeFlashSaleId",
+                jsonb_array_length(coalesce(items, '[]'::jsonb)) AS "soItem", jsonb_array_length(coalesce("failedItems", '[]'::jsonb)) AS "soTuChoi", "createdAt", "updatedAt"
+                FROM "FlashSalePlan" ORDER BY "createdAt" DESC LIMIT 10`)
+            ra.planMoiNhat = moi.map(m => ({ ...m, shopeeFlashSaleId: m.shopeeFlashSaleId != null ? String(m.shopeeFlashSaleId) : null,
+                startTime: vn(m.startTime), endTime: vn(m.endTime), createdAt: vn(m.createdAt), updatedAt: vn(m.updatedAt) }))
+        } catch (e: any) { ra.hangDoi = 'chưa có bảng FlashSalePlan: ' + String(e?.message || e).slice(0, 120) }
+        const { shopeeServiceFromChannel } = await import('./flashSales')
+        const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { name: 'asc' } })
+        ra.gian = []
+        const now = Math.floor(Date.now() / 1000)
+        for (const c of kenh) {
+            const o: any = { gian: c.name, shopId: c.shopId, trangThai: c.status, coToken: !!c.accessToken }
+            if (c.accessToken && c.status !== 'inactive') {
+                const svc = shopeeServiceFromChannel(c)
+                try {
+                    const ds = await svc.flashSaleGetTimeSlots(now, now + 3 * 86400)
+                    o.khungGio3Ngay = { so: ds.length, mau: ds.slice(0, 4).map(k => `${vn(k.start_time * 1000)}→${vn(k.end_time * 1000)?.slice(11)}`) }
+                } catch (e: any) { o.khungGio3Ngay = { loi: String(e?.message || e).slice(0, 250) } }
+                try {
+                    const r = await svc.flashSaleList(0, 0, 20)
+                    const list: any[] = r.flash_sale_list || r.list || []
+                    o.flashSaleTrenShopee = { tong: r.total_count ?? list.length, truong: list[0] ? Object.keys(list[0]) : [],
+                        mau: list.slice(0, 6).map((f: any) => ({ id: String(f.flash_sale_id), status: f.status, type: f.type, batDau: f.start_time ? vn(f.start_time * 1000) : null,
+                            ketThuc: f.end_time ? vn(f.end_time * 1000) : null, item: f.enabled_item_count ?? f.item_count ?? null })) }
+                } catch (e: any) { o.flashSaleTrenShopee = { loi: String(e?.message || e).slice(0, 250) } }
+            }
+            ra.gian.push(o)
+        }
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── CHAT SHOPEE THẤY TỚI ĐÂU (chỉ đọc) — GET /admin/do-shopee-chat?store=KENGISTORE (15/10/2026) ──
  * Chủ shop: "viết ticket cho shopee để mở chat v2". Đo 27/09 trong log: v2.sellerchat.get_conversation_list và get_message
  * ĐỌC ĐƯỢC nhưng hội thoại mới nhất chỉ tới 31/05/2026 dù gian bán hằng ngày ⇒ app chỉ thấy kho chat cũ. Đo lại từng gian:

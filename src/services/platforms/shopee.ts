@@ -1689,6 +1689,15 @@ export class ShopeeService extends PlatformService {
         return data.response || []
     }
 
+    /** Danh sách flash sale của gian (15/10/2026 — đo xem flash sale có chạy không). type: 0 tất cả · 1 sắp tới ·
+     *  2 đang chạy · 3 đã hết. Trả nguyên response để phép đo đọc đúng tên trường Shopee trả về. */
+    async flashSaleList(type: 0 | 1 | 2 | 3 = 0, offset = 0, limit = 20): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/shop_flash_sale/get_shop_flash_sale_list')}&type=${type}&offset=${offset}&limit=${limit}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_shop_flash_sale_list: ${data.error} - ${data.message}`)
+        return data.response || {}
+    }
+
     /** Tạo flash sale rỗng cho 1 khung giờ → flash_sale_id. */
     async flashSaleCreate(timeslotId: number): Promise<number> {
         const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/create_shop_flash_sale'), {
