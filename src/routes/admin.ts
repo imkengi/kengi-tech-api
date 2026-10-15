@@ -5542,6 +5542,46 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                     }))
                     o.nganhBiChan = (c.overlap_block_category_ids || []).length
                 } catch (e: any) { o.dieuKien = { loi: String(e?.message || e).slice(0, 250) } }
+                /* ?kiemGia=1&soMa=100: lấy soMa mã NORMAL còn tồn (mới cập nhật trước) của gian, đọc giá THẬT trên Shopee, đếm bao nhiêu
+                 * mã "giá đang bán − 1đ" đạt mức giảm tối thiểu so với giá gốc (lib/flashSaleKiemGia.ts). Chỉ đọc. */
+                if (req.query.kiemGia === '1') {
+                    try {
+                        const { docDieuKienTheoNganh, kiemGiaFlashSale, phanTramGiam } = await import('../lib/flashSaleKiemGia')
+                        const soMa = Math.min(200, Math.max(1, Number(req.query.soMa) || 100))
+                        const sps: any[] = await sp.onlineProduct.findMany({
+                            where: { channelId: c.id, status: 'NORMAL' }, orderBy: { updatedAt: 'desc' }, take: soMa,
+                            select: { platformProductId: true, name: true, sku: true, price: true },
+                        })
+                        const ten = new Map(sps.map(x => [Number(x.platformProductId), `${x.sku || ''} ${String(x.name || '').slice(0, 40)}`.trim()]))
+                        const theoNganh = await docDieuKienTheoNganh(svc)
+                        const kq: any[] = []
+                        const ids = sps.map(x => Number(x.platformProductId)).filter(n => n > 0)
+                        for (let i = 0; i < ids.length; i += 50) kq.push(...await kiemGiaFlashSale(svc, ids.slice(i, i + 50), theoNganh))
+                        const dem = { soMa: kq.length, khongPhanLoai: { dat: 0, khongDat: 0, hetTon: 0 }, coPhanLoai: { datHet: 0, datMotPhan: 0, khongDat: 0, hetTon: 0 }, loiDoc: 0, giaSyncLech: 0 }
+                        const mauKhongDat: any[] = [], mauDat: any[] = []
+                        for (const k of kq) {
+                            if (k.loi) { dem.loiDoc++; continue }
+                            const min = k.dieuKien?.giamToiThieu ?? 0, max = k.dieuKien?.giamToiDa ?? 100
+                            const dat = (goc: number, dangBan: number) => { const g = phanTramGiam(goc, Math.max(1, Math.round(dangBan) - 1)); return g >= min && g <= max }
+                            if (!k.coPhanLoai) {
+                                if (k.ton <= 0) { dem.khongPhanLoai.hetTon++; continue }
+                                const ok = dat(k.giaGoc, k.giaDangBan)
+                                ok ? dem.khongPhanLoai.dat++ : dem.khongPhanLoai.khongDat++
+                                const giaSync = Number(sps.find(x => Number(x.platformProductId) === k.itemId)?.price) || 0
+                                if (giaSync > 0 && Math.round(giaSync) !== Math.round(k.giaDangBan)) dem.giaSyncLech++
+                                const m = { ma: ten.get(k.itemId), giaGoc: k.giaGoc, giaDangBan: k.giaDangBan, giam1d: phanTramGiam(k.giaGoc, k.giaDangBan - 1) }
+                                ;(ok ? mauDat : mauKhongDat).length < 6 && (ok ? mauDat : mauKhongDat).push(m)
+                            } else {
+                                const coTon = k.phanLoai.filter((p: any) => p.ton > 0)
+                                if (!coTon.length) { dem.coPhanLoai.hetTon++; continue }
+                                const n = coTon.filter((p: any) => dat(p.giaGoc, p.giaDangBan)).length
+                                n === coTon.length ? dem.coPhanLoai.datHet++ : n === 0 ? dem.coPhanLoai.khongDat++ : dem.coPhanLoai.datMotPhan++
+                                if (n === 0 && mauKhongDat.length < 6) mauKhongDat.push({ ma: ten.get(k.itemId), phanLoai: coTon.slice(0, 3).map((p: any) => `${p.ten}: ${p.giaGoc}→${p.giaDangBan}`) })
+                            }
+                        }
+                        o.kiemGia = { dieuKienChung: theoNganh.get(0) ?? null, ...dem, mauKhongDat, mauDat }
+                    } catch (e: any) { o.kiemGia = { loi: String(e?.message || e).slice(0, 250) } }
+                }
                 // Giá trong vài đợt cũ có item: giá gốc vs giá flash sale ⇒ mức giảm thật Shopee đã nhận
                 if (req.query.giaCu === '1') {
                     try {

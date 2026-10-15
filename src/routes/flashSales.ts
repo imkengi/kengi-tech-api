@@ -126,6 +126,26 @@ router.get('/slots', async (req: AuthRequest, res: Response) => {
     }
 })
 
+// ─── POST /kiem-gia {channelId, itemIds[≤50]} — giá thật trên Shopee + điều kiện flash sale (15/10/2026) ─────
+// Đo get_item_criteria: mọi ngành đòi giảm ≥ 5% so với GIÁ GỐC ⇒ "giá đang bán − 1đ" chỉ lọt khi mã đang có khuyến mãi của
+// shop. Màn hình gọi khi chọn mã để báo TRƯỚC mã nào sẽ bị từ chối — không tự đổi giá (lib/flashSaleKiemGia.ts).
+router.post('/kiem-gia', async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await getShopeeChannel(prisma, String(req.body?.channelId || ''))
+        const service = shopeeServiceFromChannel(channel)
+        const itemIds: number[] = (Array.isArray(req.body?.itemIds) ? req.body.itemIds : []).map(Number).filter((n: number) => n > 0).slice(0, 50)
+        const { docDieuKienTheoNganh, kiemGiaFlashSale } = await import('../lib/flashSaleKiemGia')
+        let theoNganh: Map<number, any> | undefined
+        let loiDieuKien: string | null = null
+        try { theoNganh = await docDieuKienTheoNganh(service) } catch (e: any) { loiDieuKien = String(e?.message || e).slice(0, 200) }
+        const items = await kiemGiaFlashSale(service, itemIds, theoNganh)
+        res.json({ success: true, data: { items, dieuKienChung: theoNganh?.get(0) ?? null, loiDieuKien } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // ─── GET /plans?channelId= — hàng đợi + trạng thái ───────────────────────────
 router.get('/plans', async (req: AuthRequest, res: Response) => {
     try {

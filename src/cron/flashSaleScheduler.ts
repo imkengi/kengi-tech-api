@@ -1,6 +1,7 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { ensureFlashSaleTable, shopeeServiceFromChannel } from '../routes/flashSales'
+import { tonSanPham } from '../lib/flashSaleKiemGia'
 
 /**
  * FLASH SALE SCHEDULER — chạy ngầm mỗi 3 phút, đảm bảo TUẦN TỰ:
@@ -107,6 +108,13 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
     /* Mã KHÔNG gửi lên Shopee + lý do (15/10/2026). Trước đây bỏ im lặng ⇒ chủ shop chọn 30 mã, đợt chỉ có 22 mà không ai biết
      * vì sao. Nay gộp vào failedItems (cùng dạng err_msg với mã Shopee từ chối) để tab Hàng đợi hiện ra. */
     const boQua: any[] = []
+    /* Giá + tồn SỐNG trên Shopee lúc đẩy (15/10/2026): plan nằm hàng đợi hàng giờ, giá đang bán có thể đã đổi — số FE gửi lúc
+     * xếp chỉ là dự phòng khi Shopee không trả. `has_model` cho biết CHẮC mã có phân loại không (khỏi đoán khi get_model_list lỗi). */
+    const coSo = new Map<number, any>()
+    const ids = [...new Set(items.map(it => Number(it.itemId)).filter(n => n > 0))]
+    for (let i = 0; i < ids.length; i += 50) {
+        try { for (const x of await service.getItemBaseInfo(ids.slice(i, i + 50))) coSo.set(Number(x.item_id), x) } catch { /* thiếu thì dùng số FE gửi */ }
+    }
     for (const it of items) {
         const itemId = Number(it.itemId)
         if (!itemId) { boQua.push({ item_id: it.itemId ?? null, name: it.name, err_msg: 'Thiếu mã sản phẩm trên sàn' }); continue }
@@ -125,7 +133,11 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
         let models: { model_id: number; price: number; giaHienTai?: number; stock: number }[] = []
         // Đọc phân loại hỏng ≠ không có phân loại: giữ lời Shopee để nếu bước sau phải bỏ mã thì nói đúng lý do
         let loiPhanLoai = ''
-        try { models = await service.getModelList(itemId) } catch (e: any) { loiPhanLoai = String(e?.message || e).slice(0, 160) }
+        const cs = coSo.get(itemId)
+        const coPhanLoai: boolean | null = cs ? !!cs.has_model : null   // null = Shopee không trả thông tin gốc ⇒ thử đọc phân loại
+        if (coPhanLoai !== false) {
+            try { models = await service.getModelList(itemId) } catch (e: any) { loiPhanLoai = String(e?.message || e).slice(0, 160) }
+        }
         // purchase_limit là trường BẮT BUỘC theo tài liệu (0 = không giới hạn) — bản đầu bỏ trống khi 0
         const entry: any = { item_id: itemId, purchase_limit: limit }
         if (models.length > 0) {
@@ -137,8 +149,14 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
                     stock: Math.min(m.stock, stockPer),
                 }))
             if (entry.models.length === 0) { boQua.push({ item_id: itemId, name: it.name, err_msg: 'Hết tồn ở mọi phân loại (hoặc phân loại chưa có giá)' }); continue }
+        } else if (coPhanLoai === true) {
+            // Chắc chắn có phân loại mà không đọc được ⇒ đừng gửi như hàng không phân loại (Shopee từ chối, lại sai giá)
+            boQua.push({ item_id: itemId, name: it.name, err_msg: loiPhanLoai ? `Không đọc được phân loại: ${loiPhanLoai}` : 'Mã có phân loại nhưng Shopee không trả phân loại nào' })
+            continue
         } else {
-            const base = Number(it.price) || 0
+            const pi = cs?.price_info?.[0]
+            const base = Number(pi?.current_price) || Number(it.price) || 0   // giá ĐANG BÁN sống; dự phòng số FE gửi lúc xếp
+            const goc = Number(pi?.original_price) || Number(it.giaGoc) || base
             if (base <= 0) {
                 boQua.push({ item_id: itemId, name: it.name, err_msg: loiPhanLoai ? `Không đọc được phân loại: ${loiPhanLoai}` : 'Chưa có giá đang bán (đồng bộ lại sản phẩm)' })
                 continue
@@ -148,8 +166,9 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
              * `models: [{ model_id: 0 }]` ⇒ Shopee trả "item-model invalid" cho mọi mã không phân loại (đợt thử 14/07 ra 0 item).
              * tru1d: FE gửi `price` = giá đang bán; %: giá gốc ở `giaGoc` (bản cũ gửi giá gốc ở `price`).
              * Tồn: FE gửi tồn trên sàn lúc chọn (`ton`) ⇒ không xin quá số đang có; thiếu thì Shopee báo trong failedItems. */
-            const ton = Number(it.ton) || 0
-            entry.item_input_promo_price = tru1d ? giaTru1d(base) : promoFor(Number(it.giaGoc) || base)
+            const ton = cs ? tonSanPham(cs) : (Number(it.ton) || 0)
+            if (cs && ton <= 0) { boQua.push({ item_id: itemId, name: it.name, err_msg: 'Hết tồn trên sàn' }); continue }
+            entry.item_input_promo_price = tru1d ? giaTru1d(base) : promoFor(goc)
             entry.item_stock = Math.max(1, ton > 0 ? Math.min(ton, stockPer) : stockPer)
         }
         shopeeItems.push(entry)

@@ -1706,6 +1706,16 @@ export class ShopeeService extends PlatformService {
         return data.response || {}
     }
 
+    /** get_item_base_info theo lô ≤ 50 mã: has_model, price_info (giá gốc/đang bán của hàng không phân loại), stock_info_v2,
+     *  category_id. Trả nguyên item_list. */
+    async getItemBaseInfo(itemIds: number[]): Promise<any[]> {
+        const ids = itemIds.slice(0, 50)
+        if (!ids.length) return []
+        const data = await this.httpGet(`${this.apiUrl('/api/v2/product/get_item_base_info')}&item_id_list=${ids.join(',')}`)
+        if (data.error) throw new Error(`Shopee get_item_base_info: ${data.error} - ${data.message}`)
+        return data.response?.item_list || []
+    }
+
     /** Điều kiện flash sale của gian theo ngành (min_discount %, need_lowest_price, giới hạn tồn…) + ngành áp dụng. Trả nguyên response. */
     async flashSaleItemCriteria(): Promise<any> {
         const data = await this.httpGet(this.apiUrl('/api/v2/shop_flash_sale/get_item_criteria'))
