@@ -5486,6 +5486,48 @@ router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── CHAT SHOPEE THẤY TỚI ĐÂU (chỉ đọc) — GET /admin/do-shopee-chat?store=KENGISTORE (15/10/2026) ──
+ * Chủ shop: "viết ticket cho shopee để mở chat v2". Đo 27/09 trong log: v2.sellerchat.get_conversation_list và get_message
+ * ĐỌC ĐƯỢC nhưng hội thoại mới nhất chỉ tới 31/05/2026 dù gian bán hằng ngày ⇒ app chỉ thấy kho chat cũ. Đo lại từng gian:
+ * hội thoại mới nhất API trả, request_id, và số đơn phát sinh SAU mốc đó (bằng chứng dán vào ticket). Không gửi/đánh dấu
+ * đọc gì, không làm mới token (lỗi token thì báo). Trả partner_id (mã app, công khai) — KHÔNG trả partner key / token. */
+router.get('/do-shopee-chat', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const { ShopeeService } = await import('../services/platforms')
+        const kenh: any[] = await sp.$queryRawUnsafe(`SELECT * FROM "OnlineChannel" WHERE "platform" = 'shopee' AND coalesce("status", 'active') <> 'inactive' ORDER BY "name"`)
+        const vn = (ms: number) => new Date(ms + 7 * 3600_000).toISOString().replace('T', ' ').slice(0, 16)
+        const veMs = (ts: number) => !ts ? 0 : ts > 1e17 ? Math.floor(ts / 1e6) : ts > 1e14 ? Math.floor(ts / 1e3) : ts > 1e11 ? ts : ts * 1000
+        const ra: any[] = []
+        for (const c of kenh) {
+            const o: any = { gian: c.name, shopId: c.shopId, partnerId: c.apiKey || null }
+            try {
+                if (!c.accessToken) throw new Error('kênh chưa có access token')
+                const svc = new ShopeeService({ apiKey: c.apiKey || '', apiSecret: c.apiSecret || '', accessToken: c.accessToken, refreshToken: c.refreshToken || '', shopId: c.shopId || '' })
+                const kq = await svc.getConversationList({ pageSize: 60 })
+                const ds = kq.conversations.map(x => ({ ...x, ms: veMs(Number(x.lastMessageTimestamp)) })).filter(x => x.ms > 0)
+                const moiNhat = ds.length ? Math.max(...ds.map(x => x.ms)) : 0
+                o.soHoiThoai = kq.conversations.length
+                o.tinMoiNhat = moiNhat ? vn(moiNhat) : null
+                o.chuaDoc = ds.reduce((a, x) => a + (x.unreadCount || 0), 0)
+                o.mau = ds.slice(0, 3).map(x => ({ conversationId: x.conversationId, tinCuoi: vn(x.ms), loai: x.lastMessageType }))
+                if (moiNhat) {
+                    const r: any[] = await sp.$queryRawUnsafe(`SELECT count(*)::int AS so, max("createdAt") AS cuoi FROM "OnlineOrder" WHERE "channelId" = $1 AND "createdAt" > $2`, c.id, new Date(moiNhat))
+                    o.donSauMocChat = r[0]?.so ?? null
+                    o.donMoiNhat = r[0]?.cuoi ? vn(new Date(r[0].cuoi).getTime()) : null
+                }
+            } catch (e: any) { o.loi = String(e?.message || e).slice(0, 300) }
+            ra.push(o)
+        }
+        res.json({ success: true, data: { luc: vn(Date.now()), gian: ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── THỬ AI SOÁT NỘI DUNG — GET /admin/thu-soat-noi-dung?store=KENGISTORE&sku=A,B (14/10/2026) ──
  * Chạy soatNoiDung (lib/aiSoatNoiDung.ts) cho vài mã như máy dựng sẽ chạy, trả kho nội dung AI + đoạn đầu mô tả để soát
  * chất lượng. Không đụng video nào; kết quả được LƯU vào SanMediaNoiDung như đường thật (lần dựng sau dùng lại, không
