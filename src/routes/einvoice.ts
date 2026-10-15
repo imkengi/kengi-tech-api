@@ -2279,18 +2279,25 @@ router.post('/shopee-buyer-info/:transactionId', einvoiceAuth, async (req: AuthR
         const info = await svc.getBuyerInvoiceInfo(sn)
         if (!info) return res.json({ success: true, data: null, message: 'Khách không khai thông tin xuất hoá đơn trên Shopee cho đơn này' })
         const laCongTy = info.invoiceType === 'company'
+        /* Shopee CHE tên + địa chỉ HĐ CÁ NHÂN (A****b — đo 15/10/2026: 532/532 đơn, mọi trạng thái; email thì rõ). Bản trước ghi
+         * nguyên chữ bị che lên phiếu. Nay bỏ trường bị che, giữ trường rõ, và nói ra trường nào bị che. */
+        const che: string[] = []
+        const ro = (ten: string, v: any) => { const x = String(v ?? '').trim(); if (x && /\*{2,}/.test(x)) { che.push(ten); return '' } return x }
         const vbi = {
             source: 'shopee', fetchedAt: new Date().toISOString(),
             type: info.invoiceType,
-            name: laCongTy ? (info.companyName || info.name || '') : (info.name || ''),
-            taxCode: laCongTy ? (info.companyTaxId || '') : (info.taxId || ''),
-            address: laCongTy ? (info.companyAddress || info.address || '') : (info.address || ''),
-            email: laCongTy ? (info.companyEmail || info.email || '') : (info.email || ''),
-            phone: info.phone || '',
-            nationalId: info.nationalId || '',
+            name: ro('tên', laCongTy ? (info.companyName || info.name) : info.name),
+            taxCode: ro('MST', laCongTy ? info.companyTaxId : info.taxId),
+            address: ro('địa chỉ', laCongTy ? (info.companyAddress || info.address) : info.address),
+            email: ro('email', laCongTy ? (info.companyEmail || info.email) : info.email),
+            phone: ro('SĐT', info.phone),
+            nationalId: ro('CCCD', info.nationalId),
+        }
+        if (!vbi.name && !vbi.taxCode && !vbi.email && !vbi.nationalId) {
+            return res.json({ success: true, data: null, message: `Shopee che thông tin của khách (${che.join(', ') || 'mọi trường'}) — không lấy được; nhờ khách nhắn thông tin hoặc gõ tay` })
         }
         await prisma.transaction.update({ where: { id: txId }, data: { vatBuyerInfo: JSON.stringify(vbi) } as any })
-        res.json({ success: true, data: vbi })
+        res.json({ success: true, data: vbi, ...(che.length ? { message: `Shopee che ${che.join(', ')} của khách — chỉ lấy được phần còn lại` } : {}) })
     } catch (err: any) {
         console.error('[shopee-buyer-info]', err?.message || err)
         res.status(502).json({ success: false, error: err?.message || 'Không lấy được thông tin từ Shopee' })
@@ -3440,18 +3447,25 @@ router.post('/shopee-buyer-info/:transactionId', einvoiceAuth, async (req: AuthR
         const info = await svc.getBuyerInvoiceInfo(sn)
         if (!info) return res.json({ success: true, data: null, message: 'Khách không khai thông tin xuất hoá đơn trên Shopee cho đơn này' })
         const laCongTy = info.invoiceType === 'company'
+        /* Shopee CHE tên + địa chỉ HĐ CÁ NHÂN (A****b — đo 15/10/2026: 532/532 đơn, mọi trạng thái; email thì rõ). Bản trước ghi
+         * nguyên chữ bị che lên phiếu. Nay bỏ trường bị che, giữ trường rõ, và nói ra trường nào bị che. */
+        const che: string[] = []
+        const ro = (ten: string, v: any) => { const x = String(v ?? '').trim(); if (x && /\*{2,}/.test(x)) { che.push(ten); return '' } return x }
         const vbi = {
             source: 'shopee', fetchedAt: new Date().toISOString(),
             type: info.invoiceType,
-            name: laCongTy ? (info.companyName || info.name || '') : (info.name || ''),
-            taxCode: laCongTy ? (info.companyTaxId || '') : (info.taxId || ''),
-            address: laCongTy ? (info.companyAddress || info.address || '') : (info.address || ''),
-            email: laCongTy ? (info.companyEmail || info.email || '') : (info.email || ''),
-            phone: info.phone || '',
-            nationalId: info.nationalId || '',
+            name: ro('tên', laCongTy ? (info.companyName || info.name) : info.name),
+            taxCode: ro('MST', laCongTy ? info.companyTaxId : info.taxId),
+            address: ro('địa chỉ', laCongTy ? (info.companyAddress || info.address) : info.address),
+            email: ro('email', laCongTy ? (info.companyEmail || info.email) : info.email),
+            phone: ro('SĐT', info.phone),
+            nationalId: ro('CCCD', info.nationalId),
+        }
+        if (!vbi.name && !vbi.taxCode && !vbi.email && !vbi.nationalId) {
+            return res.json({ success: true, data: null, message: `Shopee che thông tin của khách (${che.join(', ') || 'mọi trường'}) — không lấy được; nhờ khách nhắn thông tin hoặc gõ tay` })
         }
         await prisma.transaction.update({ where: { id: txId }, data: { vatBuyerInfo: JSON.stringify(vbi) } as any })
-        res.json({ success: true, data: vbi })
+        res.json({ success: true, data: vbi, ...(che.length ? { message: `Shopee che ${che.join(', ')} của khách — chỉ lấy được phần còn lại` } : {}) })
     } catch (err: any) {
         console.error('[shopee-buyer-info]', err?.message || err)
         res.status(502).json({ success: false, error: err?.message || 'Không lấy được thông tin từ Shopee' })

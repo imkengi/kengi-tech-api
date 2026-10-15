@@ -1,6 +1,7 @@
 import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { moTaLoi } from '../lib/gomLoi'
 import { gomThieuTonThue, moTaThieuTonThue } from '../lib/gomThieuTonThue'
+import { layHoaDonKhachShopee } from '../lib/hoaDonKhachShopee'
 import {
     ensureEInvoiceTablesFor, getActiveConfig, parseConfigExtra,
     findInvoiceQueue, issueInvoiceForTransaction,
@@ -37,6 +38,9 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     if (!config) return
     const extra = parseConfigExtra(config)
 
+    // HĐ đã xuất mà khách có khai HĐ công ty/hộ KD trên Shopee ⇒ điền sẵn + báo xuất thay thế (không tự xuất)
+    try { await soatHoaDonDaXuat(prisma, storeName) } catch (e: any) { console.warn(`[EInvoiceQueue] ${storeName}: soát HĐ đã xuất hỏng —`, e?.message || e) }
+
     // Hai chế độ chạy song song:
     // 1) auto TOÀN CỤC (autoIssueOnDelivery): xuất mọi đơn giao xong từ mốc bật.
     // 2) đơn KHÁCH YÊU CẦU HĐ (vatBuyerInfo gắn trên phiếu): LUÔN tự xuất khi
@@ -58,6 +62,21 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     const clean = all.filter((r: any) => !r.hasReturn)
     const returns = all.length - clean.length
     if (returns > 0) console.log(`[EInvoiceQueue] ${storeName}: bỏ qua ${returns} đơn có trả hàng/hoàn tiền`)
+    /* THÔNG TIN HĐ KHÁCH KHAI TRÊN SHOPEE (15/10/2026) — hỏi NGAY TRƯỚC khi xuất (Shopee không có push cho yêu cầu hoá đơn):
+     * HĐ công ty/hộ KD có MST rõ ⇒ ghi lên phiếu ⇒ xuất đúng tên đơn vị/MST/email ngay lần đầu. Trước đây phải bấm "Lấy từ
+     * Shopee" tay — quên là xuất thiếu MST, khách nhắn đòi, lại xuất thay thế (lib/hoaDonKhachShopee.ts). */
+    const canHoi = clean.filter((r: any) => !r.hasBuyerInfo && /^ONLINE-SPE-/i.test(String(r.receiptNumber || '')))
+    if (canHoi.length) {
+        try {
+            const kq = await layHoaDonKhachShopee(prisma, canHoi, { ghi: true })
+            const da = new Set(kq.daGhiPhieu)
+            for (const r of clean) if (da.has(r.id)) r.hasBuyerInfo = true
+            console.log(`[EInvoiceQueue] ${storeName}: hỏi Shopee thông tin HĐ ${kq.daHoi} đơn → ${kq.coKhai} có khai, ` +
+                `${kq.dungDuoc} HĐ công ty/hộ KD, ghi ${kq.daGhiPhieu.length} phiếu` +
+                (kq.caNhanBiChe ? `, ${kq.caNhanBiChe} cá nhân bị Shopee che (bỏ)` : '') +
+                (kq.loi.length ? ` | lỗi: ${kq.loi.slice(0, 2).join('; ')}` : ''))
+        } catch (e: any) { console.warn(`[EInvoiceQueue] ${storeName}: hỏi thông tin HĐ Shopee hỏng —`, e?.message || e) }
+    }
     const rows = clean.filter((r: any) => r.hasBuyerInfo
         || (autoFrom && new Date(r.deliveredAt || r.orderDate) >= autoFrom))
     if (rows.length === 0) return
@@ -117,6 +136,36 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     }
     if (rows.length >= PER_STORE_CAP) {
         console.warn(`[EInvoiceQueue] ${storeName}: chạm trần ${PER_STORE_CAP} phiếu/đêm — phần còn lại xuất đêm sau`)
+    }
+}
+
+/* HĐ ĐÃ XUẤT (30 ngày) không MST mà khách có khai HĐ công ty/hộ KD trên Shopee — khai sau khi xuất, hoặc xuất trước khi có bước
+ * tự lấy (đo 15/10: Kengi Tools đơn SPE-260922P2CABRFF) ⇒ ghi thông tin lên phiếu (nút "🔁 Xuất HĐ thay thế với thông tin này" ở
+ * chi tiết đơn tự điền sẵn) + MỘT thông báo. KHÔNG tự xuất thay thế — HĐ thay thế là chứng từ với cơ quan thuế, chủ shop bấm. */
+async function soatHoaDonDaXuat(prisma: any, storeName: string): Promise<void> {
+    const ds: any[] = await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT t.id, t."receiptNumber" FROM "Transaction" t JOIN "EInvoice" e ON e."transactionId" = t.id
+         WHERE t."receiptNumber" LIKE 'ONLINE-SPE-%' AND t."vatBuyerInfo" IS NULL
+           AND e.status IN ('ISSUING','issued','SIGNED','SENT') AND coalesce(e."buyerTaxCode", '') = ''
+           AND coalesce(e."issuedAt", e."createdAt") >= now() - interval '30 days'
+         LIMIT 500`)
+    if (!ds.length) return
+    const kq = await layHoaDonKhachShopee(prisma, ds, { ghi: true })
+    console.log(`[EInvoiceQueue] ${storeName}: soát ${kq.daHoi} HĐ đã xuất không MST → ${kq.dungDuoc} khách có khai HĐ công ty/hộ KD, ` +
+        `điền sẵn ${kq.daGhiDon.length}` + (kq.loi.length ? ` | lỗi: ${kq.loi.slice(0, 2).join('; ')}` : ''))
+    if (!kq.daGhiDon.length) return
+    const tin = await prisma.notification.create({
+        data: {
+            type: 'einvoice',
+            title: `🧾 ${kq.daGhiDon.length} đơn Shopee khách yêu cầu HĐ công ty — cần xuất HĐ thay thế`,
+            message: (`Hoá đơn đã xuất KHÔNG có MST trong khi khách khai HĐ công ty/hộ kinh doanh trên Shopee. Thông tin đã điền sẵn — ` +
+                `mở chi tiết đơn, bấm "Xuất HĐ thay thế với thông tin này": ${kq.daGhiDon.slice(0, 10).join(', ')}` +
+                `${kq.daGhiDon.length > 10 ? ` …(+${kq.daGhiDon.length - 10})` : ''}`).slice(0, 500),
+        },
+    }).catch(() => null)
+    if (tin) {
+        const { sendPushToStore } = await import('../routes/notifications')
+        sendPushToStore(prisma, tin.title, tin.message, { id: tin.id, type: 'einvoice' }).catch(() => { })
     }
 }
 

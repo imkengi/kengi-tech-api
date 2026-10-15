@@ -5503,6 +5503,13 @@ router.get('/do-hoa-don-khach-shopee', async (req: Request, res: Response) => {
         const { shopeeServiceTokenMoi } = await import('./flashSales')
         const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { name: 'asc' } })
         const ra: any = { cuaHang: st.code, ngay, soDonToiDa: soDon, lo, gian: [] }
+        // Cấu hình HĐĐT: không có cấu hình ⇒ hàng đợi 20:30 bỏ cả cửa hàng; tự xuất tắt ⇒ chỉ xuất phiếu có thông tin khách yêu cầu
+        try {
+            const { getActiveConfig, parseConfigExtra } = await import('./einvoice')
+            const cfg: any = await getActiveConfig(sp)
+            const ex: any = cfg ? parseConfigExtra(cfg) : null
+            ra.cauHinhHoaDon = cfg ? { coCauHinh: true, nhaCungCap: cfg.provider ?? null, tuXuatKhiGiao: !!ex?.autoIssueOnDelivery, tuXuatTu: ex?.autoIssueSince || null } : { coCauHinh: false }
+        } catch (e: any) { ra.cauHinhHoaDon = { loi: String(e?.message || e).slice(0, 160) } }
         const maDon = (d: any) => String(d.externalOrderId || d.orderNumber || '').replace(/^SPE-/i, '')
         for (const c of kenh) {
             const o: any = { gian: c.name, coToken: !!c.accessToken }
