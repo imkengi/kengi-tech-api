@@ -221,6 +221,16 @@ router.get('/tu-dong', async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         await ensureFlashSaleTable(prisma)
         const channelId = String(req.query.channelId || '')
+        // Không truyền channelId ⇒ mọi gian Shopee + cấu hình tự động (tổng quan / vận hành nội bộ)
+        if (!channelId) {
+            const kenh: any[] = await prisma.onlineChannel.findMany({ where: { platform: 'shopee' }, select: { id: true, name: true, status: true }, orderBy: { name: 'asc' } })
+            const cfgs: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "FlashSaleTuDong"`)
+            res.json({ success: true, data: kenh.map(k => {
+                const r = cfgs.find(c => c.channelId === k.id)
+                return { ten: k.name, trangThaiKenh: k.status, ...(r ? { ...r, khungDaXet: r.khungDaXet != null ? String(r.khungDaXet) : null } : { channelId: k.id, ...MAC_DINH_TU_DONG }) }
+            }) })
+            return
+        }
         const rows: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "FlashSaleTuDong" WHERE "channelId"=$1`, channelId)
         const r = rows[0]
         res.json({ success: true, data: r ? { ...r, khungDaXet: r.khungDaXet != null ? String(r.khungDaXet) : null } : { channelId, ...MAC_DINH_TU_DONG } })
