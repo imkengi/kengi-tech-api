@@ -354,7 +354,7 @@ async function tickStore(schema: string): Promise<void> {
     for (const { channelId } of channels) {
         /* Bản cũ: còn đợt 'active' là đợi nó HẾT mới đẩy đợt sau ⇒ khung Shopee nối liền (12:00–12:30, 12:30–13:00…) thì lúc đợt
          * trước hết, đợt sau đã quá sát giờ ⇒ luôn bị bỏ "lỡ khung giờ". Nay: tối đa 1 đợt CHỜ (đã lên Shopee mà chưa tới giờ),
-         * được đẩy đợt kế khi còn ≤ 90 phút — Shopee giữ tồn campaign của tối đa 2 đợt, không phải cả loạt. */
+         * được đẩy đợt kế khi còn ≤ 60 phút (LEAD_MS) — Shopee giữ tồn campaign của tối đa 2 đợt, không phải cả loạt. */
         const dem: any[] = await prisma.$queryRawUnsafe(
             `SELECT COUNT(*) FILTER (WHERE status='dang_kich_hoat' OR (status='active' AND "startTime" > now()))::int AS "sapToi",
                     COUNT(*) FILTER (WHERE status='active')::int AS "dangChay"
@@ -405,7 +405,7 @@ async function tickStore(schema: string): Promise<void> {
 
 /* ─── FLASH SALE TỰ ĐỘNG — xếp đợt cho khung giờ kế tiếp của MỘT gian (15/10/2026) ─────────────────────────────────────
  * Mỗi nhịp: gian còn đợt chờ (queued / đang đẩy / đã lên Shopee mà chưa tới giờ) thì thôi; không thì lấy khung Shopee sớm nhất
- * trong 90 phút tới chưa có đợt ⇒ GIÀNH khung trên dòng cấu hình (hai bản Cloud Run không cùng tạo) ⇒ chọn soMa mã còn hàng
+ * trong 60 phút tới (LEAD_MS) chưa có đợt ⇒ GIÀNH khung trên dòng cấu hình (hai bản Cloud Run không cùng tạo) ⇒ chọn soMa mã còn hàng
  * đạt điều kiện giá (xoay vòng) ⇒ thêm plan 'queued' (tuDong=true); bước 2 đẩy lên Shopee ngay trong nhịp. Không có mã nào ⇒
  * ghi lý do; 3 lần liền không có mã ⇒ 6 giờ mới thử lại (Kengi Electric: 0 mã đạt −1đ — khỏi đọc Shopee mỗi khung). */
 async function tuDongXepDot(prisma: any, cfgRow: any): Promise<void> {

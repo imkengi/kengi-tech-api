@@ -7,8 +7,9 @@
 
 import { kiemGiaFlashSale, phanTramGiam, type DieuKienFlashSale, type KetQuaKiemGia } from './flashSaleKiemGia'
 
-/** Đẩy trước đợt kế khi còn ≤ 90 phút nữa tới giờ (khung Shopee nối liền nhau — đợi đợt trước hết mới đẩy là lỡ khung). */
-export const LEAD_MS = 90 * 60_000
+/** Đẩy trước đợt kế khi còn ≤ 60 phút nữa tới giờ (khung Shopee nối liền nhau — đợi đợt trước hết mới đẩy là lỡ khung).
+ *  Chủ shop 15/10/2026 16:45: "chừa 60p nó tạo 1 lần là ổn nhất" (bản đầu 90 phút) — mỗi khung tạo trước 60 phút, từng đợt một. */
+export const LEAD_MS = 60 * 60_000
 
 export interface CauHinhTuDong {
     channelId: string

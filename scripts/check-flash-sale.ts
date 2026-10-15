@@ -398,10 +398,11 @@ async function main() {
         dung('luật đẩy: đợt đang chạy + đợt kế còn 3 giờ ⇒ chưa (không giữ tồn quá sớm)', !duocDayDotKe({ sapToi: 0, dangChay: 1, batDau: phut(180), now }))
         const s = (id: number, batDauPhut: number) => ({ timeslot_id: id, start_time: Math.floor(phut(batDauPhut) / 1000), end_time: Math.floor(phut(batDauPhut + 30) / 1000) })
         const slots = [s(1, 2), s(2, 30), s(3, 60), s(4, 200)]
-        dung('chọn khung: bỏ khung còn < 5 phút, lấy khung sớm nhất trong 90 phút', chonKhungTuDong(slots, new Set(), now, LEAD_MS)?.timeslot_id === 2)
+        dung('tạo trước đúng 60 phút (chủ shop: "chừa 60p nó tạo 1 lần")', LEAD_MS === 60 * 60_000)
+        dung('chọn khung: bỏ khung còn < 5 phút, lấy khung sớm nhất trong 60 phút', chonKhungTuDong(slots, new Set(), now, LEAD_MS)?.timeslot_id === 2)
         dung('chọn khung: bỏ khung đã có đợt', chonKhungTuDong(slots, new Set([2]), now, LEAD_MS)?.timeslot_id === 3)
         dung('chọn khung: bỏ khung đã xét (không có mã) ⇒ khung sau', chonKhungTuDong(slots, new Set(), now, LEAD_MS, 2)?.timeslot_id === 3)
-        dung('chọn khung: ngoài 90 phút ⇒ chưa xếp', chonKhungTuDong([s(4, 200)], new Set(), now, LEAD_MS) === null)
+        dung('chọn khung: ngoài 60 phút ⇒ chưa xếp', chonKhungTuDong([s(4, 200)], new Set(), now, LEAD_MS) === null && chonKhungTuDong([s(5, 75)], new Set(), now, LEAD_MS) === null)
 
         const dk = { giamToiThieu: 5, giamToiDa: 90, tonToiThieu: 1, tonToiDa: 1000 }
         const cfg = { channelId: 'k', bat: true, soMa: 3, tonMoiMa: 1, gioiHanMua: 1, kieuGia: 'tru-1d' as const, phanTram: 10 }
