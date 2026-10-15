@@ -5527,6 +5527,26 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                         mau: list.slice(0, 6).map((f: any) => ({ id: String(f.flash_sale_id), status: f.status, type: f.type, batDau: f.start_time ? vn(f.start_time * 1000) : null,
                             ketThuc: f.end_time ? vn(f.end_time * 1000) : null, item: f.enabled_item_count ?? f.item_count ?? null })) }
                 } catch (e: any) { o.flashSaleTrenShopee = { loi: String(e?.message || e).slice(0, 250) } }
+                // Giá trong vài đợt cũ có item: giá gốc vs giá flash sale ⇒ mức giảm thật Shopee đã nhận
+                if (req.query.giaCu === '1') {
+                    try {
+                        const r = await svc.flashSaleList(3, 0, 30)
+                        const list: any[] = (r.flash_sale_list || []).filter((f: any) => Number(f.item_count) > 0).slice(0, 3)
+                        o.giaDotCu = []
+                        for (const f of list) {
+                            const it = await svc.flashSaleItems(Number(f.flash_sale_id), 0, 50)
+                            const models: any[] = it.models || []
+                            o.giaDotCu.push({
+                                id: String(f.flash_sale_id), batDau: f.start_time ? vn(f.start_time * 1000) : null, soItem: f.item_count,
+                                truongModel: models[0] ? Object.keys(models[0]) : [],
+                                mau: models.slice(0, 8).map((m: any) => {
+                                    const goc = Number(m.original_price) || 0, km = Number(m.input_promo_price ?? m.promotion_price ?? 0) || 0
+                                    return { item: String(m.item_id), model: String(m.model_id), giaGoc: goc, giaFlash: km, giam: goc && km ? `${Math.round((1 - km / goc) * 1000) / 10}%` : null, chenh: goc && km ? goc - km : null }
+                                }),
+                            })
+                        }
+                    } catch (e: any) { o.giaDotCu = { loi: String(e?.message || e).slice(0, 250) } }
+                }
             }
             ra.gian.push(o)
         }

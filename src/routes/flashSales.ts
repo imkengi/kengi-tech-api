@@ -66,6 +66,9 @@ export async function ensureFlashSaleTable(prisma: any): Promise<void> {
             "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
             "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
         )`)
+    /* Cách tính giá (15/10/2026, chủ shop: "flash sale chỉ là lấy giá bán hiện tại −1đ thôi"): 'tru-1d' = giá đang bán của
+     * từng phân loại − 1đ; null/'phan-tram' = giảm % từ giá gốc như bản đầu. Bảng tạo thô theo cửa hàng ⇒ thêm cột ở đây. */
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FlashSalePlan" ADD COLUMN IF NOT EXISTS "kieuGia" TEXT`)
     tableReady.add(schema)
 }
 
@@ -154,6 +157,7 @@ router.post('/plans', async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         await ensureFlashSaleTable(prisma)
         const { channelId, slots, discountPercent, stockPerItem, purchaseLimit, items, title } = req.body || {}
+        const kieuGia = req.body?.kieuGia === 'phan-tram' ? 'phan-tram' : 'tru-1d'
         await getShopeeChannel(prisma, String(channelId || '')) // validate kênh
 
         const slotList: any[] = Array.isArray(slots) ? slots : []
@@ -161,8 +165,8 @@ router.post('/plans', async (req: AuthRequest, res: Response) => {
         if (slotList.length === 0) { res.status(400).json({ success: false, error: 'Chưa chọn khung giờ nào' }); return }
         if (itemList.length === 0) { res.status(400).json({ success: false, error: 'Chưa chọn sản phẩm nào' }); return }
         if (itemList.length > 50) { res.status(400).json({ success: false, error: 'Shopee tối đa 50 sản phẩm/flash sale' }); return }
-        const pct = Number(discountPercent)
-        if (!Number.isFinite(pct) || pct < 5 || pct > 90) {
+        const pct = kieuGia === 'phan-tram' ? Number(discountPercent) : 0
+        if (kieuGia === 'phan-tram' && (!Number.isFinite(pct) || pct < 5 || pct > 90)) {
             res.status(400).json({ success: false, error: 'Phần trăm giảm phải trong khoảng 5–90%' }); return
         }
         const stock = Math.max(1, Number(stockPerItem) || 1)
@@ -179,11 +183,11 @@ router.post('/plans', async (req: AuthRequest, res: Response) => {
             await prisma.$executeRawUnsafe(
                 `INSERT INTO "FlashSalePlan"
                  (id, "channelId", title, "timeslotId", "startTime", "endTime", items,
-                  "discountPercent", "stockPerItem", "purchaseLimit", status, position)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,'queued',$11)`,
-                id, String(channelId), String(title || `Flash sale -${pct}%`),
+                  "discountPercent", "stockPerItem", "purchaseLimit", status, position, "kieuGia")
+                 VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,'queued',$11,$12)`,
+                id, String(channelId), String(title || (kieuGia === 'tru-1d' ? 'Flash sale giá đang bán −1đ' : `Flash sale -${pct}%`)),
                 Number(s.timeslotId), start, end, JSON.stringify(itemList),
-                pct, stock, limit, pos++
+                pct, stock, limit, pos++, kieuGia
             )
             created.push(id)
         }

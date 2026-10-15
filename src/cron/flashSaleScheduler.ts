@@ -39,7 +39,7 @@ async function activatePlan(prisma: any, plan: any, channel: any): Promise<void>
     let failedItems: any[] = []
     let soItem = 0
     try {
-        ;({ failedItems, soItem } = await napVaBat(service, flashSaleId, items, pct, stockPer, limit))
+        ;({ failedItems, soItem } = await napVaBat(service, flashSaleId, items, pct, stockPer, limit, plan.kieuGia === 'tru-1d'))
     } catch (e) {
         try { await service.flashSaleDelete(flashSaleId) } catch { /* đợt đã bật/đang chạy thì không xoá được */ }
         throw e
@@ -55,7 +55,7 @@ async function activatePlan(prisma: any, plan: any, channel: any): Promise<void>
 }
 
 /** Lấy model từng item, thêm item vào đợt, bật đợt. Ném lỗi để activatePlan xoá đợt rỗng. */
-async function napVaBat(service: any, flashSaleId: number, items: any[], pct: number, stockPer: number, limit: number): Promise<{ failedItems: any[]; soItem: number }> {
+async function napVaBat(service: any, flashSaleId: number, items: any[], pct: number, stockPer: number, limit: number, tru1d = false): Promise<{ failedItems: any[]; soItem: number }> {
     // Build payload từng item: cần model list để đặt giá/tồn theo model.
     const shopeeItems: any[] = []
     for (const it of items) {
@@ -69,7 +69,11 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
             const raw = override > 0 ? Math.min(override, basePrice * 0.95) : byPct
             return roundPrice(raw)
         }
-        let models: { model_id: number; price: number; stock: number }[] = []
+        /* "Giá đang bán − 1đ" (chủ shop 15/10/2026): giá ĐANG BÁN của từng phân loại trừ đúng 1đ — không làm tròn trăm, không
+         * ép ≤95% giá gốc. Giá điền tay thì dùng y nguyên nếu thấp hơn giá đang bán. Shopee không nhận (mức giảm so với giá gốc
+         * ngoài khoảng sàn cho phép…) thì nằm trong failedItems kèm lý do của Shopee — không đoán thay. */
+        const giaTru1d = (dangBan: number) => Math.max(1, override > 0 && override < dangBan ? Math.round(override) : Math.round(dangBan) - 1)
+        let models: { model_id: number; price: number; giaHienTai?: number; stock: number }[] = []
         try { models = await service.getModelList(itemId) } catch { /* item không phân loại */ }
         const entry: any = { item_id: itemId }
         if (limit > 0) entry.purchase_limit = limit
@@ -78,7 +82,7 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
                 .filter(m => m.stock > 0 && m.price > 0)
                 .map(m => ({
                     model_id: m.model_id,
-                    input_promo_price: promoFor(m.price),
+                    input_promo_price: tru1d ? giaTru1d(Number(m.giaHienTai) || m.price) : promoFor(m.price),
                     stock: Math.min(m.stock, stockPer),
                 }))
             if (entry.models.length === 0) continue // hết tồn mọi phân loại → bỏ item
@@ -87,7 +91,8 @@ async function napVaBat(service: any, flashSaleId: number, items: any[], pct: nu
             if (base <= 0) continue
             entry.models = [{
                 model_id: 0,
-                input_promo_price: promoFor(base),
+                // tru1d: FE gửi `price` = giá đang bán; % : gửi giá gốc ở `giaGoc` (bản cũ gửi giá gốc ở `price`)
+                input_promo_price: tru1d ? giaTru1d(base) : promoFor(Number(it.giaGoc) || base),
                 stock: stockPer,
             }]
         }

@@ -1698,6 +1698,14 @@ export class ShopeeService extends PlatformService {
         return data.response || {}
     }
 
+    /** Item + giá từng phân loại của một đợt flash sale (đo giá các đợt cũ). Trả nguyên response. */
+    async flashSaleItems(flashSaleId: number, offset = 0, limit = 50): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/shop_flash_sale/get_shop_flash_sale_items')}&flash_sale_id=${flashSaleId}&offset=${offset}&limit=${limit}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_shop_flash_sale_items: ${data.error} - ${data.message}`)
+        return data.response || {}
+    }
+
     /** Tạo flash sale rỗng cho 1 khung giờ → flash_sale_id. */
     async flashSaleCreate(timeslotId: number): Promise<number> {
         const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/create_shop_flash_sale'), {
@@ -1750,7 +1758,7 @@ export class ShopeeService extends PlatformService {
      * Model list của 1 item (để build models[] cho add items — mỗi model cần
      * input_promo_price + stock riêng). Item không phân loại → mảng rỗng.
      */
-    async getModelList(itemId: number): Promise<{ model_id: number; price: number; stock: number; name: string; sku: string }[]> {
+    async getModelList(itemId: number): Promise<{ model_id: number; price: number; giaHienTai: number; stock: number; name: string; sku: string }[]> {
         const url = `${this.apiUrl('/api/v2/product/get_model_list')}&item_id=${itemId}`
         const data = await this.httpGet(url)
         if (data.error) throw new Error(`Shopee get_model_list: ${data.error} - ${data.message}`)
@@ -1766,6 +1774,8 @@ export class ShopeeService extends PlatformService {
             // GIÁ GỐC làm chuẩn tính % giảm flash sale (Shopee validate 5–90% so
             // với original_price; current_price có thể đã dính KM khác → sai chuẩn).
             price: m.price_info?.[0]?.original_price ?? m.price_info?.[0]?.current_price ?? 0,
+            // GIÁ ĐANG BÁN (đã gồm khuyến mãi đang chạy) — flash sale kiểu "giá đang bán − 1đ" (chủ shop 15/10/2026)
+            giaHienTai: m.price_info?.[0]?.current_price ?? m.price_info?.[0]?.original_price ?? 0,
             stock: m.stock_info_v2?.seller_stock?.[0]?.stock ?? m.stock_info?.[0]?.current_stock ?? 0,
         }))
     }
