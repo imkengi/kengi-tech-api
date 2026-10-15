@@ -427,7 +427,9 @@ async function tuDongXepDot(prisma: any, cfgRow: any): Promise<void> {
     const giay = Math.floor(Date.now() / 1000)
     const slots = await service.flashSaleGetTimeSlots(giay + 60, giay + Math.ceil(LEAD_MS / 1000) + 3600)
     const daCo = new Set<number>(((await prisma.$queryRawUnsafe(
-        `SELECT "timeslotId" FROM "FlashSalePlan" WHERE "channelId"=$1 AND status <> 'cancelled' AND "startTime" > now() - interval '1 day'`,
+        // Khung "đã có" = có đợt ĐÃ/SẼ chạy; khung có đợt hỏng / bị bỏ / huỷ thì máy vẫn được thử (15/10: 12 đợt tay của Electric
+        // hỏng chiếm hết khung ⇒ bản đầu không xét lần nào)
+        `SELECT "timeslotId" FROM "FlashSalePlan" WHERE "channelId"=$1 AND status IN ('queued','dang_kich_hoat','active','ended') AND "startTime" > now() - interval '1 day'`,
         cfg.channelId)) as any[]).map(r => Number(r.timeslotId)))
     const khung = chonKhungTuDong(slots, daCo, Date.now(), LEAD_MS, cfgRow.khungDaXet != null ? Number(cfgRow.khungDaXet) : null)
     if (!khung) return
