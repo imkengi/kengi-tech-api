@@ -6,6 +6,7 @@
 import { _kiemThu } from '../src/cron/flashSaleScheduler'
 import { docDieuKienTheoNganh, kiemGiaFlashSale, phanTramGiam } from '../src/lib/flashSaleKiemGia'
 import { bocTuLamMoi } from '../src/routes/flashSales'
+import { duocDayDotKe, chonKhungTuDong, datDieuKienTuDong, chonMaTuDong, LEAD_MS } from '../src/lib/flashSaleTuDong'
 
 const { activatePlan, napVaBat, chuanBiHang, themVaBat, LoiKhongThuLai } = _kiemThu
 let loi = 0
@@ -386,6 +387,57 @@ async function main() {
             try { await bocTuLamMoi(pr, { id: 'ch' }, dv).flashSaleDelete(5) } catch (e: any) { loi = e.message }
             dung('lỗi KHÁC token ⇒ ném nguyên văn, không làm mới', /shop_flash_sale_not_exist/.test(loi) && !dv.goi.includes('lamMoi'), loi)
         }
+    }
+    // ── 3j. FLASH SALE TỰ ĐỘNG (15/10: "tới giờ là set 10 mã còn hàng, mỗi mã 1 cái") ──
+    {
+        const now = Date.UTC(2026, 9, 15, 5, 0, 0)   // 12:00 VN
+        const phut = (m: number) => now + m * 60_000
+        dung('luật đẩy: không có đợt nào ⇒ đẩy ngay', duocDayDotKe({ sapToi: 0, dangChay: 0, batDau: phut(300), now }))
+        dung('luật đẩy: đã có MỘT đợt chờ trên Shopee ⇒ không đẩy thêm', !duocDayDotKe({ sapToi: 1, dangChay: 0, batDau: phut(10), now }))
+        dung('luật đẩy: đợt đang chạy + đợt kế còn 30 phút ⇒ đẩy (khung nối liền không bị lỡ)', duocDayDotKe({ sapToi: 0, dangChay: 1, batDau: phut(30), now }))
+        dung('luật đẩy: đợt đang chạy + đợt kế còn 3 giờ ⇒ chưa (không giữ tồn quá sớm)', !duocDayDotKe({ sapToi: 0, dangChay: 1, batDau: phut(180), now }))
+        const s = (id: number, batDauPhut: number) => ({ timeslot_id: id, start_time: Math.floor(phut(batDauPhut) / 1000), end_time: Math.floor(phut(batDauPhut + 30) / 1000) })
+        const slots = [s(1, 2), s(2, 30), s(3, 60), s(4, 200)]
+        dung('chọn khung: bỏ khung còn < 5 phút, lấy khung sớm nhất trong 90 phút', chonKhungTuDong(slots, new Set(), now, LEAD_MS)?.timeslot_id === 2)
+        dung('chọn khung: bỏ khung đã có đợt', chonKhungTuDong(slots, new Set([2]), now, LEAD_MS)?.timeslot_id === 3)
+        dung('chọn khung: bỏ khung đã xét (không có mã) ⇒ khung sau', chonKhungTuDong(slots, new Set(), now, LEAD_MS, 2)?.timeslot_id === 3)
+        dung('chọn khung: ngoài 90 phút ⇒ chưa xếp', chonKhungTuDong([s(4, 200)], new Set(), now, LEAD_MS) === null)
+
+        const dk = { giamToiThieu: 5, giamToiDa: 90, tonToiThieu: 1, tonToiDa: 1000 }
+        const cfg = { channelId: 'k', bat: true, soMa: 3, tonMoiMa: 1, gioiHanMua: 1, kieuGia: 'tru-1d' as const, phanTram: 10 }
+        const ma = (id: number, goc: number, dangBan: number, ton: number) => ({ itemId: id, coPhanLoai: false, giaGoc: goc, giaDangBan: dangBan, ton, phanLoai: [], dieuKien: dk })
+        dung('điều kiện: đang KM (900/1000) còn hàng ⇒ đạt', datDieuKienTuDong(ma(1, 1000, 900, 3), cfg))
+        dung('điều kiện: bán đúng giá gốc ⇒ không đạt (−1đ chỉ giảm 0,1%)', !datDieuKienTuDong(ma(2, 1000, 1000, 3), cfg))
+        dung('điều kiện: hết hàng ⇒ không đạt', !datDieuKienTuDong(ma(3, 1000, 900, 0), cfg))
+        dung('điều kiện: kiểu % 10 ⇒ bán đúng giá gốc vẫn đạt', datDieuKienTuDong(ma(2, 1000, 1000, 3), { ...cfg, kieuGia: 'phan-tram', phanTram: 10 }))
+        dung('điều kiện: có phân loại ⇒ đạt khi ÍT NHẤT một phân loại còn hàng + đạt giá',
+            datDieuKienTuDong({ itemId: 9, coPhanLoai: true, giaGoc: 0, giaDangBan: 0, ton: 5, dieuKien: dk, phanLoai: [
+                { modelId: 1, ten: 'A', giaGoc: 1000, giaDangBan: 1000, ton: 5 }, { modelId: 2, ten: 'B', giaGoc: 1000, giaDangBan: 800, ton: 1 }] }, cfg))
+
+        // chọn mã: xoay vòng + tránh mã Shopee từ chối + dừng đủ soMa
+        const coSo: Record<number, any> = {}
+        const sps: any[] = []
+        for (let i = 1; i <= 12; i++) {
+            const id = 1000 + i
+            // 1001–1003 bán đúng giá gốc (không đạt), còn lại đang KM
+            coSo[id] = { has_model: false, category_id: 0, price_info: [{ original_price: 1000, current_price: i <= 3 ? 1000 : 900 }], stock_info_v2: { summary_info: { total_available_stock: 5 } } }
+            sps.push({ platformProductId: String(id), name: `Mã ${id}` })
+        }
+        const lichSu = [
+            { startTime: new Date(now - 3600_000).toISOString(), items: [{ itemId: 1004 }, { itemId: 1005 }], failedItems: [] },           // vừa lên ⇒ xếp sau
+            { startTime: new Date(now - 7200_000).toISOString(), items: [{ itemId: 1006 }], failedItems: [{ item_id: 1006, err_code: 9, err_msg: 'x' }] }, // Shopee từ chối cả mã ⇒ tránh
+        ]
+        const sv = shopeeGia({ coSo })
+        const { items, daXet } = await chonMaTuDong(sv, sps, lichSu, cfg, new Map([[0, dk]]), 80, () => 0.5)
+        const ids = items.map((x: any) => x.itemId)
+        dung('chọn đúng 3 mã (soMa)', items.length === 3, ids.join())
+        dung('chỉ mã đạt điều kiện (không lấy 1001–1003 bán đúng giá gốc)', ids.every((x: number) => x > 1003))
+        dung('xoay vòng: mã CHƯA lên flash sale được chọn trước mã vừa lên (1004, 1005)', !ids.includes(1004) && !ids.includes(1005), ids.join())
+        dung('tránh mã Shopee vừa từ chối cả mã (1006)', !ids.includes(1006))
+        dung('mỗi mã mang giá đang bán + giá gốc sống', items.every((x: any) => x.price === 900 && x.giaGoc === 1000))
+        dung('đọc Shopee theo lô, dừng khi đủ (1 lô 20 mã)', daXet <= 20 && sv.goi.filter(x => x.startsWith('coSo:')).length === 1, `${daXet} ${sv.goi.filter(x => x.startsWith('coSo:')).length}`)
+        const { items: rong, daXet: xet2 } = await chonMaTuDong(shopeeGia({ coSo: Object.fromEntries(Object.entries(coSo).map(([k, v]) => [k, { ...v, price_info: [{ original_price: 1000, current_price: 1000 }] }])) }), sps, [], cfg, new Map([[0, dk]]), 10, () => 0.5)
+        dung('không mã nào đạt ⇒ rỗng, xét có trần (10)', rong.length === 0 && xet2 <= 20, `${rong.length} ${xet2}`)
     }
     // ── 4. đường thường: tạo → ghi id NGAY → thêm hàng → bật → active ──
     {

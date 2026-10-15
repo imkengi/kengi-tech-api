@@ -1,6 +1,7 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
-import { ensureFlashSaleTable, shopeeServiceFromChannel, shopeeServiceTokenMoi } from '../routes/flashSales'
+import { ensureFlashSaleTable, shopeeServiceFromChannel, shopeeServiceTokenMoi, uid } from '../routes/flashSales'
+import { LEAD_MS, duocDayDotKe, chonKhungTuDong, chonMaTuDong, type CauHinhTuDong } from '../lib/flashSaleTuDong'
 import { tonSanPham, docDieuKienTheoNganh, phanTramGiam, docGiaKhuyenMai, giaHienThi, type DieuKienFlashSale, type GiaKhuyenMai } from '../lib/flashSaleKiemGia'
 
 /**
@@ -337,13 +338,29 @@ async function tickStore(schema: string): Promise<void> {
         } catch (e: any) { console.warn(`[FlashSale] Chưa dọn được đợt sót của plan ${r.id}:`, e?.message || e) }
     }
 
-    // 2. Từng kênh: chưa có active → promote plan kế tiếp
+    // 2a. FLASH SALE TỰ ĐỘNG: gian nào bật thì tự xếp đợt cho khung giờ kế tiếp (15/10/2026)
+    const tuDong: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "FlashSaleTuDong" WHERE bat = true`)
+    for (const cfg of tuDong) {
+        try { await tuDongXepDot(prisma, cfg) } catch (e: any) {
+            console.warn(`[FlashSale] Tự xếp đợt gian ${cfg.channelId} hỏng:`, e?.message || e)
+            await prisma.$executeRawUnsafe(`UPDATE "FlashSaleTuDong" SET "ketQuaCuoi"=$2, "lucChayCuoi"=now(), "updatedAt"=now() WHERE "channelId"=$1`,
+                cfg.channelId, `Lỗi: ${String(e?.message || e).slice(0, 300)}`).catch(() => { })
+        }
+    }
+
+    // 2. Từng kênh: đẩy plan kế tiếp lên Shopee theo luật duocDayDotKe (tối đa 1 đợt chạy + 1 đợt chờ)
     const channels: any[] = await prisma.$queryRawUnsafe(
         `SELECT DISTINCT "channelId" FROM "FlashSalePlan" WHERE status IN ('queued','active','dang_kich_hoat')`)
     for (const { channelId } of channels) {
-        const activeCnt: any[] = await prisma.$queryRawUnsafe(
-            `SELECT COUNT(*)::int AS n FROM "FlashSalePlan" WHERE "channelId"=$1 AND status IN ('active','dang_kich_hoat')`, channelId)
-        if ((activeCnt[0]?.n ?? 0) > 0) continue // tuần tự: đợi sale hiện tại kết thúc
+        /* Bản cũ: còn đợt 'active' là đợi nó HẾT mới đẩy đợt sau ⇒ khung Shopee nối liền (12:00–12:30, 12:30–13:00…) thì lúc đợt
+         * trước hết, đợt sau đã quá sát giờ ⇒ luôn bị bỏ "lỡ khung giờ". Nay: tối đa 1 đợt CHỜ (đã lên Shopee mà chưa tới giờ),
+         * được đẩy đợt kế khi còn ≤ 90 phút — Shopee giữ tồn campaign của tối đa 2 đợt, không phải cả loạt. */
+        const dem: any[] = await prisma.$queryRawUnsafe(
+            `SELECT COUNT(*) FILTER (WHERE status='dang_kich_hoat' OR (status='active' AND "startTime" > now()))::int AS "sapToi",
+                    COUNT(*) FILTER (WHERE status='active')::int AS "dangChay"
+             FROM "FlashSalePlan" WHERE "channelId"=$1 AND status IN ('active','dang_kich_hoat')`, channelId)
+        const sapToi = dem[0]?.sapToi ?? 0, dangChay = dem[0]?.dangChay ?? 0
+        if (sapToi > 0) continue
 
         // Dọn plan lỡ khung giờ (không kịp đăng ký — cần đệm 2 phút)
         const skipped: any[] = await prisma.$queryRawUnsafe(
@@ -361,6 +378,7 @@ async function tickStore(schema: string): Promise<void> {
              ORDER BY position ASC, "startTime" ASC LIMIT 1`, channelId)
         const plan = nextRows[0]
         if (!plan) continue
+        if (!duocDayDotKe({ sapToi, dangChay, batDau: new Date(plan.startTime).getTime(), now: Date.now() })) continue
 
         const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
         if (!channel?.accessToken) continue
@@ -383,6 +401,73 @@ async function tickStore(schema: string): Promise<void> {
             console.error(`[FlashSale] Lỗi kích hoạt plan ${plan.id} (lần ${attempts}${failed ? ' — BỎ' : ''}):`, e?.message || e)
         }
     }
+}
+
+/* ─── FLASH SALE TỰ ĐỘNG — xếp đợt cho khung giờ kế tiếp của MỘT gian (15/10/2026) ─────────────────────────────────────
+ * Mỗi nhịp: gian còn đợt chờ (queued / đang đẩy / đã lên Shopee mà chưa tới giờ) thì thôi; không thì lấy khung Shopee sớm nhất
+ * trong 90 phút tới chưa có đợt ⇒ GIÀNH khung trên dòng cấu hình (hai bản Cloud Run không cùng tạo) ⇒ chọn soMa mã còn hàng
+ * đạt điều kiện giá (xoay vòng) ⇒ thêm plan 'queued' (tuDong=true); bước 2 đẩy lên Shopee ngay trong nhịp. Không có mã nào ⇒
+ * ghi lý do; 3 lần liền không có mã ⇒ 6 giờ mới thử lại (Kengi Electric: 0 mã đạt −1đ — khỏi đọc Shopee mỗi khung). */
+async function tuDongXepDot(prisma: any, cfgRow: any): Promise<void> {
+    const cfg: CauHinhTuDong = {
+        channelId: cfgRow.channelId, bat: !!cfgRow.bat,
+        soMa: Math.max(1, Number(cfgRow.soMa) || 10), tonMoiMa: Math.max(1, Number(cfgRow.tonMoiMa) || 1),
+        gioiHanMua: Math.max(0, Number(cfgRow.gioiHanMua) || 0),
+        kieuGia: cfgRow.kieuGia === 'phan-tram' ? 'phan-tram' : 'tru-1d', phanTram: Number(cfgRow.phanTram) || 10,
+    }
+    const channel = await prisma.onlineChannel.findUnique({ where: { id: cfg.channelId } })
+    if (!channel?.accessToken || String(channel.platform).toLowerCase() !== 'shopee' || channel.status === 'inactive') return
+    const cho: any[] = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS n FROM "FlashSalePlan" WHERE "channelId"=$1
+           AND (status IN ('queued','dang_kich_hoat') OR (status='active' AND "startTime" > now()))`, cfg.channelId)
+    if ((cho[0]?.n ?? 0) > 0) return
+    if (Number(cfgRow.khongMaLienTiep) >= 3 && cfgRow.lucChayCuoi && Date.now() - new Date(cfgRow.lucChayCuoi).getTime() < 6 * 3600_000) return
+
+    const service: any = await shopeeServiceTokenMoi(prisma, channel)
+    const giay = Math.floor(Date.now() / 1000)
+    const slots = await service.flashSaleGetTimeSlots(giay + 60, giay + Math.ceil(LEAD_MS / 1000) + 3600)
+    const daCo = new Set<number>(((await prisma.$queryRawUnsafe(
+        `SELECT "timeslotId" FROM "FlashSalePlan" WHERE "channelId"=$1 AND status <> 'cancelled' AND "startTime" > now() - interval '1 day'`,
+        cfg.channelId)) as any[]).map(r => Number(r.timeslotId)))
+    const khung = chonKhungTuDong(slots, daCo, Date.now(), LEAD_MS, cfgRow.khungDaXet != null ? Number(cfgRow.khungDaXet) : null)
+    if (!khung) return
+    // GIÀNH khung trên dòng cấu hình — prod không có Redis, hai bản máy cùng nhịp không được tạo hai đợt cho một khung
+    const gianh: any[] = await prisma.$queryRawUnsafe(
+        `UPDATE "FlashSaleTuDong" SET "khungDaXet"=$2, "updatedAt"=now()
+         WHERE "channelId"=$1 AND bat = true AND "khungDaXet" IS DISTINCT FROM $2 RETURNING "channelId"`, cfg.channelId, khung.timeslot_id)
+    if (!gianh.length) return
+
+    const gio = (t: number) => new Date(t * 1000 + 7 * 3600_000).toISOString().slice(11, 16)
+    const sps: any[] = await prisma.onlineProduct.findMany({
+        where: { channelId: cfg.channelId, status: 'NORMAL' }, select: { platformProductId: true, name: true },
+    })
+    const lichSu: any[] = await prisma.$queryRawUnsafe(
+        `SELECT items, "failedItems", "startTime" FROM "FlashSalePlan"
+         WHERE "channelId"=$1 AND status IN ('queued','dang_kich_hoat','active','ended') AND "startTime" > now() - interval '3 days'`, cfg.channelId)
+    let theoNganh: any = null
+    try { const { docDieuKienTheoNganh } = await import('../lib/flashSaleKiemGia'); theoNganh = await docDieuKienTheoNganh(service) } catch { theoNganh = null }
+    const { items, daXet } = await chonMaTuDong(service, sps, lichSu, cfg, theoNganh)
+    if (!items.length) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "FlashSaleTuDong" SET "ketQuaCuoi"=$2, "lucChayCuoi"=now(), "khongMaLienTiep"="khongMaLienTiep"+1, "updatedAt"=now() WHERE "channelId"=$1`,
+            cfg.channelId, `Khung ${gio(khung.start_time)}: không mã nào đạt (đã xét ${daXet} mã đang bán) — ` +
+            (cfg.kieuGia === 'tru-1d' ? 'giá đang bán −1đ chưa thấp hơn giá gốc đủ mức Shopee đòi (cần khuyến mãi của shop), hoặc hết hàng' : 'hết hàng hoặc mức giảm ngoài khoảng Shopee cho'))
+        console.log(`[FlashSale] Tự động ${channel.name}: khung ${gio(khung.start_time)} không có mã đạt (xét ${daXet})`)
+        return
+    }
+    const maxPos: any[] = await prisma.$queryRawUnsafe(`SELECT COALESCE(MAX(position),0)::int AS p FROM "FlashSalePlan"`)
+    const id = uid()
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "FlashSalePlan"
+         (id, "channelId", title, "timeslotId", "startTime", "endTime", items, "discountPercent", "stockPerItem", "purchaseLimit", status, position, "kieuGia", "tuDong")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,'queued',$11,$12,true)`,
+        id, cfg.channelId, cfg.kieuGia === 'tru-1d' ? 'Tự động · giá đang bán −1đ' : `Tự động · −${cfg.phanTram}%`,
+        Number(khung.timeslot_id), new Date(khung.start_time * 1000), new Date(khung.end_time * 1000), JSON.stringify(items),
+        cfg.kieuGia === 'phan-tram' ? cfg.phanTram : 0, cfg.tonMoiMa, cfg.gioiHanMua, (maxPos[0]?.p ?? 0) + 1, cfg.kieuGia)
+    await prisma.$executeRawUnsafe(
+        `UPDATE "FlashSaleTuDong" SET "ketQuaCuoi"=$2, "lucChayCuoi"=now(), "khongMaLienTiep"=0, "updatedAt"=now() WHERE "channelId"=$1`,
+        cfg.channelId, `Khung ${gio(khung.start_time)}–${gio(khung.end_time)}: xếp ${items.length} mã (xét ${daXet})`)
+    console.log(`[FlashSale] Tự động ${channel.name}: xếp đợt khung ${gio(khung.start_time)} — ${items.length} mã (plan ${id})`)
 }
 
 /** Gọi từ /api/cron/tick (mỗi 3 phút, 15/10/2026): Cloud Run bóp CPU khi không có request ⇒ setInterval đứng im ban đêm,

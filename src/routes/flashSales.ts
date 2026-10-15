@@ -69,10 +69,27 @@ export async function ensureFlashSaleTable(prisma: any): Promise<void> {
     /* Cách tính giá (15/10/2026, chủ shop: "flash sale chỉ là lấy giá bán hiện tại −1đ thôi"): 'tru-1d' = giá đang bán của
      * từng phân loại − 1đ; null/'phan-tram' = giảm % từ giá gốc như bản đầu. Bảng tạo thô theo cửa hàng ⇒ thêm cột ở đây. */
     await prisma.$executeRawUnsafe(`ALTER TABLE "FlashSalePlan" ADD COLUMN IF NOT EXISTS "kieuGia" TEXT`)
+    /* FLASH SALE TỰ ĐỘNG (15/10/2026, lib/flashSaleTuDong.ts): cấu hình từng gian + cờ trên plan do máy tự xếp. */
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FlashSalePlan" ADD COLUMN IF NOT EXISTS "tuDong" BOOLEAN NOT NULL DEFAULT false`)
+    await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "FlashSaleTuDong" (
+            "channelId" TEXT PRIMARY KEY,
+            bat BOOLEAN NOT NULL DEFAULT false,
+            "soMa" INTEGER NOT NULL DEFAULT 10,
+            "tonMoiMa" INTEGER NOT NULL DEFAULT 1,
+            "gioiHanMua" INTEGER NOT NULL DEFAULT 1,
+            "kieuGia" TEXT NOT NULL DEFAULT 'tru-1d',
+            "phanTram" INTEGER NOT NULL DEFAULT 10,
+            "khungDaXet" BIGINT,
+            "ketQuaCuoi" TEXT,
+            "lucChayCuoi" TIMESTAMPTZ,
+            "khongMaLienTiep" INTEGER NOT NULL DEFAULT 0,
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+        )`)
     tableReady.add(schema)
 }
 
-const uid = () => 'fsp_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+export const uid = () => 'fsp_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
 /** Dựng ShopeeService từ channel — dùng chung cho route + cron. */
 export function shopeeServiceFromChannel(channel: any): ShopeeService {
@@ -193,6 +210,51 @@ router.post('/kiem-gia', async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: { items, dieuKienChung: theoNganh?.get(0) ?? null, loiDieuKien } })
     } catch (err: any) {
         res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+// ─── GET/PUT /tu-dong?channelId= — FLASH SALE TỰ ĐỘNG theo gian (15/10/2026) ───────────────────────────────────────
+// Chủ shop: "tự động tới giờ là set 10 mã còn hàng, mỗi mã 1 cái". Bộ hẹn giờ tự xếp đợt cho từng khung (lib/flashSaleTuDong.ts).
+const MAC_DINH_TU_DONG = { bat: false, soMa: 10, tonMoiMa: 1, gioiHanMua: 1, kieuGia: 'tru-1d', phanTram: 10 }
+router.get('/tu-dong', async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await ensureFlashSaleTable(prisma)
+        const channelId = String(req.query.channelId || '')
+        const rows: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "FlashSaleTuDong" WHERE "channelId"=$1`, channelId)
+        const r = rows[0]
+        res.json({ success: true, data: r ? { ...r, khungDaXet: r.khungDaXet != null ? String(r.khungDaXet) : null } : { channelId, ...MAC_DINH_TU_DONG } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: errMsg(err) })
+    }
+})
+router.put('/tu-dong', async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await ensureFlashSaleTable(prisma)
+        const b = req.body || {}
+        const channel = await getShopeeChannel(prisma, String(b.channelId || ''))
+        const so = (v: any, lo: number, hi: number, mac: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : mac }
+        const cfg = {
+            bat: b.bat === true,
+            soMa: so(b.soMa, 1, 50, 10),
+            tonMoiMa: so(b.tonMoiMa, 1, 1000, 1),
+            gioiHanMua: so(b.gioiHanMua, 0, 100, 1),
+            kieuGia: b.kieuGia === 'phan-tram' ? 'phan-tram' : 'tru-1d',
+            phanTram: so(b.phanTram, 5, 90, 10),
+        }
+        // Bật lại / đổi cách ⇒ xoá bộ đếm "không có mã" để thử ngay ở khung kế
+        const rows: any[] = await prisma.$queryRawUnsafe(
+            `INSERT INTO "FlashSaleTuDong" ("channelId", bat, "soMa", "tonMoiMa", "gioiHanMua", "kieuGia", "phanTram", "khongMaLienTiep", "updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,0,now())
+             ON CONFLICT ("channelId") DO UPDATE SET bat=$2, "soMa"=$3, "tonMoiMa"=$4, "gioiHanMua"=$5, "kieuGia"=$6, "phanTram"=$7,
+                 "khongMaLienTiep"=0, "updatedAt"=now()
+             RETURNING *`,
+            channel.id, cfg.bat, cfg.soMa, cfg.tonMoiMa, cfg.gioiHanMua, cfg.kieuGia, cfg.phanTram)
+        const r = rows[0]
+        res.json({ success: true, data: { ...r, khungDaXet: r?.khungDaXet != null ? String(r.khungDaXet) : null } })
+    } catch (err: any) {
+        res.status(400).json({ success: false, error: String(err?.message || err).slice(0, 300) })
     }
 })
 
