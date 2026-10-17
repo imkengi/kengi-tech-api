@@ -9,9 +9,19 @@
  * KHÔNG TỒN TẠI cũng trả 401/403 — chỉ nhìn mã trạng thái là báo "có" một cách sai. Nên mỗi
  * route đi kèm một ĐƯỜNG GIẢ cùng mount để đối chứng:
  *
- *   giả 404, thật ≠ 404  → route CÓ
- *   thật 404             → route MẤT (báo động)
+ *   thật 404 không phải JSON ("Cannot GET" của Express) → route MẤT (báo động)
+ *   giả 404, thật trả Y HỆT giả (cùng mã, cùng thân)     → route MẤT (route chung kiểu /:id nuốt cả hai)
+ *   giả 404, thật khác giả                               → route CÓ (kể cả 404 JSON do chính handler trả)
  *   giả == thật ∈ {401,403} → KHÔNG KIỂM ĐƯỢC nếu không có token (nói thẳng, không đoán)
+ *
+ * ⚠ BẪY THỨ HAI (17/10): luật cũ "thật 404 → MẤT" báo MẤT /admin/kiotviet-no-khach + -no-ncc
+ * trong khi cả hai đang sống — gọi thiếu ?storeCode= thì chính handler trả 404 JSON "Không tìm
+ * thấy cửa hàng". 404 mang hai nghĩa ngược nhau: không route nào khớp thì Express trả text/html
+ * "Cannot GET …"; handler tự trả 404 thì là JSON. Nhưng cũng ĐỪNG coi mọi 404 JSON là "có":
+ * customers / import-receipts / ccdc / fixed-assets có GET /:id nuốt mọi đường lạ (đường giả của
+ * chúng ra 401 khi không token là do authMiddleware của /:id, không phải cấp mount) và trả 404
+ * JSON cố định ("Customer not found"…) — có token mà route thật mất thì nó trả đúng câu ấy, y như
+ * đường giả. Nên so NGUYÊN câu trả lời với đường giả, không chỉ so mã.
  *
  * Có token thì đặt PROD_TOKEN=... để kiểm được cả những mount đó.
  */
@@ -52,8 +62,23 @@ const headers: Record<string, string> = {
     ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}),
     ...(ADMIN_KEY ? { 'x-admin-key': ADMIN_KEY } : {}),
 }
-const ma = async (p: string): Promise<number> => {
-    try { return (await fetch(BASE + p, { headers })).status } catch { return -1 }
+/* Mã thôi chưa đủ (BẪY THỨ HAI ở đầu file): giữ thêm loại nội dung + thân. Thân chỉ đọc khi 404 —
+ * mã khác thì không cần thân để kết luận. */
+type Dap = { ma: number; loai: string; than: string }
+const goi = async (p: string): Promise<Dap> => {
+    try {
+        const r = await fetch(BASE + p, { headers })
+        return { ma: r.status, loai: r.headers.get('content-type') || '', than: r.status === 404 ? await r.text() : '' }
+    } catch { return { ma: -1, loai: '', than: '' } }
+}
+const laJson = (d: Dap) => /json/i.test(d.loai)
+const loiCua = (d: Dap) => { try { const j = JSON.parse(d.than); return String(j?.error || j?.message || d.than) } catch { return d.than } }
+/* Thật trả Y HỆT đường giả? Bỏ đoạn cuối của CẢ HAI đường khỏi CẢ HAI thân rồi mới so — handler hay
+ * nhắc lại id ("Không tìm thấy phiếu <id>"), kẻo thật/giả lệch nhau chỉ vì chữ ấy rồi báo "có" cho
+ * một route đã bị /:id nuốt. */
+const yHet = (a: Dap, b: Dap, ...ps: string[]) => {
+    const bo = (t: string) => ps.reduce((s, p) => s.split(p.split('/').pop() || p).join('…'), t)
+    return a.ma === b.ma && bo(a.than) === bo(b.than)
 }
 
 /* So DẤU ẤN BẢN ĐANG CHẠY với cây mã ở máy — trả lời thẳng câu "prod có phải bản này không", thay
@@ -81,15 +106,24 @@ async function main() {
     await soDauAn()
     console.log('')
     let co = 0, mat = 0, khongBiet = 0
-    const cacheGia = new Map<string, number>()
+    const cacheGia = new Map<string, Dap>()
     for (const r of ROUTES) {
-        const that = await ma(r.duong)
-        if (!cacheGia.has(r.gia)) cacheGia.set(r.gia, await ma(r.gia))
+        const that = await goi(r.duong)
+        if (!cacheGia.has(r.gia)) cacheGia.set(r.gia, await goi(r.gia))
         const gia = cacheGia.get(r.gia)!
-        if (that === -1) { console.log(`  ? lạ   ${r.duong.padEnd(38)} không gọi được`); khongBiet++; continue }
-        if (that === 404) { console.log(`  ✗ MẤT  ${r.duong.padEnd(38)} → ${r.vi}`); mat++; continue }
-        if (gia === 404) { console.log(`  ✓ có   ${r.duong.padEnd(38)} (${that}, đường giả 404 → phân biệt được)`); co++; continue }
-        console.log(`  · ?    ${r.duong.padEnd(38)} (${that}) — mount chặn xác thực trước, đường giả cũng ${gia}: KHÔNG kiểm được nếu không có PROD_TOKEN`)
+        if (that.ma === -1) { console.log(`  ? lạ   ${r.duong.padEnd(38)} không gọi được`); khongBiet++; continue }
+        if (that.ma === 404 && !laJson(that)) {
+            const viSao = that.than.includes('Cannot GET') ? '404 "Cannot GET" của Express: không route nào khớp' : `404 ${that.loai.split(';')[0] || 'không rõ loại'}, không phải JSON của handler`
+            console.log(`  ✗ MẤT  ${r.duong.padEnd(38)} → ${r.vi} (${viSao})`); mat++; continue
+        }
+        if (gia.ma === 404 && yHet(that, gia, r.duong, r.gia)) {
+            console.log(`  ✗ MẤT  ${r.duong.padEnd(38)} → ${r.vi} (trả y hệt đường giả: 404 "${loiCua(that).slice(0, 60)}" — route chung kiểu /:id nuốt cả hai)`); mat++; continue
+        }
+        if (gia.ma === 404) {
+            const dap = that.ma === 404 ? `404 JSON của chính handler: "${loiCua(that).slice(0, 60)}"` : String(that.ma)
+            console.log(`  ✓ có   ${r.duong.padEnd(38)} (${dap}, đường giả 404 → phân biệt được)`); co++; continue
+        }
+        console.log(`  · ?    ${r.duong.padEnd(38)} (${that.ma}) — mount chặn xác thực trước, đường giả cũng ${gia.ma}: KHÔNG kiểm được nếu không có PROD_TOKEN`)
         khongBiet++
     }
     console.log(`\n  ${co} route xác nhận CÓ · ${mat} MẤT · ${khongBiet} không kết luận được`)
