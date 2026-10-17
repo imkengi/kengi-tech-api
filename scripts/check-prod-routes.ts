@@ -132,18 +132,26 @@ async function main() {
      * Trước đây hàm này LUÔN thoát 0 khi không có route nào MẤT — kể cả lúc chạy chay không token,
      * tức **không kiểm được gì cũng báo xanh**. Tài liệu phải dặn "đừng nhìn mã thoát", mà một
      * phép kiểm cần dặn như vậy thì không dùng làm cổng chặn được.
-     * Nay: 0 = đã xác nhận HẾT · 1 = chắc chắn THIẾU code · 2 = KHÔNG KẾT LUẬN ĐƯỢC. */
+     * Nay: 0 = đã xác nhận HẾT · 1 = chắc chắn THIẾU code · 2 = KHÔNG KẾT LUẬN ĐƯỢC.
+     *
+     * ⚠ Đặt process.exitCode rồi để tiến trình TỰ thoát, ĐỪNG process.exit(n) (17/10/2026): trên
+     * Windows, thoát cưỡng bức lúc fetch còn giữ socket keep-alive làm Node sập trong libuv
+     * ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING) … async.c", mã 0xC0000409) và Git
+     * Bash báo 127 thay cho 1/2 — mất đúng cái nghĩa vừa kể (máy chủ giả 127.0.0.1: sập 10/10 lần).
+     * Tự thoát không treo: socket keep-alive rảnh thì undici đã unref, thân bỏ dở thì socket ngừng
+     * đọc khi đầy bộ đệm (đo: thân 20 MB không đọc vẫn thoát sau 0,4 s). */
     if (mat === 0 && khongBiet > 0) {
         console.log(`\n  ⛔ KHÔNG KẾT LUẬN ĐƯỢC cho ${khongBiet}/${co + mat + khongBiet} route — thiếu token nên`)
         console.log('     mount chặn ở tầng xác thực, không phân biệt được "route có" với "route mất".')
         console.log('     Đây KHÔNG phải "đạt". Muốn kết luận thì chạy lại kèm PROD_TOKEN / PROD_ADMIN_KEY.')
-        process.exit(2)
+        process.exitCode = 2
+        return
     }
     if (mat > 0) {
         console.log(`\n  ⚠ Prod THIẾU code. Đã gặp: deploy từ cây khác / CI build HEAD / deploy lại image cũ.`)
         console.log(`  ⚠ Nặng nhất: mất bản vá "thiếu ≠ 0" ⇒ webhook KiotViet ghi 0 lên nợ thật (xem memory hai-cay-deploy-de-nhau).`)
-        process.exit(1)
+        process.exitCode = 1
     }
 }
 
-main().catch(e => { console.error('  lỗi:', e?.message || e); process.exit(1) })
+main().catch(e => { console.error('  lỗi:', e?.message || e); process.exitCode = 1 })
