@@ -69,7 +69,7 @@ Chỉ trả về MỘT đối tượng JSON đúng khuôn, không giải thích:
 const gap = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 /** Lọc truyện AI trả: nhịp hỏng thì bỏ, thiếu nhịp bắt buộc thì bỏ cả truyện; xếp lại đúng cấu trúc; bỏ truyện trùng mở đầu. */
-export function locTruyen(raw: any, ten: string, moTa: string): { dungDuoc: boolean; lyDo: string; truyen: Truyen[]; boLoc: number } {
+export function locTruyen(raw: any, ten: string, moTa: string, nhatKy?: string[]): { dungDuoc: boolean; lyDo: string; truyen: Truyen[]; boLoc: number } {
     const nguon = new Set(soTrong(`${ten}\n${moTa}`))
     let bo = 0
     const sach = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
@@ -80,13 +80,15 @@ export function locTruyen(raw: any, ten: string, moTa: string): { dungDuoc: bool
         for (const n of (Array.isArray(t?.nhip) ? t.nhip : [])) {
             const loai = (LOAI as string[]).includes(n?.loai) ? (n.loai as LoaiNhip) : null
             const chu = sach(n?.chu).replace(/[.。]+$/, ''), loi = sach(n?.loi)
-            if (!loai || !chu || !loi) { bo++; continue }
+            if (!loai || !chu || !loi) { bo++; nhatKy?.push(`thiếu loại/chữ/lời: ${JSON.stringify(n).slice(0, 80)}`); continue }
             const caHai = `${chu} ${loi}`
             const so = soTrong(caHai)
             const coSo = loai === 'ngoat' || loai === 'loi-ich'
             const soHong = coSo ? so.some(x => !nguon.has(x)) : so.length > 0
             if (chu.length > 44 || loi.length > 150 || NGOAI_SAN.test(caHai) || CAM.test(caHai) || /\?/.test(caHai) || soHong) {
                 bo++
+                nhatKy?.push(`${loai}: ${chu.length > 44 ? 'chữ dài ' + chu.length : loi.length > 150 ? 'lời dài ' + loi.length : NGOAI_SAN.test(caHai) ? 'ngoài sàn'
+                    : CAM.test(caHai) ? 'từ cấm «' + (caHai.match(CAM)?.[0] || '') + '»' : /\?/.test(caHai) ? 'câu hỏi' : 'số ' + so.join(',')} — ${chu}`)
                 if (loai !== 'loi-ich') hong = true   // nhịp bắt buộc hỏng ⇒ cả truyện hỏng; lợi ích hỏng thì bỏ riêng nhịp đó
                 continue
             }
@@ -97,7 +99,7 @@ export function locTruyen(raw: any, ten: string, moTa: string): { dungDuoc: bool
         const dau = (l: LoaiNhip) => nhip.find(x => x.loai === l)
         const loiIch = nhip.filter(x => x.loai === 'loi-ich').slice(0, 2)
         const xep = [dau('mo'), dau('roi'), dau('ngoat'), ...loiIch, dau('ket')]
-        if (hong || xep.some(x => !x) || !loiIch.length) { bo++; continue }
+        if (hong || xep.some(x => !x) || !loiIch.length) { bo++; nhatKy?.push(`BỎ TRUYỆN «${sach(t?.tieuDe)}»: ${hong ? 'nhịp bắt buộc hỏng' : 'thiếu nhịp'}`); continue }
         const tieuDe = sach(t?.tieuDe).replace(/[.。]+$/, '').slice(0, 48)
         ra.push({ tieuDe: CAM.test(tieuDe) || NGOAI_SAN.test(tieuDe) || soTrong(tieuDe).length ? '' : tieuDe, nhip: xep as NhipTruyen[] })
     }
@@ -138,6 +140,24 @@ export async function vietCauChuyen(prisma: any, sp: SanPhamTruyen, nd: NoiDungS
     if (cu.length && !vietThem) {
         return { dungDuoc: true, lyDo: '', truyen: cu, boLoc: 0, tuBoNho: true, nhaCungCap: daLuu.nhaCungCap || '', luc: new Date(daLuu.updatedAt).toISOString() }
     }
+    const { loc, model } = await vietTruyenAi(prisma, sp, nd, cu)
+    if (!loc.dungDuoc && !cu.length) return { ...loc, tuBoNho: false, nhaCungCap: model, luc: new Date().toISOString() }
+    // nối truyện mới sau truyện cũ (giữ thứ tự cũ ⇒ biến thể cũ vẫn trỏ đúng truyện), bỏ trùng câu mở, tối đa TRAN_KHO
+    const gop = [...cu]
+    for (const t of loc.truyen) if (!gop.some(x => gap(x.nhip[0]!.chu) === gap(t.nhip[0]!.chu))) gop.push(t)
+    const truyen = gop.slice(0, TRAN_KHO)
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "SanMediaCauChuyen" ("productId", bam, "ketQua", "nhaCungCap", "updatedAt") VALUES ($1,$2,$3,$4,now())
+             ON CONFLICT ("productId") DO UPDATE SET bam=$2, "ketQua"=$3, "nhaCungCap"=$4, "updatedAt"=now()`,
+            sp.id, bam, JSON.stringify({ truyen }), model)
+    } catch { /* không lưu được — vẫn trả kết quả */ }
+    return { dungDuoc: truyen.length > 0, lyDo: truyen.length ? '' : loc.lyDo, truyen, boLoc: loc.boLoc, tuBoNho: false, nhaCungCap: model, luc: new Date().toISOString() }
+}
+
+/** MỘT lượt AI viết truyện + lọc — KHÔNG đọc/ghi kho (đầu dò quản trị dùng thẳng). `cu` = truyện đã có, để AI viết truyện khác. */
+export async function vietTruyenAi(prisma: any, sp: SanPhamTruyen, nd: NoiDungSoat | null, cu: Truyen[] = [], nhatKy?: string[]) {
+    const moTa = String(sp.moTa || '').slice(0, 8000)
     const key = await layKeyAi(prisma)
     if (!key.gemini && !key.deepseek) throw new LoiAiSoat('Chưa có key AI — vào Hệ Thống → Cài Đặt, tab Trợ lý AI nhập key Gemini (miễn phí ở aistudio.google.com/apikey).', false, true)
     const deBai = [
@@ -152,17 +172,6 @@ export async function vietCauChuyen(prisma: any, sp: SanPhamTruyen, nd: NoiDungS
     if (key.gemini) { try { kq = await goiGemini(key.gemini, deBai, HUONG_DAN) } catch (e) { loiGemini = e } }
     if (!kq && key.deepseek) kq = await goiDeepSeekSoat(key.deepseek, deBai, HUONG_DAN)
     if (!kq) throw loiGemini || new LoiAiSoat('AI không viết được câu chuyện', true)
-    const loc = locTruyen(docJsonAi(kq.text), sp.ten, moTa)
-    if (!loc.dungDuoc && !cu.length) return { ...loc, tuBoNho: false, nhaCungCap: kq.model, luc: new Date().toISOString() }
-    // nối truyện mới sau truyện cũ (giữ thứ tự cũ ⇒ biến thể cũ vẫn trỏ đúng truyện), bỏ trùng câu mở, tối đa TRAN_KHO
-    const gop = [...cu]
-    for (const t of loc.truyen) if (!gop.some(x => gap(x.nhip[0]!.chu) === gap(t.nhip[0]!.chu))) gop.push(t)
-    const truyen = gop.slice(0, TRAN_KHO)
-    try {
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO "SanMediaCauChuyen" ("productId", bam, "ketQua", "nhaCungCap", "updatedAt") VALUES ($1,$2,$3,$4,now())
-             ON CONFLICT ("productId") DO UPDATE SET bam=$2, "ketQua"=$3, "nhaCungCap"=$4, "updatedAt"=now()`,
-            sp.id, bam, JSON.stringify({ truyen }), kq.model)
-    } catch { /* không lưu được — vẫn trả kết quả */ }
-    return { dungDuoc: truyen.length > 0, lyDo: truyen.length ? '' : loc.lyDo, truyen, boLoc: loc.boLoc, tuBoNho: false, nhaCungCap: kq.model, luc: new Date().toISOString() }
+    const raw = docJsonAi(kq.text)
+    return { raw, loc: locTruyen(raw, sp.ten, moTa, nhatKy), model: kq.model }
 }

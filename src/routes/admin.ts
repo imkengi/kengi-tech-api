@@ -5486,6 +5486,55 @@ router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── THỬ AI VIẾT CÂU CHUYỆN (chỉ đọc, KHÔNG lưu) — GET /admin/do-cau-chuyen?store=KENGISTORE&so=2[&sku=…] ──────────────
+ * (17/10/2026, kiểu video "câu chuyện lồng ghép sản phẩm"): lấy ngẫu nhiên `so` mã (≤5) có mô tả dài + ảnh kho + đang bán Shopee,
+ * hoặc đúng `sku`; cho AI viết truyện bằng key AI của CỬA HÀNG rồi lọc như thật (lib/aiCauChuyen.ts → vietTruyenAi) — trả truyện đạt
+ * luật + lý do từng nhịp bị bỏ, để chỉnh lời dặn khi tỉ lệ đạt thấp. Kho nội dung đã soát chỉ ĐỌC nếu có; KHÔNG ghi bảng nào.
+ * Mỗi mã tốn một lượt gọi AI (key miễn phí của cửa hàng). */
+router.get('/do-cau-chuyen', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const so = Math.min(5, Math.max(1, Number(req.query.so) || 2))
+        const sku = String(req.query.sku || '').trim()
+        const ds: { id: string }[] = sku
+            ? await sp.$queryRawUnsafe(`SELECT id FROM "Product" WHERE sku = $1 AND "mergedIntoId" IS NULL LIMIT 1`, sku)
+            : await sp.$queryRawUnsafe(`
+                SELECT p.id FROM "Product" p
+                 WHERE p."mergedIntoId" IS NULL AND length(coalesce(trim(p.description), '')) > 200
+                   AND EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id)
+                   AND EXISTS (SELECT 1 FROM "OnlineProduct" op WHERE op.sku = p.sku AND op.platform = 'shopee')
+                 ORDER BY random() LIMIT $1`, so)
+        const { chiTietLamVideo } = await import('../lib/lamVideoSanPham')
+        const { vietTruyenAi } = await import('../lib/aiCauChuyen')
+        const ra: any[] = []
+        for (const r of ds) {
+            const ct: any = await chiTietLamVideo(sp, r.id)
+            if (!ct) continue
+            let nd: any = null
+            try { const d = await sp.sanMediaNoiDung.findUnique({ where: { productId: ct.id } }); nd = d ? JSON.parse(d.ketQua) : null } catch { nd = null }
+            const nhatKy: string[] = []
+            const bd = Date.now()
+            try {
+                const kq = await vietTruyenAi(sp, { id: ct.id, ten: ct.ten, sku: ct.sku, moTa: ct.moTa, thuongHieu: ct.thuongHieu, nhom: ct.nhom },
+                    nd?.dungDuoc ? nd : null, [], nhatKy)
+                ra.push({
+                    sku: ct.sku, ten: ct.ten, moTa: ct.moTa.length, coKhoSoat: !!nd?.dungDuoc, model: kq.model, giay: Math.round((Date.now() - bd) / 100) / 10,
+                    aiDungDuoc: kq.raw?.dungDuoc, aiLyDo: kq.raw?.lyDo || '', aiTraVe: Array.isArray(kq.raw?.truyen) ? kq.raw.truyen.length : 0,
+                    dat: kq.loc.truyen.length, boLoc: kq.loc.boLoc, lyDo: kq.loc.lyDo, nhatKy, truyen: kq.loc.truyen,
+                })
+            } catch (e: any) {
+                ra.push({ sku: ct.sku, ten: ct.ten, loi: String(e?.message || e).slice(0, 300), nhatKy })
+            }
+        }
+        res.json({ success: true, data: { store: st.code, so: ra.length, ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── KHÁCH YÊU CẦU HOÁ ĐƠN TRÊN SHOPEE (chỉ đọc) — GET /admin/do-hoa-don-khach-shopee?store=KENGISTORE&ngay=30&soDon=300 ──
  * (15/10/2026, chủ shop: "xem phần khách yêu cầu hoá đơn có webhook không, mỗi lần khách nhắn rồi sửa hoá đơn cực"). Shopee KHÔNG
  * có push cho yêu cầu hoá đơn (29 loại push) ⇒ tự động = hỏi get_buyer_invoice_info theo lô. Đo trong soDon đơn Shopee gần nhất
