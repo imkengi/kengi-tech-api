@@ -54,9 +54,9 @@ LUẬT BẮT BUỘC:
 Chỉ trả về MỘT đối tượng JSON đúng khuôn, không giải thích:
 {"dungDuoc":true,"lyDo":"","tenNgan":"","khauHieu":[""],"diemManh":[""],"thongSo":[{"nhan":"","giaTri":""}],"canhBao":[]}`
 
-const NGOAI_SAN = /https?:\/\/|www\.|\.(?:com|vn|net)\b|zalo|hotline|messenger|\binbox\b|nhắn tin|liên hệ|gọi ngay|gọi điện|(?:^|\D)(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)/i
+export const NGOAI_SAN = /https?:\/\/|www\.|\.(?:com|vn|net)\b|zalo|hotline|messenger|\binbox\b|nhắn tin|liên hệ|gọi ngay|gọi điện|(?:^|\D)(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)/i
 
-function docJsonAi(text: string): any {
+export function docJsonAi(text: string): any {
     const t = String(text || '').replace(/```(?:json)?/gi, '').trim()
     const a = t.indexOf('{'), b = t.lastIndexOf('}')
     if (a < 0 || b <= a) throw new LoiAiSoat('AI không trả JSON', true)
@@ -64,7 +64,7 @@ function docJsonAi(text: string): any {
 }
 
 /** Số trong chuỗi (1.800 / 1,5 / 20) ở dạng chuẩn để so có trong mô tả không */
-const soTrong = (s: string) => (String(s).match(/\d+(?:[.,]\d+)*/g) || []).map(x => x.replace(/[.,](?=\d{3}\b)/g, '').replace(',', '.'))
+export const soTrong = (s: string) => (String(s).match(/\d+(?:[.,]\d+)*/g) || []).map(x => x.replace(/[.,](?=\d{3}\b)/g, '').replace(',', '.'))
 
 /** Lọc lại kết quả AI: độ dài, dẫn ra ngoài sàn, SỐ KHÔNG CÓ NGUỒN (số bịa) ⇒ bỏ cả dòng */
 export function locKetQua(raw: any, ten: string, moTa: string): NoiDungSoat {
@@ -93,12 +93,14 @@ export function locKetQua(raw: any, ten: string, moTa: string): NoiDungSoat {
     return { dungDuoc, lyDo, tenNgan, khauHieu, diemManh, thongSo, canhBao, boLoc: bo }
 }
 
-async function goiGemini(key: string, deBai: string): Promise<{ text: string; model: string }> {
+/** Gọi Gemini theo thứ tự model (JSON mode). `huongDan` = lời dặn hệ thống — mặc định của việc soát; AI viết truyện
+ *  (lib/aiCauChuyen.ts) truyền lời dặn riêng. */
+export async function goiGemini(key: string, deBai: string, huongDan: string = HUONG_DAN): Promise<{ text: string; model: string }> {
     const vet: string[] = []
     let coTamThoi = false
     for (const model of MODEL_GEMINI) {
         const body = JSON.stringify({
-            systemInstruction: { parts: [{ text: HUONG_DAN }] },
+            systemInstruction: { parts: [{ text: huongDan }] },
             contents: [{ role: 'user', parts: [{ text: deBai }] }],
             // Dòng 3.x: Google khuyên giữ temperature mặc định; 2.x hạ thấp cho ổn định (như aiAgentRunner)
             generationConfig: { responseMimeType: 'application/json', ...(/^gemini-2\./.test(model) ? { temperature: 0.2 } : {}) },
@@ -121,9 +123,9 @@ async function goiGemini(key: string, deBai: string): Promise<{ text: string; mo
     throw new LoiAiSoat(`Gemini không soát được: ${vet.join('; ')}`, coTamThoi)
 }
 
-async function goiDeepSeekSoat(key: string, deBai: string): Promise<{ text: string; model: string }> {
+export async function goiDeepSeekSoat(key: string, deBai: string, huongDan: string = HUONG_DAN): Promise<{ text: string; model: string }> {
     const { goiDeepSeek } = await import('../services/aiDeepSeek')
-    const data = await goiDeepSeek([{ role: 'user', parts: [{ text: deBai }] }], key, HUONG_DAN, [])
+    const data = await goiDeepSeek([{ role: 'user', parts: [{ text: deBai }] }], key, huongDan, [])
     const text = (data?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text || '').join('')
     if (!text.trim()) throw new LoiAiSoat('DeepSeek trả rỗng', true)
     return { text, model: 'deepseek' }
@@ -143,7 +145,7 @@ export async function soatNoiDung(prisma: any, sp: SanPhamSoat, lamMoi = false):
         } catch { /* bản lưu hỏng ⇒ soát lại */ }
     }
     const key = await layKeyAi(prisma)
-    if (!key.gemini && !key.deepseek) throw new LoiAiSoat('Chưa có key AI — vào Cài đặt → Trợ lý AI nhập key Gemini (miễn phí ở aistudio.google.com/apikey).', false, true)
+    if (!key.gemini && !key.deepseek) throw new LoiAiSoat('Chưa có key AI — vào Hệ Thống → Cài Đặt, tab Trợ lý AI nhập key Gemini (miễn phí ở aistudio.google.com/apikey).', false, true)
     const deBai = [
         `Tên sản phẩm: ${sp.ten}`, `Mã (SKU): ${sp.sku || '—'}`,
         sp.thuongHieu ? `Hãng: ${sp.thuongHieu}` : '', sp.nhom ? `Nhóm hàng: ${sp.nhom}` : '',

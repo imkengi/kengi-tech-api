@@ -150,4 +150,35 @@ router.post('/san-pham/:id/soat', authMiddleware, QUYEN, async (req: AuthRequest
     }
 })
 
+/**
+ * POST /san-media/lam-video/san-pham/:id/cau-chuyen {vietThem?} — KIỂU VIDEO "CÂU CHUYỆN LỒNG GHÉP SẢN PHẨM" (17/10/2026, chủ shop:
+ * "thêm các kiểu tạo video như tạo câu chuyện lồng ghép sản phẩm"). Soát nội dung trước (lấy kho đã lưu nếu có) rồi AI viết
+ * truyện đời thường từ tên + mô tả + kho đã soát, lọc lại (lib/aiCauChuyen.ts), LƯU theo mã. `vietThem` = viết thêm truyện mới
+ * nối vào kho khi các truyện cũ đã dùng hết cho video của mã.
+ */
+router.post('/san-pham/:id/cau-chuyen', authMiddleware, QUYEN, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ct = await chiTietLamVideo(prisma, String(req.params.id))
+        if (!ct) { res.status(404).json({ success: false, error: 'Không thấy sản phẩm' }); return }
+        if (!ct.moTa.trim()) { res.status(400).json({ success: false, error: 'Mã chưa có mô tả ở Thông tin sản phẩm' }); return }
+        const s = await soatNoiDung(prisma, {
+            id: ct.id, ten: ct.ten, sku: ct.sku, moTa: ct.moTa, thuongHieu: ct.thuongHieu, nhom: ct.nhom,
+            tenTrenSan: ct.gian.find((g: any) => g.tenTrenSan)?.tenTrenSan || null,
+        })
+        if (!s.noiDung.dungDuoc) { res.status(400).json({ success: false, error: `AI: ${s.noiDung.lyDo}`, moTaHong: true }); return }
+        const { vietCauChuyen } = await import('../lib/aiCauChuyen')
+        const kq = await vietCauChuyen(prisma, { id: ct.id, ten: ct.ten, sku: ct.sku, moTa: ct.moTa, thuongHieu: ct.thuongHieu, nhom: ct.nhom },
+            s.noiDung, req.body?.vietThem === true)
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        if (e instanceof LoiAiSoat) {
+            res.status(e.khongCoKey ? 400 : e.tamThoi ? 503 : 502).json({ success: false, error: e.message, khongCoKey: e.khongCoKey, tamThoi: e.tamThoi })
+            return
+        }
+        console.error('POST /san-media/lam-video/san-pham/:id/cau-chuyen lỗi:', moTaLoi(e))
+        res.status(500).json({ success: false, error: String(e?.message || e).slice(0, 300) })
+    }
+})
+
 export default router
