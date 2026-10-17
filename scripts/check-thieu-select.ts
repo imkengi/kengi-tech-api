@@ -93,6 +93,33 @@ function tachPhanTu(than: string): string[] {
 }
 
 /**
+ * Khối `{…}` của `select:` trong đoạn `doan`. Giá trị là TÊN BIẾN (`select: chonDon`) thì giải về `const chonDon = {…}` gần nhất
+ * phía trước `truoc` trong `src`; không giải được thì null (không đoán). Ca thật 17/10/2026: `driveVideos.ts` viết
+ * `select: chonDon, orderBy: { createdAt: 'desc' }` — bản cũ lấy `{` ĐẦU TIÊN sau `select:` ⇒ ra khối orderBy, báo oan 3 cột.
+ */
+function khoiSelect(doan: string, src: string, truoc: number): string | null {
+    const iSel = doan.indexOf('select:')
+    if (iSel < 0) return null
+    const sau = doan.slice(iSel + 'select:'.length)
+    const ten = /^\s*([A-Za-z_$][\w$]*)\s*(?:as\s+any\s*)?[,}\n]/.exec(sau)
+    if (ten) {
+        let kb: RegExpMatchArray | null = null
+        for (const k of src.matchAll(new RegExp('const\\s+' + ten[1] + '\\s*(?::[^=\\n]+)?=\\s*\\{', 'g'))) {
+            if (k.index! > truoc) break
+            kb = k
+        }
+        if (!kb) return null
+        const mo = kb.index! + kb[0].length - 1
+        const dong = canBang(src, mo, '{', '}')
+        return dong < 0 ? null : src.slice(mo, dong + 1)
+    }
+    if (!/^\s*\{/.test(sau)) return null
+    const moSel = doan.indexOf('{', iSel)
+    const dongSel = canBang(doan, moSel, '{', '}')
+    return dongSel < 0 ? null : doan.slice(moSel, dongSel + 1)
+}
+
+/**
  * `const [a, b] = await Promise.all([q1, q2])` — ghép TÊN theo VỊ TRÍ với `select` của từng câu.
  * Thiếu bảng này thì bộ soát mù hẳn **59 chỗ** dùng lối tháo mảng (đo 21/08/2026) — mà đó lại là
  * lối viết ưa dùng của các trang báo cáo, tức đúng chỗ tiền bạc.
@@ -109,13 +136,9 @@ function bangThaoMang(src: string): Array<{ ten: string; daLay: Set<string>; viT
             if (!tens[i]) return
             if (!/\w+\.\w+\.(findMany|findFirst|findUnique)\s*\(/.test(p)) return
             if (/\$queryRaw/.test(p) || /include\s*:/.test(p)) return
-            const iSel = p.indexOf('select:')
-            if (iSel < 0) return
-            const moSel = p.indexOf('{', iSel)
-            if (moSel < 0) return
-            const dongSel = canBang(p, moSel, '{', '}')
-            if (dongSel < 0) return
-            const daLay = khoaTangNgoai(p.slice(moSel, dongSel + 1))
+            const khoi = khoiSelect(p, src, m.index!)
+            if (!khoi) return
+            const daLay = khoaTangNgoai(khoi)
             if (daLay.size) ra.push({ ten: tens[i], daLay, viTri: m.index! })
         })
     }
@@ -178,13 +201,10 @@ for (const f of dsFile) {
         if (dongNgoac < 0) return null
         const doiSo = src.slice(moNgoac, dongNgoac + 1)
 
-        const iSel = doiSo.indexOf('select:')
-        if (iSel < 0 || /include\s*:/.test(doiSo)) return null
-        const moSel = doiSo.indexOf('{', iSel)
-        if (moSel < 0) return null
-        const dongSel = canBang(doiSo, moSel, '{', '}')
-        if (dongSel < 0) return null
-        const daLay = khoaTangNgoai(doiSo.slice(moSel, dongSel + 1))
+        if (/include\s*:/.test(doiSo)) return null
+        const khoi = khoiSelect(doiSo, src, m.index!)
+        if (!khoi) return null
+        const daLay = khoaTangNgoai(khoi)
         return daLay.size ? daLay : null
     }
 

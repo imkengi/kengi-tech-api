@@ -1,4 +1,5 @@
 import { khoaSoChan, loiKhoaSo } from './periodLock'
+import { moTaLoi } from './gomLoi'
 
 // Helpers for auto-generating JournalEntry records from POS transactions.
 // Used by both the live POS flow (POST /api/transactions) and the
@@ -128,7 +129,7 @@ export async function postDebtCollectionJournal(client: any, opts: {
     } catch (e: any) {
         // Trùng ref = đã ghi rồi (chống ghi hai lần), im lặng là đúng. Lỗi khác PHẢI nói.
         if (!laTrungKhoa(e)) {
-            console.error(`[autoJournal] KHÔNG ghi được bút toán thu nợ ref=${opts.refKey}: ${e?.message || e}`)
+            console.error(`[autoJournal] KHÔNG ghi được bút toán thu nợ ref=${opts.refKey}: ${moTaLoi(e)}`)
             throw e
         }
     }
@@ -400,7 +401,7 @@ async function postReversal(prisma: any, e: any, date: string, opts: { branchId?
         // Trùng VOID-<ref> = đã đảo rồi, im lặng là đúng. Lỗi khác thì PHẢI nói:
         // đảo hụt một vế nghĩa là hoá đơn đã huỷ mà sổ vẫn còn ghi nhận doanh thu.
         if (!laTrungKhoa(e)) {
-            console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${ref}: ${e?.message || e}`)
+            console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${ref}: ${moTaLoi(e)}`)
         }
     }
 }
@@ -427,7 +428,7 @@ export async function reverseJournalEntriesForTransaction(
     } catch (e: any) {
         // Không đọc được sổ thì KHÔNG được im lặng bỏ qua: hoá đơn sắp bị huỷ mà
         // bút toán vẫn nằm nguyên trong sổ là doanh thu ma.
-        console.error(`[autoJournal] KHÔNG đọc được bút toán để đảo cho HĐ ${receiptNumber}: ${e?.message || e}`)
+        console.error(`[autoJournal] KHÔNG đọc được bút toán để đảo cho HĐ ${receiptNumber}: ${moTaLoi(e)}`)
         throw e
     }
     const date = fmtDate(new Date())
@@ -444,7 +445,7 @@ export async function reverseJournalByReference(
         const date = fmtDate(new Date())
         for (const e of entries) await postReversal(prisma, e, date, opts)
     } catch (e: any) {
-        console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${reference}: ${e?.message || e}`)
+        console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${reference}: ${moTaLoi(e)}`)
         throw e
     }
 }

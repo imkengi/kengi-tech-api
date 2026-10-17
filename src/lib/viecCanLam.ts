@@ -16,6 +16,7 @@
 
 import { phanLoaiVuTra, kienHoanTuDonHuy, kienChuaNhan, hangHuTuDonHuy, type DongViec, type KienHoan } from './viecVuTra'
 import { tenVideoHoanTu } from '../routes/driveVideos'
+import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
 
 export type MucDo = 'khan' | 'canhBao' | 'nhac'
 
@@ -421,7 +422,8 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
         const tu = new Date(homNay.getTime() - 30 * 86400_000)
         const TRAN = 3000
         const dsDon = await prisma.transaction.findMany({
-            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: tu }, ...bo },
+            // phiếu đã bán (ghi nợ 'partial' VẪN là bán) — nhập hằng chung, đừng chép tập trạng thái (check:hangtrung)
+            where: { status: { in: [...TRANG_THAI_TINH] }, createdAt: { gte: tu }, ...bo },
             select: { receiptNumber: true },
             take: TRAN,
         })

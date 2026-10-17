@@ -5673,10 +5673,11 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                 } catch (e: any) { o.flashSaleTrenShopee = { loi: String(e?.message || e).slice(0, 250) } }
                 // Điều kiện flash sale theo ngành của gian: min_discount (%) / need_lowest_price quyết định "giá đang bán −1đ" có lọt không
                 try {
-                    const c = await svc.flashSaleItemCriteria()
+                    // `dk` (không đặt `c` — trùng tên dòng kênh bên ngoài, check:cotma tưởng đọc cột OnlineChannel)
+                    const dk = await svc.flashSaleItemCriteria()
                     const nganh = new Map<string, string[]>()
-                    for (const p of (c.pair_ids || [])) nganh.set(String(p.criteria_id), (p.category_list || []).map((k: any) => `${k.name || ''}#${k.category_id}`))
-                    o.dieuKien = (c.criteria || []).map((k: any) => ({
+                    for (const p of (dk.pair_ids || [])) nganh.set(String(p.criteria_id), (p.category_list || []).map((k: any) => `${k.name || ''}#${k.category_id}`))
+                    o.dieuKien = (dk.criteria || []).map((k: any) => ({
                         id: String(k.criteria_id), giamToiThieu: k.min_discount, giamToiDa: k.max_discount,
                         giaToiThieu: k.min_discount_price != null && k.min_discount_price >= 0 ? k.min_discount_price / 100000 : k.min_discount_price,
                         giaToiDa: k.max_discount_price != null && k.max_discount_price >= 0 ? k.max_discount_price / 100000 : k.max_discount_price,
@@ -5684,7 +5685,7 @@ router.get('/do-flash-sale', async (req: Request, res: Response) => {
                         cachNgayLapLai: k.min_repetition_day, saoToiThieu: k.min_product_rating, donToiThieu30Ngay: k.min_order_total,
                         nganh: (nganh.get(String(k.criteria_id)) || []).slice(0, 8), soNganh: (nganh.get(String(k.criteria_id)) || []).length,
                     }))
-                    o.nganhBiChan = (c.overlap_block_category_ids || []).length
+                    o.nganhBiChan = (dk.overlap_block_category_ids || []).length
                 } catch (e: any) { o.dieuKien = { loi: String(e?.message || e).slice(0, 250) } }
                 /* ?kiemGia=1&soMa=100: lấy soMa mã NORMAL còn tồn (mới cập nhật trước) của gian, đọc giá THẬT trên Shopee, đếm bao nhiêu
                  * mã "giá đang bán − 1đ" đạt mức giảm tối thiểu so với giá gốc (lib/flashSaleKiemGia.ts). Chỉ đọc. */
@@ -8279,9 +8280,10 @@ router.get('/do-mau-in', async (req: Request, res: Response) => {
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp: any = getStorePrisma(store.schema)
 
-        let ds: any[] = []
+        // `mauIn` (không đặt `ds` — check:cotma ghép nhầm với `const ds` của route khác phía trên, tưởng đọc cột Store)
+        let mauIn: any[] = []
         try {
-            ds = await sp.printTemplate.findMany({
+            mauIn = await sp.printTemplate.findMany({
                 where: chiId ? { id: chiId } : {},
                 select: { id: true, name: true, htmlSource: true, updatedAt: true, isBuiltIn: true, daSuaTay: true } as any,
                 take: 50,
@@ -8296,8 +8298,8 @@ router.get('/do-mau-in', async (req: Request, res: Response) => {
             data: {
                 cuaHang: store.name,
                 coBang: true,
-                soMau: ds.length,
-                mau: ds.map((t: any) => {
+                soMau: mauIn.length,
+                mau: mauIn.map((t: any) => {
                     const h = String(t.htmlSource || '')
                     return {
                         id: t.id, ten: t.name, suaLuc: t.updatedAt,

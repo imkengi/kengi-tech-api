@@ -10,6 +10,8 @@
 //  bảng TarotSetting. Đổi khoá không phải deploy lại.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { moTaLoi } from './gomLoi'
+
 export interface LaBai {
     cardId: string
     name: string
@@ -386,7 +388,7 @@ async function thuLaiKhiJsonHong<T>(nguon: string, goi: () => Promise<T>): Promi
         return await goi()
     } catch (e: any) {
         if (e instanceof LoiAi && (e.ma === 'JSON_HONG' || e.ma === 'RONG')) {
-            console.warn(`[tarotAi] ${nguon}: ${e.message} — gọi lại một lần`)
+            console.warn(`[tarotAi] ${nguon}: ${moTaLoi(e)} — gọi lại một lần`)
             return await goi()
         }
         throw e

@@ -18,6 +18,7 @@
 
 import crypto from 'crypto'
 import { registryPrisma, getStorePrisma, giuClient } from './prisma'
+import { moTaLoi } from './gomLoi'
 
 const THU_LAI_TOI_DA = 3
 const CACH_THU_LAI_MS = 5 * 60_000
@@ -43,7 +44,7 @@ export async function baoChuong(sp: any, loai: 'success' | 'warning', tieuDe: st
         const { sendPushToStore } = await import('../routes/notifications')
         await sendPushToStore(sp, tieuDe, noiDung.slice(0, 300), { id: tin?.id, type: loai })
     } catch (e: any) {
-        console.warn(`[Hẹn giờ video] không gửi được thông báo — ${e?.message || e}`)
+        console.warn(`[Hẹn giờ video] không gửi được thông báo — ${moTaLoi(e)}`)
     }
 }
 

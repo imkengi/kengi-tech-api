@@ -80,9 +80,14 @@ async function main() {
     const k6 = await timPhieuTrungSoHoaDon(fake([P()]), { vatInvoiceNo: '0000123', supplierId: 'ncc1', boQuaId: 'r1' })
     ok('sửa chính phiếu đó → không tự chặn mình', k6 === null, k6)
 
-    /* Không biết nhà cung cấp thì không có căn cứ nào để nói là trùng. */
+    /* CHƯA CHỌN NHÀ CUNG CẤP vẫn phải soát — chủ shop 03/09/2026: "trùng hoá đơn không cho nhập vào". Bản 14/08 trả null ở đây
+     * nên bỏ trống ô NCC là một tờ hoá đơn vào sổ vô số lần. Báo phiếu cũ KÈM tên NCC của nó và cungNcc=false (không khẳng định
+     * cùng NCC) — hai NCC thật sự trùng số thì chọn NCC vào phiếu là phân biệt được. (Ca này đỏ oan từ 03/09 tới 17/10.) */
     const k7 = await timPhieuTrungSoHoaDon(fake([P()]), { vatInvoiceNo: '0000123' })
-    ok('chưa chọn nhà cung cấp → không kết luận trùng', k7 === null, k7)
+    ok('chưa chọn nhà cung cấp → VẪN soát, báo phiếu cũ kèm NCC của nó, không khẳng định cùng NCC',
+        k7 !== null && k7.code === 'NH-20260801-001' && k7.cungNcc === false && k7.supplierName === 'Công ty A', k7)
+    const k8 = await timPhieuTrungSoHoaDon(fake([P()]), { vatInvoiceNo: '0000999' })
+    ok('chưa chọn nhà cung cấp, số khác → không chặn', k8 === null, k8)
 
     console.log('\n▶ Đọc hỏng bảng — KHÔNG được chặn oan\n')
 

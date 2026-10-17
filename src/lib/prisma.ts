@@ -19,6 +19,7 @@ import { execSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { chonClientDeThai } from './thaiClientNhanRoi'
+import { moTaLoi } from './gomLoi'
 
 const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
@@ -383,7 +384,7 @@ async function createBranchSchema(schemaName: string): Promise<void> {
         console.warn(`⚠️ Không có dist/store-schema.sql — ${schemaName} tạo bảng bằng prisma db push`)
     } catch (err: any) {
         // Giao dịch đã cuộn lại ⇒ schema vẫn rỗng, đường cũ bên dưới chạy như trước
-        console.warn(`⚠️ store-schema.sql lỗi cho ${schemaName}: ${err?.message} — chuyển sang prisma db push`)
+        console.warn(`⚠️ store-schema.sql lỗi cho ${schemaName}: ${moTaLoi(err)} — chuyển sang prisma db push`)
     }
 
     // 2b. Đường cũ: prisma db push (tiến trình con, nặng — chỉ còn là đường lùi)

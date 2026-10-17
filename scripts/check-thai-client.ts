@@ -192,8 +192,11 @@ import { processNewOrders } from '../src/services/orderSync'
         const dongLog: string[] = []
         console.log = (...a: any[]) => { const s = a.join(' '); if (/Đang tắt/.test(s)) dongLog.push(s); else logCu(...a) }
         const gia: any = {
+            // từ 12/09/2026 (6e34cf8) processNewOrders lấy đơn CHƯA CÓ PHIẾU bằng SQL thô (LEFT JOIN Transaction) — giả cả lối đó
+            $queryRawUnsafe: async () => Array.from({ length: 20 }, (_, i) => ({ id: 'o' + i, orderNumber: 'SPE-' + i })),
             onlineOrder: {
-                findMany: async () => Array.from({ length: 20 }, (_, i) => ({ id: 'o' + i, orderNumber: 'SPE-' + i })),
+                // findMany nay chỉ còn lượt "liên kết hàng đơn chờ xác nhận" (10/09) sau vòng chính — trả rỗng để đếm đúng vòng chính
+                findMany: async () => [],
                 findUnique: async ({ where }: any) => { cham++; if (cham === 3) batCoDangTat(); return { id: where.id, orderNumber: 'x', status: 'nope', items: [] } },
             },
             transaction: { findFirst: async () => null },

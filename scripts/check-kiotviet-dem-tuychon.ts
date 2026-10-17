@@ -27,6 +27,10 @@ function taoSp(co: { kho?: boolean; nhom?: boolean; user?: boolean } = {}) {
     const dem = { warehouse: 0, category: 0, user: 0 }
     const sp: any = {
         _dem: dem,
+        /* từ 25/08/2026 buildOptions lấy kho qua getOrCreateDefaultWarehouse (lib/warehouseHelper.ts) — hàm đó hỏi CHI NHÁNH
+         * CHÍNH trước rồi mới tra kho; không có bảng branch giả thì nó ném lỗi ⇒ bộ kiểm đếm 0 lần tra kho (đỏ oan từ 25/08).
+         * Không có `warehouse.create` ⇒ cửa hàng chưa có kho vẫn ra null như trước (không đệm). */
+        branch: { findFirst: async () => null, findUnique: async () => null },
         warehouse: { findFirst: async () => { dem.warehouse++; return co.kho === false ? null : { id: 'kho1' } } },
         category: { findFirst: async () => { dem.category++; return co.nhom === false ? null : { id: 'nhom1' } } },
         user: { findFirst: async () => { dem.user++; return co.user === false ? null : { id: 'user1' } } },
@@ -69,6 +73,7 @@ async function main() {
     let coKho = false
     const sp5: any = {
         _dem: { warehouse: 0, category: 0, user: 0 },
+        branch: { findFirst: async () => null, findUnique: async () => null },
         warehouse: { findFirst: async () => { sp5._dem.warehouse++; return coKho ? { id: 'khoMoi' } : null } },
         category: { findFirst: async () => { sp5._dem.category++; return { id: 'nhom1' } } },
         user: { findFirst: async () => { sp5._dem.user++; return { id: 'user1' } } },

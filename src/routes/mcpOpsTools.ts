@@ -20,6 +20,14 @@ import { timPhieuTrungSoHoaDon } from './importReceipts'
 const num = (v: any, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d)
 const gioiHan = (v: any, mac = 20, tran = 100) => Math.min(Math.max(num(v, mac), 1), tran)
 const ngayVN = (d: any) => (d ? new Date(d).toISOString().slice(0, 10) : null)
+/** Tiền của một phiếu bán theo quy ước chung (transactions.ts, debts.ts): Transaction KHÔNG có cột paidAmount/debtAmount —
+ *  đơn ghi nợ là 'partial', nợ = total − amountReceived; đơn 'completed' đã thu đủ; huỷ/trả thì không còn nợ. */
+const tienCuaPhieu = (t: any) => {
+    const total = Number(t.total) || 0
+    const debtAmount = t.status === 'partial' ? Math.max(0, total - (Number(t.amountReceived) || 0)) : 0
+    const paidAmount = t.status === 'completed' || t.status === 'partial' ? total - debtAmount : 0
+    return { ...t, paidAmount, debtAmount }
+}
 
 export const OPS_TOOLS: Tool[] = [
     // ─── Việc cần xử lý ──────────────────────────────────────────────────────
@@ -290,7 +298,8 @@ export const OPS_TOOLS: Tool[] = [
                 where: { debt: { gt: 0 } },
                 orderBy: { debt: 'desc' },
                 take: gioiHan(a.limit),
-                select: { id: true, code: true, name: true, phone: true, debt: true, totalSpent: true, lastPurchaseDate: true },
+                // tổng chi tiêu là cột totalPurchases — `totalSpent` (không có cột) làm Prisma ném lỗi ⇒ cả công cụ hỏng (soát 17/10/2026)
+                select: { id: true, code: true, name: true, phone: true, debt: true, totalPurchases: true, lastPurchaseDate: true },
             })
             return {
                 ...canhBaoCat(ds.length, gioiHan(a.limit), 'khách nợ'),
@@ -318,19 +327,21 @@ export const OPS_TOOLS: Tool[] = [
             })
             if (!kh) throw new ToolError(`Không tìm thấy khách "${q}"`)
             const tranKQ = gioiHan(a.so_don, 5, 20)
+            /* Transaction KHÔNG có cột paidAmount/debtAmount — bản cũ select hai cột đó nên Prisma ném lỗi, `.catch` nuốt ⇒ khách nào
+             * cũng "không có đơn gần đây" (soát 17/10/2026). Nợ của phiếu theo quy ước chung: 'partial' ⇒ total − amountReceived. */
             const don = await prisma.transaction.findMany({
                 where: { customerId: kh.id },
                 orderBy: { createdAt: 'desc' },
                 take: tranKQ,
-                select: { receiptNumber: true, total: true, paidAmount: true, debtAmount: true, status: true, createdAt: true },
-            }).catch(() => [])
+                select: { receiptNumber: true, total: true, amountReceived: true, status: true, createdAt: true },
+            })
             return {
                 ...canhBaoCat(don.length, tranKQ, 'đơn gần đây'),
                 khachHang: {
                     id: kh.id, ma: kh.code, ten: kh.name, dienThoai: kh.phone,
-                    duNo: kh.debt, tongChiTieu: kh.totalSpent, hangThanhVien: (kh as any).tier ?? null,
+                    duNo: kh.debt, tongChiTieu: kh.totalPurchases, hangThanhVien: (kh as any).tier ?? null,
                 },
-                donGanNhat: don.map((t: any) => ({ ...t, createdAt: ngayVN(t.createdAt) })),
+                donGanNhat: don.map((t: any) => ({ ...tienCuaPhieu(t), createdAt: ngayVN(t.createdAt) })),
             }
         },
     },
@@ -357,16 +368,18 @@ export const OPS_TOOLS: Tool[] = [
                 if (a.to) where.createdAt.lte = new Date(`${String(a.to).slice(0, 10)}T23:59:59+07:00`)
             }
             if (a.status) where.status = String(a.status)
-            if (a.con_no) where.debtAmount = { gt: 0 }
-            const ds = await prisma.transaction.findMany({
+            // còn nợ = đơn ghi nợ ('partial'); số nợ tính từ total − amountReceived (không có cột debtAmount)
+            if (a.con_no) where.status = 'partial'
+            const ds0 = await prisma.transaction.findMany({
                 where, orderBy: { createdAt: 'desc' }, take: gioiHan(a.limit),
                 select: {
-                    id: true, receiptNumber: true, customerName: true, total: true, paidAmount: true,
-                    debtAmount: true, status: true, vatStatus: true, createdAt: true, createdByName: true,
+                    id: true, receiptNumber: true, customerName: true, total: true, amountReceived: true,
+                    status: true, vatStatus: true, createdAt: true, createdByName: true,
                 },
             })
+            const ds = ds0.map(tienCuaPhieu).filter((t: any) => !a.con_no || t.debtAmount > 0)
             return {
-                ...canhBaoCat(ds.length, gioiHan(a.limit), 'phiếu'),
+                ...canhBaoCat(ds0.length, gioiHan(a.limit), 'phiếu'),
                 soDon: ds.length,
                 tongTien: ds.reduce((s: number, t: any) => s + (t.total || 0), 0),
                 tongConNo: ds.reduce((s: number, t: any) => s + (t.debtAmount || 0), 0),
@@ -572,22 +585,24 @@ export const OPS_TOOLS: Tool[] = [
         run: async (a, { prisma }) => {
             const now = new Date()
             const where: any = {}
+            /* Promotion có `status` (active | scheduled | paused | expired), KHÔNG có isActive — bản cũ lọc isActive nên Prisma ném lỗi,
+             * `.catch` nuốt ⇒ hỏi "khuyến mãi đang chạy" luôn ra KHÔNG CÓ (soát 17/10/2026). */
             if (a.dang_chay) {
-                where.isActive = true
+                where.status = 'active'
                 where.startDate = { lte: now }
                 where.endDate = { gte: now }
             }
             const tranKQ = 50
             const ds = await prisma.promotion.findMany({
                 where, orderBy: { startDate: 'desc' }, take: tranKQ,
-            }).catch(() => [])
+            })
             return {
                 ...canhBaoCat(ds.length, tranKQ, 'chương trình'),
                 soChuongTrinh: ds.length,
                 khuyenMai: ds.map((p: any) => ({
                     id: p.id, ten: p.name, loai: p.type, giaTri: p.value,
-                    tuNgay: ngayVN(p.startDate), denNgay: ngayVN(p.endDate),
-                    dangChay: p.isActive && (!p.startDate || new Date(p.startDate) <= now) && (!p.endDate || new Date(p.endDate) >= now),
+                    tuNgay: ngayVN(p.startDate), denNgay: ngayVN(p.endDate), trangThai: p.status,
+                    dangChay: p.status === 'active' && (!p.startDate || new Date(p.startDate) <= now) && (!p.endDate || new Date(p.endDate) >= now),
                 })),
             }
         },

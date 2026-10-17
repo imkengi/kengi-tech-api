@@ -27,6 +27,8 @@
 //  IMP-<mã phiếu>…) nên chạy lại đồng bộ bao nhiêu lượt cũng không đẻ thêm.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { moTaLoi } from './gomLoi'
+
 /**
  * Chạy một lượt ghi sổ cho chứng từ vừa đồng bộ về.
  * Trả về true nếu ghi được, false nếu bỏ qua — không bao giờ ném lỗi ra ngoài.
@@ -43,7 +45,7 @@ export async function thuGhiSo(nhan: string, fn: () => Promise<any>): Promise<bo
             )
             return false
         }
-        console.error(`[ghi-so] ${nhan}: KHÔNG ghi được bút toán — ${e?.message || e}`)
+        console.error(`[ghi-so] ${nhan}: KHÔNG ghi được bút toán — ${moTaLoi(e)}`)
         return false
     }
 }

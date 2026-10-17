@@ -15,6 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { moTaLoi } from '../lib/gomLoi'
 
 type StorePrisma = any
 
@@ -84,7 +85,7 @@ export async function reverseOnlineOrderEffects(
             for (const b of kq.boQua) console.warn(`[KhoMe] ${full.orderNumber}: ${b}`)
         }
     } catch (e: any) {
-        console.error(`[KhoMe] ${full.orderNumber}: hoàn kho mẹ hỏng — ${e?.message || e}`)
+        console.error(`[KhoMe] ${full.orderNumber}: hoàn kho mẹ hỏng — ${moTaLoi(e)}`)
     }
 
     const claim = await sp.onlineOrder.updateMany({

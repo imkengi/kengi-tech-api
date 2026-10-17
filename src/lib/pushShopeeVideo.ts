@@ -25,6 +25,7 @@ import crypto from 'crypto'
 import { registryPrisma, getStorePrisma } from './prisma'
 import { xongPush, boPush, hoanPush, type TinPush, type KetQuaPush } from '../services/hopThuWebhook'
 import { chayBuocDangShopee, type TienTrinh } from './dangVideoShopee'
+import { moTaLoi } from './gomLoi'
 
 /** URL khai ở ô "Live Call Back URL" — đi THẲNG api.kengi.vn (kengi.vn là máy chủ tĩnh, POST bị 302) */
 export const URL_PUSH_VIDEO = 'https://api.kengi.vn/api/webhooks/shopee-video'
@@ -179,7 +180,7 @@ async function baoCuaHang(sp: any, code: string, loai: 'warning' | 'success', ti
         const { sendPushToStore } = await import('../routes/notifications')
         await sendPushToStore(sp, tieuDe, noiDung.slice(0, 300), { id: tin?.id, type: loai })
     } catch (e: any) {
-        console.warn(`[Push Shopee Video] ${code}: không gửi được thông báo — ${e?.message || e}`)
+        console.warn(`[Push Shopee Video] ${code}: không gửi được thông báo — ${moTaLoi(e)}`)
     }
 }
 

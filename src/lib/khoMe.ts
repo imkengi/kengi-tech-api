@@ -23,6 +23,7 @@
 import { registryPrisma, getStorePrisma } from './prisma'
 import { adjustSellableStock } from './warehouseHelper'
 import { TRANG_THAI_CHO_XAC_NHAN } from './donDuocXoa'
+import { moTaLoi } from './gomLoi'
 
 /** referenceType của phiếu ghi trên thẻ kho MẸ — để tra ngược và để hoàn đúng số. */
 export const LOAI_THAM_CHIEU = 'kho_me_don_san'
@@ -143,7 +144,7 @@ export async function truKhoMe(
                 },
             }).catch((e: any) => {
                 // Mất phiếu thì tồn vẫn đúng, nhưng người xem sổ hết đường giải thích.
-                console.error(`[KhoMe] Trừ được tồn nhưng KHÔNG ghi được phiếu ${maDon}/${hang.sku}: ${e?.message || e}`)
+                console.error(`[KhoMe] Trừ được tồn nhưng KHÔNG ghi được phiếu ${maDon}/${hang.sku}: ${moTaLoi(e)}`)
             })
             daTru++
         } catch (e: any) {
