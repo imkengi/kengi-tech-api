@@ -14,6 +14,12 @@ import { chonSanPham, demKho } from './lamVideoSanPham'
 import { chuanXep, laGio, mocVN, ngayVN, XEP_MAC_DINH, type CauHinhXep } from './xepLichVideo'
 
 export const MAU_KENGI = ['thuong-hieu', 'studio', 'den', 'gia-soc', 'tap-chi'] as const
+/** KIỂU NỘI DUNG (máy dựng v9, 17/10/2026 — chủ shop: "thêm các kiểu tạo video như tạo câu chuyện lồng ghép sản phẩm"):
+ *  giới thiệu (như trước) · câu chuyện (AI viết, lib/aiCauChuyen.ts) · lý do nên chọn. Máy dựng xoay kiểu ít dùng nhất trên mã. */
+export const KIEU_VIDEO = ['gioi-thieu', 'cau-chuyen', 'ly-do'] as const
+/** Nhật ký 'het-bien-the' ghi TRƯỚC mốc này là "hết biến thể kiểu giới thiệu" (khi chưa có kiểu khác) — cấu hình có kiểu
+ *  khác thì các mã đó làm tiếp được bằng kiểu mới, không bị chặn 30 ngày */
+export const MOC_KIEU_VIDEO = Date.parse('2026-10-17T15:00:00Z')
 export type CauHinhTuDong = {
     /** giờ VN bắt đầu dựng mỗi ngày */
     gioTao: string
@@ -23,6 +29,8 @@ export type CauHinhTuDong = {
     gian: string[]
     /** mẫu luân phiên; rỗng = cả 5 mẫu Kengi */
     mau: string[]
+    /** kiểu nội dung luân phiên; rỗng = cả 3 kiểu (KIEU_VIDEO) */
+    kieu: string[]
     doDai: 'ngan' | 'day-du' | 'xen-ke'
     dungPoster: boolean
     hienGia: boolean
@@ -37,7 +45,7 @@ export type CauHinhTuDong = {
     xepLich: CauHinhXep
 }
 export const TU_DONG_MAC_DINH: CauHinhTuDong = {
-    gioTao: '06:00', moiGian: 1, gian: [], mau: [], doDai: 'xen-ke', dungPoster: true, hienGia: true,
+    gioTao: '06:00', moiGian: 1, gian: [], mau: [], kieu: [], doDai: 'xen-ke', dungPoster: true, hienGia: true,
     giong: true, giongMau: '', khaiAI: false, henGio: true, chiConHang: true, xepLich: { ...XEP_MAC_DINH },
 }
 
@@ -56,6 +64,7 @@ export function chuanTuDong(x: any): CauHinhTuDong {
         moiGian: so(x?.moiGian, m.moiGian, 1, 50),
         gian: Array.from(new Set((Array.isArray(x?.gian) ? x.gian : []).map(String).filter((s: string) => /^[A-Za-z0-9_-]{4,64}$/.test(s)))).slice(0, 20) as string[],
         mau: Array.from(new Set((Array.isArray(x?.mau) ? x.mau : []).filter((s: any) => (MAU_KENGI as readonly string[]).includes(s)))) as string[],
+        kieu: Array.from(new Set((Array.isArray(x?.kieu) ? x.kieu : []).filter((s: any) => (KIEU_VIDEO as readonly string[]).includes(s)))) as string[],
         doDai: ['ngan', 'day-du', 'xen-ke'].includes(x?.doDai) ? x.doDai : m.doDai,
         dungPoster: bool(x?.dungPoster, m.dungPoster),
         hienGia: bool(x?.hienGia, m.hienGia),
@@ -143,12 +152,17 @@ export async function chiTieuHomNay(prisma: any, cauHinh: CauHinhTuDong, nhatKy:
 /** SKU không giao cho máy dựng: đã làm tự động hôm nay CHO GIAN NÀY, hỏng vì chính mã đó gần đây, hết biến thể / mô tả lệch
  *  mã. Bản đầu tính "hôm nay" trên MỌI gian ⇒ mã bán ở hai gian thì gian thứ hai không được làm — trần ngầm (14/10/2026).
  *  Mỗi gian một video/mã/ngày; nội dung vẫn không trùng nhờ biến thể + vân tay trên SKU. */
-async function skuBoQua(prisma: any, nhatKy: DongNhatKy[], ngay: string, now: number, channelId: string): Promise<string[]> {
+/** Kiểu nội dung máy dựng được dùng (rỗng = cả 3) */
+export const kieuDung = (ch: Pick<CauHinhTuDong, 'kieu'>): string[] => ch.kieu?.length ? ch.kieu : [...KIEU_VIDEO]
+
+export async function skuBoQua(prisma: any, nhatKy: DongNhatKy[], ngay: string, now: number, channelId: string, kieu: string[] = ['gioi-thieu']): Promise<string[]> {
     const homNay: any[] = await prisma.sanMediaSanPham.findMany({ where: { media: { tuDong: ngay, channelId } }, select: { sku: true } })
     const ra = new Set<string>(homNay.map(x => x.sku))
+    const coKieuMoi = kieu.some(k => k !== 'gioi-thieu')
     for (const d of nhatKy) {
         if (!d.sku) continue
         const tuoi = now - Date.parse(d.luc)
+        if (d.loai === 'het-bien-the' && coKieuMoi && Date.parse(d.luc) < MOC_KIEU_VIDEO) continue
         if (d.loai === 'loi-sp' && tuoi < 3 * NGAY_MS) ra.add(d.sku)
         if ((d.loai === 'het-bien-the' || d.loai === 'mo-ta-lech') && tuoi < 30 * NGAY_MS) ra.add(d.sku)
     }
@@ -158,6 +172,8 @@ async function skuBoQua(prisma: any, nhatKy: DongNhatKy[], ngay: string, now: nu
 export type Viec = {
     ngay: string; channelId: string; tenGian: string; productId: string; sku: string; ten: string
     doDai: 'ngan' | 'day-du'; mau: string[]; thu: number; can: number
+    /** kiểu nội dung được dùng (đã giải 'rỗng = cả 3') — máy dựng cũ không đọc thì làm kiểu giới thiệu như trước */
+    kieu: string[]
 }
 
 /**
@@ -181,7 +197,7 @@ export async function nhanViec(prisma: any, may: MayDung, now = Date.now()) {
         return { viec: null, lyDo: 'may-khac' as const, mayKhac: td.mayDung && td.mayDung.id !== may.id ? td.mayDung.ten : null, den: td.giuChoDen }
     }
     for (const g of thieu) {
-        const boQuaSku = await skuBoQua(prisma, td.nhatKy, ct.ngay, now, g.channelId)
+        const boQuaSku = await skuBoQua(prisma, td.nhatKy, ct.ngay, now, g.channelId, kieuDung(td.cauHinh))
         const uv = await chonSanPham(prisma, {
             soLuong: 1, chiConHang: td.cauHinh.chiConHang, chiTrenSan: true, channelId: g.channelId, san: 'shopee', sapXep: 'it-video', boQuaSku,
         })
@@ -194,7 +210,7 @@ export async function nhanViec(prisma: any, may: MayDung, now = Date.now()) {
         const doDai = td.cauHinh.doDai === 'xen-ke' ? (g.daTao % 2 ? 'ngan' : 'day-du') : td.cauHinh.doDai
         const viec: Viec = {
             ngay: ct.ngay, channelId: g.channelId, tenGian: g.tenGian, productId: u.id, sku: u.sku, ten: u.ten,
-            doDai, mau: td.cauHinh.mau.length ? td.cauHinh.mau : [...MAU_KENGI], thu: g.daTao + 1, can: g.can,
+            doDai, mau: td.cauHinh.mau.length ? td.cauHinh.mau : [...MAU_KENGI], kieu: kieuDung(td.cauHinh), thu: g.daTao + 1, can: g.can,
         }
         return { viec, lyDo: null, cauHinh: td.cauHinh, giuChoDen: new Date(now + GIU_CHO_MS).toISOString() }
     }
