@@ -76,6 +76,18 @@ for (const [ten2, n] of [
     dung('AI bảo mô tả không dùng được ⇒ dungDuoc=false kèm lý do', !r.dungDuoc && /sản phẩm khác/.test(r.lyDo))
 }
 {
+    // đo 17/10 trên máy sấy tóc thật: "57 độ C" bị bỏ oan vì mẫu giá khớp "57 đ"; mô tả có 57 thì phải giữ
+    const moTa57 = moTa + ' Nhiệt độ ổn định 57 độ C.'
+    const r = locTruyen({ truyen: [doi(3, { chu: 'Nhiệt độ ổn định 57 độ C', loi: 'Nhiệt độ ổn định 57 độ C, tóc không khô xơ.' })] }, ten, moTa57)
+    dung('"57 độ C" (số có trong mô tả) ở lợi ích ⇒ GIỮ, không tưởng là giá', r.truyen[0]?.nhip.some(x => /57 độ C/.test(x.chu)) === true)
+    for (const [ten3, gia] of [['57đ', 'Chỉ 57đ một lần sấy'], ['57 đồng', 'Chỉ 57 đồng một lần sấy'], ['57k', 'Chỉ 57k một lần sấy']] as const) {
+        const r2 = locTruyen({ truyen: [doi(3, { chu: gia, loi: gia + '.' })] }, ten, moTa57)
+        dung(`giá tiền "${ten3}" ở lợi ích ⇒ bỏ nhịp đó`, !r2.truyen[0]?.nhip.some(x => x.chu === gia))
+    }
+    const r3 = locTruyen({ truyen: [doi(5, { chu: 'An toàn tuyệt đối cho cả nhà', loi: 'An toàn tuyệt đối cho cả nhà.' })] }, ten, moTa)
+    dung('khẳng định "tuyệt đối" ở nhịp kết ⇒ bỏ cả truyện', r3.truyen.length === 0)
+}
+{
     const t = tot(); t.nhip[0] = { ...t.nhip[0]!, chu: 'Một câu chữ trên hình dài quá mức cho phép của khung video ngắn' }
     const r = locTruyen({ truyen: [t] }, ten, moTa)
     dung('chữ lên hình dài quá khung ⇒ bỏ (nhịp mở hỏng ⇒ cả truyện)', r.truyen.length === 0)

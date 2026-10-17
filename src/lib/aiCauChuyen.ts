@@ -19,7 +19,7 @@ import { layKeyAi } from './keyAi'
 import { goiGemini, goiDeepSeekSoat, docJsonAi, soTrong, NGOAI_SAN, LoiAiSoat, type NoiDungSoat } from './aiSoatNoiDung'
 
 /** Đổi lời dặn / bộ lọc thì tăng — kho truyện cũ viết theo lời dặn cũ sẽ được viết lại */
-const PHIEN_BAN_TRUYEN = 'v1'
+const PHIEN_BAN_TRUYEN = 'v2'   // v2 17/10: chặn "tuyệt đối/hoàn toàn an toàn", hết bỏ oan "57 độ C" (mẫu giá khớp nhầm "đ…")
 /** Số truyện mỗi lần AI viết */
 export const SO_TRUYEN = 4
 /** Trần kho truyện của một mã (viết thêm nối dần) */
@@ -38,8 +38,10 @@ export const BIEU_TUONG = ['⏰', '😩', '😅', '😓', '🥵', '🥶', '😴'
     '📚', '🎂', '🌙', '☀️', '🌧️', '👵', '👶', '🧒', '🐶', '🌿', '🏃', '🛒', '❤️']
 const BIEU_TUONG_MAC: Record<LoaiNhip, string> = { mo: '🏠', roi: '😩', ngoat: '✨', 'loi-ich': '👍', ket: '😊' }
 
-/** Lời quảng cáo / hứa hẹn / đánh giá mà truyện KHÔNG được có (shop chưa đưa, hoặc sàn cấm) */
-const CAM = /giảm giá|khuyến m[ãạ]i|ưu đãi|\bsale\b|freeship|miễn phí|quà tặng|tặng kèm|bảo hành|số lượng có hạn|chỉ hôm nay|đánh giá|\breview\b|khách hàng (?:khen|nói|chấm|tin)|năm sao|\d\s*sao\b|cam kết|tốt nhất|số 1\b|số một|rẻ nhất|hàng đầu|chữa (?:bệnh|khỏi)|điều trị|bác sĩ|giá chỉ|giá rẻ|\d[\d.,]*\s*(?:k\b|đ|đồng|vnđ)/i
+/** Lời quảng cáo / hứa hẹn / đánh giá mà truyện KHÔNG được có (shop chưa đưa, hoặc sàn cấm). Giá tiền "57đ" phải là chữ đ
+ *  ĐỨNG RIÊNG — đo 17/10 trên mã thật: "Nhiệt độ ổn định 57 độ C" bị bỏ oan vì "57 đ" khớp mẫu giá. Lời khẳng định tuyệt đối
+ *  ("an toàn tuyệt đối") là hứa hẹn quá mô tả — AI đã viết đúng câu đó trên máy sấy tóc thật. */
+const CAM = /giảm giá|khuyến m[ãạ]i|ưu đãi|\bsale\b|freeship|miễn phí|quà tặng|tặng kèm|bảo hành|số lượng có hạn|chỉ hôm nay|đánh giá|\breview\b|khách hàng (?:khen|nói|chấm|tin)|năm sao|\d\s*sao\b|cam kết|tốt nhất|số 1\b|số một|rẻ nhất|hàng đầu|tuyệt đối|hoàn toàn an toàn|chữa (?:bệnh|khỏi)|điều trị|bác sĩ|giá chỉ|giá rẻ|\d[\d.,]*\s*(?:k\b|đ(?![a-zà-ỹ])|đồng|vnđ)/i
 
 const HUONG_DAN = `Bạn là biên kịch VIDEO BÁN HÀNG NGẮN (20–30 giây) trên Shopee cho một cửa hàng điện máy, gia dụng, dụng cụ ở Việt Nam.
 Nhiệm vụ: viết ${SO_TRUYEN} CÂU CHUYỆN đời thường NGẮN, KHÁC NHAU rõ rệt (khác nhân vật, khác hoàn cảnh), lồng ghép sản phẩm thật tự nhiên.
@@ -57,7 +59,7 @@ Mỗi nhịp: "chu" = chữ lên hình, một ý, ≤ 38 ký tự, không dấu 
 LUẬT BẮT BUỘC:
 1. Mọi thông tin về SẢN PHẨM chỉ lấy từ tên + mô tả + kho nội dung đã soát. KHÔNG bịa công dụng, chứng nhận, số liệu.
 2. Chỉ nhịp "ngoat" và "loi-ich" được có chữ số, và phải y nguyên như mô tả. Các nhịp khác KHÔNG dùng chữ số (viết "sáng sớm", không viết "6 giờ sáng").
-3. KHÔNG khuyến mãi, giá tiền, giảm giá, quà tặng, miễn phí, bảo hành, "số lượng có hạn", số sao, đánh giá, lời khen "của khách hàng", "review", "cam kết", "tốt nhất", "số 1", "rẻ nhất", so sánh hay chê thương hiệu khác.
+3. KHÔNG khuyến mãi, giá tiền, giảm giá, quà tặng, miễn phí, bảo hành, "số lượng có hạn", số sao, đánh giá, lời khen "của khách hàng", "review", "cam kết", "tốt nhất", "số 1", "rẻ nhất", "tuyệt đối", "hoàn toàn an toàn", so sánh hay chê thương hiệu khác.
 4. KHÔNG nói về sức khoẻ, chữa bệnh nếu mô tả không nói.
 5. KHÔNG số điện thoại, Zalo, website, "inbox", "liên hệ", lời mời mua ngoài sàn. KHÔNG câu hỏi.
 6. Nhân vật: tên người Việt phổ biến hoặc vai (mẹ, bố, anh thợ, sinh viên, chị văn phòng, ông bà…). Không người nổi tiếng, không trẻ em gặp nguy hiểm.
