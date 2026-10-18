@@ -63,6 +63,19 @@ function boQua(c: SyncCounters, lyDo: string) {
     if (c.errors.length < 20) c.errors.push(`bỏ qua — ${lyDo}`.slice(0, 200))
 }
 
+/** Hàng Kengi của một dòng chứng từ KiotViet — Y NHƯ đồng bộ hàng hoá: bảng nối mã KiotViet (entity 'product') TRƯỚC, rồi
+ *  SKU. Lỗi đọc DB NÉM ra (không biến thành "không có mã"). Dùng chung cho dòng hoá đơn, phiếu nhập, trả hàng (18/10/2026). */
+export async function timHangKV(sp: any, kvProductId: string | null, sku: string): Promise<{ id: string; name: string; sku: string } | null> {
+    if (kvProductId) {
+        const noi = await sp.kiotVietMap.findUnique({ where: { entity_kvId: { entity: 'product', kvId: kvProductId } }, select: { localId: true } })
+        if (noi?.localId) {
+            const p = await sp.product.findUnique({ where: { id: noi.localId }, select: { id: true, name: true, sku: true } })
+            if (p) return p
+        }
+    }
+    return sku ? sp.product.findUnique({ where: { sku }, select: { id: true, name: true, sku: true } }) : null
+}
+
 /**
  * Dựng dòng hàng Kengi từ `invoiceDetails` của KiotViet — dùng chung cho cả
  * nhánh tạo mới lẫn nhánh dựng lại (rebuildLines), để hai đường không bao giờ
@@ -93,13 +106,8 @@ export async function dungDongHoaDon(sp: any, kv: any): Promise<{ lines: any[]; 
          * DÒNG, hoá đơn vẫn tạo với tổng KiotViet (HUTI HD031632 17/10: rơi EDH-SZP125-E6 3.325.000đ; đo 62 phiếu / 128,7tr).
          * Và KHÔNG nuốt lỗi đọc thành "không có mã": DB trục trặc một nhịp là dòng mất vĩnh viễn — ném ra để cả phiếu
          * hỏng có ghi lý do, lượt sau làm lại. */
-        let p: any = null
         const kvPid = d?.productId != null ? String(d.productId) : null
-        if (kvPid) {
-            const noi = await sp.kiotVietMap.findUnique({ where: { entity_kvId: { entity: 'product', kvId: kvPid } }, select: { localId: true } })
-            if (noi?.localId) p = await sp.product.findUnique({ where: { id: noi.localId }, select: { id: true, name: true, sku: true } })
-        }
-        if (!p) p = await sp.product.findUnique({ where: { sku }, select: { id: true, name: true, sku: true } })
+        const p = await timHangKV(sp, kvPid, sku)
         if (!p) { missing.push(sku); thieu.push({ sku, kvProductId: kvPid, ten: String(d?.productName || '') }); continue }
         const qty = Math.round(Number(d?.quantity) || 0)
         const unitPrice = Number(d?.price) || 0
@@ -120,15 +128,15 @@ export async function dungDongHoaDon(sp: any, kv: any): Promise<{ lines: any[]; 
     return { lines, missing, thieu }
 }
 
-/**
- * KÉO NGAY các mã hàng hoá đơn đang thiếu (18/10/2026). Hoá đơn về qua webhook mà hàng chưa sang Kengi (lượt kéo mã mới
- * chỉ chạy 0h) thì trước đây dòng đó rơi luôn. Nay hỏi KiotViet đúng mã đó (`/products/{id}` hoặc `/products/code/{mã}`)
- * rồi đi đường TẠO MỚI của syncProducts (chiTaoMoi — hàng đã có tuyệt đối không đụng, chỉ nối bảng mã). Chỉ chạy thật
- * (apply) và khi có creds. Lỗi từng mã chỉ ghi nhật ký — bên gọi dựng lại dòng và tự quyết.
- */
 /** Mã KiotViet đã xoá: KiotViet đổi mã thành "<mã>{DEL}" / "<mã>{DEL1}"… khi xoá hàng */
 export const laMaDaXoaKV = (sku: string) => /\{DEL\d*\}/i.test(String(sku || ''))
 
+/**
+ * KÉO NGAY các mã hàng chứng từ đang thiếu (18/10/2026). Hoá đơn / phiếu nhập về qua webhook mà hàng chưa sang Kengi (lượt
+ * kéo mã mới chỉ chạy 0h) thì trước đây dòng đó rơi luôn. Nay hỏi KiotViet đúng mã đó (`/products/{id}` hoặc
+ * `/products/code/{mã}`) rồi đi đường TẠO MỚI của syncProducts (chiTaoMoi — hàng đã có tuyệt đối không đụng, chỉ nối bảng
+ * mã). Chỉ chạy thật (apply) và khi có creds. Lỗi từng mã chỉ ghi nhật ký — bên gọi dựng lại dòng và tự quyết.
+ */
 export async function keoMaThieu(sp: any, opts: SyncOptions, thieu: { sku: string; kvProductId: string | null }[], c: SyncCounters): Promise<number> {
     if (!opts.apply || !opts.creds || !thieu.length) return 0
     const { KV } = await import('./kiotviet')
@@ -1496,6 +1504,45 @@ async function ganTheKhoPhieuNhap(
     return 'ok'
 }
 
+/**
+ * Dựng dòng phiếu nhập từ `purchaseOrderDetails` (18/10/2026). Cùng lỗi với hoá đơn: bản cũ tra SKU khớp tuyệt đối và
+ * NUỐT lỗi đọc DB (`.catch(() => null)`) ⇒ hàng nối qua bảng mã / DB trục trặc một nhịp là phiếu nhập tạo THIẾU DÒNG: thẻ
+ * kho thiếu dòng nhập, bút toán 156/331 vẫn theo tổng KiotViet. Nay tra qua timHangKV (bảng nối trước, lỗi đọc ném ra).
+ */
+export async function dungDongPhieuNhap(sp: any, kv: any): Promise<{ lines: any[]; missing: string[]; thieu: { sku: string; kvProductId: string | null; ten: string }[] }> {
+    const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
+        : Array.isArray(kv?.details) ? kv.details : []
+    const lines: any[] = []
+    const missing: string[] = []
+    const thieu: { sku: string; kvProductId: string | null; ten: string }[] = []
+    for (const d of details) {
+        const sku = String(d?.productCode || '').trim()
+        const kvPid = d?.productId != null ? String(d.productId) : null
+        if (!sku && !kvPid) continue
+        const p = await timHangKV(sp, kvPid, sku)
+        if (!p) { missing.push(sku || `#${kvPid}`); thieu.push({ sku, kvProductId: kvPid, ten: String(d?.productName || '') }); continue }
+        /* THÀNH TIỀN DÒNG: dòng phiếu nhập KiotViet KHÔNG có subTotal và `discount` là giảm MỖI CÁI (đo 599 phiếu HUTI 18/10:
+         * 30/30 phiếu có giảm dòng khớp tổng theo "mỗi cái", vd PN004014 273.902.200 − Σ SL×giảm = 200.770.313 = tổng). Bản cũ
+         * ghi total = SL × giá ⇒ dòng có chiết khấu ghi CAO hơn thật. Nay như dòng hoá đơn: giảm cả dòng, total = gộp − giảm.
+         * Tiền tính theo SL THỰC (KV cho số lẻ), cột quantity Int mới làm tròn. */
+        const slThuc = Number(d?.quantity) || 0
+        const gia = Number(d?.price) || 0
+        const gop = slThuc * gia
+        const sub = Number(d?.subTotal)
+        const giam = Number.isFinite(sub) && sub > 0 ? Math.min(gop, Math.max(0, gop - sub)) : Math.min(gop, (Number(d?.discount) || 0) * slThuc)
+        lines.push({
+            productId: p.id,
+            productName: p.name,
+            productSku: p.sku,
+            quantity: Math.round(slThuc),
+            costPrice: gia,
+            discount: giam,
+            total: gop - giam,
+        })
+    }
+    return { lines, missing, thieu }
+}
+
 export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     /* Hộ kinh doanh không được khấu trừ VAT đầu vào → VAT nằm trong giá vốn.
      * Đọc MỘT lần cho cả lượt: pool prod mỗi cửa hàng chỉ 1 kết nối. */
@@ -1552,28 +1599,10 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             ).slice(0, 200)
 
             // ImportReceiptItem.productId là KHOÁ NGOẠI BẮT BUỘC → chỉ dựng được
-            // dòng cho mã đã có bên Kengi. Thiếu mã thì ghi rõ, không đẻ SP ma.
-            const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
-                : Array.isArray(kv?.details) ? kv.details : []
-            const lines: any[] = []
-            const missing: string[] = []
-            for (const d of details) {
-                const sku = String(d?.productCode || '').trim()
-                const qty = Math.round(Number(d?.quantity) || 0)
-                const gia = Number(d?.price) || 0
-                const p = sku
-                    ? await sp.product.findUnique({ where: { sku }, select: { id: true, name: true, sku: true } }).catch(() => null)
-                    : null
-                if (!p) { if (sku) missing.push(sku); continue }
-                lines.push({
-                    productId: p.id,
-                    productName: p.name,
-                    productSku: p.sku,
-                    quantity: qty,
-                    costPrice: gia,
-                    discount: Number(d?.discount) || 0,
-                    total: Number(d?.subTotal ?? (qty * gia)) || 0,
-                })
+            // dòng cho mã đã có bên Kengi. Thiếu mã thì kéo ngay từ KiotViet rồi dựng lại; vẫn thiếu thì ghi rõ, không đẻ SP ma.
+            let { lines, missing, thieu } = await dungDongPhieuNhap(sp, kv)
+            if (missing.length && opts.apply && (await keoMaThieu(sp, opts, thieu, c)) > 0) {
+                ({ lines, missing, thieu } = await dungDongPhieuNhap(sp, kv))
             }
             if (missing.length) {
                 noteError(c, `Phiếu nhập ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ Hàng hoá trước`)
@@ -1679,10 +1708,9 @@ export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: S
             const lines: any[] = []
             for (const d of details) {
                 const sku = String(d?.productCode || '').trim()
-                // productId của ReturnItem cho phép rỗng → thiếu hàng vẫn giữ được dòng
-                const p = sku
-                    ? await sp.product.findUnique({ where: { sku }, select: { id: true } }).catch(() => null)
-                    : null
+                // productId của ReturnItem cho phép rỗng → thiếu hàng vẫn giữ được dòng. Tra như hoá đơn (bảng nối trước,
+                // lỗi đọc ném ra — nuốt là dòng trả mất liên kết hàng vĩnh viễn, 18/10/2026)
+                const p = await timHangKV(sp, d?.productId != null ? String(d.productId) : null, sku)
                 lines.push({
                     productId: p?.id || null,
                     productName: String(d?.productName || sku || 'Hàng trả').slice(0, 200),

@@ -1762,6 +1762,29 @@ router.post('/chua-hd-roi-dong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO PHIẾU NHẬP KIOTVIET RƠI DÒNG (chỉ đọc, 18/10/2026) — GET /admin/do-pn-thieu-dong?store=HUTI&tuNgay=yyyy-mm-dd ────────
+ * Cùng lỗi tra mã với hoá đơn (SKU khớp tuyệt đối + nuốt lỗi đọc). Không so tiền thuần SQL được (tổng KV gồm giảm phiếu +
+ * exReturnSuppliers, dòng cũ chưa trừ giảm dòng) ⇒ hỏi KiotViet danh sách phiếu rồi so SỐ DÒNG từng phiếu. Bỏ tuNgay = toàn bộ
+ * (~1 phút với 6.000 phiếu). Không ghi gì. Xem services/kiotvietRoiDong.ts → doPhieuNhapRoiDong. */
+router.get('/do-pn-thieu-dong', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } })
+        if (!cfg) { res.status(400).json({ success: false, error: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+        const { credsOf } = await import('../services/kiotvietRunner')
+        const { doPhieuNhapRoiDong } = await import('../services/kiotvietRoiDong')
+        const t = String(req.query.tuNgay || '')
+        const tuNgay = /^\d{4}-\d{2}-\d{2}$/.test(t) ? new Date(`${t}T00:00:00+07:00`) : null
+        const data = await doPhieuNhapRoiDong(sp, credsOf(cfg), { tuNgay })
+        res.json({ success: true, data: { store: st.code, tuNgay: tuNgay ? t : 'toàn bộ', ...data } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── ĐO KHO TRÙNG (chỉ đọc, 18/10/2026) — GET /admin/do-kho-trung?store=HUTI ───────────────────────────────────────────
  * Chủ shop gửi trang Kho hàng: ba cặp "Kho chính" / "Kho hàng bảo hành" / "Kho hàng hư hỏng" — một bản gắn Chi nhánh chính, một
  * bản KHÔNG gắn chi nhánh (gieo lúc khởi động trước khi sửa 09/10). Liệt kê MỌI kho (kể cả đã tắt) kèm mọi thứ đang trỏ vào nó:

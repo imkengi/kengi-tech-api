@@ -19,8 +19,8 @@
 //       reverseJournalEntriesForTransaction đảo cả hai khoá này.
 //  Tồn kho KHÔNG đụng: tồn KiotViet là ảnh chụp onHand, hoá đơn không trừ kho bên Kengi (kiotviet-the-kho-tach-nhan).
 // ═══════════════════════════════════════════════════════════════════════════════
-import { KV } from './kiotviet'
-import { dungDongHoaDon, keoMaThieu, laMaDaXoaKV, newCounters, type SyncCounters, type SyncOptions } from './kiotvietSync'
+import { KV, kvDate } from './kiotviet'
+import { dungDongHoaDon, keoMaThieu, laMaDaXoaKV, newCounters, timHangKV, type SyncCounters, type SyncOptions } from './kiotvietSync'
 import { khoaSoChan } from '../lib/periodLock'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -156,4 +156,104 @@ export async function chuaHoaDonRoiDong(
         }
     }
     return { ds, c }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ĐO PHIẾU NHẬP KIOTVIET RƠI DÒNG (chỉ đọc, 18/10/2026) — GET /admin/do-pn-thieu-dong
+//
+//  syncPurchaseOrders dựng dòng y cách cũ của hoá đơn (SKU khớp tuyệt đối, NUỐT lỗi đọc DB) rồi vẫn tạo phiếu với tổng KiotViet
+//  ⇒ phiếu nhập THIẾU DÒNG: thẻ kho thiếu dòng nhập (ganTheKhoPhieuNhap chạy theo dòng), lịch sử nhập theo mặt hàng thiếu; bút
+//  toán 156/331 vẫn đúng tổng (postImportReceiptJournal lấy totalCost).
+//
+//  KHÔNG đo được bằng phép so tiền thuần SQL — đo 599 phiếu HUTI 18/10:
+//    · tổng KV = Σ SL × (giá − giảm MỖI CÁI) − giảm phiếu + exReturnSuppliers (30/30 phiếu có giảm dòng khớp "mỗi cái";
+//      18 phiếu cộng exReturnSuppliers ≈ 8% = VAT ghi dạng chi phí trả NCC; exReturnThirdParty KHÔNG vào tổng)
+//    · dòng Kengi cũ ghi thành tiền = SL × giá (KV không trả subTotal cho dòng phiếu nhập) ⇒ chưa trừ giảm dòng
+//  nên Σ dòng ≠ tổng là chuyện thường. Phép đo đúng: hỏi KiotViet danh sách phiếu (status 3, không {DEL}) rồi so SỐ DÒNG từng
+//  phiếu; phiếu thiếu thì tra lại từng dòng KV (bảng nối → SKU) xem dòng nào vắng và vì sao.
+// ═══════════════════════════════════════════════════════════════════════════════
+export type DongVangPN = { sku: string; ten: string; sl: number; gop: number; net: number; vi: 'ma-da-xoa' | 'nay-da-co-ma' | 'chua-co-ma' }
+
+export async function doPhieuNhapRoiDong(sp: any, creds: any, loc: { tuNgay?: Date | null; onPage?: (f: number, t: number) => any } = {}) {
+    const ts: any[] = []
+    const dk = [`(r."userName" = 'KiotViet Sync' OR r.note ILIKE '%KiotViet%')`]
+    if (loc.tuNgay) { ts.push(loc.tuNgay); dk.push(`r."createdAt" >= $${ts.length}`) }
+    const ke: any[] = await sp.$queryRawUnsafe(`
+        SELECT r.id, r.code AS ma, r."createdAt" AS ngay, r."totalCost"::float8 AS tong,
+               coalesce(sum(i.total),0)::float8 AS "tongDong", count(i.id)::int AS "soDong",
+               coalesce(array_agg(i."productId") FILTER (WHERE i.id IS NOT NULL), '{}') AS "hang"
+          FROM "ImportReceipt" r LEFT JOIN "ImportReceiptItem" i ON i."receiptId" = r.id
+         WHERE ${dk.join(' AND ')}
+         GROUP BY r.id`, ...ts)
+    const { items, truncated } = await KV.purchaseOrders(creds, loc.tuNgay ? { fromPurchaseDate: kvDate(loc.tuNgay) } : {}, {
+        maxPages: 500, onPage: loc.onPage ? (_i: any[], f: number, t: number) => loc.onPage!(f, t) : undefined,
+    })
+    const kvTheoMa = new Map<string, any>()
+    for (const po of items) {
+        const ma = String(po?.code || '').trim()
+        if (ma && Number(po?.status) === 3 && !/\{DEL\}/i.test(ma)) kvTheoMa.set(ma, po)
+    }
+    const dongKV = (po: any): any[] => (Array.isArray(po?.purchaseOrderDetails) ? po.purchaseOrderDetails : [])
+        .filter((d: any) => String(d?.productCode || '').trim() || d?.productId != null)
+    const thang = (d: any) => ngayVN(d).slice(0, 7)
+
+    const thieu: any[] = [], du: any[] = [], khongThayTrenKV: any[] = []
+    let khop = 0, ckSo = 0, ckTien = 0
+    const daCo = new Set<string>()
+    for (const r of ke) {
+        daCo.add(r.ma)
+        const po = kvTheoMa.get(r.ma)
+        if (!po) { khongThayTrenKV.push(r); continue }
+        const dong = dongKV(po)
+        const kvNet = dong.reduce((s: number, d: any) => s + (Number(d.quantity) || 0) * ((Number(d.price) || 0) - (Number(d.discount) || 0)), 0)
+        if (r.soDong > dong.length) { du.push({ ma: r.ma, ngay: ngayVN(r.ngay), soDongKengi: r.soDong, soDongKV: dong.length }); continue }
+        if (r.soDong === dong.length) {
+            khop++
+            // thành tiền dòng ghi CHƯA trừ giảm giá dòng (dòng cũ = SL × giá) — Kengi cao hơn KV đúng phần giảm dòng
+            const lech = Math.round(r.tongDong - kvNet)
+            if (lech > 1) { ckSo++; ckTien += lech }
+            continue
+        }
+        const coHang = new Set<string>(Array.isArray(r.hang) ? r.hang : [])
+        const vang: DongVangPN[] = []
+        for (const d of dong) {
+            const sku = String(d?.productCode || '').trim()
+            const p = await timHangKV(sp, d?.productId != null ? String(d.productId) : null, sku)
+            if (p && coHang.has(p.id)) continue
+            const sl = Number(d.quantity) || 0, gia = Number(d.price) || 0
+            vang.push({ sku, ten: String(d?.productName || '').slice(0, 80), sl, gop: Math.round(sl * gia), net: Math.round(sl * (gia - (Number(d.discount) || 0))),
+                vi: laMaDaXoaKV(sku) ? 'ma-da-xoa' : p ? 'nay-da-co-ma' : 'chua-co-ma' })
+        }
+        thieu.push({ ma: r.ma, ngay: ngayVN(r.ngay), tong: r.tong, soDongKengi: r.soDong, soDongKV: dong.length, vang,
+            tienVangNet: vang.reduce((s, v) => s + v.net, 0) })
+    }
+    const kvChuaNhap = [...kvTheoMa.values()].filter(po => !daCo.has(String(po.code).trim()))
+    const theoVi: Record<string, { dong: number; phieu: number; tienNet: number }> = {}
+    for (const t of thieu) {
+        const seen = new Set<string>()
+        for (const v of t.vang) {
+            const g = (theoVi[v.vi] ??= { dong: 0, phieu: 0, tienNet: 0 }); g.dong++; g.tienNet += v.net
+            if (!seen.has(v.vi)) { g.phieu++; seen.add(v.vi) }
+        }
+    }
+    const theoThang: Record<string, { so: number; tienNet: number }> = {}
+    for (const t of thieu) { const g = (theoThang[t.ngay.slice(0, 7)] ??= { so: 0, tienNet: 0 }); g.so++; g.tienNet += t.tienVangNet }
+    return {
+        soPhieuKengi: ke.length, soPhieuKV: kvTheoMa.size, kvBiCatTran: truncated,
+        khopSoDong: khop,
+        thieuDong: {
+            so: thieu.length, soDong: thieu.reduce((s, t) => s + t.vang.length, 0),
+            tienNet: thieu.reduce((s, t) => s + t.tienVangNet, 0),
+            khongConDongNao: thieu.filter(t => t.soDongKengi === 0).length,
+            theoLyDo: theoVi,
+            theoThang: Object.entries(theoThang).sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([khoa, v]) => ({ khoa, ...v })),
+        },
+        thanhTienChuaTruGiamDong: { soPhieu: ckSo, tienGhiCao: ckTien },
+        duDong: { so: du.length, mau: du.slice(0, 5) },
+        kvChuaNhapVaoKengi: { so: kvChuaNhap.length, tong: Math.round(kvChuaNhap.reduce((s, po) => s + (Number(po.total) || 0), 0)),
+            theoThang: Object.entries(kvChuaNhap.reduce((m: Record<string, number>, po) => { const k = thang(po.purchaseDate); m[k] = (m[k] || 0) + 1; return m }, {}))
+                .sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 12) },
+        kengiKhongThayTrenKV: { so: khongThayTrenKV.length, mau: khongThayTrenKV.slice(0, 8).map(r => ({ ma: r.ma, ngay: ngayVN(r.ngay), tong: r.tong })) },
+        mau: thieu.sort((a, b) => (a.ngay < b.ngay ? 1 : -1)).slice(0, 25),
+    }
 }
