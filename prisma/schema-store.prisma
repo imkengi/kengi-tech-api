@@ -367,6 +367,10 @@ model Transaction {
   revisionOfId        String? // If this is a revision, points to the original transaction
   appliedPromotionIds String? // JSON array of Promotion.id values applied at checkout
   channel             String    @default("direct") // direct | van | delivery | online
+  // Khách lấy hoá đơn (18/10/2026): đặt khi khách nhắn /hoadon trong nhóm Zalo (mọi phiếu
+  // trong ngày đó) hoặc bấm tay. CỘT RIÊNG — không phải vatBuyerInfo (dấu đó làm luồng
+  // HĐĐT Kengi tự xuất; HĐ HUTI xuất bên MISA). Xem lib/zaloNhom.ts.
+  layHoaDon           Boolean   @default(false)
   createdAt           DateTime  @default(now())
 
   creator  User              @relation(fields: [createdBy], references: [id])

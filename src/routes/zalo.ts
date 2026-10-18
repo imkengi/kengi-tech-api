@@ -30,7 +30,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
 import {
-    nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, ngayVN,
+    nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, danhDauLayHoaDon, ngayVN,
     type DongNhomZalo,
 } from '../lib/zaloNhom'
 
@@ -140,10 +140,15 @@ router.post('/tin', authMiddleware, canGhi, async (req: AuthRequest, res: Respon
             }
             throw e
         }
+        // /hoadon ⇒ bật cột "Lấy HĐ" cho phiếu của khách trong ngày (phiếu tạo sau: nhịp cron tick)
+        const layHoaDon = yc === true && tin.customerId
+            ? await danhDauLayHoaDon(sp, tin.customerId, ngayVN(tin.thoiDiem))
+            : null
         res.json({
             success: true,
             data: {
                 tinId: tin.id, trung: false, customerId: tin.customerId,
+                ...(layHoaDon ? { layHoaDon } : {}),
                 maKhach: nhom?.maKhach || null,
                 // Yêu cầu HĐ CHỈ được lưu (xem đầu file) — ngày áp dụng là ngày VN của tin
                 yeuCauHoaDon: yc,

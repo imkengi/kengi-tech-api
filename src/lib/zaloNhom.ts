@@ -152,12 +152,17 @@ export function docFileNhomZalo(rows: any[][]): { dong: DongNhomZalo[]; loi: str
 // ─── YÊU CẦU HOÁ ĐƠN QUA "/hoadon" (18/10/2026) ─────────────────────────────
 //
 // Chủ shop: khách nhắn "/hoadon" trong nhóm = lấy hoá đơn cho các phiếu bán của khách
-// trong NGÀY (giờ VN) đó. CHỈ LƯU YÊU CẦU (ZaloTin.yeuCauHoaDon = true) — hoá đơn có thể
-// xuất bên MISA, không chắc qua Kengi ("lưu lại yêu cầu xuất hoá đơn thôi").
+// trong NGÀY (giờ VN) đó. Lưu tin (ZaloTin.yeuCauHoaDon = true) + bật cột RIÊNG
+// Transaction.layHoaDon trên các phiếu đó; người quét đơn thấy cột là xuất HĐ (bên MISA).
+// Chủ shop: "chỉ cần thêm 1 cột bên giao dịch là có lấy hoá đơn".
 //
 // ⛔ KHÔNG ghi Transaction.vatBuyerInfo: đó là dấu "khách yêu cầu HĐ" của luồng HĐĐT
 // trong Kengi (màn HĐĐT coi là phải xuất; hàng đợi 20:30 tự xuất với đơn sàn) ⇒ ghi vào
 // là mời xuất TRÙNG với hoá đơn MISA. Bản đầu 18/10 có ghi — gỡ trước khi deploy.
+//
+// Phiếu tạo SAU tin trong cùng ngày (HUTI về qua webhook KiotViet): nhịp /api/cron/tick
+// gọi `apYeuCauHoaDonGanDay` mỗi 5 phút, xét cả HÔM QUA để phiếu 23:5x không lọt.
+// CHỈ BẬT, không bao giờ tự tắt — tắt là việc người bấm tay.
 
 /** "/hoadon", "/hoá đơn", "/HOADON cho em" — lệnh phải đứng ĐẦU tin; "/hoadon2" không tính */
 export function laLenhHoaDon(noiDung: string): boolean {
@@ -261,4 +266,55 @@ export async function dsYeuCauHoaDon(sp: any, ymd: string) {
         soPhieu: khachHang.reduce((s, x) => s + x.phieu.length, 0),
         khachHang, chuaNoi,
     }
+}
+
+/** Bật "Lấy HĐ" cho mọi phiếu đã bán của khách trong ngày VN. Idempotent; trả số phiếu VỪA bật. */
+export async function danhDauLayHoaDon(sp: any, customerId: string, ymd: string): Promise<{ ngay: string; daBat: number; tongPhieu: number }> {
+    const { tu, den } = khoangNgayVN(ymd)
+    const where = {
+        customerId, status: { in: [...TRANG_THAI_TINH] },
+        OR: [{ transactionDate: { gte: tu, lte: den } }, { transactionDate: null, createdAt: { gte: tu, lte: den } }],
+    }
+    const r = await sp.transaction.updateMany({ where: { ...where, layHoaDon: false }, data: { layHoaDon: true } })
+    const tongPhieu = await sp.transaction.count({ where })
+    return { ngay: ymd, daBat: r.count, tongPhieu }
+}
+
+/**
+ * Quét lại yêu cầu /hoadon của HÔM NAY và HÔM QUA (giờ VN) — bắt phiếu tạo sau tin nhắn.
+ * Một khách một ngày chỉ làm một lần. Bảng ZaloTin chưa có (cửa hàng chưa migrate) ⇒ bỏ qua.
+ */
+export async function apYeuCauHoaDonGanDay(sp: any): Promise<{ soKhachNgay: number; daBat: number }> {
+    const homNay = ngayVN(new Date())
+    const homQua = ngayVN(new Date(Date.now() - 86400_000))
+    const tu = khoangNgayVN(homQua).tu
+    const tin: any[] = await sp.zaloTin.findMany({
+        where: { yeuCauHoaDon: true, customerId: { not: null }, thoiDiem: { gte: tu } },
+        select: { customerId: true, thoiDiem: true },
+    }).catch((e: any) => { if (/ZaloTin|does not exist/i.test(String(e?.message))) return []; throw e })
+    const cap = new Set<string>()
+    for (const t of tin) {
+        const ngay = ngayVN(new Date(t.thoiDiem))
+        if (ngay === homNay || ngay === homQua) cap.add(`${t.customerId}|${ngay}`)
+    }
+    let daBat = 0
+    for (const k of cap) {
+        const [customerId, ngay] = k.split('|')
+        daBat += (await danhDauLayHoaDon(sp, customerId, ngay)).daBat
+    }
+    return { soKhachNgay: cap.size, daBat }
+}
+
+/** Nhịp ngoài: mọi cửa hàng đang hoạt động — gọi từ routes/cronTick.ts */
+export async function nhipLayHoaDon(): Promise<string> {
+    const { registryPrisma, getStorePrisma } = await import('./prisma')
+    const stores: any[] = await (registryPrisma as any).store.findMany({ where: { status: 'active' }, select: { schema: true, code: true } })
+    const ra: string[] = []
+    for (const s of stores) {   // TUẦN TỰ — pool prod nhỏ, đừng Promise.all
+        try {
+            const kq = await apYeuCauHoaDonGanDay(getStorePrisma(s.schema) as any)
+            if (kq.daBat) ra.push(`${s.code}:+${kq.daBat}`)
+        } catch (e: any) { ra.push(`${s.code}:loi ${String(e?.message || e).slice(0, 80)}`) }
+    }
+    return ra.join(' ') || 'khong-co-gi'
 }

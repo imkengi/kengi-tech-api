@@ -70,7 +70,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         const branchId = getBranchId(req)
 
         const {
-            search, startDate, endDate, paymentMethod, status, cashier, customerId,
+            search, startDate, endDate, paymentMethod, status, cashier, customerId, layHoaDon,
             page = '1', pageSize = '20',
         } = req.query
 
@@ -133,6 +133,9 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         }
         if (cashier) where.createdBy = cashier
         if (customerId) where.customerId = customerId as string
+        // Cột "Lấy HĐ" (18/10/2026 — khách nhắn /hoadon trong nhóm Zalo, xem lib/zaloNhom.ts)
+        if (layHoaDon === '1') where.layHoaDon = true
+        if (layHoaDon === '0') where.layHoaDon = false
 
         const pageNum = Math.max(1, parseInt(page as string))
         // Clamp 1000 để frontend export được nhiều dòng hơn
@@ -1834,6 +1837,24 @@ router.put('/:id', authMiddleware, requirePermission('pos.create_order'), async 
         })
     } catch (err) {
         console.error('Update transaction error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/transactions/:id/lay-hoa-don {layHoaDon: boolean} — bật/tắt tay cột "Lấy HĐ" (18/10/2026)
+// Chỉ là DẤU cho người quét đơn (HĐ HUTI xuất bên MISA) — không đụng hoá đơn điện tử Kengi.
+router.put('/:id/lay-hoa-don', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        if (typeof req.body?.layHoaDon !== 'boolean') { res.status(400).json({ success: false, error: 'layHoaDon phải là true/false' }); return }
+        const tx = await prisma.transaction.findUnique({ where: { id }, select: { id: true, branchId: true } })
+        if (!tx) { res.status(404).json({ success: false, error: 'Không tìm thấy phiếu' }); return }
+        if (!canAccessBranch(req, tx.branchId)) { res.status(403).json({ success: false, error: 'Phiếu thuộc chi nhánh khác' }); return }
+        const kq = await prisma.transaction.update({ where: { id }, data: { layHoaDon: req.body.layHoaDon }, select: { id: true, receiptNumber: true, layHoaDon: true } })
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        console.error('[transactions] lay-hoa-don:', e?.message || e)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

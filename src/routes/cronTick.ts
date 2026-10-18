@@ -72,6 +72,14 @@ router.post('/tick', async (req: Request, res: Response) => {
     }
     /* Nhắc TikTok xác nhận đủ bằng chứng (09/10/2026) — mỗi 10 phút; mỗi giờ một tin / cửa hàng do dấu
      * trong thông báo lo. Chạy ở NHỊP NGOÀI để có CPU cả đêm (cpu-throttling). */
+    /* "Lấy HĐ" theo lệnh /hoadon nhóm Zalo (18/10/2026): bật cho phiếu tạo SAU tin nhắn trong cùng ngày —
+     * đơn HUTI về qua webhook KiotViet. Mỗi 5 phút, xét hôm nay + hôm qua. Xem lib/zaloNhom.ts. */
+    if (new Date().getUTCMinutes() % 5 === 2) {
+        try {
+            const { nhipLayHoaDon } = await import('../lib/zaloNhom')
+            ra.layHoaDon = await nhipLayHoaDon()
+        } catch (e: any) { ra.layHoaDon = 'loi: ' + (e?.message || e) }
+    }
     if (new Date().getUTCMinutes() % 10 === 0) {
         try { ra.nhacBangChungTikTok = (await nhacBangChungTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.nhacBangChungTikTok = 'loi: ' + (e?.message || e) }
     }
