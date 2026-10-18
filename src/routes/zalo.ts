@@ -230,6 +230,52 @@ router.post('/admin/nhap', adminKey, async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /api/zalo/admin/do?storeCode=&ngay=YYYY-MM-DD — CHỈ ĐỌC (x-admin-key) ─
+// Soát một ngày: tin nhóm nào đã về, tin /hoadon của khách nào, và phiếu của khách đó đã
+// bật "Lấy HĐ" chưa. Dùng khi chủ shop hỏi "đơn khách X hôm nay đã bật chưa".
+router.get('/admin/do', adminKey, async (req: Request, res: Response) => {
+    try {
+        const store = await registryPrisma.store.findFirst({
+            where: { code: { equals: String(req.query.storeCode || '').trim(), mode: 'insensitive' } }, select: { schema: true, name: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const ngay = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.ngay || '')) ? String(req.query.ngay) : ngayVN(new Date())
+        const tu = new Date(`${ngay}T00:00:00+07:00`), den = new Date(`${ngay}T23:59:59.999+07:00`)
+        const tin = await sp.zaloTin.findMany({ where: { thoiDiem: { gte: tu, lte: den } }, orderBy: { thoiDiem: 'asc' }, take: 500 })
+        const khachIds = [...new Set<string>(tin.filter((t: any) => t.yeuCauHoaDon && t.customerId).map((t: any) => t.customerId))]
+        const khach = khachIds.length
+            ? await sp.customer.findMany({ where: { id: { in: khachIds } }, select: { id: true, code: true, name: true } })
+            : []
+        const theoKhach: any[] = []
+        for (const k of khach) {
+            const phieu = await sp.transaction.findMany({
+                where: {
+                    customerId: k.id,
+                    OR: [{ transactionDate: { gte: tu, lte: den } }, { transactionDate: null, createdAt: { gte: tu, lte: den } }],
+                },
+                select: { receiptNumber: true, status: true, total: true, layHoaDon: true, createdAt: true, transactionDate: true },
+                orderBy: { createdAt: 'asc' },
+            })
+            theoKhach.push({ khach: k.code, ten: k.name, phieu })
+        }
+        const tongBat = await sp.transaction.count({
+            where: { layHoaDon: true, OR: [{ transactionDate: { gte: tu, lte: den } }, { transactionDate: null, createdAt: { gte: tu, lte: den } }] },
+        })
+        res.json({
+            success: true, store: store.name, ngay,
+            data: {
+                soTin: tin.length,
+                tin: tin.map((t: any) => ({ thoiDiem: t.thoiDiem, groupId: t.groupId, customerId: t.customerId, nguoiGui: t.nguoiGui, yeuCauHoaDon: t.yeuCauHoaDon, noiDung: String(t.noiDung).slice(0, 80) })),
+                theoKhach, tongPhieuLayHoaDonTrongNgay: tongBat,
+            },
+        })
+    } catch (e: any) {
+        console.error('[zalo] admin/do:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 // ─── GET /api/zalo/yeu-cau-hoa-don?ngay=YYYY-MM-DD (mặc định hôm nay, giờ VN) ──
 router.get('/yeu-cau-hoa-don', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
