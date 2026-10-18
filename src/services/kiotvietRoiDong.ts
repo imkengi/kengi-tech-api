@@ -206,7 +206,7 @@ async function soPhieuNhapVoiKV(sp: any, creds: any, loc: { tuNgay?: Date | null
         else kvMoiTrangThai.set(ma.replace(/(_\d+)?\{DEL\d*\}$/i, ''), po)
     }
     const thieu: { r: any; po: any; vang: DongVangPN[] }[] = [], giamDong: { r: any; po: any; lech: number }[] = []
-    const du: any[] = [], khongThayTrenKV: any[] = []
+    const du: any[] = [], khongThayTrenKV: any[] = [], khacTong: { r: any; po: any }[] = []
     let khop = 0
     const daCo = new Set<string>()
     for (const r of ke) {
@@ -219,6 +219,8 @@ async function soPhieuNhapVoiKV(sp: any, creds: any, loc: { tuNgay?: Date | null
             khongThayTrenKV.push({ ...r, kvTrangThai: kvKhac ? Number(kvKhac.status) : null, kvMa: kvKhac?.code ?? null })
             continue
         }
+        // tổng KV đã khác tổng Kengi = phiếu bị SỬA bên KV sau khi đồng bộ (KV xoá bản cũ, tạo bản mới cùng mã)
+        if (Math.abs((Number(po.total) || 0) - r.tong) > 1) khacTong.push({ r, po })
         const dong = dongKV(po)
         if (r.soDong > dong.length) { du.push({ ma: r.ma, ngay: ngayVN(r.ngay), soDongKengi: r.soDong, soDongKV: dong.length }); continue }
         if (r.soDong === dong.length) {
@@ -244,7 +246,7 @@ async function soPhieuNhapVoiKV(sp: any, creds: any, loc: { tuNgay?: Date | null
     const kvChuaNhap = loc.ma?.length ? [] : [...kvTheoMa.values()].filter(po => !daCo.has(String(po.code).trim()))
     // mốc bắt đầu đồng bộ phiếu nhập = phiếu KV sớm nhất đang có trong Kengi; phiếu KV chưa nhập TỪ mốc đó trở đi là RƠI CẢ PHIẾU
     const mocDau = ke.reduce((m: number, r: any) => Math.min(m, new Date(r.ngay).getTime()), Infinity)
-    return { ke, soPhieuKV: kvTheoMa.size, truncated, khop, thieu, giamDong, du, khongThayTrenKV, kvChuaNhap, mocDau }
+    return { ke, soPhieuKV: kvTheoMa.size, truncated, khop, thieu, giamDong, du, khongThayTrenKV, kvChuaNhap, mocDau, khacTong }
 }
 
 export async function doPhieuNhapRoiDong(sp: any, creds: any, loc: { tuNgay?: Date | null } = {}) {
@@ -415,4 +417,94 @@ export async function huyPhieuNhapKvDaHuy(sp: any, opts: SyncOptions, loc: { ma?
         }
     }
     return ds
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CẬP NHẬT PHIẾU NHẬP BỊ SỬA BÊN KIOTVIET SAU ĐỒNG BỘ (18/10/2026, chủ shop duyệt làm) — POST /admin/cap-nhat-pn-da-sua
+//
+//  Sửa phiếu hoàn thành bên KV = KV xoá bản cũ ("PN003958_1015005760{DEL}") rồi tạo bản mới CÙNG mã, giữ ngày nhập. Nhánh "phiếu
+//  đã có" của đồng bộ chỉ đụng thanh toán ⇒ Kengi giữ tổng + dòng CŨ (đo HUTI 18/10: 6 phiếu, Kengi hụt 66,2tr).
+//  Cập nhật từng phiếu: dòng + tổng + đã trả theo bản KV hiện tại (cùng cổng như bộ chữa dòng); SỔ: phiếu đã có IMP-<mã> thì ghi
+//  THÊM ADJ-IMP-<mã> phần chênh (tăng: Nợ 156 · Có 331; giảm: Nợ 331 · Có 156) CÙNG NGÀY bút toán gốc, không sửa bút toán gốc;
+//  kỳ đã khoá ⇒ không ghi, báo. Huỷ phiếu về sau: refsOfImport có ADJ-IMP- nên được đảo cùng. Tồn kho KHÔNG đụng (ảnh chụp KV).
+// ═══════════════════════════════════════════════════════════════════════════════
+export type KetQuaSuaPN = {
+    ma: string; ngay: string; tongCu: number; tongMoi: number; chenh: number; soDongCu: number; soDongKV: number
+    viec: 'da-cap-nhat' | 'se-cap-nhat' | 'thieu-ma' | 'co-tra-ncc' | 'khong-khop' | 'loi'; lyDo?: string
+    soDongMoi?: number; daTraCu?: number; daTraMoi?: number
+    soSach?: 'da-ghi' | 'se-ghi' | 'chua-vao-so' | 'da-co-dieu-chinh' | 'ky-da-khoa' | 'loi-ghi'
+}
+
+export async function capNhatPhieuNhapDaSua(sp: any, opts: SyncOptions, loc: { ma?: string[] } = {}): Promise<{ ds: KetQuaSuaPN[]; c: SyncCounters }> {
+    const c = newCounters()
+    const ds: KetQuaSuaPN[] = []
+    if (!opts.creds) throw new Error('Thiếu thông tin kết nối KiotViet (creds)')
+    const k = await soPhieuNhapVoiKV(sp, opts.creds, { ma: loc.ma })
+    for (const { r, po } of k.khacTong) {
+        const tongMoi = Number(po.total) || 0
+        const kq: KetQuaSuaPN = {
+            ma: r.ma, ngay: ngayVN(r.ngay), tongCu: Math.round(r.tong), tongMoi: Math.round(tongMoi), chenh: Math.round(tongMoi - r.tong),
+            soDongCu: r.soDong, soDongKV: dongKV(po).length, viec: 'loi',
+        }
+        ds.push(kq)
+        try {
+            if (r.daTraNcc > 0) { kq.viec = 'co-tra-ncc'; kq.lyDo = `Phiếu đã có ${r.daTraNcc} cái trả NCC ghi trên dòng — dựng lại là mất số trả, để nguyên`; continue }
+            let dung = await dungDongPhieuNhap(sp, po)
+            if (dung.missing.length && opts.apply && (await keoMaThieu(sp, opts, dung.thieu, c)) > 0) dung = await dungDongPhieuNhap(sp, po)
+            if (dung.missing.length) {
+                kq.viec = 'thieu-ma'
+                kq.lyDo = `Thiếu mã ${dung.missing.slice(0, 3).join(', ')}${dung.thieu.some(t => laMaDaXoaKV(t.sku)) ? ' (có mã đã xoá bên KV)' : opts.apply ? ' — kéo từ KV vẫn không ra' : ' — chạy thật sẽ kéo từ KV'}`
+                continue
+            }
+            const tongDong = dung.lines.reduce((s: number, l: any) => s + l.total, 0)
+            const kiem = tongDong - (Number(po.discount) || 0) + (Number(po.exReturnSuppliers) || 0)
+            if (dung.lines.length !== kq.soDongKV || Math.abs(kiem - tongMoi) > 2) {
+                kq.viec = 'khong-khop'
+                kq.lyDo = `Dòng KV ${dung.lines.length}/${kq.soDongKV} · Σ dòng ${Math.round(tongDong)} − giảm phiếu ${Math.round(Number(po.discount) || 0)} + chi phí trả NCC ${Math.round(Number(po.exReturnSuppliers) || 0)} ≠ tổng ${Math.round(tongMoi)}`
+                continue
+            }
+            kq.soDongMoi = dung.lines.length
+            const daTraMoi = po.totalPayment != null && Number.isFinite(Number(po.totalPayment)) ? Number(po.totalPayment) : r.daTra
+            kq.daTraCu = Math.round(r.daTra); kq.daTraMoi = Math.round(daTraMoi)
+
+            const goc = await sp.journalEntry.findUnique({ where: { reference: `IMP-${r.ma}` } })
+            const daCo = await sp.journalEntry.count({ where: { reference: `ADJ-IMP-${r.ma}` } })
+            const ngayGoc = goc ? String(goc.date).slice(0, 10) : null
+            const khoa = ngayGoc ? await khoaSoChan(sp, r.branchId ?? null, ngayGoc).catch(() => null) : null
+            kq.soSach = !goc ? 'chua-vao-so' : daCo ? 'da-co-dieu-chinh' : khoa ? 'ky-da-khoa' : opts.apply ? 'da-ghi' : 'se-ghi'
+
+            if (!opts.apply) { kq.viec = 'se-cap-nhat'; c.updated++; continue }
+            await sp.$transaction(async (tx: any) => {
+                await tx.importReceiptItem.deleteMany({ where: { receiptId: r.id } })
+                await tx.importReceiptItem.createMany({ data: dung.lines.map((l: any) => ({ ...l, receiptId: r.id })) })
+                await tx.importReceipt.update({ where: { id: r.id }, data: {
+                    totalCost: tongMoi, totalItems: dung.lines.reduce((s: number, l: any) => s + l.quantity, 0),
+                    paidAmount: daTraMoi, paymentStatus: daTraMoi >= tongMoi ? 'paid' : daTraMoi > 0 ? 'partial' : 'unpaid',
+                } })
+            })
+            kq.viec = 'da-cap-nhat'
+            c.updated++
+
+            if (kq.soSach === 'da-ghi' && kq.chenh !== 0) {
+                try {
+                    const tang = kq.chenh > 0
+                    await sp.journalEntry.create({ data: {
+                        date: ngayGoc, branchId: goc.branchId ?? r.branchId ?? null, referenceType: 'import', createdBy: opts.systemUserId ?? null,
+                        description: `Điều chỉnh nhập hàng ${r.ma} — phiếu đã sửa bên KiotViet sau khi đồng bộ${r.ncc ? ` - NCC: ${r.ncc}` : ''}`,
+                        debitAccount: tang ? '156' : '331', debitAccountName: tang ? 'Hàng hóa' : 'Phải trả người bán',
+                        creditAccount: tang ? '331' : '156', creditAccountName: tang ? 'Phải trả người bán' : 'Hàng hóa',
+                        amount: Math.abs(kq.chenh), reference: `ADJ-IMP-${r.ma}`,
+                        notes: `Tổng phiếu ${kq.tongCu.toLocaleString('vi-VN')}đ → ${kq.tongMoi.toLocaleString('vi-VN')}đ theo KiotViet`,
+                    } })
+                } catch (e: any) {
+                    kq.soSach = 'loi-ghi'
+                    kq.lyDo = `Đã cập nhật phiếu nhưng ghi bút toán điều chỉnh hỏng: ${moTaLoi(e)}`.slice(0, 300)
+                }
+            }
+        } catch (e: any) {
+            kq.viec = 'loi'
+            kq.lyDo = moTaLoi(e).slice(0, 300)
+        }
+    }
+    return { ds, c }
 }

@@ -416,7 +416,8 @@ export async function postStockAdjustJournal(
 /* ─── ĐẢO BÚT TOÁN KHI HỦY / XÓA ─────────────────────────────────────────── */
 
 /** Danh sách reference của một phiếu nhập */
-export const refsOfImport = (code: string) => [`IMP-${code}`, `IMPVAT-${code}`, `IMPPAY-${code}`]
+export const refsOfImport = (code: string) => [`IMP-${code}`, `IMPVAT-${code}`, `IMPPAY-${code}`,
+    `ADJ-IMP-${code}`]   // điều chỉnh khi phiếu KiotViet bị SỬA sau đồng bộ (services/kiotvietRoiDong.ts, 18/10/2026) — huỷ phiếu phải đảo cả nó
 /** Danh sách reference của một khoản chi phí */
 export const refsOfExpense = (id: string) => [`EXP-${id}`, `EXPVAT-${id}`]
 /** Danh sách reference của một phiếu trả hàng */
