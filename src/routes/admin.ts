@@ -1683,6 +1683,49 @@ router.post('/tat-kho-trung', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO HOÁ ĐƠN KIOTVIET RƠI DÒNG HÀNG (chỉ đọc, 18/10/2026) — GET /admin/do-hd-thieu-dong?store=HUTI ─────────────────────
+ * Chủ shop gửi HD031632 (17/10): tổng 7.429.000 mà chỉ còn 1 dòng 4.104.000 — "đồng bộ bị rớt sản phẩm". Đường TẠO MỚI hoá đơn
+ * (kiotvietSync.syncInvoices) bỏ dòng có mã chưa có bên Kengi rồi VẪN tạo phiếu với tổng của KiotViet. Đo mọi phiếu của
+ * 'KiotViet Sync' (trừ huỷ/trả): Σ dòng − giảm giá phiếu ≠ tổng (±1đ) ⇒ rơi dòng (thiếu) hoặc dư dòng (âm). Theo tháng, 30 ngày
+ * gần nhất, số tiền hàng bị rơi, mẫu mới nhất. Không ghi gì. */
+router.get('/do-hd-thieu-dong', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const ds: any[] = await sp.$queryRawUnsafe(`
+            SELECT t.id, t."receiptNumber" AS ma, t."createdAt" AS ngay, t.total::float8 AS tong, coalesce(t.discount,0)::float8 AS giam,
+                   t.status, coalesce(sum(i."lineTotal"),0)::float8 AS "tongDong", count(i.id)::int AS "soDong"
+              FROM "Transaction" t LEFT JOIN "TransactionItem" i ON i."transactionId" = t.id
+             WHERE t."createdByName" = 'KiotViet Sync' AND t.status NOT IN ('voided','returned','cancelled')
+             GROUP BY t.id`)
+        const lech = ds.map(r => ({ ...r, lech: Math.round(r.tong + r.giam - r.tongDong) })).filter(r => Math.abs(r.lech) > 1)
+        const thieu = lech.filter(r => r.lech > 0), du = lech.filter(r => r.lech < 0)
+        const thang = (d: any) => new Date(new Date(d).getTime() + 7 * 3600_000).toISOString().slice(0, 7)
+        const ngayVN = (d: any) => new Date(new Date(d).getTime() + 7 * 3600_000).toISOString().slice(0, 10)
+        const gom = (xs: any[], k: (r: any) => string) => {
+            const m: Record<string, { so: number; tienRoi: number; trenTong: number }> = {}
+            for (const r of xs) { const g = (m[k(r)] ??= { so: 0, tienRoi: 0, trenTong: 0 }); g.so++; g.tienRoi += r.lech }
+            for (const r of ds) { const g = m[k(r)]; if (g) g.trenTong++ }
+            return Object.entries(m).sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([khoa, v]) => ({ khoa, ...v }))
+        }
+        const moc30 = Date.now() - 30 * 86400_000
+        res.json({ success: true, data: {
+            store: st.code, soPhieuKiotViet: ds.length,
+            roiDong: { so: thieu.length, tienHangBiRoi: Math.round(thieu.reduce((s, r) => s + r.lech, 0)), phieuKhongConDongNao: thieu.filter(r => r.soDong === 0).length },
+            duDong: { so: du.length, tien: Math.round(du.reduce((s, r) => s + r.lech, 0)) },
+            theoThang: gom(thieu, r => thang(r.ngay)),
+            ngayGanDay: gom(thieu.filter(r => new Date(r.ngay).getTime() >= moc30), r => ngayVN(r.ngay)),
+            mau: thieu.sort((a, b) => (a.ngay < b.ngay ? 1 : -1)).slice(0, 25)
+                .map(r => ({ ma: r.ma, ngay: ngayVN(r.ngay), tong: r.tong, giam: r.giam, tongDong: r.tongDong, soDong: r.soDong, roi: r.lech, trangThai: r.status })),
+            mauDu: du.slice(0, 5).map(r => ({ ma: r.ma, ngay: ngayVN(r.ngay), tong: r.tong, tongDong: r.tongDong, lech: r.lech })),
+        } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── ĐO KHO TRÙNG (chỉ đọc, 18/10/2026) — GET /admin/do-kho-trung?store=HUTI ───────────────────────────────────────────
  * Chủ shop gửi trang Kho hàng: ba cặp "Kho chính" / "Kho hàng bảo hành" / "Kho hàng hư hỏng" — một bản gắn Chi nhánh chính, một
  * bản KHÔNG gắn chi nhánh (gieo lúc khởi động trước khi sửa 09/10). Liệt kê MỌI kho (kể cả đã tắt) kèm mọi thứ đang trỏ vào nó:
