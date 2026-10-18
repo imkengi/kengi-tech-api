@@ -126,11 +126,16 @@ export async function dungDongHoaDon(sp: any, kv: any): Promise<{ lines: any[]; 
  * rồi đi đường TẠO MỚI của syncProducts (chiTaoMoi — hàng đã có tuyệt đối không đụng, chỉ nối bảng mã). Chỉ chạy thật
  * (apply) và khi có creds. Lỗi từng mã chỉ ghi nhật ký — bên gọi dựng lại dòng và tự quyết.
  */
+/** Mã KiotViet đã xoá: KiotViet đổi mã thành "<mã>{DEL}" / "<mã>{DEL1}"… khi xoá hàng */
+export const laMaDaXoaKV = (sku: string) => /\{DEL\d*\}/i.test(String(sku || ''))
+
 export async function keoMaThieu(sp: any, opts: SyncOptions, thieu: { sku: string; kvProductId: string | null }[], c: SyncCounters): Promise<number> {
     if (!opts.apply || !opts.creds || !thieu.length) return 0
     const { KV } = await import('./kiotviet')
     const items: any[] = []
-    for (const t of thieu.slice(0, 20)) {
+    /* Mã ĐÃ XOÁ bên KiotViet mang đuôi {DEL} (đo HUTI 18/10: 32 phiếu 2024–2025, vd L4007{DEL}, FPC20L{DEL}) — KHÔNG kéo về:
+     * kéo là đẻ ra hàng mới tên "…{DEL}" trong danh mục đang bán. Phiếu cũ đó để nguyên, báo cho người dùng. */
+    for (const t of thieu.filter(x => !laMaDaXoaKV(x.sku)).slice(0, 20)) {
         try {
             const r: any = t.kvProductId
                 ? await KV.raw(opts.creds, `/products/${encodeURIComponent(t.kvProductId)}`)

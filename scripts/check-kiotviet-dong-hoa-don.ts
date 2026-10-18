@@ -2,7 +2,7 @@
  *   npx tsx scripts/check-kiotviet-dong-hoa-don.ts
  * Ca thật: HUTI HD031632 (17/10) rơi dòng EDH-SZP125-E6 3.325.000đ — dựng dòng chỉ tra SKU khớp tuyệt đối, bỏ qua bảng nối mã
  * KiotViet mà đồng bộ hàng hoá dùng; đo 62 phiếu / 128,7tr. Prisma giả, không DB. */
-import { dungDongHoaDon } from '../src/services/kiotvietSync'
+import { dungDongHoaDon, laMaDaXoaKV } from '../src/services/kiotvietSync'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -41,6 +41,9 @@ async function main() {
     let nem = false
     try { await dungDongHoaDon(gia(true), kv) } catch { nem = true }
     dung('lỗi đọc DB ⇒ NÉM (không biến thành "không có mã" rồi rơi dòng)', nem)
+
+    // HUTI 18/10: 32 phiếu cũ rơi dòng vì mã đã XOÁ bên KiotViet (đuôi {DEL}) — không được kéo về tạo lại
+    dung('nhận mã đã xoá {DEL} / {DEL1}, không nhận mã thường', laMaDaXoaKV('L4007{DEL}') && laMaDaXoaKV('FPC20L{del1}') && !laMaDaXoaKV('L4007') && !laMaDaXoaKV('DEL-100'))
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)

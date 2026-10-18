@@ -20,7 +20,7 @@
 //  Tồn kho KHÔNG đụng: tồn KiotViet là ảnh chụp onHand, hoá đơn không trừ kho bên Kengi (kiotviet-the-kho-tach-nhan).
 // ═══════════════════════════════════════════════════════════════════════════════
 import { KV } from './kiotviet'
-import { dungDongHoaDon, keoMaThieu, newCounters, type SyncCounters, type SyncOptions } from './kiotvietSync'
+import { dungDongHoaDon, keoMaThieu, laMaDaXoaKV, newCounters, type SyncCounters, type SyncOptions } from './kiotvietSync'
 import { khoaSoChan } from '../lib/periodLock'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -77,7 +77,11 @@ export async function chuaHoaDonRoiDong(
             if (dung.missing.length && opts.apply && (await keoMaThieu(sp, opts, dung.thieu, c)) > 0) dung = await dungDongHoaDon(sp, kv)
             if (dung.missing.length) {
                 kq.viec = 'thieu-ma'; kq.maThieu = dung.thieu
-                kq.lyDo = opts.apply ? 'Kéo mã từ KiotViet vẫn không ra — xem tên mã' : 'Chạy thật sẽ kéo các mã này từ KiotViet rồi dựng lại'
+                kq.lyDo = dung.thieu.every(t => laMaDaXoaKV(t.sku))
+                    ? 'Mã đã XOÁ bên KiotViet ({DEL}) — không tạo lại hàng đã xoá, phiếu để nguyên'
+                    : opts.apply ? 'Kéo mã từ KiotViet vẫn không ra — xem tên mã'
+                        : dung.thieu.some(t => laMaDaXoaKV(t.sku)) ? 'Có mã đã xoá bên KiotViet ({DEL}) — chạy thật vẫn không dựng được'
+                            : 'Chạy thật sẽ kéo các mã này từ KiotViet rồi dựng lại'
                 continue
             }
             const tongDongMoi = dung.lines.reduce((s: number, l: any) => s + l.lineTotal, 0)
