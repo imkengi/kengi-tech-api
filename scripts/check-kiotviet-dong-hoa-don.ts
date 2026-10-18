@@ -87,6 +87,21 @@ async function main() {
     dung('Kengi đã huỷ / chưa từng có ⇒ bỏ qua im lặng như cũ', !/PN3|PN4/.test(bao) && cPN.skipped === 4, { skipped: cPN.skipped })
     dung('phiếu hoàn thành mới vẫn tạo bình thường (chạy thử)', cPN.created === 1 && cPN.failed === 0, { created: cPN.created, failed: cPN.failed })
 
+    /* SỬA phiếu bên KV = xoá bản cũ thành "PN6_1015005760{DEL}" + tạo bản mới CÙNG mã (đo HUTI 18/10, PN003958) ⇒ bản {DEL} có bản
+     * sống cùng mã là bản bị THAY — không được báo "đã xoá". Còn phiếu đã có mà tổng KV khác ⇒ báo "ĐÃ SỬA", không tự đổi. */
+    PN.PN6 = { id: 'r6', status: 'completed', totalCost: 2570400, paidAmount: 0, paymentStatus: 'unpaid' }
+    PN.PN7 = { id: 'r7', status: 'completed', totalCost: 500, paidAmount: 0, paymentStatus: 'unpaid' }
+    const cSua = newCounters()
+    await syncPurchaseOrders(spPN, [
+        { id: 61, code: 'PN6_1015005760{DEL}', status: 4, total: 2570400 },
+        { id: 62, code: 'PN6', status: 3, total: 16087838, totalPayment: 0 },
+        { id: 71, code: 'PN7_1015009999{DEL}', status: 4, total: 500 },
+    ], { apply: false } as any, cSua)
+    const baoSua = cSua.errors.join(' | ')
+    dung('bản {DEL} bị THAY (có bản sống cùng mã) ⇒ im lặng', !/PN6: ĐÃ XOÁ/.test(baoSua), cSua.errors)
+    dung('phiếu đã có mà tổng KV khác ⇒ báo "ĐÃ SỬA … 2570400 → 16087838"', /PN6: ĐÃ SỬA bên KiotViet sau khi đồng bộ — tổng 2570400 → 16087838/.test(baoSua))
+    dung('xoá thật dạng "_<id>{DEL}" (không có bản sống) ⇒ báo "ĐÃ XOÁ" theo mã gốc', /PN7: ĐÃ XOÁ/.test(baoSua))
+
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)
 }

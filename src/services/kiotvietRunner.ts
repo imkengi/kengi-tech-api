@@ -263,6 +263,13 @@ export async function runSync(
     rebuildLines = false,
     /** Chỉ cập nhật phiếu đã có — xem ghi chú ở SyncOptions.updateOnly */
     updateOnly = false,
+    /**
+     * CỬA SỔ RIÊNG CHO PHIẾU NHẬP (lượt đêm, 18/10/2026): quét theo NGÀY NHẬP từ mốc này, KHÔNG kèm lastModifiedFrom.
+     * Đo HUTI 18/10: phiếu nhập LÙI NGÀY (ngày nhập 11/09, tạo trên KV 22/09) và phiếu SỬA muộn (KV xoá bản cũ, tạo bản
+     * mới cùng mã, giữ ngày nhập) nằm ngoài cửa sổ 3 ngày theo ngày nhập ⇒ 3 phiếu tháng 9 (114tr) không bao giờ sang.
+     * lastModifiedFrom của KV cũng KHÔNG bắt được (lmf=20/09 trả 0 phiếu cho bản tạo 22/09) ⇒ chỉ lọc theo ngày nhập, nới rộng.
+     */
+    phieuNhapTuNgay: Date | null = null,
 ): Promise<void> {
     const baseOpts = await buildOptions(sp, cfg, apply)
     baseOpts.creds = credsOf(cfg)
@@ -412,11 +419,9 @@ export async function runSync(
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncReturns(sp, filtered, opts, c)
             } else if (entity === 'purchaseOrders') {
-                const { items, truncated } = await KV.purchaseOrders(creds, {
-                    fromPurchaseDate: kvDate(fromDate),
-                    toPurchaseDate: kvDate(toDate),
-                    lastModifiedFrom,
-                }, pageOpts)
+                const { items, truncated } = await KV.purchaseOrders(creds, phieuNhapTuNgay
+                    ? { fromPurchaseDate: kvDate(phieuNhapTuNgay), toPurchaseDate: kvDate(toDate) }   // lượt đêm — xem phieuNhapTuNgay
+                    : { fromPurchaseDate: kvDate(fromDate), toPurchaseDate: kvDate(toDate), lastModifiedFrom }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'purchaseDate', 'modifiedDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncPurchaseOrders(sp, filtered, opts, c)

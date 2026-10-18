@@ -1548,6 +1548,8 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
      * Đọc MỘT lần cho cả lượt: pool prod mỗi cửa hàng chỉ 1 kết nối. */
     const khauTruVat = await coKhauTruVat(sp)
     let ganOk = 0, ganGiu = 0
+    // mã phiếu đang HOÀN THÀNH trong lượt — để nhận ra bản {DEL} chỉ là bản cũ bị thay khi sửa phiếu (xem dưới)
+    const songTrenKV = new Set<string>(items.filter(x => Number(x?.status) === 3 && !/\{DEL/i.test(String(x?.code || ''))).map(x => String(x.code).trim()))
     for (const kv of items) {
         c.fetched++
         beat(opts, c)
@@ -1560,15 +1562,25 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             /* PHIẾU ĐÃ SANG KENGI RỒI MỚI BỊ HUỶ / XOÁ BÊN KIOTVIET (đo HUTI 18/10: 8 phiếu 98,9tr đều status 4). Trước đây nhánh dưới
              * chỉ đụng thanh toán rồi `continue` — huỷ không bao giờ sang, phiếu vẫn 'completed' + bút toán IMP- (Nợ 156 · Có 331).
              * KHÔNG tự huỷ ở đây (đụng sổ 156/331, đã trả tiền thì còn chuyện NCC hoàn) — báo rõ để người dùng xử lý
-             * (POST /admin/huy-pn-kv-da-huy). Mã xoá mang đuôi {DEL} ⇒ tra theo mã gốc. */
+             * (POST /admin/huy-pn-kv-da-huy). Mã xoá mang đuôi {DEL} ⇒ tra theo mã gốc.
+             * SỬA phiếu đã hoàn thành bên KV = XOÁ bản cũ (mã thành "PN003958_1015005760{DEL}") + TẠO bản mới CÙNG mã (đo HUTI
+             * 18/10) ⇒ bản {DEL} có bản sống cùng mã trong lượt là bản bị THAY, không phải bị xoá — im lặng bỏ qua. */
             const huyBenKV = /\{DEL\d*\}/i.test(code) || Number(kv?.status) !== 3
             if (huyBenKV) {
-                const conGiu = existing ?? await sp.importReceipt.findUnique({ where: { code: code.replace(/\{DEL\d*\}/gi, '') }, select: { id: true, status: true } })
+                const maGoc = code.replace(/(_\d+)?\{DEL\d*\}$/i, '')
+                if (maGoc !== code && songTrenKV.has(maGoc)) { c.skipped++; continue }
+                const conGiu = existing ?? await sp.importReceipt.findUnique({ where: { code: maGoc }, select: { id: true, status: true } })
                 if (conGiu && conGiu.status !== 'cancelled') {
-                    boQua(c, `Phiếu nhập ${code.replace(/\{DEL\d*\}/gi, '')}: ĐÃ ${/\{DEL/i.test(code) ? 'XOÁ' : `HUỶ (status ${kv?.status})`} bên KiotViet mà Kengi vẫn giữ — cần huỷ bên Kengi`)
+                    boQua(c, `Phiếu nhập ${maGoc}: ĐÃ ${/\{DEL/i.test(code) ? 'XOÁ' : `HUỶ (status ${kv?.status})`} bên KiotViet mà Kengi vẫn giữ — cần huỷ bên Kengi`)
                     continue
                 }
                 if (conGiu) { c.skipped++; continue }   // đã huỷ cả hai bên
+            }
+            /* Phiếu đã có mà TỔNG bên KV đã khác (sửa sau khi đồng bộ — đo HUTI 18/10: 6 phiếu, Kengi hụt 66,2tr) — nhánh dưới không
+             * đụng dòng/tổng (đổi tổng là đụng bút toán IMP- và nợ NCC) ⇒ báo, không tự sửa. Không tăng skipped: nhánh dưới vẫn đếm. */
+            if (existing && existing.status !== 'cancelled' && Number.isFinite(Number(kv?.total))
+                && Math.abs(Number(kv.total) - (Number(existing.totalCost) || 0)) > 1 && c.errors.length < 20) {
+                c.errors.push(`Phiếu nhập ${code}: ĐÃ SỬA bên KiotViet sau khi đồng bộ — tổng ${Math.round(Number(existing.totalCost) || 0)} → ${Math.round(Number(kv.total))}, Kengi chưa cập nhật`.slice(0, 200))
             }
             if (existing) {
                 /* PHIẾU ĐÃ CÓ: bản đầu bỏ qua hoàn toàn ⇒ paidAmount/paymentStatus chỉ ghi lúc tạo, phiếu HUTI đã

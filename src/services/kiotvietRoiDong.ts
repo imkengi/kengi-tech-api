@@ -196,12 +196,14 @@ async function soPhieuNhapVoiKV(sp: any, creds: any, loc: { tuNgay?: Date | null
          GROUP BY r.id`, ...ts)
     const { items, truncated } = await KV.purchaseOrders(creds, loc.tuNgay ? { fromPurchaseDate: kvDate(loc.tuNgay) } : {}, { maxPages: 500 })
     const kvTheoMa = new Map<string, any>()
-    const kvMoiTrangThai = new Map<string, any>()   // mã gốc (bỏ đuôi {DEL}) → phiếu KV ở MỌI trạng thái
+    /* mã gốc → phiếu KV KHÔNG hoàn thành (huỷ / xoá). Bỏ cả đuôi "_<id>{DEL}": sửa phiếu bên KV = xoá bản cũ thành
+     * "PN003958_1015005760{DEL}" + tạo bản mới cùng mã — bản mới nằm ở kvTheoMa nên phiếu Kengi khớp bản sống trước. */
+    const kvMoiTrangThai = new Map<string, any>()
     for (const po of items) {
         const ma = String(po?.code || '').trim()
         if (!ma) continue
         if (Number(po?.status) === 3 && !/\{DEL\}/i.test(ma)) kvTheoMa.set(ma, po)
-        else kvMoiTrangThai.set(ma.replace(/\{DEL\d*\}/gi, ''), po)
+        else kvMoiTrangThai.set(ma.replace(/(_\d+)?\{DEL\d*\}$/i, ''), po)
     }
     const thieu: { r: any; po: any; vang: DongVangPN[] }[] = [], giamDong: { r: any; po: any; lech: number }[] = []
     const du: any[] = [], khongThayTrenKV: any[] = []

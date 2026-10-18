@@ -28,6 +28,10 @@ import { errMsg } from '../lib/errorResponse'
 const RUN_HOUR_UTC = 17    // 00:00 VN
 const RUN_MINUTE = 0
 const LOOKBACK_DAYS = 3
+/** Phiếu nhập quét RỘNG hơn theo ngày nhập (18/10/2026): phiếu nhập lùi ngày / sửa muộn bên KV giữ ngày nhập cũ — cửa sổ
+ *  3 ngày bỏ sót 3 phiếu tháng 9 (114tr). ~20 phiếu/ngày ⇒ 45 ngày ≈ 900 phiếu, vài trang, rẻ. Xem runSync.phieuNhapTuNgay. */
+const LOOKBACK_PHIEU_NHAP_DAYS = 45
+const BAT_CUA_SO_PHIEU_NHAP = false
 const ENTITIES = ['categories', 'products', 'suppliers', 'invoices', 'returns', 'purchaseOrders']
 const STALE_MS = 2 * 60_000
 
@@ -71,7 +75,9 @@ async function runForStore(schema: string, storeName: string): Promise<'ban' | v
     })
     console.log(`[KVNightly] ${storeName}: bắt đầu ${ENTITIES.join(',')} (chứng từ từ ${fromDate.toISOString().slice(0, 10)})`)
     try {
-        await runSync(sp, cfg, ENTITIES, fromDate, null, true, log.id)
+        // CHỜ CHỦ SHOP DUYỆT (18/10): bật thì lượt đầu tự nhập 3 phiếu tháng 9 còn thiếu — đổi null thành mốc 45 ngày
+        const phieuNhapTuNgay: Date | null = BAT_CUA_SO_PHIEU_NHAP ? new Date(Date.now() - LOOKBACK_PHIEU_NHAP_DAYS * 86400_000) : null
+        await runSync(sp, cfg, ENTITIES, fromDate, null, true, log.id, false, false, phieuNhapTuNgay)
         console.log(`[KVNightly] ${storeName}: xong — chi tiết ở lịch sử đồng bộ (log ${log.id})`)
     } catch (e: any) {
         await sp.kiotVietSyncLog.update({
