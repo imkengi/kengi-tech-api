@@ -1556,7 +1556,20 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             const code = String(kv?.code || '').trim()
             if (!kvId || !code) { c.skipped++; continue }
 
-            const existing = await sp.importReceipt.findUnique({ where: { code }, select: { id: true, supplierId: true, totalCost: true, paidAmount: true, paymentStatus: true } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
+            const existing = await sp.importReceipt.findUnique({ where: { code }, select: { id: true, supplierId: true, totalCost: true, paidAmount: true, paymentStatus: true, status: true } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
+            /* PHIẾU ĐÃ SANG KENGI RỒI MỚI BỊ HUỶ / XOÁ BÊN KIOTVIET (đo HUTI 18/10: 8 phiếu 98,9tr đều status 4). Trước đây nhánh dưới
+             * chỉ đụng thanh toán rồi `continue` — huỷ không bao giờ sang, phiếu vẫn 'completed' + bút toán IMP- (Nợ 156 · Có 331).
+             * KHÔNG tự huỷ ở đây (đụng sổ 156/331, đã trả tiền thì còn chuyện NCC hoàn) — báo rõ để người dùng xử lý
+             * (POST /admin/huy-pn-kv-da-huy). Mã xoá mang đuôi {DEL} ⇒ tra theo mã gốc. */
+            const huyBenKV = /\{DEL\d*\}/i.test(code) || Number(kv?.status) !== 3
+            if (huyBenKV) {
+                const conGiu = existing ?? await sp.importReceipt.findUnique({ where: { code: code.replace(/\{DEL\d*\}/gi, '') }, select: { id: true, status: true } })
+                if (conGiu && conGiu.status !== 'cancelled') {
+                    boQua(c, `Phiếu nhập ${code.replace(/\{DEL\d*\}/gi, '')}: ĐÃ ${/\{DEL/i.test(code) ? 'XOÁ' : `HUỶ (status ${kv?.status})`} bên KiotViet mà Kengi vẫn giữ — cần huỷ bên Kengi`)
+                    continue
+                }
+                if (conGiu) { c.skipped++; continue }   // đã huỷ cả hai bên
+            }
             if (existing) {
                 /* PHIẾU ĐÃ CÓ: bản đầu bỏ qua hoàn toàn ⇒ paidAmount/paymentStatus chỉ ghi lúc tạo, phiếu HUTI đã
                  * trả bên KV vẫn "chưa trả" mãi trên Hạn Thanh Toán / MCP / Lịch tiền (rà soát độc lập 19/08/2026).

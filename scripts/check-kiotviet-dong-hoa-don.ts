@@ -2,7 +2,7 @@
  *   npx tsx scripts/check-kiotviet-dong-hoa-don.ts
  * Ca thật: HUTI HD031632 (17/10) rơi dòng EDH-SZP125-E6 3.325.000đ — dựng dòng chỉ tra SKU khớp tuyệt đối, bỏ qua bảng nối mã
  * KiotViet mà đồng bộ hàng hoá dùng; đo 62 phiếu / 128,7tr. Prisma giả, không DB. */
-import { dungDongHoaDon, dungDongPhieuNhap, laMaDaXoaKV, timHangKV } from '../src/services/kiotvietSync'
+import { dungDongHoaDon, dungDongPhieuNhap, laMaDaXoaKV, newCounters, syncPurchaseOrders, timHangKV } from '../src/services/kiotvietSync'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -63,6 +63,29 @@ async function main() {
     try { await dungDongPhieuNhap(gia(true), pn) } catch { nemPn = true }
     dung('phiếu nhập: lỗi đọc DB ⇒ NÉM (bản cũ .catch(() => null) ⇒ rơi dòng)', nemPn)
     dung('timHangKV: bảng nối trỏ hàng đã xoá ⇒ rơi về tra SKU', (await timHangKV({ ...gia(), kiotVietMap: { findUnique: async () => ({ localId: 'p-da-xoa' }) } }, '1', 'EDH-SZP107-E6'))?.id === 'p-a')
+
+    /* PHIẾU NHẬP HUỶ / XOÁ BÊN KV SAU KHI ĐÃ SANG KENGI (đo HUTI 18/10: 8 phiếu 98,9tr status 4) — trước đây nhánh "đã có" chỉ
+     * đụng thanh toán rồi bỏ qua IM LẶNG. Nay phải báo rõ; phiếu Kengi đã huỷ / chưa từng có thì vẫn bỏ qua như cũ. */
+    const PN: Record<string, any> = {
+        PN1: { id: 'r1', status: 'completed', totalCost: 1000, paidAmount: 0, paymentStatus: 'unpaid' },
+        PN2: { id: 'r2', status: 'completed', totalCost: 2000, paidAmount: 0, paymentStatus: 'unpaid' },
+        PN3: { id: 'r3', status: 'cancelled', totalCost: 3000, paidAmount: 0, paymentStatus: 'unpaid' },
+    }
+    const spPN: any = { ...gia(), storeSettings: { findFirst: async () => ({ businessType: 'company' }) },
+        importReceipt: { findUnique: async ({ where }: any) => PN[where.code] ?? null } }
+    const cPN = newCounters()
+    await syncPurchaseOrders(spPN, [
+        { id: 1, code: 'PN1', status: 4, total: 1000 },
+        { id: 2, code: 'PN2{DEL}', status: 4, total: 2000 },
+        { id: 3, code: 'PN3', status: 4, total: 3000 },
+        { id: 4, code: 'PN4', status: 4, total: 4000 },
+        { id: 5, code: 'PN5', status: 3, total: 3300000, purchaseOrderDetails: pn.purchaseOrderDetails.slice(0, 1) },
+    ], { apply: false } as any, cPN)
+    const bao = cPN.errors.join(' | ')
+    dung('phiếu KV huỷ (status 4) mà Kengi còn giữ ⇒ BÁO "ĐÃ HUỶ"', /PN1: ĐÃ HUỶ \(status 4\)/.test(bao), cPN.errors)
+    dung('phiếu KV xoá ({DEL}) mà Kengi còn giữ ⇒ BÁO "ĐÃ XOÁ" theo mã gốc', /PN2: ĐÃ XOÁ/.test(bao))
+    dung('Kengi đã huỷ / chưa từng có ⇒ bỏ qua im lặng như cũ', !/PN3|PN4/.test(bao) && cPN.skipped === 4, { skipped: cPN.skipped })
+    dung('phiếu hoàn thành mới vẫn tạo bình thường (chạy thử)', cPN.created === 1 && cPN.failed === 0, { created: cPN.created, failed: cPN.failed })
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)
