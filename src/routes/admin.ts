@@ -3847,6 +3847,61 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // ⚠ Chạy migrate TRƯỚC khi deploy code có cột này trong model Transaction — thiếu cột là POS hỏng.
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "layHoaDon" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Transaction_layHoaDon_idx" ON "Transaction"("layHoaDon") WHERE "layHoaDon"`)
+                // 18/10/2026 — quét nhóm Zalo qua n8n + gửi tin cho khách (routes/zalo.ts, lib/zaloGui.ts)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloCauHinh" (
+                        "id" TEXT NOT NULL DEFAULT 'default',
+                        "n8nQuetUrl" TEXT,
+                        "n8nGuiUrl" TEXT,
+                        "guiMoiPhut" INTEGER NOT NULL DEFAULT 4,
+                        "quetLuc" TIMESTAMP(3),
+                        "quetKetQua" TEXT,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "ZaloCauHinh_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloNhomQuet" (
+                        "id" TEXT NOT NULL,
+                        "groupId" TEXT NOT NULL,
+                        "tenNhom" TEXT,
+                        "soThanhVien" INTEGER,
+                        "quetLuc" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "ZaloNhomQuet_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ZaloNhomQuet_groupId_key" ON "ZaloNhomQuet"("groupId")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloDotGui" (
+                        "id" TEXT NOT NULL,
+                        "tieuDe" TEXT,
+                        "noiDung" TEXT NOT NULL,
+                        "anh" TEXT,
+                        "trangThai" TEXT NOT NULL DEFAULT 'dang_gui',
+                        "soNhom" INTEGER NOT NULL DEFAULT 0,
+                        "nguoiTao" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "ZaloDotGui_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloDotGui_createdAt_idx" ON "ZaloDotGui"("createdAt")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "ZaloDotGuiNhom" (
+                        "id" TEXT NOT NULL,
+                        "dotId" TEXT NOT NULL,
+                        "groupId" TEXT NOT NULL,
+                        "customerId" TEXT,
+                        "tenNhom" TEXT,
+                        "trangThai" TEXT NOT NULL DEFAULT 'cho',
+                        "loi" TEXT,
+                        "lanThu" INTEGER NOT NULL DEFAULT 0,
+                        "guiLuc" TIMESTAMP(3),
+                        CONSTRAINT "ZaloDotGuiNhom_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ZaloDotGuiNhom_dotId_groupId_key" ON "ZaloDotGuiNhom"("dotId", "groupId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloDotGuiNhom_trangThai_idx" ON "ZaloDotGuiNhom"("trangThai")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloDotGuiNhom_dotId_idx" ON "ZaloDotGuiNhom"("dotId")`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,
@@ -5458,6 +5513,56 @@ router.get('/do-nhan-ai-video-tu-dong', async (req: Request, res: Response) => {
 /* ─── ỨNG VIÊN LÀM VIDEO THEO NGUỒN ẢNH (chỉ đọc) — GET /admin/do-ung-vien-video?store=KENGISTORE (14/10/2026) ──
  * Mỗi gian Shopee: mã đang bán + còn hàng + có mô tả — bao nhiêu có ảnh kho, bao nhiêu CHỈ có ảnh listing trên sàn,
  * bao nhiêu không có ảnh nào; đã soát AI bao nhiêu mã; cửa hàng có key AI không (chỉ đúng/sai, không bao giờ trả key). */
+/* ─── CÂY NHÓM HÀNG (chỉ đọc) — GET /admin/do-cay-nhom?store=HUTI ─────────────────────────────────────────────────────────
+ * (18/10/2026, chủ shop: "trong phần báo cáo thì các nhóm hàng đang nằm lộn xộn, nó có nhiều cấp nhóm hàng mà"). Báo cáo
+ * "Theo Nhóm Hàng" gộp theo TÊN nhóm lá của từng mã ⇒ đo: số nhóm mỗi cấp, hàng gắn vào nhóm cấp nào (gắn vào nhóm cha hay
+ * nhóm lá), tên trùng ở nhiều nhánh, nhóm mồ côi (cha không tồn tại / cấp ghi sai so với độ sâu thật). Chỉ trả số đếm + mẫu. */
+router.get('/do-cay-nhom', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const nhom: any[] = await sp.category.findMany({ select: { id: true, name: true, level: true, parentId: true } })
+        const dem: any[] = await sp.$queryRawUnsafe(`SELECT "categoryId" AS id, count(*)::int AS so FROM "Product" WHERE "mergedIntoId" IS NULL GROUP BY 1`)
+        const soHang = new Map<string, number>(dem.map(r => [String(r.id), Number(r.so) || 0]))
+        const theoId = new Map<string, any>(nhom.map(n => [n.id, n]))
+        const con = new Map<string, number>()
+        for (const n of nhom) if (n.parentId) con.set(n.parentId, (con.get(n.parentId) || 0) + 1)
+        // độ sâu THẬT theo chuỗi cha (cột level có thể ghi sai), chặn vòng
+        const sau = (n: any) => { let d = 1, x = n; const da = new Set<string>(); while (x?.parentId && !da.has(x.id)) { da.add(x.id); x = theoId.get(x.parentId); if (!x) return -d; d++ } return d }
+        const duong = (n: any) => { const ds: string[] = []; let x = n; const da = new Set<string>(); while (x && !da.has(x.id)) { da.add(x.id); ds.unshift(x.name); x = x.parentId ? theoId.get(x.parentId) : null } return ds.join(' › ') }
+        const theoCap: Record<string, { soNhom: number; nhomCoHang: number; soHang: number; laNhomLa: number }> = {}
+        const lechCap: any[] = [], moCoi: any[] = [], hangONhomCha: any[] = []
+        for (const n of nhom) {
+            const d = sau(n)
+            const k = d < 0 ? 'mo-coi' : String(d)
+            const c = (theoCap[k] ??= { soNhom: 0, nhomCoHang: 0, soHang: 0, laNhomLa: 0 })
+            const h = soHang.get(n.id) || 0
+            c.soNhom++; if (h) { c.nhomCoHang++; c.soHang += h }
+            if (!con.get(n.id)) c.laNhomLa++
+            if (d < 0) moCoi.push({ ten: n.name, parentId: n.parentId, soHang: h })
+            else if (n.level !== d && lechCap.length < 10) lechCap.push({ duong: duong(n), levelGhi: n.level, doSauThat: d })
+            if (h && con.get(n.id) && hangONhomCha.length < 15) hangONhomCha.push({ duong: duong(n), soHang: h, soNhomCon: con.get(n.id) })
+        }
+        const theoTen = new Map<string, any[]>()
+        for (const n of nhom) { const k = n.name.trim().toLowerCase(); theoTen.set(k, [...(theoTen.get(k) || []), n]) }
+        const trungTen = [...theoTen.values()].filter(ds => ds.length > 1)
+        const goc = nhom.filter(n => !n.parentId).map(n => ({ ten: n.name, soNhomCon: con.get(n.id) || 0, soHangTrucTiep: soHang.get(n.id) || 0 }))
+            .sort((a, b) => b.soNhomCon - a.soNhomCon).slice(0, 30)
+        res.json({ success: true, data: {
+            store: st.code, tongNhom: nhom.length, theoCap, soHangKhongNhom: soHang.get('null') || 0,
+            soNhomGoc: nhom.filter(n => !n.parentId).length, goc,
+            trungTen: { so: trungTen.length, mau: trungTen.slice(0, 12).map(ds => ds.map(duong)) },
+            hangONhomCha: { so: nhom.filter(n => (soHang.get(n.id) || 0) && con.get(n.id)).length, mau: hangONhomCha },
+            lechCap: { so: nhom.filter(n => { const d = sau(n); return d > 0 && n.level !== d }).length, mau: lechCap },
+            moCoi: moCoi.slice(0, 10),
+        } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 router.get('/do-ung-vien-video', async (req: Request, res: Response) => {
     try {
         const code = String(req.query.store || '').trim().toUpperCase()
