@@ -1679,6 +1679,46 @@ router.post('/tat-kho-trung', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐO KHO TRÙNG (chỉ đọc, 18/10/2026) — GET /admin/do-kho-trung?store=HUTI ───────────────────────────────────────────
+ * Chủ shop gửi trang Kho hàng: ba cặp "Kho chính" / "Kho hàng bảo hành" / "Kho hàng hư hỏng" — một bản gắn Chi nhánh chính, một
+ * bản KHÔNG gắn chi nhánh (gieo lúc khởi động trước khi sửa 09/10). Liệt kê MỌI kho (kể cả đã tắt) kèm mọi thứ đang trỏ vào nó:
+ * dòng tồn (khác 0 / tổng), lô hàng hư, phiếu chuyển kho, phiếu kiểm kê, chuyến bán hàng, xe, cấu hình KiotViet/MISA — để biết
+ * bản nào xoá/tắt được, bản nào phải gộp. Không ghi gì. */
+router.get('/do-kho-trung', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const chiNhanh: any[] = await sp.branch.findMany({ select: { id: true, name: true, code: true, isMainBranch: true } })
+        const tenCN = new Map(chiNhanh.map(b => [b.id, `${b.name} (${b.code})`]))
+        const kho: any[] = await sp.warehouse.findMany({ orderBy: [{ type: 'asc' }, { createdAt: 'asc' }] })
+        const dem = async (f: () => Promise<number>) => { try { return await f() } catch { return -1 } }
+        const kv: any = await sp.kiotVietConfig?.findFirst?.({ select: { defaultWarehouseId: true } }).catch(() => null)
+        const misa: any = await sp.misaConfig?.findFirst?.({ select: { defaultWarehouseId: true } }).catch(() => null)
+        const ra: any[] = []
+        for (const w of kho) {
+            const ton: any[] = await sp.$queryRawUnsafe(
+                `SELECT count(*)::int AS dong, count(*) FILTER (WHERE quantity <> 0)::int AS "khac0", coalesce(sum(quantity),0)::float8 AS tong,
+                        count(*) FILTER (WHERE quantity < 0)::int AS am
+                   FROM "WarehouseStock" WHERE "warehouseId" = $1`, w.id).catch(() => [{}])
+            ra.push({
+                ma: w.code, ten: w.name, loai: w.type, chiNhanh: w.branchId ? (tenCN.get(w.branchId) || `?${w.branchId}`) : null,
+                macDinh: w.isDefault, dangBat: w.isActive, xe: w.vehicleId || null, tao: w.createdAt,
+                ton: ton[0] || {},
+                loHuHong: await dem(() => sp.damagedEntry.count({ where: { warehouseId: w.id } })),
+                chuyenKho: await dem(() => sp.stockTransfer.count({ where: { OR: [{ fromWarehouseId: w.id }, { toWarehouseId: w.id }] } })),
+                kiemKe: await dem(() => sp.inventoryCount.count({ where: { warehouseId: w.id } })),
+                chuyenBan: await dem(() => sp.salesTrip.count({ where: { warehouseId: w.id } })),
+                kiotVietMacDinh: kv?.defaultWarehouseId === w.id, misaMacDinh: misa?.defaultWarehouseId === w.id,
+            })
+        }
+        res.json({ success: true, data: { store: st.code, chiNhanh, soKho: kho.length, kho: ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 // ─── POST /admin/kho-hu-hong-soat ────────────────────────────────────────────
 /**
  * SOÁT + CHỮA KHO HƯ HỎNG ÂM (đo HUTI 25/08/2026: kho hư hỏng CN01 âm −535 ở 11 mã).
