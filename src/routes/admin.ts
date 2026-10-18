@@ -3902,6 +3902,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ZaloDotGuiNhom_dotId_groupId_key" ON "ZaloDotGuiNhom"("dotId", "groupId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloDotGuiNhom_trangThai_idx" ON "ZaloDotGuiNhom"("trangThai")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloDotGuiNhom_dotId_idx" ON "ZaloDotGuiNhom"("dotId")`)
+                // Báo doanh số theo nhóm hàng (18/10/2026): cấu hình của đợt + số liệu chốt cho từng nhóm lúc tạo đợt
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ZaloDotGui" ADD COLUMN IF NOT EXISTS "doanhSo" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ZaloDotGuiNhom" ADD COLUMN IF NOT EXISTS "bien" TEXT`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,
