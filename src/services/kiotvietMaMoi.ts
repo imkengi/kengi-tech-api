@@ -111,6 +111,22 @@ export async function keoMaHangMoi(sp: any, cfg: any, logId: string): Promise<Ke
         : [])
     const tao = moi.filter(kv => daCo.has(String(kv.code).trim())).map(kv => moTaMa(kv, opts.branchIds))
     const loiChiTiet = [...c.errors]
+
+    /* TỰ CHỮA PHIẾU RƠI DÒNG 3 NGÀY GẦN NHẤT (18/10/2026 — chủ shop duyệt "Bật tự chữa"). Sau khi mã mới đã sang: phiếu
+     * KiotViet nào Σ dòng − giảm ≠ tổng thì hỏi lại KV, dựng lại khi đủ 3 cổng, ghi ADJ-SALE-/ADJ-COGS- nếu đã vào sổ
+     * (services/kiotvietRoiDong.ts). Kết quả vào `details.tuChua` (không phải lỗi); hỏng thì ghi vào lỗi — không làm hỏng
+     * lượt kéo mã. */
+    let tuChua: { xet: number; daChua: number; ma: string[] } | null = null
+    try {
+        const { chuaHoaDonRoiDong } = await import('./kiotvietRoiDong')
+        const optsChua = await buildOptions(sp, cfg, true)
+        optsChua.creds = credsOf(cfg)
+        const { ds } = await chuaHoaDonRoiDong(sp, optsChua, { tuNgay: new Date(Date.now() - 3 * 86400_000), gioiHan: 50 })
+        const da = ds.filter(k => k.viec === 'da-chua')
+        tuChua = { xet: ds.length, daChua: da.length, ma: da.map(k => k.ma).slice(0, 50) }
+    } catch (e: any) {
+        loiChiTiet.push(`Tự chữa phiếu rơi dòng hỏng: ${String(e?.message || e).slice(0, 160)}`)
+    }
     if (biCatTran) loiChiTiet.unshift('Chạm trần 500 trang khi tải hàng hoá — danh sách có thể CHƯA ĐỦ')
     const trangThai = c.failed || biCatTran || tao.length < moi.length ? 'partial' : 'success'
     await sp.kiotVietSyncLog.update({
@@ -120,7 +136,7 @@ export async function keoMaHangMoi(sp: any, cfg: any, logId: string): Promise<Ke
             fetched: items.length, created: tao.length, updated: 0,
             skipped: items.length - moi.length, failed: moi.length - tao.length,
             errors: loiChiTiet.join('\n').slice(0, 4000) || null,
-            details: JSON.stringify({ layVe: items.length, moi: moi.length, tao: tao.slice(0, 300), loiChiTiet: loiChiTiet.slice(0, 20) }).slice(0, 60000),
+            details: JSON.stringify({ layVe: items.length, moi: moi.length, tao: tao.slice(0, 300), loiChiTiet: loiChiTiet.slice(0, 20), tuChua }).slice(0, 60000),
             heartbeatAt: new Date(), finishedAt: new Date(),
         },
     }).catch(() => { })
