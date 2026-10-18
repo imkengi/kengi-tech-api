@@ -14,6 +14,11 @@
  *   GET  /api/zalo/nhom              danh sách nhóm đã nối
  *   POST /api/zalo/nhom/nhap         nhập bảng CODE | TÊN NHÓM | GROUP ID (Excel), mặc định CHẠY THỬ
  *   POST /api/zalo/admin/nhap        như trên cho quản trị hệ thống (x-admin-key + storeCode)
+ *   GET  /api/zalo/yeu-cau-hoa-don?ngay=YYYY-MM-DD   JSON yêu cầu HĐ trong ngày (khách + phiếu + dòng hàng) — CHỈ ĐỌC
+ *
+ * "/hoadon" (18/10/2026): khách nhắn lệnh này trong nhóm = lấy hoá đơn cho MỌI phiếu bán của
+ * khách trong ngày (giờ VN) đó. CHỈ LƯU YÊU CẦU — hoá đơn xuất bên MISA, KHÔNG ghi gì lên phiếu.
+ * Xem lib/zaloNhom.ts mục YÊU CẦU HOÁ ĐƠN.
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -24,7 +29,10 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
-import { nhapNhomZalo, docFileNhomZalo, type DongNhomZalo } from '../lib/zaloNhom'
+import {
+    nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, ngayVN,
+    type DongNhomZalo,
+} from '../lib/zaloNhom'
 
 const router = Router()
 
@@ -109,7 +117,9 @@ router.post('/tin', authMiddleware, canGhi, async (req: AuthRequest, res: Respon
         }
         const nhom = await sp.zaloNhom.findUnique({ where: { groupId: gid }, select: { customerId: true, maKhach: true } })
         const tg = b.thoiDiem ? new Date(typeof b.thoiDiem === 'number' && b.thoiDiem < 1e12 ? b.thoiDiem * 1000 : b.thoiDiem) : new Date()
-        const yc = b.yeuCauHoaDon === true || b.yeuCauHoaDon === false ? b.yeuCauHoaDon : null
+        const laLenh = laLenhHoaDon(noiDung)
+        // n8n gửi rõ true/false thì theo n8n; không gửi thì tự nhận lệnh "/hoadon"
+        const yc = b.yeuCauHoaDon === true || b.yeuCauHoaDon === false ? b.yeuCauHoaDon : (laLenh ? true : null)
 
         let tin
         try {
@@ -134,6 +144,9 @@ router.post('/tin', authMiddleware, canGhi, async (req: AuthRequest, res: Respon
             data: {
                 tinId: tin.id, trung: false, customerId: tin.customerId,
                 maKhach: nhom?.maKhach || null,
+                // Yêu cầu HĐ CHỈ được lưu (xem đầu file) — ngày áp dụng là ngày VN của tin
+                yeuCauHoaDon: yc,
+                ...(yc === true ? { ngayYeuCau: ngayVN(tin.thoiDiem) } : {}),
                 ghiChu: nhom ? (nhom.customerId ? null : `Nhóm nối mã ${nhom.maKhach} — chưa có khách trên Kengi`) : 'Nhóm chưa nối khách — vẫn đã lưu tin',
             },
         })
@@ -207,6 +220,17 @@ router.post('/admin/nhap', adminKey, async (req: Request, res: Response) => {
         res.json({ success: true, store: store.name, data: kq })
     } catch (e: any) {
         console.error('[zalo] admin/nhap:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── GET /api/zalo/yeu-cau-hoa-don?ngay=YYYY-MM-DD (mặc định hôm nay, giờ VN) ──
+router.get('/yeu-cau-hoa-don', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const ngay = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.ngay || '')) ? String(req.query.ngay) : ngayVN(new Date())
+        res.json({ success: true, data: await dsYeuCauHoaDon(req.storePrisma as any, ngay) })
+    } catch (e: any) {
+        console.error('[zalo] yeu-cau-hoa-don:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })

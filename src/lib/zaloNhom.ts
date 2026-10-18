@@ -18,6 +18,8 @@
  *     hoá đơn của khách này vào nhóm khách kia.
  */
 
+import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
+
 export interface DongNhomZalo {
     maKhach: string
     tenNhom?: string | null
@@ -144,5 +146,119 @@ export function docFileNhomZalo(rows: any[][]): { dong: DongNhomZalo[]; loi: str
                 : String(r[cGid] ?? ''),
         })),
         loi: null,
+    }
+}
+
+// ─── YÊU CẦU HOÁ ĐƠN QUA "/hoadon" (18/10/2026) ─────────────────────────────
+//
+// Chủ shop: khách nhắn "/hoadon" trong nhóm = lấy hoá đơn cho các phiếu bán của khách
+// trong NGÀY (giờ VN) đó. CHỈ LƯU YÊU CẦU (ZaloTin.yeuCauHoaDon = true) — hoá đơn có thể
+// xuất bên MISA, không chắc qua Kengi ("lưu lại yêu cầu xuất hoá đơn thôi").
+//
+// ⛔ KHÔNG ghi Transaction.vatBuyerInfo: đó là dấu "khách yêu cầu HĐ" của luồng HĐĐT
+// trong Kengi (màn HĐĐT coi là phải xuất; hàng đợi 20:30 tự xuất với đơn sàn) ⇒ ghi vào
+// là mời xuất TRÙNG với hoá đơn MISA. Bản đầu 18/10 có ghi — gỡ trước khi deploy.
+
+/** "/hoadon", "/hoá đơn", "/HOADON cho em" — lệnh phải đứng ĐẦU tin; "/hoadon2" không tính */
+export function laLenhHoaDon(noiDung: string): boolean {
+    const s = String(noiDung || '').trim().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/đ/gi, 'd').toLowerCase()
+    return /^\/\s*hoa\s*don(?![a-z0-9])/.test(s)
+}
+
+/** Ngày giờ VN 'YYYY-MM-DD' của một thời điểm */
+export const ngayVN = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
+export const khoangNgayVN = (ymd: string) => ({
+    tu: new Date(`${ymd}T00:00:00+07:00`), den: new Date(`${ymd}T23:59:59.999+07:00`),
+})
+
+/** Thông tin người mua từ HỒ SƠ KHÁCH — chỉ để TRẢ RA (lập HĐ bên MISA), không ghi đâu cả */
+export function thongTinHoaDonTuKhach(k: any) {
+    const congTy = k.invoiceType === 'company' || (!k.invoiceType && /^\d{10}(-\d{3})?$/.test(String(k.taxCode || '').trim()))
+    return {
+        type: k.invoiceType || (congTy ? 'company' : 'personal'),
+        name: congTy ? (k.invoiceCompanyName || k.name || '') : (k.invoiceBuyerName || k.name || ''),
+        taxCode: String(k.taxCode || '').trim(),
+        address: k.invoiceAddress || k.address || '',
+        email: k.invoiceEmail || k.email || '',
+        phone: k.invoicePhone || k.phone || '',
+        nationalId: k.invoiceIdNo || '',
+    }
+}
+
+const CHON_KHACH_HD = {
+    id: true, code: true, name: true, phone: true, address: true, email: true, taxCode: true,
+    invoiceType: true, invoiceCompanyName: true, invoiceBuyerName: true, invoiceAddress: true,
+    invoiceEmail: true, invoicePhone: true, invoiceIdNo: true,
+} as const
+
+/** Phiếu đã bán (gồm ghi nợ) của khách trong ngày VN, kèm dòng hàng */
+async function phieuTrongNgay(sp: any, customerId: string, ymd: string) {
+    const { tu, den } = khoangNgayVN(ymd)
+    return sp.transaction.findMany({
+        where: {
+            customerId, status: { in: [...TRANG_THAI_TINH] },
+            OR: [{ transactionDate: { gte: tu, lte: den } }, { transactionDate: null, createdAt: { gte: tu, lte: den } }],
+        },
+        select: {
+            id: true, receiptNumber: true, transactionDate: true, createdAt: true, status: true, channel: true,
+            subtotal: true, discount: true, discountType: true, tax: true, total: true,
+            items: { select: { sku: true, productName: true, quantity: true, unitPrice: true, discount: true, lineTotal: true, product: { select: { baseUnit: true, invoiceUnit: true } } } },
+        },
+        orderBy: { createdAt: 'asc' },
+    })
+}
+
+/**
+ * Danh sách yêu cầu HĐ của một ngày — CHỈ ĐỌC. Mỗi khách: thông tin người mua + các tin
+ * "/hoadon" + phiếu trong ngày kèm dòng hàng (đủ để lập HĐ bên MISA). Phiếu tạo SAU tin
+ * trong cùng ngày vẫn hiện vì tính sống lúc đọc.
+ */
+export async function dsYeuCauHoaDon(sp: any, ymd: string) {
+    const { tu, den } = khoangNgayVN(ymd)
+    const tin = await sp.zaloTin.findMany({
+        where: { yeuCauHoaDon: true, thoiDiem: { gte: tu, lte: den } },
+        orderBy: { thoiDiem: 'asc' },
+    })
+    const theoKhach = new Map<string, any[]>()
+    const chuaNoi: any[] = []
+    for (const t of tin) {
+        if (!t.customerId) { chuaNoi.push({ groupId: t.groupId, thoiDiem: t.thoiDiem, nguoiGui: t.nguoiGui, noiDung: t.noiDung }); continue }
+        theoKhach.set(t.customerId, [...(theoKhach.get(t.customerId) || []), t])
+    }
+    const khachHang: any[] = []
+    for (const [customerId, ds] of theoKhach) {
+        const k = await sp.customer.findUnique({ where: { id: customerId }, select: CHON_KHACH_HD })
+        const phieu = await phieuTrongNgay(sp, customerId, ymd)
+        // Phiếu đã có HĐĐT xuất từ Kengi thì nói ra để khỏi xuất lại bên MISA
+        let daXuat = new Map<string, string>()
+        if (phieu.length) {
+            const hd: any[] = await sp.$queryRawUnsafe(
+                `SELECT "transactionId", "invoiceNumber" FROM "EInvoice" WHERE "transactionId" = ANY($1::text[]) AND status IN ('issued','SENT')`,
+                phieu.map((p: any) => p.id),
+            ).catch(() => [])   // cửa hàng chưa dùng HĐĐT thì chưa có bảng — không có HĐ nào là đúng
+            daXuat = new Map(hd.map(h => [h.transactionId, h.invoiceNumber]))
+        }
+        khachHang.push({
+            khach: k ? { id: k.id, code: k.code, name: k.name } : { id: customerId },
+            thongTinHoaDon: k ? thongTinHoaDonTuKhach(k) : null,
+            thieuMst: k ? !String(k.taxCode || '').trim() : true,
+            yeuCau: ds.map((t: any) => ({ tinId: t.id, groupId: t.groupId, thoiDiem: t.thoiDiem, nguoiGui: t.nguoiGui, noiDung: t.noiDung })),
+            phieu: phieu.map((p: any) => ({
+                id: p.id, soPhieu: p.receiptNumber, ngay: p.transactionDate || p.createdAt, trangThai: p.status, kenh: p.channel,
+                tienHang: p.subtotal, giamGia: p.discount, loaiGiamGia: p.discountType, thue: p.tax, tongTien: p.total,
+                daXuatHoaDonKengi: daXuat.get(p.id) || null,
+                dong: (p.items || []).map((i: any) => ({
+                    maHang: i.sku, tenHang: i.productName, soLuong: i.quantity,
+                    donVi: i.product?.invoiceUnit || i.product?.baseUnit || null,
+                    donGia: i.unitPrice, giamGia: i.discount, thanhTien: i.lineTotal,
+                })),
+            })),
+        })
+    }
+    return {
+        ngay: ymd, soYeuCau: tin.length, soKhach: khachHang.length,
+        soPhieu: khachHang.reduce((s, x) => s + x.phieu.length, 0),
+        khachHang, chuaNoi,
     }
 }
