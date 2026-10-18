@@ -33,6 +33,10 @@ import {
     nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, danhDauLayHoaDon, ngayVN,
     type DongNhomZalo,
 } from '../lib/zaloNhom'
+import {
+    docChiMucKhach, goiYKhach, kiemUrlN8n, goiN8n, docNhomTuN8n, luuNhomQuet, guiMotNhom,
+} from '../lib/zaloGui'
+import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 
 const router = Router()
 
@@ -114,6 +118,9 @@ router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
             : []
         const theoId = new Map<string, any>(khach.map((k: any) => [k.id, k]))
         const tk = await thongKeTin(sp)
+        // Nhóm chưa có khách: gợi ý ghép theo tên nhóm (trùng mã / tên giống)
+        const canGoiY = rows.some((r: any) => !r.customerId && r.tenNhom)
+        const cm = canGoiY ? await docChiMucKhach(sp) : null
         res.json({
             success: true, tong,
             data: rows.map((r: any) => ({
@@ -121,6 +128,7 @@ router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
                 khach: r.customerId ? (theoId.get(r.customerId) || null) : null,
                 soTin: tk.get(r.groupId)?.soTin || 0,
                 tinCuoi: tk.get(r.groupId)?.tinCuoi || null,
+                goiY: !r.customerId && cm ? goiYKhach(cm, r.tenNhom) : [],
             })),
         })
     } catch (e: any) {
@@ -130,16 +138,26 @@ router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // ─── GET /api/zalo/nhom-la ──────────────────────────────────────────────────
-// Nhóm có tin n8n đẩy về mà CHƯA có trong bảng nối — đợi người nối với khách thật.
+// Nhóm CHƯA nối: có tin n8n đẩy về, hoặc n8n quét thấy (có tên) — kèm gợi ý ghép khách.
 router.get('/nhom-la', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const sp = req.storePrisma as any
         const tk = await thongKeTin(sp)
         const daNoi = new Set<string>((await sp.zaloNhom.findMany({ select: { groupId: true } })).map((r: any) => r.groupId))
-        const data = [...tk.entries()]
-            .filter(([gid]) => !daNoi.has(gid))
-            .map(([groupId, x]) => ({ groupId, soTin: x.soTin, tinCuoi: x.tinCuoi }))
-            .sort((a, b) => new Date(b.tinCuoi?.thoiDiem || 0).getTime() - new Date(a.tinCuoi?.thoiDiem || 0).getTime())
+        const quet: any[] = await sp.zaloNhomQuet.findMany({}).catch(() => [])   // bảng chưa migrate thì coi như chưa quét
+        const tenQuet = new Map<string, any>(quet.map((q: any) => [q.groupId, q]))
+        const ids = new Set<string>([...tk.keys(), ...quet.map((q: any) => q.groupId)])
+        const cm = await docChiMucKhach(sp)
+        const data = [...ids].filter(gid => !daNoi.has(gid)).map(groupId => {
+            const q = tenQuet.get(groupId)
+            const x = tk.get(groupId)
+            return {
+                groupId, tenNhom: q?.tenNhom || null, soThanhVien: q?.soThanhVien || null, quetLuc: q?.quetLuc || null,
+                soTin: x?.soTin || 0, tinCuoi: x?.tinCuoi || null,
+                goiY: goiYKhach(cm, q?.tenNhom),
+            }
+        }).sort((m, n) => (n.goiY[0]?.diem || 0) - (m.goiY[0]?.diem || 0)
+            || new Date(n.tinCuoi?.thoiDiem || 0).getTime() - new Date(m.tinCuoi?.thoiDiem || 0).getTime())
         res.json({ success: true, data })
     } catch (e: any) {
         console.error('[zalo] GET nhom-la:', e?.message || e)
@@ -421,6 +439,216 @@ router.get('/yeu-cau-hoa-don', authMiddleware, async (req: AuthRequest, res: Res
         res.json({ success: true, data: await dsYeuCauHoaDon(req.storePrisma as any, ngay) })
     } catch (e: any) {
         console.error('[zalo] yeu-cau-hoa-don:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/* ═══ n8n: CẤU HÌNH + QUÉT NHÓM + GỬI TIN (18/10/2026) — lõi ở lib/zaloGui.ts ═══ */
+
+const CALLBACK_QUET = 'https://api.kengi.vn/api/zalo/nhom/quet'
+
+// ─── GET /api/zalo/cau-hinh ─────────────────────────────────────────────────
+router.get('/cau-hinh', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const ch = await (req.storePrisma as any).zaloCauHinh.findUnique({ where: { id: 'default' } })
+        res.json({ success: true, data: ch || { id: 'default', n8nQuetUrl: null, n8nGuiUrl: null, guiMoiPhut: 4, quetLuc: null, quetKetQua: null }, callbackQuet: CALLBACK_QUET })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── PUT /api/zalo/cau-hinh {n8nQuetUrl?, n8nGuiUrl?, guiMoiPhut?} ───────────
+router.put('/cau-hinh', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const b = req.body || {}
+        const data: any = {}
+        for (const k of ['n8nQuetUrl', 'n8nGuiUrl'] as const) {
+            if (b[k] === undefined) continue
+            const v = String(b[k] || '').trim()
+            if (v) { const loi = kiemUrlN8n(v); if (loi) { res.status(400).json({ success: false, error: `${k === 'n8nQuetUrl' ? 'Webhook quét' : 'Webhook gửi'}: ${loi}` }); return } }
+            data[k] = v || null
+        }
+        if (b.guiMoiPhut !== undefined) data.guiMoiPhut = Math.min(30, Math.max(1, Math.round(Number(b.guiMoiPhut) || 4)))
+        const ch = await (req.storePrisma as any).zaloCauHinh.upsert({ where: { id: 'default' }, create: { id: 'default', ...data }, update: data })
+        res.json({ success: true, data: ch })
+    } catch (e: any) {
+        console.error('[zalo] PUT cau-hinh:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/nhom/quet-ngay — nút "Quét lại nhóm" ────────────────────
+// Gọi webhook quét của n8n. n8n trả danh sách ngay thì lưu luôn; không thì n8n POST về
+// /api/zalo/nhom/quet sau (kèm X-API-Key + X-Store-Code như gửi tin).
+router.post('/nhom/quet-ngay', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
+        if (!ch?.n8nQuetUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook QUÉT NHÓM của n8n (mục Kết nối n8n)', chuaCauHinh: true }); return }
+        const r = await goiN8n(ch.n8nQuetUrl, { loai: 'quet_nhom', storeCode: req.user?.storeCode || null, callbackUrl: CALLBACK_QUET }, 90_000)
+        if (!r.ok) { res.status(502).json({ success: false, error: `n8n báo lỗi: ${r.data?.error || r.data?.message || r.text || 'HTTP ' + r.status}` }); return }
+        const ds = docNhomTuN8n(r.data)
+        if (!ds.length) {
+            res.json({ success: true, data: { soNhom: 0, choN8nGuiVe: true, ghiChu: 'n8n đã nhận lệnh nhưng chưa trả danh sách nhóm — nếu workflow gửi về sau, bấm làm mới sau ít phút' } })
+            return
+        }
+        res.json({ success: true, data: await luuNhomQuet(sp, ds) })
+    } catch (e: any) {
+        console.error('[zalo] quet-ngay:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/nhom/quet — n8n gửi danh sách nhóm về (mọi kiểu dữ liệu, xem docNhomTuN8n) ─
+router.post('/nhom/quet', authMiddleware, canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const ds = docNhomTuN8n(req.body)
+        if (!ds.length) { res.status(400).json({ success: false, error: 'Không đọc được nhóm nào — cần mảng [{groupId, name}] (groupId dạng CHUỖI)' }); return }
+        res.json({ success: true, data: await luuNhomQuet(req.storePrisma as any, ds) })
+    } catch (e: any) {
+        console.error('[zalo] nhom/quet:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/anh {base64} — tải ảnh cho tin nhắn, trả link công khai ──
+// Base64 trong JSON chứ không multipart — WAF của Tino chặn gửi tệp (xem lib/anhSanPham.ts).
+router.post('/anh', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const b64 = String(req.body?.base64 || '').replace(/^data:[^;]+;base64,/, '')
+        if (!b64) { res.status(400).json({ success: false, error: 'Thiếu ảnh' }); return }
+        const buf = Buffer.from(b64, 'base64')
+        if (buf.length > 6 * 1024 * 1024) { res.status(400).json({ success: false, error: 'Ảnh quá 6MB — thu nhỏ rồi tải lại' }); return }
+        const loai = nhanDangAnh(buf)
+        if (!loai || loai === 'heic') { res.status(400).json({ success: false, error: loai === 'heic' ? 'Ảnh HEIC (iPhone) — đổi sang JPG/PNG' : 'Chỉ nhận ảnh JPG, PNG, WEBP' }); return }
+        const schema = String(req.user?.storeSchema || (req.user as any)?.branchSchema || '')
+        // Cùng kho ảnh công khai với ảnh sản phẩm, thư mục con "zalo"
+        const url = await luuAnhSanPham(schema, 'zalo', buf, loai)
+        res.json({ success: true, data: { url } })
+    } catch (e: any) {
+        console.error('[zalo] anh:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+function docAnh(v: any): string[] {
+    return (Array.isArray(v) ? v : []).map(String).filter(u => /^https:\/\//.test(u)).slice(0, 10)
+}
+
+// ─── POST /api/zalo/gui-thu {groupId, noiDung, anh[]} — gửi NGAY vào một nhóm để thử ─
+router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const b = req.body || {}
+        const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
+        if (!ch?.n8nGuiUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook GỬI TIN của n8n (mục Kết nối n8n)' }); return }
+        const gid = chuoiGid(b.groupId)
+        if (!/^\d{6,25}$/.test(gid)) { res.status(400).json({ success: false, error: 'Chọn nhóm để gửi thử' }); return }
+        if (!String(b.noiDung || '').trim() && !docAnh(b.anh).length) { res.status(400).json({ success: false, error: 'Tin trống' }); return }
+        const nhom = await sp.zaloNhom.findUnique({ where: { groupId: gid } })
+        const k = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { code: true, name: true } }) : null
+        const kq = await guiMotNhom(ch.n8nGuiUrl, {
+            dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
+            maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: nhom?.tenNhom || null,
+        })
+        if (!kq.ok) { res.status(502).json({ success: false, error: kq.loi }); return }
+        res.json({ success: true })
+    } catch (e: any) {
+        console.error('[zalo] gui-thu:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/dot-gui {tieuDe?, noiDung, anh[], groupIds[]} — tạo đợt, nhịp cron gửi dần ─
+router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const b = req.body || {}
+        const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
+        if (!ch?.n8nGuiUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook GỬI TIN của n8n (mục Kết nối n8n)' }); return }
+        const noiDung = String(b.noiDung || '').trim()
+        const anh = docAnh(b.anh)
+        if (!noiDung && !anh.length) { res.status(400).json({ success: false, error: 'Tin trống — nhập nội dung hoặc thêm ảnh' }); return }
+        const ids = [...new Set<string>((Array.isArray(b.groupIds) ? b.groupIds : []).map(chuoiGid).filter((g: string) => /^\d{6,25}$/.test(g)))]
+        if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn nhóm nào' }); return }
+        if (ids.length > 2000) { res.status(400).json({ success: false, error: 'Tối đa 2.000 nhóm một đợt' }); return }
+        const nhom: any[] = await sp.zaloNhom.findMany({ where: { groupId: { in: ids } }, select: { groupId: true, customerId: true, tenNhom: true } })
+        const quet: any[] = await sp.zaloNhomQuet.findMany({ where: { groupId: { in: ids } }, select: { groupId: true, tenNhom: true } })
+        const theoNhom = new Map<string, any>(nhom.map(n => [n.groupId, n]))
+        const tenQuet = new Map<string, string | null>(quet.map(q => [q.groupId, q.tenNhom]))
+        const dot = await sp.zaloDotGui.create({
+            data: { tieuDe: b.tieuDe ? String(b.tieuDe).slice(0, 200) : null, noiDung, anh: JSON.stringify(anh), soNhom: ids.length, nguoiTao: req.user?.email || req.user?.userId || null },
+        })
+        await sp.zaloDotGuiNhom.createMany({
+            data: ids.map(gid => ({
+                dotId: dot.id, groupId: gid, customerId: theoNhom.get(gid)?.customerId || null,
+                tenNhom: theoNhom.get(gid)?.tenNhom || tenQuet.get(gid) || null,
+            })),
+            skipDuplicates: true,
+        })
+        const phut = Math.ceil(ids.length / Math.max(1, ch.guiMoiPhut || 4))
+        res.json({ success: true, data: { dotId: dot.id, soNhom: ids.length, uocTinhPhut: phut } })
+    } catch (e: any) {
+        console.error('[zalo] dot-gui:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── GET /api/zalo/dot-gui — các đợt gần đây + đếm theo trạng thái ──────────
+router.get('/dot-gui', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const dots = await sp.zaloDotGui.findMany({ orderBy: { createdAt: 'desc' }, take: 30 })
+        const dem: any[] = dots.length
+            ? await sp.zaloDotGuiNhom.groupBy({ by: ['dotId', 'trangThai'], where: { dotId: { in: dots.map((d: any) => d.id) } }, _count: true })
+            : []
+        res.json({
+            success: true,
+            data: dots.map((d: any) => {
+                const c: Record<string, number> = {}
+                for (const x of dem.filter(x => x.dotId === d.id)) c[x.trangThai] = x._count
+                let anh: string[] = []
+                try { anh = d.anh ? JSON.parse(d.anh) : [] } catch { anh = [] }
+                return { ...d, anh, dem: c }
+            }),
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── GET /api/zalo/dot-gui/:id — từng nhóm của một đợt ──────────────────────
+router.get('/dot-gui/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const rows = await (req.storePrisma as any).zaloDotGuiNhom.findMany({ where: { dotId: String(req.params.id) }, orderBy: [{ trangThai: 'asc' }, { tenNhom: 'asc' }] })
+        res.json({ success: true, data: rows })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/dot-gui/:id/huy — dừng các nhóm CHƯA gửi ────────────────
+router.post('/dot-gui/:id/huy', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const id = String(req.params.id)
+        await sp.zaloDotGui.updateMany({ where: { id }, data: { trangThai: 'huy' } })
+        const r = await sp.zaloDotGuiNhom.updateMany({ where: { dotId: id, trangThai: 'cho' }, data: { trangThai: 'huy' } })
+        res.json({ success: true, data: { soNhomDung: r.count } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/dot-gui/:id/gui-lai-loi — đưa các nhóm LỖI về hàng đợi ──
+router.post('/dot-gui/:id/gui-lai-loi', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const id = String(req.params.id)
+        const r = await sp.zaloDotGuiNhom.updateMany({ where: { dotId: id, trangThai: 'loi' }, data: { trangThai: 'cho', loi: null, lanThu: 0 } })
+        if (r.count) await sp.zaloDotGui.updateMany({ where: { id }, data: { trangThai: 'dang_gui' } })
+        res.json({ success: true, data: { soNhom: r.count } })
+    } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })

@@ -4045,3 +4045,55 @@ model ZaloTin {
   @@index([customerId])
   @@index([thoiDiem])
 }
+
+/// Cấu hình nối n8n cho Zalo cá nhân (18/10/2026) — một dòng 'default' mỗi cửa hàng.
+/// Kengi KHÔNG tự đọc/gửi Zalo cá nhân: mọi việc với Zalo đi qua webhook n8n.
+model ZaloCauHinh {
+  id          String    @id @default("default")
+  n8nQuetUrl  String? // webhook n8n trả danh sách nhóm Zalo (quét lại nhóm)
+  n8nGuiUrl   String? // webhook n8n gửi MỘT tin vào MỘT nhóm
+  guiMoiPhut  Int       @default(4) // giãn nhịp gửi — gửi dồn dễ bị Zalo khoá tài khoản cá nhân
+  quetLuc     DateTime?
+  quetKetQua  String?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Nhóm Zalo n8n quét được (tên nhóm) — để gợi ý ghép với khách. Không phải bảng nối.
+model ZaloNhomQuet {
+  id          String   @id @default(cuid())
+  groupId     String   @unique
+  tenNhom     String?
+  soThanhVien Int?
+  quetLuc     DateTime @default(now())
+}
+
+/// Một đợt gửi tin cho khách (giới thiệu sản phẩm / chương trình / thông báo) — 18/10/2026.
+model ZaloDotGui {
+  id         String   @id @default(cuid())
+  tieuDe     String?
+  noiDung    String
+  anh        String? // JSON mảng link ảnh công khai
+  trangThai  String   @default("dang_gui") // dang_gui | xong | huy
+  soNhom     Int      @default(0)
+  nguoiTao   String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Hàng đợi gửi: một dòng = một nhóm của một đợt. Nhịp /api/cron/tick gửi dần.
+model ZaloDotGuiNhom {
+  id         String    @id @default(cuid())
+  dotId      String
+  groupId    String
+  customerId String?
+  tenNhom    String?
+  trangThai  String    @default("cho") // cho | dang | da_gui | loi | huy
+  loi        String?
+  lanThu     Int       @default(0)
+  guiLuc     DateTime?
+
+  @@unique([dotId, groupId])
+  @@index([trangThai])
+  @@index([dotId])
+}
