@@ -45,7 +45,8 @@ const CHON_KHACH = {
 
 /** Key chỉ-đọc không được ghi. Đăng nhập thường (JWT) thì để phân quyền lo. */
 function canGhi(req: AuthRequest, res: Response, next: NextFunction): void {
-    if ((req as any).viaApiKey && !String((req as any).apiKeyScopes || 'read').includes('write')) {
+    // 'admin' = key tạo ở Cài đặt › API (POST /api-keys/regenerate) — chính key chủ shop dán vào n8n
+    if ((req as any).viaApiKey && !/write|admin/.test(String((req as any).apiKeyScopes || 'read'))) {
         res.status(403).json({ success: false, error: 'API key này chỉ có quyền đọc — tạo key có quyền ghi (read,write)' })
         return
     }
