@@ -3842,6 +3842,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_groupId_idx" ON "ZaloTin"("groupId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_customerId_idx" ON "ZaloTin"("customerId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ZaloTin_thoiDiem_idx" ON "ZaloTin"("thoiDiem")`)
+                // 18/10/2026 — cột "Lấy HĐ" trên phiếu: khách nhắn /hoadon trong nhóm Zalo ⇒ phiếu trong ngày = true.
+                // CỘT RIÊNG, không dùng vatBuyerInfo (dấu đó làm luồng HĐĐT Kengi tự xuất — HĐ HUTI xuất bên MISA).
+                // ⚠ Chạy migrate TRƯỚC khi deploy code có cột này trong model Transaction — thiếu cột là POS hỏng.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "layHoaDon" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Transaction_layHoaDon_idx" ON "Transaction"("layHoaDon") WHERE "layHoaDon"`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,
