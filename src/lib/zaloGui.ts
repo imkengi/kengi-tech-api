@@ -152,9 +152,10 @@ export function docNhomTuN8n(raw: any): NhomQuet[] {
     }
     const duyet = (v: any, sau = 0) => {
         if (sau > 4 || v == null) return
-        if (Array.isArray(v)) { for (const o of v) them(o); return }
+        // Mỗi phần tử có thể là 1 nhóm, hoặc 1 lần gọi zca-js getGroupInfo: { success, response: { gridInfoMap } }
+        if (Array.isArray(v)) { for (const o of v) { them(o); duyet(o, sau + 1) } return }
         if (typeof v !== 'object') return
-        for (const k of ['groups', 'data', 'items', 'nhom', 'result']) if (v[k] != null) duyet(v[k], sau + 1)
+        for (const k of ['groups', 'data', 'items', 'nhom', 'result', 'response', 'json']) if (v[k] != null) duyet(v[k], sau + 1)
         const map = v.gridInfoMap || v.groupInfoMap
         if (map && typeof map === 'object') for (const [id, o] of Object.entries(map)) them(o, id)
         if (!Array.isArray(v) && (v.groupId || v.grid || v.groupID)) them(v)
