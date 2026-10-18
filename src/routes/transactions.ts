@@ -256,6 +256,9 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             // Tình trạng HĐĐT — FE lọc "Đã/Chưa xuất HĐ" + badge cần 2 trường này
             vatStatus: (t as any).vatStatus || 'none',
             vatInvoiceNumber: (t as any).vatInvoiceNumber || null,
+            // Cột "Lấy HĐ" (18/10/2026) — danh sách dựng TỪNG TRƯỜNG nên cột mới phải kê ở đây,
+            // thiếu là FE lọc "Khách lấy HĐ" ra rỗng dù DB đã bật (lỗi đúng ngày ra mắt)
+            layHoaDon: (t as any).layHoaDon === true,
             }
         })
 
