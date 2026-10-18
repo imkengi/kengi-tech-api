@@ -417,8 +417,9 @@ export async function reverseJournalEntriesForTransaction(
         entries = await prisma.journalEntry.findMany({
             where: {
                 OR: [
-                    // ADJ-SALE- (sửa giá đơn sàn) cũng là doanh thu của phiếu này — sót thì huỷ xong 511 còn dư
-                    { reference: { in: [`SALE-${receiptNumber}`, `VAT-${receiptNumber}`, `DISC-${receiptNumber}`, `COGS-${receiptNumber}`, `ADJ-SALE-${receiptNumber}`, `COLLECT-${receiptNumber}`] } },
+                    // ADJ-SALE- (sửa giá đơn sàn / dựng lại dòng KiotViet rơi) cũng là doanh thu của phiếu này — sót thì huỷ xong 511
+                    // còn dư; ADJ-COGS- (giá vốn phần dòng dựng lại, services/kiotvietRoiDong.ts 18/10/2026) cũng vậy với 632
+                    { reference: { in: [`SALE-${receiptNumber}`, `VAT-${receiptNumber}`, `DISC-${receiptNumber}`, `COGS-${receiptNumber}`, `ADJ-SALE-${receiptNumber}`, `ADJ-COGS-${receiptNumber}`, `COLLECT-${receiptNumber}`] } },
                     // Thu nợ từng lần: COLLECT-<số>-<paymentId>. Trước 13/10/2026 là startsWith `COLLECT-<số>` trơn
                     // ⇒ huỷ HD12 đảo luôn tiền thu của HD123, huỷ HD031492 đảo cả HD031492.01
                     { reference: { startsWith: `COLLECT-${receiptNumber}-` } },

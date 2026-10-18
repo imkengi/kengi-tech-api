@@ -1726,6 +1726,42 @@ router.get('/do-hd-thieu-dong', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── CHỮA HOÁ ĐƠN KIOTVIET RƠI DÒNG (18/10/2026) — POST /admin/chua-hd-roi-dong ───────────────────────────────────────────
+ * Body: { storeCode, apply?: true, ma?: string[], tuNgay?: 'yyyy-mm-dd', gioiHan?: number } — mặc định CHẠY THỬ (không ghi gì,
+ * không kéo mã). Hỏi lại KiotViet từng phiếu, dựng dòng như đồng bộ (bảng nối → SKU), qua đủ 3 cổng mới thay dòng; phiếu đã vào
+ * sổ thì ghi THÊM ADJ-SALE-/ADJ-COGS- (không sửa bút toán gốc). Xem services/kiotvietRoiDong.ts. */
+router.post('/chua-hd-roi-dong', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const apply = b.apply === true
+        const code = String(b.storeCode || '').trim().toUpperCase()
+        const st = await prisma.store.findFirst({ where: { code }, select: { code: true, schema: true } })
+        if (!st) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${code}` }); return }
+        const sp: any = getStorePrisma(st.schema)
+        const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } })
+        if (!cfg) { res.status(400).json({ success: false, error: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+        const { buildOptions, credsOf } = await import('../services/kiotvietRunner')
+        const { chuaHoaDonRoiDong } = await import('../services/kiotvietRoiDong')
+        const opts = await buildOptions(sp, cfg, apply)
+        opts.creds = credsOf(cfg)
+        const ma = Array.isArray(b.ma) ? b.ma.map((x: any) => String(x).trim()).filter(Boolean).slice(0, 500) : undefined
+        const tuNgay = typeof b.tuNgay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.tuNgay) ? new Date(`${b.tuNgay}T00:00:00+07:00`) : null
+        const { ds, c } = await chuaHoaDonRoiDong(sp, opts, { ma, tuNgay, gioiHan: Number(b.gioiHan) || undefined })
+        const dem: Record<string, number> = {}
+        for (const k of ds) dem[k.viec] = (dem[k.viec] || 0) + 1
+        const so: Record<string, number> = {}
+        for (const k of ds) if (k.soSach) so[k.soSach] = (so[k.soSach] || 0) + 1
+        res.json({ success: true, cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ — không đụng dữ liệu', data: {
+            store: st.code, soPhieu: ds.length, theoViec: dem, soSach: so,
+            tienRoiDuocChua: ds.filter(k => k.viec === 'da-chua' || k.viec === 'se-chua').reduce((s, k) => s + k.tienRoi, 0),
+            giaVonThem: ds.reduce((s, k) => s + (k.giaVonThem || 0), 0),
+            loiPhu: c.errors.slice(0, 10), ds,
+        } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
 /* ─── ĐO KHO TRÙNG (chỉ đọc, 18/10/2026) — GET /admin/do-kho-trung?store=HUTI ───────────────────────────────────────────
  * Chủ shop gửi trang Kho hàng: ba cặp "Kho chính" / "Kho hàng bảo hành" / "Kho hàng hư hỏng" — một bản gắn Chi nhánh chính, một
  * bản KHÔNG gắn chi nhánh (gieo lúc khởi động trước khi sửa 09/10). Liệt kê MỌI kho (kể cả đã tắt) kèm mọi thứ đang trỏ vào nó:

@@ -30,7 +30,7 @@
     "check:migrate": "npx tsx scripts/check-migrate-thieu-cot.ts",
     "check:fields": "npx tsx scripts/check-prisma-fields.ts",
     "check:api": "npx tsx scripts/check-api-contract.ts",
-    "check:kiotviet": "npx tsx scripts/check-kiotviet-don-hang.ts && npx tsx scripts/check-kiotviet-dem-tuychon.ts && npx tsx scripts/check-gom-loi.ts && npx tsx scripts/check-tong-hop-suc-khoe.ts && npx tsx scripts/check-goi-y-lien-ket.ts && npx tsx scripts/check-don-duoc-xoa.ts && npx tsx scripts/check-tong-mua-khach.ts && npx tsx scripts/check-chay-theo-dot.ts",
+    "check:kiotviet": "npx tsx scripts/check-kiotviet-dong-hoa-don.ts && npx tsx scripts/check-kiotviet-don-hang.ts && npx tsx scripts/check-kiotviet-dem-tuychon.ts && npx tsx scripts/check-gom-loi.ts && npx tsx scripts/check-tong-hop-suc-khoe.ts && npx tsx scripts/check-goi-y-lien-ket.ts && npx tsx scripts/check-don-duoc-xoa.ts && npx tsx scripts/check-tong-mua-khach.ts && npx tsx scripts/check-chay-theo-dot.ts",
     "check:all": "npx tsx scripts/chay-soat.ts",
     "check:xep-lich": "npx tsx scripts/check-xep-lich-video.ts",
     "check:flash-sale": "npx tsx scripts/check-flash-sale.ts",
