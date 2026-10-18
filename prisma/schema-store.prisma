@@ -4073,6 +4073,7 @@ model ZaloDotGui {
   tieuDe     String?
   noiDung    String
   anh        String? // JSON mảng link ảnh công khai
+  doanhSo    String? // JSON cấu hình báo doanh số {categoryIds,tu,den,nhomHang} — lib/zaloDoanhSo.ts
   trangThai  String   @default("dang_gui") // dang_gui | xong | huy
   soNhom     Int      @default(0)
   nguoiTao   String?
@@ -4092,6 +4093,7 @@ model ZaloDotGuiNhom {
   loi        String?
   lanThu     Int       @default(0)
   guiLuc     DateTime?
+  bien       String? // JSON biến chốt lúc tạo đợt: {doanhSo,soLuong,soDon,nhomHang,tuNgay,denNgay}
 
   @@unique([dotId, groupId])
   @@index([trangThai])

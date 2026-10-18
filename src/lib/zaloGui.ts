@@ -191,17 +191,22 @@ export async function luuNhomQuet(sp: any, ds: NhomQuet[]): Promise<{ soNhom: nu
 // ─── Gửi tin ────────────────────────────────────────────────────────────────
 
 /** {tenKhach} {maKhach} {tenNhom} trong nội dung → giá trị của từng nhóm */
-export function dienMau(noiDung: string, v: { tenKhach?: string | null; maKhach?: string | null; tenNhom?: string | null }): string {
-    return String(noiDung || '')
+export function dienMau(noiDung: string, v: { tenKhach?: string | null; maKhach?: string | null; tenNhom?: string | null; bien?: Record<string, string> | null }): string {
+    let s = String(noiDung || '')
         .replace(/\{\s*tenKhach\s*\}/gi, v.tenKhach || 'Quý khách')
         .replace(/\{\s*maKhach\s*\}/gi, v.maKhach || '')
         .replace(/\{\s*tenNhom\s*\}/gi, v.tenNhom || '')
+    // Biến doanh số chốt lúc tạo đợt (lib/zaloDoanhSo.ts): {doanhSo} {soLuong} {soDon} {nhomHang} {tuNgay} {denNgay}
+    for (const [k, gt] of Object.entries(v.bien || {})) {
+        if (/^[a-zA-Z]+$/.test(k)) s = s.replace(new RegExp(`\\{\\s*${k}\\s*\\}`, 'gi'), () => String(gt))
+    }
+    return s
 }
 
 /** Gửi MỘT tin vào MỘT nhóm qua n8n (dùng cho cả gửi thử lẫn hàng đợi) */
 export async function guiMotNhom(url: string, tin: {
     dotId: string | null; groupId: string; noiDung: string; anh: string[]; tieuDe?: string | null
-    maKhach?: string | null; tenKhach?: string | null; tenNhom?: string | null
+    maKhach?: string | null; tenKhach?: string | null; tenNhom?: string | null; bien?: Record<string, string> | null
 }): Promise<{ ok: boolean; loi: string | null }> {
     const r = await goiN8n(url, {
         loai: 'gui_tin', ...tin,
@@ -239,9 +244,11 @@ export async function guiTiepCuaHang(sp: any, nganSachMs = 40_000): Promise<{ da
         const k = h.customerId ? await sp.customer.findUnique({ where: { id: h.customerId }, select: { code: true, name: true } }) : null
         let anh: string[] = []
         try { anh = dot.anh ? JSON.parse(dot.anh) : [] } catch { anh = [] }
+        let bien: Record<string, string> | null = null
+        try { bien = h.bien ? JSON.parse(h.bien) : null } catch { bien = null }
         const kq = await guiMotNhom(ch.n8nGuiUrl, {
             dotId: dot.id, groupId: h.groupId, noiDung: dot.noiDung, anh, tieuDe: dot.tieuDe,
-            maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: h.tenNhom,
+            maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: h.tenNhom, bien,
         })
         if (kq.ok) { daGui++; await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: 'da_gui', loi: null, guiLuc: new Date() } }) }
         else {
