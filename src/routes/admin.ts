@@ -1641,10 +1641,13 @@ router.post('/tat-kho-trung', async (req: Request, res: Response) => {
                 const sp: any = getStorePrisma(st.schema)
                 const chinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
                 if (!chinh) continue
-                /* CHỈ kho HƯ HỎNG: mọi chỗ chọn kho hư hỏng đều lọc isActive (khoHuHong, trang Kho Hư
-                 * Hỏng). Kho CHÍNH thì KHÔNG — getOrCreateDefaultWarehouse / products.ts chọn kho main
-                 * không lọc isActive, tắt bản trống là có đường ghi tồn vào kho đã tắt. */
-                for (const loai of ['damaged']) {
+                /* Kho HƯ HỎNG + kho BẢO HÀNH: chọn kho hư hỏng đều lọc isActive (khoHuHong, trang Kho Hư Hỏng); kho bảo hành
+                 * KHÔNG có luồng nào tự chọn theo loại — chỉ liệt kê cho người dùng chọn (thêm 18/10/2026: HUTI còn
+                 * WH-WARRANTY-F1KDCZ không gắn chi nhánh, trống, đang bật, chủ shop thấy "thừa ra 1 kho"). Kho CHÍNH thì KHÔNG —
+                 * getOrCreateDefaultWarehouse / products.ts chọn kho main không lọc isActive, tắt bản trống là có đường ghi tồn
+                 * vào kho đã tắt. Giữ nguyên isDefault của bản tắt: đường gieo kho cho phạm vi "không chi nhánh" tìm bản
+                 * isDefault, xoá cờ đi là nó gieo lại một bản mới. */
+                for (const loai of ['damaged', 'warranty']) {
                     const cuaChinh = await sp.warehouse.findFirst({ where: { type: loai, isActive: true, branchId: chinh.id }, select: { code: true } })
                     if (!cuaChinh) continue
                     const moCoi = await sp.warehouse.findMany({
@@ -1656,7 +1659,8 @@ router.post('/tat-kho-trung', async (req: Request, res: Response) => {
                         const lo = await sp.damagedEntry.count({ where: { warehouseId: w.id } }).catch(() => 0)
                         const chuyen = await sp.stockTransfer.count({ where: { OR: [{ fromWarehouseId: w.id }, { toWarehouseId: w.id }] } }).catch(() => 0)
                         const chuyenBan = await sp.salesTrip.count({ where: { warehouseId: w.id } }).catch(() => 0)
-                        const trong = tonKhac0 === 0 && lo === 0 && chuyen === 0 && chuyenBan === 0 && !w.vehicleId
+                        const kiemKe = await sp.inventoryCount.count({ where: { warehouseId: w.id } }).catch(() => 0)
+                        const trong = tonKhac0 === 0 && lo === 0 && chuyen === 0 && chuyenBan === 0 && kiemKe === 0 && !w.vehicleId
                         let daTat = false
                         if (trong && apply) {
                             await sp.warehouse.update({ where: { id: w.id }, data: { isActive: false } })
@@ -1664,7 +1668,7 @@ router.post('/tat-kho-trung', async (req: Request, res: Response) => {
                         }
                         ketQua.push({
                             store: st.code, loai, khoKhongGanCN: w.code, khoChiNhanhChinh: cuaChinh.code,
-                            tonKhac0, lo, chuyen, chuyenBan, trong, daTat,
+                            tonKhac0, lo, chuyen, chuyenBan, kiemKe, trong, daTat,
                             viec: trong ? (daTat ? 'ĐÃ TẮT' : 'sẽ tắt khi apply') : 'CÓ DỮ LIỆU — chỉ báo, phải gộp có kiểm',
                         })
                     }
