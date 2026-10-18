@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
+import { thongTinHoaDonTuKhach } from '../lib/zaloNhom'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
@@ -61,6 +62,20 @@ function resolveConversionRate(
     if (!conv || !conv.conversionRate || conv.conversionRate <= 0) return 1
     if (conv.toUnit === selectedUnit) return conv.conversionRate
     return 1 / conv.conversionRate
+}
+
+/** Thông tin xuất HĐ của một phiếu: vatBuyerInfo trên phiếu (nếu có tên/MST) ưu tiên, rồi hồ sơ khách. */
+function thongTinHoaDonPhieu(t: any, khach: any): any {
+    let vbi: any = null
+    try { vbi = t.vatBuyerInfo ? JSON.parse(t.vatBuyerInfo) : null } catch { vbi = null }
+    if (vbi && (vbi.name || vbi.taxCode)) {
+        return {
+            nguon: 'phieu', type: vbi.type || (vbi.taxCode ? 'company' : 'personal'),
+            name: vbi.name || '', taxCode: vbi.taxCode || '', address: vbi.address || '',
+            email: vbi.email || '', phone: vbi.phone || '', nationalId: vbi.nationalId || '',
+        }
+    }
+    return khach ? { nguon: 'ho_so_khach', ...thongTinHoaDonTuKhach(khach) } : null
 }
 
 // GET /api/transactions
@@ -198,10 +213,19 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
          * KHÔNG có cột địa chỉ — thứ thật nằm ở hồ sơ khách. Kéo từ hồ sơ khách: phiếu có
          * SĐT riêng thì giữ SĐT của phiếu, trống thì lấy của hồ sơ. */
         const custIds = [...new Set(filteredTx.map((t: any) => t.customerId).filter(Boolean))] as string[]
-        const custMap = new Map<string, { phone: string | null; address: string | null }>()
+        const custMap = new Map<string, any>()
         if (custIds.length > 0) {
-            const custs = await prisma.customer.findMany({ where: { id: { in: custIds } }, select: { id: true, phone: true, address: true } })
-            for (const c of custs) custMap.set(c.id, { phone: c.phone || null, address: c.address || null })
+            /* + thông tin XUẤT HOÁ ĐƠN trên hồ sơ khách (18/10/2026 — chủ shop: "transaction chưa có chỗ lấy
+             * hoá đơn theo tên khách"): người quét đơn "Lấy HĐ" cần tên đơn vị / MST / địa chỉ / email HĐ. */
+            const custs = await prisma.customer.findMany({
+                where: { id: { in: custIds } },
+                select: {
+                    id: true, code: true, name: true, phone: true, address: true, email: true, taxCode: true,
+                    invoiceType: true, invoiceCompanyName: true, invoiceBuyerName: true, invoiceAddress: true,
+                    invoiceEmail: true, invoicePhone: true, invoiceIdNo: true,
+                },
+            })
+            for (const c of custs) custMap.set(c.id, c)
         }
 
         const data = filteredTx.map(t => {
@@ -263,6 +287,10 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             // Tình trạng HĐĐT — FE lọc "Đã/Chưa xuất HĐ" + badge cần 2 trường này
             vatStatus: (t as any).vatStatus || 'none',
             vatInvoiceNumber: (t as any).vatInvoiceNumber || null,
+            customerCode: (t.customerId ? custMap.get(t.customerId)?.code : null) || null,
+            /* Thông tin xuất HĐ: phiếu có ghi người mua riêng (vatBuyerInfo — màn đơn / Lấy từ Shopee) thì
+             * ưu tiên; không thì lấy hồ sơ khách. null = khách lẻ không gắn hồ sơ. */
+            hoaDon: thongTinHoaDonPhieu(t, t.customerId ? custMap.get(t.customerId) : null),
             // Cột "Lấy HĐ" (18/10/2026) — danh sách dựng TỪNG TRƯỜNG nên cột mới phải kê ở đây,
             // thiếu là FE lọc "Khách lấy HĐ" ra rỗng dù DB đã bật (lỗi đúng ngày ra mắt)
             layHoaDon: (t as any).layHoaDon === true,
