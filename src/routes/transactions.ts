@@ -69,10 +69,17 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
 
+        const q: any = req.query
         const {
-            search, startDate, endDate, paymentMethod, status, cashier, customerId, layHoaDon,
-            page = '1', pageSize = '20',
-        } = req.query
+            search, paymentMethod, status, cashier, customerId, layHoaDon,
+            page = '1',
+        } = q
+        /* Tên trong trang Tài liệu API (dashboard-api-docs) là from / to / limit — bản cũ chỉ đọc
+         * startDate / endDate / pageSize nên ai làm theo tài liệu (n8n, 18/10/2026) bị BỎ QUA lọc
+         * ngày mà không báo gì. Nhận cả hai bộ tên. */
+        const startDate = q.startDate ?? q.from
+        const endDate = q.endDate ?? q.to
+        const pageSize = q.pageSize ?? q.limit ?? '20'
 
         const where: any = { ...getBranchFilter(req as any) }
         console.log(`[DEBUG-TX-GET] branchId=${branchId}, where=${JSON.stringify(where)}, headers.x-branch-id=${req.headers['x-branch-id']}, jwt.branchId=${req.user?.branchId}, isMainBranch=${req.user?.isMainBranch}`)
