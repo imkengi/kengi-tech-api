@@ -80,7 +80,22 @@ router.get('/nhom/:groupId', authMiddleware, async (req: AuthRequest, res: Respo
     }
 })
 
-// ─── GET /api/zalo/nhom?customerId=&q= ──────────────────────────────────────
+/** Thống kê tin theo nhóm: số tin + tin gần nhất (một câu SQL, DISTINCT ON + đếm theo cửa sổ) */
+async function thongKeTin(sp: any): Promise<Map<string, { soTin: number; tinCuoi: any }>> {
+    const rows: any[] = await sp.$queryRawUnsafe(
+        `SELECT DISTINCT ON (t."groupId") t."groupId", t."noiDung", t."nguoiGui", t."thoiDiem", t."yeuCauHoaDon",
+                COUNT(*) OVER (PARTITION BY t."groupId")::int AS "soTin"
+           FROM "ZaloTin" t
+          ORDER BY t."groupId", t."thoiDiem" DESC`,
+    )
+    return new Map(rows.map(r => [String(r.groupId), {
+        soTin: Number(r.soTin) || 0,
+        tinCuoi: { noiDung: String(r.noiDung || '').slice(0, 160), nguoiGui: r.nguoiGui, thoiDiem: r.thoiDiem, yeuCauHoaDon: r.yeuCauHoaDon },
+    }]))
+}
+
+// ─── GET /api/zalo/nhom?customerId=&q=&chuaNoi=1 ────────────────────────────
+// Danh sách nhóm đã nối + tên khách + số tin + tin gần nhất (tab Chăm sóc khách hàng).
 router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const sp = req.storePrisma as any
@@ -91,10 +106,133 @@ router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
             const q = String(req.query.q)
             where.OR = [{ maKhach: { contains: q, mode: 'insensitive' } }, { tenNhom: { contains: q, mode: 'insensitive' } }, { groupId: q }]
         }
-        const rows = await sp.zaloNhom.findMany({ where, orderBy: { maKhach: 'asc' }, take: 1000 })
+        const rows = await sp.zaloNhom.findMany({ where, orderBy: { maKhach: 'asc' }, take: 2000 })
         const tong = await sp.zaloNhom.count({ where })
-        res.json({ success: true, data: rows, tong })
+        const ids = [...new Set<string>(rows.map((r: any) => r.customerId).filter(Boolean))]
+        const khach = ids.length
+            ? await sp.customer.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, phone: true, taxCode: true } })
+            : []
+        const theoId = new Map<string, any>(khach.map((k: any) => [k.id, k]))
+        const tk = await thongKeTin(sp)
+        res.json({
+            success: true, tong,
+            data: rows.map((r: any) => ({
+                ...r,
+                khach: r.customerId ? (theoId.get(r.customerId) || null) : null,
+                soTin: tk.get(r.groupId)?.soTin || 0,
+                tinCuoi: tk.get(r.groupId)?.tinCuoi || null,
+            })),
+        })
     } catch (e: any) {
+        console.error('[zalo] GET nhom:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── GET /api/zalo/nhom-la ──────────────────────────────────────────────────
+// Nhóm có tin n8n đẩy về mà CHƯA có trong bảng nối — đợi người nối với khách thật.
+router.get('/nhom-la', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const tk = await thongKeTin(sp)
+        const daNoi = new Set<string>((await sp.zaloNhom.findMany({ select: { groupId: true } })).map((r: any) => r.groupId))
+        const data = [...tk.entries()]
+            .filter(([gid]) => !daNoi.has(gid))
+            .map(([groupId, x]) => ({ groupId, soTin: x.soTin, tinCuoi: x.tinCuoi }))
+            .sort((a, b) => new Date(b.tinCuoi?.thoiDiem || 0).getTime() - new Date(a.tinCuoi?.thoiDiem || 0).getTime())
+        res.json({ success: true, data })
+    } catch (e: any) {
+        console.error('[zalo] GET nhom-la:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/** Kéo tin cũ của nhóm theo khách mới — để /hoadon đã nhắn tính đúng khách (nhịp cron bật Lấy HĐ) */
+async function ganTinTheoNhom(sp: any, groupId: string, customerId: string | null): Promise<number> {
+    const r = await sp.zaloTin.updateMany({ where: { groupId }, data: { customerId } })
+    return r.count
+}
+
+// ─── POST /api/zalo/nhom {groupId, customerId, tenNhom?} — nối một nhóm ─────
+router.post('/nhom', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const b = req.body || {}
+        const gid = chuoiGid(b.groupId)
+        if (!/^\d{6,25}$/.test(gid)) { res.status(400).json({ success: false, error: 'Group ID phải là dãy số' }); return }
+        const k = b.customerId ? await sp.customer.findUnique({ where: { id: String(b.customerId) }, select: { id: true, code: true } }) : null
+        if (!k) { res.status(400).json({ success: false, error: 'Chọn khách hàng để nối' }); return }
+        const cu = await sp.zaloNhom.findUnique({ where: { groupId: gid } })
+        if (cu) { res.status(409).json({ success: false, error: `Nhóm này đã nối với ${cu.maKhach} — dùng "Đổi khách"` }); return }
+        const nhom = await sp.zaloNhom.create({
+            data: { groupId: gid, tenNhom: b.tenNhom ? String(b.tenNhom).trim().slice(0, 200) : null, maKhach: k.code, customerId: k.id },
+        })
+        const soTin = await ganTinTheoNhom(sp, gid, k.id)
+        res.json({ success: true, data: { ...nhom, soTinGan: soTin } })
+    } catch (e: any) {
+        console.error('[zalo] POST nhom:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── PUT /api/zalo/nhom/:id {customerId?, tenNhom?} — đổi khách / đổi tên nhóm ─
+router.put('/nhom/:id', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const b = req.body || {}
+        const nhom = await sp.zaloNhom.findUnique({ where: { id: String(req.params.id) } })
+        if (!nhom) { res.status(404).json({ success: false, error: 'Không tìm thấy nhóm' }); return }
+        const data: any = {}
+        if (typeof b.tenNhom === 'string') data.tenNhom = b.tenNhom.trim().slice(0, 200) || null
+        let soTin = 0
+        if (b.customerId !== undefined) {
+            const k = b.customerId ? await sp.customer.findUnique({ where: { id: String(b.customerId) }, select: { id: true, code: true } }) : null
+            if (b.customerId && !k) { res.status(400).json({ success: false, error: 'Không tìm thấy khách hàng' }); return }
+            data.customerId = k?.id || null
+            if (k) data.maKhach = k.code
+        }
+        const moi = await sp.zaloNhom.update({ where: { id: nhom.id }, data })
+        if ('customerId' in data && data.customerId !== nhom.customerId) soTin = await ganTinTheoNhom(sp, nhom.groupId, data.customerId)
+        res.json({ success: true, data: { ...moi, soTinGan: soTin } })
+    } catch (e: any) {
+        console.error('[zalo] PUT nhom:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── DELETE /api/zalo/nhom/:id — bỏ nối (tin cũ của nhóm thôi gắn khách) ─────
+// ⚠ Không gỡ "Lấy HĐ" đã bật trên phiếu theo nối cũ — việc đó tắt tay ở trang Giao dịch.
+router.delete('/nhom/:id', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const nhom = await sp.zaloNhom.findUnique({ where: { id: String(req.params.id) } })
+        if (!nhom) { res.status(404).json({ success: false, error: 'Không tìm thấy nhóm' }); return }
+        await sp.zaloNhom.delete({ where: { id: nhom.id } })
+        const soTin = await ganTinTheoNhom(sp, nhom.groupId, null)
+        res.json({ success: true, data: { groupId: nhom.groupId, soTinGo: soTin } })
+    } catch (e: any) {
+        console.error('[zalo] DELETE nhom:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/nhom/nhap-json {rows:[{maKhach,tenNhom,groupId}], apply, ghiDe} ─
+// Trang đọc Excel ngay trên trình duyệt rồi gửi JSON — tránh gửi tệp (WAF của Tino chặn multipart).
+router.post('/nhom/nhap-json', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const b = req.body || {}
+        if (!Array.isArray(b.rows) || !b.rows.length) { res.status(400).json({ success: false, error: 'File không có dòng nào' }); return }
+        if (b.rows.length > 5000) { res.status(400).json({ success: false, error: 'Tối đa 5.000 dòng một lần' }); return }
+        const kq = await nhapNhomZalo(req.storePrisma as any, b.rows, { apply: b.apply === true, ghiDe: b.ghiDe === true })
+        // Nhập thật xong: tin cũ của các nhóm vừa nối kéo theo khách
+        if (b.apply === true) {
+            const sp = req.storePrisma as any
+            const ds = await sp.zaloNhom.findMany({ where: { customerId: { not: null } }, select: { groupId: true, customerId: true } })
+            for (const n of ds) await sp.zaloTin.updateMany({ where: { groupId: n.groupId, customerId: null }, data: { customerId: n.customerId } })
+        }
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        console.error('[zalo] nhap-json:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })
