@@ -3,7 +3,7 @@
  * Trang Vận Hành › "Đẩy HĐ sang MISA": mã HUTI đến từ KiotViet, phần lớn không trùng mã vật tư MISA; MISA lưu khách theo MST.
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
-import { lapKeHoach, docCaiDat, tenKhongDau, tenNguoiTieuDung, cungDvt, type DanhMucMisa } from '../src/services/misaPush'
+import { lapKeHoach, docCaiDat, tenKhongDau, NHAN_TIEU_DUNG, cungDvt, type DanhMucMisa } from '../src/services/misaPush'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -137,27 +137,50 @@ async function main() {
     dung('mã hàng lấy qua liên kết (p-d → DCX125), đúng mã gốc MISA', d1.payload?.detail?.[0]?.inventory_item_code === 'DCX125')
     const d2 = kh.dong.find(d => d.localId === '2')!
     dung('MST ứng NHIỀU đối tượng MISA ⇒ không tự chọn, phiếu "thiếu"', d2.trangThai === 'thieu' && d2.lyDo.some(l => l.includes('không tự chọn')), d2.lyDo)
-    /* Chủ shop 19/10/2026: khách chưa có MST xuất "Bán cho người tiêu dùng (Tên khách)", KHÔNG lưu mã khách hàng */
+    /* Chủ shop 19/10/2026 (lần 2): khách chưa có MST ⇒ người mua đúng "Bán cho người tiêu dùng" — BỎ phần trong ngoặc; không mã khách */
     const d3 = kh.dong.find(d => d.localId === '3')!
-    dung('khách KHÔNG MST ⇒ người mua "Bán cho người tiêu dùng (Tên khách)", phiếu sẵn sàng',
-        d3.trangThai === 'san_sang' && d3.payload?.account_object_name === 'Bán cho người tiêu dùng (Cty)', { tt: d3.trangThai, ten: d3.payload?.account_object_name, lyDo: d3.lyDo })
-    dung('…KHÔNG mã đối tượng, không địa chỉ / MST — cả đầu phiếu lẫn dòng hàng',
+    dung('khách KHÔNG MST ⇒ người mua "Bán cho người tiêu dùng" (không ngoặc), phiếu sẵn sàng',
+        d3.trangThai === 'san_sang' && d3.payload?.account_object_name === 'Bán cho người tiêu dùng', { tt: d3.trangThai, ten: d3.payload?.account_object_name, lyDo: d3.lyDo })
+    dung('…KHÔNG mã đối tượng, không địa chỉ / MST — cả đầu phiếu lẫn dòng hàng; tên khách thật ở diễn giải',
         !('account_object_code' in (d3.payload || {})) && d3.payload?.account_object_tax_code === undefined && d3.payload?.account_object_address === undefined
-        && d3.payload?.detail?.[0]?.account_object_code === undefined && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng (Cty)', d3.payload?.detail?.[0])
-    dung('tên người mua: có tên ⇒ kèm ngoặc; "Khách lẻ" / trống ⇒ chỉ "Bán cho người tiêu dùng"',
-        tenNguoiTieuDung('  Chị  Lan ') === 'Bán cho người tiêu dùng (Chị Lan)' && tenNguoiTieuDung('Khách lẻ') === 'Bán cho người tiêu dùng'
-        && tenNguoiTieuDung('KHÁCH LẺ') === 'Bán cho người tiêu dùng' && tenNguoiTieuDung('') === 'Bán cho người tiêu dùng')
+        && d3.payload?.detail?.[0]?.account_object_code === undefined && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng'
+        && String(d3.payload?.journal_memo).includes('Cty'), d3.payload?.detail?.[0])
+    dung('loại chứng từ ghi "Phiếu bán hàng" — bỏ chữ Kengi', d3.payload?.org_reftype_name === 'Phiếu bán hàng', d3.payload?.org_reftype_name)
     dung('tên đối tượng so bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng (tìm đối tượng ở admin)', tenKhongDau('BÁN CHO  người TIÊU DÙNG ') === 'ban cho nguoi tieu dung')
 
-    // khách lẻ (không gắn khách) dùng tên ghi trên phiếu; khách không MST có "người mua hàng" trên hồ sơ thì lấy tên đó
+    // khách lẻ (không gắn khách) và khách không MST có "người mua hàng" trên hồ sơ — đều chỉ "Bán cho người tiêu dùng"
     const txLe = { ...tx('4', '', 'x'), customerId: null, customer: null, customerName: 'Anh Tư' }
     const txNm = tx('5', '', 'KH0005'); txNm.customer = { ...txNm.customer, name: 'Đại lý Tư Phát', invoiceBuyerName: 'Nguyễn Văn Tư' } as any
     const spLe: any = { ...spKh, transaction: { count: async () => 2, findMany: async () => [txLe, txNm] } }
     const kLe = await lapKeHoach(spLe, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
-    dung('phiếu không gắn khách ⇒ "Bán cho người tiêu dùng (tên trên phiếu)", không mã',
-        kLe.dong[0].trangThai === 'san_sang' && kLe.dong[0].payload?.account_object_name === 'Bán cho người tiêu dùng (Anh Tư)' && kLe.dong[0].payload?.account_object_code === undefined, kLe.dong[0].payload?.account_object_name)
-    dung('khách không MST có "người mua hàng" trên hồ sơ ⇒ lấy tên người mua',
-        kLe.dong[1].payload?.account_object_name === 'Bán cho người tiêu dùng (Nguyễn Văn Tư)', kLe.dong[1].payload?.account_object_name)
+    dung('phiếu không gắn khách ⇒ "Bán cho người tiêu dùng", không mã',
+        kLe.dong[0].trangThai === 'san_sang' && kLe.dong[0].payload?.account_object_name === NHAN_TIEU_DUNG && kLe.dong[0].payload?.account_object_code === undefined, kLe.dong[0].payload?.account_object_name)
+    dung('khách không MST có tên người mua trên hồ sơ ⇒ vẫn chỉ "Bán cho người tiêu dùng"',
+        kLe.dong[1].payload?.account_object_name === NHAN_TIEU_DUNG, kLe.dong[1].payload?.account_object_name)
+
+    /* Chủ shop 19/10/2026: "có thể đẩy mà không cần link mã hàng, cái nào chưa link thì bỏ qua" ⇒ dòng chưa nối mã MISA bị bỏ, phần còn lại
+     * vẫn đẩy; tắt tuỳ chọn thì phiếu đứng "thiếu"; không còn dòng nào nối được thì vẫn "thiếu" */
+    const txBo = tx('8', '0102373667', 'KH0008')
+    txBo.items = [...txBo.items, { productId: 'p-khong', productName: 'Hàng chưa nối', quantity: 3, unitPrice: 100000, lineTotal: 300000,
+        product: { id: 'p-khong', sku: 'CHUA-NOI', name: 'Hàng chưa nối', baseUnit: 'Cái' } }] as any
+    txBo.total = 1300000; txBo.subtotal = 1300000
+    const spBo: any = { ...spKh, transaction: { count: async () => 1, findMany: async () => [txBo] } }
+    const kBo = await lapKeHoach(spBo, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const dBo = kBo.dong[0]
+    dung('dòng chưa nối mã ⇒ BỎ dòng đó, phiếu vẫn sẵn sàng, chỉ còn dòng đã nối (DCX125), cảnh báo nói rõ dòng bị bỏ + số tiền',
+        dBo.trangThai === 'san_sang' && dBo.payload?.detail?.length === 1 && dBo.payload?.detail?.[0]?.inventory_item_code === 'DCX125'
+        && dBo.payload?.detail?.[0]?.sort_order === 1 && dBo.canhBao.some(c => c.startsWith('Bỏ qua 1 dòng chưa nối mã MISA: CHUA-NOI (300.000đ)')), { tt: dBo.trangThai, lyDo: dBo.lyDo, cb: dBo.canhBao })
+    dung('…tổng chứng từ = phần đã nối (1.000.000), số tiền dòng hiển thị theo phần được đẩy, không cảnh báo lệch tổng',
+        Math.abs((dBo.payload?.total_amount || 0) - 1000000) <= 1 && dBo.soTien === 1000000 && !dBo.canhBao.some(c => c.startsWith('Tổng thanh toán')), { tong: dBo.payload?.total_amount, soTien: dBo.soTien })
+    const kBoTat = await lapKeHoach(spBo, {} as any, docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', boQuaDongChuaNoi: false })), dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('tắt "bỏ qua dòng chưa nối" ⇒ phiếu "thiếu", nói mã chưa có trên MISA', kBoTat.dong[0].trangThai === 'thieu' && kBoTat.dong[0].lyDo.some(l => l.includes('CHUA-NOI')), kBoTat.dong[0].lyDo)
+    const txHet = tx('9', '0102373667', 'KH0009')
+    txHet.items = [{ productId: 'p-khong', productName: 'Hàng chưa nối', quantity: 1, unitPrice: 50000, lineTotal: 50000, product: { id: 'p-khong', sku: 'CHUA-NOI', name: 'x', baseUnit: 'Cái' } }] as any
+    const kHet = await lapKeHoach({ ...spKh, transaction: { count: async () => 1, findMany: async () => [txHet] } }, {} as any, caiDat, dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('không còn dòng nào nối được ⇒ vẫn "thiếu" ("Mọi dòng hàng đều chưa nối mã MISA")',
+        kHet.dong[0].trangThai === 'thieu' && kHet.dong[0].lyDo.some(l => l.startsWith('Mọi dòng hàng đều chưa nối mã MISA')), kHet.dong[0].lyDo)
 
     /* THEO MẪU CHỨNG TỪ CHỦ SHOP GỬI 19/10/2026: 4 × 480.000 (giá đã gồm thuế 8%) ⇒ đơn giá 444.444,44 · thành tiền 1.777.777,76
      * · thuế 142.222,22; kèm hoá đơn (sa_invoice 11/3560), phiếu xuất kho (8/2020), inventory_item_id / unit_id / stock_id, reference */

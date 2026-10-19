@@ -74,6 +74,8 @@ export interface CaiDatDay {
     giaGomThue: boolean
     /** Chứng từ bán KÈM HOÁ ĐƠN (include_invoice 1 + khối sa_invoice) — theo mẫu chủ shop */
     kemHoaDon: boolean
+    /** Dòng hàng chưa nối mã MISA thì BỎ QUA dòng đó, vẫn đẩy phần còn lại (chủ shop 19/10/2026: "cái nào chưa link thì bỏ qua") */
+    boQuaDongChuaNoi: boolean
     tk: {
         tienMat: string; nganHang: string; phaiThu: string
         doanhThu: string; doanhThuDV: string; thueRa: string
@@ -86,7 +88,7 @@ export const CAI_DAT_MAC_DINH: CaiDatDay = {
     maKhachLe: null, maKhachSan: null, maNccMacDinh: null,
     kiemXuatKho: true,
     purchasePurposeId: null,
-    thueSuat: 8, giaGomThue: true, kemHoaDon: true,
+    thueSuat: 8, giaGomThue: true, kemHoaDon: true, boQuaDongChuaNoi: true,
     tk: {
         tienMat: '1111', nganHang: '1121', phaiThu: '131',
         doanhThu: '5111', doanhThuDV: '5113', thueRa: '33311',
@@ -110,6 +112,7 @@ export function docCaiDat(raw: string | null | undefined): CaiDatDay {
             ? Number(o.thueSuat) : CAI_DAT_MAC_DINH.thueSuat,
         giaGomThue: typeof o.giaGomThue === 'boolean' ? o.giaGomThue : CAI_DAT_MAC_DINH.giaGomThue,
         kemHoaDon: typeof o.kemHoaDon === 'boolean' ? o.kemHoaDon : CAI_DAT_MAC_DINH.kemHoaDon,
+        boQuaDongChuaNoi: typeof o.boQuaDongChuaNoi === 'boolean' ? o.boQuaDongChuaNoi : CAI_DAT_MAC_DINH.boQuaDongChuaNoi,
         tk,
     }
 }
@@ -156,12 +159,9 @@ const khoaMa = (m: string) => m.trim().toUpperCase()
 /** Tên bỏ dấu, chữ thường, gộp khoảng trắng — so tên đối tượng MISA */
 export const tenKhongDau = (s: any) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim()
+/** Người mua cho khách KHÔNG có MST. Chủ shop 19/10/2026: lần đầu chọn "(Tên khách)" trong ngoặc, sau đổi: "bán cho người tiêu dùng thôi,
+ *  bỏ trong dấu ngoặc" — tên khách thật chỉ còn ở diễn giải (journal_memo). */
 export const NHAN_TIEU_DUNG = 'Bán cho người tiêu dùng'
-/** Tên người mua cho khách KHÔNG có MST: "Bán cho người tiêu dùng (Tên khách)"; không tên (khách lẻ) ⇒ "Bán cho người tiêu dùng" */
-export function tenNguoiTieuDung(ten: any): string {
-    const t = String(ten || '').replace(/\s+/g, ' ').trim()
-    return t && !/^kh[aá]ch( l[eẻ]| h[aà]ng)?$/i.test(t) ? `${NHAN_TIEU_DUNG} (${t})` : NHAN_TIEU_DUNG
-}
 /** So tên ĐVT: chuẩn Unicode NFC + chữ thường — "Cái" của MISA và của Kengi có thể khác dạng mã hoá (dựng sẵn / tổ hợp dấu) dù nhìn
  *  y hệt (HD031660 19/10/2026 báo "Kengi Cái ≠ MISA Cái") */
 export const cungDvt = (a: any, b: any) => String(a || '').normalize('NFC').trim().toLowerCase() === String(b || '').normalize('NFC').trim().toLowerCase()
@@ -489,7 +489,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         let maKhach: string | null = null
         let tieuDung: string | null = null   // tên người mua khi bán cho người tiêu dùng
         if (!tx.customer || !mstKhach) {
-            tieuDung = tenNguoiTieuDung(tx.customer ? (tx.customer.invoiceBuyerName || tx.customer.name) : tx.customerName)
+            tieuDung = NHAN_TIEU_DUNG   // chủ shop 19/10/2026 (lần 2): "bán cho người tiêu dùng thôi, bỏ trong dấu ngoặc"
             d.canhBao.push(`${tx.customer ? 'Khách không có MST' : 'Khách lẻ'} ⇒ người mua "${tieuDung}", không mã đối tượng MISA`)
         } else {
             maKhach = maKhachQuaMap.get(tx.customer.id) || tx.customer.code
@@ -537,16 +537,29 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         if (items.length > MAX_DONG_CHUNG_TU) d.lyDo.push(`Phiếu ${items.length} dòng — MISA nhận tối đa ${MAX_DONG_CHUNG_TU} dòng/chứng từ`)
 
         const thieuMa: string[] = [], ngungMa: string[] = []
+        const coMa: boolean[] = []
         const maHang = items.map((it: any) => {
             const ma = maHangQuaMap.get(it.productId) || it.product?.sku || it.sku
             const vt = dm.vatTuTheoMa.get(khoaMa(String(ma || '')))
+            coMa.push(!!vt)
             if (!vt) { thieuMa.push(String(ma || '(trống)')); return String(ma || '') }
             if (vt.ngung) ngungMa.push(vt.ma)
             return vt.ma || String(ma)   // đúng mã (cả hoa/thường) bên MISA
         })
+        /* Chủ shop 19/10/2026: "có thể đẩy mà không cần link mã hàng, cái nào chưa link thì bỏ qua" ⇒ dòng chưa nối mã MISA bị BỎ, phần còn
+         * lại vẫn đẩy (Thiết lập › boQuaDongChuaNoi, mặc định bật). Phiếu không còn dòng nào nối được thì vẫn đứng ở "thiếu". */
+        const boQuaDong = caiDat.boQuaDongChuaNoi && thieuMa.length > 0 && coMa.some(Boolean)
         if (thieuMa.length) {
             const ds = [...new Set(thieuMa)]
-            d.lyDo.push(`${ds.length} mã hàng chưa có trên MISA: ${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''} — nối mã ở "Liên kết hàng hoá" hoặc đẩy "Vật tư" trước`)
+            const dsChu = `${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''}`
+            if (boQuaDong) {
+                const tienBo = items.reduce((s: number, it: any, k: number) => s + (coMa[k] ? 0 : Number(it.lineTotal) || 0), 0)
+                d.canhBao.push(`Bỏ qua ${thieuMa.length} dòng chưa nối mã MISA: ${dsChu} (${lam(tienBo).toLocaleString('vi-VN')}đ) — chứng từ MISA không có các dòng này`)
+            } else if (caiDat.boQuaDongChuaNoi) {
+                d.lyDo.push(`Mọi dòng hàng đều chưa nối mã MISA (${dsChu}) — nối mã ở "Liên kết hàng hoá"`)
+            } else {
+                d.lyDo.push(`${ds.length} mã hàng chưa có trên MISA: ${dsChu} — nối mã ở "Liên kết hàng hoá" hoặc đẩy "Vật tư" trước`)
+            }
         }
         if (ngungMa.length) d.canhBao.push(`Vật tư MISA đang NGỪNG THEO DÕI: ${[...new Set(ngungMa)].slice(0, 5).join(', ')} — MISA có thể từ chối`)
         if (d.lyDo.length && d.trangThai === 'san_sang') d.trangThai = 'thieu'
@@ -593,7 +606,10 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         const tron2 = (n: number) => Math.round(n * 100) / 100
         const lechDvt: string[] = []
         let tienHang = 0, tienThue = 0
-        const detail = items.map((it: any, k: number) => {
+        let tienKengiGiu = 0                                                   // tiền Kengi của các dòng ĐƯỢC đẩy (khi bỏ qua dòng)
+        const giuIdx = items.map((_: any, k: number) => k).filter((k: number) => !boQuaDong || coMa[k])
+        const detail = giuIdx.map((k: number, viTri: number) => {
+            const it = items[k]
             const sl = Number(it.quantity) || 0
             const sauGiam = (Number(it.lineTotal) || 0) - giamGiaDong[k]      // tiền dòng sau mọi giảm giá (giá Kengi)
             let donGia: number, thanhTien: number, tienThueDong: number, vat: { vat_rate?: number; other_vat_rate?: number }
@@ -616,6 +632,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             }
             tienHang += thanhTien
             tienThue += tienThueDong
+            tienKengiGiu += sauGiam + (thue ? thueDong[k] : 0)
             const dv = it.product?.productType === 'service'
             const vt = dm.vatTuTheoMa.get(khoaMa(maHang[k]))
             // ĐVT: theo vật tư MISA (tên + id ĐVT chính) — mẫu gửi unit_id; tên Kengi khác MISA thì cảnh báo để soát
@@ -623,7 +640,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             const dvt = vt?.dvt || dvtKengi
             if (vt?.dvt && cungDvt(vt.dvt, dvtKengi) === false) lechDvt.push(`${maHang[k]} (Kengi "${dvtKengi}", MISA "${vt.dvt}")`)
             return {
-                sort_order: k + 1,
+                sort_order: viTri + 1,
                 ...(vt?.id ? { inventory_item_id: vt.id } : {}),
                 inventory_item_code: maHang[k],
                 inventory_item_name: it.productName || it.product?.name || maHang[k],
@@ -653,9 +670,12 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         if (lechDvt.length) d.canhBao.push(`ĐVT khác MISA — gửi theo ĐVT MISA: ${lechDvt.slice(0, 4).join(', ')}${lechDvt.length > 4 ? '…' : ''}`)
         tienHang = tron2(tienHang); tienThue = tron2(tienThue)
         const tongTT = tron2(tienHang + tienThue)
-        if (Math.abs(tongTT - tongPhieu) > (tachThue && !caiDat.giaGomThue ? Infinity : 5)) {
-            d.canhBao.push(`Tổng thanh toán dựng lại ${tongTT.toLocaleString('vi-VN')}đ ≠ tổng phiếu ${lam(tongPhieu).toLocaleString('vi-VN')}đ`)
+        // bỏ qua dòng ⇒ so với tiền các dòng được đẩy, không phải tổng phiếu (đã nói ở cảnh báo "Bỏ qua … dòng")
+        const tongSo = boQuaDong ? tienKengiGiu : tongPhieu
+        if (Math.abs(tongTT - tongSo) > (tachThue && !caiDat.giaGomThue ? Infinity : 5)) {
+            d.canhBao.push(`Tổng thanh toán dựng lại ${tongTT.toLocaleString('vi-VN')}đ ≠ ${boQuaDong ? 'tiền các dòng được đẩy' : 'tổng phiếu'} ${lam(tongSo).toLocaleString('vi-VN')}đ`)
         }
+        if (boQuaDong) d.soTien = lam(tienKengiGiu)
 
         // "Bán cho người tiêu dùng (Tên khách)": KHÔNG mã đối tượng, không địa chỉ / MST (chủ shop 19/10/2026)
         const doiTuong = tieuDung ? {
@@ -678,7 +698,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             reftype,
             org_refid: d.orgRefid,
             org_refno: rn,
-            org_reftype_name: 'Phiếu bán hàng Kengi',
+            org_reftype_name: 'Phiếu bán hàng',   // chủ shop 19/10/2026: bỏ chữ Kengi (hiện ở cột Loại chứng từ bên MISA)
             refdate: ngayCT, posted_date: ngayCT,
             ...(caiDat.kemHoaDon ? { inv_date: ngayCT } : {}),
             is_posted_finance: true,
@@ -858,7 +878,7 @@ async function keHoachMuaHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             voucher_type: 18,
             org_refid: d.orgRefid,
             org_refno: p.code,
-            org_reftype_name: 'Phiếu nhập hàng Kengi',
+            org_reftype_name: 'Phiếu nhập hàng',
             reftype: 302,   // mua trong nước nhập kho CHƯA THANH TOÁN
             branch_id: caiDat.branchId,
             account_object_code: maNcc || undefined,
