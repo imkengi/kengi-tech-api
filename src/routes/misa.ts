@@ -1778,7 +1778,6 @@ router.get('/push/danh-muc', async (req: Request, res: Response) => {
                 soVatTu: dm.vatTuTheoMa.size, soDoiTuong: dm.doiTuongTheoMa.size,
                 layLuc: new Date(dm.layLuc).toISOString(), canhBao: dm.canhBao,
                 congMoi: !!c.creds.clientId,
-                tieuDung: dm.tieuDung,
                 // ?timDoiTuong=… — CHỈ ĐỌC: đối tượng MISA có tên chứa chuỗi này (bỏ dấu), để soát cấu hình "Bán cho người tiêu dùng"
                 ...(req.query.timDoiTuong ? { timDoiTuong: [...dm.doiTuongTheoMa.values()]
                     .filter(v => tenKhongDau(v.ten).includes(tenKhongDau(req.query.timDoiTuong)))

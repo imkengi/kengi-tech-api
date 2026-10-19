@@ -3,7 +3,7 @@
  * Trang Vận Hành › "Đẩy HĐ sang MISA": mã HUTI đến từ KiotViet, phần lớn không trùng mã vật tư MISA; MISA lưu khách theo MST.
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
-import { lapKeHoach, docCaiDat, tenKhongDau, TEN_TIEU_DUNG, type DanhMucMisa } from '../src/services/misaPush'
+import { lapKeHoach, docCaiDat, tenKhongDau, tenNguoiTieuDung, type DanhMucMisa } from '../src/services/misaPush'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -24,7 +24,6 @@ const dm: DanhMucMisa = {
     ]),
     doiTuongTheoId: new Map([['dt-1', '0102373667'], ['dt-2', 'KHLE'], ['dt-3', 'BCNTD']]),
     doiTuongTheoMst: new Map([['0102373667', ['0102373667']], ['0309999999', ['A1', 'A2']]]),
-    tieuDung: { ma: 'BCNTD', ten: 'Bán cho người tiêu dùng' },
     kho: [{ id: 'k1', ma: 'HH', ten: 'Kho hàng hoá' }],
     chiNhanh: [{ id: 'cn1', ma: 'HTSG', ten: 'HƯNG TÍN SG', loai: 2 }],
     layLuc: Date.now(), canhBao: [],
@@ -138,25 +137,27 @@ async function main() {
     dung('mã hàng lấy qua liên kết (p-d → DCX125), đúng mã gốc MISA', d1.payload?.detail?.[0]?.inventory_item_code === 'DCX125')
     const d2 = kh.dong.find(d => d.localId === '2')!
     dung('MST ứng NHIỀU đối tượng MISA ⇒ không tự chọn, phiếu "thiếu"', d2.trangThai === 'thieu' && d2.lyDo.some(l => l.includes('không tự chọn')), d2.lyDo)
-    /* Chủ shop 19/10/2026: "những khách chưa có MST sẽ xuất sang dạng Bán cho người tiêu dùng" */
+    /* Chủ shop 19/10/2026: khách chưa có MST xuất "Bán cho người tiêu dùng (Tên khách)", KHÔNG lưu mã khách hàng */
     const d3 = kh.dong.find(d => d.localId === '3')!
-    dung('khách KHÔNG MST ⇒ đối tượng "Bán cho người tiêu dùng" (tự nhận theo tên), phiếu sẵn sàng',
-        d3.trangThai === 'san_sang' && d3.payload?.account_object_code === 'BCNTD' && d3.canhBao.some(c => c.includes('Bán cho người tiêu dùng')), { tt: d3.trangThai, lyDo: d3.lyDo })
-    dung('…không mang tên / địa chỉ / MST của khách lên MISA, tên khách thật vẫn ở diễn giải',
-        d3.payload?.account_object_name === 'Bán cho người tiêu dùng' && d3.payload?.account_object_tax_code === undefined && d3.payload?.account_object_address === undefined
-        && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng' && String(d3.payload?.journal_memo).includes('Cty'), { ten: d3.payload?.account_object_name, memo: d3.payload?.journal_memo })
-    dung('tên đối tượng so bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng', tenKhongDau('BÁN CHO  người TIÊU DÙNG ') === TEN_TIEU_DUNG)
+    dung('khách KHÔNG MST ⇒ người mua "Bán cho người tiêu dùng (Tên khách)", phiếu sẵn sàng',
+        d3.trangThai === 'san_sang' && d3.payload?.account_object_name === 'Bán cho người tiêu dùng (Cty)', { tt: d3.trangThai, ten: d3.payload?.account_object_name, lyDo: d3.lyDo })
+    dung('…KHÔNG mã đối tượng, không địa chỉ / MST — cả đầu phiếu lẫn dòng hàng',
+        !('account_object_code' in (d3.payload || {})) && d3.payload?.account_object_tax_code === undefined && d3.payload?.account_object_address === undefined
+        && d3.payload?.detail?.[0]?.account_object_code === undefined && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng (Cty)', d3.payload?.detail?.[0])
+    dung('tên người mua: có tên ⇒ kèm ngoặc; "Khách lẻ" / trống ⇒ chỉ "Bán cho người tiêu dùng"',
+        tenNguoiTieuDung('  Chị  Lan ') === 'Bán cho người tiêu dùng (Chị Lan)' && tenNguoiTieuDung('Khách lẻ') === 'Bán cho người tiêu dùng'
+        && tenNguoiTieuDung('KHÁCH LẺ') === 'Bán cho người tiêu dùng' && tenNguoiTieuDung('') === 'Bán cho người tiêu dùng')
+    dung('tên đối tượng so bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng (tìm đối tượng ở admin)', tenKhongDau('BÁN CHO  người TIÊU DÙNG ') === 'ban cho nguoi tieu dung')
 
-    // khách lẻ (không gắn khách) cũng đi "Bán cho người tiêu dùng"; mã đặt ở Thiết lập thắng mã tự nhận
-    const txLe = { ...tx('4', '', 'x'), customerId: null, customer: null }
-    const spLe: any = { ...spKh, transaction: { count: async () => 1, findMany: async () => [txLe] } }
+    // khách lẻ (không gắn khách) dùng tên ghi trên phiếu; khách không MST có "người mua hàng" trên hồ sơ thì lấy tên đó
+    const txLe = { ...tx('4', '', 'x'), customerId: null, customer: null, customerName: 'Anh Tư' }
+    const txNm = tx('5', '', 'KH0005'); txNm.customer = { ...txNm.customer, name: 'Đại lý Tư Phát', invoiceBuyerName: 'Nguyễn Văn Tư' } as any
+    const spLe: any = { ...spKh, transaction: { count: async () => 2, findMany: async () => [txLe, txNm] } }
     const kLe = await lapKeHoach(spLe, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
-    dung('phiếu không gắn khách ⇒ "Bán cho người tiêu dùng"', kLe.dong[0].trangThai === 'san_sang' && kLe.dong[0].payload?.account_object_code === 'BCNTD', kLe.dong[0].lyDo)
-    const caiDatLe = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', maKhachLe: 'KHLE' }))
-    const kLe2 = await lapKeHoach(spLe, {} as any, caiDatLe, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
-    dung('Thiết lập đặt mã riêng (KHLE) ⇒ dùng mã đó thay mã tự nhận', kLe2.dong[0].payload?.account_object_code === 'KHLE', kLe2.dong[0].payload?.account_object_code)
-    const kLe3 = await lapKeHoach(spLe, {} as any, caiDat, { ...dm, tieuDung: null }, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
-    dung('MISA chưa có đối tượng "Bán cho người tiêu dùng", Thiết lập trống ⇒ "thiếu", nói rõ phải tạo', kLe3.dong[0].trangThai === 'thieu' && kLe3.dong[0].lyDo.some(l => l.includes('Bán cho người tiêu dùng')), kLe3.dong[0].lyDo)
+    dung('phiếu không gắn khách ⇒ "Bán cho người tiêu dùng (tên trên phiếu)", không mã',
+        kLe.dong[0].trangThai === 'san_sang' && kLe.dong[0].payload?.account_object_name === 'Bán cho người tiêu dùng (Anh Tư)' && kLe.dong[0].payload?.account_object_code === undefined, kLe.dong[0].payload?.account_object_name)
+    dung('khách không MST có "người mua hàng" trên hồ sơ ⇒ lấy tên người mua',
+        kLe.dong[1].payload?.account_object_name === 'Bán cho người tiêu dùng (Nguyễn Văn Tư)', kLe.dong[1].payload?.account_object_name)
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)

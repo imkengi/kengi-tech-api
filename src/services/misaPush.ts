@@ -56,8 +56,8 @@ export interface CaiDatDay {
     /** Mã kho MISA ghi vào từng dòng hàng (stock_code bắt buộc) */
     maKho: string | null
     tenKho: string | null
-    /** Đối tượng MISA "Bán cho người tiêu dùng": khách KHÔNG có MST + phiếu không gắn khách (19/10/2026).
-     *  Trống ⇒ đối tượng MISA mang đúng tên đó (DanhMucMisa.tieuDung). Tên khoá giữ nguyên `maKhachLe` cho pushConfig cũ. */
+    /** (cũ) Đối tượng MISA cho phiếu không gắn khách. Từ 19/10/2026 chứng từ BÁN không dùng nữa: khách không MST xuất
+     *  "Bán cho người tiêu dùng (Tên khách)" KHÔNG mã đối tượng (chủ shop). Giữ khoá cho pushConfig cũ. */
     maKhachLe: string | null
     /** Đối tượng MISA cho đơn sàn TMĐT — trống thì dùng khách lẻ */
     maKhachSan: string | null
@@ -124,9 +124,6 @@ export interface DanhMucMisa {
     doiTuongTheoId: Map<string, string>
     /** MST chuẩn hoá → mã đối tượng KHÁCH bên MISA (một MST có thể ứng nhiều mã — chỉ dùng khi DUY NHẤT) */
     doiTuongTheoMst: Map<string, string[]>
-    /** Đối tượng MISA tên ĐÚNG "Bán cho người tiêu dùng" (bỏ dấu, không phân biệt hoa thường) — chỉ khi DUY NHẤT.
-     *  Mặc định cho khách KHÔNG có MST khi Thiết lập chưa đặt mã (chủ shop 19/10/2026). */
-    tieuDung: { ma: string; ten: string } | null
     kho: Array<{ id: string; ma: string; ten: string }>
     chiNhanh: Array<{ id: string; ma: string; ten: string; loai: number }>
     layLuc: number
@@ -146,8 +143,12 @@ const khoaMa = (m: string) => m.trim().toUpperCase()
 /** Tên bỏ dấu, chữ thường, gộp khoảng trắng — so tên đối tượng MISA */
 export const tenKhongDau = (s: any) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim()
-export const TEN_TIEU_DUNG = 'ban cho nguoi tieu dung'
 export const NHAN_TIEU_DUNG = 'Bán cho người tiêu dùng'
+/** Tên người mua cho khách KHÔNG có MST: "Bán cho người tiêu dùng (Tên khách)"; không tên (khách lẻ) ⇒ "Bán cho người tiêu dùng" */
+export function tenNguoiTieuDung(ten: any): string {
+    const t = String(ten || '').replace(/\s+/g, ' ').trim()
+    return t && !/^kh[aá]ch( l[eẻ]| h[aà]ng)?$/i.test(t) ? `${NHAN_TIEU_DUNG} (${t})` : NHAN_TIEU_DUNG
+}
 /** MST chuẩn hoá: chỉ giữ số và gạch nối; hợp lệ = 10 số (± "-3 số" chi nhánh) hoặc 12 số (CCCD cá nhân). Không hợp lệ ⇒ '' */
 export const chuanMst = (v: any) => {
     const s = String(v || '').replace(/[^0-9-]/g, '')
@@ -207,11 +208,8 @@ export async function docDanhMucMisa(creds: MisaCreds, khoaBoNho: string, lamMoi
         const mst = chuanMst(pick(m, 'company_tax_code', 'CompanyTaxCode'))
         if (mst && laKhach) doiTuongTheoMst.set(mst, [...(doiTuongTheoMst.get(mst) || []), ma])
     }
-    const tieuDungDs = [...doiTuongTheoMa.values()].filter(v => tenKhongDau(v.ten) === TEN_TIEU_DUNG)
-    if (tieuDungDs.length > 1) canhBao.push(`MISA có ${tieuDungDs.length} đối tượng tên "Bán cho người tiêu dùng" (${tieuDungDs.map(v => v.ma).slice(0, 4).join(', ')}) — chọn mã ở Thiết lập`)
     const dm: DanhMucMisa = {
         vatTuTheoMa, vatTuTheoId, doiTuongTheoMa, doiTuongTheoId, doiTuongTheoMst,
-        tieuDung: tieuDungDs.length === 1 ? { ma: tieuDungDs[0].ma, ten: tieuDungDs[0].ten } : null,
         kho: kh.items.map((m: any) => ({
             id: chuoi(pick(m, 'stock_id', 'StockID')),
             ma: chuoi(pick(m, 'stock_code', 'StockCode')),
@@ -424,7 +422,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             customer: {
                 select: {
                     id: true, code: true, name: true, address: true, taxCode: true,
-                    invoiceType: true, invoiceCompanyName: true, invoiceAddress: true,
+                    invoiceType: true, invoiceCompanyName: true, invoiceAddress: true, invoiceBuyerName: true,
                 },
             },
         },
@@ -462,21 +460,16 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         if (chung.length) { d.trangThai = 'thieu'; d.lyDo.push(...chung) }
 
         // ── Đối tượng ──
-        /* Chủ shop 19/10/2026: "những khách chưa có MST sẽ xuất sang dạng Bán cho người tiêu dùng". Khách KHÔNG có MST hợp lệ —
-         * kể cả phiếu không gắn khách — ghi đối tượng MISA "Bán cho người tiêu dùng" (Thiết lập › maKhachLe; trống thì đối tượng
-         * MISA mang đúng tên đó), không tên/địa chỉ/MST riêng; tên khách thật vẫn nằm ở diễn giải. Khách CÓ MST: bảng nối → mã → MST.
-         * Đơn sàn không gắn khách: "mã khách sàn" nếu đã đặt. */
+        /* Chủ shop 19/10/2026: khách chưa có MST xuất dạng "Bán cho người tiêu dùng (Tên khách)" — giống MISA Hưng Tín đang ghi
+         * ("Bán cho người tiêu dùng (Chị Vương)") — và "không có lưu mã khách hàng": KHÔNG gắn mã đối tượng MISA, không địa chỉ/MST.
+         * Áp cho mọi phiếu không có MST hợp lệ, kể cả phiếu không gắn khách / đơn sàn. Khách CÓ MST: bảng nối → mã → MST như cũ. */
         const san = detectOnlinePlatform(tx.receiptNumber)
         const mstKhach = chuanMst(tx.customer?.taxCode)
         let maKhach: string | null = null
-        let tieuDung = false
-        if (!tx.customer && san && caiDat.maKhachSan) {
-            maKhach = caiDat.maKhachSan
-        } else if (!tx.customer || !mstKhach) {
-            tieuDung = true
-            maKhach = caiDat.maKhachLe || dm.tieuDung?.ma || null
-            if (!maKhach) d.lyDo.push(`${tx.customer ? 'Khách không có MST' : 'Phiếu không gắn khách'} ⇒ bán cho người tiêu dùng — MISA chưa có đối tượng tên "${NHAN_TIEU_DUNG}" (tạo bên MISA hoặc đặt mã ở Thiết lập)`)
-            else d.canhBao.push(`${tx.customer ? 'Khách không có MST' : 'Khách lẻ'} ⇒ xuất "${NHAN_TIEU_DUNG}" (mã MISA ${maKhach})`)
+        let tieuDung: string | null = null   // tên người mua khi bán cho người tiêu dùng
+        if (!tx.customer || !mstKhach) {
+            tieuDung = tenNguoiTieuDung(tx.customer ? (tx.customer.invoiceBuyerName || tx.customer.name) : tx.customerName)
+            d.canhBao.push(`${tx.customer ? 'Khách không có MST' : 'Khách lẻ'} ⇒ người mua "${tieuDung}", không mã đối tượng MISA`)
         } else {
             maKhach = maKhachQuaMap.get(tx.customer.id) || tx.customer.code
             // Mã Kengi không có bên MISA ⇒ khớp theo MST (MISA lưu khách theo MST) — chỉ khi MST ứng DUY NHẤT một đối tượng
@@ -492,10 +485,8 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             }
         }
         const dtMisa = maKhach ? dm.doiTuongTheoMa.get(khoaMa(maKhach)) : undefined
-        if (maKhach && !dtMisa) {
-            d.lyDo.push(tieuDung
-                ? `Mã "${maKhach}" (đối tượng "${NHAN_TIEU_DUNG}" ở Thiết lập) không có trên MISA`
-                : `Khách "${maKhach}"${mstKhach ? ` (MST ${mstKhach})` : ''} chưa có trên MISA — tạo đối tượng bên MISA${mstKhach ? ' (mã = MST thì tự khớp)' : ''} hoặc đẩy "Khách hàng & NCC"`)
+        if (!tieuDung && !dtMisa) {
+            d.lyDo.push(`Khách "${maKhach || tx.customer?.name}"${mstKhach ? ` (MST ${mstKhach})` : ''} chưa có trên MISA — tạo đối tượng bên MISA${mstKhach ? ' (mã = MST thì tự khớp)' : ''} hoặc đẩy "Khách hàng & NCC"`)
         }
 
         // ── Dòng hàng ──
@@ -566,7 +557,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
                 description: it.productName || it.product?.name || maHang[k],
                 inventory_item_type: dv ? 2 : 0,
                 account_object_code: maKhach || undefined,
-                account_object_name: dtMisa?.ten || (tieuDung ? NHAN_TIEU_DUNG : d.doiTuong),
+                account_object_name: tieuDung || dtMisa?.ten || d.doiTuong,
                 stock_code: caiDat.maKho, stock_name: kho?.ten || caiDat.tenKho || caiDat.maKho,
                 debit_account: tkNo,
                 credit_account: dv ? caiDat.tk.doanhThuDV : caiDat.tk.doanhThu,
@@ -590,10 +581,9 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             d.canhBao.push(`Tổng thanh toán dựng lại ${tongTT.toLocaleString('vi-VN')}đ ≠ tổng phiếu ${lam(tongPhieu).toLocaleString('vi-VN')}đ`)
         }
 
-        // "Bán cho người tiêu dùng": không tên / địa chỉ / MST riêng của khách — đúng đối tượng MISA đó
+        // "Bán cho người tiêu dùng (Tên khách)": KHÔNG mã đối tượng, không địa chỉ / MST (chủ shop 19/10/2026)
         const doiTuong = tieuDung ? {
-            account_object_code: maKhach || undefined,
-            account_object_name: dtMisa?.ten || NHAN_TIEU_DUNG,
+            account_object_name: tieuDung,
         } : {
             account_object_code: maKhach || undefined,
             account_object_name: dtMisa?.ten || (tx.customer?.invoiceType === 'company' && tx.customer?.invoiceCompanyName) || d.doiTuong,

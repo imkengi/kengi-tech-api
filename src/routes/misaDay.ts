@@ -150,26 +150,11 @@ router.get('/danh-muc-misa', XEM, async (req: AuthRequest, res: Response) => {
         const { dm } = await danhMuc(kn, req.query.lamMoi === '1')
         res.json({ success: true, data: {
             chiNhanh: dm.chiNhanh, kho: dm.kho, soVatTu: dm.vatTuTheoMa.size, soDoiTuong: dm.doiTuongTheoMa.size,
-            tieuDung: dm.tieuDung,   // đối tượng tên "Bán cho người tiêu dùng" nhận được (khách không MST)
             layLuc: new Date(dm.layLuc).toISOString(), canhBao: dm.canhBao,
         } })
     } catch (e: any) { tra500(res, e) }
 })
 
-/** Tìm đối tượng MISA (mã chứa / tên chứa mọi từ, bỏ dấu) — chọn đối tượng "Bán cho người tiêu dùng" ở Thiết lập */
-router.get('/doi-tuong-misa', XEM, async (req: AuthRequest, res: Response) => {
-    try {
-        const kn = await canKetNoi(req, res); if (!kn) return
-        const { dm } = await danhMuc(kn)
-        const q = String(req.query.q || '').trim()
-        const ma = q.toUpperCase(), tu = boDau(q).split(/[^a-z0-9]+/).filter(Boolean)
-        const ds = [...dm.doiTuongTheoMa.values()]
-            .filter(v => q && (v.ma.toUpperCase().includes(ma) || (tu.length > 0 && tu.every(t => boDau(v.ten).includes(t)))))
-            .slice(0, 30)
-            .map(v => ({ ma: v.ma, ten: v.ten, laKhach: v.laKhach, laNcc: v.laNcc }))
-        res.json({ success: true, data: ds })
-    } catch (e: any) { tra500(res, e) }
-})
 
 /** Thiết lập đẩy: GỘP lên bản đang lưu (gửi thiếu khoá không làm mất khoá cũ) */
 router.put('/thiet-lap', CAU_HINH, async (req: AuthRequest, res: Response) => {
