@@ -2,7 +2,7 @@
  *   npx tsx scripts/check-ai-cau-chuyen.ts
  * Truyện là hư cấu nhưng điều nói về SẢN PHẨM phải đúng mô tả, và không được lẫn quảng cáo / đánh giá giả / dẫn ra ngoài sàn.
  * Mỗi luật có ca PHẢI GIỮ lẫn ca PHẢI BỎ. */
-import { locTruyen, BIEU_TUONG } from '../src/lib/aiCauChuyen'
+import { locTruyen, BIEU_TUONG, LOI_TOI_DA, LOI_TONG_TOI_THIEU, NHIP_TOI_DA } from '../src/lib/aiCauChuyen'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -10,15 +10,16 @@ const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; conso
 const ten = 'Nồi cơm điện 1.8L Sunhouse Mama SHD8666G'
 const moTa = 'Dung tích 1.8L. Công suất 700W. Mâm nhiệt lớn tỏa nhiệt đều. Lòng nồi dạng niêu giúp cơm dẻo ngon. Nút gạt điều khiển dễ dùng.'
 const nhip = (loai: string, chu: string, loi = chu + '.', bieuTuong = '😊') => ({ loai, chu, loi, bieuTuong })
+// v3 (19/10): lời kể 2–3 câu cho video ≥ 1 phút — cả truyện ~900 ký tự lời
 const tot = (them: any = {}) => ({
     tieuDe: 'Chuyện bữa sáng nhà chị Mai',
     nhip: [
-        nhip('mo', 'Sáng nào nhà chị Mai cũng tất bật', 'Sáng nào nhà chị Mai cũng tất bật lo bữa cơm.', '⏰'),
-        nhip('roi', 'Nồi cũ nấu cơm chín không đều', 'Nồi cũ nấu cơm chỗ khô chỗ nhão.', '😩'),
-        nhip('ngoat', 'Rồi chị đổi sang nồi 1.8L mới', 'Rồi chị Mai đổi sang nồi cơm điện 1.8L.', '✨'),
-        nhip('loi-ich', 'Công suất 700W nấu nhanh', 'Công suất 700W, cơm chín nhanh.', '🔥'),
-        nhip('loi-ich', 'Lòng nồi dạng niêu, cơm dẻo ngon', 'Lòng nồi dạng niêu, cơm dẻo ngon hơn.', '🍚'),
-        nhip('ket', 'Bữa cơm giờ ngon hơn hẳn', 'Giờ bữa cơm nhà chị ngon hơn hẳn.', '😊'),
+        nhip('mo', 'Sáng nào nhà chị Mai cũng tất bật', 'Sáng nào nhà chị Mai cũng tất bật từ lúc trời còn tối. Chị vừa chuẩn bị đồ cho hai đứa nhỏ đi học, vừa lo nồi cơm cho cả nhà kịp ăn.', '⏰'),
+        nhip('roi', 'Nồi cũ nấu cơm chín không đều', 'Chiếc nồi cũ dùng đã lâu, nấu xong cơm chỗ khô chỗ nhão. Có hôm chị phải nấu lại nồi khác, cả nhà ngồi chờ mà ai cũng sốt ruột vì sắp muộn.', '😩'),
+        nhip('ngoat', 'Rồi chị đổi sang nồi 1.8L mới', 'Rồi chị Mai quyết định đổi sang chiếc nồi cơm điện 1.8L mới. Nút gạt điều khiển đơn giản nên bà nội cũng tự nấu được, chẳng cần ai chỉ.', '✨'),
+        nhip('loi-ich', 'Công suất 700W nấu nhanh', 'Công suất 700W giúp cơm chín nhanh hơn hẳn. Chị chỉ cần vo gạo, gạt nút rồi đi chuẩn bị thức ăn, quay lại là cơm đã chín thơm cả gian bếp.', '🔥'),
+        nhip('loi-ich', 'Lòng nồi dạng niêu, cơm dẻo ngon', 'Lòng nồi dạng niêu và mâm nhiệt lớn tỏa nhiệt đều, hạt cơm chín mềm, dẻo ngon từ trên xuống dưới. Không còn cảnh cơm sống ở giữa như trước.', '🍚'),
+        nhip('ket', 'Bữa cơm giờ ngon hơn hẳn', 'Giờ bữa sáng nhà chị Mai nhẹ nhàng hơn nhiều. Cả nhà ăn ngon, đi học đi làm đúng giờ, còn chị có thêm chút thời gian ngồi uống tách trà nóng.', '😊'),
     ],
     ...them,
 })
@@ -91,6 +92,35 @@ for (const [ten2, n] of [
     const t = tot(); t.nhip[0] = { ...t.nhip[0]!, chu: 'Một câu chữ trên hình dài quá mức cho phép của khung video ngắn' }
     const r = locTruyen({ truyen: [t] }, ten, moTa)
     dung('chữ lên hình dài quá khung ⇒ bỏ (nhịp mở hỏng ⇒ cả truyện)', r.truyen.length === 0)
+}
+// ── ĐỘ DÀI (v3 19/10/2026, chủ shop: "ít gì cũng phải 1p chứ có vài giây sao mà xem") ──
+{
+    const tong = tot().nhip.reduce((s, x) => s + x.loi.length, 0)
+    dung(`truyện mẫu đủ lời cho 1 phút (${tong} ≥ ${LOI_TONG_TOI_THIEU} ký tự, mỗi nhịp ≤ ${LOI_TOI_DA})`, tong >= LOI_TONG_TOI_THIEU && tot().nhip.every(x => x.loi.length <= LOI_TOI_DA))
+}
+{
+    // bản v2: mỗi nhịp một câu ngắn ⇒ video ~25 giây ⇒ nay phải bỏ
+    const ngan = tot(); ngan.nhip = ngan.nhip.map(x => ({ ...x, loi: x.chu + '.' }))
+    const nk: string[] = []
+    const r = locTruyen({ truyen: [ngan] }, ten, moTa, nk)
+    dung('lời kể quá ngắn (video < 1 phút) ⇒ bỏ truyện, nhật ký nói rõ', r.truyen.length === 0 && nk.some(x => /lời kể ngắn/.test(x)), nk.find(x => /BỎ/.test(x)))
+}
+{
+    const t = doi(3, { loi: 'Công suất 700W giúp cơm chín nhanh. '.repeat(7).trim() })
+    const r = locTruyen({ truyen: [t] }, ten, moTa)
+    dung(`lời một nhịp lợi ích dài quá ${LOI_TOI_DA} ký tự ⇒ bỏ riêng nhịp đó`, r.truyen.length === 1 && r.truyen[0]!.nhip.filter(x => x.loai === 'loi-ich').length === 1)
+    const t2 = doi(1, { loi: 'Chiếc nồi cũ nấu cơm chỗ khô chỗ nhão. '.repeat(7).trim() })
+    dung(`lời nhịp rắc rối dài quá ${LOI_TOI_DA} ký tự ⇒ bỏ cả truyện`, locTruyen({ truyen: [t2] }, ten, moTa).truyen.length === 0)
+}
+{
+    // 2 rắc rối + 3 lợi ích + mở/ngoặt/kết = 8 nhịp > máy dựng chịu được (8 cảnh kể cả cảnh giá) ⇒ bớt lợi ích cuối
+    const dai = tot(); const n = dai.nhip
+    dai.nhip = [n[0]!, n[1]!, { ...n[1]!, chu: 'Cơm nguội nhanh, cả nhà ăn không ngon', loi: 'Mới dọn ra một lúc cơm đã nguội, cả nhà ăn không ngon miệng. Chị Mai nhìn bát cơm thừa mà thấy tiếc công nấu cả buổi sáng.' },
+        n[2]!, n[3]!, n[4]!, { ...n[4]!, chu: 'Nút gạt điều khiển dễ dùng', loi: 'Nút gạt điều khiển dễ dùng, bà nội tự nấu được mà không cần hỏi ai. Ông nội cũng học cách nấu chỉ sau một lần xem.' }, n[5]!]
+    const r = locTruyen({ truyen: [dai] }, ten, moTa)
+    const loai = r.truyen[0]?.nhip.map(x => x.loai).join(',')
+    dung(`8 nhịp ⇒ còn ${NHIP_TOI_DA}: giữ 2 rắc rối đúng thứ tự, bớt lợi ích cuối`, loai === 'mo,roi,roi,ngoat,loi-ich,loi-ich,ket'
+        && r.truyen[0]!.nhip[2]!.chu.startsWith('Cơm nguội') && !r.truyen[0]!.nhip.some(x => x.chu === 'Nút gạt điều khiển dễ dùng'), loai)
 }
 
 console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
