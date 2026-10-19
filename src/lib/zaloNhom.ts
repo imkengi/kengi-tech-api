@@ -313,14 +313,23 @@ export async function apYeuCauHoaDonGanDay(sp: any): Promise<{ soKhachNgay: numb
  * phiếu lấy HĐ (services/misaPush). CHỈ BẬT, không tự tắt — như /hoadon.
  */
 export async function batLayHoaDonKhachLuonLay(sp: any, tu: Date): Promise<number> {
+    // Lọc theo danh sách id (scalar `in`) thay vì lọc qua quan hệ `customer: { is }` — repo chưa chỗ nào chạy kiểu đó trên prod
+    const ids = await idKhachLuonLayHoaDon(sp)
+    if (!ids.length) return 0
     const r = await sp.transaction.updateMany({
         where: {
-            layHoaDon: false, status: { in: [...TRANG_THAI_TINH] }, customer: { is: { luonLayHoaDon: true } },
+            layHoaDon: false, status: { in: [...TRANG_THAI_TINH] }, customerId: { in: ids },
             OR: [{ transactionDate: { gte: tu } }, { transactionDate: null, createdAt: { gte: tu } }],
         },
         data: { layHoaDon: true },
     })
     return Number(r?.count) || 0
+}
+
+/** id các khách "luôn lấy hoá đơn" (Customer.luonLayHoaDon) — dùng chung cho nhịp này và đẩy MISA (services/misaPush) */
+export async function idKhachLuonLayHoaDon(sp: any): Promise<string[]> {
+    const ds: { id: string }[] = await sp.customer.findMany({ where: { luonLayHoaDon: true }, select: { id: true } })
+    return ds.map(k => k.id)
 }
 
 /** Nhịp ngoài: mọi cửa hàng đang hoạt động — gọi từ routes/cronTick.ts */

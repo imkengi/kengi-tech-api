@@ -129,12 +129,13 @@ async function main() {
             findMany: async ({ where }: any) => { whereNhan = where; return [tx('1', '0102373667', 'KH0001'), tx('2', '0309999999', 'KH0002'), tx('3', '', 'KH0003')] },
         },
         misaPushItem: { findMany: async () => [] },
+        customer: { findMany: async ({ where }: any) => (where?.luonLayHoaDon === true ? [{ id: 'c-luon' }] : []) },
     }
     const caiDat = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH' }))
     const kh = await lapKeHoach(spKh, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's', chiLayHoaDon: true, ids: ['1', '2', '3'] })
     // lọc Lấy HĐ = phiếu Lấy HĐ HOẶC khách "luôn lấy hoá đơn" (19/10/2026); đi qua AND, giữ nguyên OR khoảng ngày
     dung('kế hoạch: lọc phiếu Lấy HĐ HOẶC khách luôn lấy HĐ (qua AND, không đè OR khoảng ngày) + đúng id chọn',
-        JSON.stringify(whereNhan?.AND) === JSON.stringify([{ OR: [{ layHoaDon: true }, { customer: { is: { luonLayHoaDon: true } } }] }])
+        JSON.stringify(whereNhan?.AND) === JSON.stringify([{ OR: [{ layHoaDon: true }, { customerId: { in: ['c-luon'] } }] }])
         && Array.isArray(whereNhan?.OR) && whereNhan.OR.length === 2 && whereNhan?.layHoaDon === undefined
         && JSON.stringify(whereNhan?.id) === JSON.stringify({ in: ['1', '2', '3'] }), whereNhan)
     const d1 = kh.dong.find(d => d.localId === '1')!
@@ -310,13 +311,21 @@ async function main() {
         kLuonKhongMst.dong[0].payload?.account_object_name === NHAN_TIEU_DUNG, kLuonKhongMst.dong[0].payload?.account_object_name)
 
     // nhịp tự bật Lấy HĐ cho khách luôn lấy HĐ: chỉ phiếu từ mốc `tu`, chỉ phiếu chưa bật, chỉ trạng thái đã bán
-    let whereBat: any = null, dataBat: any = null
+    let whereBat: any = null, dataBat: any = null, whereKhach: any = null, goiGhi = 0
     const tuBat = new Date('2026-10-18T00:00:00+07:00')
-    const soBat = await batLayHoaDonKhachLuonLay({ transaction: { updateMany: async ({ where, data }: any) => { whereBat = where; dataBat = data; return { count: 3 } } } }, tuBat)
-    dung('nhịp: bật Lấy HĐ cho phiếu của khách luôn lấy HĐ — chỉ phiếu chưa bật, đã bán, từ hôm qua; trả số phiếu vừa bật',
-        soBat === 3 && dataBat?.layHoaDon === true && whereBat?.layHoaDon === false && whereBat?.customer?.is?.luonLayHoaDon === true
+    const spBat = (ds: { id: string }[]) => ({
+        customer: { findMany: async ({ where }: any) => { whereKhach = where; return ds } },
+        transaction: { updateMany: async ({ where, data }: any) => { goiGhi++; whereBat = where; dataBat = data; return { count: 3 } } },
+    })
+    const soBat = await batLayHoaDonKhachLuonLay(spBat([{ id: 'c-1' }, { id: 'c-2' }]), tuBat)
+    dung('nhịp: bật Lấy HĐ cho phiếu của khách luôn lấy HĐ (lọc theo DANH SÁCH id, không lọc qua quan hệ) — chỉ phiếu chưa bật, đã bán, từ hôm qua',
+        soBat === 3 && whereKhach?.luonLayHoaDon === true && dataBat?.layHoaDon === true && whereBat?.layHoaDon === false
+        && JSON.stringify(whereBat?.customerId) === JSON.stringify({ in: ['c-1', 'c-2'] }) && whereBat?.customer === undefined
         && Array.isArray(whereBat?.status?.in) && whereBat.status.in.includes('completed')
         && JSON.stringify(whereBat?.OR) === JSON.stringify([{ transactionDate: { gte: tuBat } }, { transactionDate: null, createdAt: { gte: tuBat } }]), whereBat)
+    goiGhi = 0
+    const soBat0 = await batLayHoaDonKhachLuonLay(spBat([]), tuBat)
+    dung('nhịp: chưa có khách luôn lấy HĐ ⇒ không ghi gì, trả 0', soBat0 === 0 && goiGhi === 0, { soBat0, goiGhi })
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)

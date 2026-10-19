@@ -433,8 +433,12 @@ function thieuChung(caiDat: CaiDatDay, dm: DanhMucMisa): string[] {
 
 async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: ThamSoKeHoach): Promise<KetQuaKeHoach> {
     const where: any = { status: { in: ['completed', 'partial'] }, ...khoangNgay(ts.tu, ts.den) }
-    // `where` đã có OR (khoảng ngày) ⇒ điều kiện Lấy HĐ đi qua AND, đừng ghi đè OR
-    if (ts.chiLayHoaDon) where.AND = [{ OR: [{ layHoaDon: true }, { customer: { is: { luonLayHoaDon: true } } }] }]
+    // `where` đã có OR (khoảng ngày) ⇒ điều kiện Lấy HĐ đi qua AND, đừng ghi đè OR. Khách "luôn lấy hoá đơn" lọc theo danh sách id
+    // (scalar `in`) chứ không lọc qua quan hệ `customer: { is }` — repo chưa chỗ nào chạy kiểu đó trên prod.
+    if (ts.chiLayHoaDon) {
+        const luon: { id: string }[] = await sp.customer.findMany({ where: { luonLayHoaDon: true }, select: { id: true } })
+        where.AND = [{ OR: [{ layHoaDon: true }, ...(luon.length ? [{ customerId: { in: luon.map(k => k.id) } }] : [])] }]
+    }
     if (ts.ids) where.id = { in: ts.ids }
     const tong = await sp.transaction.count({ where })
     const txs = await sp.transaction.findMany({
