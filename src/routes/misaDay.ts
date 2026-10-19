@@ -221,10 +221,19 @@ router.post('/hoa-don/xoa-de-nghi', DAY, async (req: AuthRequest, res: Response)
         const kn = await canKetNoi(req, res); if (!kn) return
         const ids: string[] = Array.isArray(req.body?.ids) ? req.body.ids.map(String).slice(0, 100) : []
         if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn phiếu' }); return }
+        /* `chiBoQua`: KHÔNG gọi MISA, chỉ bỏ dấu "đã đẩy" để gửi lại — khi đề nghị cũ không có bên MISA (đi qua kết nối KHÁC: HUTI
+         * 19/10 gửi qua cổng mới Client ID trong khi MISA đang nhận theo App ID cũ ⇒ không thấy, xoá qua kết nối mới cũng vô nghĩa).
+         * Người dùng tự xác nhận đã soát "Đề nghị lập chứng từ kế toán" bên MISA; MISA nhận trùng org_refid thì tự báo. */
+        const chiBoQua = req.body?.chiBoQua === true
         const rows: any[] = await kn.sp.misaPushItem.findMany({ where: { loai: 'banhang', localId: { in: ids } } })
         const ketQua: Array<{ refNo: string; ok: boolean; loi?: string }> = []
         for (const r of rows) {
             if (r.trangThai === 'da_xoa') { ketQua.push({ refNo: r.refNo, ok: true }); continue }
+            if (chiBoQua) {
+                await kn.sp.misaPushItem.update({ where: { id: r.id }, data: { trangThai: 'da_xoa', loi: 'Bỏ qua lần đẩy trước (không thấy bên MISA) — gửi lại', ketQuaLuc: new Date() } })
+                ketQua.push({ refNo: r.refNo, ok: true })
+                continue
+            }
             try {
                 await MISA.xoaDeNghi(kn.creds, [{ voucher_type: r.voucherType || 13, org_refid: r.orgRefid }])
                 await kn.sp.misaPushItem.update({ where: { id: r.id }, data: { trangThai: 'da_xoa', loi: null, ketQuaLuc: new Date() } })
