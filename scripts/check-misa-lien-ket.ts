@@ -117,7 +117,7 @@ async function main() {
     const tx = (id: string, mst: string, code: string) => ({
         id, receiptNumber: `HD-${id}`, status: 'completed', createdAt: new Date('2026-10-18T03:00:00Z'), transactionDate: null,
         total: 1000000, subtotal: 1000000, tax: 0, discount: 0, amountReceived: 0, payments: [],
-        customerId: `c-${id}`, customerName: 'x',
+        customerId: `c-${id}`, customerName: 'x', layHoaDon: true,
         customer: { id: `c-${id}`, code, name: 'Cty', taxCode: mst, invoiceType: 'company', invoiceCompanyName: 'Cty', address: '', invoiceAddress: '' },
         items: [{ productId: 'p-d', productName: 'Đá cắt', quantity: 1, unitPrice: 1000000, lineTotal: 1000000, product: { id: 'p-d', sku: 'EDH-SZP125-E6', name: 'Đá cắt', baseUnit: 'Hộp' } }],
     })
@@ -230,8 +230,27 @@ async function main() {
     dung('chiết khấu gộp vào đơn giá trước thuế — 263.200 · 526.400 + 42.112 = 568.512, không cột chiết khấu',
         dCk?.unit_price === 263200 && dCk?.amount === 526400 && dCk?.vat_amount === 42112 && dCk?.discount_amount === 0 && kCk.dong[0].payload?.total_amount === 568512,
         dCk && { u: dCk.unit_price, a: dCk.amount, v: dCk.vat_amount })
-    dung('chưa thu tiền ⇒ reftype 3530, is_paid false, Nợ 131',
-        kCk.dong[0].payload?.reftype === 3530 && kCk.dong[0].payload?.is_paid === false && dCk?.debit_account === '131')
+    /* Chủ shop 19/10/2026: "bán cho người tiêu dùng thì phải 1111 chứ, thu tiền mặt chứ" ⇒ phiếu người tiêu dùng LUÔN bán thu tiền mặt */
+    dung('người tiêu dùng CHƯA thu tiền ⇒ vẫn ghi thu tiền mặt: reftype 3531, is_paid, Nợ 1111, cảnh báo "Kengi mới thu"',
+        kCk.dong[0].payload?.reftype === 3531 && kCk.dong[0].payload?.is_paid === true && dCk?.debit_account === '1111'
+        && kCk.dong[0].canhBao.some(c => c.startsWith('Kengi mới thu 0đ / 568.512đ')), { rt: kCk.dong[0].payload?.reftype, no: dCk?.debit_account, cb: kCk.dong[0].canhBao })
+    const kBank = await lapKeHoach({ ...spMau, transaction: { count: async () => 1, findMany: async () => [{ ...txMau, id: 't-bank', payments: [{ type: 'bank', amount: 1920000 }] }] } },
+        {} as any, caiDat, dmMau, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('người tiêu dùng CHUYỂN KHOẢN ⇒ vẫn 3531 / Nợ 1111 (không 3537 / 1121), cảnh báo nói rõ',
+        kBank.dong[0].payload?.reftype === 3531 && kBank.dong[0].payload?.detail?.[0]?.debit_account === '1111'
+        && kBank.dong[0].canhBao.some(c => c.startsWith('Kengi ghi chuyển khoản')), { rt: kBank.dong[0].payload?.reftype, cb: kBank.dong[0].canhBao })
+    // phiếu Lấy HĐ của khách có MST: luật thanh toán như cũ — chưa thu ⇒ bán chịu Nợ 131 (có mã đối tượng); chuyển khoản đủ ⇒ 3537 / Nợ 1121
+    const txHdNo = { ...txMau, id: 't-hd-no', customerId: 'c-1', customer: tx('1', '0102373667', 'KH0001').customer, layHoaDon: true, payments: [], amountReceived: 0 }
+    const kHdNo = await lapKeHoach({ ...spMau, transaction: { count: async () => 1, findMany: async () => [txHdNo] } }, {} as any, caiDat, dmMau,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const pHdNo = kHdNo.dong[0].payload
+    dung('phiếu Lấy HĐ khách có MST, chưa thu ⇒ bán chịu 3530, is_paid false, Nợ 131, mang mã đối tượng theo MST',
+        pHdNo?.reftype === 3530 && pHdNo?.is_paid === false && pHdNo?.detail?.[0]?.debit_account === '131' && pHdNo?.account_object_code === '0102373667'
+        && pHdNo?.account_object_name !== NHAN_TIEU_DUNG, { rt: pHdNo?.reftype, ma: pHdNo?.account_object_code, ten: pHdNo?.account_object_name })
+    const kHdCk = await lapKeHoach({ ...spMau, transaction: { count: async () => 1, findMany: async () => [{ ...txHdNo, id: 't-hd-ck', payments: [{ type: 'bank', amount: 1920000 }], amountReceived: 1920000 }] } },
+        {} as any, caiDat, dmMau, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('phiếu Lấy HĐ khách có MST, chuyển khoản đủ ⇒ 3537 / Nợ 1121',
+        kHdCk.dong[0].payload?.reftype === 3537 && kHdCk.dong[0].payload?.detail?.[0]?.debit_account === '1121', kHdCk.dong[0].payload?.reftype)
 
     // tắt kèm hoá đơn / không ghi thuế
     const caiDatTat = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', kemHoaDon: false, thueSuat: null }))
@@ -256,6 +275,16 @@ async function main() {
         && tdMoi?.payload?.dictionary_type === 1 && tdMoi?.payload?.account_object_name === 'CÔNG TY TNHH MỚI' && tdMoi?.payload?.address === '1 Lê Lợi'
         && tdMoi?.payload?.company_tax_code === '0311111111' && tdMoi?.payload?.account_object_type === 0 && tdMoi?.localId === 'kh:c-7',
         { tt: kMoi.dong[0].trangThai, lyDo: kMoi.dong[0].lyDo, td: tdMoi?.payload })
+
+    /* Chủ shop 19/10/2026: "khách nào có yêu cầu xuất HĐ thì mới xuất qua MST người ta, còn lại xuất qua khách tiêu dùng" */
+    const txKhongHd = { ...tx('10', '0311111111', 'KH0010'), layHoaDon: false }
+    const kKhongHd = await lapKeHoach({ ...spKh, transaction: { count: async () => 1, findMany: async () => [txKhongHd] } }, {} as any, caiDat, dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const dKhongHd = kKhongHd.dong[0], pKhongHd = dKhongHd.payload
+    dung('khách CÓ MST nhưng phiếu không "Lấy HĐ" ⇒ "Bán cho người tiêu dùng", không mã / MST, KHÔNG tạo đối tượng, thu tiền mặt 1111',
+        dKhongHd.trangThai === 'san_sang' && pKhongHd?.account_object_name === NHAN_TIEU_DUNG && !('account_object_code' in (pKhongHd || {}))
+        && pKhongHd?.account_object_tax_code === undefined && !dKhongHd.tuDien && pKhongHd?.reftype === 3531 && pKhongHd?.detail?.[0]?.debit_account === '1111'
+        && dKhongHd.canhBao.some(c => c.startsWith('Phiếu không "Lấy HĐ" (khách có MST 0311111111)')), { tt: dKhongHd.trangThai, lyDo: dKhongHd.lyDo, cb: dKhongHd.canhBao })
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)

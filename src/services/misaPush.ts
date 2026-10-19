@@ -481,16 +481,18 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         if (chung.length) { d.trangThai = 'thieu'; d.lyDo.push(...chung) }
 
         // ── Đối tượng ──
-        /* Chủ shop 19/10/2026: khách chưa có MST xuất dạng "Bán cho người tiêu dùng (Tên khách)" — giống MISA Hưng Tín đang ghi
-         * ("Bán cho người tiêu dùng (Chị Vương)") — và "không có lưu mã khách hàng": KHÔNG gắn mã đối tượng MISA, không địa chỉ/MST.
-         * Áp cho mọi phiếu không có MST hợp lệ, kể cả phiếu không gắn khách / đơn sàn. Khách CÓ MST: bảng nối → mã → MST như cũ. */
+        /* Chủ shop 19/10/2026: "khách nào có yêu cầu xuất HĐ thì mới xuất qua MST người ta, còn lại xuất qua khách tiêu dùng".
+         * ⇒ CHỈ phiếu Lấy HĐ (Transaction.layHoaDon — /hoadon nhóm Zalo) của khách CÓ MST mới mang đối tượng MISA (bảng nối → mã → MST).
+         * Mọi phiếu khác — khách lẻ, khách không MST, khách có MST mà không lấy HĐ, đơn sàn — người mua "Bán cho người tiêu dùng",
+         * KHÔNG mã đối tượng, không địa chỉ / MST ("không có lưu mã khách hàng"); tên khách thật ở diễn giải. */
         const san = detectOnlinePlatform(tx.receiptNumber)
         const mstKhach = chuanMst(tx.customer?.taxCode)
         let maKhach: string | null = null
         let tieuDung: string | null = null   // tên người mua khi bán cho người tiêu dùng
-        if (!tx.customer || !mstKhach) {
+        if (!tx.customer || !mstKhach || !tx.layHoaDon) {
             tieuDung = NHAN_TIEU_DUNG   // chủ shop 19/10/2026 (lần 2): "bán cho người tiêu dùng thôi, bỏ trong dấu ngoặc"
-            d.canhBao.push(`${tx.customer ? 'Khách không có MST' : 'Khách lẻ'} ⇒ người mua "${tieuDung}", không mã đối tượng MISA`)
+            const viSao = !tx.customer ? 'Khách lẻ' : !mstKhach ? 'Khách không có MST' : `Phiếu không "Lấy HĐ" (khách có MST ${mstKhach})`
+            d.canhBao.push(`${viSao} ⇒ người mua "${tieuDung}", không mã đối tượng MISA`)
         } else {
             maKhach = maKhachQuaMap.get(tx.customer.id) || tx.customer.code
             // Mã Kengi không có bên MISA ⇒ khớp theo MST (MISA lưu khách theo MST) — chỉ khi MST ứng DUY NHẤT một đối tượng
@@ -590,13 +592,21 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         const thuDu = daThu >= tongPhieu - 0.5
         const loaiTT = String(tx.payments?.[0]?.type || 'cash')
         const laNganHang = loaiTT === 'bank' || loaiTT === 'transfer'
-        if (new Set((tx.payments || []).map((p: any) => p.type)).size > 1) {
+        if (!tieuDung && new Set((tx.payments || []).map((p: any) => p.type)).size > 1) {
             d.canhBao.push('Thanh toán nhiều hình thức — ghi theo hình thức đầu tiên (giống sổ Kengi)')
         }
         // 3530 chưa thu · 3531 thu tiền mặt · 3537 chuyển khoản. Đơn sàn: sàn nợ ⇒ chưa thu.
         let reftype = 3530
         let tkNo = caiDat.tk.phaiThu
-        if (!san && thuDu && tongPhieu > 0) {
+        if (tieuDung) {
+            /* Chủ shop 19/10/2026: "bán cho người tiêu dùng thì phải 1111 chứ, thu tiền mặt chứ" ⇒ phiếu người tiêu dùng LUÔN ghi bán
+             * thu tiền mặt (3531, Nợ 1111) — kể cả Kengi ghi chuyển khoản / còn nợ / đơn sàn. Công nợ thật vẫn theo dõi ở Kengi. */
+            reftype = 3531
+            tkNo = caiDat.tk.tienMat
+            if (san) d.canhBao.push(`Đơn sàn — MISA ghi thu tiền mặt ${caiDat.tk.tienMat} (bán cho người tiêu dùng)`)
+            else if (!thuDu) d.canhBao.push(`Kengi mới thu ${lam(daThu).toLocaleString('vi-VN')}đ / ${lam(tongPhieu).toLocaleString('vi-VN')}đ — MISA vẫn ghi thu tiền mặt đủ ${caiDat.tk.tienMat} (bán cho người tiêu dùng)`)
+            else if (laNganHang) d.canhBao.push(`Kengi ghi chuyển khoản — MISA ghi thu tiền mặt ${caiDat.tk.tienMat} (bán cho người tiêu dùng)`)
+        } else if (!san && thuDu && tongPhieu > 0) {
             reftype = laNganHang ? 3537 : 3531
             tkNo = laNganHang ? caiDat.tk.nganHang : caiDat.tk.tienMat
         } else if (!san && daThu > 0) {
@@ -677,7 +687,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         }
         if (boQuaDong) d.soTien = lam(tienKengiGiu)
 
-        // "Bán cho người tiêu dùng (Tên khách)": KHÔNG mã đối tượng, không địa chỉ / MST (chủ shop 19/10/2026)
+        // "Bán cho người tiêu dùng": KHÔNG mã đối tượng, không địa chỉ / MST (chủ shop 19/10/2026)
         const doiTuong = tieuDung ? {
             account_object_name: tieuDung,
         } : {
