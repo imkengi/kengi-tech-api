@@ -4097,6 +4097,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // ⚠ Chạy migrate TRƯỚC khi deploy code có cột này trong model Transaction — thiếu cột là POS hỏng.
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "layHoaDon" BOOLEAN NOT NULL DEFAULT false`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Transaction_layHoaDon_idx" ON "Transaction"("layHoaDon") WHERE "layHoaDon"`)
+                // 19/10/2026 — khách "luôn lấy hoá đơn" (chủ shop: "2 dạng khách: 1 khách luôn luôn lấy hoá đơn, còn 1 dạng thì tuỳ hứng").
+                // true ⇒ phiếu bán của khách tự bật Lấy HĐ (nhịp lib/zaloNhom) + đẩy MISA xuất theo MST; false = tuỳ lúc (/hoadon).
+                // ⚠ Chạy migrate TRƯỚC khi deploy code có cột này trong model Customer — danh sách / chi tiết khách đọc mọi cột.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "luonLayHoaDon" BOOLEAN NOT NULL DEFAULT false`)
                 // 18/10/2026 — quét nhóm Zalo qua n8n + gửi tin cho khách (routes/zalo.ts, lib/zaloGui.ts)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "ZaloCauHinh" (
