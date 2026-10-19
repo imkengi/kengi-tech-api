@@ -65,6 +65,7 @@ import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
 import kiotvietRoutes from './routes/kiotviet'
 import misaRoutes from './routes/misa'
+import misaDayRoutes from './routes/misaDay'
 import zaloRoutes from './routes/zalo'
 import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
@@ -313,6 +314,8 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/kiotviet', kiotvietRoutes)
 // Cổng đồng bộ MISA AMIS Kế toán — toàn bộ sau adminAuth, không có webhook công khai
 app.use('/api/misa', misaRoutes)
+// Trang Vận Hành › "Đẩy HĐ sang MISA" — đăng nhập CỬA HÀNG (routes/misa.ts là khoá quản trị) — 19/10/2026
+app.use('/api/misa-day', misaDayRoutes)
 // Nhóm Zalo ↔ khách + tin nhóm Zalo do n8n chuyển vào (thay Google Sheet) — 13/10/2026
 app.use('/api/zalo', zaloRoutes)
 app.use('/api/import-data', importDataRoutes)

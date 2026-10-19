@@ -116,10 +116,13 @@ export function guidTatDinh(schema: string, loai: string, localId: string): stri
 // ─── Danh mục hiện có bên MISA (đọc sống) ───────────────────────────────────
 
 export interface DanhMucMisa {
-    vatTuTheoMa: Map<string, { id: string; ten: string; dvt: string | null }>
+    /** khoá = mã viết hoa; `ma` = mã nguyên gốc bên MISA (để hiển thị / lưu liên kết) */
+    vatTuTheoMa: Map<string, { id: string; ma: string; ten: string; dvt: string | null; ngung?: boolean }>
     vatTuTheoId: Map<string, string>
     doiTuongTheoMa: Map<string, { id: string; ten: string; laKhach: boolean; laNcc: boolean }>
     doiTuongTheoId: Map<string, string>
+    /** MST chuẩn hoá → mã đối tượng KHÁCH bên MISA (một MST có thể ứng nhiều mã — chỉ dùng khi DUY NHẤT) */
+    doiTuongTheoMst: Map<string, string[]>
     kho: Array<{ id: string; ma: string; ten: string }>
     chiNhanh: Array<{ id: string; ma: string; ten: string; loai: number }>
     layLuc: number
@@ -136,6 +139,11 @@ const pick = (o: any, ...keys: string[]) => {
 const chuoi = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
 /** So mã không phân biệt hoa thường — MISA và Kengi đều có người gõ tay */
 const khoaMa = (m: string) => m.trim().toUpperCase()
+/** MST chuẩn hoá: chỉ giữ số và gạch nối; hợp lệ = 10 số (± "-3 số" chi nhánh) hoặc 12 số (CCCD cá nhân). Không hợp lệ ⇒ '' */
+export const chuanMst = (v: any) => {
+    const s = String(v || '').replace(/[^0-9-]/g, '')
+    return /^\d{10}(-\d{3})?$|^\d{12}$/.test(s) ? s : ''
+}
 
 const boNhoDanhMuc = new Map<string, DanhMucMisa>()
 const DANH_MUC_SONG_MS = 10 * 60_000
@@ -158,32 +166,40 @@ export async function docDanhMucMisa(creds: MisaCreds, khoaBoNho: string, lamMoi
     if (vt.truncated) canhBao.push('Danh mục vật tư MISA quá 30.000 mã — phần sau bị cắt, kết quả "chưa có trên MISA" có thể sai.')
     if (dt.truncated) canhBao.push('Danh mục đối tượng MISA quá 30.000 — phần sau bị cắt.')
 
-    const vatTuTheoMa = new Map<string, { id: string; ten: string; dvt: string | null }>()
+    const vatTuTheoMa = new Map<string, { id: string; ma: string; ten: string; dvt: string | null; ngung?: boolean }>()
     const vatTuTheoId = new Map<string, string>()
     for (const m of vt.items) {
         const ma = chuoi(pick(m, 'inventory_item_code', 'InventoryItemCode'))
         const id = chuoi(pick(m, 'inventory_item_id', 'InventoryItemID'))
         if (!ma) continue
         vatTuTheoMa.set(khoaMa(ma), {
-            id, ten: chuoi(pick(m, 'inventory_item_name', 'InventoryItemName')),
+            id, ma, ten: chuoi(pick(m, 'inventory_item_name', 'InventoryItemName')),
             dvt: chuoi(pick(m, 'unit_name', 'UnitName')) || null,
+            // ngừng theo dõi bên MISA: VẪN giữ trong danh mục (bỏ ra là kế hoạch "vật tư" đòi tạo lại trùng mã), chỉ cảnh báo khi nối
+            ngung: pick(m, 'inactive', 'Inactive') === true,
         })
         if (id) vatTuTheoId.set(id, ma)
     }
     const doiTuongTheoMa = new Map<string, { id: string; ten: string; laKhach: boolean; laNcc: boolean }>()
     const doiTuongTheoId = new Map<string, string>()
+    const doiTuongTheoMst = new Map<string, string[]>()
     for (const m of dt.items) {
         const ma = chuoi(pick(m, 'account_object_code', 'AccountObjectCode'))
         const id = chuoi(pick(m, 'account_object_id', 'AccountObjectID'))
         if (!ma) continue
+        const laKhach = !!pick(m, 'is_customer', 'IsCustomer')
         doiTuongTheoMa.set(khoaMa(ma), {
             id, ten: chuoi(pick(m, 'account_object_name', 'AccountObjectName')),
-            laKhach: !!pick(m, 'is_customer', 'IsCustomer'), laNcc: !!pick(m, 'is_vendor', 'IsVendor'),
+            laKhach, laNcc: !!pick(m, 'is_vendor', 'IsVendor'),
         })
         if (id) doiTuongTheoId.set(id, ma)
+        /* MISA của Hưng Tín lưu khách theo MST (đo HUTITAX 19/10/2026: mã đối tượng = MST, có trường company_tax_code)
+         * còn mã khách Kengi đến từ KiotViet ⇒ khớp theo MST mới tránh tạo trùng khách bên MISA. */
+        const mst = chuanMst(pick(m, 'company_tax_code', 'CompanyTaxCode'))
+        if (mst && laKhach) doiTuongTheoMst.set(mst, [...(doiTuongTheoMst.get(mst) || []), ma])
     }
     const dm: DanhMucMisa = {
-        vatTuTheoMa, vatTuTheoId, doiTuongTheoMa, doiTuongTheoId,
+        vatTuTheoMa, vatTuTheoId, doiTuongTheoMa, doiTuongTheoId, doiTuongTheoMst,
         kho: kh.items.map((m: any) => ({
             id: chuoi(pick(m, 'stock_id', 'StockID')),
             ma: chuoi(pick(m, 'stock_code', 'StockCode')),
@@ -250,6 +266,10 @@ export interface ThamSoKeHoach {
     /** Danh mục: 'trong_ky' = chỉ mã/đối tượng xuất hiện trên phiếu trong kỳ; 'tat_ca' */
     phamVi?: 'trong_ky' | 'tat_ca'
     schema: string
+    /** Chứng từ bán: chỉ phiếu khách yêu cầu hoá đơn (Transaction.layHoaDon — /hoadon nhóm Zalo, cột "Lấy HĐ") */
+    chiLayHoaDon?: boolean
+    /** Chỉ xét đúng các id này (chứng từ bán / vật tư) — trang "Đẩy HĐ sang MISA" gửi phần người dùng chọn */
+    ids?: string[]
 }
 
 const TRAN_CHUNG_TU = 2000
@@ -380,7 +400,9 @@ function thieuChung(caiDat: CaiDatDay, dm: DanhMucMisa): string[] {
 // ── Chứng từ bán hàng (voucher_type 13) ─────────────────────────────────────
 
 async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: ThamSoKeHoach): Promise<KetQuaKeHoach> {
-    const where = { status: { in: ['completed', 'partial'] }, ...khoangNgay(ts.tu, ts.den) }
+    const where: any = { status: { in: ['completed', 'partial'] }, ...khoangNgay(ts.tu, ts.den) }
+    if (ts.chiLayHoaDon) where.layHoaDon = true
+    if (ts.ids) where.id = { in: ts.ids }
     const tong = await sp.transaction.count({ where })
     const txs = await sp.transaction.findMany({
         where,
@@ -432,6 +454,17 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         let maKhach: string | null = null
         if (tx.customer) {
             maKhach = maKhachQuaMap.get(tx.customer.id) || tx.customer.code
+            // Mã Kengi không có bên MISA ⇒ khớp theo MST (MISA lưu khách theo MST) — chỉ khi MST ứng DUY NHẤT một đối tượng
+            if (!dm.doiTuongTheoMa.has(khoaMa(String(maKhach || '')))) {
+                const mst = chuanMst(tx.customer.taxCode)
+                const ds = mst ? [...new Set([...(dm.doiTuongTheoMst.get(mst) || []), ...(dm.doiTuongTheoMa.has(khoaMa(mst)) ? [mst] : [])])] : []
+                if (ds.length === 1) {
+                    d.canhBao.push(`Khách khớp MISA theo MST ${mst} → mã ${ds[0]}`)
+                    maKhach = ds[0]
+                } else if (ds.length > 1) {
+                    d.lyDo.push(`MST ${mst} ứng với ${ds.length} đối tượng MISA (${ds.slice(0, 3).join(', ')}) — không tự chọn`)
+                }
+            }
         } else if (san) {
             maKhach = caiDat.maKhachSan || caiDat.maKhachLe
             if (!maKhach) d.lyDo.push('Đơn sàn không gắn khách — chưa đặt "mã khách sàn" hay "mã khách lẻ"')
@@ -440,23 +473,29 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             if (!maKhach) d.lyDo.push('Phiếu không gắn khách — chưa đặt "mã khách lẻ" MISA')
         }
         const dtMisa = maKhach ? dm.doiTuongTheoMa.get(khoaMa(maKhach)) : undefined
-        if (maKhach && !dtMisa) d.lyDo.push(`Khách "${maKhach}" chưa có trên MISA — đẩy "Khách hàng & NCC" trước`)
+        if (maKhach && !dtMisa) {
+            const mst = chuanMst(tx.customer?.taxCode)
+            d.lyDo.push(`Khách "${maKhach}"${mst ? ` (MST ${mst})` : ''} chưa có trên MISA — tạo đối tượng bên MISA${mst ? ' (mã = MST thì tự khớp)' : ''} hoặc đẩy "Khách hàng & NCC"`)
+        }
 
         // ── Dòng hàng ──
         const items = (tx.items || []).filter((i: any) => Number(i.quantity) !== 0 || Number(i.lineTotal) !== 0)
         if (!items.length) d.lyDo.push('Phiếu không có dòng hàng')
         if (items.length > MAX_DONG_CHUNG_TU) d.lyDo.push(`Phiếu ${items.length} dòng — MISA nhận tối đa ${MAX_DONG_CHUNG_TU} dòng/chứng từ`)
 
-        const thieuMa: string[] = []
+        const thieuMa: string[] = [], ngungMa: string[] = []
         const maHang = items.map((it: any) => {
             const ma = maHangQuaMap.get(it.productId) || it.product?.sku || it.sku
-            if (!dm.vatTuTheoMa.has(khoaMa(String(ma || '')))) thieuMa.push(String(ma || '(trống)'))
-            return String(ma || '')
+            const vt = dm.vatTuTheoMa.get(khoaMa(String(ma || '')))
+            if (!vt) { thieuMa.push(String(ma || '(trống)')); return String(ma || '') }
+            if (vt.ngung) ngungMa.push(vt.ma)
+            return vt.ma || String(ma)   // đúng mã (cả hoa/thường) bên MISA
         })
         if (thieuMa.length) {
             const ds = [...new Set(thieuMa)]
-            d.lyDo.push(`${ds.length} mã hàng chưa có trên MISA: ${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''} — đẩy "Vật tư" trước`)
+            d.lyDo.push(`${ds.length} mã hàng chưa có trên MISA: ${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''} — nối mã ở "Liên kết hàng hoá" hoặc đẩy "Vật tư" trước`)
         }
+        if (ngungMa.length) d.canhBao.push(`Vật tư MISA đang NGỪNG THEO DÕI: ${[...new Set(ngungMa)].slice(0, 5).join(', ')} — MISA có thể từ chối`)
         if (d.lyDo.length && d.trangThai === 'san_sang') d.trangThai = 'thieu'
 
         // ── Tiền: khớp ĐÚNG cách autoJournal ghi sổ Kengi ──
@@ -735,7 +774,8 @@ async function idSanPhamTrongKy(sp: any, tu: Date, den: Date): Promise<string[]>
 async function keHoachVatTu(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: ThamSoKeHoach): Promise<KetQuaKeHoach> {
     const phamVi = ts.phamVi || 'trong_ky'
     let where: any = {}
-    if (phamVi === 'trong_ky') where = { id: { in: await idSanPhamTrongKy(sp, ts.tu, ts.den) } }
+    if (ts.ids) where = { id: { in: ts.ids } }   // trang "Đẩy HĐ sang MISA" › Liên kết hàng hoá: tạo đúng các mã người dùng chọn
+    else if (phamVi === 'trong_ky') where = { id: { in: await idSanPhamTrongKy(sp, ts.tu, ts.den) } }
     const tong = await sp.product.count({ where })
     const sps = await sp.product.findMany({
         where,
