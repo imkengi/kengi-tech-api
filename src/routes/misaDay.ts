@@ -15,7 +15,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { errMsg } from '../lib/errorResponse'
-import { testMisaConnection, clearMisaToken, type MisaCreds } from '../services/misa'
+import { MISA, testMisaConnection, clearMisaToken, type MisaCreds } from '../services/misa'
 import { docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua, type DongKeHoach } from '../services/misaPush'
 import {
     dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, boNoiHang, nhapLienKetPrtcode, boDau,
@@ -211,6 +211,29 @@ router.post('/hoa-don/ket-qua', XEM, async (req: AuthRequest, res: Response) => 
         if (!khoangNgayVN(req.body?.tu, req.body?.den)) { res.status(400).json({ success: false, error: 'Khoảng ngày gửi không hợp lệ (yyyy-mm-dd, tối đa 3 tháng)' }); return }
         const kq = await hoiKetQua(kn.sp, kn.creds, String(req.body.tu), String(req.body.den))
         res.json({ success: true, data: kq })
+    } catch (e: any) { tra500(res, e) }
+})
+
+/** Xoá ĐỀ NGHỊ đã đẩy (chưa được kế toán "Lập CT kế toán" bên MISA) để gửi lại — vd đổi mẫu chứng từ (19/10/2026).
+ *  Từng phiếu một: phiếu đã thành chứng từ thì MISA từ chối — câu lỗi MISA trả về nguyên văn, phiếu khác vẫn xoá tiếp. */
+router.post('/hoa-don/xoa-de-nghi', DAY, async (req: AuthRequest, res: Response) => {
+    try {
+        const kn = await canKetNoi(req, res); if (!kn) return
+        const ids: string[] = Array.isArray(req.body?.ids) ? req.body.ids.map(String).slice(0, 100) : []
+        if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn phiếu' }); return }
+        const rows: any[] = await kn.sp.misaPushItem.findMany({ where: { loai: 'banhang', localId: { in: ids } } })
+        const ketQua: Array<{ refNo: string; ok: boolean; loi?: string }> = []
+        for (const r of rows) {
+            if (r.trangThai === 'da_xoa') { ketQua.push({ refNo: r.refNo, ok: true }); continue }
+            try {
+                await MISA.xoaDeNghi(kn.creds, [{ voucher_type: r.voucherType || 13, org_refid: r.orgRefid }])
+                await kn.sp.misaPushItem.update({ where: { id: r.id }, data: { trangThai: 'da_xoa', loi: null, ketQuaLuc: new Date() } })
+                ketQua.push({ refNo: r.refNo, ok: true })
+            } catch (e: any) {
+                ketQua.push({ refNo: r.refNo, ok: false, loi: loiMisa(e) })
+            }
+        }
+        res.json({ success: true, data: { ketQua } })
     } catch (e: any) { tra500(res, e) }
 })
 

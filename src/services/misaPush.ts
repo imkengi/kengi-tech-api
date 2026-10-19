@@ -67,6 +67,13 @@ export interface CaiDatDay {
     kiemXuatKho: boolean
     /** purchase_purpose_id cho dòng mua hàng (mã nhóm HHDV mua vào của MISA) */
     purchasePurposeId: string | null
+    /** Thuế suất GTGT (%) ghi lên chứng từ bán khi phiếu Kengi KHÔNG ghi tiền thuế — mẫu MISA của chủ shop 19/10/2026 dùng 8.
+     *  null = không ghi thuế. Phiếu Kengi có tiền thuế thì luôn theo phiếu. */
+    thueSuat: number | null
+    /** Giá bán Kengi ĐÃ GỒM thuế ⇒ tách: đơn giá trước thuế = giá / (1 + thuế suất) (mẫu: 480.000 → 444.444,44 + 8%) */
+    giaGomThue: boolean
+    /** Chứng từ bán KÈM HOÁ ĐƠN (include_invoice 1 + khối sa_invoice) — theo mẫu chủ shop */
+    kemHoaDon: boolean
     tk: {
         tienMat: string; nganHang: string; phaiThu: string
         doanhThu: string; doanhThuDV: string; thueRa: string
@@ -79,6 +86,7 @@ export const CAI_DAT_MAC_DINH: CaiDatDay = {
     maKhachLe: null, maKhachSan: null, maNccMacDinh: null,
     kiemXuatKho: true,
     purchasePurposeId: null,
+    thueSuat: 8, giaGomThue: true, kemHoaDon: true,
     tk: {
         tienMat: '1111', nganHang: '1121', phaiThu: '131',
         doanhThu: '5111', doanhThuDV: '5113', thueRa: '33311',
@@ -97,6 +105,11 @@ export function docCaiDat(raw: string | null | undefined): CaiDatDay {
         maKhachLe: s(o.maKhachLe), maKhachSan: s(o.maKhachSan), maNccMacDinh: s(o.maNccMacDinh),
         kiemXuatKho: typeof o.kiemXuatKho === 'boolean' ? o.kiemXuatKho : CAI_DAT_MAC_DINH.kiemXuatKho,
         purchasePurposeId: s(o.purchasePurposeId),
+        // chỉ nhận mức hợp lệ của MISA; null (bấm "không ghi thuế") giữ null; thiếu khoá ⇒ mặc định 8
+        thueSuat: o.thueSuat === null ? null : [0, 5, 8, 10].includes(Number(o.thueSuat)) && o.thueSuat !== '' && o.thueSuat !== undefined
+            ? Number(o.thueSuat) : CAI_DAT_MAC_DINH.thueSuat,
+        giaGomThue: typeof o.giaGomThue === 'boolean' ? o.giaGomThue : CAI_DAT_MAC_DINH.giaGomThue,
+        kemHoaDon: typeof o.kemHoaDon === 'boolean' ? o.kemHoaDon : CAI_DAT_MAC_DINH.kemHoaDon,
         tk,
     }
 }
@@ -118,7 +131,7 @@ export function guidTatDinh(schema: string, loai: string, localId: string): stri
 
 export interface DanhMucMisa {
     /** khoá = mã viết hoa; `ma` = mã nguyên gốc bên MISA (để hiển thị / lưu liên kết) */
-    vatTuTheoMa: Map<string, { id: string; ma: string; ten: string; dvt: string | null; ngung?: boolean }>
+    vatTuTheoMa: Map<string, { id: string; ma: string; ten: string; dvt: string | null; unitId?: string | null; ngung?: boolean }>
     vatTuTheoId: Map<string, string>
     doiTuongTheoMa: Map<string, { id: string; ma: string; ten: string; laKhach: boolean; laNcc: boolean }>
     doiTuongTheoId: Map<string, string>
@@ -176,7 +189,7 @@ export async function docDanhMucMisa(creds: MisaCreds, khoaBoNho: string, lamMoi
     if (vt.truncated) canhBao.push('Danh mục vật tư MISA quá 30.000 mã — phần sau bị cắt, kết quả "chưa có trên MISA" có thể sai.')
     if (dt.truncated) canhBao.push('Danh mục đối tượng MISA quá 30.000 — phần sau bị cắt.')
 
-    const vatTuTheoMa = new Map<string, { id: string; ma: string; ten: string; dvt: string | null; ngung?: boolean }>()
+    const vatTuTheoMa = new Map<string, { id: string; ma: string; ten: string; dvt: string | null; unitId?: string | null; ngung?: boolean }>()
     const vatTuTheoId = new Map<string, string>()
     for (const m of vt.items) {
         const ma = chuoi(pick(m, 'inventory_item_code', 'InventoryItemCode'))
@@ -185,6 +198,7 @@ export async function docDanhMucMisa(creds: MisaCreds, khoaBoNho: string, lamMoi
         vatTuTheoMa.set(khoaMa(ma), {
             id, ma, ten: chuoi(pick(m, 'inventory_item_name', 'InventoryItemName')),
             dvt: chuoi(pick(m, 'unit_name', 'UnitName')) || null,
+            unitId: chuoi(pick(m, 'unit_id', 'UnitID')) || null,   // ĐVT chính — dòng chứng từ mẫu của chủ shop gửi unit_id
             // ngừng theo dõi bên MISA: VẪN giữ trong danh mục (bỏ ra là kế hoạch "vật tư" đòi tạo lại trùng mã), chỉ cảnh báo khi nối
             ngung: pick(m, 'inactive', 'Inactive') === true,
         })
@@ -256,6 +270,10 @@ export interface DongKeHoach {
     lanTruoc: { trangThai: string; guiLuc: string; loi: string | null; lanGui: number } | null
     orgRefid: string
     payload?: any
+    /** Chứng từ bán: liên kết phiếu bán ↔ phiếu xuất kho ↔ hoá đơn (khối `reference` trong mẫu của chủ shop — cổng cũ) */
+    thamChieu?: any[]
+    /** Chứng từ bán: đối tượng (khách CÓ MST chưa có trên MISA) phải tạo TRƯỚC khi gửi phiếu */
+    tuDien?: Array<{ localId: string; refNo: string; payload: any }>
 }
 
 export interface KetQuaKeHoach {
@@ -481,11 +499,32 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
                     maKhach = ds[0]
                 } else if (ds.length > 1) {
                     d.lyDo.push(`MST ${mst} ứng với ${ds.length} đối tượng MISA (${ds.slice(0, 3).join(', ')}) — không tự chọn`)
+                } else if (mst) {
+                    /* Khách CÓ MST mà MISA chưa có ⇒ tạo đối tượng (mã = MST, như MISA Hưng Tín đang lưu) TRƯỚC khi gửi phiếu — mẫu
+                     * chứng từ chủ shop gửi 19/10/2026 kèm khối `dictionary` khách ngay trong lượt đẩy. guiDi gửi tuDien trước. */
+                    const c = tx.customer
+                    d.tuDien = [{
+                        localId: `kh:${c.id}`, refNo: mst,
+                        payload: {
+                            dictionary_type: 1,
+                            account_object_id: guidTatDinh(ts.schema, 'doituong', `kh:${c.id}`),
+                            account_object_code: mst,
+                            account_object_name: (c.invoiceCompanyName || c.name || mst).slice(0, 255),
+                            account_object_type: /^\d{10}(-\d{3})?$/.test(mst) ? 0 : 1,   // MST 10 số = tổ chức; 12 số (CCCD) = cá nhân
+                            is_customer: true, is_vendor: false, is_employee: false, inactive: false,
+                            address: c.invoiceAddress || c.address || '',
+                            company_tax_code: mst,
+                            branch_id: caiDat.branchId,
+                            state: 1,
+                        },
+                    }]
+                    maKhach = mst
+                    d.canhBao.push(`Khách MST ${mst} chưa có trên MISA ⇒ tạo đối tượng mới (mã ${mst}) ngay trước khi gửi phiếu`)
                 }
             }
         }
         const dtMisa = maKhach ? dm.doiTuongTheoMa.get(khoaMa(maKhach)) : undefined
-        if (!tieuDung && !dtMisa) {
+        if (!tieuDung && !dtMisa && !d.tuDien) {
             d.lyDo.push(`Khách "${maKhach || tx.customer?.name}"${mstKhach ? ` (MST ${mstKhach})` : ''} chưa có trên MISA — tạo đối tượng bên MISA${mstKhach ? ' (mã = MST thì tự khớp)' : ''} hoặc đẩy "Khách hàng & NCC"`)
         }
 
@@ -509,7 +548,11 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         if (ngungMa.length) d.canhBao.push(`Vật tư MISA đang NGỪNG THEO DÕI: ${[...new Set(ngungMa)].slice(0, 5).join(', ')} — MISA có thể từ chối`)
         if (d.lyDo.length && d.trangThai === 'san_sang') d.trangThai = 'thieu'
 
-        // ── Tiền: khớp ĐÚNG cách autoJournal ghi sổ Kengi ──
+        // ── Tiền ──
+        /* THEO MẪU CHỨNG TỪ CHỦ SHOP GỬI 19/10/2026 (đang chạy với MISA Hưng Tín): dòng hàng KHÔNG có chiết khấu riêng — đơn giá là
+         * giá SAU giảm; phiếu Kengi không ghi thuế ⇒ tách thuế từ giá đã gồm thuế: đơn giá = giá / (1 + thuế suất), làm tròn 2 số lẻ;
+         * thành tiền = SL × đơn giá; thuế = thành tiền × thuế suất (mẫu: 4 × 480.000 ⇒ 444.444,44 · 1.777.777,76 + 142.222,22).
+         * Phiếu Kengi CÓ tiền thuế ⇒ theo đúng phiếu (tiền trước thuế + thuế chia theo dòng). */
         const subtotal = Number(tx.subtotal) || items.reduce((s: number, i: any) => s + (Number(i.lineTotal) || 0), 0)
         const giamGiaPhieu = lam(tienGiamGiaPhieu({ ...tx, subtotal }))
         const thue = lam(Number(tx.tax) || 0)
@@ -518,8 +561,13 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
 
         const giamGiaDong = chiaTheoTyLe(giamGiaPhieu, items.map((i: any) => Number(i.lineTotal) || 0))
         const thueDong = chiaTheoTyLe(thue, items.map((i: any, k: number) => (Number(i.lineTotal) || 0) - giamGiaDong[k]))
-        const ts_ = thueSuat(thue, subtotal - giamGiaPhieu)
+        const ts_: ReturnType<typeof thueSuat> = thue ? thueSuat(thue, subtotal - giamGiaPhieu) : {}
         if (ts_.lech) d.canhBao.push(`Thuế: ${ts_.lech}`)
+        const tachThue = !thue && caiDat.thueSuat !== null && caiDat.thueSuat > 0
+        if (!thue && caiDat.thueSuat !== null) {
+            d.canhBao.push(caiDat.thueSuat === 0 ? 'Thuế suất 0%'
+                : caiDat.giaGomThue ? `Tách thuế ${caiDat.thueSuat}% từ giá đã gồm thuế` : `Cộng thêm thuế ${caiDat.thueSuat}% trên giá bán (giá chưa gồm thuế)`)
+        }
 
         const daThu = (tx.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0) || Number(tx.amountReceived) || 0
         const tongPhieu = Number(tx.total) || 0
@@ -539,45 +587,70 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             d.canhBao.push(`Đã thu ${lam(daThu).toLocaleString('vi-VN')}đ / ${lam(tongPhieu).toLocaleString('vi-VN')}đ — ghi BÁN CHỊU cả phiếu; phần đã thu kế toán lập phiếu thu bên MISA`)
         }
 
-        let tienHang = 0, tienGiam = 0
+        const tron2 = (n: number) => Math.round(n * 100) / 100
+        const lechDvt: string[] = []
+        let tienHang = 0, tienThue = 0
         const detail = items.map((it: any, k: number) => {
             const sl = Number(it.quantity) || 0
-            const gia = Number(it.unitPrice) || 0
-            const thanhTienDong = Number(it.lineTotal) || 0
-            const goc = Math.max(lam(sl * gia), lam(thanhTienDong))
-            const giam = Math.max(0, goc - lam(thanhTienDong)) + giamGiaDong[k]
-            tienHang += goc
-            tienGiam += giam
+            const sauGiam = (Number(it.lineTotal) || 0) - giamGiaDong[k]      // tiền dòng sau mọi giảm giá (giá Kengi)
+            let donGia: number, thanhTien: number, tienThueDong: number, vat: { vat_rate?: number; other_vat_rate?: number }
+            if (thue) {
+                thanhTien = tron2(sauGiam)
+                donGia = sl ? tron2(sauGiam / sl) : 0
+                tienThueDong = thueDong[k]
+                vat = { vat_rate: ts_.vat_rate, other_vat_rate: ts_.other_vat_rate }
+            } else if (tachThue) {
+                const tyLe = (caiDat.thueSuat as number) / 100
+                donGia = sl ? tron2((caiDat.giaGomThue ? sauGiam / (1 + tyLe) : sauGiam) / sl) : 0
+                thanhTien = sl ? tron2(sl * donGia) : tron2(caiDat.giaGomThue ? sauGiam / (1 + tyLe) : sauGiam)
+                tienThueDong = tron2(thanhTien * tyLe)
+                vat = { vat_rate: caiDat.thueSuat as number }
+            } else {
+                donGia = sl ? tron2(sauGiam / sl) : 0
+                thanhTien = tron2(sauGiam)
+                tienThueDong = 0
+                vat = caiDat.thueSuat === 0 ? { vat_rate: 0 } : {}
+            }
+            tienHang += thanhTien
+            tienThue += tienThueDong
             const dv = it.product?.productType === 'service'
-            const dvt = it.product?.baseUnit || 'Cái'
+            const vt = dm.vatTuTheoMa.get(khoaMa(maHang[k]))
+            // ĐVT: theo vật tư MISA (tên + id ĐVT chính) — mẫu gửi unit_id; tên Kengi khác MISA thì cảnh báo để soát
+            const dvtKengi = String(it.product?.baseUnit || 'Cái').trim()
+            const dvt = vt?.dvt || dvtKengi
+            if (vt?.dvt && vt.dvt.toLowerCase() !== dvtKengi.toLowerCase()) lechDvt.push(`${maHang[k]} (Kengi "${dvtKengi}", MISA "${vt.dvt}")`)
             return {
                 sort_order: k + 1,
+                ...(vt?.id ? { inventory_item_id: vt.id } : {}),
                 inventory_item_code: maHang[k],
                 inventory_item_name: it.productName || it.product?.name || maHang[k],
                 description: it.productName || it.product?.name || maHang[k],
                 inventory_item_type: dv ? 2 : 0,
-                account_object_code: maKhach || undefined,
+                ...(maKhach ? { account_object_code: maKhach } : {}),
                 account_object_name: tieuDung || dtMisa?.ten || d.doiTuong,
+                ...(vt?.unitId ? { unit_id: vt.unitId } : {}),
+                unit_name: dvt, main_unit_name: dvt, main_convert_rate: 1,
+                ...(kho?.id ? { stock_id: kho.id } : {}),
                 stock_code: caiDat.maKho, stock_name: kho?.ten || caiDat.tenKho || caiDat.maKho,
+                quantity: sl, main_quantity: sl,
+                unit_price: donGia, main_unit_price: donGia,
+                amount_oc: thanhTien, amount: thanhTien,
+                discount_rate: 0, discount_amount_oc: 0, discount_amount: 0,
+                ...(vat.vat_rate !== undefined ? { vat_rate: vat.vat_rate } : {}),
+                ...(vat.other_vat_rate !== undefined ? { other_vat_rate: vat.other_vat_rate } : {}),
+                vat_amount_oc: tienThueDong, vat_amount: tienThueDong,
+                ...(tienThueDong ? { vat_account: caiDat.tk.thueRa } : {}),
                 debit_account: tkNo,
                 credit_account: dv ? caiDat.tk.doanhThuDV : caiDat.tk.doanhThu,
-                unit_name: dvt, main_unit_name: dvt, main_convert_rate: 1,
-                quantity: sl, main_quantity: sl,
-                unit_price: gia, main_unit_price: gia,
-                amount_oc: goc, amount: goc,
-                discount_rate: goc > 0 ? Math.round(giam * 10000 / goc) / 100 : 0,
-                discount_amount_oc: giam, discount_amount: giam,
-                ...(ts_.vat_rate !== undefined ? { vat_rate: ts_.vat_rate } : {}),
-                ...(ts_.other_vat_rate !== undefined ? { other_vat_rate: ts_.other_vat_rate } : {}),
-                vat_amount_oc: thueDong[k], vat_amount: thueDong[k],
-                vat_account: thue ? caiDat.tk.thueRa : undefined,
-                is_promotion: goc > 0 && thanhTienDong === 0,
+                is_promotion: sauGiam === 0 && sl > 0 && Number(it.unitPrice) > 0,
                 is_description: false,
                 exchange_rate_operator: '*',
             }
         })
-        const tongTT = tienHang - tienGiam + thue
-        if (Math.abs(tongTT - tongPhieu) > 1) {
+        if (lechDvt.length) d.canhBao.push(`ĐVT khác MISA — gửi theo ĐVT MISA: ${lechDvt.slice(0, 4).join(', ')}${lechDvt.length > 4 ? '…' : ''}`)
+        tienHang = tron2(tienHang); tienThue = tron2(tienThue)
+        const tongTT = tron2(tienHang + tienThue)
+        if (Math.abs(tongTT - tongPhieu) > (tachThue && !caiDat.giaGomThue ? Infinity : 5)) {
             d.canhBao.push(`Tổng thanh toán dựng lại ${tongTT.toLocaleString('vi-VN')}đ ≠ tổng phiếu ${lam(tongPhieu).toLocaleString('vi-VN')}đ`)
         }
 
@@ -591,36 +664,72 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             account_object_tax_code: tx.customer?.taxCode || undefined,
         }
         const thoiDiem = ngayVN(ngay)
+        const ngayCT = String(thoiDiem).slice(0, 10)          // mẫu: refdate / posted_date / inv_date dạng YYYY-MM-DD
+        const rn = String(tx.receiptNumber)
+        const soPxk = `PXK-${rn}`, soHd = `HD-${rn}`
+        const guidPxk = guidTatDinh(ts.schema, 'banhang-pxk', tx.id)
+        const guidHd = guidTatDinh(ts.schema, 'banhang-hd', tx.id)
+        const ghiChu = `Bán hàng cho ${d.doiTuong}`.slice(0, 250)
         d.payload = {
             voucher_type: 13,
-            org_refid: d.orgRefid,
-            org_refno: tx.receiptNumber,
-            org_reftype_name: 'Phiếu bán hàng Kengi',
             reftype,
+            org_refid: d.orgRefid,
+            org_refno: rn,
+            org_reftype_name: 'Phiếu bán hàng Kengi',
+            refdate: ngayCT, posted_date: ngayCT,
+            ...(caiDat.kemHoaDon ? { inv_date: ngayCT } : {}),
+            is_posted_finance: true,
+            display_on_book: 2,
+            include_invoice: caiDat.kemHoaDon ? 1 : 0,
+            is_sale_with_outward: caiDat.kiemXuatKho,
+            is_paid: reftype !== 3530,
             branch_id: caiDat.branchId,
             ...doiTuong,
             currency_id: 'VND', exchange_rate: 1,
-            discount_type: tienGiam > 0 ? 1 : 0,
-            discount_rate_voucher: 0,
-            is_sale_with_outward: caiDat.kiemXuatKho,
-            include_invoice: 0,
-            journal_memo: `Bán hàng ${tx.receiptNumber}${d.doiTuong ? ' - ' + d.doiTuong : ''}${tx.vatInvoiceNumber ? ` (HĐ ${tx.vatInvoiceNumber})` : ''}`.slice(0, 250),
-            posted_date: thoiDiem, refdate: thoiDiem,
+            discount_type: 0, discount_rate_voucher: 0,
+            journal_memo: ghiChu,
+            ...(caiDat.kiemXuatKho ? { in_outward_refid: guidPxk } : {}),
+            ...(caiDat.kemHoaDon ? { inv_refid: guidHd } : {}),
             total_sale_amount_oc: tienHang, total_sale_amount: tienHang,
-            total_discount_amount_oc: tienGiam, total_discount_amount: tienGiam,
-            total_vat_amount_oc: thue, total_vat_amount: thue,
+            total_discount_amount_oc: 0, total_discount_amount: 0,
+            total_vat_amount_oc: tienThue, total_vat_amount: tienThue,
             total_amount_oc: tongTT, total_amount: tongTT,
             ...(caiDat.kiemXuatKho ? {
                 in_outward: {
-                    reftype: 2020,
+                    voucher_type: 8,
+                    refid: guidPxk,
+                    reftype: 2020, org_reftype: 2020,
+                    branch_id: caiDat.branchId,
+                    refdate: ngayCT, posted_date: ngayCT, in_reforder: thoiDiem,
+                    ...doiTuong,
+                    journal_memo: `Xuất kho bán hàng cho ${d.doiTuong}`.slice(0, 250),
+                    is_get_new_id: true,
+                    is_posted_finance: true,
+                    is_posted_inventory_book_finance: true,
+                    org_refno: soPxk, inv_no: soPxk,
+                },
+            } : {}),
+            ...(caiDat.kemHoaDon ? {
+                sa_invoice: {
+                    voucher_type: 11,
+                    refid: guidHd,
+                    reftype: 3560, org_reftype: 3560,
                     branch_id: caiDat.branchId,
                     ...doiTuong,
-                    journal_memo: `Xuất kho bán hàng ${tx.receiptNumber}`,
-                    posted_date: thoiDiem, refdate: thoiDiem, in_reforder: thoiDiem,
+                    journal_memo: ghiChu,
+                    inv_date: ngayCT,
+                    is_get_new_id: true,
+                    is_posted: true,
+                    org_refno: soHd,
                 },
             } : {}),
             detail,
         }
+        // Liên kết chứng từ con ↔ phiếu bán — khối `reference` của mẫu (cổng cũ gửi kèm; cổng mới dùng in_outward_refid / inv_refid)
+        d.thamChieu = [
+            ...(caiDat.kiemXuatKho ? [{ org_refid: guidPxk, org_refno: soPxk, org_reftype: 2020, org_refer_refid: d.orgRefid, org_refer_refno: rn, org_refer_reftype: reftype }] : []),
+            ...(caiDat.kemHoaDon ? [{ org_refid: guidHd, org_refno: soHd, org_reftype: 3560, org_refer_refid: d.orgRefid, org_refer_refno: rn, org_refer_reftype: reftype }] : []),
+        ]
     }
     return tongKet('banhang', dong.map(d => { apLanTruoc(d, lanTruoc.get(d.localId)); return d }), tong, TRAN_CHUNG_TU, canhBaoChung)
 }
@@ -974,12 +1083,45 @@ const loiChu = (e: any) => {
  * chỉ đúng bản ghi hỏng, không bắt cả lô chịu chung một câu lỗi mơ hồ.
  * Ghi sổ MisaPushItem ngay sau mỗi lô — gãy giữa chừng vẫn giữ phần đã gửi.
  */
+/** Đối tượng tạo kèm phiếu bán (khách CÓ MST chưa có trên MISA) — ghi sổ để lượt sau không gửi trùng mã */
+async function ghiSoTuDien(sp: any, t: { localId: string; refNo: string; payload: any }) {
+    const data = {
+        refNo: t.refNo, orgRefid: String(t.payload?.account_object_id || ''), voucherType: 1, ngay: null, soTien: 0,
+        trangThai: 'da_gui', loi: null, payload: JSON.stringify(t.payload).slice(0, 30000), guiLuc: new Date(), ketQuaLuc: null,
+    }
+    await sp.misaPushItem.upsert({
+        where: { loai_localId: { loai: 'doituong', localId: t.localId } },
+        create: { loai: 'doituong', localId: t.localId, ...data },
+        update: { ...data, lanGui: { increment: 1 } },
+    })
+}
+
 export async function guiDi(sp: any, creds: MisaCreds, loai: LoaiDay, dong: DongKeHoach[]): Promise<KetQuaGui> {
     const kq: KetQuaGui = { daGui: 0, loi: [], xuLy: [] }
     const lo = CO_LO[loai]
-    const goi = (ds: DongKeHoach[]) => LA_CHUNG_TU[loai]
-        ? MISA.save(creds, ds.map(d => d.payload))
-        : MISA.saveDictionary(creds, ds.map(d => d.payload))
+    const goi = async (ds: DongKeHoach[]) => {
+        if (!LA_CHUNG_TU[loai]) return MISA.saveDictionary(creds, ds.map(d => d.payload))
+        if (loai === 'banhang') {
+            /* Khách mới (CÓ MST, MISA chưa có) gửi TRƯỚC phiếu — như khối `dictionary` trong mẫu của chủ shop. Bỏ qua khách đã
+             * gửi ở lượt trước (danh mục MISA nhớ 10 phút, MISA xử lý bất đồng bộ ⇒ chưa thấy ngay) để không tạo trùng mã. */
+            const tuDien = new Map<string, { localId: string; refNo: string; payload: any }>()
+            for (const d of ds) for (const t of d.tuDien || []) tuDien.set(t.refNo, t)
+            if (tuDien.size) {
+                const daGui: any[] = await sp.misaPushItem.findMany({
+                    where: { loai: 'doituong', localId: { in: [...tuDien.values()].map(t => t.localId) }, trangThai: { in: ['da_gui', 'misa_ok'] } },
+                    select: { localId: true },
+                })
+                const boQua = new Set(daGui.map(r => r.localId))
+                const canGui = [...tuDien.values()].filter(t => !boQua.has(t.localId))
+                if (canGui.length) {
+                    await MISA.saveDictionary(creds, canGui.map(t => t.payload))
+                    for (const t of canGui) await ghiSoTuDien(sp, t)
+                }
+            }
+            return MISA.save(creds, ds.map(d => d.payload), ds.flatMap(d => d.thamChieu || []))
+        }
+        return MISA.save(creds, ds.map(d => d.payload))
+    }
 
     for (let i = 0; i < dong.length; i += lo) {
         const nhom = dong.slice(i, i + lo)

@@ -67,7 +67,7 @@ const DEFAULT_BASE = 'https://actapp.misa.vn'
 const GATEWAY_BASE = 'https://developer.misa.vn/apis'
 const MAX_TAKE = 100
 
-const diCongMoi = (c: MisaCreds) => !!(c.clientId && c.clientId.trim())
+export const diCongMoi = (c: MisaCreds) => !!(c.clientId && c.clientId.trim())
 
 /** Base URL thật sẽ gọi — cổng mới bỏ qua baseUrl cũ (thường là actapp). */
 function baseOf(c: MisaCreds): string {
@@ -417,9 +417,11 @@ export const MISA = {
     // HÀNG yêu cầu, chưa phải đã thành chứng từ. Kết quả thật tra bằng
     // `ketQuaXuLy` (hoặc callback — chưa đăng ký).
 
-    /** Đề nghị sinh chứng từ — `voucher` là mảng, mỗi phần tử một chứng từ */
-    save: (creds: MisaCreds, voucher: any[]) =>
-        misaPost(creds, '/apir/sync/actopen/save', { voucher }),
+    /** Đề nghị sinh chứng từ — `voucher` là mảng, mỗi phần tử một chứng từ.
+     *  `reference` (liên kết phiếu bán ↔ phiếu xuất kho ↔ hoá đơn, mẫu chủ shop 19/10/2026) CHỈ gửi ở cổng cũ: tài liệu cổng mới
+     *  ghi thân save chỉ gồm org_company_code + voucher — cổng mới nối chứng từ con bằng in_outward_refid / inv_refid trong voucher. */
+    save: (creds: MisaCreds, voucher: any[], reference?: any[]) =>
+        misaPost(creds, '/apir/sync/actopen/save', reference?.length && !diCongMoi(creds) ? { voucher, reference } : { voucher }),
 
     /** Tạo mới danh mục — `dictionary` là mảng, `dictionary_type` theo bảng CHIỀU ĐẨY (khác chiều lấy) */
     saveDictionary: (creds: MisaCreds, dictionary: any[]) =>

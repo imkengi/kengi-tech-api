@@ -159,6 +159,78 @@ async function main() {
     dung('khách không MST có "người mua hàng" trên hồ sơ ⇒ lấy tên người mua',
         kLe.dong[1].payload?.account_object_name === 'Bán cho người tiêu dùng (Nguyễn Văn Tư)', kLe.dong[1].payload?.account_object_name)
 
+    /* THEO MẪU CHỨNG TỪ CHỦ SHOP GỬI 19/10/2026: 4 × 480.000 (giá đã gồm thuế 8%) ⇒ đơn giá 444.444,44 · thành tiền 1.777.777,76
+     * · thuế 142.222,22; kèm hoá đơn (sa_invoice 11/3560), phiếu xuất kho (8/2020), inventory_item_id / unit_id / stock_id, reference */
+    const dmMau: DanhMucMisa = {
+        ...dm,
+        vatTuTheoMa: new Map([['SHD8611N', { id: 'vt-shd', ma: 'SHD8611N', ten: 'Nồi cơm điện 1.8L Sunhouse SHD8611N', dvt: 'Cái', unitId: 'u-cai' }]]),
+        vatTuTheoId: new Map([['vt-shd', 'SHD8611N']]),
+        kho: [{ id: 'k-hh', ma: 'HH', ten: 'Kho Hàng' }],
+    }
+    const txMau = { ...tx('6', '', 'x'), customerId: null, customer: null, customerName: '', total: 1920000, subtotal: 1920000,
+        payments: [{ type: 'cash', amount: 1920000 }], amountReceived: 1920000,
+        items: [{ productId: 'p-shd', productName: 'Nồi cơm điện 1.8L Sunhouse SHD8611N', quantity: 4, unitPrice: 480000, lineTotal: 1920000,
+            product: { id: 'p-shd', sku: 'SHD8611N', name: 'Nồi cơm', baseUnit: 'cái' } }] }
+    const spMau: any = { ...spKh, transaction: { count: async () => 1, findMany: async () => [txMau] } }
+    const kMau = await lapKeHoach(spMau, {} as any, caiDat, dmMau, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const pMau = kMau.dong[0].payload, dMau = pMau?.detail?.[0]
+    dung('mẫu: tách thuế 8% giá đã gồm thuế — 444.444,44 · 1.777.777,76 · 142.222,22 (đúng số trong mẫu)',
+        dMau?.unit_price === 444444.44 && dMau?.amount === 1777777.76 && dMau?.amount_oc === 1777777.76 && dMau?.vat_rate === 8 && dMau?.vat_amount === 142222.22,
+        dMau && { u: dMau.unit_price, a: dMau.amount, v: dMau.vat_amount })
+    dung('mẫu: mã định danh MISA trên dòng — inventory_item_id / unit_id / stock_id, ĐVT theo MISA',
+        dMau?.inventory_item_id === 'vt-shd' && dMau?.unit_id === 'u-cai' && dMau?.stock_id === 'k-hh' && dMau?.unit_name === 'Cái',
+        dMau && { i: dMau.inventory_item_id, u: dMau.unit_id, s: dMau.stock_id, n: dMau.unit_name })
+    dung('mẫu: thu tiền mặt ⇒ reftype 3531, is_paid, Nợ 1111 / Có 5111',
+        pMau?.reftype === 3531 && pMau?.is_paid === true && dMau?.debit_account === '1111' && dMau?.credit_account === '5111')
+    dung('mẫu: kèm hoá đơn — include_invoice 1, sa_invoice (11 / 3560, is_get_new_id, is_posted), inv_date',
+        pMau?.include_invoice === 1 && pMau?.sa_invoice?.voucher_type === 11 && pMau?.sa_invoice?.reftype === 3560 && pMau?.sa_invoice?.is_get_new_id === true
+        && pMau?.sa_invoice?.is_posted === true && pMau?.inv_date === '2026-10-18', pMau?.sa_invoice)
+    dung('mẫu: phiếu xuất kho (8 / 2020, ghi sổ tài chính + sổ kho), ngày YYYY-MM-DD, is_posted_finance, display_on_book 2',
+        pMau?.in_outward?.voucher_type === 8 && pMau?.in_outward?.reftype === 2020 && pMau?.in_outward?.is_posted_inventory_book_finance === true
+        && pMau?.refdate === '2026-10-18' && pMau?.posted_date === '2026-10-18' && pMau?.is_posted_finance === true && pMau?.display_on_book === 2, pMau?.in_outward)
+    const thamChieu = kMau.dong[0].thamChieu || []
+    dung('mẫu: reference nối phiếu xuất kho + hoá đơn về phiếu bán (org_refer_refid = org_refid phiếu bán)',
+        thamChieu.length === 2 && thamChieu.every((r: any) => r.org_refer_refid === pMau?.org_refid && r.org_refer_reftype === 3531)
+        && thamChieu[0].org_reftype === 2020 && thamChieu[1].org_reftype === 3560 && thamChieu[0].org_refid === pMau?.in_outward?.refid, thamChieu)
+    dung('mẫu: tổng chứng từ = Σ dòng (1.919.999,98 — lệch làm tròn 2 số lẻ như mẫu, không cảnh báo)',
+        pMau?.total_amount === 1919999.98 && pMau?.total_vat_amount === 142222.22 && !kMau.dong[0].canhBao.some(c => c.startsWith('Tổng thanh toán')), pMau?.total_amount)
+
+    // chiết khấu gộp vào đơn giá (mẫu không có cột chiết khấu): HD031660 — 2 × 302.400, giảm 6% ⇒ còn 568.512
+    const txCk = { ...txMau, id: 't-ck', total: 568512, subtotal: 568512, payments: [], amountReceived: 0,
+        items: [{ ...txMau.items[0], quantity: 2, unitPrice: 302400, lineTotal: 568512 }] }
+    const kCk = await lapKeHoach({ ...spMau, transaction: { count: async () => 1, findMany: async () => [txCk] } }, {} as any, caiDat, dmMau,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const dCk = kCk.dong[0].payload?.detail?.[0]
+    dung('chiết khấu gộp vào đơn giá trước thuế — 263.200 · 526.400 + 42.112 = 568.512, không cột chiết khấu',
+        dCk?.unit_price === 263200 && dCk?.amount === 526400 && dCk?.vat_amount === 42112 && dCk?.discount_amount === 0 && kCk.dong[0].payload?.total_amount === 568512,
+        dCk && { u: dCk.unit_price, a: dCk.amount, v: dCk.vat_amount })
+    dung('chưa thu tiền ⇒ reftype 3530, is_paid false, Nợ 131',
+        kCk.dong[0].payload?.reftype === 3530 && kCk.dong[0].payload?.is_paid === false && dCk?.debit_account === '131')
+
+    // tắt kèm hoá đơn / không ghi thuế
+    const caiDatTat = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', kemHoaDon: false, thueSuat: null }))
+    const kTat = await lapKeHoach(spMau, {} as any, caiDatTat, dmMau, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const pTat = kTat.dong[0].payload
+    dung('Thiết lập tắt kèm hoá đơn + không ghi thuế ⇒ include_invoice 0, không sa_invoice, giá giữ nguyên, thuế 0',
+        pTat?.include_invoice === 0 && !pTat?.sa_invoice && pTat?.detail?.[0]?.unit_price === 480000 && pTat?.detail?.[0]?.vat_amount === 0 && pTat?.detail?.[0]?.vat_rate === undefined,
+        pTat?.detail?.[0])
+    dung('thiết lập thuế: mặc định 8 · gồm thuế · kèm HĐ; giá trị lạ ⇒ 8; null giữ null',
+        docCaiDat(null).thueSuat === 8 && docCaiDat(null).giaGomThue === true && docCaiDat(null).kemHoaDon === true
+        && docCaiDat(JSON.stringify({ thueSuat: 7 })).thueSuat === 8 && docCaiDat(JSON.stringify({ thueSuat: 10 })).thueSuat === 10
+        && docCaiDat(JSON.stringify({ thueSuat: null })).thueSuat === null)
+
+    // khách CÓ MST mà MISA chưa có ⇒ tạo đối tượng (mã = MST) trước khi gửi phiếu, phiếu sẵn sàng
+    const txMoi = tx('7', '0311111111', 'KH0007')
+    txMoi.customer = { ...txMoi.customer, name: 'Cty Mới', invoiceCompanyName: 'CÔNG TY TNHH MỚI', invoiceAddress: '1 Lê Lợi' } as any
+    const kMoi = await lapKeHoach({ ...spKh, transaction: { count: async () => 1, findMany: async () => [txMoi] } }, {} as any, caiDat, dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const tdMoi = kMoi.dong[0].tuDien?.[0]
+    dung('khách MST chưa có trên MISA ⇒ phiếu sẵn sàng + đối tượng tạo kèm (mã = MST, tên công ty, địa chỉ HĐ, tổ chức)',
+        kMoi.dong[0].trangThai === 'san_sang' && kMoi.dong[0].payload?.account_object_code === '0311111111' && tdMoi?.payload?.account_object_code === '0311111111'
+        && tdMoi?.payload?.dictionary_type === 1 && tdMoi?.payload?.account_object_name === 'CÔNG TY TNHH MỚI' && tdMoi?.payload?.address === '1 Lê Lợi'
+        && tdMoi?.payload?.company_tax_code === '0311111111' && tdMoi?.payload?.account_object_type === 0 && tdMoi?.localId === 'kh:c-7',
+        { tt: kMoi.dong[0].trangThai, lyDo: kMoi.dong[0].lyDo, td: tdMoi?.payload })
+
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)
 }
