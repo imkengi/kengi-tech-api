@@ -307,6 +307,10 @@ model Customer {
   invoiceEmail       String? // Email nhận HĐ — trống thì dùng email khách
   invoicePhone       String? // SĐT trên HĐ (KiotViet contactNumberEInvoice)
   invoiceIdNo        String? // CCCD / hộ chiếu người mua (HĐ cá nhân)
+  /// Khách LUÔN lấy hoá đơn (chủ shop 19/10/2026: "2 dạng khách: 1 khách luôn luôn lấy hoá đơn, còn 1 dạng thì tuỳ hứng").
+  /// true ⇒ phiếu bán của khách tự bật Transaction.layHoaDon (nhịp lib/zaloNhom) + đẩy MISA xuất theo MST;
+  /// false = tuỳ lúc — chỉ phiếu khách nhắn /hoadon. Cột thêm bằng /admin/migrate (19/10/2026).
+  luonLayHoaDon      Boolean @default(false)
   totalPurchases   Float     @default(0)
   totalOrders      Int       @default(0)
   debt             Float     @default(0)

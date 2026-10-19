@@ -3,8 +3,9 @@
  *
  * Trước đây chiều đẩy (services/misaPush.ts) chỉ có trong /admin (khoá quản trị, routes/misa.ts). Trang này cho chính cửa hàng
  * (đăng nhập thường, phân quyền nhóm "Hóa đơn ĐT") làm ba việc:
- *   1. Đẩy hoá đơn: chứng từ bán hàng (voucher 13) lên MISA AMIS — mặc định CHỈ phiếu khách yêu cầu hoá đơn (layHoaDon,
- *      /hoadon nhóm Zalo) vì hoá đơn của Hưng Tín xuất bên MISA. Kế hoạch luôn dựng lại phía máy chủ; trình duyệt chỉ gửi id.
+ *   1. Đẩy hoá đơn: chứng từ bán hàng (voucher 13) lên MISA AMIS. Phiếu khách yêu cầu hoá đơn (layHoaDon — /hoadon nhóm Zalo —
+ *      hoặc khách "luôn lấy hoá đơn") có MST xuất theo MST; mọi phiếu khác "Bán cho người tiêu dùng" (chủ shop 19/10/2026).
+ *      Trình duyệt mặc định xem MỌI phiếu bán, gửi chiLayHoaDon để lọc. Kế hoạch luôn dựng lại phía máy chủ; trình duyệt chỉ gửi id.
  *   2. Liên kết hàng hoá: nối hàng Kengi ↔ vật tư MISA (lib/misaLienKet.ts) — mã HUTI đến từ KiotViet, phần lớn không trùng MISA.
  *   3. Kết nối & thiết lập: tài khoản MISA của CHÍNH cửa hàng (chủ shop tự nhập), chi nhánh / kho / khách lẻ MISA.
  *
@@ -273,7 +274,7 @@ async function idHangTheoPhamVi(sp: any, phamVi: string, ngay: number): Promise<
         `SELECT DISTINCT ti."productId" AS id FROM "TransactionItem" ti
            JOIN "Transaction" t ON t."id" = ti."transactionId"
           WHERE t."status" IN ('completed','partial') AND COALESCE(t."transactionDate", t."createdAt") >= $1
-            ${phamVi === 'lay-hd' ? 'AND t."layHoaDon" = true' : ''}`, tu)
+            ${phamVi === 'lay-hd' ? `AND (t."layHoaDon" = true OR EXISTS (SELECT 1 FROM "Customer" c WHERE c."id" = t."customerId" AND c."luonLayHoaDon"))` : ''}`, tu)
     return rows.map(r => String(r.id))
 }
 

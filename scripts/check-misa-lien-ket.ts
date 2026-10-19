@@ -4,6 +4,7 @@
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
 import { lapKeHoach, docCaiDat, tenKhongDau, NHAN_TIEU_DUNG, cungDvt, type DanhMucMisa } from '../src/services/misaPush'
+import { batLayHoaDonKhachLuonLay } from '../src/lib/zaloNhom'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -131,7 +132,11 @@ async function main() {
     }
     const caiDat = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH' }))
     const kh = await lapKeHoach(spKh, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's', chiLayHoaDon: true, ids: ['1', '2', '3'] })
-    dung('kế hoạch: lọc đúng phiếu Lấy HĐ + đúng id chọn', whereNhan?.layHoaDon === true && JSON.stringify(whereNhan?.id) === JSON.stringify({ in: ['1', '2', '3'] }), whereNhan)
+    // lọc Lấy HĐ = phiếu Lấy HĐ HOẶC khách "luôn lấy hoá đơn" (19/10/2026); đi qua AND, giữ nguyên OR khoảng ngày
+    dung('kế hoạch: lọc phiếu Lấy HĐ HOẶC khách luôn lấy HĐ (qua AND, không đè OR khoảng ngày) + đúng id chọn',
+        JSON.stringify(whereNhan?.AND) === JSON.stringify([{ OR: [{ layHoaDon: true }, { customer: { is: { luonLayHoaDon: true } } }] }])
+        && Array.isArray(whereNhan?.OR) && whereNhan.OR.length === 2 && whereNhan?.layHoaDon === undefined
+        && JSON.stringify(whereNhan?.id) === JSON.stringify({ in: ['1', '2', '3'] }), whereNhan)
     const d1 = kh.dong.find(d => d.localId === '1')!
     dung('khách mã KiotViet KH0001 không có bên MISA ⇒ khớp theo MST 0102373667, phiếu sẵn sàng', d1.trangThai === 'san_sang' && d1.payload?.account_object_code === '0102373667' && d1.canhBao.some(c => c.includes('MST')), { tt: d1.trangThai, lyDo: d1.lyDo })
     dung('mã hàng lấy qua liên kết (p-d → DCX125), đúng mã gốc MISA', d1.payload?.detail?.[0]?.inventory_item_code === 'DCX125')
@@ -284,7 +289,34 @@ async function main() {
     dung('khách CÓ MST nhưng phiếu không "Lấy HĐ" ⇒ "Bán cho người tiêu dùng", không mã / MST, KHÔNG tạo đối tượng, thu tiền mặt 1111',
         dKhongHd.trangThai === 'san_sang' && pKhongHd?.account_object_name === NHAN_TIEU_DUNG && !('account_object_code' in (pKhongHd || {}))
         && pKhongHd?.account_object_tax_code === undefined && !dKhongHd.tuDien && pKhongHd?.reftype === 3531 && pKhongHd?.detail?.[0]?.debit_account === '1111'
-        && dKhongHd.canhBao.some(c => c.startsWith('Phiếu không "Lấy HĐ" (khách có MST 0311111111)')), { tt: dKhongHd.trangThai, lyDo: dKhongHd.lyDo, cb: dKhongHd.canhBao })
+        && dKhongHd.canhBao.some(c => c.startsWith('Phiếu không "Lấy HĐ" (khách có MST 0311111111')), { tt: dKhongHd.trangThai, lyDo: dKhongHd.lyDo, cb: dKhongHd.canhBao })
+
+    /* Chủ shop 19/10/2026: "2 dạng khách: 1 khách luôn luôn lấy hoá đơn, còn 1 dạng thì tuỳ hứng" ⇒ khách luôn lấy HĐ (Customer.luonLayHoaDon)
+     * xuất theo MST dù phiếu CHƯA bật Lấy HĐ (phiếu cũ không tự bật — xem batLayHoaDonKhachLuonLay) */
+    const txLuon = { ...tx('11', '0102373667', 'KH0001'), layHoaDon: false }
+    txLuon.customer = { ...txLuon.customer, luonLayHoaDon: true } as any
+    const kLuon = await lapKeHoach({ ...spKh, transaction: { count: async () => 1, findMany: async () => [txLuon] } }, {} as any, caiDat, dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    const dLuon = kLuon.dong[0]
+    dung('khách "luôn lấy hoá đơn" + MST, phiếu chưa bật Lấy HĐ ⇒ xuất theo MST (mã 0102373667), không phải người tiêu dùng',
+        dLuon.trangThai === 'san_sang' && dLuon.payload?.account_object_code === '0102373667' && dLuon.payload?.account_object_name !== NHAN_TIEU_DUNG
+        && dLuon.canhBao.some(c => c.startsWith('Khách "luôn lấy hoá đơn"')) && !dLuon.canhBao.some(c => c.includes('người mua "Bán cho người tiêu dùng"')),
+        { tt: dLuon.trangThai, ma: dLuon.payload?.account_object_code, cb: dLuon.canhBao })
+    const txLuonKhongMst = { ...tx('12', '', 'KH0012'), layHoaDon: false }
+    txLuonKhongMst.customer = { ...txLuonKhongMst.customer, luonLayHoaDon: true } as any
+    const kLuonKhongMst = await lapKeHoach({ ...spKh, transaction: { count: async () => 1, findMany: async () => [txLuonKhongMst] } }, {} as any, caiDat, dm,
+        { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('khách "luôn lấy hoá đơn" mà KHÔNG có MST ⇒ vẫn "Bán cho người tiêu dùng"',
+        kLuonKhongMst.dong[0].payload?.account_object_name === NHAN_TIEU_DUNG, kLuonKhongMst.dong[0].payload?.account_object_name)
+
+    // nhịp tự bật Lấy HĐ cho khách luôn lấy HĐ: chỉ phiếu từ mốc `tu`, chỉ phiếu chưa bật, chỉ trạng thái đã bán
+    let whereBat: any = null, dataBat: any = null
+    const tuBat = new Date('2026-10-18T00:00:00+07:00')
+    const soBat = await batLayHoaDonKhachLuonLay({ transaction: { updateMany: async ({ where, data }: any) => { whereBat = where; dataBat = data; return { count: 3 } } } }, tuBat)
+    dung('nhịp: bật Lấy HĐ cho phiếu của khách luôn lấy HĐ — chỉ phiếu chưa bật, đã bán, từ hôm qua; trả số phiếu vừa bật',
+        soBat === 3 && dataBat?.layHoaDon === true && whereBat?.layHoaDon === false && whereBat?.customer?.is?.luonLayHoaDon === true
+        && Array.isArray(whereBat?.status?.in) && whereBat.status.in.includes('completed')
+        && JSON.stringify(whereBat?.OR) === JSON.stringify([{ transactionDate: { gte: tuBat } }, { transactionDate: null, createdAt: { gte: tuBat } }]), whereBat)
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)

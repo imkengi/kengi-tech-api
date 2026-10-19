@@ -302,7 +302,25 @@ export async function apYeuCauHoaDonGanDay(sp: any): Promise<{ soKhachNgay: numb
         const [customerId, ngay] = k.split('|')
         daBat += (await danhDauLayHoaDon(sp, customerId, ngay)).daBat
     }
+    daBat += await batLayHoaDonKhachLuonLay(sp, tu)
     return { soKhachNgay: cap.size, daBat }
+}
+
+/**
+ * Khách "luôn lấy hoá đơn" (Customer.luonLayHoaDon — chủ shop 19/10/2026: "2 dạng khách: 1 khách luôn luôn lấy hoá đơn,
+ * còn 1 dạng thì tuỳ hứng"): phiếu bán từ mốc `tu` (HÔM QUA trở đi) tự bật Lấy HĐ — như khách nhắn /hoadon mỗi ngày.
+ * Phiếu CŨ hơn KHÔNG tự bật (bật lại phiếu cũ là mời người quét đơn xuất HĐ trùng); đẩy MISA tự coi phiếu của khách này là
+ * phiếu lấy HĐ (services/misaPush). CHỈ BẬT, không tự tắt — như /hoadon.
+ */
+export async function batLayHoaDonKhachLuonLay(sp: any, tu: Date): Promise<number> {
+    const r = await sp.transaction.updateMany({
+        where: {
+            layHoaDon: false, status: { in: [...TRANG_THAI_TINH] }, customer: { is: { luonLayHoaDon: true } },
+            OR: [{ transactionDate: { gte: tu } }, { transactionDate: null, createdAt: { gte: tu } }],
+        },
+        data: { layHoaDon: true },
+    })
+    return Number(r?.count) || 0
 }
 
 /** Nhịp ngoài: mọi cửa hàng đang hoạt động — gọi từ routes/cronTick.ts */

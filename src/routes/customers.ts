@@ -1222,6 +1222,8 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
                 salesUserId: salesUserId || null,
                 salesUserName: salesUserName || null,
                 ...hoaDon,
+                // Khách luôn lấy hoá đơn / tuỳ lúc (19/10/2026) — chỉ nhận boolean
+                ...(typeof req.body.luonLayHoaDon === 'boolean' && { luonLayHoaDon: req.body.luonLayHoaDon }),
             },
             include: { group: true },
         })
@@ -1264,6 +1266,8 @@ router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate
                 ...(groupId !== undefined && { groupId: groupId || null }),
                 // taxCode + các trường xuất HĐ — trước 09/10/2026 ghi vào cột KHÔNG tồn tại
                 ...hoaDon,
+                // Khách luôn lấy hoá đơn / tuỳ lúc (19/10/2026) — chỉ nhận boolean, không gửi = không đụng
+                ...(typeof req.body.luonLayHoaDon === 'boolean' && { luonLayHoaDon: req.body.luonLayHoaDon }),
                 // `note` không phải cột (cột là `notes`) — trước đây gửi `note` là Prisma ném lỗi
                 ...(notes === undefined && note !== undefined && { notes: note }),
                 ...(notes !== undefined && { notes }),

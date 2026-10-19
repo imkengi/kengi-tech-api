@@ -104,6 +104,8 @@ export const CreateCustomerSchema = z.object({
     invoiceEmail: z.string().email('Email nhận hoá đơn không hợp lệ').optional().nullable().or(z.literal('')),
     invoicePhone: z.string().max(30).optional().nullable(),
     invoiceIdNo: z.string().max(20).optional().nullable(),
+    // 19/10/2026 — khách LUÔN lấy hoá đơn (phiếu tự bật "Lấy HĐ", đẩy MISA theo MST); false = tuỳ lúc (/hoadon)
+    luonLayHoaDon: z.boolean().optional(),
     note: z.string().max(1000).optional().nullable(),
     notes: z.string().max(2000).optional().nullable(),
     birthday: z.string().optional().nullable(),

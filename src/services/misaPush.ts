@@ -297,7 +297,8 @@ export interface ThamSoKeHoach {
     /** Danh mục: 'trong_ky' = chỉ mã/đối tượng xuất hiện trên phiếu trong kỳ; 'tat_ca' */
     phamVi?: 'trong_ky' | 'tat_ca'
     schema: string
-    /** Chứng từ bán: chỉ phiếu khách yêu cầu hoá đơn (Transaction.layHoaDon — /hoadon nhóm Zalo, cột "Lấy HĐ") */
+    /** Chứng từ bán: chỉ phiếu khách yêu cầu hoá đơn — Transaction.layHoaDon (/hoadon nhóm Zalo, cột "Lấy HĐ") HOẶC khách
+     *  "luôn lấy hoá đơn" (Customer.luonLayHoaDon, 19/10/2026) */
     chiLayHoaDon?: boolean
     /** Chỉ xét đúng các id này (chứng từ bán / vật tư) — trang "Đẩy HĐ sang MISA" gửi phần người dùng chọn */
     ids?: string[]
@@ -432,7 +433,8 @@ function thieuChung(caiDat: CaiDatDay, dm: DanhMucMisa): string[] {
 
 async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: ThamSoKeHoach): Promise<KetQuaKeHoach> {
     const where: any = { status: { in: ['completed', 'partial'] }, ...khoangNgay(ts.tu, ts.den) }
-    if (ts.chiLayHoaDon) where.layHoaDon = true
+    // `where` đã có OR (khoảng ngày) ⇒ điều kiện Lấy HĐ đi qua AND, đừng ghi đè OR
+    if (ts.chiLayHoaDon) where.AND = [{ OR: [{ layHoaDon: true }, { customer: { is: { luonLayHoaDon: true } } }] }]
     if (ts.ids) where.id = { in: ts.ids }
     const tong = await sp.transaction.count({ where })
     const txs = await sp.transaction.findMany({
@@ -444,6 +446,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
                 select: {
                     id: true, code: true, name: true, address: true, taxCode: true,
                     invoiceType: true, invoiceCompanyName: true, invoiceAddress: true, invoiceBuyerName: true,
+                    luonLayHoaDon: true,
                 },
             },
         },
@@ -482,18 +485,22 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
 
         // ── Đối tượng ──
         /* Chủ shop 19/10/2026: "khách nào có yêu cầu xuất HĐ thì mới xuất qua MST người ta, còn lại xuất qua khách tiêu dùng".
-         * ⇒ CHỈ phiếu Lấy HĐ (Transaction.layHoaDon — /hoadon nhóm Zalo) của khách CÓ MST mới mang đối tượng MISA (bảng nối → mã → MST).
+         * ⇒ CHỈ phiếu Lấy HĐ (Transaction.layHoaDon — /hoadon nhóm Zalo) hoặc của khách "luôn lấy hoá đơn" (Customer.luonLayHoaDon —
+         * "2 dạng khách: 1 khách luôn luôn lấy hoá đơn, còn 1 dạng thì tuỳ hứng"), mà khách CÓ MST, mới mang đối tượng MISA (bảng nối → mã → MST).
          * Mọi phiếu khác — khách lẻ, khách không MST, khách có MST mà không lấy HĐ, đơn sàn — người mua "Bán cho người tiêu dùng",
          * KHÔNG mã đối tượng, không địa chỉ / MST ("không có lưu mã khách hàng"); tên khách thật ở diễn giải. */
         const san = detectOnlinePlatform(tx.receiptNumber)
         const mstKhach = chuanMst(tx.customer?.taxCode)
         let maKhach: string | null = null
         let tieuDung: string | null = null   // tên người mua khi bán cho người tiêu dùng
-        if (!tx.customer || !mstKhach || !tx.layHoaDon) {
+        const luonLay = !!tx.customer?.luonLayHoaDon
+        if (!tx.customer || !mstKhach || !(tx.layHoaDon || luonLay)) {
             tieuDung = NHAN_TIEU_DUNG   // chủ shop 19/10/2026 (lần 2): "bán cho người tiêu dùng thôi, bỏ trong dấu ngoặc"
-            const viSao = !tx.customer ? 'Khách lẻ' : !mstKhach ? 'Khách không có MST' : `Phiếu không "Lấy HĐ" (khách có MST ${mstKhach})`
+            const viSao = !tx.customer ? 'Khách lẻ' : !mstKhach ? 'Khách không có MST'
+                : `Phiếu không "Lấy HĐ" (khách có MST ${mstKhach}; khách luôn lấy HĐ thì đặt "Luôn lấy hoá đơn" ở hồ sơ khách)`
             d.canhBao.push(`${viSao} ⇒ người mua "${tieuDung}", không mã đối tượng MISA`)
         } else {
+            if (luonLay && !tx.layHoaDon) d.canhBao.push('Khách "luôn lấy hoá đơn" ⇒ xuất theo MST của khách')
             maKhach = maKhachQuaMap.get(tx.customer.id) || tx.customer.code
             // Mã Kengi không có bên MISA ⇒ khớp theo MST (MISA lưu khách theo MST) — chỉ khi MST ứng DUY NHẤT một đối tượng
             if (!dm.doiTuongTheoMa.has(khoaMa(String(maKhach || '')))) {
