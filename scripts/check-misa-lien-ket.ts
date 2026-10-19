@@ -3,7 +3,7 @@
  * Trang Vận Hành › "Đẩy HĐ sang MISA": mã HUTI đến từ KiotViet, phần lớn không trùng mã vật tư MISA; MISA lưu khách theo MST.
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
-import { lapKeHoach, docCaiDat, tenKhongDau, tenNguoiTieuDung, type DanhMucMisa } from '../src/services/misaPush'
+import { lapKeHoach, docCaiDat, tenKhongDau, tenNguoiTieuDung, cungDvt, type DanhMucMisa } from '../src/services/misaPush'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -180,6 +180,9 @@ async function main() {
     dung('mẫu: mã định danh MISA trên dòng — inventory_item_id / unit_id / stock_id, ĐVT theo MISA',
         dMau?.inventory_item_id === 'vt-shd' && dMau?.unit_id === 'u-cai' && dMau?.stock_id === 'k-hh' && dMau?.unit_name === 'Cái',
         dMau && { i: dMau.inventory_item_id, u: dMau.unit_id, s: dMau.stock_id, n: dMau.unit_name })
+    // HD031660 19/10: MISA "Cái" (dựng sẵn) và Kengi "Cái" (tổ hợp dấu) nhìn y hệt mà so thường ra KHÁC ⇒ cảnh báo oan
+    dung('ĐVT: cùng chữ khác dạng mã hoá Unicode / hoa thường ⇒ coi là một, không cảnh báo lệch',
+        cungDvt('Cái'.normalize('NFD'), 'cái'.normalize('NFC')) && !cungDvt('Cái', 'Hộp') && !kMau.dong[0].canhBao.some(c => c.startsWith('ĐVT khác MISA')), kMau.dong[0].canhBao)
     dung('mẫu: thu tiền mặt ⇒ reftype 3531, is_paid, Nợ 1111 / Có 5111',
         pMau?.reftype === 3531 && pMau?.is_paid === true && dMau?.debit_account === '1111' && dMau?.credit_account === '5111')
     dung('mẫu: kèm hoá đơn — include_invoice 1, sa_invoice (11 / 3560, is_get_new_id, is_posted), inv_date',

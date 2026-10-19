@@ -162,6 +162,9 @@ export function tenNguoiTieuDung(ten: any): string {
     const t = String(ten || '').replace(/\s+/g, ' ').trim()
     return t && !/^kh[aá]ch( l[eẻ]| h[aà]ng)?$/i.test(t) ? `${NHAN_TIEU_DUNG} (${t})` : NHAN_TIEU_DUNG
 }
+/** So tên ĐVT: chuẩn Unicode NFC + chữ thường — "Cái" của MISA và của Kengi có thể khác dạng mã hoá (dựng sẵn / tổ hợp dấu) dù nhìn
+ *  y hệt (HD031660 19/10/2026 báo "Kengi Cái ≠ MISA Cái") */
+export const cungDvt = (a: any, b: any) => String(a || '').normalize('NFC').trim().toLowerCase() === String(b || '').normalize('NFC').trim().toLowerCase()
 /** MST chuẩn hoá: chỉ giữ số và gạch nối; hợp lệ = 10 số (± "-3 số" chi nhánh) hoặc 12 số (CCCD cá nhân). Không hợp lệ ⇒ '' */
 export const chuanMst = (v: any) => {
     const s = String(v || '').replace(/[^0-9-]/g, '')
@@ -618,7 +621,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
             // ĐVT: theo vật tư MISA (tên + id ĐVT chính) — mẫu gửi unit_id; tên Kengi khác MISA thì cảnh báo để soát
             const dvtKengi = String(it.product?.baseUnit || 'Cái').trim()
             const dvt = vt?.dvt || dvtKengi
-            if (vt?.dvt && vt.dvt.toLowerCase() !== dvtKengi.toLowerCase()) lechDvt.push(`${maHang[k]} (Kengi "${dvtKengi}", MISA "${vt.dvt}")`)
+            if (vt?.dvt && cungDvt(vt.dvt, dvtKengi) === false) lechDvt.push(`${maHang[k]} (Kengi "${dvtKengi}", MISA "${vt.dvt}")`)
             return {
                 sort_order: k + 1,
                 ...(vt?.id ? { inventory_item_id: vt.id } : {}),
@@ -927,7 +930,7 @@ async function keHoachVatTu(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: Tha
         if (co) {
             d.trangThai = 'da_co'
             d.lyDo.push(`Đã có trên MISA${co.ten && co.ten !== s.name ? ` (tên MISA: ${co.ten})` : ''}`)
-            if (co.dvt && s.baseUnit && co.dvt.toLowerCase() !== String(s.baseUnit).toLowerCase()) {
+            if (co.dvt && s.baseUnit && cungDvt(co.dvt, s.baseUnit) === false) {
                 d.canhBao.push(`ĐVT lệch: MISA "${co.dvt}" ≠ Kengi "${s.baseUnit}" — chứng từ gửi theo ĐVT Kengi, MISA có thể từ chối`)
             }
             continue
