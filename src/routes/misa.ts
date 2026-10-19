@@ -34,7 +34,7 @@ import {
 } from '../services/misaSync'
 import { doBanHangMisa, tomTatDeGhiLog } from '../services/misaImportBanHang'
 import {
-    LOAI_DAY, NHAN_LOAI_DAY, MA_LOAI_MISA, docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua,
+    LOAI_DAY, NHAN_LOAI_DAY, MA_LOAI_MISA, docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua, tenKhongDau,
     type LoaiDay,
 } from '../services/misaPush'
 
@@ -1778,6 +1778,11 @@ router.get('/push/danh-muc', async (req: Request, res: Response) => {
                 soVatTu: dm.vatTuTheoMa.size, soDoiTuong: dm.doiTuongTheoMa.size,
                 layLuc: new Date(dm.layLuc).toISOString(), canhBao: dm.canhBao,
                 congMoi: !!c.creds.clientId,
+                tieuDung: dm.tieuDung,
+                // ?timDoiTuong=… — CHỈ ĐỌC: đối tượng MISA có tên chứa chuỗi này (bỏ dấu), để soát cấu hình "Bán cho người tiêu dùng"
+                ...(req.query.timDoiTuong ? { timDoiTuong: [...dm.doiTuongTheoMa.values()]
+                    .filter(v => tenKhongDau(v.ten).includes(tenKhongDau(req.query.timDoiTuong)))
+                    .slice(0, 30).map(v => ({ ma: v.ma, ten: v.ten, laKhach: v.laKhach })) } : {}),
             },
         })
     } catch (e: any) {

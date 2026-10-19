@@ -3,7 +3,7 @@
  * Trang Vận Hành › "Đẩy HĐ sang MISA": mã HUTI đến từ KiotViet, phần lớn không trùng mã vật tư MISA; MISA lưu khách theo MST.
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
-import { lapKeHoach, docCaiDat, type DanhMucMisa } from '../src/services/misaPush'
+import { lapKeHoach, docCaiDat, tenKhongDau, TEN_TIEU_DUNG, type DanhMucMisa } from '../src/services/misaPush'
 
 let loi = 0
 const dung = (t: string, ok: boolean, x?: any) => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${t}${x !== undefined ? ' — ' + JSON.stringify(x) : ''}`) }
@@ -18,11 +18,13 @@ const dm: DanhMucMisa = {
     vatTuTheoMa: new Map(VT.map(v => [v.ma.toUpperCase(), v])),
     vatTuTheoId: new Map(VT.map(v => [v.id, v.ma])),
     doiTuongTheoMa: new Map([
-        ['0102373667', { id: 'dt-1', ten: 'CÔNG TY TNHH ĐIỆN HƯNG', laKhach: true, laNcc: false }],
-        ['KHLE', { id: 'dt-2', ten: 'Khách lẻ', laKhach: true, laNcc: false }],
+        ['0102373667', { id: 'dt-1', ma: '0102373667', ten: 'CÔNG TY TNHH ĐIỆN HƯNG', laKhach: true, laNcc: false }],
+        ['KHLE', { id: 'dt-2', ma: 'KHLE', ten: 'Khách lẻ', laKhach: true, laNcc: false }],
+        ['BCNTD', { id: 'dt-3', ma: 'BCNTD', ten: 'Bán cho người tiêu dùng', laKhach: true, laNcc: false }],
     ]),
-    doiTuongTheoId: new Map([['dt-1', '0102373667'], ['dt-2', 'KHLE']]),
+    doiTuongTheoId: new Map([['dt-1', '0102373667'], ['dt-2', 'KHLE'], ['dt-3', 'BCNTD']]),
     doiTuongTheoMst: new Map([['0102373667', ['0102373667']], ['0309999999', ['A1', 'A2']]]),
+    tieuDung: { ma: 'BCNTD', ten: 'Bán cho người tiêu dùng' },
     kho: [{ id: 'k1', ma: 'HH', ten: 'Kho hàng hoá' }],
     chiNhanh: [{ id: 'cn1', ma: 'HTSG', ten: 'HƯNG TÍN SG', loai: 2 }],
     layLuc: Date.now(), canhBao: [],
@@ -136,8 +138,25 @@ async function main() {
     dung('mã hàng lấy qua liên kết (p-d → DCX125), đúng mã gốc MISA', d1.payload?.detail?.[0]?.inventory_item_code === 'DCX125')
     const d2 = kh.dong.find(d => d.localId === '2')!
     dung('MST ứng NHIỀU đối tượng MISA ⇒ không tự chọn, phiếu "thiếu"', d2.trangThai === 'thieu' && d2.lyDo.some(l => l.includes('không tự chọn')), d2.lyDo)
+    /* Chủ shop 19/10/2026: "những khách chưa có MST sẽ xuất sang dạng Bán cho người tiêu dùng" */
     const d3 = kh.dong.find(d => d.localId === '3')!
-    dung('không MST, mã không có ⇒ "thiếu", nói rõ khách chưa có trên MISA', d3.trangThai === 'thieu' && d3.lyDo.some(l => l.includes('KH0003')), d3.lyDo)
+    dung('khách KHÔNG MST ⇒ đối tượng "Bán cho người tiêu dùng" (tự nhận theo tên), phiếu sẵn sàng',
+        d3.trangThai === 'san_sang' && d3.payload?.account_object_code === 'BCNTD' && d3.canhBao.some(c => c.includes('Bán cho người tiêu dùng')), { tt: d3.trangThai, lyDo: d3.lyDo })
+    dung('…không mang tên / địa chỉ / MST của khách lên MISA, tên khách thật vẫn ở diễn giải',
+        d3.payload?.account_object_name === 'Bán cho người tiêu dùng' && d3.payload?.account_object_tax_code === undefined && d3.payload?.account_object_address === undefined
+        && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng' && String(d3.payload?.journal_memo).includes('Cty'), { ten: d3.payload?.account_object_name, memo: d3.payload?.journal_memo })
+    dung('tên đối tượng so bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng', tenKhongDau('BÁN CHO  người TIÊU DÙNG ') === TEN_TIEU_DUNG)
+
+    // khách lẻ (không gắn khách) cũng đi "Bán cho người tiêu dùng"; mã đặt ở Thiết lập thắng mã tự nhận
+    const txLe = { ...tx('4', '', 'x'), customerId: null, customer: null }
+    const spLe: any = { ...spKh, transaction: { count: async () => 1, findMany: async () => [txLe] } }
+    const kLe = await lapKeHoach(spLe, {} as any, caiDat, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('phiếu không gắn khách ⇒ "Bán cho người tiêu dùng"', kLe.dong[0].trangThai === 'san_sang' && kLe.dong[0].payload?.account_object_code === 'BCNTD', kLe.dong[0].lyDo)
+    const caiDatLe = docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', maKhachLe: 'KHLE' }))
+    const kLe2 = await lapKeHoach(spLe, {} as any, caiDatLe, dm, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('Thiết lập đặt mã riêng (KHLE) ⇒ dùng mã đó thay mã tự nhận', kLe2.dong[0].payload?.account_object_code === 'KHLE', kLe2.dong[0].payload?.account_object_code)
+    const kLe3 = await lapKeHoach(spLe, {} as any, caiDat, { ...dm, tieuDung: null }, { loai: 'banhang', tu: new Date('2026-10-01'), den: new Date('2026-10-19'), schema: 's' })
+    dung('MISA chưa có đối tượng "Bán cho người tiêu dùng", Thiết lập trống ⇒ "thiếu", nói rõ phải tạo', kLe3.dong[0].trangThai === 'thieu' && kLe3.dong[0].lyDo.some(l => l.includes('Bán cho người tiêu dùng')), kLe3.dong[0].lyDo)
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)
