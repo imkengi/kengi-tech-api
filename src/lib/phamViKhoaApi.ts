@@ -1,11 +1,13 @@
 // Phạm vi của API key theo scope — hàm THUẦN cho middleware/auth.ts (soát ở scripts/check-chatbot-san-pham.ts + check-pham-vi-khoa.ts).
-// 20/10/2026: scope 'chatbot' = khoá nằm trong n8n của chatbot trả lời KHÁCH ⇒ CHỈ được gọi /api/chatbot/*.
+// 20/10/2026: scope 'chatbot' = khoá nằm trong n8n của chatbot trả lời KHÁCH ⇒ CHỈ được gọi webhook trả lời + tra sản
+// phẩm / kênh. KHÔNG gồm /api/chatbot/shops (kho kiến thức — thứ chatbot nói với khách): lộ khoá cũng không sửa được.
+const DUONG_KHOA_CHATBOT = /^\/api\/chatbot\/(webhook|san-pham|kenh)\/?$/
 
 /** Lý do chặn (chuỗi) khi khoá KHÔNG được gọi đường này; null = cho qua (scope khác tự kiểm ghi/đọc ở authMiddleware). */
 export function lyDoChanKhoa(scopes: unknown, url: unknown): string | null {
     const scope = String(scopes ?? '').trim().toLowerCase()
     const duong = String(url ?? '').split('?')[0]
-    if (scope === 'chatbot' && !/^\/api\/chatbot(\/|$)/.test(duong)) return 'Khoá API chatbot chỉ dùng được cho /api/chatbot'
+    if (scope === 'chatbot' && !DUONG_KHOA_CHATBOT.test(duong)) return 'Khoá API chatbot chỉ dùng được cho /api/chatbot/webhook, /san-pham, /kenh'
     return null
 }
 
@@ -14,12 +16,16 @@ export function lyDoChanKhoa(scopes: unknown, url: unknown): string | null {
  * Khoá chỉ-đọc (scope không chứa admin / write / *; rỗng = 'read') KHÔNG được POST/PUT/PATCH/DELETE.
  * Trừ /api/mcp: JSON-RPC nên LUÔN POST kể cả khi chỉ đọc; quyền ghi ở đó do chính mcp.ts kiểm theo
  * cờ tool.write + scope — chặn ở đây thì khoá chỉ-đọc không gọi được tool nào (đo thật 15/08).
+ * Trừ khoá 'chatbot' POST /api/chatbot/webhook: n8n chuyển tin nhắn khách để kengi.vn soạn câu trả lời — việc CHÍNH của
+ * khoá này, mà handler chỉ đọc (agent scopes 'read', 2 công cụ tra cứu). Thiếu lối này thì webhook 403 với chính khoá đó.
  * Trả lý do chặn hoặc null = cho qua.
  */
 export function lyDoChanGhi(scopes: unknown, method: unknown, url: unknown): string | null {
     if (/admin|write|\*/i.test(String(scopes || 'read'))) return null
     if (['GET', 'HEAD', 'OPTIONS'].includes(String(method ?? ''))) return null
-    if (/^\/api\/mcp\/?$/.test(String(url ?? '').split('?')[0])) return null
+    const duong = String(url ?? '').split('?')[0]
+    if (/^\/api\/mcp\/?$/.test(duong)) return null
+    if (String(scopes ?? '').trim().toLowerCase() === 'chatbot' && method === 'POST' && /^\/api\/chatbot\/webhook\/?$/.test(duong)) return null
     return 'API key chỉ có quyền đọc — không thể ghi/sửa/xóa (scope=read)'
 }
 

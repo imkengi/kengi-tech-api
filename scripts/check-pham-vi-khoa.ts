@@ -5,6 +5,8 @@
  * người tạo khoá (ghi / sửa / xoá được hết; nhánh X-API-Key thì chặn). Nay JWT mang claim apiKeyScopes và mọi chỗ nhận JWT
  * áp CÙNG một luật với nhánh X-API-Key. Không DB: authMiddleware chạy thật với JWT ký bằng khoá thử (không storeId ⇒ không
  * tra registry), còn /auth/token + livestream soát bằng đọc nguồn.
+ * Kèm: khoá 'chatbot' POST /api/chatbot/webhook phải QUA luật ghi — webhook thêm cùng ngày, luật ghi cũ chặn nó 403
+ * (bộ soát chatbot chỉ thử phạm vi đường nên không thấy).
  */
 import fs from 'fs'
 import path from 'path'
@@ -32,6 +34,15 @@ dung('đường giả dạng MCP vẫn bị chặn',
     ['/api/mcpx', '/api/mcp/tools', '/api/x/api/mcp', '/api/mcp-agent/run'].every(u => !!lyDoChanGhi('read', 'POST', u)))
 dung('method lạ / viết thường ⇒ coi là ghi (chặn mặc định)', !!lyDoChanGhi('read', 'post', '/api/x') && !!lyDoChanGhi('read', 'PROPFIND', '/api/x') && !!lyDoChanGhi('read', undefined, '/api/x'))
 dung('lý do chặn giữ nguyên câu cũ của nhánh X-API-Key', lyDoChanGhi('read', 'DELETE', '/api/x') === 'API key chỉ có quyền đọc — không thể ghi/sửa/xóa (scope=read)')
+// POST /api/chatbot/webhook (n8n chuyển tin nhắn khách) là việc chính của khoá chatbot — trước đó luật ghi chặn nó 403
+dung('khoá chatbot POST /api/chatbot/webhook được (lối riêng, chỉ đường này, chỉ POST)',
+    lyDoChanGhi('chatbot', 'POST', '/api/chatbot/webhook') === null && lyDoChanGhi(' ChatBot ', 'POST', '/api/chatbot/webhook/?x=1') === null
+    && !!lyDoChanGhi('chatbot', 'PUT', '/api/chatbot/webhook') && !!lyDoChanGhi('chatbot', 'DELETE', '/api/chatbot/webhook')
+    && !!lyDoChanGhi('chatbot', 'POST', '/api/chatbot/webhook/x') && !!lyDoChanGhi('chatbot', 'POST', '/api/chatbot/shops') && !!lyDoChanGhi('chatbot', 'POST', '/api/chatbot/san-pham'))
+dung('lối webhook KHÔNG mở cho khoá read (chỉ scope chatbot)', !!lyDoChanGhi('read', 'POST', '/api/chatbot/webhook') && !!lyDoChanGhi('', 'POST', '/api/chatbot/webhook'))
+dung('khoá chatbot qua cả hai lớp ở /webhook (phạm vi đường + luật ghi); /shops (kho kiến thức) bị chặn cả đọc lẫn ghi',
+    (lyDoChanKhoa('chatbot', '/api/chatbot/webhook') ?? lyDoChanGhi('chatbot', 'POST', '/api/chatbot/webhook')) === null
+    && !!lyDoChanKhoa('chatbot', '/api/chatbot/shops') && !!(lyDoChanKhoa('chatbot', '/api/chatbot/shops/a') ?? lyDoChanGhi('chatbot', 'PUT', '/api/chatbot/shops/a')))
 
 // 2. JWT: có claim ⇒ y hệt nhánh X-API-Key; không claim ⇒ không đụng
 dung('JWT đăng nhập thường (không claim) không bị đụng',
@@ -43,11 +54,11 @@ dung('JWT khoá read: GET qua, POST / PUT / PATCH / DELETE bị chặn',
 dung('JWT có claim rỗng / null ⇒ vẫn chỉ đọc (có mặt claim = token của khoá)',
     !!lyDoChanJwtKhoa({ apiKeyScopes: '' }, 'POST', '/api/x') && !!lyDoChanJwtKhoa({ apiKeyScopes: null }, 'DELETE', '/api/x'))
 dung('JWT khoá read,write / admin ghi được', lyDoChanJwtKhoa({ apiKeyScopes: 'read,write' }, 'POST', '/api/products') === null && lyDoChanJwtKhoa({ apiKeyScopes: 'admin' }, 'DELETE', '/api/customers/1') === null)
-dung('JWT khoá chatbot (lỡ có): chỉ GET /api/chatbot',
-    lyDoChanJwtKhoa({ apiKeyScopes: 'chatbot' }, 'GET', '/api/chatbot/san-pham?q=x') === null
+dung('JWT khoá chatbot (lỡ có): như X-API-Key — GET /san-pham, POST /webhook; ngoài ra chặn',
+    lyDoChanJwtKhoa({ apiKeyScopes: 'chatbot' }, 'GET', '/api/chatbot/san-pham?q=x') === null && lyDoChanJwtKhoa({ apiKeyScopes: 'chatbot' }, 'POST', '/api/chatbot/webhook') === null
     && !!lyDoChanJwtKhoa({ apiKeyScopes: 'chatbot' }, 'GET', '/api/customers') && !!lyDoChanJwtKhoa({ apiKeyScopes: 'chatbot' }, 'POST', '/api/chatbot/san-pham'))
 const luoiScope = ['read', 'read,write', 'admin', '*', 'chatbot', '', null, 'readonly']
-const luoiDuong = ['/api/products', '/api/mcp', '/api/chatbot/kenh', '/api/livestream/state', '/api/auth/switch-branch']
+const luoiDuong = ['/api/products', '/api/mcp', '/api/chatbot/kenh', '/api/chatbot/webhook', '/api/chatbot/shops', '/api/livestream/state', '/api/auth/switch-branch']
 const lech: string[] = []
 for (const s of luoiScope) for (const m of [...DOC, ...GHI]) for (const u of luoiDuong) {
     const quaKhoa = lyDoChanKhoa(s, u) ?? lyDoChanGhi(s, m, u)   // nhánh X-API-Key: phạm vi đường (tryApiKeyAuth) rồi luật ghi
@@ -141,6 +152,8 @@ dung(`mọi chỗ tự jwt.verify (${tep.length} tệp) đã được soát vớ
     dung('chạy thật: claim rỗng PUT ⇒ 403', !g.qua && g.ma === 403, g)
     const h = await chay({ apiKeyScopes: 'chatbot' }, 'GET', '/api/customers')
     dung('chạy thật: JWT chatbot (lỡ có) GET /api/customers ⇒ 403', !h.qua && h.ma === 403, h)
+    const h2 = await chay({ apiKeyScopes: 'chatbot' }, 'POST', '/api/chatbot/webhook')
+    dung('chạy thật: JWT chatbot (lỡ có) POST /api/chatbot/webhook ⇒ qua', h2.qua && h2.scope === 'chatbot', h2)
     const i = await chay({ apiKeyScopes: 'admin' }, 'POST', '/api/products', 'khoa-gia-mao')
     dung('chạy thật: JWT ký sai khoá ⇒ 401 (không tin claim của token giả)', !i.qua && i.ma === 401, i)
 

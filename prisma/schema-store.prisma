@@ -4179,3 +4179,17 @@ model ZaloDotGuiNhom {
   @@index([trangThai])
   @@index([dotId])
 }
+
+/// Shop của trang kengi.vn/chatbot (20/10/2026): kho kiến thức + kênh bán để webhook n8n trả lời khách
+/// (routes/chatbot.ts, lib/chatbotLuuTru.ts — đọc / ghi bằng SQL thô; bảng tự tạo ở lượt gọi đầu + /admin/migrate).
+model ChatbotShop {
+  id         String   @id // mã shop do trang chatbot đặt (mac-dinh, shop-xxxx)
+  ten        String
+  kenh       String? // tên kênh bán (OnlineChannel.name) — null = chưa chọn, '' = giá bán lẻ tại cửa hàng
+  san        String   @default("") // '' | shopee | tiktok | lazada
+  kienThuc   String // JSON {schema_version:1, documents:[...]} — trang tự kiểm biên tập, máy chủ kiểm kích thước
+  thuTu      Int      @default(0)
+  capNhatBoi String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+}

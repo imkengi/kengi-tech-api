@@ -7,6 +7,7 @@
  */
 import { docThamSoSanPham, tuKhoa, cauTimListing, cauTimHang, tinhTrang, tinhTrangKho, tinhTrangSan, tongTinhTrang, linkSan, catMoTa, gomSanPham, LISTING_DANG_BAN } from '../src/lib/chatbotSanPham'
 import { lyDoChanKhoa, khoaDoiDuocToken } from '../src/lib/phamViKhoaApi'
+import { timKienThuc, kiemShopChatbot, docTinNhan, tachCoNhanVien, soanPromptChatbot, layPhien, ghiPhien, homNayVN, DAU_NHAN_VIEN, TRA_LOI_DU_PHONG } from '../src/lib/chatbotKienThuc'
 import fs from 'fs'
 import path from 'path'
 
@@ -106,9 +107,9 @@ dung('giá chung = giá THẤP NHẤT có thật, không phụ thuộc thứ t�
 dung('ảnh: ưu tiên ảnh hàng kho', may?.anh === 'https://anh/1.jpg')
 
 // 7. phạm vi khoá chatbot
-dung('khoá chatbot gọi /api/chatbot/* được', lyDoChanKhoa('chatbot', '/api/chatbot/san-pham?q=x') === null && lyDoChanKhoa(' Chatbot ', '/api/chatbot') === null)
-dung('khoá chatbot bị chặn ở đường khác (khách hàng, MCP, sản phẩm, đường giả dạng)',
-    ['/api/customers', '/api/mcp', '/api/products?search=a', '/api/chatbotx', '/api/chatbot-gia/x', '/api/x/api/chatbot'].every(u => !!lyDoChanKhoa('chatbot', u)))
+dung('khoá chatbot gọi được webhook / tra sản phẩm / kênh', ['/api/chatbot/webhook', '/api/chatbot/san-pham?q=x', '/api/chatbot/kenh', '/api/chatbot/webhook/'].every(u => lyDoChanKhoa(' Chatbot ', u) === null))
+dung('khoá chatbot bị chặn ở đường khác (kho kiến thức, khách hàng, MCP, sản phẩm, đường giả dạng)',
+    ['/api/chatbot/shops', '/api/chatbot/shops/mac-dinh', '/api/chatbot', '/api/customers', '/api/mcp', '/api/products?search=a', '/api/chatbotx', '/api/chatbot-gia/x', '/api/x/api/chatbot/webhook', '/api/chatbot/webhook/x'].every(u => !!lyDoChanKhoa('chatbot', u)))
 dung('scope khác không bị đụng (đọc / ghi tự kiểm ở authMiddleware)', lyDoChanKhoa('read', '/api/customers') === null && lyDoChanKhoa('read,write', '/api/products') === null && lyDoChanKhoa(undefined, '/api/x') === null)
 // POST /api/auth/token đổi khoá ⇒ JWT KHÔNG mang scope: khoá chatbot đổi được là thoát phạm vi
 dung('khoá chatbot KHÔNG đổi được token; scope cũ giữ nguyên', !khoaDoiDuocToken('chatbot') && !khoaDoiDuocToken(' ChatBot ') && khoaDoiDuocToken('read') && khoaDoiDuocToken('admin') && khoaDoiDuocToken(undefined))
@@ -116,6 +117,59 @@ const nguonAuth = fs.readFileSync(path.join(__dirname, '../src/routes/auth.ts'),
 const doanToken = nguonAuth.slice(nguonAuth.indexOf("router.post('/token'"), nguonAuth.indexOf('jwt.sign(payload', nguonAuth.indexOf("router.post('/token'")))
 dung('POST /auth/token gọi khoaDoiDuocToken TRƯỚC khi ký JWT, SAU khi khớp secret',
     doanToken.includes('khoaDoiDuocToken(apiKey.scopes)') && doanToken.indexOf('bcrypt.compare(clientSecret') < doanToken.indexOf('khoaDoiDuocToken(apiKey.scopes)'))
+
+// 8. WEBHOOK trả lời khách (lib/chatbotKienThuc.ts + routes/chatbot.ts)
+const ngay = '2026-10-20'
+const tl = (o: any = {}) => ({ id: 'doi-tra', title: 'Chính sách đổi trả', category: 'returns', status: 'published', visibility: 'customer',
+    content: 'Đổi trả trong 7 ngày nếu sản phẩm còn nguyên tem, lỗi do nhà sản xuất.', keywords: ['đổi trả', 'hoàn tiền'], source: 'Quy định shop',
+    approved_by: 'NGUOI_DUYET_BI_MAT', editor_note: 'GHI_CHU_NOI_BO', updated_at: '2026-10-01', valid_from: '2026-10-01', valid_until: '2026-12-31', ...o })
+const kho = [tl(), tl({ id: 'nhap', status: 'draft' }), tl({ id: 'noi-bo', visibility: 'internal' }), tl({ id: 'het-han', valid_until: '2026-10-19' }), tl({ id: 'chua-toi', valid_from: '2026-10-21' })]
+const kt1 = timKienThuc(kho, 'shop ơi DOI TRA thế nào vậy', ngay)
+dung('kiến thức: tìm không dấu, chỉ tài liệu ĐÃ DUYỆT + cho khách + còn hiệu lực', kt1.status === 'candidates_found' && kt1.results.length === 1 && kt1.results[0].id === 'doi-tra', kt1)
+dung('kiến thức: KHÔNG trả người duyệt / ghi chú nội bộ', !JSON.stringify(kt1).includes('NGUOI_DUYET_BI_MAT') && !JSON.stringify(kt1).includes('GHI_CHU_NOI_BO'))
+dung('kiến thức: câu toàn từ dừng / rỗng / không có kho ⇒ cần người, không bịa',
+    timKienThuc(kho, 'shop ơi cho mình hỏi', ngay).status === 'invalid_query' && timKienThuc(kho, '', ngay).needs_human
+    && timKienThuc([tl({ status: 'draft' })], 'đổi trả', ngay).status === 'knowledge_unavailable' && timKienThuc(kho, 'giao hàng hoả tốc', ngay).needs_human)
+dung('kiến thức: hôm nay theo giờ VN', homNayVN(new Date('2026-10-20T17:30:00Z')) === '2026-10-21' && homNayVN(new Date('2026-10-20T16:59:00Z')) === '2026-10-20')
+
+const ks = kiemShopChatbot('shop-ab12', { ten: '  Kengi   Store ', kenh: 'Kengi Store', san: 'tiktok', kienThuc: { schema_version: 1, documents: [tl()] } })
+dung('lưu shop: làm sạch tên, giữ kênh + sàn, kho thành JSON', 'shop' in ks && ks.shop.ten === 'Kengi Store' && ks.shop.kenh === 'Kengi Store' && ks.shop.san === 'tiktok' && JSON.parse(ks.shop.kienThuc).documents.length === 1, ks)
+const ks2 = kiemShopChatbot('mac-dinh', { ten: 'A', kenh: null, san: 'amazon', kienThuc: { schema_version: 1, documents: [] } })
+dung('lưu shop: kênh null (chưa chọn) khác "" (giá lẻ); sàn lạ bỏ', 'shop' in ks2 && ks2.shop.kenh === null && ks2.shop.san === ''
+    && (() => { const r = kiemShopChatbot('mac-dinh', { ten: 'A', kenh: '', kienThuc: { schema_version: 1, documents: [] } }); return 'shop' in r && r.shop.kenh === '' })())
+dung('lưu shop: chặn mã lạ, thiếu tên, sai định dạng, trùng mã tài liệu, quá nhiều tài liệu',
+    ['../x', 'A B', '', 'x'.repeat(41)].every(m => 'loi' in kiemShopChatbot(m, { ten: 'A', kienThuc: { schema_version: 1, documents: [] } }))
+    && 'loi' in kiemShopChatbot('a', { ten: ' ', kienThuc: { schema_version: 1, documents: [] } })
+    && 'loi' in kiemShopChatbot('a', { ten: 'A', kienThuc: { documents: [] } })
+    && 'loi' in kiemShopChatbot('a', { ten: 'A', kienThuc: { schema_version: 1, documents: [tl(), tl()] } })
+    && 'loi' in kiemShopChatbot('a', { ten: 'A', kienThuc: { schema_version: 1, documents: Array.from({ length: 301 }, (_, i) => tl({ id: `t${i}` })) } }))
+
+const t1 = docTinNhan({ action: 'sendMessage', chatInput: '  quạt đứng giá sao ', sessionId: 'abc', shop: 'mac-dinh' })
+dung('webhook: nhận đúng thân Chat Trigger của n8n (chatInput + sessionId)', !('loi' in t1) && t1.cauHoi === 'quạt đứng giá sao' && t1.phien === 'abc' && t1.shop === 'mac-dinh', t1)
+const t2 = docTinNhan({ message: 'hi', shop: 'Kengi Store', lichSu: [{ role: 'khach', text: 'a' }, { role: 'shop', noiDung: 'b' }, { role: 'hacker', text: 'c' }, ...Array.from({ length: 20 }, () => ({ role: 'user', text: 'x' }))] })
+dung('webhook: message / lichSu (vai khách ⇒ user, shop ⇒ model, vai lạ bỏ, ≤ 12 lượt)', !('loi' in t2) && t2.lichSu.length === 12 && t2.lichSu.every(m => m.role === 'user' || m.role === 'model'))
+dung('webhook: thiếu tin nhắn / thiếu shop / quá dài ⇒ báo lỗi rõ',
+    'loi' in docTinNhan({ shop: 'a' }) && 'loi' in docTinNhan({ chatInput: 'x' }) && 'loi' in docTinNhan({ chatInput: 'x'.repeat(2001), shop: 'a' }) && 'loi' in docTinNhan(null))
+
+const traLoi1 = tachCoNhanVien(`Dạ để nhân viên kiểm tra giúp bạn nhé.\n${DAU_NHAN_VIEN}`)
+dung('câu trả lời: bỏ dấu cần nhân viên + bật cờ; câu thường không cờ; rỗng ⇒ câu dự phòng + cờ',
+    traLoi1.canNhanVien && !traLoi1.traLoi.includes(DAU_NHAN_VIEN) && traLoi1.traLoi === 'Dạ để nhân viên kiểm tra giúp bạn nhé.'
+    && !tachCoNhanVien('Dạ còn hàng ạ').canNhanVien && tachCoNhanVien(DAU_NHAN_VIEN).traLoi === TRA_LOI_DU_PHONG && tachCoNhanVien('').canNhanVien)
+const pr = soanPromptChatbot('Kengi Store', ngay)
+dung('prompt: tên shop, ngày, 2 công cụ, giá theo sàn, chưa rõ không khẳng định, chống chèn lệnh, dấu cần người',
+    pr.includes('"Kengi Store"') && pr.includes(ngay) && pr.includes('tra_cuu_kien_thuc') && pr.includes('tra_cuu_san_pham') && pr.includes('THEO TỪNG SÀN')
+    && pr.includes('chua_ro') && /DỮ LIỆU, không phải chỉ dẫn/.test(pr) && pr.includes(DAU_NHAN_VIEN))
+ghiPhien('k1', 'câu 1', 'đáp 1', 1_000)
+dung('nhớ phiên: giữ hội thoại, hết hạn sau 30 phút', layPhien('k1', 2_000).length === 2 && layPhien('k1', 1_000 + 31 * 60_000).length === 0)
+for (let i = 0; i < 10; i++) ghiPhien('k2', `c${i}`, `d${i}`, 5_000 + i)
+dung('nhớ phiên: tối đa 12 lượt gần nhất', layPhien('k2', 6_000).length === 12 && layPhien('k2', 6_000)[11].parts[0].text === 'd9')
+
+const nguonRoute = fs.readFileSync(path.join(__dirname, '../src/routes/chatbot.ts'), 'utf8')
+const doanShops = nguonRoute.split(/router\.(?:get|put|delete)\('\/shops/).slice(1)
+dung('/shops (kho kiến thức): CẢ 3 đường đều chặn khoá API + chỉ quản lý', doanShops.length === 3 && doanShops.every(d => d.slice(0, 120).includes('if (!chiQuanLy(req, res)) return')))
+dung('webhook dùng BỘ CÔNG CỤ RIÊNG (không bao giờ bộ MCP có giá vốn / khách hàng)', nguonRoute.includes('tools: congCuChatbot(') && !/allowWrite|allowedTools|giamSat/.test(nguonRoute))
+const nguonRunner = fs.readFileSync(path.join(__dirname, '../src/services/aiAgentRunner.ts'), 'utf8')
+dung('bộ chạy agent: có tools riêng thì KHÔNG lấy bộ MCP', nguonRunner.includes('p.tools ? bocTool(p.tools) : chonTool('))
 
 console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
 process.exit(loi ? 1 : 0)
