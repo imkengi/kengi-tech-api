@@ -76,10 +76,52 @@ export interface CaiDatDay {
     kemHoaDon: boolean
     /** Dòng hàng chưa nối mã MISA thì BỎ QUA dòng đó, vẫn đẩy phần còn lại (chủ shop 19/10/2026: "cái nào chưa link thì bỏ qua") */
     boQuaDongChuaNoi: boolean
+    /** Tự động đẩy chứng từ bán mỗi ngày (chủ shop 20/10/2026: "cron tự động đẩy theo ngày giờ luôn") — lib/misaTuDong.ts */
+    tuDong: TuDongDay
+    /** Lần tự đẩy gần nhất — MÁY CHỦ ghi (nhịp ngoài), PUT /thiet-lap không cho trình duyệt sửa */
+    tuDongLan: LanTuDong | null
     tk: {
         tienMat: string; nganHang: string; phaiThu: string
         doanhThu: string; doanhThuDV: string; thueRa: string
         kho: string; phaiTra: string; thueVao: string; giaVon: string
+    }
+}
+
+export interface TuDongDay {
+    bat: boolean
+    /** Giờ chạy (giờ VN 'HH:MM'). Nhịp ngoài xét mỗi 5 phút ⇒ chạy trong ~5 phút sau giờ này */
+    gio: string
+    /** Đẩy phiếu bán của: hôm qua (mặc định — đêm KiotViet vá dòng rơi xong mới đẩy) hoặc chính hôm nay */
+    ngay: 'hom_qua' | 'hom_nay'
+    /** Chỉ phiếu Lấy HĐ (gồm khách "luôn lấy hoá đơn"); mặc định mọi phiếu bán */
+    chiLayHoaDon: boolean
+}
+
+export interface LanTuDong {
+    /** Ngày chạy (giờ VN) — mỗi ngày MỘT lượt */
+    ngay: string
+    batDau: string
+    xong: boolean
+    ketThuc?: string
+    /** Ngày bán của các phiếu được xét */
+    ngayPhieu?: string
+    tong?: number
+    sanSang?: number
+    daGui?: number
+    loi?: number
+    thieu?: number
+    /** Lỗi chung (MISA từ chối kết nối, danh mục hỏng…) hoặc vài lỗi đầu của từng phiếu */
+    ghiChu?: string | null
+}
+
+const GIO_HOP_LE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function docTuDong(t: any): TuDongDay {
+    return {
+        bat: t?.bat === true,
+        gio: typeof t?.gio === 'string' && GIO_HOP_LE.test(t.gio) ? t.gio : '07:00',
+        ngay: t?.ngay === 'hom_nay' ? 'hom_nay' : 'hom_qua',
+        chiLayHoaDon: t?.chiLayHoaDon === true,
     }
 }
 
@@ -89,6 +131,8 @@ export const CAI_DAT_MAC_DINH: CaiDatDay = {
     kiemXuatKho: true,
     purchasePurposeId: null,
     thueSuat: 8, giaGomThue: true, kemHoaDon: true, boQuaDongChuaNoi: true,
+    tuDong: { bat: false, gio: '07:00', ngay: 'hom_qua', chiLayHoaDon: false },
+    tuDongLan: null,
     tk: {
         tienMat: '1111', nganHang: '1121', phaiThu: '131',
         doanhThu: '5111', doanhThuDV: '5113', thueRa: '33311',
@@ -113,8 +157,30 @@ export function docCaiDat(raw: string | null | undefined): CaiDatDay {
         giaGomThue: typeof o.giaGomThue === 'boolean' ? o.giaGomThue : CAI_DAT_MAC_DINH.giaGomThue,
         kemHoaDon: typeof o.kemHoaDon === 'boolean' ? o.kemHoaDon : CAI_DAT_MAC_DINH.kemHoaDon,
         boQuaDongChuaNoi: typeof o.boQuaDongChuaNoi === 'boolean' ? o.boQuaDongChuaNoi : CAI_DAT_MAC_DINH.boQuaDongChuaNoi,
+        tuDong: docTuDong(o.tuDong),
+        tuDongLan: o.tuDongLan && typeof o.tuDongLan === 'object' && typeof o.tuDongLan.ngay === 'string' ? o.tuDongLan : null,
         tk,
     }
+}
+
+/**
+ * Sửa thiết lập đẩy kiểu SO-RỒI-GHI: đọc pushConfig, `doi` trả bản mới (null = thôi), chỉ ghi khi pushConfig CHƯA bị ai đổi
+ * từ lúc đọc (updateMany có điều kiện = chuỗi cũ). Nhịp tự đẩy (lib/misaTuDong) và nút Lưu thiết lập cùng ghi một ô JSON —
+ * ghi thẳng thì bên ghi sau xoá mất phần bên kia vừa ghi. Đụng nhau thì đọc lại, thử tối đa `soLan` lần.
+ */
+export async function capNhatCaiDat(sp: any, doi: (cu: CaiDatDay) => CaiDatDay | null, soLan = 3): Promise<CaiDatDay | null> {
+    for (let i = 0; i < soLan; i++) {
+        const cfg = await sp.misaConfig.findUnique({ where: { id: 'default' }, select: { pushConfig: true } })
+        if (!cfg) return null
+        const moi = doi(docCaiDat(cfg.pushConfig))
+        if (!moi) return null
+        const r = await sp.misaConfig.updateMany({
+            where: { id: 'default', pushConfig: cfg.pushConfig ?? null },
+            data: { pushConfig: JSON.stringify(moi) },
+        })
+        if (Number(r?.count) === 1) return moi
+    }
+    return null
 }
 
 // ─── Khoá tất định ──────────────────────────────────────────────────────────
@@ -248,6 +314,52 @@ export async function docDanhMucMisa(creds: MisaCreds, khoaBoNho: string, lamMoi
 }
 
 export function quenDanhMuc(khoaBoNho: string) { boNhoDanhMuc.delete(khoaBoNho) }
+
+// ─── Tồn kho MISA (get_list_inventory_balance) ──────────────────────────────
+/* Chủ shop 20/10/2026: "bên phần liên kết hàng hoá hiện tồn bên misa với phần mềm này". MISA trả tồn theo TỪNG (vật tư, kho),
+ * mỗi trang 100 dòng ⇒ HUTI ~2.500 mã đọc mất 15–40 giây — nhớ 10 phút theo cửa hàng, nút "Làm mới tồn MISA" đọc lại. CHỈ ĐỌC:
+ * không ghi tồn MISA vào Kengi (đó là việc của chiều kéo + công tắc overwriteStock). */
+export interface TonKhoMisa {
+    layLuc: number
+    /** khoá = mã vật tư (khoaMa) → tổng mọi kho + từng kho (khoá = mã kho, khoaMa) */
+    theoMa: Map<string, { tong: number; kho: Record<string, number> }>
+    soDong: number
+    catBot: boolean
+}
+const boNhoTon = new Map<string, TonKhoMisa>()
+const TON_SONG_MS = 10 * 60_000
+
+export async function docTonKhoMisa(creds: MisaCreds, khoaBoNho: string, lamMoi = false): Promise<TonKhoMisa> {
+    const cu = boNhoTon.get(khoaBoNho)
+    if (!lamMoi && cu && Date.now() - cu.layLuc < TON_SONG_MS) return cu
+    const r = await MISA.tonKho(creds, {}, { maxPages: 400 })
+    const theoMa = new Map<string, { tong: number; kho: Record<string, number> }>()
+    for (const m of r.items) {
+        const ma = chuoi(pick(m, 'inventory_item_code', 'InventoryItemCode'))
+        if (!ma) continue
+        const sl = Number(pick(m, 'quantity_balance', 'QuantityBalance') ?? 0) || 0
+        const kho = khoaMa(chuoi(pick(m, 'stock_code', 'StockCode')) || '?')
+        const x = theoMa.get(khoaMa(ma)) || { tong: 0, kho: {} }
+        x.tong += sl
+        x.kho[kho] = (x.kho[kho] || 0) + sl
+        theoMa.set(khoaMa(ma), x)
+    }
+    const ton: TonKhoMisa = { layLuc: Date.now(), theoMa, soDong: r.items.length, catBot: r.truncated }
+    boNhoTon.set(khoaBoNho, ton)
+    return ton
+}
+
+/** Tồn đã nhớ (không gọi MISA) — trang Liên kết hiện ngay nếu bản máy này đã đọc */
+export function tonKhoDaNho(khoaBoNho: string): TonKhoMisa | null {
+    const t = boNhoTon.get(khoaBoNho)
+    return t && Date.now() - t.layLuc < TON_SONG_MS ? t : null
+}
+
+/** Tồn MISA của một mã: tổng mọi kho + kho đang đẩy (thiết lập maKho). coDong = MISA có dòng tồn cho mã này */
+export function tonCuaMa(ton: TonKhoMisa, ma: string, maKho: string | null): { tong: number; kho: number | null; coDong: boolean } {
+    const x = ton.theoMa.get(khoaMa(String(ma || '')))
+    return { tong: x?.tong ?? 0, kho: maKho ? (x?.kho[khoaMa(maKho)] ?? 0) : null, coDong: !!x }
+}
 
 // ─── Kế hoạch đẩy ───────────────────────────────────────────────────────────
 

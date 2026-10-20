@@ -97,6 +97,14 @@ router.post('/tick', async (req: Request, res: Response) => {
         await quetHopThu({ chiNenTang: 'shopee-video', nganSachMs: 40_000 })
         ra.pushVideo = 'xong'
     } catch (e: any) { ra.pushVideo = 'loi: ' + (e?.message || e) }
+    /* Tự động đẩy hoá đơn sang MISA theo giờ đặt (20/10/2026, chủ shop: "cron tự động đẩy theo ngày giờ luôn"). Xét mỗi 5 phút;
+     * mỗi cửa hàng một lượt/ngày, giành lượt trên dòng MisaConfig. Lượt đầu ngày có thể đọc danh mục MISA 10–60 giây. lib/misaTuDong.ts */
+    if (new Date().getUTCMinutes() % 5 === 4) {
+        try {
+            const { nhipTuDongDayMisa } = await import('../lib/misaTuDong')
+            ra.tuDongMisa = await nhipTuDongDayMisa()
+        } catch (e: any) { ra.tuDongMisa = 'loi: ' + (e?.message || e) }
+    }
     res.json({ success: true, data: { ...ra, ms: Date.now() - batDau } })
 })
 

@@ -17,7 +17,10 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import { MISA, testMisaConnection, clearMisaToken, type MisaCreds } from '../services/misa'
-import { docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua, type DongKeHoach } from '../services/misaPush'
+import {
+    docCaiDat, docDanhMucMisa, quenDanhMuc, lapKeHoach, guiDi, hoiKetQua, capNhatCaiDat,
+    docTonKhoMisa, tonKhoDaNho, tonCuaMa, type DongKeHoach, type TonKhoMisa,
+} from '../services/misaPush'
 import {
     dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, boNoiHang, nhapLienKetPrtcode, boDau,
     type ChiMucMisa, type DongNhap,
@@ -163,10 +166,15 @@ router.put('/thiet-lap', CAU_HINH, async (req: AuthRequest, res: Response) => {
         const kn = await canKetNoi(req, res); if (!kn) return
         const moi = req.body?.thietLap
         if (!moi || typeof moi !== 'object') { res.status(400).json({ success: false, error: 'Thiếu thietLap' }); return }
-        const cu = docCaiDat(kn.cfg.pushConfig)
-        const gop = { ...cu, ...moi, tk: { ...cu.tk, ...(moi.tk || {}) } }
-        const chuan = docCaiDat(JSON.stringify(gop))
-        await kn.sp.misaConfig.update({ where: { id: 'default' }, data: { pushConfig: JSON.stringify(chuan) } })
+        /* Ghi SO-RỒI-GHI (capNhatCaiDat): nhịp tự đẩy (lib/misaTuDong) cũng ghi ô pushConfig này. tuDongLan là sổ của máy chủ —
+         * trình duyệt gửi gì cũng giữ bản đang có; tuDong gộp từng khoá (gửi mỗi giờ chạy không làm tắt công tắc). */
+        const chuan = await capNhatCaiDat(kn.sp, cu => docCaiDat(JSON.stringify({
+            ...cu, ...moi,
+            tk: { ...cu.tk, ...(moi.tk || {}) },
+            tuDong: { ...cu.tuDong, ...(moi.tuDong && typeof moi.tuDong === 'object' ? moi.tuDong : {}) },
+            tuDongLan: cu.tuDongLan,
+        })))
+        if (!chuan) { res.status(409).json({ success: false, error: 'Thiết lập vừa bị thay đổi cùng lúc — tải lại trang rồi lưu lại' }); return }
         res.json({ success: true, data: chuan })
     } catch (e: any) { tra500(res, e) }
 })
@@ -291,20 +299,29 @@ router.get('/lien-ket', XEM, async (req: AuthRequest, res: Response) => {
         const ids = await idHangTheoPhamVi(kn.sp, phamVi, ngay)
         const hang: any[] = await kn.sp.product.findMany({
             where: ids ? { id: { in: ids } } : { mergedIntoId: null },
-            select: { id: true, sku: true, name: true, baseUnit: true },
+            select: { id: true, sku: true, name: true, baseUnit: true, stock: true },
             orderBy: { name: 'asc' },
         })
         const lk = await trangThaiLienKet(kn.sp, dm, hang)
-        const dem = { tong: hang.length, noi: 0, trungMa: 0, chua: 0, noiHong: 0 }
+        /* Tồn MISA (chủ shop 20/10/2026: "hiện tồn bên misa với phần mềm này"): đọc trọn bộ mất 15–40 giây ⇒ danh sách CHỈ dùng bản
+         * đã nhớ của bản máy này; chưa có thì trình duyệt gọi POST /ton-misa cho đúng trang đang xem. Lọc "lệch tồn" cần trọn bộ ⇒ đọc. */
+        const maKho = docCaiDat(kn.cfg.pushConfig).maKho
+        let ton: TonKhoMisa | null = tonKhoDaNho(kn.schema)
+        if (!ton && loc === 'lech-ton') ton = await docTonKhoMisa(kn.creds, kn.schema)
+        const tonMisaCua = (h: any) => { const l = lk.get(h.id)!; return ton && l.vt ? tonCuaMa(ton, l.vt.ma, maKho) : null }
+        const lechTon = (h: any) => { const t = tonMisaCua(h); return !!t && Math.abs((t.kho ?? t.tong) - (Number(h.stock) || 0)) > 1e-6 }
+        const dem = { tong: hang.length, noi: 0, trungMa: 0, chua: 0, noiHong: 0, lechTon: ton ? 0 : null as number | null }
         for (const h of hang) {
             const k = lk.get(h.id)!.kieu
             if (k === 'noi') dem.noi++; else if (k === 'trung-ma') dem.trungMa++; else if (k === 'noi-hong') dem.noiHong++; else dem.chua++
+            if (dem.lechTon !== null && lechTon(h)) dem.lechTon++
         }
         const loc_ = hang.filter(h => {
             const k = lk.get(h.id)!.kieu
             if (loc === 'chua' && !(k === 'chua' || k === 'noi-hong')) return false
             if (loc === 'noi' && k !== 'noi') return false
             if (loc === 'trung-ma' && k !== 'trung-ma') return false
+            if (loc === 'lech-ton' && !lechTon(h)) return false
             if (q && !boDau(`${h.sku} ${h.name}`).includes(q)) return false
             return true
         })
@@ -316,9 +333,28 @@ router.get('/lien-ket', XEM, async (req: AuthRequest, res: Response) => {
                 kieu: l.kieu, misa: l.vt ? { ma: l.vt.ma, ten: l.vt.ten, dvt: l.vt.dvt, ngung: !!l.vt.ngung } : null,
                 maDaNoi: l.maDaNoi ?? null,
                 goiY: l.kieu === 'chua' || l.kieu === 'noi-hong' ? goiYVatTu(cm, h.name, h.sku) : [],
+                tonKengi: Number(h.stock) || 0,
+                tonMisa: tonMisaCua(h),
             }
         })
-        res.json({ success: true, data: { dem, tongLoc: loc_.length, trang, soTrang: Math.max(1, Math.ceil(loc_.length / 50)), dong, soVatTuMisa: dm.vatTuTheoMa.size } })
+        res.json({ success: true, data: {
+            dem, tongLoc: loc_.length, trang, soTrang: Math.max(1, Math.ceil(loc_.length / 50)), dong, soVatTuMisa: dm.vatTuTheoMa.size,
+            tonMisa: { layLuc: ton ? new Date(ton.layLuc).toISOString() : null, maKho, catBot: !!ton?.catBot },
+        } })
+    } catch (e: any) { tra500(res, e) }
+})
+
+/** Tồn MISA cho các mã đang xem ở tab Liên kết (đọc trọn bộ lần đầu 15–40 giây, nhớ 10 phút). lamMoi = đọc lại từ MISA. */
+router.post('/ton-misa', XEM, async (req: AuthRequest, res: Response) => {
+    try {
+        const kn = await canKetNoi(req, res); if (!kn) return
+        const ma: string[] = Array.isArray(req.body?.ma) ? req.body.ma.map(String).filter(Boolean).slice(0, 500) : []
+        const ton = await docTonKhoMisa(kn.creds, kn.schema, req.body?.lamMoi === true)
+        const maKho = docCaiDat(kn.cfg.pushConfig).maKho
+        res.json({ success: true, data: {
+            layLuc: new Date(ton.layLuc).toISOString(), maKho, soDong: ton.soDong, catBot: ton.catBot,
+            theoMa: Object.fromEntries(ma.map(m => [m, tonCuaMa(ton, m, maKho)])),
+        } })
     } catch (e: any) { tra500(res, e) }
 })
 

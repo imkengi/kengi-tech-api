@@ -3,7 +3,8 @@
  * Trang Vận Hành › "Đẩy HĐ sang MISA": mã HUTI đến từ KiotViet, phần lớn không trùng mã vật tư MISA; MISA lưu khách theo MST.
  * Prisma giả, không DB, không gọi MISA. */
 import { dungChiMuc, goiYVatTu, timVatTu, trangThaiLienKet, noiHang, nhapLienKetPrtcode } from '../src/lib/misaLienKet'
-import { lapKeHoach, docCaiDat, tenKhongDau, NHAN_TIEU_DUNG, cungDvt, type DanhMucMisa } from '../src/services/misaPush'
+import { lapKeHoach, docCaiDat, tenKhongDau, NHAN_TIEU_DUNG, cungDvt, capNhatCaiDat, tonCuaMa, type DanhMucMisa, type TonKhoMisa } from '../src/services/misaPush'
+import { denLuot, khoangNgayPhieu, tuDongDayMotCuaHang, TREO_MS } from '../src/lib/misaTuDong'
 import { batLayHoaDonKhachLuonLay } from '../src/lib/zaloNhom'
 
 let loi = 0
@@ -326,6 +327,84 @@ async function main() {
     goiGhi = 0
     const soBat0 = await batLayHoaDonKhachLuonLay(spBat([]), tuBat)
     dung('nhịp: chưa có khách luôn lấy HĐ ⇒ không ghi gì, trả 0', soBat0 === 0 && goiGhi === 0, { soBat0, goiGhi })
+
+    /* ── TỰ ĐỘNG ĐẨY THEO GIỜ (chủ shop 20/10/2026: "cron tự động đẩy theo ngày giờ luôn") — lib/misaTuDong.ts ── */
+    const cdTd = (tuDong: any, tuDongLan: any = null) => docCaiDat(JSON.stringify({ branchId: 'cn1', maKho: 'HH', tuDong, tuDongLan }))
+    dung('thiết lập tự đẩy: mặc định TẮT, 07:00, phiếu hôm qua, mọi phiếu; giờ sai ⇒ 07:00; "hom_nay" giữ; tuDongLan hỏng ⇒ null',
+        JSON.stringify(docCaiDat(null).tuDong) === JSON.stringify({ bat: false, gio: '07:00', ngay: 'hom_qua', chiLayHoaDon: false })
+        && cdTd({ bat: true, gio: '25:00' }).tuDong.gio === '07:00' && cdTd({ bat: true, gio: '22:30', ngay: 'hom_nay' }).tuDong.ngay === 'hom_nay'
+        && cdTd({ bat: 'co' }).tuDong.bat === false && cdTd({}, { khong: 1 }).tuDongLan === null && cdTd({}, { ngay: '2026-10-20', batDau: 'x', xong: true }).tuDongLan?.xong === true)
+    const luc = (gioVn: string, ngay = '2026-10-20') => new Date(`${ngay}T${gioVn}:00+07:00`)
+    const batTd = { bat: true, gio: '07:00', ngay: 'hom_qua', chiLayHoaDon: false }
+    dung('tới lượt: tắt ⇒ không · 06:59 ⇒ chưa tới giờ · 07:00 ⇒ được · đã xong hôm nay ⇒ không · lượt hôm qua ⇒ được',
+        denLuot(cdTd({ ...batTd, bat: false }), luc('09:00')).lyDo === 'tat' && denLuot(cdTd(batTd), luc('06:59')).lyDo === 'chua-den-gio'
+        && denLuot(cdTd(batTd), luc('07:00')).duoc && denLuot(cdTd(batTd, { ngay: '2026-10-20', batDau: luc('07:01').toISOString(), xong: true }), luc('09:00')).lyDo === 'da-chay'
+        && denLuot(cdTd(batTd, { ngay: '2026-10-19', batDau: luc('07:01', '2026-10-19').toISOString(), xong: true }), luc('07:05')).duoc)
+    const dangChay = { ngay: '2026-10-20', batDau: luc('07:00').toISOString(), xong: false }
+    dung('lượt đang chạy ⇒ bản máy khác không chạy chen; treo quá 20 phút ⇒ được giành lại',
+        denLuot(cdTd(batTd, dangChay), luc('07:10')).lyDo === 'dang-chay' && denLuot(cdTd(batTd, dangChay), new Date(luc('07:00').getTime() + TREO_MS + 1000)).duoc)
+    const kpQua = khoangNgayPhieu(cdTd(batTd), luc('00:30')), kpNay = khoangNgayPhieu(cdTd({ ...batTd, ngay: 'hom_nay' }), luc('23:00'))
+    dung('ngày phiếu: "hôm qua" lúc 00:30 ngày 20/10 ⇒ phiếu 19/10 trọn ngày giờ VN · "hôm nay" lúc 23:00 ⇒ 20/10',
+        kpQua.ngay === '2026-10-19' && kpQua.tu.toISOString() === '2026-10-18T17:00:00.000Z' && kpQua.den.toISOString() === '2026-10-19T16:59:59.999Z'
+        && kpNay.ngay === '2026-10-20', { kpQua, kpNay })
+
+    // MisaConfig giả: updateMany CHỈ ghi khi pushConfig vẫn là chuỗi lúc đọc (như Postgres); `chenGiua` = người khác ghi ngay sau lần đọc
+    const cfgGia = (raw: string | null, chenGiua?: (r: string | null) => string | null) => {
+        const o: any = { raw, soGhi: 0, soDoc: 0 }
+        o.sp = {
+            misaConfig: {
+                findUnique: async () => { o.soDoc++; const kq = { id: 'default', appId: 'a', accessCode: 'b', orgCompanyCode: 'c', pushConfig: o.raw }; if (chenGiua && o.soDoc === 1) o.raw = chenGiua(o.raw); return kq },
+                updateMany: async ({ where, data }: any) => { if (where.pushConfig === o.raw) { o.raw = data.pushConfig; o.soGhi++; return { count: 1 } } return { count: 0 } },
+            },
+        }
+        return o
+    }
+    const c1 = cfgGia(JSON.stringify({ maKho: 'HH' }), r => JSON.stringify({ ...JSON.parse(r!), maKho: 'KHO2' }))
+    const kqCap = await capNhatCaiDat(c1.sp, cu => ({ ...cu, thueSuat: 10 }))
+    dung('ghi so-rồi-ghi: có người ghi chen giữa ⇒ đọc lại, giữ thay đổi của họ (kho KHO2) + của mình (thuế 10%)',
+        kqCap?.thueSuat === 10 && JSON.parse(c1.raw).maKho === 'KHO2' && JSON.parse(c1.raw).thueSuat === 10 && c1.soGhi === 1, c1.raw)
+    const c2 = cfgGia(JSON.stringify({ maKho: 'HH' }))
+    dung('ghi so-rồi-ghi: hàm đổi trả null ⇒ không ghi gì', (await capNhatCaiDat(c2.sp, () => null)) === null && c2.soGhi === 0)
+
+    // một lượt tự đẩy với MISA giả
+    const goi: any = { keHoach: null as any, guiIds: [] as string[], danhMuc: 0 }
+    const ptGia: any = {
+        docDanhMuc: async () => { goi.danhMuc++; return dm },
+        lapKeHoach: async (_sp: any, _c: any, cd: any, _dm: any, ts: any) => {
+            goi.keHoach = { ts, chiLay: ts.chiLayHoaDon, gio: cd.tuDong.gio }
+            return { dong: [{ localId: 'a', refNo: 'HD1', trangThai: 'san_sang' }, { localId: 'b', refNo: 'HD2', trangThai: 'thieu' }, { localId: 'c', refNo: 'HD3', trangThai: 'san_sang' }, { localId: 'd', refNo: 'HD4', trangThai: 'da_day' }],
+                dem: { san_sang: 2, thieu: 1, da_day: 1, da_co: 0, bo_qua: 0 }, canhBaoChung: [] }
+        },
+        guiDi: async (_sp: any, _c: any, loai: string, ds: any[]) => { goi.guiIds = ds.map(d => d.localId); goi.loai = loai; return { daGui: 1, loi: [{ refNo: 'HD3', loi: 'MISA chê' }], xuLy: [] } },
+    }
+    const c3 = cfgGia(JSON.stringify({ maKho: 'HH', tuDong: { ...batTd, chiLayHoaDon: true } }))
+    const kqTd = await tuDongDayMotCuaHang(c3.sp, 's', luc('07:04'), ptGia)
+    const lanTd = JSON.parse(c3.raw).tuDongLan
+    dung('tới giờ ⇒ giành lượt, dựng kế hoạch phiếu HÔM QUA (19/10) đúng bộ lọc Lấy HĐ, gửi ĐÚNG phiếu sẵn sàng, ghi kết quả vào thiết lập',
+        goi.keHoach?.ts?.tu?.toISOString() === '2026-10-18T17:00:00.000Z' && goi.keHoach?.chiLay === true && goi.loai === 'banhang'
+        && JSON.stringify(goi.guiIds) === JSON.stringify(['a', 'c']) && lanTd?.xong === true && lanTd?.ngay === '2026-10-20' && lanTd?.ngayPhieu === '2026-10-19'
+        && lanTd?.daGui === 1 && lanTd?.sanSang === 2 && lanTd?.loi === 1 && lanTd?.thieu === 1 && lanTd?.tong === 4 && String(lanTd?.ghiChu).includes('HD3: MISA chê')
+        && kqTd.startsWith('1/2 phiếu'), { kqTd, lanTd, goi })
+    goi.guiIds = []; goi.danhMuc = 0
+    const kqLan2 = await tuDongDayMotCuaHang(c3.sp, 's', luc('07:09'), ptGia)
+    dung('nhịp sau cùng ngày ⇒ không chạy lại (đã xong hôm nay)', kqLan2 === '' && goi.guiIds.length === 0 && goi.danhMuc === 0)
+    // bản máy khác giành trước: ngay sau lần đọc đầu, dòng MisaConfig đã ghi "đang chạy" ⇒ lần ghi giành của mình hỏng, đọc lại thấy đang chạy
+    const c4 = cfgGia(JSON.stringify({ maKho: 'HH', tuDong: batTd }),
+        r => JSON.stringify({ ...JSON.parse(r!), tuDongLan: { ngay: '2026-10-20', batDau: luc('07:04').toISOString(), xong: false } }))
+    const kqChen = await tuDongDayMotCuaHang(c4.sp, 's', luc('07:04'), ptGia)
+    dung('hai bản máy cùng nhận nhịp: bản giành sau KHÔNG gửi gì', kqChen === '' && goi.guiIds.length === 0 && goi.danhMuc === 0, c4.raw)
+    const c5 = cfgGia(JSON.stringify({ maKho: 'HH', tuDong: batTd }))
+    const ptLoi: any = { ...ptGia, docDanhMuc: async () => { throw new Error('MISA: sai App ID') } }
+    const kqLoi = await tuDongDayMotCuaHang(c5.sp, 's', luc('08:00'), ptLoi)
+    const lanLoi = JSON.parse(c5.raw).tuDongLan
+    dung('MISA hỏng giữa chừng ⇒ lượt vẫn đóng (xong) kèm lỗi nguyên văn — không treo "đang chạy" cả ngày',
+        lanLoi?.xong === true && String(lanLoi?.ghiChu).includes('sai App ID') && kqLoi.startsWith('0/'), lanLoi)
+
+    // tồn MISA theo mã + kho đang đẩy (khoá không phân biệt hoa thường)
+    const tonGia: TonKhoMisa = { layLuc: Date.now(), soDong: 3, catBot: false, theoMa: new Map([['DCX125', { tong: 12, kho: { HH: 10, KHO2: 2 } }]]) }
+    const t1 = tonCuaMa(tonGia, 'dcx125', 'hh'), t2 = tonCuaMa(tonGia, 'KHONG-CO', 'HH'), t3 = tonCuaMa(tonGia, 'DCX125', null)
+    dung('tồn MISA: theo mã (không phân biệt hoa thường) + kho đang đẩy; mã MISA không có dòng tồn ⇒ 0, coDong=false; chưa chọn kho ⇒ kho null',
+        t1.tong === 12 && t1.kho === 10 && t1.coDong && t2.tong === 0 && t2.kho === 0 && !t2.coDong && t3.kho === null && t3.tong === 12, { t1, t2, t3 })
 
     console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
     process.exit(loi ? 1 : 0)
