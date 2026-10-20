@@ -30,7 +30,7 @@ export type KetQuaSoat = { noiDung: NoiDungSoat; tuBoNho: boolean; nhaCungCap: s
 
 /** Đổi hướng dẫn thì tăng — kho cũ soát theo hướng dẫn cũ sẽ được soát lại */
 const PHIEN_BAN_SOAT = 'v1'
-const MODEL_GEMINI = Array.from(new Set([
+export const MODEL_GEMINI = Array.from(new Set([
     process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash',
 ].filter(Boolean) as string[]))
 

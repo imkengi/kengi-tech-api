@@ -105,6 +105,14 @@ router.post('/tick', async (req: Request, res: Response) => {
             ra.tuDongMisa = await nhipTuDongDayMisa()
         } catch (e: any) { ra.tuDongMisa = 'loi: ' + (e?.message || e) }
     }
+    /* Kengi Vault (20/10/2026): nhắc giấy tờ sắp hết hạn (1 tin/cửa hàng/ngày, 8h–21h), dọn thùng rác 30 ngày +
+     * phiên tải lên bỏ dở, AI đọc nốt tệp mà tab đã đóng. Mỗi 3 phút; tự giãn nhắc/dọn 15 phút. cron/vaultCron.ts */
+    if (new Date().getUTCMinutes() % 3 === 1) {
+        try {
+            const { nhipKhoTaiLieu } = await import('../cron/vaultCron')
+            ra.khoTaiLieu = await nhipKhoTaiLieu(30_000)
+        } catch (e: any) { ra.khoTaiLieu = 'loi: ' + (e?.message || e) }
+    }
     res.json({ success: true, data: { ...ra, ms: Date.now() - batDau } })
 })
 

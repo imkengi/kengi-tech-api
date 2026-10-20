@@ -2706,11 +2706,13 @@ model ZReport {
 }
 
 // ─── Storage Vault ──────────────────────────────────────────────────────────
+// Kengi Vault v4 (20/10/2026): tệp nằm ở bucket RIÊNG TƯ (lib/khoTaiLieu.ts), cột thêm về sau đi qua
+// /admin/migrate (ALTER viết tay) + tự vá lười trong lib/khoTaiLieu.ts damBaoBangVault().
 
 model StorageFile {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String
-  url           String
+  url           String    // bản cũ: đường /uploads trên đĩa tạm (đã mất); bản mới: "vault:<id>" — FE luôn xin link ký
   size          Int
   type          String
   category      String
@@ -2718,11 +2720,85 @@ model StorageFile {
   referenceName String?
   description   String?
   uploadedBy    String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  status        String    @default("ready") // uploading | ready | trash | version
+  objectKey     String?   // khoá object trong bucket riêng tư; null = tệp đời cũ (đĩa tạm, đã mất)
+  thumbKey      String?
+  folderId      String?
+  tags          String[]  @default([])
+  referenceType String?   // customer | supplier | vehicle | employee | product | other
+  md5           String?
+  pinned        Boolean   @default(false)
+  expiresAt     DateTime? // ngày hết hạn của GIẤY TỜ (hợp đồng, giấy phép, đăng kiểm…) — không phải hạn link
+  remindDays    Int?
+  reminded      String?   // "<yyyy-mm-dd hết hạn>:30,7,1" — mốc đã nhắc theo đúng ngày hết hạn đó
+  aiStatus      String?   // pending | done | error | skipped
+  aiData        Json?
+  aiText        String?
+  aiError       String?
+  aiAt          DateTime?
+  version       Int       @default(1)
+  versionOf     String?   // dòng phiên bản cũ trỏ về tệp hiện hành
+  uploaderId    String?
+  updatedBy     String?
+  deletedAt     DateTime?
+  deletedBy     String?
 
   @@index([category])
   @@index([referenceId])
+  @@index([status])
+  @@index([folderId])
+  @@index([referenceType, referenceId])
+  @@index([expiresAt])
+  @@index([md5])
+  @@index([versionOf])
+}
+
+model StorageFolder {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  color     String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+model StorageActivity {
+  id        String   @id @default(cuid())
+  fileId    String?
+  action    String   // tai_len | xem | tai_ve | sua | di_chuyen | xoa | khoi_phuc | xoa_vinh_vien | chia_se | huy_chia_se | phien_ban | ai_doc | zip | thu_muc
+  actor     String
+  actorId   String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([fileId])
+  @@index([createdAt])
+}
+
+model StorageShare {
+  id        String    @id // 32 ký tự hex ngẫu nhiên — nằm trong đường chia sẻ, kèm chữ ký HMAC
+  fileId    String
+  createdBy String
+  note      String?
+  expiresAt DateTime
+  maxViews  Int?
+  views     Int       @default(0)
+  revokedAt DateTime?
+  lastViewAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([fileId])
+}
+
+model StorageConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 // --- Chart of Accounts (TT200/2014) ----------------------------------------

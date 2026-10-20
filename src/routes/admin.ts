@@ -4101,6 +4101,45 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // true ⇒ phiếu bán của khách tự bật Lấy HĐ (nhịp lib/zaloNhom) + đẩy MISA xuất theo MST; false = tuỳ lúc (/hoadon).
                 // ⚠ Chạy migrate TRƯỚC khi deploy code có cột này trong model Customer — danh sách / chi tiết khách đọc mọi cột.
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "luonLayHoaDon" BOOLEAN NOT NULL DEFAULT false`)
+                /* 20/10/2026 — KENGI VAULT v4 (routes/storage.ts, lib/khoTaiLieu.ts): bucket riêng tư, thư mục, nhãn, hết hạn + nhắc,
+                 * phiên bản, thùng rác, chia sẻ, AI đọc. Cùng danh sách với DDL_VAULT (lib/khoTaiLieu.ts — tự vá lười ở lượt gọi đầu). */
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageFile" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "url" TEXT NOT NULL, "size" INTEGER NOT NULL, "type" TEXT NOT NULL, "category" TEXT NOT NULL, "referenceId" TEXT, "referenceName" TEXT, "description" TEXT, "uploadedBy" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StorageFile_pkey" PRIMARY KEY ("id"))`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'ready'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "objectKey" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "thumbKey" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "folderId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "tags" TEXT[] DEFAULT ARRAY[]::TEXT[]`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "referenceType" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "md5" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "pinned" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "remindDays" INTEGER`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "reminded" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "aiStatus" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "aiData" JSONB`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "aiText" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "aiError" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "aiAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 1`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "versionOf" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "uploaderId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "updatedBy" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StorageFile" ADD COLUMN IF NOT EXISTS "deletedBy" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_status_idx" ON "StorageFile"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_folderId_idx" ON "StorageFile"("folderId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_referenceType_referenceId_idx" ON "StorageFile"("referenceType", "referenceId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_expiresAt_idx" ON "StorageFile"("expiresAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_md5_idx" ON "StorageFile"("md5")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFile_versionOf_idx" ON "StorageFile"("versionOf")`)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageFolder" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "parentId" TEXT, "color" TEXT, "createdBy" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "StorageFolder_pkey" PRIMARY KEY ("id"))`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageFolder_parentId_idx" ON "StorageFolder"("parentId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageActivity" ("id" TEXT NOT NULL, "fileId" TEXT, "action" TEXT NOT NULL, "actor" TEXT NOT NULL, "actorId" TEXT, "detail" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StorageActivity_pkey" PRIMARY KEY ("id"))`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageActivity_fileId_idx" ON "StorageActivity"("fileId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageActivity_createdAt_idx" ON "StorageActivity"("createdAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageShare" ("id" TEXT NOT NULL, "fileId" TEXT NOT NULL, "createdBy" TEXT NOT NULL, "note" TEXT, "expiresAt" TIMESTAMP(3) NOT NULL, "maxViews" INTEGER, "views" INTEGER NOT NULL DEFAULT 0, "revokedAt" TIMESTAMP(3), "lastViewAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StorageShare_pkey" PRIMARY KEY ("id"))`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageShare_fileId_idx" ON "StorageShare"("fileId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageConfig" ("key" TEXT NOT NULL, "value" TEXT NOT NULL, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "StorageConfig_pkey" PRIMARY KEY ("key"))`)
                 // 18/10/2026 — quét nhóm Zalo qua n8n + gửi tin cho khách (routes/zalo.ts, lib/zaloGui.ts)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "ZaloCauHinh" (
@@ -5534,6 +5573,61 @@ router.post('/sua-gia-san-tiktok', async (req: Request, res: Response) => {
  * Bộ này ĐẾM THẲNG trên bảng ở từng cửa hàng: đếm được = bảng có thật.
  * CHỈ ĐỌC.
  */
+/* ─── ĐO KENGI VAULT (20/10/2026) ──────────────────────────────────────────────
+ *   GET /admin/do-vault            — mỗi cửa hàng: số tệp ready/rác/đang tải/đã mất (đĩa tạm cũ), dung lượng, cột đủ chưa
+ *   GET /admin/do-vault?thu=1      — THÊM: ghi + đọc + xoá MỘT object thử 16 byte ở bucket riêng tư (đo quyền service
+ *                                    account thật trên prod) + đọc cấu hình CORS/chặn công khai của bucket.
+ * Không đụng dữ liệu cửa hàng (object thử nằm ở tiền tố "thu/", xoá ngay). */
+router.get('/do-vault', async (req: Request, res: Response) => {
+    try {
+        const kho = await import('../lib/khoTaiLieu')
+        const ds = await prisma.store.findMany({ select: { code: true, schema: true } })
+        const cuaHang: any[] = []
+        for (const st of ds) {
+            const sp: any = getStorePrisma(st.schema)
+            try {
+                const cot: any[] = await sp.$queryRawUnsafe(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'StorageFile' AND column_name IN ('status','objectKey','deletedBy','aiText')`, st.schema)
+                if ((cot[0]?.n ?? 0) < 4) { cuaHang.push({ cuaHang: st.code, chuaVaBang: true }); continue }
+                const r: any[] = await sp.$queryRawUnsafe(`SELECT
+                    count(*) FILTER (WHERE status = 'ready' AND "objectKey" IS NOT NULL)::int AS ready,
+                    count(*) FILTER (WHERE status = 'ready' AND "objectKey" IS NULL)::int AS "daMat",
+                    count(*) FILTER (WHERE status = 'trash')::int AS rac,
+                    count(*) FILTER (WHERE status = 'uploading')::int AS "dangTai",
+                    count(*) FILTER (WHERE status = 'version')::int AS "phienBan",
+                    count(*) FILTER (WHERE "aiStatus" = 'pending')::int AS "aiCho",
+                    coalesce(sum(size) FILTER (WHERE "objectKey" IS NOT NULL), 0)::bigint AS byte
+                    FROM "${st.schema}"."StorageFile"`)
+                cuaHang.push({ cuaHang: st.code, ...r[0], byte: Number(r[0]?.byte || 0) })
+            } catch (e: any) {
+                cuaHang.push({ cuaHang: st.code, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+        let bucket: any = { ten: kho.tenBucket(), cucBo: kho.laCucBo() }
+        if (req.query.thu === '1' && !kho.laCucBo()) {
+            const { Storage } = await import('@google-cloud/storage')
+            const b = new Storage().bucket(kho.tenBucket())
+            try {
+                const [m]: any = await b.getMetadata()
+                bucket = { ...bucket, ton: true, viTri: m.location, ublA: !!m.iamConfiguration?.uniformBucketLevelAccess?.enabled, chanCongKhai: m.iamConfiguration?.publicAccessPrevention, cors: m.cors || [] }
+                const ten = `thu/do-vault-${Date.now()}.txt`
+                const t0 = Date.now()
+                await b.file(ten).save(Buffer.from('kengi-vault-thu!'), { resumable: false, contentType: 'text/plain' })
+                const [doc] = await b.file(ten).download()
+                await b.file(ten).delete()
+                bucket.ghiDocXoa = doc.toString() === 'kengi-vault-thu!' ? `ok (${Date.now() - t0} ms)` : 'đọc lại sai nội dung'
+                // Phiên resumable (đường tải lên thật) — mở rồi bỏ, không gửi byte nào
+                const [uri] = await b.file(`thu/phien-${Date.now()}`).createResumableUpload({ origin: 'https://kengi.vn', metadata: { contentType: 'application/pdf', contentLength: 16 } } as any)
+                bucket.phienResumable = uri ? 'ok' : 'không trả URL'
+            } catch (e: any) {
+                bucket.loi = String(e?.message || e).slice(0, 300)
+            }
+        }
+        res.json({ success: true, data: { bucket, cuaHang } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
 /* ─── ĐO CỘT THẬT SỰ CÓ TRONG DB (chỉ đọc) ─────────────────────────────────────
  * `/admin/migrate` trả "OK" cho mọi cửa hàng KỂ CẢ khi danh sách ALTER viết tay
  * của nó thiếu cột — nó chỉ chạy đúng những dòng nó có. Nên sau mỗi lần migrate

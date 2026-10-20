@@ -161,6 +161,8 @@ export function phanNhomThongBao(type: string, title = ''): { nhom: string; rout
         case 'tax-audit':
         case 'tax-deadline':
         case 'tax-reconcile': return { nhom: 'thue', route: 'tax' }
+        // Kengi Vault (20/10/2026): giấy tờ sắp hết hạn — app chưa có màn kho tài liệu ⇒ không route
+        case 'tai_lieu_het_han': return { nhom: 'he_thong', route: null }
     }
     if (/hoá đơn XML|hóa đơn XML/i.test(title)) return { nhom: 'hoa_don', route: null }
     return { nhom: 'he_thong', route: null }
