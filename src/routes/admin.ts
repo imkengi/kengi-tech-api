@@ -4140,6 +4140,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageShare" ("id" TEXT NOT NULL, "fileId" TEXT NOT NULL, "createdBy" TEXT NOT NULL, "note" TEXT, "expiresAt" TIMESTAMP(3) NOT NULL, "maxViews" INTEGER, "views" INTEGER NOT NULL DEFAULT 0, "revokedAt" TIMESTAMP(3), "lastViewAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StorageShare_pkey" PRIMARY KEY ("id"))`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StorageShare_fileId_idx" ON "StorageShare"("fileId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "StorageConfig" ("key" TEXT NOT NULL, "value" TEXT NOT NULL, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "StorageConfig_pkey" PRIMARY KEY ("key"))`)
+                /* 20/10/2026 — CHATBOT trả lời khách qua webhook n8n (routes/chatbot.ts): shop + kho kiến thức soạn ở kengi.vn/chatbot.
+                 * Cùng câu với DDL_CHATBOT (lib/chatbotLuuTru.ts — tự tạo ở lượt gọi đầu nên không bắt buộc chạy migrate trước). */
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "ChatbotShop" ("id" TEXT NOT NULL, "ten" TEXT NOT NULL, "kenh" TEXT, "san" TEXT NOT NULL DEFAULT '', "kienThuc" TEXT NOT NULL, "thuTu" INTEGER NOT NULL DEFAULT 0, "capNhatBoi" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "ChatbotShop_pkey" PRIMARY KEY ("id"))`)
                 // 18/10/2026 — quét nhóm Zalo qua n8n + gửi tin cho khách (routes/zalo.ts, lib/zaloGui.ts)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "ZaloCauHinh" (

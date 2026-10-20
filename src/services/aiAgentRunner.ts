@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { TOOLS } from '../routes/mcp'
-import { ToolCtx, ToolError } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { toGeminiSchema } from '../lib/geminiSchema'
 import { goiDeepSeek } from './aiDeepSeek'
 
@@ -96,6 +96,12 @@ export type ThamSoChay = {
     giamSat?: boolean
     /** Ghi log từng bước (job tự động dùng để soi lại) */
     onStep?: (info: { step: number; calls: string[] }) => void
+    /**
+     * BỘ CÔNG CỤ RIÊNG thay cho bộ MCP (20/10/2026 — chatbot trả lời KHÁCH, routes/chatbot.ts): có thì agent CHỈ thấy
+     * đúng các công cụ này, bỏ qua allowWrite / allowedTools / giamSat. Bộ MCP có công cụ trả giá vốn, khách hàng, doanh
+     * thu ⇒ không bao giờ được lọt vào hội thoại với người lạ.
+     */
+    tools?: Tool[]
 }
 
 /**
@@ -213,6 +219,16 @@ export function chonTool(allowWrite: boolean, allowedTools?: string[], giamSat =
     }
 }
 
+/** Bọc bộ công cụ riêng (ThamSoChay.tools) thành function declarations Gemini */
+function bocTool(ds: Tool[]) {
+    return {
+        dung: ds,
+        declarations: [{
+            functionDeclarations: ds.map(t => ({ name: t.name, description: t.description, parameters: toGeminiSchema(t.inputSchema) })),
+        }],
+    }
+}
+
 /**
  * Chạy một lượt agent tới khi model thôi gọi tool hoặc chạm trần bước.
  * KHÔNG ném lỗi tool ra ngoài — lỗi nghiệp vụ được đưa lại cho model để nó tự
@@ -221,7 +237,7 @@ export function chonTool(allowWrite: boolean, allowedTools?: string[], giamSat =
 export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
     const maxSteps = Math.min(Math.max(p.maxSteps ?? 8, 1), 20)
     const allowWrite = !!p.allowWrite
-    const { dung, declarations } = chonTool(allowWrite, p.allowedTools, !!p.giamSat)
+    const { dung, declarations } = p.tools ? bocTool(p.tools) : chonTool(allowWrite, p.allowedTools, !!p.giamSat)
     if (!dung.length) throw new Error('Không có tool nào khả dụng với cấu hình quyền hiện tại')
 
     const contents: any[] = [...(p.history || []), { role: 'user', parts: [{ text: p.message }] }]

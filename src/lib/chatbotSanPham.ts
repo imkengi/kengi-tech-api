@@ -252,3 +252,47 @@ export function gomSanPham(rows: any[], tu: string[], ma: string, limit: number,
     ds.sort((a, b) => b.d - a.d || a.sp.ten.length - b.sp.ten.length)
     return ds.slice(0, limit).map(x => x.sp)
 }
+
+// ─── Tra cứu đầy đủ (dùng chung: GET /api/chatbot/san-pham + công cụ tra_cuu_san_pham của webhook) ───────────────
+
+/** Lỗi do NGƯỜI GỌI (thiếu từ khoá, shop không có) — route trả đúng mã, công cụ AI trả lời lỗi cho model đọc */
+export class LoiTraSanPham extends Error {
+    constructor(public readonly ma: 400 | 404, message: string) { super(message) }
+}
+
+export const GHI_CHU_TINH_TRANG = 'tinhTrang: con_hang / sap_het = còn hàng; het_hang = sàn đang báo hết; '
+    + 'chua_ro = chưa xác nhận được — KHÔNG khẳng định còn hay hết, mời khách xem link sản phẩm hoặc chờ nhân viên kiểm tra.'
+
+export interface KetQuaTraSanPham {
+    ketQua: SanPhamChatbot[]
+    soKetQua: number
+    ghiChu: string
+    capNhatLuc: string | null
+}
+
+/** shop = tên kênh bán (so không phân biệt hoa thường, gom khoảng trắng); trống ⇒ giá bán lẻ hàng kho. Truy vấn TUẦN TỰ (pool 1). */
+export async function traSanPham(prisma: any, ts: ThamSoSanPham): Promise<KetQuaTraSanPham> {
+    const tu = tuKhoa(ts.q)
+    if (!ts.ma && !tu.length) throw new LoiTraSanPham(400, 'Cần từ khoá (tên hoặc mã sản phẩm) — tham số q hoặc ma')
+    let rows: any[]
+    let ghiChu: string
+    if (ts.shop) {
+        const kenh: any[] = await prisma.onlineChannel.findMany({
+            where: { status: 'active', ...(ts.san ? { platform: ts.san } : {}) },
+            select: { id: true, name: true, platform: true },
+        })
+        const cua = kenh.filter(k => String(k.name || '').replace(/\s+/g, ' ').trim().toLowerCase() === ts.shop.toLowerCase())
+        if (!cua.length) throw new LoiTraSanPham(404, `Không có shop "${ts.shop}"${ts.san ? ` trên ${TEN_SAN[ts.san]}` : ''} trong kênh bán của cửa hàng`)
+        const { sql, tham } = cauTimListing(cua.map(k => k.id), tu, ts.ma)
+        rows = await prisma.$queryRawUnsafe(sql, ...tham)
+        ghiChu = `Giá đang bán trên ${Array.from(new Set(cua.map(k => TEN_SAN[String(k.platform).toLowerCase()] || k.platform))).join(', ')} của shop ${cua[0].name} — `
+            + 'báo giá THEO TỪNG SÀN (giaTheoSan). gia null = tuỳ phân loại: gửi link cho khách xem. ' + GHI_CHU_TINH_TRANG
+    } else {
+        const { sql, tham } = cauTimHang(tu, ts.ma)
+        rows = await prisma.$queryRawUnsafe(sql, ...tham)
+        ghiChu = 'Giá bán lẻ tại cửa hàng. ' + GHI_CHU_TINH_TRANG
+    }
+    const ketQua = gomSanPham(rows, tu, ts.ma, ts.ma ? 1 : ts.limit, !!ts.ma)
+    const dongBo = rows.map(r => r.dongBoLuc).filter(Boolean).map((d: any) => new Date(d).getTime()).filter(Number.isFinite)
+    return { ketQua, soKetQua: ketQua.length, ghiChu, capNhatLuc: dongBo.length ? new Date(Math.max(...dongBo)).toISOString() : null }
+}
