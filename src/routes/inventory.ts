@@ -8,6 +8,7 @@ import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged } from '../lib/webhookDispatch'
 import { postStockAdjustJournal } from '../lib/autoJournalPurchase'
+import { docThamSoTonKho, cauTonKho } from '../lib/danhSachTonKho'
 
 const router = Router()
 
@@ -395,31 +396,35 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
         // TUẦN TỰ, không Promise.all: pool per-store nhỏ (PRISMA_POOL_SIZE=8),
         // 4 truy vấn thô song song = 1 lượt tải trang ôm 4 kết nối; trùng giờ cron
         // là cạn pool → 500 hàng loạt (đã sập thật 29/07). Chậm thêm ~200ms.
+        /* 20/10/2026: TRƯỚC ĐÂY chỉ `canNhap` theo chi nhánh, còn ô tổng / biểu đồ / top 5 vẫn cộng p.stock toàn cửa hàng dưới nhãn
+         * chi nhánh. Nay mọi truy vấn dùng tồn kho chính của chi nhánh (ST). Thêm tonAm / tonAmSoLuong — trang Kho từng tự đếm trên 1.000 mã tải về. */
         const tong = await prisma.$queryRawUnsafe(`
                 SELECT COUNT(*)::int AS "soMaHang",
-                       COALESCE(SUM(p.stock),0)::float8 AS "tongTonKho",
-                       COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTriVon",
-                       COALESCE(SUM(p.stock * p."sellingPrice"),0)::float8 AS "giaTriBan",
-                       COUNT(*) FILTER (WHERE p.stock <= 0)::int AS "hetHang",
-                       COUNT(*) FILTER (WHERE p.stock > 0 AND p.stock <= p."minStock")::int AS "sapHet",
-                       COUNT(*) FILTER (WHERE p.stock > p."minStock")::int AS "duHang"
-                FROM "Product" p
+                       COALESCE(SUM(${ST}),0)::float8 AS "tongTonKho",
+                       COALESCE(SUM(${ST} * p."costPrice"),0)::float8 AS "giaTriVon",
+                       COALESCE(SUM(${ST} * p."sellingPrice"),0)::float8 AS "giaTriBan",
+                       COUNT(*) FILTER (WHERE ${ST} <= 0)::int AS "hetHang",
+                       COUNT(*) FILTER (WHERE ${ST} > 0 AND ${ST} <= p."minStock")::int AS "sapHet",
+                       COUNT(*) FILTER (WHERE ${ST} > p."minStock")::int AS "duHang",
+                       COUNT(*) FILTER (WHERE ${ST} < 0)::int AS "tonAm",
+                       COALESCE(SUM(LEAST(${ST}, 0)),0)::float8 AS "tonAmSoLuong"
+                FROM "Product" p ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service'
                   AND p."mergedIntoId" IS NULL`)
         const theoDanhMuc = await prisma.$queryRawUnsafe(`
                 SELECT COALESCE(c.name,'Chưa phân loại') AS "danhMuc",
-                       COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTri"
-                FROM "Product" p LEFT JOIN "Category" c ON c.id = p."categoryId"
+                       COALESCE(SUM(${ST} * p."costPrice"),0)::float8 AS "giaTri"
+                FROM "Product" p LEFT JOIN "Category" c ON c.id = p."categoryId" ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
                 GROUP BY 1 ORDER BY 2 DESC LIMIT 8`)
         const top5 = await prisma.$queryRawUnsafe(`
-                SELECT p.sku, p.name, p.stock::float8 AS stock, p."costPrice"::float8 AS "costPrice",
-                       (p.stock * p."costPrice")::float8 AS "giaTri"
-                FROM "Product" p
+                SELECT p.id, p.sku, p.name, p."baseUnit" AS dvt, (${ST})::float8 AS stock, p."costPrice"::float8 AS "costPrice",
+                       (${ST} * p."costPrice")::float8 AS "giaTri"
+                FROM "Product" p ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
-                ORDER BY (p.stock * p."costPrice") DESC LIMIT 5`)
+                ORDER BY (${ST} * p."costPrice") DESC LIMIT 5`)
         const canNhap = await prisma.$queryRawUnsafe(`
-                SELECT p.sku, p.name, ${ST}::float8 AS stock, p."minStock"::float8 AS "minStock"
+                SELECT p.id, p.sku, p.name, p."baseUnit" AS dvt, ${ST}::float8 AS stock, p."minStock"::float8 AS "minStock", p."costPrice"::float8 AS "costPrice"
                 FROM "Product" p ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
                   AND ${ST} <= p."minStock"
@@ -441,6 +446,34 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
     } catch (err: any) {
         console.error('Inventory overview error:', err)
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+/** GET /api/inventory/ton-kho — danh sách tồn kho trang Kho, lọc + sắp + phân trang trong SQL (lib/danhSachTonKho.ts, 20/10/2026) */
+router.get('/ton-kho', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const ts = docThamSoTonKho(req.query as Record<string, any>)
+        const branchId = String(req.query.branchId || '').trim()
+        if (!ts.khoId && branchId) {
+            const w = await prisma.warehouse.findFirst({ where: { type: 'main', isDefault: true, branchId }, select: { id: true } })
+            ts.khoChiNhanhId = w?.id || null
+        }
+        const c = cauTonKho(ts)
+        // TUẦN TỰ, không Promise.all — pool cửa hàng nhỏ (xem /overview)
+        const tongRows: any[] = await prisma.$queryRawUnsafe(c.sqlTong, ...c.tham)
+        const dong: any[] = await prisma.$queryRawUnsafe(c.sqlDong, ...c.tham)
+        const t = tongRows[0] || { tong: 0, tongTon: 0, tongGiaTri: 0 }
+        res.json({
+            success: true,
+            data: {
+                dong, trang: ts.trang, soDong: ts.soDong, tong: t.tong, soTrang: Math.max(1, Math.ceil(t.tong / ts.soDong)),
+                tongTon: t.tongTon, tongGiaTri: t.tongGiaTri, theoKho: c.theoKho, theoChiNhanh: c.theoChiNhanh,
+            },
+        })
+    } catch (err: any) {
+        console.error('Inventory ton-kho error:', err)
+        res.status(500).json({ success: false, error: errorDetail(err) })
     }
 })
 
