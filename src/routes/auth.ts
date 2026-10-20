@@ -1467,6 +1467,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 // ─── POST /token — OAuth2 Client Credentials → Access Token ─────────────────
 // No auth required. Accepts { clientId, clientSecret, storeCode } and returns
 // a JWT access token (1 hour) that can be used as a Bearer token for all API calls.
+// Token mang scope của khoá (claim apiKeyScopes, 20/10/2026): khoá 'read' đổi token vẫn CHỈ đọc.
 router.post('/token', async (req: Request, res: Response) => {
     try {
         const { clientId, clientSecret, storeCode } = req.body
@@ -1540,12 +1541,18 @@ router.post('/token', async (req: Request, res: Response) => {
             return
         }
 
-        // Khoá scope 'chatbot' (20/10/2026) KHÔNG đổi lấy token: JWT dưới đây không mang scope ⇒ đổi được là thoát phạm vi
-        // /api/chatbot (đọc được khách hàng, doanh thu…). Kiểm SAU khi khớp secret — người không có secret không dò được scope.
+        // Khoá scope 'chatbot' (20/10/2026) KHÔNG đổi lấy token: JWT dưới đây mang scope nhưng không phải chỗ nào nhận JWT
+        // cũng soát phạm vi đường (websocket…) ⇒ đổi được là có cửa thoát /api/chatbot. Kiểm SAU khi khớp secret — người
+        // không có secret không dò được scope.
         if (!khoaDoiDuocToken(apiKey.scopes)) {
             res.status(403).json({ success: false, error: 'Khoá API chatbot không đổi được token — gọi thẳng /api/chatbot với header X-API-Key + x-store-code' })
             return
         }
+
+        // Scope khoá ĐI THEO token (20/10/2026). Thiếu claim này thì khoá 'read' đổi token là có JWT toàn quyền người tạo
+        // khoá ⇒ ghi / sửa / xoá được hết. authMiddleware + livestream đọc claim, áp lại luật của nhánh X-API-Key
+        // (lyDoChanJwtKhoa). Rỗng ⇒ 'read' như authMiddleware; `scope` trả về cùng giá trị (trước đây khoá rỗng báo 'admin').
+        const scope = apiKey.scopes || 'read'
 
         // Generate JWT token (same shape as login tokens)
         const payload = {
@@ -1558,6 +1565,7 @@ router.post('/token', async (req: Request, res: Response) => {
             branchSchema: schema,
             storeSchema: schema,
             isMainBranch: true,
+            apiKeyScopes: scope,
         }
 
         const token = jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' })
@@ -1574,7 +1582,7 @@ router.post('/token', async (req: Request, res: Response) => {
                 access_token: token,
                 token_type: 'Bearer',
                 expires_in: 3600,
-                scope: apiKey.scopes || 'admin',
+                scope,
             },
         })
     } catch (err: any) {

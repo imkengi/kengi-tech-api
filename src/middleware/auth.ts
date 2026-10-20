@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { getStorePrisma, registryPrisma } from '../lib/prisma'
 import { getStoreStatus } from '../lib/storeStatusCache'
-import { lyDoChanKhoa } from '../lib/phamViKhoaApi'
+import { lyDoChanKhoa, lyDoChanGhi, lyDoChanJwtKhoa } from '../lib/phamViKhoaApi'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -21,6 +21,7 @@ export interface AuthPayload {
     branchSchema?: string   // branch_<branchId> — the PostgreSQL schema for this session
     storeSchema?: string    // legacy alias (same value as branchSchema)
     isMainBranch?: boolean
+    apiKeyScopes?: string   // CHỈ có ở JWT đổi từ API key (POST /auth/token): scope của khoá — xem lyDoChanJwtKhoa
 }
 
 export interface AuthRequest extends Request {
@@ -155,6 +156,19 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
                 }
             }
 
+            /* JWT đổi từ API key (POST /auth/token) mang scope của khoá (20/10/2026) ⇒ đúng luật nhánh X-API-Key bên dưới.
+             * Trước đó JWT ấy không mang scope: khoá 'read' đổi token là ghi / sửa / xoá được hết. */
+            const lyDoChanJwt = lyDoChanJwtKhoa(decoded, req.method, req.originalUrl)
+            if (lyDoChanJwt) {
+                res.status(403).json({ success: false, error: lyDoChanJwt })
+                return
+            }
+            if (decoded.apiKeyScopes !== undefined) {
+                // mcp.ts (tool.write) và zalo.ts (canGhi) đọc hai cờ này — token đổi từ khoá cùng phạm vi như gọi bằng X-API-Key
+                ;(req as any).viaApiKey = true
+                ;(req as any).apiKeyScopes = String(decoded.apiKeyScopes || 'read')
+            }
+
             next()
             return
         } catch {
@@ -165,17 +179,11 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     // Fallback: X-API-Key
     const authenticated = await tryApiKeyAuth(req)
     if (authenticated) {
-        // Thực thi scope của API key: key chỉ-đọc (scope không chứa admin/write/*)
-        // KHÔNG được thực hiện thao tác ghi (POST/PUT/PATCH/DELETE).
-        const scopes = String((req as any).apiKeyScopes || 'read')
-        const writeAllowed = /admin|write|\*/i.test(scopes)
-        // MCP (/api/mcp) là JSON-RPC nên LUÔN POST kể cả khi chỉ đọc; quyền ghi ở
-        // đó do chính mcp.ts kiểm theo cờ tool.write + scope — không chặn ở đây,
-        // nếu không key chỉ-đọc không gọi được bất kỳ tool nào (đo thật 15/08).
-        const laMcp = /^\/api\/mcp\/?$/.test(req.originalUrl.split('?')[0])
-        const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !laMcp
-        if (isWrite && !writeAllowed) {
-            res.status(403).json({ success: false, error: 'API key chỉ có quyền đọc — không thể ghi/sửa/xóa (scope=read)' })
+        // Thực thi scope của API key: key chỉ-đọc (scope không chứa admin/write/*) KHÔNG được ghi
+        // (POST/PUT/PATCH/DELETE), trừ /api/mcp — luật ở lib/phamViKhoaApi.ts, dùng chung với nhánh JWT ở trên.
+        const lyDoChanGhiKhoa = lyDoChanGhi((req as any).apiKeyScopes, req.method, req.originalUrl)
+        if (lyDoChanGhiKhoa) {
+            res.status(403).json({ success: false, error: lyDoChanGhiKhoa })
             return
         }
         next()

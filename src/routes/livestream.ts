@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
 import registryPrisma from '../lib/prisma'
+import { lyDoChanJwtKhoa } from '../lib/phamViKhoaApi'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Livestream Studio API — backend cho app Kengi Stream (kengi.vn/ai-livestream)
@@ -57,7 +58,13 @@ function requireToken(req: Request, res: Response, next: NextFunction) {
     if (JWT_SECRET) {
         try {
             const payload = jwt.verify(got, JWT_SECRET, { algorithms: ['HS256'] }) as any
-            if (payload?.scope === STUDIO_SCOPE || isAllowedStore(payload?.storeCode)) return next()
+            if (payload?.scope === STUDIO_SCOPE || isAllowedStore(payload?.storeCode)) {
+                // Token đổi từ API key (/auth/token) — kể cả studio token đúc từ nó — giữ luật chỉ-đọc của khoá
+                // (đường này không chạy qua authMiddleware). JWT đăng nhập thường không có claim ⇒ không đổi gì.
+                const lyDoChan = lyDoChanJwtKhoa(payload, req.method, req.originalUrl)
+                if (lyDoChan) return res.status(403).json({ success: false, error: lyDoChan })
+                return next()
+            }
             return res.status(403).json({ success: false, error: 'Tài khoản này không có quyền vào livestream studio' })
         } catch { /* token sai/hết hạn → 401 bên dưới */ }
     }
@@ -86,7 +93,11 @@ router.get('/session-token', (req: Request, res: Response) => {
             return res.status(403).json({ success: false, error: 'Tài khoản này không có quyền vào livestream studio' })
         }
         const studioToken = jwt.sign(
-            { scope: STUDIO_SCOPE, storeCode: payload.storeCode, userId: payload.userId, email: payload.email },
+            {
+                scope: STUDIO_SCOPE, storeCode: payload.storeCode, userId: payload.userId, email: payload.email,
+                // Token đổi từ API key: scope khoá đi theo, kẻo đổi sang studio token 12h là thoát luật chỉ-đọc
+                ...(payload.apiKeyScopes !== undefined ? { apiKeyScopes: payload.apiKeyScopes } : {}),
+            },
             JWT_SECRET,
             { expiresIn: '12h' },
         )
