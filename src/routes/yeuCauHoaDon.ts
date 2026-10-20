@@ -74,7 +74,7 @@ async function timDon(ungVien: string[]) {
         const o = await ch.prisma.onlineOrder.findFirst({
             where: { orderNumber: { in: ungVien } },
             select: {
-                orderNumber: true, platform: true, status: true, total: true, createdAt: true, deliveredAt: true,
+                orderNumber: true, platform: true, channelName: true, status: true, total: true, createdAt: true, deliveredAt: true,
                 items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true } },
             },
         })
@@ -129,7 +129,8 @@ router.post('/tra-cuu', gioiHanTraCuu, async (req: Request, res: Response) => {
             success: true,
             data: {
                 cuaHang: {
-                    ten: cai?.name || hddt?.companyName || ch.code,
+                    // Tên GIAN HÀNG khách đã mua ("Kengi Store", "Kengi Tools" — đo 20/10) chứ không phải mã cửa hàng nội bộ
+                    ten: o.channelName || cai?.name || hddt?.companyName || ch.code,
                     tenPhapLy: hddt?.companyName || '', mst: hddt?.taxCode || '',
                     diaChi: hddt?.companyAddress || cai?.address || '', sdt: cai?.phone || '',
                 },
