@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { getStorePrisma, registryPrisma } from '../lib/prisma'
 import { getStoreStatus } from '../lib/storeStatusCache'
+import { lyDoChanKhoa } from '../lib/phamViKhoaApi'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -89,6 +90,15 @@ async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
             if (key.expiresAt && key.expiresAt < new Date()) continue
             const valid = await bcrypt.compare(apiKey, key.secretHash)
             if (valid) {
+                /* Khoá scope 'chatbot' (20/10/2026): CHỈ được gọi /api/chatbot/* — khoá này nằm trong n8n của chatbot
+                 * trả lời KHÁCH; lộ ra cũng không đọc được khách hàng / doanh thu / giá vốn (key 'read' thường đọc
+                 * được hết). Chặn NGAY TẠI ĐÂY nên mọi đường dùng API key (authMiddleware, optionalAuth, apiKeyAuth…)
+                 * đều chịu; authMiddleware đọc cờ này để trả 403 kèm lý do. */
+                const lyDoChan = lyDoChanKhoa(key.scopes, req.originalUrl)
+                if (lyDoChan) {
+                    ;(req as any).apiKeyBiChan = lyDoChan
+                    return false
+                }
                 req.user = {
                     userId: key.user.id,
                     email: key.user.email,
@@ -172,6 +182,11 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         return
     }
 
+    // Khoá đúng nhưng sai phạm vi (khoá chatbot gọi ngoài /api/chatbot) ⇒ 403 nói rõ, không phải 401
+    if ((req as any).apiKeyBiChan) {
+        res.status(403).json({ success: false, error: (req as any).apiKeyBiChan })
+        return
+    }
     res.status(401).json({ success: false, error: 'Access token required' })
 }
 

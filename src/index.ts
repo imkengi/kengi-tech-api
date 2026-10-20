@@ -393,6 +393,9 @@ app.use('/api/online-orders/chat', chatRoutes)
 // Trang KHÁCH tự lấy hoá đơn kengi.vn/hoadon (20/10/2026) — CÔNG KHAI, không JWT; giới hạn lượt theo IP trong route.
 import yeuCauHoaDonRoutes from './routes/yeuCauHoaDon'
 app.use('/api/yeu-cau-hoa-don', yeuCauHoaDonRoutes)
+// Tra sản phẩm / giá cho chatbot (AI Agent n8n) — JWT hoặc API key scope 'chatbot' (20/10/2026)
+import chatbotRoutes from './routes/chatbot'
+app.use('/api/chatbot', chatbotRoutes)
 app.use('/api/fanpage', fanpageRoutes)
 app.use('/api/mkt', mktStudioRoutes)   // Marketing Studio (da nen tang)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
