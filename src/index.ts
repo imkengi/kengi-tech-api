@@ -390,6 +390,9 @@ app.use('/api/tiktok-dang-video', tiktokDangVideoRoutes)
 
 import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)
+// Trang KHÁCH tự lấy hoá đơn kengi.vn/hoadon (20/10/2026) — CÔNG KHAI, không JWT; giới hạn lượt theo IP trong route.
+import yeuCauHoaDonRoutes from './routes/yeuCauHoaDon'
+app.use('/api/yeu-cau-hoa-don', yeuCauHoaDonRoutes)
 app.use('/api/fanpage', fanpageRoutes)
 app.use('/api/mkt', mktStudioRoutes)   // Marketing Studio (da nen tang)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
