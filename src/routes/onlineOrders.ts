@@ -18,6 +18,7 @@ import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
 import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
+import { anBiMatKenh, anBiMatKenhCuaDon } from '../lib/kenhAnToan'
 
 const router = Router()
 
@@ -897,6 +898,8 @@ router.get('/stats/analytics', authMiddleware, requirePermission('online_orders.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders/channels
+/* Trả qua anBiMatKenh (lib/kenhAnToan.ts): token/khoá thành cờ hasAccessToken… —
+ * quyền XEM đơn không phải quyền cầm khoá API sàn. */
 router.get('/channels', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -904,7 +907,7 @@ router.get('/channels', authMiddleware, requirePermission('online_orders.view', 
             orderBy: { createdAt: 'desc' },
             include: { _count: { select: { orders: true } } },
         })
-        res.json({ success: true, data: channels })
+        res.json({ success: true, data: channels.map(anBiMatKenh) })
     } catch (err) {
         console.error('Get channels error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -927,7 +930,7 @@ router.post('/channels', authMiddleware, requirePermission('online_orders.manage
         })
         markHasOnlineChannels(req.user?.storeSchema)
 
-        res.json({ success: true, data: channel })
+        res.json({ success: true, data: anBiMatKenh(channel) })
     } catch (err) {
         console.error('Create channel error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -959,7 +962,7 @@ router.put('/channels/:id', authMiddleware, requirePermission('online_orders.man
             data,
         })
 
-        res.json({ success: true, data: channel })
+        res.json({ success: true, data: anBiMatKenh(channel) })
     } catch (err) {
         console.error('Update channel error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -1204,7 +1207,9 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
         res.json({
             success: true,
             data: {
-                items,
+                /* `channel` của từng đơn đi qua anBiMatKenh — đường này mở cho cả
+                 * packing.view; trước 20/10/2026 mỗi đơn mang theo nguyên khoá API sàn. */
+                items: items.map(anBiMatKenhCuaDon),
                 total,
                 page: pageNum,
                 pageSize: size,
@@ -1660,7 +1665,7 @@ router.get('/:id', authMiddleware, requirePermission('online_orders.view', 'orde
             return
         }
 
-        res.json({ success: true, data: order })
+        res.json({ success: true, data: anBiMatKenhCuaDon(order) })
     } catch (err) {
         console.error('Get online order error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -1745,7 +1750,7 @@ router.post('/', authMiddleware, requirePermission('online_orders.manage', 'orde
             }).catch(() => { })
         }
 
-        res.json({ success: true, data: order })
+        res.json({ success: true, data: anBiMatKenhCuaDon(order) })
     } catch (err) {
         console.error('Create online order error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -1781,7 +1786,7 @@ router.put('/:id', authMiddleware, requirePermission('online_orders.manage', 'or
             include: { items: true, channel: true },
         })
 
-        res.json({ success: true, data: order })
+        res.json({ success: true, data: anBiMatKenhCuaDon(order) })
     } catch (err) {
         console.error('Update online order error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -1901,7 +1906,7 @@ router.put('/:id/status', authMiddleware, requirePermission('online_orders.updat
                 })
             } catch { }
 
-            res.json({ success: true, data: order })
+            res.json({ success: true, data: anBiMatKenhCuaDon(order) })
             return
         }
 
@@ -1986,7 +1991,7 @@ router.put('/:id/status', authMiddleware, requirePermission('online_orders.updat
                 })
             } catch { }
 
-            res.json({ success: true, data: order })
+            res.json({ success: true, data: anBiMatKenhCuaDon(order) })
             return
         }
 
@@ -2084,7 +2089,7 @@ router.put('/:id/status', authMiddleware, requirePermission('online_orders.updat
             console.error('[Audit] Failed to log status change:', logErr)
         }
 
-        res.json({ success: true, data: order })
+        res.json({ success: true, data: anBiMatKenhCuaDon(order) })
     } catch (err) {
         console.error('Update online order status error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -2172,7 +2177,7 @@ router.post('/:id/handle-cancellation', authMiddleware, requirePermission('onlin
             })
         } catch { }
 
-        res.json({ success: true, data: updated })
+        res.json({ success: true, data: anBiMatKenhCuaDon(updated) })
     } catch (err: any) {
         console.error('Handle buyer cancellation error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
@@ -4535,7 +4540,7 @@ router.put('/channels/:id/fee-config', authMiddleware, async (req: AuthRequest, 
             where: { id: req.params.id as string },
             data: { commissionRate: parseFloat(commissionRate) },
         })
-        res.json({ success: true, data: channel })
+        res.json({ success: true, data: anBiMatKenh(channel) })
     } catch (err) {
         console.error('Fee config error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
