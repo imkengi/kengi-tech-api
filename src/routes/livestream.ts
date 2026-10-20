@@ -4,7 +4,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
 import registryPrisma from '../lib/prisma'
-import { lyDoChanJwtKhoa } from '../lib/phamViKhoaApi'
+import { lyDoChanJwtKhoa, lyDoChanDucPhien } from '../lib/phamViKhoaApi'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Livestream Studio API — backend cho app Kengi Stream (kengi.vn/ai-livestream)
@@ -89,13 +89,17 @@ router.get('/session-token', (req: Request, res: Response) => {
         if (payload?.scope === STUDIO_SCOPE) {
             return res.status(400).json({ success: false, error: 'Phải dùng access token đăng nhập, không dùng studio token' })
         }
+        // Token đổi từ API key (claim apiKeyScopes) KHÔNG đổi lấy studio token 12h — sống lâu hơn token gốc 1h, còn sau khi thu
+        // hồi khoá (20/10/2026). requireToken đã nhận thẳng token ấy cho store thuộc allowlist nên không mất gì.
+        const lyDoKhoa = lyDoChanDucPhien(false, payload, 'gọi thẳng /api/livestream/* bằng chính token này')
+        if (lyDoKhoa) return res.status(403).json({ success: false, error: lyDoKhoa })
         if (!isAllowedStore(payload?.storeCode)) {
             return res.status(403).json({ success: false, error: 'Tài khoản này không có quyền vào livestream studio' })
         }
         const studioToken = jwt.sign(
             {
                 scope: STUDIO_SCOPE, storeCode: payload.storeCode, userId: payload.userId, email: payload.email,
-                // Token đổi từ API key: scope khoá đi theo, kẻo đổi sang studio token 12h là thoát luật chỉ-đọc
+                // Lớp thứ hai: token khoá đã bị chặn ở trên; lỡ lọt thì scope khoá vẫn đi theo, kẻo studio token thoát luật chỉ-đọc
                 ...(payload.apiKeyScopes !== undefined ? { apiKeyScopes: payload.apiKeyScopes } : {}),
             },
             JWT_SECRET,

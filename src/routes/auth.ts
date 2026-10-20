@@ -11,7 +11,7 @@ import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG
 import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
-import { khoaDoiDuocToken } from '../lib/phamViKhoaApi'
+import { khoaDoiDuocToken, lyDoChanDucPhien } from '../lib/phamViKhoaApi'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -776,8 +776,16 @@ router.post('/add-branch', authMiddleware, async (req: AuthRequest, res: Respons
 // Access rules (mirrors canAccessBranch semantics):
 //   - admin / manager / superadmin may switch to any branch
 //   - everyone else may only switch to their own assigned branch
+//   - API key (X-API-Key hoặc JWT đổi từ khoá ở /auth/token) ⇒ 403: refresh token 90 ngày không mang scope khoá và
+//     sống tiếp sau khi thu hồi khoá — xem lyDoChanDucPhien (20/10/2026)
 router.post('/switch-branch', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        // Chặn TRƯỚC mọi truy vấn và trước createTokenPair (soát ở scripts/check-pham-vi-khoa.ts)
+        const lyDoKhoa = lyDoChanDucPhien((req as any).viaApiKey, req.user, 'đổi chi nhánh phải đăng nhập kengi.vn bằng tài khoản')
+        if (lyDoKhoa) {
+            res.status(403).json({ success: false, error: lyDoKhoa })
+            return
+        }
         const storePrisma = req.storePrisma!
         const { branchId } = req.body || {}
         if (!branchId || typeof branchId !== 'string') {

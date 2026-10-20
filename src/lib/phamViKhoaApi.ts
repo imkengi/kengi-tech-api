@@ -1,4 +1,4 @@
-// Phạm vi của API key theo scope — hàm THUẦN cho middleware/auth.ts (soát ở scripts/check-chatbot-san-pham.ts + check-pham-vi-khoa.ts).
+// Phạm vi của API key theo scope — hàm THUẦN cho middleware/auth.ts, routes/auth.ts, livestream.ts (soát ở scripts/check-chatbot-san-pham.ts + check-pham-vi-khoa.ts).
 // 20/10/2026: scope 'chatbot' = khoá nằm trong n8n của chatbot trả lời KHÁCH ⇒ CHỈ được gọi webhook trả lời + tra sản
 // phẩm / kênh. KHÔNG gồm /api/chatbot/shops (kho kiến thức — thứ chatbot nói với khách): lộ khoá cũng không sửa được.
 const DUONG_KHOA_CHATBOT = /^\/api\/chatbot\/(webhook|san-pham|kenh)\/?$/
@@ -39,6 +39,21 @@ export function lyDoChanJwtKhoa(payload: unknown, method: unknown, url: unknown)
     if (!payload || typeof payload !== 'object' || !('apiKeyScopes' in payload)) return null
     const scopes = (payload as { apiKeyScopes?: unknown }).apiKeyScopes
     return lyDoChanKhoa(scopes, url) ?? lyDoChanGhi(scopes, method, url)
+}
+
+/**
+ * ĐÚC PHIÊN từ một request đã xác thực — chỉ cho người đăng nhập, KHÔNG cho API key (20/10/2026).
+ * POST /auth/switch-branch gọi createTokenPair ⇒ access token + refresh token 90 ngày LƯU CSDL, đổi vòng mãi qua /auth/refresh;
+ * GET /livestream/session-token ⇒ studio token 12h (token gốc của khoá chỉ sống 1h). Phiên mới KHÔNG mang scope khoá (bản ghi
+ * refresh token không có chỗ chứa claim) và sống tiếp sau khi khoá bị thu hồi / hết hạn ⇒ khoá write/admin lộ ra thì thu hồi
+ * khoá vẫn còn phiên. "Đi bằng khoá" = cờ viaApiKey (authMiddleware gắn cho CẢ X-API-Key lẫn JWT đổi từ khoá) HOẶC payload
+ * có claim apiKeyScopes (chỗ tự jwt.verify, không qua authMiddleware — livestream). Log 30 ngày (đo 20/10): không tích hợp nào
+ * gọi hai đường này bằng khoá — switch-branch 0 lượt, session-token chỉ trình duyệt. Trả lý do chặn hoặc null = cho qua.
+ */
+export function lyDoChanDucPhien(viaApiKey: unknown, payload: unknown, goiY: string): string | null {
+    const quaKhoa = !!viaApiKey || (!!payload && typeof payload === 'object' && 'apiKeyScopes' in payload)
+    if (!quaKhoa) return null
+    return `Khoá API không đúc được phiên đăng nhập mới (phiên ấy không mang phạm vi của khoá và vẫn sống sau khi thu hồi khoá) — ${goiY}`
 }
 
 /**
