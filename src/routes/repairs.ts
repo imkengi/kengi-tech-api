@@ -150,6 +150,11 @@ router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: A
         if (source && source !== 'all') where.source = source
         // Lọc theo hoá đơn đã thu — bản in hoá đơn dùng để moi các phiếu SC đã gắn
         if (transactionId) where.transactionId = String(transactionId)
+        /* Lọc theo LÚC CẬP NHẬT (20/10/2026): phiếu nhặt hàng (trang Giao dịch) in mục "hàng bảo hành trả trong ngày" =
+         * phiếu 'returned' cập nhật trong ngày. Phiếu 'returned' khoá sửa với nhân viên (chỉ admin sửa) nên updatedAt ≈ lúc trả. */
+        const ngayHopLe = (v: unknown) => { const d = v ? new Date(String(v)) : null; return d && !isNaN(d.getTime()) ? d : null }
+        const capNhatTu = ngayHopLe(req.query.capNhatTu), capNhatDen = ngayHopLe(req.query.capNhatDen)
+        if (capNhatTu || capNhatDen) where.updatedAt = { ...(capNhatTu ? { gte: capNhatTu } : {}), ...(capNhatDen ? { lte: capNhatDen } : {}) }
         if (search) {
             const q = String(search)
             /* Thêm IMEI vào ô tìm (23/08/2026): khách cầm máy tới thường chỉ đọc được
