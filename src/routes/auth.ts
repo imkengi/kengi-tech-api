@@ -11,6 +11,7 @@ import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG
 import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { khoaDoiDuocToken } from '../lib/phamViKhoaApi'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -1536,6 +1537,13 @@ router.post('/token', async (req: Request, res: Response) => {
         // User chủ key bị khóa → key cũng vô hiệu
         if ((apiKey.user as any).isLocked) {
             invalidCreds()
+            return
+        }
+
+        // Khoá scope 'chatbot' (20/10/2026) KHÔNG đổi lấy token: JWT dưới đây không mang scope ⇒ đổi được là thoát phạm vi
+        // /api/chatbot (đọc được khách hàng, doanh thu…). Kiểm SAU khi khớp secret — người không có secret không dò được scope.
+        if (!khoaDoiDuocToken(apiKey.scopes)) {
+            res.status(403).json({ success: false, error: 'Khoá API chatbot không đổi được token — gọi thẳng /api/chatbot với header X-API-Key + x-store-code' })
             return
         }
 

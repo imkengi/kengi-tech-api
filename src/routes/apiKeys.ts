@@ -119,7 +119,8 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const QUAN_LY = ['admin', 'manager', 'owner', 'superadmin']
-const SCOPE_HOP_LE = ['read', 'read,write', 'admin']
+// 'chatbot' (20/10/2026): khoá cho AI Agent n8n trả lời khách — middleware/auth.ts chỉ cho gọi /api/chatbot/*
+const SCOPE_HOP_LE = ['read', 'read,write', 'admin', 'chatbot']
 
 // GET /api/api-keys/list — mọi key đang có (không lộ secret)
 router.get('/list', authMiddleware, async (req: AuthRequest, res: Response) => {
