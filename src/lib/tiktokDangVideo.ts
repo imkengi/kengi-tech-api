@@ -147,6 +147,24 @@ export async function layHoSoNguoiDang(accessToken: string): Promise<any> {
     return j?.data || {}
 }
 
+/** Khối tải lên mặc định 10MB — mỗi lượt (75 giây) đẩy được vài khối, bộ nhớ Cloud Run (512Mi) an toàn. */
+export const KHOI_TIKTOK = 10 * 1024 * 1024
+const KHOI_TOI_DA = 64 * 1024 * 1024
+
+/**
+ * Chia khối FILE_UPLOAD theo luật TikTok — MỘT phép tính dùng cho cả lời khai ở init lẫn vòng tải.
+ *  · khối 5MB–64MB; total_chunk_count = FLOOR(video_size / chunk_size), phần dư dồn vào KHỐI CUỐI (tối đa 128MB)
+ *  · file < 5MB: một khối, chunk_size = video_size
+ *  · ⚠ chỉ MỘT khối thì chunk_size PHẢI BẰNG video_size. Đo 20/10/2026: file 10.759.282 byte khai chunk_size 10MB × 1 khối
+ *    ⇒ "inbox/init: invalid_params — The chunk size is invalid". Bản cũ lấy min(file, 10MB) nên MỌI file 10–20MB hỏng;
+ *    "phần dư dồn vào khối cuối" chỉ đúng khi có từ hai khối trở lên.
+ */
+export function chiaKhoiTikTok(fileSize: number, khoi = KHOI_TIKTOK): { chunkSize: number; tongPhan: number } {
+    const motKhoi = fileSize < 2 * khoi && fileSize <= KHOI_TOI_DA
+    const tongPhan = motKhoi ? 1 : Math.max(1, Math.floor(fileSize / khoi))
+    return { tongPhan, chunkSize: tongPhan === 1 ? fileSize : khoi }
+}
+
 export interface KetQuaMoPhien { publishId: string; uploadUrl?: string | null }
 
 /**
@@ -183,10 +201,9 @@ export async function moPhienDang(
             video_size: opts.fileSize,
             chunk_size: opts.chunkSize ?? opts.fileSize,
             /* ⚠ FLOOR, KHÔNG PHẢI CEIL — và phải là ĐÚNG con số người gọi dùng để
-             * chia khối. TikTok dồn phần dư vào khối CUỐI, nên file 12MB với khối
-             * 10MB là MỘT khối 12MB, không phải hai. Trước đây chỗ này tự tính bằng
-             * ceil ⇒ khai 2 khối mà chỉ gửi 1, phiên treo vĩnh viễn với mọi file
-             * không chia hết cho 10MB. Một phép tính, một chỗ. */
+             * chia khối (chiaKhoiTikTok). Trước đây chỗ này tự tính bằng ceil ⇒ khai
+             * 2 khối mà chỉ gửi 1, phiên treo vĩnh viễn. Một phép tính, một chỗ.
+             * Chỉ MỘT khối thì chunk_size phải bằng video_size — xem chiaKhoiTikTok. */
             total_chunk_count: opts.totalChunkCount
                 ?? Math.max(1, Math.floor((opts.fileSize || 1) / (opts.chunkSize || opts.fileSize || 1))),
         }

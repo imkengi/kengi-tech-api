@@ -14,13 +14,15 @@
 //    · khối nhỏ nhất 5MB, lớn nhất 64MB
 //    · total_chunk_count = FLOOR(video_size / chunk_size), phần dư dồn vào KHỐI
 //      CUỐI (nên khối cuối to hơn chunk_size, tối đa 128MB)
-//    · file nhỏ hơn một khối thì chunk_size = video_size và tổng = 1
-//  Ở đây lấy khối 10MB: file 12MB ra 1 khối 12MB (hợp lệ), file 105MB ra 10 khối
-//  mà khối cuối 15MB. Khối cuối lớn nhất < 20MB nên bộ nhớ luôn an toàn.
+//    · CHỈ MỘT khối thì chunk_size = video_size (đo 20/10/2026: file 10,26MB khai
+//      khối 10MB × 1 ⇒ "The chunk size is invalid")
+//  Phép chia nằm ở tiktokDangVideo.chiaKhoiTikTok: file < 20MB gửi nguyên MỘT khối
+//  bằng cả file; lớn hơn thì khối 10MB, file 105MB ra 10 khối mà khối cuối 15MB.
+//  Khối lớn nhất < 20MB nên bộ nhớ luôn an toàn.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { getStoreDriveWriter } from './driveOAuth'
-import { layTokenTikTok, moPhienDang, trangThaiDang, layHoSoNguoiDang } from './tiktokDangVideo'
+import { layTokenTikTok, moPhienDang, trangThaiDang, layHoSoNguoiDang, chiaKhoiTikTok } from './tiktokDangVideo'
 
 export type GiaiDoanTT = 'init' | 'parts' | 'check' | 'xong'
 
@@ -52,7 +54,6 @@ export interface KetQuaBuocTT {
 }
 
 const NGAN_SACH_MAC_DINH_MS = 75_000
-const KHOI = 10 * 1024 * 1024
 const TRAN_TIKTOK = 4 * 1024 * 1024 * 1024   // TikTok nhận tối đa 4GB
 
 const GIAI_DOAN_TT: string[] = ['init', 'parts', 'check', 'xong']
@@ -136,8 +137,7 @@ export async function buocDangTikTok(
             if (!fileSize) throw new Error('Drive không trả dung lượng file')
             if (fileSize > TRAN_TIKTOK) throw new Error(`Video ${(fileSize / 1024 / 1024).toFixed(0)}MB vượt trần 4GB của TikTok`)
 
-            const chunkSize = Math.min(fileSize, KHOI)
-            const tongPhan = Math.max(1, Math.floor(fileSize / chunkSize))
+            const { chunkSize, tongPhan } = chiaKhoiTikTok(fileSize)
 
             /* Đăng thẳng BẮT BUỘC có privacy_level, và chỉ được dùng giá trị TikTok
              * cho phép với đúng tài khoản này — gửi bừa là 400. Hộp thư không cần. */
