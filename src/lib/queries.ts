@@ -7,6 +7,7 @@
 
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { chayTheoDot } from './poolGuard'
+import { moTaLoi } from './gomLoi'
 
 // ─── Dashboard Stats (single parallel call) ─────────────────────────────────
 
@@ -32,6 +33,21 @@ export interface DashboardStats {
         profitGrowth: number
         margin: number
     }
+    // Thẻ "Lãi / Lỗ" trang chủ — cùng kỳ, cùng bộ lọc trạng thái với period.revenue
+    // nên doanh thu ở đây LUÔN bằng ô Doanh Thu bên cạnh. null = không đọc được,
+    // KHÔNG phải 0. Kèm các khoản CHƯA tính để thẻ nói ra, đừng để người đọc tưởng đủ.
+    laiLo: {
+        doanhThu: number
+        giaVon: number
+        laiGop: number
+        phiSan: number | null       // Σ (tiền phiếu − thực nhận) của đơn sàn ĐÃ quyết toán
+        chiPhi: number              // Σ Expense 'active' theo ngày chi, TRỪ trả tiền NCC
+        loiNhuan: number | null     // null khi không đọc được phí sàn
+        bienLoiNhuan: number | null // % trên doanh thu, 1 chữ số lẻ
+        thieuGiaVon: { soMa: number; doanhThu: number }
+        // phiếu đơn sàn CHƯA CÓ số phí: chưa quyết toán, hoặc đơn gốc đã bị dọn
+        sanChuaQuyetToan: { soDon: number; doanhThu: number } | null
+    }
 }
 
 // Các preset thời gian hỗ trợ cho dashboard. Giữ đồng bộ với FE.
@@ -43,6 +59,11 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
     lastMonth: 'Tháng trước',
     thisYear: 'Năm nay',
 }
+
+// Đơn sàn đã quyết toán: có số thực nhận (kể cả ÂM — đơn hoàn) và phí không mang
+// hình dạng ước tính total × rate mà webhook cũ ghi — cùng luật với /online-orders/stats.
+const DA_QUYET_TOAN = `o.id IS NOT NULL AND o."netRevenue" <> 0
+    AND NOT (o."platformFeeRate" > 0 AND ABS(o."platformFee" - ROUND(o.total * o."platformFeeRate" / 100)) <= 1)`
 
 export async function getDashboardStats(
     prisma: StorePrisma,
@@ -93,7 +114,7 @@ export async function getDashboardStats(
     // Product + Customer don't have branchId, so they use a single aggregate.
     const branchId: string | null = (branchFilter && (branchFilter as any).branchId) || null
 
-    const [txRows, productRows, customerRows, expenseRows, cogsRows] = await chayTheoDot([
+    const [txRows, productRows, customerRows, expenseRows, cogsRows, sanRows] = await chayTheoDot([
         () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned')), 0) AS total_revenue,
@@ -127,19 +148,34 @@ export async function getDashboardStats(
              FROM "Customer"`,
             monthStart, lastMonthStart, lastMonthEnd,
         ),
+        /* Chi phí = phiếu chi 'active', TRỪ 'supplier_payment'. Bản cũ cộng mọi
+         * trạng thái: 'cancelled' là phiếu đã huỷ, còn 'pending' gồm phiếu bóc từ
+         * email HĐĐT đang chờ duyệt VÀ sổ quỹ KiotViet kéo về chờ soát — HUTI
+         * 10/2026: 1.176 dòng, 233 tỷ, toàn chuyển/rút tiền và trả NCC.
+         * Trả tiền NCC là giảm nợ phải trả (Nợ 331, xem TK_CHI_PHI), tiền hàng đã
+         * vào giá vốn khi bán — tính thêm ở đây là trừ hai lần (cả năm 2026:
+         * HUTI 1,36 tỷ, KENGISTORE 1,64 tỷ). */
         () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(amount) FILTER (WHERE date >= $1), 0) AS this_month_expenses,
-                COALESCE(SUM(amount) FILTER (WHERE date >= $2 AND date <= $3), 0) AS last_month_expenses
+                COALESCE(SUM(amount) FILTER (WHERE date >= $2 AND date <= $3), 0) AS last_month_expenses,
+                COALESCE(SUM(amount) FILTER (WHERE date >= $5 AND date <= $6), 0) AS period_expenses
              FROM "Expense"
-             WHERE ($4::text IS NULL OR "branchId" = $4)`,
-            monthStart, lastMonthStart, lastMonthEnd, branchId,
+             WHERE status = 'active' AND category <> 'supplier_payment'
+               AND ($4::text IS NULL OR "branchId" = $4)`,
+            monthStart, lastMonthStart, lastMonthEnd, branchId, pStart, pEnd,
         ),
-        // COGS theo kỳ (+ kỳ liền trước) cho thẻ Lợi nhuận gộp — giá vốn hiện tại
+        /* COGS theo kỳ (+ kỳ liền trước) — giá vốn hiện tại, số lượng theo ĐƠN VỊ
+         * GỐC: COALESCE(NULLIF(baseQuantity,0), quantity), cùng công thức với biểu
+         * đồ doanh thu và tool profit_report. Hàng bán theo vỉ/lốc mà nhân
+         * `quantity` trần thì giá vốn hụt nhiều lần. Dòng chưa có giá vốn đếm riêng:
+         * giá vốn của chúng KHÔNG được trừ nên lãi thật thấp hơn số tính ra. */
         () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
-                COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2), 0) AS period_cogs,
-                COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $3 AND t."createdAt" <= $4), 0) AS prev_period_cogs
+                COALESCE(SUM(COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity) * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2), 0) AS period_cogs,
+                COALESCE(SUM(COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity) * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $3 AND t."createdAt" <= $4), 0) AS prev_period_cogs,
+                COUNT(DISTINCT ti."productId") FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2 AND COALESCE(p."costPrice", 0) <= 0) AS period_no_cost_products,
+                COALESCE(SUM(ti."lineTotal") FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2 AND COALESCE(p."costPrice", 0) <= 0), 0) AS period_no_cost_revenue
              FROM "TransactionItem" ti
              JOIN "Transaction" t ON t.id = ti."transactionId"
              LEFT JOIN "Product" p ON p.id = ti."productId"
@@ -148,6 +184,37 @@ export async function getDashboardStats(
                AND ($5::text IS NULL OR t."branchId" = $5)`,
             pStart, pEnd, prevStart, prevEnd, branchId,
         ),
+        /* PHÍ SÀN của kỳ: phiếu đơn sàn ('ONLINE-' + orderNumber) ghi doanh thu theo
+         * giá bán, còn tiền về là OnlineOrder.netRevenue sau khi sàn trừ hoa hồng,
+         * phí thanh toán, voucher shop tài trợ… Đo KENGISTORE 01–21/10/2026: khấu
+         * trừ 25,9% doanh thu đơn sàn — bỏ qua thì lợi nhuận ròng 79,8tr hiện thành
+         * 276,4tr.
+         *
+         * Đã quyết toán = netRevenue <> 0 (ÂM là đơn hoàn đã quyết toán, vẫn phải
+         * tính) và phí KHÔNG mang hình dạng ước tính total × rate (đơn webhook
+         * cũ). Còn lại là CHƯA CÓ SỐ PHÍ: đơn chưa quyết toán, VÀ phiếu mà đơn gốc
+         * đã bị cron dọn (autoSync runCleanup xoá đơn hoàn tất sau 18 ngày — phí
+         * chỉ nằm trên OnlineOrder nên mất theo; KENGISTORE tháng 9/2026: 3.015 đơn,
+         * 84% doanh thu). Không ước tính phí (chủ shop chốt 06/09/2026), chỉ đếm
+         * để thẻ nói ra.
+         *
+         * Đọc hỏng thì null (thẻ hiện "—"), không coi như phí bằng 0. */
+        () => prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COALESCE(SUM(t.total - o."netRevenue") FILTER (WHERE ${DA_QUYET_TOAN}), 0) AS khau_tru,
+                COUNT(*) FILTER (WHERE NOT (${DA_QUYET_TOAN})) AS chua_so_don,
+                COALESCE(SUM(t.total) FILTER (WHERE NOT (${DA_QUYET_TOAN})), 0) AS chua_doanh_thu
+             FROM "Transaction" t
+             LEFT JOIN "OnlineOrder" o ON o."orderNumber" = substring(t."receiptNumber" from 8)
+             WHERE t."receiptNumber" LIKE 'ONLINE-%'
+               AND t.status NOT IN ('voided', 'returned')
+               AND t."createdAt" >= $1 AND t."createdAt" <= $2
+               AND ($3::text IS NULL OR t."branchId" = $3)`,
+            pStart, pEnd, branchId,
+        ).catch((e: any) => {
+            console.error('[getDashboardStats] không đọc được phí sàn — thẻ Lãi/Lỗ để trống lợi nhuận ròng:', moTaLoi(e))
+            return null
+        }),
     ])
 
     const num = (v: unknown): number => Number(v ?? 0)
@@ -176,6 +243,11 @@ export async function getDashboardStats(
     const cg = cogsRows[0] || {}
     const periodProfit = periodRevenue - num(cg.period_cogs)
     const prevPeriodProfit = prevPeriodRevenue - num(cg.prev_period_cogs)
+
+    const san = sanRows ? (sanRows[0] || {}) : null
+    const phiSan = san ? num(san.khau_tru) : null
+    const chiPhiKy = num(ex.period_expenses)
+    const loiNhuan = phiSan == null ? null : periodProfit - phiSan - chiPhiKy
 
     return {
         revenue: {
@@ -217,6 +289,17 @@ export async function getDashboardStats(
             profit: Math.round(periodProfit),
             profitGrowth: calcGrowth(periodProfit, prevPeriodProfit),
             margin: periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0,
+        },
+        laiLo: {
+            doanhThu: periodRevenue,
+            giaVon: Math.round(num(cg.period_cogs)),
+            laiGop: Math.round(periodProfit),
+            phiSan: phiSan == null ? null : Math.round(phiSan),
+            chiPhi: Math.round(chiPhiKy),
+            loiNhuan: loiNhuan == null ? null : Math.round(loiNhuan),
+            bienLoiNhuan: loiNhuan != null && periodRevenue > 0 ? Math.round((loiNhuan / periodRevenue) * 1000) / 10 : null,
+            thieuGiaVon: { soMa: num(cg.period_no_cost_products), doanhThu: Math.round(num(cg.period_no_cost_revenue)) },
+            sanChuaQuyetToan: san ? { soDon: num(san.chua_so_don), doanhThu: Math.round(num(san.chua_doanh_thu)) } : null,
         },
     }
 }
