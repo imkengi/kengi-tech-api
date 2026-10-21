@@ -10391,6 +10391,46 @@ router.post('/lay-lai-phi-don-da-xoa', async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /admin/phan-loai-don-chua-lay-phi?storeCode=&tu=0&limit=250 ─────────
+// CHỈ ĐỌC (21/10/2026): phân loại phiếu đơn sàn mà PhiSanDon ghi 'chua-lay-duoc'
+// (sàn không trả số phí khi lấy lại) — huỷ / giao thất bại / hoàn tiền / … — kèm
+// trạng thái sổ của từng phiếu: còn trừ kho, bút toán chưa đảo, đã có hoá đơn, kho
+// mẹ còn trừ, có phiếu trả từ sàn. KHÔNG ghi gì — xem services/phanLoaiDonChuaLayPhi.ts.
+// Trang theo `tu` (thứ tự mã đơn). hetGio > 0 thì gọi lại cùng `tu` với limit nhỏ hơn.
+router.get('/phan-loai-don-chua-lay-phi', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        const tu = Math.max(0, Math.floor(Number(req.query.tu) || 0))
+        const limit = Math.min(Math.max(1, Math.floor(Number(req.query.limit) || 250)), 600)
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+
+        // Kho mẹ: không khai thì 'khong-co'; mở hỏng thì 'loi' — khi đó khoMeRong = null,
+        // nghĩa là "không đọc được", KHÔNG phải "kho mẹ không bị trừ".
+        let khoMe: { maCon: string; sp: any } | null = null
+        let trangThaiKhoMe: 'co' | 'khong-co' | 'loi' = 'khong-co'
+        try {
+            const { moKhoMe } = await import('../lib/khoMe')
+            const k = await moKhoMe(sp)
+            if (k) { khoMe = { maCon: k.maCon, sp: k.sp }; trangThaiKhoMe = 'co' }
+        } catch (e: any) {
+            trangThaiKhoMe = 'loi'
+            console.warn('[phan-loai-don-chua-lay-phi] không mở được kho mẹ:', e?.message || e)
+        }
+
+        const { phanLoaiDonChuaLayPhi } = await import('../services/phanLoaiDonChuaLayPhi')
+        const batDau = Date.now()
+        // 200s rồi thôi nhận đơn mới — chừa chỗ đọc sổ + trả lời
+        const kq = await phanLoaiDonChuaLayPhi(sp, { tu, gioiHan: limit, hanMs: 200_000, khoMe })
+        res.json({ success: true, data: { tu, limit, khoMe: trangThaiKhoMe, giay: Math.round((Date.now() - batDau) / 1000), ...kq } })
+    } catch (err: any) {
+        console.error('Admin phan-loai-don-chua-lay-phi error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // ─── GET /admin/order-trace?code=… ───────────────────────────────────────────
 // CHỈ ĐỌC: tra trọn vòng đời 1 đơn sàn — đơn gốc, phiếu bán, phiếu trả hàng,
 // hoá đơn điện tử. Nhận mã đơn sàn có/không prefix (260703PVMJ7K94 hoặc
