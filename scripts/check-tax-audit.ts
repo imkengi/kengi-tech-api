@@ -8,17 +8,7 @@
  * tra đều có 2 ca: một ca PHẢI kêu, một ca PHẢI im.
  */
 
-import { kiemTraThue, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, nguongChiuThueHKD, type KhoangKy } from '../src/lib/taxAudit'
-
-/** Tháng 09–12/2026 (sau kỳ soát) mà hạn khai — ngày 20 tháng kế — đã QUA tính theo hôm nay (giờ VN) */
-function thangDaQuaHanSauKy(homNay = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)): string[] {
-    const ra: string[] = []
-    for (let m = 9; m <= 12; m++) {
-        const han = m === 12 ? '2027-01-20' : `2026-${String(m + 1).padStart(2, '0')}-20`
-        if (han < homNay) ra.push(`2026-${String(m).padStart(2, '0')}`)
-    }
-    return ra
-}
+import { kiemTraThue as kiemTraThueGoc, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, nguongChiuThueHKD, type KhoangKy } from '../src/lib/taxAudit'
 
 const KY: KhoangKy = {
     from: '2026-08-01', to: '2026-08-31',
@@ -26,6 +16,16 @@ const KY: KhoangKy = {
     end: new Date('2026-09-01T00:00:00.000Z'),
     maKy: '2026-08', nhan: 'tháng 8/2026',
 }
+
+/* "HÔM NAY" CỐ ĐỊNH cho mọi lần soát trong file (sửa 21/10/2026). Không truyền thì `kiemTraThue`
+ * xét hạn nộp theo ngày thật nên fixture già đi theo lịch: 21/10/2026 cửa hàng sạch (đã khai
+ * T1–T8) bỗng có kỳ T9 quá hạn 20/10 — hàm báo ĐÚNG — và ba ca đỏ. Một ngày ghim cho cả file,
+ * thay vì từng fixture tự bù theo ngày thật. Chọn 25/09: hạn kỳ đang soát (T8, 20/09) đã qua,
+ * hạn T9 chưa tới. Riêng `uocTinhPhat.soNgayCham` hàm vẫn đếm theo đồng hồ thật, không theo
+ * `homNay` — đừng so nó với một con số cố định. */
+const HOM_NAY = '2026-09-25'
+const kiemTraThue: typeof kiemTraThueGoc = (prisma, ky, opts) =>
+    kiemTraThueGoc(prisma, ky, { ...opts, homNay: opts?.homNay ?? HOM_NAY })
 
 interface Kho {
     journal: any[]
@@ -138,16 +138,12 @@ function khoSach(): Kho {
              * thu toàn tiền mặt, và để nguyên thì mọi ca "sổ sạch" đều vướng. */
             { date: '2026-08-02', debitAccount: '112', creditAccount: '341', amount: 40_000_000 },
         ],
-        /* Cửa hàng sạch = đã khai đủ các kỳ đã qua trong năm (1–8/2026), kỳ đang
-         * soát có số khớp sổ. Thiếu phần này thì chính bộ soát sẽ kêu "chưa khai
-         * các tháng đầu năm" — và nó kêu đúng. */
+        /* Cửa hàng sạch = đã khai đủ các kỳ đã tới hạn tính tới HOM_NAY (1–8/2026),
+         * kỳ đang soát có số khớp sổ. Thiếu phần này thì chính bộ soát sẽ kêu "chưa
+         * khai các tháng đầu năm" — và nó kêu đúng. */
         declarations: [
             ...Array.from({ length: 7 }, (_, i) => ({ period: `2026-${String(i + 1).padStart(2, '0')}`, ct29: 0, ct30: 0, ct33: 0 })),
             { period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 },
-            /* Các tháng SAU kỳ soát đã tới hạn khai TÍNH THEO HÔM NAY (hạn GTGT tháng = ngày 20 tháng sau). Thiếu phần này
-             * thì qua 20/10/2026 hồ sơ "sạch" tự thành "chưa khai T09/2026" (bộ soát tự dựng hạn nộp theo ngày THẬT) và
-             * 3 ca kiểm đỏ theo lịch dù kiemTraThue đúng — cùng bệnh ca đã sửa 21/08 bên dưới. Sửa 21/10/2026. */
-            ...thangDaQuaHanSauKy().map(period => ({ period, ct29: 0, ct30: 0, ct33: 0 })),
         ],
         invoices: [
             { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, vatAmount: 10_000_000, totalAmount: 110_000_000 },
@@ -389,9 +385,9 @@ async function main() {
         /* NGÀY PHẢI TÍNH TƯƠNG ĐỐI (sửa 21/08/2026). Bản cũ ghi cứng mốc `2026-07 hạn 2026-08-20`
          * làm "mốc chưa tới hạn"; đúng nửa đêm 20→21/08 nó thành QUÁ HẠN THẬT và ca kiểm đỏ, dù
          * `kiemTraThue` chạy hoàn toàn đúng. Ca kiểm mục ruỗng theo lịch là ca kiểm sẽ bị tắt.
-         * `kiemTraThue` đọc `new Date()` bên trong, không nhận ngày tiêm vào — nên dựng mốc theo
-         * hôm nay: hai kỳ TRƯỚC ngày có dữ liệu (đã quá hạn) + một kỳ SAU, hạn còn ở tương lai. */
-        const nay = new Date()
+         * Dựng mốc theo HOM_NAY (ngày cố định tiêm vào mọi lần soát, xem đầu file): hai kỳ TRƯỚC
+         * ngày có dữ liệu (đã quá hạn) + một kỳ SAU, hạn còn ở tương lai. */
+        const nay = new Date(`${HOM_NAY}T12:00:00.000Z`)
         const ngay = (d: Date) => d.toISOString().slice(0, 10)
         const thangCua = (d: Date) => d.toISOString().slice(0, 7)
         const batDauDuLieu = new Date(nay.getTime() - 20 * 86400_000)   // cửa hàng mới có dữ liệu 20 ngày
