@@ -2062,6 +2062,29 @@ model OnlineOrderItem {
   @@index([productId])
 }
 
+// ─── Phí sàn giữ lại khi dọn đơn sàn cũ ─────────────────────────────────────
+
+/// SỐ PHÍ SÀN CỦA ĐƠN SÀN ĐÃ BỊ CRON DỌN (21/10/2026). Phí thật (escrow Shopee /
+/// statement TikTok) chỉ nằm trên OnlineOrder.platformFee/netRevenue, mà cron dọn
+/// (autoSync runCleanup) xoá đơn hoàn tất sau 18 ngày ⇒ thẻ Lãi/Lỗ mất số phí của
+/// mọi kỳ cũ hơn ~3 tuần. Khoá theo orderNumber, khớp Transaction.receiptNumber =
+/// 'ONLINE-' + orderNumber. Chỉ đọc/ghi bằng SQL thô — xem lib/phiSanGiuLai.ts.
+/// netRevenue = 0 nghĩa là ĐÃ HỎI SÀN MÀ CHƯA CÓ SỐ, không phải phí bằng 0.
+model PhiSanDon {
+  orderNumber String    @id
+  platform    String?
+  platformFee Float     @default(0)
+  netRevenue  Float     @default(0)
+  /// 'chep-truoc-xoa' (cron chép từ đơn gốc) | 'lay-lai' (hỏi lại sàn khi đơn đã xoá) | 'chua-lay-duoc'
+  nguon       String
+  /// Gian đã trả số khi lấy lại (OnlineChannel.id) — một cửa hàng có thể nhiều gian cùng sàn
+  kenhId      String?
+  lanThu      Int       @default(0)
+  thuLuc      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 // ─── Sync Logs ──────────────────────────────────────────────────────────────
 
 model SyncLog {

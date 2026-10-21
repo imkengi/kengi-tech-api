@@ -730,18 +730,23 @@ async function runCleanup() {
 
                 const ids = duocXoa.map((o: any) => o.id)
 
-                // Xóa items trước (cascade nếu DB không tự xóa)
-                await storePrisma.onlineOrderItem.deleteMany({
-                    where: { onlineOrderId: { in: ids } },
-                })
+                /* GIỮ SỐ PHÍ SÀN TRƯỚC KHI XOÁ (21/10/2026). platformFee/netRevenue chỉ nằm
+                 * trên đơn này — xoá đi là thẻ Lãi/Lỗ mất số phí của kỳ đó vĩnh viễn. Chép
+                 * sang PhiSanDon trước; chép hỏng thì lượt này KHÔNG xoá gì. */
+                const { giuPhiRoiXoa, LoiChepPhi } = await import('../lib/phiSanGiuLai')
+                let kq: { daChep: number; daXoa: number }
+                try {
+                    kq = await giuPhiRoiXoa(storePrisma as any, ids)
+                } catch (e: any) {
+                    if (e instanceof LoiChepPhi) {
+                        console.error(`[Cleanup] ${store.name}: KHÔNG xoá ${ids.length} đơn — ${fmtErr(e.goc)}`)
+                        continue
+                    }
+                    throw e
+                }
 
-                // Xóa đơn hàng
-                const result = await storePrisma.onlineOrder.deleteMany({
-                    where: { id: { in: ids } },
-                })
-
-                totalDeleted += result.count
-                console.log(`[Cleanup] ${store.name}: xóa ${result.count} đơn cũ (>${CLEANUP_DAYS} ngày): ${duocXoa.slice(0, 5).map((o: any) => o.orderNumber).join(', ')}${duocXoa.length > 5 ? '...' : ''}`)
+                totalDeleted += kq.daXoa
+                console.log(`[Cleanup] ${store.name}: xóa ${kq.daXoa} đơn cũ (>${CLEANUP_DAYS} ngày), giữ số phí ${kq.daChep} đơn: ${duocXoa.slice(0, 5).map((o: any) => o.orderNumber).join(', ')}${duocXoa.length > 5 ? '...' : ''}`)
 
                 // Cập nhật lại stats kênh
                 const channels = await storePrisma.onlineChannel.findMany({ select: { id: true } })

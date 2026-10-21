@@ -939,7 +939,7 @@ export class ShopeeService extends PlatformService {
      * Returns the escrow (money the seller actually receives) and the platform
      * fees Shopee charged, replacing commissionRate-based estimates.
      */
-    async getEscrowDetail(orderSn: string): Promise<{
+    async getEscrowDetail(orderSn: string, tuyChon: { imLang?: boolean } = {}): Promise<{
         escrowAmount: number
         totalFees: number
         commissionFee: number
@@ -951,8 +951,10 @@ export class ShopeeService extends PlatformService {
         const url = this.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`
         const data = await this.httpGet(url)
         if (data.error) {
-            // Escrow chưa có (đơn chưa đối soát) — không phải lỗi cứng
-            console.warn(`[Shopee Escrow] ${orderSn}: ${data.error} - ${data.message}`)
+            // Escrow chưa có (đơn chưa đối soát) — không phải lỗi cứng.
+            // `imLang`: đang dò đơn của gian nào (services/layLaiPhiSan.ts) — hỏi nhầm gian ra
+            // order_not_found là chuyện thường, ghi log thì mỗi lượt dò đẻ hàng nghìn dòng.
+            if (!tuyChon.imLang) console.warn(`[Shopee Escrow] ${orderSn}: ${data.error} - ${data.message}`)
             return null
         }
         const income = data.response?.order_income

@@ -8,6 +8,7 @@
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { chayTheoDot } from './poolGuard'
 import { moTaLoi } from './gomLoi'
+import { sqlPhiSanKy, laLoiThieuBangGiu } from './phiSanGiuLai'
 
 // ─── Dashboard Stats (single parallel call) ─────────────────────────────────
 
@@ -59,11 +60,6 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
     lastMonth: 'Tháng trước',
     thisYear: 'Năm nay',
 }
-
-// Đơn sàn đã quyết toán: có số thực nhận (kể cả ÂM — đơn hoàn) và phí không mang
-// hình dạng ước tính total × rate mà webhook cũ ghi — cùng luật với /online-orders/stats.
-const DA_QUYET_TOAN = `o.id IS NOT NULL AND o."netRevenue" <> 0
-    AND NOT (o."platformFeeRate" > 0 AND ABS(o."platformFee" - ROUND(o.total * o."platformFeeRate" / 100)) <= 1)`
 
 export async function getDashboardStats(
     prisma: StorePrisma,
@@ -185,36 +181,27 @@ export async function getDashboardStats(
             pStart, pEnd, prevStart, prevEnd, branchId,
         ),
         /* PHÍ SÀN của kỳ: phiếu đơn sàn ('ONLINE-' + orderNumber) ghi doanh thu theo
-         * giá bán, còn tiền về là OnlineOrder.netRevenue sau khi sàn trừ hoa hồng,
-         * phí thanh toán, voucher shop tài trợ… Đo KENGISTORE 01–21/10/2026: khấu
-         * trừ 25,9% doanh thu đơn sàn — bỏ qua thì lợi nhuận ròng 79,8tr hiện thành
-         * 276,4tr.
+         * giá bán, còn tiền về là netRevenue sau khi sàn trừ hoa hồng, phí thanh
+         * toán, voucher shop tài trợ… Bỏ qua khoản này là lợi nhuận ròng phồng gấp
+         * mấy lần.
          *
          * Đã quyết toán = netRevenue <> 0 (ÂM là đơn hoàn đã quyết toán, vẫn phải
-         * tính) và phí KHÔNG mang hình dạng ước tính total × rate (đơn webhook
-         * cũ). Còn lại là CHƯA CÓ SỐ PHÍ: đơn chưa quyết toán, VÀ phiếu mà đơn gốc
-         * đã bị cron dọn (autoSync runCleanup xoá đơn hoàn tất sau 18 ngày — phí
-         * chỉ nằm trên OnlineOrder nên mất theo; KENGISTORE tháng 9/2026: 3.015 đơn,
-         * 84% doanh thu). Không ước tính phí (chủ shop chốt 06/09/2026), chỉ đếm
-         * để thẻ nói ra.
+         * tính) và phí KHÔNG mang hình dạng ước tính total × rate (đơn webhook cũ).
+         * Số phí lấy từ đơn gốc; đơn gốc đã bị cron dọn (autoSync runCleanup xoá đơn
+         * hoàn tất sau 18 ngày) thì lấy ở bảng PhiSanDon — chép ra trước khi xoá,
+         * hoặc hỏi lại sàn (lib/phiSanGiuLai.ts). Còn lại là CHƯA CÓ SỐ PHÍ: không
+         * ước tính (chủ shop chốt 06/09/2026), chỉ đếm để thẻ nói ra.
          *
          * Đọc hỏng thì null (thẻ hiện "—"), không coi như phí bằng 0. */
-        () => prisma.$queryRawUnsafe<any[]>(
-            `SELECT
-                COALESCE(SUM(t.total - o."netRevenue") FILTER (WHERE ${DA_QUYET_TOAN}), 0) AS khau_tru,
-                COUNT(*) FILTER (WHERE NOT (${DA_QUYET_TOAN})) AS chua_so_don,
-                COALESCE(SUM(t.total) FILTER (WHERE NOT (${DA_QUYET_TOAN})), 0) AS chua_doanh_thu
-             FROM "Transaction" t
-             LEFT JOIN "OnlineOrder" o ON o."orderNumber" = substring(t."receiptNumber" from 8)
-             WHERE t."receiptNumber" LIKE 'ONLINE-%'
-               AND t.status NOT IN ('voided', 'returned')
-               AND t."createdAt" >= $1 AND t."createdAt" <= $2
-               AND ($3::text IS NULL OR t."branchId" = $3)`,
-            pStart, pEnd, branchId,
-        ).catch((e: any) => {
-            console.error('[getDashboardStats] không đọc được phí sàn — thẻ Lãi/Lỗ để trống lợi nhuận ròng:', moTaLoi(e))
-            return null
-        }),
+        () => prisma.$queryRawUnsafe<any[]>(sqlPhiSanKy(true), pStart, pEnd, branchId)
+            // Cửa hàng chưa chạy /admin/migrate (chưa có bảng PhiSanDon) → câu cũ, chỉ đọc đơn gốc
+            .catch((e: any) => laLoiThieuBangGiu(e)
+                ? prisma.$queryRawUnsafe<any[]>(sqlPhiSanKy(false), pStart, pEnd, branchId)
+                : Promise.reject(e))
+            .catch((e: any) => {
+                console.error('[getDashboardStats] không đọc được phí sàn — thẻ Lãi/Lỗ để trống lợi nhuận ròng:', moTaLoi(e))
+                return null
+            }),
     ])
 
     const num = (v: unknown): number => Number(v ?? 0)

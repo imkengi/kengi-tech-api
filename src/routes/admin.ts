@@ -2922,6 +2922,23 @@ router.post('/migrate', async (_req: Request, res: Response) => {
             try {
                 const sp = getStorePrisma(store.schema)
 
+                /* PHÍ SÀN GIỮ LẠI khi cron dọn xoá đơn sàn cũ (21/10/2026) — xem
+                 * lib/phiSanGiuLai.ts. Đặt ĐẦU vòng: thẻ Lãi/Lỗ của MỌI cửa hàng JOIN
+                 * bảng này (thiếu bảng thì nó lùi về câu cũ, nhưng cron chép phí sẽ
+                 * không xoá đơn nào cho tới khi có bảng). */
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "PhiSanDon" (
+                    "orderNumber" TEXT NOT NULL PRIMARY KEY,
+                    "platform" TEXT,
+                    "platformFee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    "netRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    "nguon" TEXT NOT NULL,
+                    "kenhId" TEXT,
+                    "lanThu" INTEGER NOT NULL DEFAULT 0,
+                    "thuLuc" TIMESTAMP(3),
+                    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`)
+
                 /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
                  * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán
                  * 20+ đơn/ngày, 14 tỷ doanh thu mà chỉ có ĐÚNG 2 tài khoản, cả
@@ -10329,6 +10346,47 @@ router.post('/sync-fees', async (req: Request, res: Response) => {
         res.json({ success: true, data: { kenh: out, giay: Math.round((Date.now() - batDau) / 1000) } })
     } catch (err: any) {
         console.error('Admin sync-fees error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── POST /admin/lay-lai-phi-don-da-xoa ──────────────────────────────────────
+// LẤY LẠI PHÍ SÀN cho đơn sàn ĐÃ BỊ CRON DỌN XOÁ (21/10/2026), ghi vào bảng
+// PhiSanDon để thẻ Lãi/Lỗ có số — xem services/layLaiPhiSan.ts.
+// ⚠ MẶC ĐỊNH CHẠY THỬ: vẫn hỏi sàn để xem lấy được gì, KHÔNG ghi. Gửi {"apply":true}
+// mới ghi. Chỉ ghi PhiSanDon — không đụng phiếu, đơn, sổ.
+// Body: { storeCode, apply?, limit? (mặc định 300, tối đa 3000, mỗi sàn), san? 'shopee'|'tiktok',
+//         tuNgay?, denNgay? ('YYYY-MM-DD' giờ VN, theo ngày bán trên phiếu; denNgay không tính) }
+// Gọi lặp tới khi khopDieuKien về 0. Đơn sàn chưa trả số được hỏi lại cách 2 ngày, tối đa 6 lần.
+router.post('/lay-lai-phi-don-da-xoa', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        if (!storeCode) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        if (b.san != null && b.san !== 'shopee' && b.san !== 'tiktok') {
+            res.status(400).json({ success: false, error: "san phải là 'shopee' hoặc 'tiktok'" }); return
+        }
+        const ngay = (v: any): Date | null | undefined => {
+            if (v == null || v === '') return null
+            return /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? new Date(`${v}T00:00:00+07:00`) : undefined
+        }
+        const tuNgay = ngay(b.tuNgay), denNgay = ngay(b.denNgay)
+        if (tuNgay === undefined || denNgay === undefined) {
+            res.status(400).json({ success: false, error: 'tuNgay/denNgay phải dạng YYYY-MM-DD' }); return
+        }
+        const limit = Math.min(Math.max(1, Number(b.limit) || 300), 3000)
+        const apply = b.apply === true
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+
+        const { layLaiPhiDonDaXoa } = await import('../services/layLaiPhiSan')
+        const batDau = Date.now()
+        // 220s rồi thôi nhận đơn mới — chừa chỗ ghi + trả lời trước trần 300s của Cloud Run
+        const ketQua = await layLaiPhiDonDaXoa(sp, { apply, gioiHan: limit, san: b.san || undefined, tuNgay, denNgay, hanMs: 220_000 })
+        res.json({ success: true, apply, data: { ketQua, giay: Math.round((Date.now() - batDau) / 1000) } })
+    } catch (err: any) {
+        console.error('Admin lay-lai-phi-don-da-xoa error:', err)
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
     }
 })
