@@ -282,8 +282,10 @@ async function timTheoDuongVao(ma: string, khoa: string): Promise<CuaHangVao | n
     }
     if (!store?.schema || (store.status && store.status !== 'active')) return null
     const prisma: any = getStorePrisma(store.schema)
-    await damBaoBangChatbot(prisma, store.schema)
-    const shop = await timShopTheoKhoa(prisma, khoa)
+    /* KHÔNG tạo / vá bảng ở đường KHÔNG đăng nhập (người lạ đoán mã cửa hàng là bắt máy chủ chạy DDL). Bảng chưa có /
+     * chưa đủ cột = chưa ai mở trang chatbot của cửa hàng ⇒ chưa có đường dẫn nào ⇒ coi như sai đường dẫn. */
+    let shop: DongShopChatbot | null = null
+    try { shop = await timShopTheoKhoa(prisma, khoa) } catch { return null }
     return shop ? { prisma, schema: store.schema, code: String(store.code), shop } : null
 }
 

@@ -138,6 +138,8 @@ async function kiemVaoRa() {
     const route = fs.readFileSync(path.join(__dirname, '../src/routes/chatbot.ts'), 'utf8')
     const doanVao = route.slice(route.indexOf("router.post('/vao/:ma/:khoa'"), route.indexOf("router.get('/vao/:ma/:khoa'"))
     dung('đầu vào: không cần đăng nhập, tra theo đường dẫn, gửi ra đầu ra', doanVao.includes('timTheoDuongVao(') && !doanVao.includes('authMiddleware') && doanVao.includes('guiKetQuaRa('))
+    const doanTim = route.slice(route.indexOf('async function timTheoDuongVao('), route.indexOf("router.post('/vao/:ma/:khoa'"))
+    dung('đầu vào: KHÔNG chạy DDL (tạo / vá bảng) ở đường không đăng nhập', doanTim.length > 100 && !doanTim.includes('damBaoBangChatbot(') && doanTim.includes('try { shop = await timShopTheoKhoa('))
     dung('đầu vào: sai mã cửa hàng hay sai khoá đều MỘT thông báo 404 (chống dò)', (route.match(/SAI_DUONG_VAO/g) || []).length === 3 && !/Không có cửa hàng/.test(doanVao))
     const doanRa = route.slice(route.indexOf("router.put('/shops/:id/webhook'"), route.indexOf("router.post('/shops/:id/webhook/lam-moi'"))
     dung('lưu đầu ra: chỉ quản lý (JWT) + kiểm SSRF TRƯỚC khi lưu', doanRa.includes('shopCuaQuanLy(') && doanRa.indexOf('kiemUrlDauRa(') > -1 && doanRa.indexOf('kiemUrlDauRa(') < doanRa.indexOf('datDauRa('))
