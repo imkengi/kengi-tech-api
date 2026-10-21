@@ -10,6 +10,16 @@
 
 import { kiemTraThue, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, nguongChiuThueHKD, type KhoangKy } from '../src/lib/taxAudit'
 
+/** Tháng 09–12/2026 (sau kỳ soát) mà hạn khai — ngày 20 tháng kế — đã QUA tính theo hôm nay (giờ VN) */
+function thangDaQuaHanSauKy(homNay = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)): string[] {
+    const ra: string[] = []
+    for (let m = 9; m <= 12; m++) {
+        const han = m === 12 ? '2027-01-20' : `2026-${String(m + 1).padStart(2, '0')}-20`
+        if (han < homNay) ra.push(`2026-${String(m).padStart(2, '0')}`)
+    }
+    return ra
+}
+
 const KY: KhoangKy = {
     from: '2026-08-01', to: '2026-08-31',
     start: new Date('2026-08-01T00:00:00.000Z'),
@@ -134,6 +144,10 @@ function khoSach(): Kho {
         declarations: [
             ...Array.from({ length: 7 }, (_, i) => ({ period: `2026-${String(i + 1).padStart(2, '0')}`, ct29: 0, ct30: 0, ct33: 0 })),
             { period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 },
+            /* Các tháng SAU kỳ soát đã tới hạn khai TÍNH THEO HÔM NAY (hạn GTGT tháng = ngày 20 tháng sau). Thiếu phần này
+             * thì qua 20/10/2026 hồ sơ "sạch" tự thành "chưa khai T09/2026" (bộ soát tự dựng hạn nộp theo ngày THẬT) và
+             * 3 ca kiểm đỏ theo lịch dù kiemTraThue đúng — cùng bệnh ca đã sửa 21/08 bên dưới. Sửa 21/10/2026. */
+            ...thangDaQuaHanSauKy().map(period => ({ period, ct29: 0, ct30: 0, ct33: 0 })),
         ],
         invoices: [
             { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, vatAmount: 10_000_000, totalAmount: 110_000_000 },

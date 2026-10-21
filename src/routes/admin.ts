@@ -4143,6 +4143,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 /* 20/10/2026 — CHATBOT trả lời khách qua webhook n8n (routes/chatbot.ts): shop + kho kiến thức soạn ở kengi.vn/chatbot.
                  * Cùng câu với DDL_CHATBOT (lib/chatbotLuuTru.ts — tự tạo ở lượt gọi đầu nên không bắt buộc chạy migrate trước). */
                 await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "ChatbotShop" ("id" TEXT NOT NULL, "ten" TEXT NOT NULL, "kenh" TEXT, "san" TEXT NOT NULL DEFAULT '', "kienThuc" TEXT NOT NULL, "thuTu" INTEGER NOT NULL DEFAULT 0, "capNhatBoi" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "ChatbotShop_pkey" PRIMARY KEY ("id"))`)
+                // 21/10/2026 — webhook đầu vào / đầu ra của chatbot (lib/chatbotWebhook.ts)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ChatbotShop" ADD COLUMN IF NOT EXISTS "webhookToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ChatbotShop" ADD COLUMN IF NOT EXISTS "webhookRa" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ChatbotShop" ADD COLUMN IF NOT EXISTS "webhookRaKhoa" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ChatbotShop_webhookToken_key" ON "ChatbotShop"("webhookToken")`)
                 // 18/10/2026 — quét nhóm Zalo qua n8n + gửi tin cho khách (routes/zalo.ts, lib/zaloGui.ts)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "ZaloCauHinh" (

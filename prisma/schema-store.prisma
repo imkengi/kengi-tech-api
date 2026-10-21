@@ -4192,4 +4192,8 @@ model ChatbotShop {
   capNhatBoi String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now())
+  /// 21/10: webhook ĐẦU VÀO (đường dẫn bí mật /api/chatbot/vao/<mã>/<khoá>) + ĐẦU RA (URL n8n, header X-Kengi-Chatbot)
+  webhookToken  String? @unique
+  webhookRa     String?
+  webhookRaKhoa String?
 }

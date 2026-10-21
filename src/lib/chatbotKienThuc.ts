@@ -130,13 +130,14 @@ export interface TinNhanWebhook {
  * Nhận nhiều kiểu thân cho dễ nối: Chat Trigger của n8n gửi {chatInput, sessionId}; node khác tự đặt {message|text|cauHoi}.
  * lichSu (tuỳ chọn): [{role:'user'|'khach'|'model'|'shop'|'assistant', text|noiDung|content}] — ≤ 12 lượt gần nhất.
  */
-export function docTinNhan(body: any): TinNhanWebhook | { loi: string } {
+export function docTinNhan(body: any, canShop = true): TinNhanWebhook | { loi: string } {
     const b = body && typeof body === 'object' ? body : {}
     const cauHoi = String(b.chatInput ?? b.message ?? b.text ?? b.cauHoi ?? b.query ?? '').trim()
     if (!cauHoi) return { loi: 'Thiếu tin nhắn của khách (chatInput / message)' }
     if (cauHoi.length > 2000) return { loi: 'Tin nhắn quá dài (tối đa 2000 ký tự)' }
+    // đường dẫn đầu vào (/vao/<mã>/<khoá>) đã chỉ ra shop ⇒ thân không cần trường shop
     const shop = String(b.shop ?? b.shopId ?? '').trim().slice(0, 80)
-    if (!shop) return { loi: 'Thiếu shop (mã hoặc tên shop trong kengi.vn/chatbot)' }
+    if (canShop && !shop) return { loi: 'Thiếu shop (mã hoặc tên shop trong kengi.vn/chatbot)' }
     const phien = String(b.sessionId ?? b.phien ?? b.conversationId ?? '').trim().slice(0, 120)
     const lichSu = (Array.isArray(b.lichSu) ? b.lichSu : Array.isArray(b.history) ? b.history : [])
         .map((m: any) => {
