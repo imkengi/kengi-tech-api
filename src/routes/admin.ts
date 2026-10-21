@@ -10431,6 +10431,35 @@ router.get('/phan-loai-don-chua-lay-phi', async (req: Request, res: Response) =>
     }
 })
 
+// ─── POST /admin/sua-phieu-don-da-xoa ────────────────────────────────────────
+// SỬA PHIẾU BÁN của đơn sàn đã xoá mà thực ra KHÔNG bán được (21/10/2026) — chủ shop
+// chọn phương án A: huỷ phiếu + đảo bút toán + cộng lại kho (huỷ / giao thất bại /
+// hoàn tiền có phiếu trả). Hỏi sàn LẠI lúc chạy. Kỳ đã khoá sổ thì bỏ qua.
+// ⚠ MẶC ĐỊNH CHẠY THỬ: tính đủ việc sẽ làm, không ghi. {"apply":true} mới ghi.
+// KHÔNG đụng hoá đơn điện tử — trả kèm danh sách HĐ để kế toán điều chỉnh.
+// Body: { storeCode, apply?, tu? (thứ tự mã đơn), limit? (mặc định 200, tối đa 400) }
+// Xem services/suaPhieuDonDaXoa.ts. Chạy lại cùng trang là vô hại.
+router.post('/sua-phieu-don-da-xoa', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        if (!storeCode) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        const tu = Math.max(0, Math.floor(Number(b.tu) || 0))
+        const limit = Math.min(Math.max(1, Math.floor(Number(b.limit) || 200)), 400)
+        const apply = b.apply === true
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const { suaPhieuDonDaXoa } = await import('../services/suaPhieuDonDaXoa')
+        const batDau = Date.now()
+        const kq = await suaPhieuDonDaXoa(sp, { apply, tu, gioiHan: limit, hanMs: 220_000 })
+        res.json({ success: true, data: { tu, limit, giay: Math.round((Date.now() - batDau) / 1000), ...kq } })
+    } catch (err: any) {
+        console.error('Admin sua-phieu-don-da-xoa error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // ─── GET /admin/order-trace?code=… ───────────────────────────────────────────
 // CHỈ ĐỌC: tra trọn vòng đời 1 đơn sàn — đơn gốc, phiếu bán, phiếu trả hàng,
 // hoá đơn điện tử. Nhận mã đơn sàn có/không prefix (260703PVMJ7K94 hoặc
