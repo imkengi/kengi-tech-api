@@ -1,19 +1,23 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  KẾT CỤC VỤ TRẢ HÀNG / HOÀN TIỀN (22/10/2026)
+//  KẾT CỤC VỤ TRẢ HÀNG / HOÀN TIỀN — nói bằng KHIẾU NẠI THẮNG / THUA (22/10/2026)
 //
 //  Chủ shop: "trong phần trả hàng hoàn tiền chưa phân loại được các đơn bị sàn từ chối trả
-//  hàng hoàn tiền". Trạng thái app chỉ có 4 nấc, và nấc 'rejected' gom chung những chuyện
-//  khác hẳn nhau. ĐO 22/10/2026 KENGISTORE (698 phiếu sàn, chuỗi trạng thái gốc trong ghi chú):
-//    · Shopee CLOSED 42 — 34 vụ sau khi shop khiếu nại (PROCESSING → [Khiếu nại] → CLOSED…)
-//      ⇒ sàn ĐÓNG yêu cầu, khách không được hoàn
-//    · Shopee JUDGING → CANCELLED 9 — huỷ đúng lúc Shopee đang xét khiếu nại của shop
-//    · Shopee CANCELLED không qua khiếu nại 64, TikTok CANCEL 25 (17 vụ đã duyệt mà khách
-//      không gửi hàng) ⇒ khách huỷ
-//    · TikTok REFUND_OR_RETURN_REQUEST_REJECT 4 + REJECT_RECEIVE_PACKAGE 1 — shop từ chối,
-//      khách không đưa lên sàn
+//  hàng hoàn tiền", rồi (bản đầu chia "sàn từ chối / shop từ chối / khách được hoàn"):
+//  "khó hiểu quá, sửa lại là khiếu nại thắng hay thua đi". Nên nhóm theo ngôn ngữ người bán:
+//    · Khiếu nại THẮNG  — shop khiếu nại / từ chối và khách KHÔNG được hoàn
+//    · Khiếu nại THUA   — shop khiếu nại / từ chối mà khách VẪN được hoàn
+//    · Đang khiếu nại · Chờ xử lý (chưa khiếu nại) · Chấp nhận hoàn (không khiếu nại) · Khách huỷ
+//  TikTok "Từ chối" là cách shop phản đối vụ trả trên TikTok (màn Khiếu nại của app gửi lệnh từ
+//  chối) ⇒ tính là khiếu nại: từ chối đứng vững = thắng, sàn xử cho khách = thua.
+//
+//  ĐO 22/10/2026 KENGISTORE (698 phiếu sàn, chuỗi trạng thái gốc trong ghi chú):
+//    · Shopee … → [Khiếu nại] → CLOSED 34 · JUDGING → CANCELLED 9 · TikTok shop từ chối mà khách
+//      không kiện lên sàn 5 ⇒ THẮNG 48
+//    · Shopee khiếu nại rồi ACCEPTED 32 · TikTok sàn xử cho khách 2 ⇒ THUA 34
+//    · Shopee CLOSED KHÔNG có khiếu nại 8 (vụ tháng 6–7, sàn tự đóng) ⇒ xếp chung "Khách huỷ"
+//      (không phải hoàn, nhưng không được gọi là khiếu nại thắng)
 //  Tài liệu Shopee (Data Definition › ReturnStatus) chỉ liệt kê tên, không giải nghĩa — luật
-//  dưới đây dựa trên chuỗi đo được. Bộ lọc "Đã hoàn" cũ chỉ lấy 'refunded' (108 phiếu TikTok)
-//  trong khi thẻ "Đã hoàn" đếm cả 'approved' (425 Shopee ACCEPTED) — nay cả hai đọc chung hàm này.
+//  dưới đây dựa trên chuỗi đo được.
 //
 //  Đọc đúng những dòng returnSync / route khiếu nại ghi vào ghi chú: "[Shopee] MÃ (giờ)",
 //  "[TikTok] Status: MÃ", "[Khiếu nại] …", "[Từ chối TikTok] …", "[Tranh chấp TikTok] MÃ …".
@@ -22,7 +26,7 @@
 
 import { DAU_TU_CHOI_TT, DAU_TRANH_CHAP_TT } from './bangChungTikTok'
 
-export const KET_CUC_VU_TRA = ['cho_xu_ly', 'dang_khieu_nai', 'khach_duoc_hoan', 'san_tu_choi', 'shop_tu_choi', 'khach_huy'] as const
+export const KET_CUC_VU_TRA = ['cho_xu_ly', 'dang_khieu_nai', 'khieu_nai_thang', 'khieu_nai_thua', 'chap_nhan_hoan', 'khach_huy'] as const
 export type KetCucVuTra = typeof KET_CUC_VU_TRA[number]
 export const laKetCucVuTra = (v: unknown): v is KetCucVuTra =>
     typeof v === 'string' && (KET_CUC_VU_TRA as readonly string[]).includes(v)
@@ -35,7 +39,7 @@ export interface PhieuTraKetCuc {
 
 export interface KetQuaKetCuc {
     ketCuc: KetCucVuTra
-    /** Một câu nói rõ vì sao — hiện ngay trên thẻ phiếu */
+    /** Vài chữ nói vì sao — hiện ngay trên thẻ phiếu */
     chiTiet: string
 }
 
@@ -53,7 +57,7 @@ interface DienBien {
     dangXet: boolean
     /** mã gốc cuối đến ĐÚNG LÚC đang xét khiếu nại (vd JUDGING → CANCELLED) */
     cuoiKhiDangXet: boolean
-    /** từng khiếu nại (app hay Seller Center) / tranh chấp */
+    /** từng khiếu nại (app hay Seller Center), từng bị kiện lên sàn, hoặc shop từng từ chối (TikTok) */
     tungKhieuNai: boolean
     /** shop từng từ chối (TikTok) */
     tungTuChoi: boolean
@@ -88,7 +92,7 @@ function docDienBien(notes?: string | null): DienBien {
             kq.goc = ma
             continue
         }
-        if (/REJECT/.test(ma)) kq.tungTuChoi = true
+        if (/REJECT/.test(ma)) { kq.tungTuChoi = true; kq.tungKhieuNai = true }
         if (/AWAITING_BUYER_SHIP/.test(ma)) kq.tungChoGuiHang = true
         kq.cuoiKhiDangXet = kq.dangXet
         if (MA_PHAN_QUYET.test(ma)) kq.dangXet = false
@@ -97,7 +101,7 @@ function docDienBien(notes?: string | null): DienBien {
     return kq
 }
 
-/** Kết cục MỘT phiếu trả — nhìn từ túi tiền cửa hàng. */
+/** Kết cục MỘT phiếu trả — nói theo khiếu nại thắng / thua của shop. */
 export function ketCucVuTra(p: PhieuTraKetCuc): KetQuaKetCuc {
     const db = docDienBien(p.notes)
     const { goc, tranhChap } = db
@@ -106,63 +110,58 @@ export function ketCucVuTra(p: PhieuTraKetCuc): KetQuaKetCuc {
 
     // 1. Tiền đã ra — app đã ghi hoàn, hoặc sàn báo đã hoàn
     if (p.status === 'refunded' || /REFUND_PAID|SUCCESS|COMPLETE/.test(goc)) {
-        return {
-            ketCuc: 'khach_duoc_hoan',
-            chiTiet: tranhChap === 'SUPPORT_BUYER' ? `${san} xử cho khách — đã hoàn tiền`
-                : db.tungKhieuNai ? 'khiếu nại thua — đã hoàn tiền cho khách'
-                    : 'đã hoàn tiền cho khách',
-        }
+        if (tranhChap === 'SUPPORT_BUYER') return { ketCuc: 'khieu_nai_thua', chiTiet: `${san} xử cho khách` }
+        if (db.tungKhieuNai) return { ketCuc: 'khieu_nai_thua', chiTiet: 'khách đã được hoàn tiền' }
+        return { ketCuc: 'chap_nhan_hoan', chiTiet: 'đã hoàn tiền' }
     }
     // 2. Sàn đã phân xử tranh chấp (TikTok)
-    if (tranhChap === 'SUPPORT_SELLER') return { ketCuc: 'san_tu_choi', chiTiet: `${san} xử cho shop — khách không được hoàn` }
-    if (tranhChap === 'SUPPORT_BUYER') return { ketCuc: 'khach_duoc_hoan', chiTiet: `${san} xử cho khách — sắp hoàn tiền` }
+    if (tranhChap === 'SUPPORT_SELLER') return { ketCuc: 'khieu_nai_thang', chiTiet: `${san} xử cho shop` }
+    if (tranhChap === 'SUPPORT_BUYER') return { ketCuc: 'khieu_nai_thua', chiTiet: `${san} xử cho khách` }
     // 3. Đang có lượt khiếu nại / tranh chấp chưa phân xử
     if (db.dangXet) {
         return {
             ketCuc: 'dang_khieu_nai',
-            chiTiet: tranhChap === 'IN_PROGRESS' ? `khách đưa vụ lên ${san} — sàn đang phân xử`
-                : goc === 'JUDGING' ? `${san} đang xét khiếu nại`
-                    : 'đã khiếu nại — chờ sàn phân xử',
+            chiTiet: tranhChap === 'IN_PROGRESS' ? `khách kiện lên ${san} — chờ sàn xử`
+                : goc === 'JUDGING' ? `${san} đang xét`
+                    : 'chờ sàn xử',
         }
     }
-    // 4. Sàn ĐÓNG yêu cầu (Shopee CLOSED)
+    // 4. Sàn ĐÓNG yêu cầu (Shopee CLOSED) — thắng chỉ khi đóng lúc đang khiếu nại
     if (/CLOS/.test(goc)) {
-        return {
-            ketCuc: 'san_tu_choi',
-            chiTiet: db.cuoiKhiDangXet ? `${san} đóng yêu cầu sau khiếu nại — khách không được hoàn`
-                : `${san} đóng yêu cầu — khách không được hoàn`,
-        }
+        return db.cuoiKhiDangXet
+            ? { ketCuc: 'khieu_nai_thang', chiTiet: `${san} đóng yêu cầu của khách` }
+            : { ketCuc: 'khach_huy', chiTiet: `${san} tự đóng yêu cầu` }
     }
     // 5. Huỷ
     if (/CANCEL/.test(goc)) {
-        if (db.cuoiKhiDangXet) return { ketCuc: 'san_tu_choi', chiTiet: `yêu cầu bị huỷ khi ${san} đang xét khiếu nại — khách không được hoàn` }
-        if (tiktok && db.tungTuChoi) return { ketCuc: 'shop_tu_choi', chiTiet: 'shop từ chối — yêu cầu đã huỷ' }
-        if (db.tungChoGuiHang) return { ketCuc: 'khach_huy', chiTiet: 'đã duyệt nhưng khách không gửi hàng — yêu cầu huỷ' }
+        if (db.cuoiKhiDangXet) return { ketCuc: 'khieu_nai_thang', chiTiet: `yêu cầu bị huỷ khi ${san} đang xét` }
+        if (tiktok && db.tungTuChoi) return { ketCuc: 'khieu_nai_thang', chiTiet: 'shop từ chối, yêu cầu đã huỷ' }
+        if (db.tungChoGuiHang) return { ketCuc: 'khach_huy', chiTiet: 'khách không gửi hàng về' }
         return { ketCuc: 'khach_huy', chiTiet: 'khách huỷ yêu cầu' }
     }
-    // 6. Shop từ chối (TikTok), khách không đưa lên sàn — cả tên cũ lẫn tên mới (REQUEST_REJECTED / RECEIVE_REJECTED)
+    // 6. Shop từ chối (TikTok), khách không kiện lên sàn — cả tên cũ lẫn tên mới (REQUEST_REJECTED / RECEIVE_REJECTED)
     if (/REJECT/.test(goc)) {
-        return { ketCuc: 'shop_tu_choi', chiTiet: /RECEIVE/.test(goc) ? 'shop từ chối nhận bưu kiện trả' : 'shop từ chối yêu cầu' }
+        return { ketCuc: 'khieu_nai_thang', chiTiet: /RECEIVE/.test(goc) ? 'shop từ chối nhận hàng trả, khách không kiện lên sàn' : 'shop từ chối, khách không kiện lên sàn' }
     }
     // 7. Khách đã gửi hàng về — TikTok chờ shop nhận bưu kiện hoặc kháng nghị
-    if (/BUYER_SHIPPED_ITEM/.test(goc)) return { ketCuc: 'cho_xu_ly', chiTiet: 'khách đã gửi hàng về — chờ shop nhận bưu kiện hoặc kháng nghị' }
-    // 8. Đã chấp nhận, tiền chưa ra
+    if (/BUYER_SHIPPED_ITEM/.test(goc)) return { ketCuc: 'cho_xu_ly', chiTiet: 'khách đã gửi hàng — chờ shop nhận hoặc kháng nghị' }
+    // 8. Đã chấp nhận, tiền chưa ra — sau khiếu nại / từ chối là THUA
     if (/^ACCEPTED$|AWAITING_BUYER_SHIP/.test(goc) || p.status === 'approved' || p.status === 'exchanged') {
+        if (db.tungKhieuNai) return { ketCuc: 'khieu_nai_thua', chiTiet: `${san} cho khách trả hàng / hoàn tiền` }
         return {
-            ketCuc: 'khach_duoc_hoan',
-            chiTiet: /AWAITING_BUYER_SHIP/.test(goc) ? 'đã duyệt — chờ khách gửi hàng'
-                : p.status === 'exchanged' ? 'đã đổi hàng cho khách'
-                    : db.tungKhieuNai ? 'khiếu nại thua — sàn cho khách trả/hoàn'
-                        : 'đã chấp nhận trả hàng / hoàn tiền',
+            ketCuc: 'chap_nhan_hoan',
+            chiTiet: /AWAITING_BUYER_SHIP/.test(goc) ? 'chờ khách gửi hàng về'
+                : p.status === 'exchanged' ? 'đã đổi hàng'
+                    : 'đã chấp nhận',
         }
     }
-    // 9. Từ chối trong Kengi (phiếu nhập tay / không có mã sàn)
-    if (p.status === 'rejected') return { ketCuc: 'shop_tu_choi', chiTiet: 'đã từ chối trong Kengi' }
-    // 10. Còn lại: yêu cầu đang mở, chưa ai quyết
+    // 9. Shop từ chối trong Kengi (phiếu nhập tay / không có mã sàn) — từ chối đứng vững
+    if (p.status === 'rejected') return { ketCuc: 'khieu_nai_thang', chiTiet: 'đã từ chối trong Kengi' }
+    // 10. Còn lại: yêu cầu đang mở, chưa khiếu nại
     return {
         ketCuc: 'cho_xu_ly',
-        chiTiet: /REQUESTED|PENDING/.test(goc) ? 'khách vừa yêu cầu — chờ shop phản hồi'
-            : goc === 'PROCESSING' ? `${san} đang xử lý yêu cầu`
+        chiTiet: /REQUESTED|PENDING/.test(goc) ? 'khách vừa yêu cầu'
+            : goc === 'PROCESSING' ? `${san} đang xử lý`
                 : goc ? `chờ xử lý (${san}: ${goc})`
                     : 'chờ duyệt',
     }
