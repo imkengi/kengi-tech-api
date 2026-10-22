@@ -139,6 +139,18 @@ async function main() {
         ok('2r. cửa hàng chưa dùng HĐĐT ⇒ hoaDon null, không báo lỗi', kqKhongHd.doiChieu?.hoaDonDienTuDaGuiCqt === null && !kqKhongHd.doiChieu?.loi, kqKhongHd.doiChieu)
         const kqLoiBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', butToan, Object.assign(new Error('P1001: mất kết nối'), { code: 'P1001' }))))
         ok('2s. đọc phiếu bán hỏng ⇒ vẫn trả tờ khai + nói rõ lỗi đối chiếu (không lặng lẽ coi là 0)', kqLoiBan.phaiNop === 600_000 && /không đọc được phiếu bán/.test(kqLoiBan.doiChieu?.loi || ''), kqLoiBan.doiChieu)
+        const kqHdBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', [],
+            { n: 3328, dt: 1_504_331_793, thue: 0 }, { n: 3250, truoc: 1_506_662_481, thue: 0 })))
+        ok('2t. ĐO THẬT KENGISTORE 22/10: HĐĐT gửi CQT đều thuế 0đ ⇒ HOÁ ĐƠN BÁN HÀNG (trực tiếp/HKD): 01/GTGT KHÔNG áp dụng — KHÔNG buộc tội "sổ chưa ghi"',
+            Object.keys(kqHdBan)[0] === 'canhBaoKhongApDung' && /HOÁ ĐƠN BÁN HÀNG/.test(kqHdBan.canhBaoKhongApDung) && /TUYỆT ĐỐI không nói/.test(kqHdBan.canhBaoKhongApDung)
+            && !('canhBaoSoChuaGhi' in kqHdBan) && /Cài đặt cửa hàng/.test(kqHdBan.canhBaoKhongApDung), Object.keys(kqHdBan))
+        const kqHoHdBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('household', 'month', [],
+            { n: 10, dt: 5_000_000, thue: 0 }, { n: 10, truoc: 5_000_000, thue: 0 })))
+        ok('2u. hộ kinh doanh xuất hoá đơn bán hàng ⇒ không bảo sửa loại hình', typeof kqHoHdBan.canhBaoKhongApDung === 'string' && !/Cài đặt cửa hàng/.test(kqHoHdBan.canhBaoKhongApDung))
+        const kqKhongHdCoBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', [],
+            { n: 50, dt: 20_000_000, thue: 0 }, { n: 0, truoc: 0, thue: 0 })))
+        ok('2v. có bán, sổ 0, KHÔNG có hoá đơn nào ⇒ "chưa xác định được", không kết luận gì',
+            Object.keys(kqKhongHdCoBan)[0] === 'canhBaoChuaRo' && /CHƯA xác định/.test(kqKhongHdCoBan.canhBaoChuaRo) && !('canhBaoSoChuaGhi' in kqKhongHdCoBan), Object.keys(kqKhongHdCoBan))
     }
 
     /* 3 — lịch nghĩa vụ + số dư */

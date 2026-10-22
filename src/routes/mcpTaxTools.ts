@@ -38,7 +38,7 @@ const SCHEMA_NAM = { type: 'number', description: 'Năm (mặc định năm hi�
 export const TAX_TOOLS: Tool[] = [
     {
         name: 'tax_vat_return',
-        description: 'TỜ KHAI THUẾ GTGT (01/GTGT) của một kỳ — đúng số trang Tờ Khai GTGT: thuế GTGT ĐẦU RA (Có TK 3331), ĐẦU VÀO được khấu trừ (Nợ TK 133), số PHẢI NỘP, số CÒN ĐƯỢC KHẤU TRỪ chuyển kỳ sau, kèm tờ khai đã lập / đã nộp cho kỳ đó và ĐỐI CHIẾU với phiếu bán + hoá đơn điện tử đã gửi cơ quan thuế (sổ chưa ghi thuế thì có canhBaoSoChuaGhi — khi đó số 0 KHÔNG có nghĩa là không phải nộp). Gọi khi hỏi "tháng/quý này phải nộp VAT bao nhiêu", "đã khai thuế GTGT kỳ X chưa". Bỏ trống cả năm lẫn kỳ = kỳ ĐANG DIỄN RA theo cách cửa hàng kê khai (tháng hoặc quý); chỉ truyền year = cả năm. CHỈ ĐỌC.',
+        description: 'TỜ KHAI THUẾ GTGT (01/GTGT) của một kỳ — đúng số trang Tờ Khai GTGT: thuế GTGT ĐẦU RA (Có TK 3331), ĐẦU VÀO được khấu trừ (Nợ TK 133), số PHẢI NỘP, số CÒN ĐƯỢC KHẤU TRỪ chuyển kỳ sau, kèm tờ khai đã lập / đã nộp cho kỳ đó và ĐỐI CHIẾU với phiếu bán + hoá đơn điện tử đã gửi cơ quan thuế (sổ ra 0 mà kỳ có bán hàng thì có canhBaoSoChuaGhi / canhBaoKhongApDung / canhBaoChuaRo — khi đó số 0 KHÔNG có nghĩa là không phải nộp). Gọi khi hỏi "tháng/quý này phải nộp VAT bao nhiêu", "đã khai thuế GTGT kỳ X chưa". Bỏ trống cả năm lẫn kỳ = kỳ ĐANG DIỄN RA theo cách cửa hàng kê khai (tháng hoặc quý); chỉ truyền year = cả năm. CHỈ ĐỌC.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -96,10 +96,33 @@ export const TAX_TOOLS: Tool[] = [
             } catch (e: any) {
                 if (!thieuBang(e)) loiDoiChieu = `${loiDoiChieu ? `${loiDoiChieu}; ` : ''}không đọc được hoá đơn điện tử để đối chiếu: ${e?.message || e}`
             }
-            const coBanHang = (phieuBan?.doanhThu || 0) > 0 || (hoaDonDaGui?.thueGtgt || 0) > 0
-            const soChuaGhiThue = tk.outputVat === 0 && coBanHang
-            const lechHoaDon = !soChuaGhiThue && hoaDonDaGui && hoaDonDaGui.thueGtgt > 0
-                && Math.abs(tk.outputVat - hoaDonDaGui.thueGtgt) > Math.max(100_000, hoaDonDaGui.thueGtgt * 0.05)
+            const coBanHang = (phieuBan?.doanhThu || 0) > 0 || (hoaDonDaGui?.tienTruocThue || 0) > 0
+            /* Sổ ra 0 mà kỳ có bán: BA trường hợp khác nhau — đừng buộc tội oan ([[khong-buoc-toi-oan]]).
+             * Đo KENGISTORE 22/10: 3.250 HĐĐT tháng 9 gửi CQT đều thuế 0đ ⇒ shop xuất HOÁ ĐƠN BÁN HÀNG
+             * (GTGT trực tiếp trên doanh thu / hộ kinh doanh) — không có thuế đầu ra nào để ghi sổ cả. */
+            const soKhong = tk.outputVat === 0 && coBanHang
+            const hdCoThue = (hoaDonDaGui?.thueGtgt || 0) > 0
+            const hdKhongThue = !!hoaDonDaGui && hoaDonDaGui.soHoaDon > 0 && hoaDonDaGui.thueGtgt === 0
+            const tienBan = `${phieuBan?.soPhieu ?? 0} phiếu bán, doanh thu ${(phieuBan?.doanhThu ?? 0).toLocaleString('vi-VN')}đ`
+            const CAM = 'TUYỆT ĐỐI không nói "không phải nộp thuế GTGT".'
+            const canhBaoSoKhong: Record<string, string> = !soKhong ? {}
+                : hdCoThue ? {
+                    canhBaoSoChuaGhi: `Kỳ này có ${tienBan}, ${hoaDonDaGui!.soHoaDon} hoá đơn điện tử đã gửi CQT với thuế GTGT ${hoaDonDaGui!.thueGtgt.toLocaleString('vi-VN')}đ`
+                        + ` nhưng sổ cái KHÔNG có bút toán thuế GTGT đầu ra ⇒ số 0 dưới đây là do SỔ CHƯA GHI, KHÔNG phải không phải nộp. ${CAM}`
+                        + ' Thuế đầu ra thực tế xem ở doiChieu (hoá đơn đã gửi CQT); kế toán cần ghi sổ trước khi lập tờ khai. Chi tiết: tax_reconcile_3way.',
+                }
+                : hdKhongThue ? {
+                    canhBaoKhongApDung: `Kỳ này có ${tienBan} và ${hoaDonDaGui!.soHoaDon} hoá đơn điện tử đã gửi CQT nhưng các hoá đơn đều KHÔNG có thuế GTGT (thuế 0đ)`
+                        + ' ⇒ cửa hàng đang xuất HOÁ ĐƠN BÁN HÀNG, tức nộp thuế GTGT theo phương pháp TRỰC TIẾP trên doanh thu (hoặc là hộ kinh doanh).'
+                        + ' Số liệu tờ khai 01/GTGT (khấu trừ) ở đây KHÔNG áp dụng cho cách kê khai đó — thuế tính bằng % doanh thu. '
+                        + `${CAM} Xem số từng mốc ở tax_deadlines; nên hỏi kế toán cách kê khai đang dùng`
+                        + `${hoSo.loaiHinh !== 'household' ? ' (hồ sơ trong phần mềm đang ghi loại hình "doanh nghiệp" — nếu thực tế là hộ kinh doanh thì sửa trong Cài đặt cửa hàng)' : ''}.`,
+                }
+                : {
+                    canhBaoChuaRo: `Kỳ này có ${tienBan} nhưng sổ cái không có thuế GTGT đầu ra và không có hoá đơn điện tử nào đã gửi CQT ⇒ CHƯA xác định được do sổ chưa ghi hay do cách kê khai. ${CAM} Hỏi kế toán / xem tax_reconcile_3way.`,
+                }
+            const lechHoaDon = !soKhong && hdCoThue
+                && Math.abs(tk.outputVat - hoaDonDaGui!.thueGtgt) > Math.max(100_000, hoaDonDaGui!.thueGtgt * 0.05)
 
             // Tờ khai đã lưu cho kỳ (mã kỳ y như POST /tax/declarations: T09/2026 · Q3/2026; bản bổ sung có hậu tố)
             const maKy = tk.periodType === 'month' ? `T${pad2(Number(tk.month))}/${year}` : tk.periodType === 'quarter' ? `Q${tk.quarter}/${year}` : null
@@ -132,12 +155,7 @@ export const TAX_TOOLS: Tool[] = [
 
             return {
                 // Đặt ĐẦU object — phần AI đọc kỹ nhất
-                ...(soChuaGhiThue ? {
-                    canhBaoSoChuaGhi: `Kỳ này có ${phieuBan?.soPhieu ?? 0} phiếu bán, doanh thu ${(phieuBan?.doanhThu ?? 0).toLocaleString('vi-VN')}đ`
-                        + `${hoaDonDaGui?.soHoaDon ? `, ${hoaDonDaGui.soHoaDon} hoá đơn điện tử đã gửi CQT với thuế GTGT ${hoaDonDaGui.thueGtgt.toLocaleString('vi-VN')}đ` : ''}`
-                        + ' nhưng sổ cái KHÔNG có bút toán thuế GTGT đầu ra ⇒ số 0 dưới đây là do SỔ CHƯA GHI, KHÔNG phải không phải nộp. '
-                        + 'TUYỆT ĐỐI không nói "không phải nộp thuế GTGT". Thuế đầu ra thực tế xem ở doiChieu (hoá đơn đã gửi CQT); kế toán cần ghi sổ trước khi lập tờ khai. Chi tiết: tax_reconcile_3way.',
-                } : {}),
+                ...canhBaoSoKhong,
                 ...(lechHoaDon ? {
                     canhBaoLechHoaDon: `Thuế đầu ra trên sổ (${tk.outputVat.toLocaleString('vi-VN')}đ) lệch thuế trên hoá đơn điện tử đã gửi CQT (${hoaDonDaGui!.thueGtgt.toLocaleString('vi-VN')}đ) — cơ quan thuế đối chiếu theo hoá đơn. Xem tax_reconcile_3way.`,
                 } : {}),
