@@ -19,6 +19,7 @@ import { moTaLoi } from '../lib/gomLoi'
 import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
 import { anBiMatKenh, anBiMatKenhCuaDon } from '../lib/kenhAnToan'
+import { ketCucVuTra, demTheoKetCuc, trangTheoKetCuc, laKetCucVuTra } from '../lib/ketCucVuTra'
 
 const router = Router()
 
@@ -4702,16 +4703,35 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
             }]
         }
 
-        const [returns, total] = await Promise.all([
-            prisma.returnOrder.findMany({
-                where,
-                include: { items: true },
-                orderBy: { createdAt: 'desc' },
-                skip: (parseInt(page as string) - 1) * parseInt(pageSize as string),
-                take: parseInt(pageSize as string),
-            }),
-            prisma.returnOrder.count({ where }),
-        ])
+        /* KẾT CỤC (22/10/2026 — chủ shop: "chưa phân loại được các đơn bị sàn từ chối trả hàng hoàn
+         * tiền"): đọc từ ghi chú — mã gốc sàn + khiếu nại + tranh chấp — nên KHÔNG lọc bằng SQL được.
+         * Lấy mã/trạng thái/ghi chú của mọi phiếu khớp các bộ lọc còn lại (KENGISTORE ~700 phiếu),
+         * phân loại bằng lib/ketCucVuTra, cắt trang, rồi mới lấy đủ dòng của đúng trang đó. */
+        const ketCucLoc = laKetCucVuTra(req.query.ketCuc) ? req.query.ketCuc : null
+        const trangSo = parseInt(page as string)
+        const coTrang = parseInt(pageSize as string)
+        const layTrang = async () => {
+            if (!ketCucLoc) {
+                return Promise.all([
+                    prisma.returnOrder.findMany({
+                        where,
+                        include: { items: true },
+                        orderBy: { createdAt: 'desc' },
+                        skip: (trangSo - 1) * coTrang,
+                        take: coTrang,
+                    }),
+                    prisma.returnOrder.count({ where }),
+                ])
+            }
+            const ungVien = await prisma.returnOrder.findMany({
+                where, select: { id: true, code: true, status: true, notes: true }, orderBy: { createdAt: 'desc' },
+            })
+            const { ids, total } = trangTheoKetCuc(ungVien, ketCucLoc, trangSo, coTrang)
+            const dong = ids.length ? await prisma.returnOrder.findMany({ where: { id: { in: ids } }, include: { items: true } }) : []
+            const viTri = new Map(ids.map((id, i) => [id, i] as const))
+            return [dong.sort((a, b) => (viTri.get(a.id) ?? 0) - (viTri.get(b.id) ?? 0)), total] as const
+        }
+        const [returns, total] = await layTrang()
 
         // Enrich: platform từ prefix mã phiếu + thông tin đơn gốc (kênh, trạng thái,
         // tracking) để màn hình hiển thị chi tiết mà không phải tự parse notes.
@@ -4771,21 +4791,26 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
             return !v || v.toUpperCase() === 'N/A' ? null : v
         }
 
-        const enriched = returns.map(r => ({
-            ...r,
-            platform: codePlatform(r.code),
-            returnSn: r.code.replace(/^RTN-(TT|SH)-/, '').replace(/^RTN-ON-?/, ''),
-            returnTracking: returnTrackingOf((r as any).notes),
-            order: orderMap.get(r.originalInvoice) || null,
-        }))
+        const enriched = returns.map(r => {
+            const kc = ketCucVuTra(r)
+            return {
+                ...r,
+                platform: codePlatform(r.code),
+                returnSn: r.code.replace(/^RTN-(TT|SH)-/, '').replace(/^RTN-ON-?/, ''),
+                returnTracking: returnTrackingOf((r as any).notes),
+                order: orderMap.get(r.originalInvoice) || null,
+                ketCuc: kc.ketCuc,
+                ketCucChiTiet: kc.chiTiet,
+            }
+        })
 
         res.json({
             success: true,
             data: {
                 data: enriched,
                 total,
-                page: parseInt(page as string),
-                totalPages: Math.ceil(total / parseInt(pageSize as string)),
+                page: trangSo,
+                totalPages: Math.ceil(total / coTrang),
             },
         })
     } catch (err) {
@@ -4815,7 +4840,7 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
                 ],
             ...(statChannelId && statChannelId !== 'all' ? { channelId: statChannelId } : {}),
         }
-        const [total, pending, approved, rejected, totalRefunded] = await chayTheoDot([
+        const [total, pending, approved, rejected, totalRefunded, dongKetCuc] = await chayTheoDot([
             () => prisma.returnOrder.count({ where: onlineCode }),
             () => prisma.returnOrder.count({ where: { ...onlineCode, status: 'pending' } }),
             () => prisma.returnOrder.count({ where: { ...onlineCode, status: { in: ['approved', 'refunded'] } } }),
@@ -4824,6 +4849,8 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
                 where: { ...onlineCode, status: { in: ['approved', 'refunded'] } },
                 _sum: { totalRefund: true },
             }),
+            // Kết cục đọc từ ghi chú (lib/ketCucVuTra) — cùng luật với bộ lọc ?ketCuc= của /returns/list
+            () => prisma.returnOrder.findMany({ where: onlineCode, select: { code: true, status: true, notes: true, totalRefund: true } }),
         ])
 
         res.json({
@@ -4834,6 +4861,7 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
                 approved,
                 rejected,
                 totalRefunded: totalRefunded._sum.totalRefund || 0,
+                theoKetCuc: demTheoKetCuc(dongKetCuc),
             },
         })
     } catch (err) {
