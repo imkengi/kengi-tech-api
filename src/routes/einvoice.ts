@@ -1374,63 +1374,70 @@ router.get('/tax-stock-debug', einvoiceAuth, async (req: AuthRequest, res: Respo
 router.get('/tax-stock', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const q = String(req.query.q || '').trim().toLowerCase()
-        const limit = Math.min(Math.max(1, Number(req.query.limit) || 300), 1000)
-        const qFilter = q ? `WHERE x.sku LIKE '%' || $1 || '%' OR LOWER(COALESCE(p.name,'')) LIKE '%' || $1 || '%'` : ''
-        const params: any[] = q ? [q] : []
-        // Gộp 3 nguồn bằng UNION ALL (thay FULL OUTER JOIN 2 nhánh): nhập có HĐ
-        // VAT (+), đã bán & đã xuất HĐ (−), HÀNG TRẢ LẠI đã điều chỉnh HĐ (+).
-        // Thiếu nhánh trả lại thì mã từng bị trả hàng sẽ báo hết tồn thuế oan và
-        // chặn xuất hoá đơn lần bán sau.
-        const rows = await prisma.$queryRawUnsafe(`
-            SELECT x.sku, COALESCE(p.name, x.any_name, '') AS name,
-                   x.nhap::float8 AS "nhapVat", x.xuat::float8 AS xuat,
-                   x.tra::float8 AS "traLai",
-                   (x.nhap - x.xuat + x.tra)::float8 AS ton
-            FROM (
-                SELECT sku,
-                       SUM(nhap) AS nhap, SUM(xuat) AS xuat, SUM(tra) AS tra,
-                       MIN(any_name) AS any_name
-                FROM (
-                    SELECT LOWER(TRIM(ii."productSku")) AS sku,
-                           SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)) AS nhap,
-                           0 AS xuat, 0 AS tra, MIN(ii."productName") AS any_name
-                    FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
-                    WHERE r."hasVatInvoice" = true AND r.status = 'completed'
-                      AND NULLIF(TRIM(ii."productSku"),'') IS NOT NULL
-                    GROUP BY 1
-
-                    UNION ALL
-                    -- CHỈ trừ phần ĐÃ XUẤT HOÁ ĐƠN (khớp công thức chặn — bán chưa
-                    -- xuất HĐ thì chưa trừ tồn kho thuế)
-                    SELECT LOWER(TRIM(ti.sku)) AS sku, 0 AS nhap,
-                           SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)) AS xuat,
-                           0 AS tra, MIN(ti."productName") AS any_name
-                    FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
-                    WHERE t.status IN ('completed','partial','returned')
-                      AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
-                      AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
-                    GROUP BY 1
-
-                    UNION ALL
-                    -- HÀNG TRẢ LẠI đã lập HĐ điều chỉnh/thay thế → hoàn tồn kho thuế
-                    SELECT k AS sku, 0 AS nhap, 0 AS xuat, q AS tra, any_name
-                    FROM ( ${TRA_LAI_SELECT} GROUP BY 1 ) tl
-                ) u
-                GROUP BY sku
-            ) x
-            LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = x.sku
-            ${qFilter}
-            ORDER BY (x.nhap - x.xuat + x.tra) ASC, x.xuat DESC
-            LIMIT ${limit}
-        `, ...params)
-        const tongThieu = (rows as any[]).filter((r: any) => r.ton < 0).length
-        res.json({ success: true, data: { rows, tongThieu } })
+        // CHUNG hàm với công cụ AI tax_stock (routes/mcpTaxTools)
+        res.json({ success: true, data: await tonKhoThue(prisma, { q: String(req.query.q || ''), limit: Number(req.query.limit) || 300 }) })
     } catch (err: any) {
         console.error('[tax-stock]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
+
+/** TỒN KHO THUẾ theo mã: nhập có HĐ VAT − đã bán & đã xuất HĐ + hàng trả lại đã điều chỉnh HĐ.
+ *  Âm ⇒ bán (xuất HĐ) nhiều hơn số đã nhập có hoá đơn — trang Tồn Kho Thuế + AI dùng chung. */
+export async function tonKhoThue(prisma: any, opts: { q?: string; limit?: number } = {}): Promise<{ rows: any[]; tongThieu: number }> {
+    const q = String(opts.q || '').trim().toLowerCase()
+    const limit = Math.min(Math.max(1, Number(opts.limit) || 300), 1000)
+    const qFilter = q ? `WHERE x.sku LIKE '%' || $1 || '%' OR LOWER(COALESCE(p.name,'')) LIKE '%' || $1 || '%'` : ''
+    const params: any[] = q ? [q] : []
+    // Gộp 3 nguồn bằng UNION ALL (thay FULL OUTER JOIN 2 nhánh): nhập có HĐ
+    // VAT (+), đã bán & đã xuất HĐ (−), HÀNG TRẢ LẠI đã điều chỉnh HĐ (+).
+    // Thiếu nhánh trả lại thì mã từng bị trả hàng sẽ báo hết tồn thuế oan và
+    // chặn xuất hoá đơn lần bán sau.
+    const rows = await prisma.$queryRawUnsafe(`
+        SELECT x.sku, COALESCE(p.name, x.any_name, '') AS name,
+               x.nhap::float8 AS "nhapVat", x.xuat::float8 AS xuat,
+               x.tra::float8 AS "traLai",
+               (x.nhap - x.xuat + x.tra)::float8 AS ton
+        FROM (
+            SELECT sku,
+                   SUM(nhap) AS nhap, SUM(xuat) AS xuat, SUM(tra) AS tra,
+                   MIN(any_name) AS any_name
+            FROM (
+                SELECT LOWER(TRIM(ii."productSku")) AS sku,
+                       SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)) AS nhap,
+                       0 AS xuat, 0 AS tra, MIN(ii."productName") AS any_name
+                FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+                  AND NULLIF(TRIM(ii."productSku"),'') IS NOT NULL
+                GROUP BY 1
+
+                UNION ALL
+                -- CHỈ trừ phần ĐÃ XUẤT HOÁ ĐƠN (khớp công thức chặn — bán chưa
+                -- xuất HĐ thì chưa trừ tồn kho thuế)
+                SELECT LOWER(TRIM(ti.sku)) AS sku, 0 AS nhap,
+                       SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)) AS xuat,
+                       0 AS tra, MIN(ti."productName") AS any_name
+                FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
+                WHERE t.status IN ('completed','partial','returned')
+                  AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+                  AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
+                GROUP BY 1
+
+                UNION ALL
+                -- HÀNG TRẢ LẠI đã lập HĐ điều chỉnh/thay thế → hoàn tồn kho thuế
+                SELECT k AS sku, 0 AS nhap, 0 AS xuat, q AS tra, any_name
+                FROM ( ${TRA_LAI_SELECT} GROUP BY 1 ) tl
+            ) u
+            GROUP BY sku
+        ) x
+        LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = x.sku
+        ${qFilter}
+        ORDER BY (x.nhap - x.xuat + x.tra) ASC, x.xuat DESC
+        LIMIT ${limit}
+    `, ...params)
+    const tongThieu = (rows as any[]).filter((r: any) => r.ton < 0).length
+    return { rows: rows as any[], tongThieu }
+}
 
 // GET /einvoice/tax-stock-gap?from=YYYY-MM-DD&to=&platform=&onlyShort=1
 // ĐỐI CHIẾU hàng đợi xuất HĐ ⇄ TỒN KHO THUẾ: gom nhu cầu theo SKU của toàn bộ phiếu
@@ -1980,6 +1987,58 @@ router.put('/buyer/by-order/:orderNumber', einvoiceAuth, async (req: AuthRequest
     }
 })
 
+/** HOÁ ĐƠN ĐÃ PHÁT HÀNH mà đơn phát sinh trả hàng / hoàn tiền ⇒ phải lập HĐ điều chỉnh (trả một phần)
+ *  hoặc thay thế / huỷ (trả toàn bộ). Trang Hoá đơn ĐT › Cần điều chỉnh + AI dùng chung. */
+export async function hoaDonCanDieuChinh(prisma: any) {
+    const rows = await prisma.$queryRawUnsafe(`
+        SELECT e.id, e."invoiceNumber", e."invoiceSymbol", e."invoiceDate", e.status,
+               e."totalAmount", e."buyerName", e."transactionId", e."replacedByInvoiceId",
+               e.notes, e."createdAt" AS "issuedAt",
+               t."receiptNumber", t.total AS "txTotal", t.status AS "txStatus",
+               o.status AS "orderStatus", o.platform,
+               ro.code AS "returnCode", ro.status AS "returnStatus",
+               ro."refundAmount", ro."createdAt" AS "returnDate",
+               (SELECT COUNT(*)::int FROM "ReturnItem" ri WHERE ri."returnOrderId" = ro.id) AS "returnItemCount"
+        FROM "EInvoice" e
+        JOIN "Transaction" t ON t.id = e."transactionId"
+        LEFT JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
+        -- Nối chịu cả 2 dạng originalInvoice: 'TIK-5852…' (tìm được đơn lúc
+        -- sync) LẪN '5852…' thô (không tìm được → lưu orderSn trần). Nếu chỉ
+        -- nối dạng có prefix thì 11 phiếu trả mồ côi thành ĐIỂM MÙ.
+        JOIN "ReturnOrder" ro ON (
+                ro."originalInvoice" = o."orderNumber"
+             OR o."orderNumber" LIKE '%-' || ro."originalInvoice"
+        )
+        WHERE e.status IN ('SENT','issued','SIGNED')
+          AND e."replacedByInvoiceId" IS NULL
+          AND e."adjustedByInvoiceId" IS NULL
+          AND LOWER(ro.status) IN ('approved','refunded','processing')
+        ORDER BY ro."createdAt" DESC
+        LIMIT 300`)
+    const list = (rows as any[]).map(r => {
+        const refund = Number(r.refundAmount) || 0
+        const total = Number(r.totalAmount) || Number(r.txTotal) || 0
+        // Hoàn ≥ 98% tổng tiền coi như trả TOÀN BỘ → thay thế/huỷ; còn lại là
+        // trả một phần → hoá đơn điều chỉnh giảm.
+        const fullReturn = total > 0 && refund >= total * 0.98
+        return {
+            ...r,
+            refundAmount: refund,
+            totalAmount: total,
+            suggestion: fullReturn ? 'replace' : 'adjust',
+            suggestionLabel: fullReturn
+                ? 'Trả toàn bộ → nên THAY THẾ/huỷ hoá đơn'
+                : `Trả một phần (${refund.toLocaleString('vi-VN')}đ/${total.toLocaleString('vi-VN')}đ) → nên lập HĐ ĐIỀU CHỈNH giảm`,
+        }
+    })
+    return {
+        items: list,
+        total: list.length,
+        totalRefund: list.reduce((s, r) => s + r.refundAmount, 0),
+        fullReturns: list.filter(r => r.suggestion === 'replace').length,
+    }
+}
+
 // GET /einvoice/needs-adjust — HOÁ ĐƠN ĐÃ PHÁT HÀNH nhưng đơn phát sinh TRẢ
 // HÀNG / HOÀN TIỀN → phải lập hoá đơn ĐIỀU CHỈNH (trả một phần) hoặc THAY THẾ /
 // huỷ (trả toàn bộ). Chưa xử lý = còn rủi ro kê khai thừa doanh thu với CQT.
@@ -1988,31 +2047,8 @@ router.get('/needs-adjust', einvoiceAuth, async (req: AuthRequest, res: Response
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const rows = await prisma.$queryRawUnsafe(`
-            SELECT e.id, e."invoiceNumber", e."invoiceSymbol", e."invoiceDate", e.status,
-                   e."totalAmount", e."buyerName", e."transactionId", e."replacedByInvoiceId",
-                   e.notes, e."createdAt" AS "issuedAt",
-                   t."receiptNumber", t.total AS "txTotal", t.status AS "txStatus",
-                   o.status AS "orderStatus", o.platform,
-                   ro.code AS "returnCode", ro.status AS "returnStatus",
-                   ro."refundAmount", ro."createdAt" AS "returnDate",
-                   (SELECT COUNT(*)::int FROM "ReturnItem" ri WHERE ri."returnOrderId" = ro.id) AS "returnItemCount"
-            FROM "EInvoice" e
-            JOIN "Transaction" t ON t.id = e."transactionId"
-            LEFT JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
-            -- Nối chịu cả 2 dạng originalInvoice: 'TIK-5852…' (tìm được đơn lúc
-            -- sync) LẪN '5852…' thô (không tìm được → lưu orderSn trần). Nếu chỉ
-            -- nối dạng có prefix thì 11 phiếu trả mồ côi thành ĐIỂM MÙ.
-            JOIN "ReturnOrder" ro ON (
-                    ro."originalInvoice" = o."orderNumber"
-                 OR o."orderNumber" LIKE '%-' || ro."originalInvoice"
-            )
-            WHERE e.status IN ('SENT','issued','SIGNED')
-              AND e."replacedByInvoiceId" IS NULL
-              AND e."adjustedByInvoiceId" IS NULL
-              AND LOWER(ro.status) IN ('approved','refunded','processing')
-            ORDER BY ro."createdAt" DESC
-            LIMIT 300`)
+        // CHUNG hàm với công cụ AI einvoice_status (routes/mcpTaxTools)
+        const kq = await hoaDonCanDieuChinh(prisma)
         // ?debug=1 — soi từng mắt xích nối bảng để phân biệt "thật sự không có"
         // với "nối sai nên luôn ra 0" (ReturnOrder.originalInvoice có thể là
         // orderNumber CÓ prefix hoặc orderSn thô tuỳ lúc sync tìm được đơn hay không).
@@ -2023,7 +2059,7 @@ router.get('/needs-adjust', einvoiceAuth, async (req: AuthRequest, res: Response
             res.json({
                 success: true,
                 data: {
-                    ketQua: (rows as any[]).length,
+                    ketQua: kq.total,
                     hdDaPhatHanh: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" WHERE status IN ('SENT','issued','SIGNED')`),
                     hdCoGiaoDich: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" e JOIN "Transaction" t ON t.id = e."transactionId" WHERE e.status IN ('SENT','issued','SIGNED')`),
                     hdNoiDuocDonSan: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" e JOIN "Transaction" t ON t.id = e."transactionId" JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber" WHERE e.status IN ('SENT','issued','SIGNED')`),
@@ -2036,36 +2072,20 @@ router.get('/needs-adjust', einvoiceAuth, async (req: AuthRequest, res: Response
             })
             return
         }
-        const list = (rows as any[]).map(r => {
-            const refund = Number(r.refundAmount) || 0
-            const total = Number(r.totalAmount) || Number(r.txTotal) || 0
-            // Hoàn ≥ 98% tổng tiền coi như trả TOÀN BỘ → thay thế/huỷ; còn lại là
-            // trả một phần → hoá đơn điều chỉnh giảm.
-            const fullReturn = total > 0 && refund >= total * 0.98
-            return {
-                ...r,
-                refundAmount: refund,
-                totalAmount: total,
-                suggestion: fullReturn ? 'replace' : 'adjust',
-                suggestionLabel: fullReturn
-                    ? 'Trả toàn bộ → nên THAY THẾ/huỷ hoá đơn'
-                    : `Trả một phần (${refund.toLocaleString('vi-VN')}đ/${total.toLocaleString('vi-VN')}đ) → nên lập HĐ ĐIỀU CHỈNH giảm`,
-            }
-        })
-        res.json({
-            success: true,
-            data: {
-                items: list,
-                total: list.length,
-                totalRefund: list.reduce((s, r) => s + r.refundAmount, 0),
-                fullReturns: list.filter(r => r.suggestion === 'replace').length,
-            },
-        })
+        res.json({ success: true, data: kq })
     } catch (err: any) {
         console.error('[needs-adjust]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
+
+/** Đếm hoá đơn xuất từ phiếu bán (qua hàng đợi) từ mốc `from`: đã gửi CQT / lỗi — tab Lịch sử xuất + AI dùng chung.
+ *  TUẦN TỰ (xem ghi chú pool ở /einvoice/queue). */
+export async function demXuatHoaDon(prisma: any, from: Date): Promise<{ sent: number; errors: number }> {
+    const sent = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'SENT' } })
+    const errors = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'ERROR' } })
+    return { sent, errors }
+}
 
 // GET /einvoice/queue/history — lịch sử xuất qua hàng đợi: SENT/ERROR + đếm.
 router.get('/queue/history', einvoiceAuth, async (req: AuthRequest, res: Response) => {
@@ -2094,9 +2114,8 @@ router.get('/queue/history', einvoiceAuth, async (req: AuthRequest, res: Respons
             },
         })
         const total = await prisma.eInvoice.count({ where })
-        const sent = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'SENT' } })
-        const errors = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'ERROR' } })
-        res.json({ success: true, data: { items, total, page, pageSize, counts: { sent, errors } } })
+        const counts = await demXuatHoaDon(prisma, from)
+        res.json({ success: true, data: { items, total, page, pageSize, counts } })
     } catch (err: any) {
         console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })

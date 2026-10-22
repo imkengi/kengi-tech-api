@@ -74,6 +74,20 @@ Tham số **in đậm** là bắt buộc.
 | `fanpage_subscribe_webhook` | ghi | Bật webhook để bình luận về server tức thì. | page_id |
 | `fanpage_set_auto_reply` | ghi | Bật / tắt engine auto-reply cho fanpage. | **enabled**, page_id |
 
+### Thuế (thêm 2026-10-22 — `src/routes/mcpTaxTools.ts`)
+
+Mỗi tool gọi ĐÚNG hàm mà màn hình Thuế dùng (AI không nói số khác màn hình). Tất cả chỉ đọc.
+
+| Tool | Loại | Việc | Tham số |
+|---|---|---|---|
+| `tax_vat_return` | đọc | Tờ khai GTGT 01/GTGT của kỳ: đầu ra (Có 3331), đầu vào (Nợ 133), phải nộp, còn được khấu trừ + tờ khai đã lập. Bỏ trống kỳ = kỳ đang diễn ra theo cách cửa hàng kê khai. | year, month, quarter |
+| `tax_deadlines` | đọc* | Lịch nghĩa vụ thuế: quá hạn / sắp đến hạn / sắp tới + số tiền từng mốc + căn cứ; số dư TK 3331/3334/3335. *Gieo mốc thiếu + đánh dấu quá hạn y như mở trang. | year |
+| `einvoice_status` | đọc | HĐĐT bán ra: phiếu chờ xuất (theo sàn/ngày), đã gửi / lỗi trong N ngày + lỗi gần nhất, HĐ cần điều chỉnh / thay thế vì trả hàng. | days |
+| `tax_stock` | đọc | Tồn kho thuế theo mã (nhập có HĐ − đã xuất HĐ + trả lại đã điều chỉnh); mã âm. | q, limit |
+| `tax_pit` | đọc | Quyết toán TNCN năm: tổng + từng nhân viên (bản đã lưu, không thì tự tính). Năm ≥ 2026 cảnh báo nếu bộ tính còn mức giảm trừ cũ. | year |
+
+Trợ lý trong dashboard có chế độ **Hỏi AI về thuế**: `POST /api/mcp-agent/chat` với `chuDe: "thue"` chỉ nạp bộ `TEN_TOOL_THUE` (5 tool trên + soát thanh tra/đối chiếu/TNDN + `accounting_*` + `data_health_check`), prompt riêng cho thuế, không có quyền ghi. Kiểm: `npm run check:mcp-thue`.
+
 ### Fanpage — bài đã đăng & bình luận theo bài (thêm 2026-08-15)
 
 | Tool | Loại | Việc | Tham số |

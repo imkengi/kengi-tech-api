@@ -3,6 +3,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { type ToolCtx } from '../lib/mcpTypes'
 import { chayAgent } from '../services/aiAgentRunner'
 import { layKeyAi } from '../lib/keyAi'
+import { TEN_TOOL_THUE } from './mcpTaxTools'
 
 /**
  * TRỢ LÝ AI trong dashboard — POST /api/mcp-agent/chat
@@ -46,6 +47,26 @@ const SYSTEM_PROMPT =
     'Hỏi về LÃI/LỖ dùng profit_report, chi phí dùng expense_report, nợ nhà cung cấp dùng supplier_debt, tồn theo kho dùng stock_by_warehouse. '+
     'profit_report tính giá vốn theo giá vốn HIỆN TẠI nên là ước tính — khi báo cáo phải nói rõ, và nếu có cảnh báo thiếu giá vốn thì nhắc chủ shop cập nhật.'
 
+/* HỎI AI VỀ THUẾ (22/10/2026 — chủ shop: "làm MCP thuế để hỏi trợ lý AI"): FE gửi chuDe='thue' từ các
+ * trang Thuế / Tuân thủ / Hoá đơn ĐT. Chỉ nạp nhóm công cụ thuế + sổ sách (mcpTaxTools.TEN_TOOL_THUE) —
+ * bớt hàng chục công cụ fanpage/marketing không liên quan để model chọn đúng — và KHÔNG có công cụ ghi. */
+const SYSTEM_PROMPT_THUE =
+    'Bạn là trợ lý THUẾ & KẾ TOÁN của cửa hàng Kengi, trả lời NGẮN GỌN bằng tiếng Việt, dễ hiểu với chủ shop không chuyên kế toán. ' +
+    'LUÔN GỌI CÔNG CỤ để lấy số thật — TUYỆT ĐỐI không bịa số, không đoán luật. Nêu rõ kỳ (tháng/quý/năm) của mọi con số. Tiền VND, có dấu chấm ngăn cách. ' +
+    'Chọn công cụ: thuế GTGT kỳ này phải nộp bao nhiêu → tax_vat_return; sắp phải nộp gì, có trễ hạn không, còn nợ thuế bao nhiêu → tax_deadlines; ' +
+    'hoá đơn điện tử (đơn chưa xuất hoá đơn, hoá đơn lỗi, hoá đơn phải điều chỉnh vì khách trả hàng) → einvoice_status; ' +
+    'tồn kho thuế, mã thiếu hoá đơn đầu vào → tax_stock; thuế TNCN của nhân viên → tax_pit; ' +
+    'rủi ro nếu bị thanh tra → tax_audit_check rồi tax_assessment_risk / tax_remediation_plan / tax_audit_drill; ' +
+    'đối chiếu doanh thu sổ sách – tờ khai – hoá đơn → tax_reconcile_3way; quyết toán TNDN → tax_cit_settlement; ' +
+    'hộ kinh doanh bỏ thuế khoán 2026 → hkd_bo_thue_khoan_2026; truy một chứng từ → tax_trace_document; sổ cái, cân đối, báo cáo tài chính → accounting_*. ' +
+    'TRƯỚC KHI kết luận về số liệu theo kỳ, gọi data_health_check một lần; có mục mức "nang" thì PHẢI nói rõ hạn chế đó trước khi đưa số. ' +
+    'Số null nghĩa là CHƯA ĐỌC ĐƯỢC / chưa suy ra được, KHÔNG phải 0 — đừng nói "không phải nộp". Không đọc được dữ liệu KHÔNG phải là vi phạm — đừng kết tội cửa hàng. ' +
+    'Số "tạm tính" / "ước tính" phải gọi đúng là tạm tính / ước tính. Công cụ trả về canhBaoMucGiamTru, canhBaoCat, tamTinh hay ghiChu cảnh báo thì PHẢI nhắc lại cho chủ shop. ' +
+    'Nêu nghĩa vụ, hạn nộp hay mức phạt thì kèm căn cứ pháp lý nếu công cụ có trả (canCu). ' +
+    'Không hướng dẫn trốn thuế, khai sai hay lập chứng từ khống; được gợi ý cách làm đúng luật và cách khắc phục. ' +
+    'Bạn KHÔNG có công cụ ghi: không lập hay nộp tờ khai, không xuất hay huỷ hoá đơn — được nhờ thì chỉ chủ shop làm ở trang tương ứng. ' +
+    'Câu trả lời có số thuế quan trọng thì cuối câu nhắc ngắn: đây là số phần mềm tự tính, nên để kế toán kiểm trước khi nộp chính thức.'
+
 const WRITE_ROLES = ['admin', 'manager', 'owner', 'superadmin']
 
 router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -68,7 +89,9 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
     if (!message) { res.status(400).json({ success: false, error: 'Thiếu message' }); return }
 
     const role = String(req.user?.role || '')
-    const canWrite = WRITE_ROLES.includes(role)
+    const thue = req.body?.chuDe === 'thue'
+    // Chế độ thuế CHỈ ĐỌC dù người hỏi có quyền ghi
+    const canWrite = !thue && WRITE_ROLES.includes(role)
     const ctx: ToolCtx = {
         prisma,
         scopes: canWrite ? 'read,write' : 'read',
@@ -94,12 +117,14 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
         const kq = await chayAgent({
             apiKey,
             deepseekKey: key.deepseek,
-            systemPrompt: SYSTEM_PROMPT,
+            systemPrompt: thue ? SYSTEM_PROMPT_THUE : SYSTEM_PROMPT,
             ctx,
             message,
             history,
-            maxSteps: MAX_STEPS,
+            // Câu hỏi thuế hay phải gọi chuỗi: soát dữ liệu → tờ khai → lịch nộp → đối chiếu
+            maxSteps: thue ? 8 : MAX_STEPS,
             allowWrite: canWrite,
+            ...(thue ? { allowedTools: TEN_TOOL_THUE } : {}),
             giamSat: true,
         })
         res.json({

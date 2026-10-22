@@ -11,6 +11,7 @@ import { MARKETING_TOOLS } from './mcpMarketingTools'
 import { REPORT_TOOLS } from './mcpReportTools'
 import { ACCOUNTING_TOOLS } from './mcpAccountingTools'
 import { OPS_TOOLS } from './mcpOpsTools'
+import { TAX_TOOLS } from './mcpTaxTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -969,6 +970,8 @@ export const TOOLS: Tool[] = [
     ...REPORT_TOOLS,
     // Sổ sách kế toán (03/09/2026) — agent đọc được sổ cái/cân đối/BCTC
     ...ACCOUNTING_TOOLS,
+    // Thuế (22/10/2026) — tờ khai GTGT, lịch nghĩa vụ, HĐĐT bán ra, tồn kho thuế, quyết toán TNCN
+    ...TAX_TOOLS,
     // Vận hành: việc cần làm, NCC, hạn trả, công nợ, đơn, sao kê, kho, chi phí
     ...OPS_TOOLS,
 ]

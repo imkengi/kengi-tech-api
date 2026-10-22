@@ -24,6 +24,8 @@ const rongNeuChuaCoBang = (e: any): any[] => {
     throw e
 }
 import { tienThueDaNop, dieuKienButToanNopThue, ghiChuNguonDaNop } from '../lib/taxPaidLedger'
+import { PIT_FORM_TYPE, aggregatePitByEmployee, pitSummary, parsePitNotes, docQuyetToanTncn, type PitEmployeeBreakdown } from '../lib/quyetToanTncn'
+import { docLichNghiaVu, soDuThuePhaiNop } from '../lib/lichNghiaVuThue'
 
 const router = Router()
 
@@ -5750,134 +5752,7 @@ router.get('/cit-declaration/appendix/pl01-2', authMiddleware, async (req: AuthR
     }
 })
 
-// Tính thuế TNCN cuối năm cho từng nhân viên từ PayrollRecord.
-// Biểu lũy tiến từng phần 5%→35% theo Luật thuế TNCN.
-// Mức giảm trừ: bản thân 11tr/tháng (NĐ44/2023), phụ thuộc 4.4tr/tháng/người.
-
-const PIT_FORM_TYPE = '05_QTT_TNCN'
-const PIT_SELF_DEDUCTION_PER_MONTH = 11_000_000
-const PIT_DEPENDENT_DEDUCTION_PER_MONTH = 4_400_000
-
-// Biểu thuế lũy tiến từng phần — annual brackets (VND), Vietnamese PIT law
-const PIT_BRACKETS_ANNUAL: { upTo: number; rate: number }[] = [
-    { upTo: 60_000_000, rate: 0.05 },
-    { upTo: 120_000_000, rate: 0.10 },
-    { upTo: 216_000_000, rate: 0.15 },
-    { upTo: 384_000_000, rate: 0.20 },
-    { upTo: 624_000_000, rate: 0.25 },
-    { upTo: 960_000_000, rate: 0.30 },
-    { upTo: Infinity, rate: 0.35 },
-]
-
-function calculatePitProgressive(taxableIncome: number): number {
-    if (taxableIncome <= 0) return 0
-    let tax = 0
-    let prevCap = 0
-    for (const b of PIT_BRACKETS_ANNUAL) {
-        const slice = Math.min(taxableIncome, b.upTo) - prevCap
-        if (slice <= 0) break
-        tax += slice * b.rate
-        prevCap = b.upTo
-        if (taxableIncome <= b.upTo) break
-    }
-    return Math.round(tax)
-}
-
-interface PitEmployeeBreakdown {
-    employeeId: string
-    employeeCode: string | null
-    name: string
-    department: string | null
-    monthsWorked: number
-    totalIncome: number          // Tổng thu nhập chịu thuế
-    totalInsurance: number       // BHXH + BHYT + BHTN (phần NLĐ) — khấu trừ trước thuế
-    selfDeduction: number        // Giảm trừ bản thân
-    dependentDeduction: number   // Giảm trừ người phụ thuộc
-    deductions: number           // Tổng giảm trừ (BH + bản thân + phụ thuộc)
-    taxableIncome: number        // Thu nhập tính thuế
-    taxAmount: number            // Thuế TNCN phải nộp theo biểu lũy tiến
-    pitWithheld: number          // Thuế TNCN đã khấu trừ trong năm (sum monthly pit)
-    balanceDue: number           // taxAmount - pitWithheld (>0: nộp thêm, <0: hoàn)
-}
-
-function aggregatePitByEmployee(records: any[]): PitEmployeeBreakdown[] {
-    const byEmp = new Map<string, any[]>()
-    for (const r of records) {
-        const key = r.employeeId || r.employeeName
-        if (!key) continue
-        if (!byEmp.has(key)) byEmp.set(key, [])
-        byEmp.get(key)!.push(r)
-    }
-
-    const result: PitEmployeeBreakdown[] = []
-    for (const [employeeId, recs] of byEmp.entries()) {
-        const sample = recs[0]
-        let totalIncome = 0
-        let totalInsurance = 0
-        let dependentMonths = 0
-        let pitWithheld = 0
-        const monthsSeen = new Set<number>()
-        for (const r of recs) {
-            const gross = Number(r.actualGross) || Number(r.grossSalary) || 0
-            const bonus = Number(r.bonus) || 0
-            // actualGross may or may not already include bonus depending on how payroll was entered.
-            // If actualGross < grossSalary, treat bonus as not yet rolled in.
-            const hasBonusInActual = gross >= Number(r.grossSalary || 0)
-            totalIncome += gross + (hasBonusInActual ? 0 : bonus)
-            totalInsurance += (Number(r.bhxh_emp) || 0) + (Number(r.bhyt_emp) || 0) + (Number(r.bhtn_emp) || 0)
-            dependentMonths += Number(r.dependents) || 0
-            pitWithheld += Number(r.pit) || 0
-            if (typeof r.month === 'number') monthsSeen.add(r.month)
-        }
-        const monthsWorked = monthsSeen.size || recs.length
-        const selfDeduction = monthsWorked * PIT_SELF_DEDUCTION_PER_MONTH
-        const dependentDeduction = dependentMonths * PIT_DEPENDENT_DEDUCTION_PER_MONTH
-        const deductions = totalInsurance + selfDeduction + dependentDeduction
-        const taxableIncome = Math.max(0, totalIncome - deductions)
-        const taxAmount = calculatePitProgressive(taxableIncome)
-        result.push({
-            employeeId,
-            employeeCode: sample.employeeCode || null,
-            name: sample.employeeName || '',
-            department: sample.department || null,
-            monthsWorked,
-            totalIncome: Math.round(totalIncome),
-            totalInsurance: Math.round(totalInsurance),
-            selfDeduction,
-            dependentDeduction,
-            deductions: Math.round(deductions),
-            taxableIncome: Math.round(taxableIncome),
-            taxAmount,
-            pitWithheld: Math.round(pitWithheld),
-            balanceDue: taxAmount - Math.round(pitWithheld),
-        })
-    }
-    result.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
-    return result
-}
-
-function pitSummary(employees: PitEmployeeBreakdown[]) {
-    return {
-        totalEmployees: employees.length,
-        totalIncome: employees.reduce((s, e) => s + e.totalIncome, 0),
-        totalDeductions: employees.reduce((s, e) => s + e.deductions, 0),
-        totalTaxableIncome: employees.reduce((s, e) => s + e.taxableIncome, 0),
-        totalTax: employees.reduce((s, e) => s + e.taxAmount, 0),
-        totalWithheld: employees.reduce((s, e) => s + e.pitWithheld, 0),
-        totalBalanceDue: employees.reduce((s, e) => s + e.balanceDue, 0),
-    }
-}
-
-// Parse the structured PIT payload we store inside TaxDeclaration.notes.
-// Returns null if notes is plain text (legacy / user-entered) rather than our JSON envelope.
-function parsePitNotes(notes: string | null | undefined): { userNotes?: string; employees?: PitEmployeeBreakdown[]; summary?: any } | null {
-    if (!notes) return null
-    try {
-        const obj = JSON.parse(notes)
-        if (obj && obj.__pit === true) return obj
-        return null
-    } catch { return null }
-}
+// Tính thuế TNCN cuối năm: lib/quyetToanTncn.ts (dùng chung với công cụ AI tax_pit).
 
 // GET /api/tax/pit-settlement/calculate?year=2024
 // Tính thuế TNCN năm từ PayrollRecord (không lưu).
@@ -6018,37 +5893,8 @@ router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRe
         const prisma = req.storePrisma! as any
         const year = Number(req.params.year)
         if (!year) return res.status(400).json({ success: false, error: 'year không hợp lệ' })
-
-        const decl = await prisma.taxDeclaration.findUnique({ where: { period: `QTT-${year}` } })
-        const parsed = decl ? parsePitNotes(decl.notes) : null
-        if (parsed?.employees) {
-            return res.json({
-                success: true,
-                data: {
-                    year,
-                    source: 'saved',
-                    declarationId: decl.id,
-                    status: decl.status,
-                    summary: parsed.summary || pitSummary(parsed.employees),
-                    employees: parsed.employees,
-                },
-            })
-        }
-
-        const records = await prisma.payrollRecord.findMany({
-            where: { year },
-            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
-        })
-        const employees = aggregatePitByEmployee(records)
-        res.json({
-            success: true,
-            data: {
-                year,
-                source: 'calculated',
-                summary: pitSummary(employees),
-                employees,
-            },
-        })
+        // Bản đã lưu nếu có, không thì tính từ bảng lương — CHUNG hàm với công cụ AI tax_pit
+        res.json({ success: true, data: await docQuyetToanTncn(prisma, year) })
     } catch (err) {
         console.error('GET /pit-settlement/:year/employees error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -7087,156 +6933,8 @@ function fmtDateYMD(y: number, m1to12: number, d: number): string {
 router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const year = Number(req.query.year) || new Date().getFullYear()
-
-        /* Lịch nghĩa vụ phải theo ĐÚNG hồ sơ của cửa hàng.
-         *
-         * Bản trước sinh cả tờ khai GTGT tháng LẪN quý cho mọi cửa hàng: một nơi
-         * chỉ khai một kiểu, nên nửa số mốc là việc không bao giờ làm — rồi tới
-         * hạn chúng tự chuyển sang "quá hạn" và biến trang nghĩa vụ thuế thành
-         * một bức tường báo động giả. Hộ kinh doanh còn bị hiện cả quyết toán
-         * TNDN và báo cáo tài chính, hai thứ họ không phải nộp. */
-        const hoSo = await suyHoSoThue(prisma, year, String(req.query.kyKeKhai || ''))
-        const loaiHinh = hoSo.loaiHinh
-        const seeds = await gieoLichNghiaVu(prisma, year, hoSo)
-
-
-        // Auto-mark overdue: pending items whose dueDate < today
-        const today = new Date().toISOString().slice(0, 10)
-        await prisma.taxDeadline.updateMany({
-            where: { status: 'pending', dueDate: { lt: today } },
-            data: { status: 'overdue' },
-        })
-
-        const where: any = {}
-        if (req.query.year) {
-            const y = Number(req.query.year)
-            where.OR = [
-                { period: { contains: `/${y}` } },
-                { period: { contains: `-${y}` } },
-            ]
-        }
-        if (req.query.taxType) where.taxType = String(req.query.taxType)
-        if (req.query.status) where.status = String(req.query.status)
-
-        const data = await prisma.taxDeadline.findMany({
-            where,
-            orderBy: [{ dueDate: 'asc' }],
-        })
-        // Bổ sung field FE cần: type/label/daysUntilDue/estimatedAmount + status
-        // upcoming|due_soon (giữ nguyên field gốc để không vỡ chỗ khác)
-        const seedTheoKhoa = new Map(seeds.map((x: MocNghiaVu) => [`${x.taxType}|${x.period}`, x]))
-
-        /* Số tiền phải nộp của từng mốc. Bảng TaxDeadline không có cột tiền nên
-         * trang nghĩa vụ thuế đang hiện 0đ cho tất cả — một danh sách hạn nộp
-         * không kèm số tiền chỉ trả lời được "khi nào", còn câu người ta cần là
-         * "phải chuẩn bị bao nhiêu". Ba truy vấn gộp một lần rồi tra tại chỗ. */
-        const tienTheoKhoa = new Map<string, any>()
-        try {
-            const toKhaiNam: any[] = await prisma.taxDeclaration.findMany({
-                where: { year },
-                select: { period: true, formType: true, ct38: true, ct40a: true, cnkdTotalTax: true },
-            }).catch(rongNeuChuaCoBang)
-            const toKhaiTheoKy = new Map<string, number>()
-            for (const t of toKhaiNam) {
-                if (String(t.formType || '').includes('_BS')) continue   // bản bổ sung không phải số gốc
-                /* So thue phai nop nam o [38]; [40a] la de nghi hoan va he thong
-                 * de luon bang 0 khi tu tinh to khai. Doc [40a] la moi moc han
-                 * nop deu hien 0 dong. */
-                toKhaiTheoKy.set(String(t.period),
-                    Number(t.formType === '01_CNKD'
-                        ? t.cnkdTotalTax
-                        : (t.ct38 || t.ct40a)) || 0)
-            }
-
-            const kyLuong: any[] = await prisma.payrollPeriod.findMany({
-                where: { year },
-                select: { id: true, month: true },
-            }).catch(rongNeuChuaCoBang)
-            const tncnTheoKy = new Map<string, number>()
-            if (kyLuong.length) {
-                const dong: any[] = await prisma.payrollEntry.findMany({
-                    where: { periodId: { in: kyLuong.map((k: any) => k.id) } },
-                    select: { periodId: true, pitAmount: true },
-                }).catch(rongNeuChuaCoBang)
-                const thangCua = new Map(kyLuong.map((k: any) => [k.id, k.month]))
-                for (const e of dong) {
-                    const m = thangCua.get(e.periodId)
-                    if (!m) continue
-                    const kThang = `${year}-${String(m).padStart(2, '0')}`
-                    const kQuy = `${year}-Q${Math.ceil(m / 3)}`
-                    tncnTheoKy.set(kThang, (tncnTheoKy.get(kThang) || 0) + (e.pitAmount || 0))
-                    tncnTheoKy.set(kQuy, (tncnTheoKy.get(kQuy) || 0) + (e.pitAmount || 0))
-                }
-            }
-
-            const btNam: any[] = await prisma.journalEntry.findMany({
-                where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` } },
-                select: { date: true, debitAccount: true, creditAccount: true, amount: true },
-            }).catch(rongNeuChuaCoBang)
-            const laiTheoQuy = new Map<number, number>()
-            const laDoanhThu = (tk: string) => /^(511|515|711)/.test(tk)
-            const laChiPhi = (tk: string) => /^(632|635|641|642|811)/.test(tk)
-            for (const e of btNam) {
-                const q = Math.ceil(Number(String(e.date).slice(5, 7)) / 3)
-                if (!q) continue
-                let v = 0
-                if (laDoanhThu(String(e.creditAccount || ''))) v += e.amount
-                if (laDoanhThu(String(e.debitAccount || ''))) v -= e.amount
-                if (laChiPhi(String(e.debitAccount || ''))) v -= e.amount
-                if (laChiPhi(String(e.creditAccount || ''))) v += e.amount
-                laiTheoQuy.set(q, (laiTheoQuy.get(q) || 0) + v)
-            }
-
-            const dtNamTruoc: any[] = await prisma.journalEntry.findMany({
-                where: { date: { gte: `${year - 1}-01-01`, lte: `${year - 1}-12-31` } },
-                select: { debitAccount: true, creditAccount: true, amount: true },
-            }).catch(rongNeuChuaCoBang)
-            const doanhThuNamTruoc = dtNamTruoc.length
-                ? dtNamTruoc.reduce((s: number, e: any) =>
-                    s + (String(e.creditAccount || '').startsWith('511') ? e.amount : 0)
-                    - (String(e.debitAccount || '').startsWith('511') ? e.amount : 0), 0)
-                : null
-
-            for (const m of seeds) {
-                tienTheoKhoa.set(`${m.taxType}|${m.period}`, ganTienChoMoc(m, {
-                    loaiHinh, doanhThuNamTruoc, toKhaiTheoKy, tncnTheoKy, laiTheoQuy,
-                }))
-            }
-        } catch (e: any) {
-            console.warn('[Deadlines] không ước tính được số tiền:', e?.message || e)
-        }
-        const nowMs = Date.now()
-        const enriched = data.map((d: any) => {
-            const daysUntilDue = Math.ceil((new Date(d.dueDate).getTime() - nowMs) / 86400000)
-            const feStatus = d.status === 'pending'
-                ? (daysUntilDue <= 7 ? 'due_soon' : 'upcoming')
-                : d.status
-            /* Bảng TaxDeadline không có cột căn cứ pháp lý và loại việc, mà hai
-             * thứ đó lại quan trọng: rất nhiều người nhầm "tạm nộp thuế TNDN
-             * quý" là phải nộp tờ khai, rồi đi tìm mẫu tờ khai không tồn tại.
-             * Gắn lại từ lịch chuẩn vừa dựng, khớp theo loại + kỳ. */
-            const chuan = seedTheoKhoa.get(`${d.taxType}|${d.period}`)
-            const tien = tienTheoKhoa.get(`${d.taxType}|${d.period}`)
-            return {
-                ...d,
-                type: d.taxType,
-                label: d.description || d.taxType,
-                daysUntilDue,
-                /* null khi không suy ra được — KHÔNG quy về 0, vì "0đ" nghĩa là
-                 * không phải nộp gì, còn "chưa biết" là phải đi tra. Hai điều
-                 * hoàn toàn khác nhau với người đang chuẩn bị tiền nộp thuế. */
-                /* `TaxDeadline` không có cột `estimatedAmount` — toán hạng đầu luôn undefined,
-                 * đã bỏ. Nguồn thật là `tien?.soTien`. (21/08/2026) */
-                estimatedAmount: tien?.soTien ?? null,
-                nguonSoTien: tien ? (tien.tuToKhai ? 'to-khai' : 'uoc-tinh') : null,
-                dienGiaiSoTien: tien?.dienGiai ?? null,
-                status: feStatus,
-                rawStatus: d.status,
-                canCu: chuan?.canCu ?? null,
-                loaiViec: chuan?.loaiViec ?? null,
-            }
-        })
+        // Gieo mốc theo hồ sơ cửa hàng, gắn số tiền / căn cứ — CHUNG hàm với công cụ AI tax_deadlines
+        const enriched = await docLichNghiaVu(prisma, req.query)
         res.json({ success: true, data: enriched })
     } catch (err: any) {
         console.error('GET /deadlines error:', err)
@@ -7755,21 +7453,9 @@ router.get('/reports/tax-obligations', authMiddleware, async (req: AuthRequest, 
             data: { status: 'overdue' },
         })
 
-        // Closing balance of each payable account
-        const endDate = `${year}-12-31`
-        const allEntries = await loadJournalEntries(prisma, undefined, endDate)
-        const netCr = (prefixes: string[]) => {
-            let dr = 0, cr = 0
-            for (const e of allEntries) {
-                if (prefixes.some(p => e.debitAccount?.startsWith(p))) dr += e.amount || 0
-                if (prefixes.some(p => e.creditAccount?.startsWith(p))) cr += e.amount || 0
-            }
-            return cr - dr
-        }
-
-        const vatPayable = netCr(['3331'])
-        const citPayable = netCr(['3334'])
-        const pitPayable = netCr(['3335'])
+        // Số dư cuối năm 3331 / 3334 / 3335 — CHUNG hàm với công cụ AI tax_deadlines.
+        // Đọc sổ hỏng thì báo lỗi (500), không hiện số dư 0 như bản cũ.
+        const balances = await soDuThuePhaiNop(prisma, year)
 
         // Upcoming pending/overdue deadlines for the year
         const upcoming = await prisma.taxDeadline.findMany({
@@ -7787,7 +7473,7 @@ router.get('/reports/tax-obligations', authMiddleware, async (req: AuthRequest, 
             success: true,
             data: {
                 year,
-                balances: { vatPayable, citPayable, pitPayable, total: vatPayable + citPayable + pitPayable },
+                balances,
                 upcomingDeadlines: upcoming,
                 today,
             },
