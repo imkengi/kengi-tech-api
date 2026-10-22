@@ -78,8 +78,16 @@ async function main() {
             { debitAccount: '3331', creditAccount: '131', amount: 100_000 },     // đảo một phần đầu ra
             { debitAccount: '1331', creditAccount: '331', amount: 300_000 },     // đầu vào
         ]
-        const p = (businessType = 'company', kieu: 'month' | 'quarter' = 'month', but = butToan) => gia({
+        let thamSoSql: any[] = []
+        const p = (businessType = 'company', kieu: 'month' | 'quarter' = 'month', but = butToan,
+            ban: any = { n: 12, dt: 9_900_000, thue: 900_000 }, hd: any = { n: 12, truoc: 9_000_000, thue: 900_000 }) => gia({
             ...hoSo(businessType, kieu),
+            $queryRawUnsafe: async (sql: string, ...ps: any[]) => {
+                thamSoSql = ps
+                if (/FROM "Transaction"/.test(sql)) { if (ban instanceof Error) throw ban; return [ban] }
+                if (/FROM "EInvoice"/.test(sql)) { if (hd instanceof Error) throw hd; return [hd] }
+                throw new Error(`SQL lạ chưa khai trong mock: ${sql.slice(0, 60)}`)
+            },
             taxDeclaration: {
                 findMany: async (a: any) => {
                     if (a?.where?.formType) return Array.from({ length: 3 }, () => ({ periodType: kieu }))
@@ -116,6 +124,21 @@ async function main() {
             journalEntry: { findMany: async () => { throw loiMatKetNoi() } },
         }))))
         ok('2l. đọc sổ HỎNG ⇒ NÉM, không trả "phải nộp 0đ"', loi instanceof Error, String(loi))
+        ok('2m. đối chiếu cắt đúng kỳ (tham số SQL = ngày đầu/cuối kỳ)', thamSoSql[0] === '2025-09-01' && thamSoSql[1] === '2025-09-30', thamSoSql)
+        ok('2n. sổ khớp hoá đơn ⇒ KHÔNG cảnh báo, có số đối chiếu', !('canhBaoSoChuaGhi' in kq) && !('canhBaoLechHoaDon' in kq)
+            && kq.doiChieu?.phieuBanTrongKy?.doanhThu === 9_900_000 && kq.doiChieu?.hoaDonDienTuDaGuiCqt?.thueGtgt === 900_000, kq.doiChieu)
+        const kqSoTrong: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', [])))
+        ok('2o. ĐO THẬT 22/10 (KENGISTORE): sổ không có thuế đầu ra mà kỳ có bán hàng ⇒ canhBaoSoChuaGhi ĐẦU object, cấm nói "không phải nộp"',
+            kqSoTrong.phaiNop === 0 && typeof kqSoTrong.canhBaoSoChuaGhi === 'string' && /SỔ CHƯA GHI/.test(kqSoTrong.canhBaoSoChuaGhi)
+            && Object.keys(kqSoTrong)[0] === 'canhBaoSoChuaGhi', Object.keys(kqSoTrong))
+        const kqKhongBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', [], { n: 0, dt: 0, thue: 0 }, { n: 0, truoc: 0, thue: 0 })))
+        ok('2p. kỳ KHÔNG bán gì, sổ 0 ⇒ không cảnh báo oan', !('canhBaoSoChuaGhi' in kqKhongBan), Object.keys(kqKhongBan))
+        const kqLech: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', butToan, undefined, { n: 30, truoc: 20_000_000, thue: 2_000_000 })))
+        ok('2q. thuế trên sổ (900k) lệch hoá đơn đã gửi CQT (2tr) ⇒ canhBaoLechHoaDon', typeof kqLech.canhBaoLechHoaDon === 'string', Object.keys(kqLech))
+        const kqKhongHd: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', butToan, undefined, Object.assign(new Error('relation "EInvoice" does not exist'), { code: 'P2010' }))))
+        ok('2r. cửa hàng chưa dùng HĐĐT ⇒ hoaDon null, không báo lỗi', kqKhongHd.doiChieu?.hoaDonDienTuDaGuiCqt === null && !kqKhongHd.doiChieu?.loi, kqKhongHd.doiChieu)
+        const kqLoiBan: any = await tool('tax_vat_return').run({ year: 2025, month: 9 }, ctx(p('company', 'month', butToan, Object.assign(new Error('P1001: mất kết nối'), { code: 'P1001' }))))
+        ok('2s. đọc phiếu bán hỏng ⇒ vẫn trả tờ khai + nói rõ lỗi đối chiếu (không lặng lẽ coi là 0)', kqLoiBan.phaiNop === 600_000 && /không đọc được phiếu bán/.test(kqLoiBan.doiChieu?.loi || ''), kqLoiBan.doiChieu)
     }
 
     /* 3 — lịch nghĩa vụ + số dư */

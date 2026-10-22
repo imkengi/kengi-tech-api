@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolCtx, ToolError, canhBaoCat, canhBaoMau } from '../lib/mcpTypes'
-import { tinhToKhaiGtgt, pad2 } from '../lib/toKhaiGtgt'
+import { tinhToKhaiGtgt, resolvePeriod, pad2 } from '../lib/toKhaiGtgt'
 import { docLichNghiaVu, soDuThuePhaiNop } from '../lib/lichNghiaVuThue'
 import { suyHoSoThue } from '../lib/taxCalendarStore'
 import { docQuyetToanTncn, PIT_SELF_DEDUCTION_PER_MONTH, PIT_DEPENDENT_DEDUCTION_PER_MONTH } from '../lib/quyetToanTncn'
@@ -38,7 +38,7 @@ const SCHEMA_NAM = { type: 'number', description: 'Năm (mặc định năm hi�
 export const TAX_TOOLS: Tool[] = [
     {
         name: 'tax_vat_return',
-        description: 'TỜ KHAI THUẾ GTGT (01/GTGT) của một kỳ — đúng số trang Tờ Khai GTGT: thuế GTGT ĐẦU RA (Có TK 3331), ĐẦU VÀO được khấu trừ (Nợ TK 133), số PHẢI NỘP, số CÒN ĐƯỢC KHẤU TRỪ chuyển kỳ sau, kèm tờ khai đã lập / đã nộp cho kỳ đó. Gọi khi hỏi "tháng/quý này phải nộp VAT bao nhiêu", "đã khai thuế GTGT kỳ X chưa". Bỏ trống cả năm lẫn kỳ = kỳ ĐANG DIỄN RA theo cách cửa hàng kê khai (tháng hoặc quý); chỉ truyền year = cả năm. CHỈ ĐỌC.',
+        description: 'TỜ KHAI THUẾ GTGT (01/GTGT) của một kỳ — đúng số trang Tờ Khai GTGT: thuế GTGT ĐẦU RA (Có TK 3331), ĐẦU VÀO được khấu trừ (Nợ TK 133), số PHẢI NỘP, số CÒN ĐƯỢC KHẤU TRỪ chuyển kỳ sau, kèm tờ khai đã lập / đã nộp cho kỳ đó và ĐỐI CHIẾU với phiếu bán + hoá đơn điện tử đã gửi cơ quan thuế (sổ chưa ghi thuế thì có canhBaoSoChuaGhi — khi đó số 0 KHÔNG có nghĩa là không phải nộp). Gọi khi hỏi "tháng/quý này phải nộp VAT bao nhiêu", "đã khai thuế GTGT kỳ X chưa". Bỏ trống cả năm lẫn kỳ = kỳ ĐANG DIỄN RA theo cách cửa hàng kê khai (tháng hoặc quý); chỉ truyền year = cả năm. CHỈ ĐỌC.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -63,7 +63,43 @@ export const TAX_TOOLS: Tool[] = [
                 if (hoSo.kyKeKhai === 'quarter') quarter = Math.ceil((nay.getUTCMonth() + 1) / 3)
                 else month = nay.getUTCMonth() + 1
             }
-            const tk = await tinhToKhaiGtgt(prisma, { year, month: month || undefined, quarter: month ? undefined : (quarter || undefined) })
+            const thamSoKy = { year, month: month || undefined, quarter: month ? undefined : (quarter || undefined) }
+            const tk = await tinhToKhaiGtgt(prisma, thamSoKy)
+            const ky = resolvePeriod(thamSoKy)
+
+            /* ĐỐI CHIẾU (22/10/2026, đo trên KENGISTORE: tờ khai từ sổ ra 0đ cho tháng 9 và quý 4 trong khi bán
+             * vài trăm triệu/tháng — sổ cái chưa ghi bút toán thuế). Số 0 vì SỔ CHƯA GHI ≠ không phải nộp:
+             * so với phiếu bán (cắt theo NGÀY BÁN như revenue_by_day) và hoá đơn điện tử đã gửi CQT trong kỳ. */
+            const KHOANG = `>= $1::date AND (%s + interval '7 hours') < ($2::date + interval '1 day')`
+            let phieuBan: { soPhieu: number; doanhThu: number; thueGhiTrenPhieu: number } | null = null
+            let hoaDonDaGui: { soHoaDon: number; tienTruocThue: number; thueGtgt: number } | null = null
+            let loiDoiChieu: string | null = null
+            try {
+                const r: any[] = await prisma.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS n, COALESCE(SUM(total),0)::float8 AS dt, COALESCE(SUM(tax),0)::float8 AS thue
+                     FROM "Transaction"
+                     WHERE status IN ('completed','partial')
+                       AND (COALESCE("transactionDate","createdAt") + interval '7 hours') ${KHOANG.replace('%s', 'COALESCE("transactionDate","createdAt")')}`,
+                    ky.gte, ky.lte)
+                phieuBan = { soPhieu: Number(r[0]?.n) || 0, doanhThu: tien(r[0]?.dt), thueGhiTrenPhieu: tien(r[0]?.thue) }
+            } catch (e: any) {
+                loiDoiChieu = `không đọc được phiếu bán để đối chiếu: ${e?.message || e}`
+            }
+            try {
+                const r: any[] = await prisma.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS n, COALESCE(SUM("totalBeforeVat"),0)::float8 AS truoc, COALESCE(SUM("vatAmount"),0)::float8 AS thue
+                     FROM "EInvoice"
+                     WHERE status IN ('SENT','issued','SIGNED')
+                       AND (COALESCE("issuedAt","createdAt") + interval '7 hours') ${KHOANG.replace('%s', 'COALESCE("issuedAt","createdAt")')}`,
+                    ky.gte, ky.lte)
+                hoaDonDaGui = { soHoaDon: Number(r[0]?.n) || 0, tienTruocThue: tien(r[0]?.truoc), thueGtgt: tien(r[0]?.thue) }
+            } catch (e: any) {
+                if (!thieuBang(e)) loiDoiChieu = `${loiDoiChieu ? `${loiDoiChieu}; ` : ''}không đọc được hoá đơn điện tử để đối chiếu: ${e?.message || e}`
+            }
+            const coBanHang = (phieuBan?.doanhThu || 0) > 0 || (hoaDonDaGui?.thueGtgt || 0) > 0
+            const soChuaGhiThue = tk.outputVat === 0 && coBanHang
+            const lechHoaDon = !soChuaGhiThue && hoaDonDaGui && hoaDonDaGui.thueGtgt > 0
+                && Math.abs(tk.outputVat - hoaDonDaGui.thueGtgt) > Math.max(100_000, hoaDonDaGui.thueGtgt * 0.05)
 
             // Tờ khai đã lưu cho kỳ (mã kỳ y như POST /tax/declarations: T09/2026 · Q3/2026; bản bổ sung có hậu tố)
             const maKy = tk.periodType === 'month' ? `T${pad2(Number(tk.month))}/${year}` : tk.periodType === 'quarter' ? `Q${tk.quarter}/${year}` : null
@@ -95,6 +131,16 @@ export const TAX_TOOLS: Tool[] = [
             const dangDienRa = cuoiKy.getTime() + MOT_NGAY > nay.getTime()
 
             return {
+                // Đặt ĐẦU object — phần AI đọc kỹ nhất
+                ...(soChuaGhiThue ? {
+                    canhBaoSoChuaGhi: `Kỳ này có ${phieuBan?.soPhieu ?? 0} phiếu bán, doanh thu ${(phieuBan?.doanhThu ?? 0).toLocaleString('vi-VN')}đ`
+                        + `${hoaDonDaGui?.soHoaDon ? `, ${hoaDonDaGui.soHoaDon} hoá đơn điện tử đã gửi CQT với thuế GTGT ${hoaDonDaGui.thueGtgt.toLocaleString('vi-VN')}đ` : ''}`
+                        + ' nhưng sổ cái KHÔNG có bút toán thuế GTGT đầu ra ⇒ số 0 dưới đây là do SỔ CHƯA GHI, KHÔNG phải không phải nộp. '
+                        + 'TUYỆT ĐỐI không nói "không phải nộp thuế GTGT". Thuế đầu ra thực tế xem ở doiChieu (hoá đơn đã gửi CQT); kế toán cần ghi sổ trước khi lập tờ khai. Chi tiết: tax_reconcile_3way.',
+                } : {}),
+                ...(lechHoaDon ? {
+                    canhBaoLechHoaDon: `Thuế đầu ra trên sổ (${tk.outputVat.toLocaleString('vi-VN')}đ) lệch thuế trên hoá đơn điện tử đã gửi CQT (${hoaDonDaGui!.thueGtgt.toLocaleString('vi-VN')}đ) — cơ quan thuế đối chiếu theo hoá đơn. Xem tax_reconcile_3way.`,
+                } : {}),
                 ky: tk.periodType === 'month' ? `tháng ${tk.month}/${year}` : tk.periodType === 'quarter' ? `quý ${tk.quarter}/${year}` : `năm ${year}`,
                 cuaHangKeKhaiTheo: hoSo.kyKeKhai === 'quarter' ? 'quý' : 'tháng',
                 loaiHinh: hoSo.loaiHinh === 'household' ? 'hộ kinh doanh' : 'doanh nghiệp',
@@ -102,6 +148,11 @@ export const TAX_TOOLS: Tool[] = [
                 thueDauVaoDuocKhauTru: tk.inputVat,
                 phaiNop: tk.vatPayable,
                 conDuocKhauTruChuyenKySau: tk.vatCarryForward,
+                doiChieu: {
+                    phieuBanTrongKy: phieuBan,
+                    hoaDonDienTuDaGuiCqt: hoaDonDaGui,
+                    ...(loiDoiChieu ? { loi: loiDoiChieu } : {}),
+                },
                 toKhaiDaLap,
                 ...(dangDienRa ? { tamTinh: 'Kỳ CHƯA kết thúc — số tạm tính tới hôm nay, còn thay đổi.' } : {}),
                 ...(hoSo.loaiHinh === 'household'
