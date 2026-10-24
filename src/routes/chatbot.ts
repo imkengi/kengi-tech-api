@@ -180,7 +180,19 @@ async function kenhCuaShop(prisma: any, shop: DongShopChatbot): Promise<string> 
     return ds.map(k => gon(k.name)).find(n => n.toLowerCase() === gon(shop.ten).toLowerCase()) ?? ''
 }
 
-interface KetQuaTin {
+/** Lỗi AI ⇒ câu người dùng làm theo được. 24/10/2026: key Gemini KENGISTORE hết tín dụng trả trước (HTTP 402) — câu thô
+ *  tiếng Anh bị cắt giữa chừng, chủ shop không biết phải nạp tiền. */
+export function loiAiChoNguoiDung(e: any): string {
+    if (e instanceof LoiGeminiTamThoi) return 'AI đang quá tải / hết hạn mức — thử lại sau ít phút'
+    const s = String(e?.message || e)
+    if (/\b402\b|prepayment|credits are depleted|billing/i.test(s)) {
+        return 'Key Gemini của cửa hàng đã HẾT TIỀN (Google báo hết tín dụng trả trước) — nạp thêm ở AI Studio, hoặc nhập key khác / key DeepSeek ở Cài đặt › Trợ lý AI'
+    }
+    if (/\b(401|403)\b|API key not valid|PERMISSION_DENIED/i.test(s)) return 'Key AI của cửa hàng sai hoặc đã bị khoá — kiểm tra ở Cài đặt › Trợ lý AI'
+    return `AI lỗi: ${s.slice(0, 200)}`
+}
+
+export interface KetQuaTin {
     shop: { id: string; ten: string }
     phien: string | null
     traLoi: string
@@ -191,9 +203,10 @@ interface KetQuaTin {
     ghiChu?: string
 }
 
-/** Lõi: một tin nhắn khách → câu trả lời. Dùng chung cho /webhook (khoá API / JWT) và /vao (đường dẫn đầu vào). Không ném
- *  lỗi AI — AI hỏng / chưa có key ⇒ câu dự phòng + canNhanVien. */
-async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: DongShopChatbot, tin: TinNhanWebhook): Promise<KetQuaTin> {
+/** Lõi: một tin nhắn khách → câu trả lời. Dùng chung cho /webhook (khoá API / JWT), /vao (đường dẫn đầu vào) và gợi ý trả
+ *  lời ở khung chat sàn (soanGoiYChoSan — themPrompt là luật riêng của sàn). Không ném lỗi AI — AI hỏng / chưa có key ⇒
+ *  câu dự phòng + canNhanVien. */
+async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: DongShopChatbot, tin: TinNhanWebhook, themPrompt?: string): Promise<KetQuaTin> {
     const khoaPhien = tin.phien ? `${schema}:${shop.id}:${tin.phien}` : ''
     const lichSu = tin.lichSu.length ? tin.lichSu : (khoaPhien ? layPhien(khoaPhien) : [])
     const sanPham: SanPhamChatbot[] = []
@@ -210,7 +223,7 @@ async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: Don
         kq = await chayAgent({
             apiKey: key.gemini,
             deepseekKey: key.deepseek,
-            systemPrompt: soanPromptChatbot(shop.ten, homNayVN()),
+            systemPrompt: soanPromptChatbot(shop.ten, homNayVN()) + (themPrompt ? `\n\n${themPrompt}` : ''),
             ctx: { prisma, scopes: 'read', storeCode },
             message: tin.cauHoi,
             history: lichSu,
@@ -220,7 +233,7 @@ async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: Don
     } catch (e: any) {
         // AI hỏng (quá tải / hết hạn mức / key sai) ⇒ vẫn trả câu lịch sự + cờ cần người, n8n không phải đoán
         console.warn('[chatbot] AI lỗi:', e?.message || e)
-        return { ...nen, traLoi: TRA_LOI_DU_PHONG, canNhanVien: true, sanPham, congCu: [], loi: e instanceof LoiGeminiTamThoi ? 'AI đang quá tải / hết hạn mức — thử lại sau ít phút' : `AI lỗi: ${String(e?.message || e).slice(0, 200)}` }
+        return { ...nen, traLoi: TRA_LOI_DU_PHONG, canNhanVien: true, sanPham, congCu: [], loi: loiAiChoNguoiDung(e) }
     }
     // bộ chạy trả '(không có nội dung trả lời)' khi model im — KHÔNG gửi chữ đó cho khách
     const rong = kq.chamTran || !String(kq.reply || '').trim() || kq.reply === '(không có nội dung trả lời)'
@@ -230,6 +243,44 @@ async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: Don
         ...nen, traLoi, canNhanVien, sanPham, congCu: kq.toolCalls.map(t => ({ ten: t.name, ok: t.ok })),
         ...(kq.doiSangDeepSeek ? { ghiChu: 'Trả lời bằng DeepSeek (Gemini quá tải / hết hạn mức)' } : {}),
     }
+}
+
+// ─── GỢI Ý TRẢ LỜI cho khung chat sàn (24/10/2026) ────────────────────────────
+/** Luật riêng từng sàn cho câu NHÁP. Shopee cấm kéo khách ra ngoài sàn (SĐT, Zalo, link ngoài, sàn khác). */
+export const LUAT_NHAP_SAN: Record<string, string> = {
+    shopee: 'Bạn đang soạn NHÁP để nhân viên duyệt rồi tự gửi trong khung chat SHOPEE. Chỉ nói về mua trên Shopee: KHÔNG đưa số điện thoại, Zalo, Facebook, website hay link ngoài Shopee, KHÔNG nhắc sàn khác (Shopee cấm kéo khách ra ngoài sàn). Tin trong ngoặc vuông như [Gửi thẻ sản phẩm: …] là mô tả thẻ khách đã gửi.',
+}
+
+/** Kho kiến thức cho một kênh sàn: shop chatbot gắn đúng kênh (ưu tiên đúng sàn) › chưa gắn kênh mà trùng tên › trùng tên ›
+ *  cửa hàng chỉ có MỘT shop chatbot. Không có ⇒ null (kho rỗng — AI vẫn tra sản phẩm / giá). */
+export function chonShopChoKenh<T extends { ten: string; kenh: string | null; san: string }>(ds: T[], kenh: { name: string; platform: string }): T | null {
+    const gon = (s: unknown) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const ten = gon(kenh.name)
+    if (!ten) return ds.length === 1 ? ds[0]! : null
+    const ganKenh = ds.filter(s => s.kenh !== null && gon(s.kenh) === ten)
+    return ganKenh.find(s => s.san === kenh.platform) || ganKenh.find(s => !s.san) || ganKenh[0]
+        || ds.find(s => s.kenh === null && gon(s.ten) === ten)
+        || ds.find(s => gon(s.ten) === ten)
+        || (ds.length === 1 ? ds[0]! : null)
+}
+
+/**
+ * Soạn GỢI Ý trả lời cho khung chat sàn — nhân viên xem rồi TỰ bấm gửi (luật Chat API Shopee cấm chatbot tự trả lời).
+ * Kho kiến thức: chonShopChoKenh. Giá / link: CHỈ của đúng kênh sàn đang chat (khách Shopee không nghe giá sàn khác).
+ * KHÔNG nhớ phiên (phien rỗng ⇒ xuLyTin không ghi bộ nhớ), không lưu, không log nội dung tin.
+ */
+export async function soanGoiYChoSan(prisma: any, schema: string, storeCode: string, kenh: { name: string; platform: string },
+    cauHoi: string, lichSu: TinNhanWebhook['lichSu']): Promise<KetQuaTin & { khoKienThuc: string | null }> {
+    if (schema) await damBaoBangChatbot(prisma, schema)
+    const shop = chonShopChoKenh(await dsShopChatbot(prisma), kenh)
+    const ten = String(kenh.name || '').replace(/\s+/g, ' ').trim()
+    const goc: DongShopChatbot = shop || {
+        id: 'goi-y', ten, kenh: null, san: '', thuTu: 0, kienThuc: JSON.stringify({ schema_version: 1, documents: [] }),
+        capNhatBoi: null, updatedAt: new Date(0), webhookToken: null, webhookRa: null, webhookRaKhoa: null,
+    }
+    const kq = await xuLyTin(prisma, schema, storeCode, { ...goc, ten: ten || goc.ten, kenh: ten, san: kenh.platform },
+        { shop: goc.id, cauHoi, phien: '', lichSu }, LUAT_NHAP_SAN[kenh.platform])
+    return { ...kq, khoKienThuc: shop ? shop.ten : null }
 }
 
 /** Gửi kết quả ra webhook đầu ra của shop (nếu đã cài) — kèm lại các trường của tin vào */

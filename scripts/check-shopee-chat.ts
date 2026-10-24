@@ -11,10 +11,15 @@
  *   B. lib/tinHieuChat.ts — ghi tín hiệu (không nội dung), tạo bảng lười một lần, thiếu bảng ⇒ rỗng.
  *   C. Bên gửi (24/10/2026: mọi tin hiện bên khách vì so from_id — mã TÀI KHOẢN — với shopId): tin của gian theo
  *      from_shop_id; tin tự động trả lời gắn cờ; get_message KHÔNG ghi nội dung tin ra log.
+ *   D. Gợi ý trả lời bằng chatbot (nhân viên tự bấm gửi): câu cần trả lời = tin khách SAU lần cuối NGƯỜI của gian trả lời
+ *      (tin tự động / Shopee gửi thay không tính); lịch sử xen kẽ khách–shop, mở đầu bằng khách; thẻ sản phẩm ra TÊN hàng;
+ *      kho kiến thức chọn đúng gian; luật nháp Shopee cấm kéo khách ra ngoài sàn.
  */
 process.env.SHOPEE_FORWARD_PROXY = ''   // không bao giờ ra mạng: httpGet bị thay bằng bản giả
 
-import { ShopeeService, laTinCuaGian, laTinTuDong } from '../src/services/platforms/shopee'
+import { ShopeeService, laTinCuaGian, laTinTuDong, tachCauHoiShopee, chuTinShopee, TinShopeeGoiY } from '../src/services/platforms/shopee'
+import { chonShopChoKenh, LUAT_NHAP_SAN, loiAiChoNguoiDung } from '../src/routes/chatbot'
+import { LoiGeminiTamThoi } from '../src/services/aiAgentRunner'
 import { ghiTinHieuChat, docTinHieuChat } from '../src/lib/tinHieuChat'
 
 let dat = 0, hong = 0
@@ -115,6 +120,42 @@ async function main() {
     ok('21. tin tự động: auto_reply + offwork_autoreply; normal / user_chat thì không', laTinTuDong({ status: 'auto_reply' }) && laTinTuDong({ status: 'offwork_autoreply' }) && !laTinTuDong({ status: 'normal' }) && !laTinTuDong({ status: 'user_chat' }) && !laTinTuDong({}))
     ok('22. getMessages mang status/source/toShopId cho route dùng', k6.messages[1]!.status === 'auto_reply' && k6.messages[2]!.source === 'openapi' && k6.messages[0]!.toShopId === 42, k6.messages.map(m => [m.status, m.source, m.toShopId]))
     ok('23. get_message KHÔNG ghi nội dung tin của người mua ra log (cam kết với Shopee)', !daLog.some(l => l.includes('NOI-DUNG-KHACH-BI-MAT')), daLog)
+
+    console.log('— D. Gợi ý trả lời —')
+    let so = 0
+    const k = (content: string, extra: Partial<TinShopeeGoiY> = {}): TinShopeeGoiY => ({ messageId: `k${++so}`, messageType: 'text', content, fromShopId: 0, status: 'user_chat', source: 'ios', ...extra })
+    const g = (content: string, extra: Partial<TinShopeeGoiY> = {}): TinShopeeGoiY => ({ messageId: `g${++so}`, messageType: 'text', content, fromShopId: 42, status: 'normal', source: 'mini_webchat', ...extra })
+    const tuDong = g('Xin chao tu dong', { status: 'auto_reply', source: 'server' })
+    const rong = new Map<string, string>()
+
+    const q2 = k('Q2')
+    const t1 = tachCauHoiShopee([k('Q1'), tuDong, g('A1'), q2, { ...tuDong, messageId: 'td2' }], 42, rong)
+    ok('24. câu cần trả lời = tin khách SAU câu trả lời cuối của người; tin tự động không tính là đã trả lời', t1?.cauHoi === 'Q2' && t1?.tinCuoiId === q2.messageId, t1)
+    ok('25. lịch sử khách–shop xen kẽ, tin liền nhau cùng bên gộp một lượt, kết thúc bằng câu trả lời của shop', JSON.stringify(t1?.lichSu.map(l => [l.role, l.parts[0]!.text])) === JSON.stringify([['user', 'Q1'], ['model', 'Xin chao tu dong\nA1']]), t1?.lichSu)
+    ok('26. tin cuối là người của gian trả lời ⇒ không soạn (null)', tachCauHoiShopee([k('Q1'), g('A1')], 42, rong) === null)
+    const t2 = tachCauHoiShopee([g('A0'), k('Q1'), k('Q2'), g('', { messageType: 'voucher', source: 'server' })], 42, rong)
+    ok('27. nhiều tin khách liền nhau gộp thành một câu; voucher Shopee gửi thay gian không tính là trả lời', t2?.cauHoi === 'Q1\nQ2', t2)
+    ok('28. lịch sử mở đầu bằng shop ⇒ bỏ cho lượt đầu là khách (Gemini đòi user/model xen kẽ)', Array.isArray(t2?.lichSu) && t2!.lichSu.length === 0, t2?.lichSu)
+    const tenSp = new Map([['111', 'Nồi chiên không dầu 5L (SKU NC5)']])
+    const t3 = tachCauHoiShopee([k('', { messageType: 'item', itemId: '111' }), k('còn hàng không shop', { itemId: '111' }), k('', { messageType: 'item', itemId: '999' })], 42, tenSp)
+    ok('29. thẻ sản phẩm / tin từ trang sản phẩm ⇒ TÊN + SKU hàng của gian; mã lạ ⇒ ghi mã', t3?.cauHoi === '[Gửi thẻ sản phẩm: Nồi chiên không dầu 5L (SKU NC5)]\ncòn hàng không shop (nhắn từ trang sản phẩm: Nồi chiên không dầu 5L (SKU NC5))\n[Gửi thẻ sản phẩm: mã 999 trên Shopee]', t3?.cauHoi)
+    ok('30. thẻ đơn / ảnh ra mô tả ngắn, không để trống', chuTinShopee(k('', { messageType: 'order', orderSn: '2410ABC' }), rong) === '[Gửi thẻ đơn hàng #2410ABC]' && chuTinShopee(k('[Hình ảnh]', { messageType: 'image' }), rong) === '[Gửi ảnh]')
+    ok('31. hội thoại rỗng / chỉ có tin tự động ⇒ null', tachCauHoiShopee([], 42, rong) === null && tachCauHoiShopee([tuDong], 42, rong) === null)
+
+    const shops = [
+        { id: 'a', ten: 'Kengi', kenh: 'Kengi Store', san: 'tiktok' },
+        { id: 'b', ten: 'Kengi Shopee', kenh: 'Kengi  store', san: 'shopee' },
+        { id: 'c', ten: 'Kengi Tools', kenh: null, san: '' },
+    ]
+    ok('32. kho kiến thức: shop chatbot gắn đúng kênh + đúng sàn được ưu tiên (gom khoảng trắng, không phân biệt hoa thường)', chonShopChoKenh(shops, { name: 'Kengi Store', platform: 'shopee' })?.id === 'b')
+    ok('33. chưa gắn kênh mà trùng tên kênh ⇒ dùng', chonShopChoKenh(shops, { name: 'kengi tools', platform: 'shopee' })?.id === 'c')
+    ok('34. nhiều shop chatbot mà không shop nào khớp ⇒ null (kho rỗng, không lấy nhầm kho gian khác)', chonShopChoKenh(shops, { name: 'Kengi Electric', platform: 'shopee' }) === null)
+    ok('35. cửa hàng chỉ có MỘT shop chatbot ⇒ dùng nó cho mọi gian', chonShopChoKenh([shops[2]!], { name: 'Kengi Electric', platform: 'shopee' })?.id === 'c' && chonShopChoKenh([], { name: 'X', platform: 'shopee' }) === null)
+    ok('36. luật nháp Shopee: chỉ NHÁP cho người duyệt, cấm SĐT / Zalo / link ngoài / sàn khác', /NHÁP/.test(LUAT_NHAP_SAN.shopee!) && /số điện thoại/.test(LUAT_NHAP_SAN.shopee!) && /Zalo/.test(LUAT_NHAP_SAN.shopee!) && /sàn khác/.test(LUAT_NHAP_SAN.shopee!))
+    // Câu Google trả THẬT ngày 24/10 (key KENGISTORE): HTTP 402 hết tín dụng trả trước
+    const loi402 = loiAiChoNguoiDung(new Error('Gemini lỗi HTTP 402 (gemini-3.8-flash): Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.'))
+    ok('37. key Gemini hết tiền (402) ⇒ câu tiếng Việt bảo NẠP TIỀN / đổi key, không phải câu Anh bị cắt', /HẾT TIỀN/.test(loi402) && /Cài đặt › Trợ lý AI/.test(loi402) && !/prepayment/.test(loi402), loi402)
+    ok('38. quá tải tạm thời ⇒ "thử lại sau"; key sai ⇒ kiểm tra key; lỗi lạ ⇒ giữ nguyên (cắt 200)', /thử lại sau/.test(loiAiChoNguoiDung(new LoiGeminiTamThoi('429 RESOURCE_EXHAUSTED'))) && /sai hoặc đã bị khoá/.test(loiAiChoNguoiDung(new Error('HTTP 400: API key not valid'))) && loiAiChoNguoiDung(new Error('x'.repeat(300))).length === 'AI lỗi: '.length + 200)
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

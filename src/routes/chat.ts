@@ -377,7 +377,8 @@ router.post('/backfill-channels', chatAuth, async (req: AuthRequest, res: Respon
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ShopeeService } from '../services/platforms'
-import { laTinCuaGian, laTinTuDong } from '../services/platforms/shopee'
+import { laTinCuaGian, laTinTuDong, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
+import { soanGoiYChoSan } from './chatbot'
 
 // Helper: load channel credentials and create ShopeeService
 async function getShopeeServiceForChannel(prisma: any, channelId: string): Promise<{ shopee: ShopeeService; channel: any }> {
@@ -590,8 +591,9 @@ router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest
                 imageUrl: m.imageUrl || null,
                 isRead: true,
                 createdAt: safeTimestampToISO(m.createdTimestamp) || new Date().toISOString(),
-                // Tin tự động trả lời của gian — web ghi "Tự động" để khỏi tưởng nhân viên gõ
-                tuDong: cuaGian && laTinTuDong(m),
+                // Tin tự động trả lời / Shopee gửi thay gian (source server: voucher, combo…) — web ghi "Tự động", và
+                // không tính là đã trả lời khách (khớp tachCauHoiShopee)
+                tuDong: cuaGian && (laTinTuDong(m) || m.source === 'server'),
                 // Shopee-specific
                 shopeeMessageType: m.messageType,
                 shopeeSourceContent: m.sourceContent,
@@ -612,6 +614,73 @@ router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest
         })
     } catch (err: any) {
         console.error('Shopee get messages error:', err)
+        const { status, body } = platformChatError('shopee', err)
+        res.status(status).json(body)
+    }
+})
+
+// Soạn gợi ý là một lượt AI (5–20 giây, tốn hạn mức key của cửa hàng) — chặn bấm dồn
+const goiYLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Soạn gợi ý quá nhiều lần — đợi 1 phút rồi thử lại.' },
+})
+
+/* POST /shopee/goi-y — body { channelId, conversationId } (24/10/2026). Chatbot (kho kiến thức kengi.vn/chatbot + giá
+ * thật của ĐÚNG gian) soạn NHÁP trả lời tin khách; web điền vào ô nhập, nhân viên xem rồi TỰ bấm gửi — luật Chat API
+ * Shopee cấm chatbot tự trả lời và cấm giả tin tự động thành tin tay. Máy chủ tự đọc lại tin từ Shopee (đúng bên gửi,
+ * không tin nội dung web gửi lên); KHÔNG lưu, KHÔNG log nội dung tin. */
+router.post('/shopee/goi-y', chatAuth, goiYLimiter, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channelId = String(req.body?.channelId || '')
+        const conversationId = String(req.body?.conversationId || '')
+        // conversationId đi thẳng vào URL Shopee ⇒ chỉ nhận số
+        if (!channelId || !/^\d{1,30}$/.test(conversationId)) {
+            res.status(400).json({ success: false, error: 'Thiếu channelId / conversationId' })
+            return
+        }
+        const { shopee, channel } = await getShopeeServiceForChannel(prisma, channelId)
+        const r = await withTokenRefresh(prisma, channel, shopee, () => shopee.getMessages(conversationId, { pageSize: 25 }))
+        const ds: TinShopeeGoiY[] = (r.messages as TinShopeeGoiY[]).slice().reverse() // Shopee trả mới → cũ
+
+        // Thẻ sản phẩm / tin nhắn từ trang sản phẩm ⇒ tên + SKU hàng của ĐÚNG gian (công cụ tra theo tên / SKU, không theo mã Shopee)
+        const maSp: string[] = [...new Set(ds.map(m => String(m.itemId || '')).filter(Boolean))].slice(0, 10)
+        const tenSanPham = new Map<string, string>()
+        if (maSp.length) {
+            const sp: any[] = await prisma.onlineProduct.findMany({
+                where: { channelId: channel.id, platformProductId: { in: maSp } },
+                select: { platformProductId: true, name: true, sku: true },
+            })
+            for (const x of sp) tenSanPham.set(String(x.platformProductId), `${x.name}${x.sku ? ` (SKU ${x.sku})` : ''}`)
+        }
+
+        const tach = tachCauHoiShopee(ds, channel.shopId, tenSanPham)
+        if (!tach) {
+            res.json({ success: true, data: { canSoan: false, lyDo: 'Khách chưa nhắn gì mới sau câu trả lời của shop' } })
+            return
+        }
+        const schema = String((req.user as any)?.branchSchema || req.user?.storeSchema || '')
+        const kq = await soanGoiYChoSan(prisma, schema, String(req.user?.storeCode || ''),
+            { name: String(channel.name || ''), platform: 'shopee' }, tach.cauHoi, tach.lichSu)
+        res.json({
+            success: true,
+            data: {
+                canSoan: true,
+                tinCuoiId: tach.tinCuoiId,
+                // AI hỏng / chưa có key ⇒ không đưa câu dự phòng vào ô nhập, chỉ báo lý do
+                traLoi: kq.loi ? '' : kq.traLoi,
+                canNhanVien: kq.canNhanVien,
+                loi: kq.loi || null,
+                ghiChu: kq.ghiChu || null,
+                khoKienThuc: kq.khoKienThuc,
+                sanPham: kq.sanPham.map(s => s.ten).slice(0, 5),
+            },
+        })
+    } catch (err: any) {
+        console.error('[chat shopee goi-y]', moTaLoi(err)) // chỉ lỗi, không kèm nội dung tin
         const { status, body } = platformChatError('shopee', err)
         res.status(status).json(body)
     }

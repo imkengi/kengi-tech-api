@@ -35,6 +35,72 @@ export function laTinTuDong(m: { status?: string | null }): boolean {
     return /auto_?reply/i.test(String(m.status || ''))
 }
 
+/** Một tin Shopee (đã map ở getMessages) — phần chatbot gợi ý cần */
+export interface TinShopeeGoiY {
+    messageId: string
+    messageType: string
+    content: string
+    fromShopId?: number | string
+    status?: string
+    source?: string
+    itemId?: string
+    orderSn?: string
+    sourceContent?: any
+}
+type LuotHoiThoai = { role: 'user' | 'model'; parts: { text: string }[] }
+
+/** Chữ của một tin để AI đọc. Thẻ sản phẩm / tin nhắn từ trang sản phẩm ⇒ kèm TÊN hàng của gian (tenSanPham: itemId → tên) —
+ *  công cụ tra sản phẩm tìm theo tên / SKU, không theo mã sản phẩm Shopee. */
+export function chuTinShopee(m: TinShopeeGoiY, tenSanPham: Map<string, string>): string {
+    const sp = m.itemId ? (tenSanPham.get(m.itemId) || `mã ${m.itemId} trên Shopee`) : ''
+    switch (m.messageType) {
+        case 'text': return sp ? `${m.content} (nhắn từ trang sản phẩm: ${sp})` : m.content
+        case 'item': case 'product': return `[Gửi thẻ sản phẩm: ${sp || 'không rõ'}]`
+        case 'item_list': {
+            const ten = (Array.isArray(m.sourceContent?.chat_product_infos) ? m.sourceContent.chat_product_infos : [])
+                .map((x: any) => String(x?.name || '').trim()).filter(Boolean).slice(0, 5)
+            return `[Gửi danh sách sản phẩm${ten.length ? `: ${ten.join('; ')}` : ''}]`
+        }
+        case 'order': return `[Gửi thẻ đơn hàng${m.orderSn ? ` #${m.orderSn}` : ''}]`
+        case 'image': return '[Gửi ảnh]'
+        case 'video': return '[Gửi video]'
+        case 'sticker': return '[Gửi sticker]'
+        default: return String(m.content || '')
+    }
+}
+
+/**
+ * Câu KHÁCH cần trả lời + lịch sử, cho chatbot soạn NHÁP (24/10/2026). ds: cũ → mới.
+ * Câu hỏi = các tin khách sau lần cuối NGƯỜI của gian trả lời — tin tự động (auto_reply) và tin Shopee gửi thay gian
+ * (source server: voucher, combo…) không tính là đã trả lời. Không có ⇒ null (khách chưa hỏi gì mới).
+ * Lịch sử: ≤ 12 lượt, gộp tin liền nhau cùng bên, lượt đầu là khách (Gemini đòi user / model xen kẽ).
+ */
+export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, tenSanPham: Map<string, string>):
+    { cauHoi: string; lichSu: LuotHoiThoai[]; tinCuoiId: string } | null {
+    const nguoiTraLoi = (m: TinShopeeGoiY) => laTinCuaGian(m, shopId) && !laTinTuDong(m) && m.source !== 'server'
+    const hoi: TinShopeeGoiY[] = []
+    let i = ds.length - 1
+    for (; i >= 0; i--) {
+        const m = ds[i]!
+        if (nguoiTraLoi(m)) break
+        if (!laTinCuaGian(m, shopId)) hoi.unshift(m)
+    }
+    const cauHoi = hoi.map(m => chuTinShopee(m, tenSanPham).trim()).filter(Boolean).join('\n').slice(0, 2000)
+    if (!cauHoi) return null
+    const lichSu: LuotHoiThoai[] = []
+    for (const m of ds.slice(0, i + 1)) {
+        const text = chuTinShopee(m, tenSanPham).trim().slice(0, 2000)
+        if (!text) continue
+        const role = laTinCuaGian(m, shopId) ? 'model' : 'user'
+        const cuoi = lichSu[lichSu.length - 1]
+        if (cuoi && cuoi.role === role) cuoi.parts[0]!.text = `${cuoi.parts[0]!.text}\n${text}`.slice(-2000)
+        else lichSu.push({ role, parts: [{ text }] })
+    }
+    let gon = lichSu.slice(-12)
+    while (gon.length && gon[0]!.role !== 'user') gon = gon.slice(1)
+    return { cauHoi, lichSu: gon, tinCuoiId: hoi[hoi.length - 1]!.messageId }
+}
+
 export class ShopeeService extends PlatformService {
     get platformName() { return 'shopee' }
 
@@ -1627,6 +1693,10 @@ export class ShopeeService extends PlatformService {
             status: string
             /** ios | android | mini_webchat | openapi (gửi từ Kengi) | server | … */
             source: string
+            /** Sản phẩm của tin: thẻ sản phẩm (content.item_id) hoặc khách nhắn TỪ trang sản phẩm (source_content.item_id) */
+            itemId: string
+            /** Đơn của tin: thẻ đơn (content.order_sn) hoặc nhắn từ trang đơn (source_content.order_sn) */
+            orderSn: string
             createdTimestamp: number
             sourceContent?: any
         }>
@@ -1680,6 +1750,8 @@ export class ShopeeService extends PlatformService {
                     toShopId: Number(m.to_shop_id) || 0,
                     status: String(m.status || ''),
                     source: String(m.source || ''),
+                    itemId: String(m.content?.item_id || m.source_content?.item_id || ''),
+                    orderSn: String(m.content?.order_sn || m.source_content?.order_sn || ''),
                     createdTimestamp: m.created_timestamp || 0,
                     sourceContent: m.content,
                 }
