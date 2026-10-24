@@ -3,6 +3,8 @@ import { errMsg } from '../lib/errorResponse'
 import rateLimit from 'express-rate-limit'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { moTaLoi } from '../lib/gomLoi'
+import { docTinHieuChat } from '../lib/tinHieuChat'
 
 const router = Router()
 
@@ -62,7 +64,13 @@ const pollMessagesLimiter = rateLimit({
 // ─── Zero-Touch Migration ───────────────────────────────────────────────────
 // Creates chat tables on first access per store schema
 
+/* Nhớ client đã chạy DDL (24/10/2026): trước đây MỌI request chat chạy lại 6 lệnh CREATE … IF NOT EXISTS —
+ * trang chat hỏi 5–30 giây/lần mà prod mỗi cửa hàng chỉ có 1 kết nối ⇒ xếp hàng chặn truy vấn khác.
+ * getStorePrisma trả lại cùng client cho một schema; client bị thải rồi tạo lại thì chạy lại một lần. */
+const daTaoBangChat = new WeakSet<object>()
+
 async function ensureChatTables(prisma: any) {
+    if (daTaoBangChat.has(prisma)) return
     await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "ChatConversation" (
             "id" TEXT NOT NULL,
@@ -115,6 +123,7 @@ async function ensureChatTables(prisma: any) {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ChatConversation_platform_idx" ON "ChatConversation"("platform")`)
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ChatConversation_sessionToken_idx" ON "ChatConversation"("sessionToken")`)
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ChatMessage_conversationId_idx" ON "ChatMessage"("conversationId")`)
+    daTaoBangChat.add(prisma)
 }
 
 function generateId() {
@@ -281,6 +290,29 @@ router.put('/conversations/:id/status', chatAuth, async (req: AuthRequest, res: 
 })
 
 // GET /unread-count
+/* GET /tin-hieu — web hỏi 5 giây/lần "có gì mới không" mà KHÔNG gọi sàn (24/10/2026, lib/tinHieuChat.ts).
+ * kenh: tín hiệu ghi lúc nhận push chat của sàn (Shopee webchat_push mã 10); noiBo: giờ tin mới nhất của
+ * chat website (bảng nội bộ). Đổi thì web mới làm mới danh sách / khung chat — hỏi thẳng Shopee chỉ còn là
+ * lưới an toàn thưa, đúng luật Chat API "thời gian thực thì dùng push". */
+router.get('/tin-hieu', chatAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await ensureChatTables(prisma)
+        const kenh = await docTinHieuChat(prisma)
+        const r: any[] = await prisma.$queryRawUnsafe(`SELECT MAX("createdAt") AS "lanCuoi", COUNT(*)::int AS "soTin" FROM "ChatMessage"`)
+        res.json({
+            success: true,
+            data: {
+                kenh,
+                noiBo: { lanCuoi: r[0]?.lanCuoi ? new Date(r[0].lanCuoi).toISOString() : null, soTin: Number(r[0]?.soTin) || 0 },
+            },
+        })
+    } catch (err: any) {
+        console.error('[chat tin-hieu]', moTaLoi(err))
+        res.status(500).json({ success: false, error: 'Không đọc được tín hiệu chat' })
+    }
+})
+
 router.get('/unread-count', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -465,25 +497,25 @@ function platformChatError(platform: 'shopee' | 'tiktok', err: any): { status: n
 router.get('/shopee/conversations', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { channelId, type, pageSize } = req.query
+        const { channelId, type, pageSize, cursor } = req.query
 
         if (!channelId) {
             res.status(400).json({ success: false, error: 'channelId is required' })
             return
         }
 
-        console.log(`[Shopee Chat Route] Getting conversations for channelId=${channelId}`)
         const { shopee, channel } = await getShopeeServiceForChannel(prisma, channelId as string)
-        console.log(`[Shopee Chat Route] Channel: name=${channel.name}, shopId=${channel.shopId}, hasAccessToken=${!!channel.accessToken}, accessToken=${(channel.accessToken || '').substring(0, 20)}...`)
 
+        /* MỘT trang 60 hội thoại MỚI NHẤT mỗi lần (24/10/2026). Bản cũ tự lật tới 10 trang mỗi lần web hỏi
+         * (15 giây/lần, mọi kênh) — gọi đúng hướng thì gian lâu năm có hàng nghìn hội thoại ⇒ 10 lượt gọi
+         * Shopee mỗi kênh mỗi lần. Cũ hơn thì gọi lại với cursor = nextOffset của lần trước. */
         const result = await withTokenRefresh(prisma, channel, shopee, () =>
             shopee.getConversationList({
                 type: (type as string) || 'all',
-                pageSize: parseInt(pageSize as string) || 25,
+                pageSize: parseInt(pageSize as string) || 60,
+                cursor: cursor ? String(cursor) : undefined,
             })
         )
-
-        console.log(`[Shopee Chat Route] Result: ${result.conversations.length} conversations, hasMore=${result.hasMore}`)
 
         // Map to our ChatConversation-like format
         const items = result.conversations.map((c: any) => ({

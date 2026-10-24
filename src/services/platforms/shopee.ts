@@ -1486,9 +1486,12 @@ export class ShopeeService extends PlatformService {
      * Uses GET /api/v2/sellerchat/get_conversation_list
      */
     async getConversationList(params: {
-        direction?: string   // 'latest' (default) or 'older'
         type?: string        // 'all', 'pinned', 'unread'
         pageSize?: number
+        /** Số trang lấy trong một lần gọi (mặc định 1 — mỗi trang một lượt gọi Shopee) */
+        soTrang?: number
+        /** next_message_time_nano của trang trước — bắt đầu từ đó lùi về cũ hơn */
+        cursor?: string
     } = {}): Promise<{
         conversations: Array<{
             conversationId: string
@@ -1509,24 +1512,27 @@ export class ShopeeService extends PlatformService {
         const path = '/api/v2/sellerchat/get_conversation_list'
         // Shopee caps page_size at 60 — anything larger returns param_error
         const pageSize = Math.min(params.pageSize || 60, 60)
+        const soTrang = Math.max(1, Math.min(params.soTrang || 1, 5))
 
-        // Auto-paginate to collect ALL conversations
+        /* direction LUÔN 'older' (24/10/2026). Tài liệu: mốc là next_timestamp_nano — bỏ trống = "vô cực";
+         * 'older' trả dữ liệu TRƯỚC mốc, 'latest' trả dữ liệu SAU mốc, cả hai đều xếp mới nhất trước. Bản cũ
+         * gọi trang đầu bằng 'latest' không kèm mốc ⇒ Shopee trả hội thoại CŨ NHẤT của gian: đo cùng lúc
+         * trên một gian lâu năm, 'latest' ra tin cuối từ 2024 còn 'older' ra tin 8 phút trước. Gian ít hội
+         * thoại thì 'latest' vẫn lọt đủ nên lỗi trông như "Shopee chưa mở chat v2" — đã gửi ticket nhầm
+         * hướng 15/10. Lấy hết hội thoại = 'older' + mốc vô cực, rồi lùi bằng next_cursor.next_message_time_nano. */
         let allConvs: any[] = []
-        let nextOffset: string | undefined = undefined
+        let nextOffset: string | undefined = params.cursor || undefined
+        let hasMore = false
         let pageCount = 0
-        const maxPages = 10 // Safety limit
 
         do {
-            // `direction` là tham số BẮT BUỘC của Shopee (thiếu → param_error):
-            // 'latest' cho trang đầu, 'older' + next_timestamp_nano khi phân trang.
             let url = this.apiUrl(path) +
-                `&direction=${nextOffset ? 'older' : 'latest'}` +
+                `&direction=older` +
                 `&type=${params.type || 'all'}` +
                 `&page_size=${pageSize}`
             if (nextOffset) url += `&next_timestamp_nano=${encodeURIComponent(nextOffset)}`
 
             const data = await this.httpGet(url)
-            console.log(`[Shopee Chat] get_conversation_list page ${pageCount + 1}:`, JSON.stringify(data).substring(0, 500))
 
             if (data.error && data.error !== '') throw new Error(`Shopee getConversationList: ${data.error} - ${data.message}`)
 
@@ -1534,21 +1540,18 @@ export class ShopeeService extends PlatformService {
             const convList = resp.conversation_list || resp.conversations || resp.page_result?.conversations ||
                 (Array.isArray(resp) ? resp : [])
 
-            if (convList.length > 0) {
-                if (pageCount === 0 && convList[0]) console.log('[Shopee Chat] FIRST ITEM RAW:', JSON.stringify(convList[0]))
-                allConvs = allConvs.concat(convList)
-            }
+            if (convList.length > 0) allConvs = allConvs.concat(convList)
 
-            nextOffset = resp.page_result?.next_offset
-                || resp.page_result?.next_cursor?.next_message_time_nano
+            nextOffset = resp.page_result?.next_cursor?.next_message_time_nano
+                || resp.page_result?.next_offset
                 || resp.next_offset
-            const hasMore = resp.page_result?.more || resp.more || false
+            hasMore = !!(resp.page_result?.more || resp.more) && !!nextOffset
             pageCount++
 
-            if (!hasMore || !nextOffset || pageCount >= maxPages) break
+            if (!hasMore || pageCount >= soTrang) break
         } while (true)
 
-        console.log(`[Shopee Chat] Total conversations collected: ${allConvs.length} from ${pageCount} pages`)
+        console.log(`[Shopee Chat] get_conversation_list: ${allConvs.length} hội thoại / ${pageCount} trang, còn nữa=${hasMore}`)
 
         // Khử trùng lặp: trang phân trang của Shopee chồng mép (item cuối trang N
         // lặp lại ở trang N+1) → cùng conversation_id xuất hiện 2 lần trên UI.
@@ -1577,8 +1580,9 @@ export class ShopeeService extends PlatformService {
                 lastMessageTimestamp: c.last_message_timestamp || 0,
                 lastReadMessageId: String(c.last_read_message_id || ''),
             })),
-            hasMore: false, // We already collected all pages
-            nextOffset: '',
+            // Còn hội thoại cũ hơn chưa lấy — gọi lại với cursor = nextOffset
+            hasMore,
+            nextOffset: hasMore ? String(nextOffset) : '',
         }
     }
 

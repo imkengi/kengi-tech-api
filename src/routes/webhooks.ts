@@ -9,6 +9,7 @@ import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineO
 import { moTaLoi } from '../lib/gomLoi'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
+import { ghiTinHieuChat } from '../lib/tinHieuChat'
 import { processComment } from '../services/fanpageAutoReply'
 import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
 import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
@@ -324,6 +325,10 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
     if (pushCode === 10) {
         let content: any = data.content || data
         if (typeof content === 'string') { try { content = JSON.parse(content) } catch { } }
+        /* Tín hiệu trong DB (24/10/2026, lib/tinHieuChat.ts) — sự kiện publishEvent bên dưới chỉ tới được
+         * trình duyệt nối cùng bản Cloud Run (prod không có Redis). Web hỏi tín hiệu 5 giây/lần rồi mới gọi
+         * Shopee. Ghi hỏng thì NÉM: hộp thư webhook thử lại push này, đừng để tin mới lặng lẽ không báo. */
+        await ghiTinHieuChat(storePrisma, String(channel.id), String(content.conversation_id || '') || null)
         publishEvent(resolvedSchema || undefined, 'chat:new-platform-message', {
             platform: 'shopee',
             channelId: channel.id,
