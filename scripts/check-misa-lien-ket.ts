@@ -148,10 +148,16 @@ async function main() {
     const d3 = kh.dong.find(d => d.localId === '3')!
     dung('khách KHÔNG MST ⇒ người mua "Bán cho người tiêu dùng" (không ngoặc), phiếu sẵn sàng',
         d3.trangThai === 'san_sang' && d3.payload?.account_object_name === 'Bán cho người tiêu dùng', { tt: d3.trangThai, ten: d3.payload?.account_object_name, lyDo: d3.lyDo })
-    dung('…KHÔNG mã đối tượng, không địa chỉ / MST — cả đầu phiếu lẫn dòng hàng; tên khách thật ở diễn giải',
+    dung('…KHÔNG mã đối tượng, không địa chỉ / MST — cả đầu phiếu lẫn dòng hàng',
         !('account_object_code' in (d3.payload || {})) && d3.payload?.account_object_tax_code === undefined && d3.payload?.account_object_address === undefined
-        && d3.payload?.detail?.[0]?.account_object_code === undefined && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng'
-        && String(d3.payload?.journal_memo).includes('Cty'), d3.payload?.detail?.[0])
+        && d3.payload?.detail?.[0]?.account_object_code === undefined && d3.payload?.detail?.[0]?.account_object_name === 'Bán cho người tiêu dùng', d3.payload?.detail?.[0])
+    /* Chủ shop 24/10/2026: "diễn giải lý do cũng là bán cho người tiêu dùng chứ" ⇒ diễn giải phiếu bán / hoá đơn / phiếu xuất kho không còn tên khách */
+    dung('…diễn giải (Lý do nộp) cũng "Bán cho người tiêu dùng", phiếu xuất kho "Xuất kho bán cho người tiêu dùng" — không còn tên khách',
+        d3.payload?.journal_memo === 'Bán cho người tiêu dùng' && !String(JSON.stringify(d3.payload)).includes('Bán hàng cho')
+        && (!d3.payload?.sa_invoice || d3.payload.sa_invoice.journal_memo === 'Bán cho người tiêu dùng')
+        && (!d3.payload?.in_outward || d3.payload.in_outward.journal_memo === 'Xuất kho bán cho người tiêu dùng'),
+        { memo: d3.payload?.journal_memo, hd: d3.payload?.sa_invoice?.journal_memo, pxk: d3.payload?.in_outward?.journal_memo })
+    dung('khách có MST lấy HĐ vẫn diễn giải "Bán hàng cho <tên>"', String(d1.payload?.journal_memo).startsWith('Bán hàng cho '), d1.payload?.journal_memo)
     dung('loại chứng từ ghi "Phiếu bán hàng" — bỏ chữ Kengi', d3.payload?.org_reftype_name === 'Phiếu bán hàng', d3.payload?.org_reftype_name)
     dung('tên đối tượng so bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng (tìm đối tượng ở admin)', tenKhongDau('BÁN CHO  người TIÊU DÙNG ') === 'ban cho nguoi tieu dung')
 
