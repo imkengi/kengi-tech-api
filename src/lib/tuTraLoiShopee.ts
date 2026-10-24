@@ -15,8 +15,9 @@
  *     thì thà không trả lời (nhân viên vẫn thấy) còn hơn gửi đôi.
  *  5. trần: TRAN_HOI_THOAI lần / hội thoại / 24 giờ (quá ⇒ để nhân viên), TRAN_GIO tin / gian / giờ (quá ⇒ tự tắt).
  *  6. chatbot soạn (routes/chatbot.ts soanGoiYChoSan: kho kiến thức + giá thật của đúng gian, luật nháp Shopee).
- *     AI lỗi / chưa đủ căn cứ ⇒ không gửi, để nhân viên (web vẫn có nháp).
- *  7. soát câu (SĐT / Zalo / link ngoài / sàn khác ⇒ bỏ), cắt ≤ 600 ký tự, gửi.
+ *  7. soát câu (SĐT / Zalo / link ngoài / sàn khác ⇒ bỏ), cắt ≤ 600 ký tự, gửi. Không trả lời được (AI lỗi / chưa đủ
+ *     căn cứ / câu bị chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" (tối đa 1 lần / hội thoại / GIO_TIN_CHO giờ), nhân viên
+ *     trả lời sau (web vẫn có nháp).
  * KHÔNG lưu nội dung tin: nhật ký chỉ có mã + trạng thái + lý do.
  */
 import { ShopeeService, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
@@ -28,12 +29,17 @@ export const GOM_MS = 15_000
 export const TRAN_HOI_THOAI = 5
 export const TRAN_GIO = 60
 export const DUOI_TU_DONG = '\n\n(Tin nhắn tự động)'
+/** Tin chờ khi chatbot không trả lời được — mỗi hội thoại tối đa 1 lần / GIO_TIN_CHO giờ */
+export const CAU_CHO = 'Dạ shop đã nhận được tin nhắn của bạn ạ. Bạn đợi shop một chút nhé, nhân viên sẽ trả lời bạn ngay!'
+export const GIO_TIN_CHO = 3
+/** lyDo của dòng nhật ký tin chờ bắt đầu bằng chữ này (đếm tin chờ + web hiện lý do không trả lời được) */
+export const TIEN_TO_TIN_CHO = 'tin chờ — '
 const DAI_TOI_DA = 600
 
 export type TrangThaiNhatKy = 'dang' | 'da_gui' | 'bo_qua' | 'loi'
 export type KetQuaTuTraLoi =
     | 'tat' | 'tin_cua_gian' | 'thieu_hoi_thoai' | 'dang_cho' | 'khong_can' | 'da_xu_ly'
-    | 'bo_qua' | 'loi' | 'da_gui' | 'gian_tu_tat'
+    | 'bo_qua' | 'loi' | 'da_gui' | 'tin_cho' | 'gian_tu_tat'
 
 /** Phần lưu trữ — bản SQL ở khoTuTraLoiSql, bộ kiểm thay bằng bản trong bộ nhớ. */
 export interface KhoTuTraLoi {
@@ -45,6 +51,8 @@ export interface KhoTuTraLoi {
     demDaGui(kenhId: string, soGio: number, hoiThoaiId?: string): Promise<number>
     /** mã các tin chatbot đã gửi trong hội thoại — tính là "đã trả lời" */
     maTinDaGui(kenhId: string, hoiThoaiId: string): Promise<Set<string>>
+    /** số TIN CHỜ đã gửi cho hội thoại trong soGio giờ qua */
+    demTinCho(kenhId: string, hoiThoaiId: string, soGio: number): Promise<number>
     tat(kenhId: string, lyDo: string): Promise<void>
 }
 
@@ -179,15 +187,31 @@ async function sauGiuCho(
     if (!Number.isFinite(nguoiMua) || nguoiMua <= 0) { await ket('bo_qua', 'không rõ người mua'); return 'bo_qua' }
 
     const soan = await pt.soanGoiY(tach.cauHoi, tach.lichSu, String(kenh.name || ''))
-    if (soan.loi) { await ket('loi', soan.loi); return 'loi' }
-    if (soan.canNhanVien) { await ket('bo_qua', 'AI chưa đủ căn cứ — để nhân viên'); return 'bo_qua' }
-    const kiem = kiemCauTuDong(soan.traLoi)
-    if (!kiem.ok) { await ket('bo_qua', kiem.lyDo); return 'bo_qua' }
+    /* Chatbot KHÔNG trả lời được (AI lỗi / chưa đủ căn cứ / câu bị soát chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" — chủ shop
+     * 24/10/2026: "nếu trả lời không được thì gửi đợi 1 chút chứ". Đúng kiểu tin Shopee dành send_autoreply_message
+     * ("We'll reply to your inquiry as soon as possible"). Mỗi hội thoại tối đa 1 tin chờ / GIO_TIN_CHO giờ. */
+    let khongTraLoi: string | null = null
+    let cau = ''
+    if (soan.loi) khongTraLoi = soan.loi
+    else if (soan.canNhanVien) khongTraLoi = 'AI chưa đủ căn cứ'
+    else {
+        const kiem = kiemCauTuDong(soan.traLoi)
+        if (kiem.ok) cau = kiem.cau
+        else khongTraLoi = kiem.lyDo
+    }
+    if (khongTraLoi) {
+        if ((await pt.kho.demTinCho(kenhId, hoiThoaiId, GIO_TIN_CHO)) > 0) {
+            const t: TrangThaiNhatKy = soan.loi ? 'loi' : 'bo_qua'
+            await ket(t, `${khongTraLoi} — đã gửi tin chờ trong ${GIO_TIN_CHO} giờ qua, để nhân viên`)
+            return t
+        }
+        cau = CAU_CHO + DUOI_TU_DONG
+    }
 
     try {
-        const gui = await shopee.sendAutoReplyMessage(nguoiMua, kiem.cau)
-        await ket('da_gui', null, gui.messageId || undefined)
-        return 'da_gui'
+        const gui = await shopee.sendAutoReplyMessage(nguoiMua, cau)
+        await ket('da_gui', khongTraLoi ? `${TIEN_TO_TIN_CHO}${khongTraLoi}` : null, gui.messageId || undefined)
+        return khongTraLoi ? 'tin_cho' : 'da_gui'
     } catch (e) {
         const pl = phanLoaiLoiGui(e)
         if (pl.loai === 'tat') {
@@ -284,6 +308,15 @@ export function khoTuTraLoiSql(db: any): KhoTuTraLoi {
                 return new Set(r.map(x => String(x.maTinGui)))
             } catch (e) { if (thieu(e)) return new Set(); throw e }
         },
+        async demTinCho(kenhId, hoiThoaiId, soGio) {
+            try {
+                const r: any[] = await db.$queryRawUnsafe(
+                    `SELECT COUNT(*)::int AS n FROM "TuTraLoiNhatKy"
+                      WHERE "kenhId" = $1 AND "hoiThoaiId" = $2 AND "trangThai" = 'da_gui' AND "lyDo" LIKE $4
+                        AND "luc" >= ${BAY_GIO} - make_interval(hours => $3::int)`, kenhId, hoiThoaiId, soGio, `${TIEN_TO_TIN_CHO}%`)
+                return Number(r[0]?.n) || 0
+            } catch (e) { if (thieu(e)) return 0; throw e }
+        },
         async tat(kenhId, lyDo) {
             await damBao(db)
             await db.$executeRawUnsafe(
@@ -310,17 +343,19 @@ export interface TinhTrangTuTraLoi {
     bat: boolean
     tatLyDo: string | null
     tatLuc: string | null
-    /** 24 giờ qua */
+    /** 24 giờ qua — daGui gồm cả tin chờ */
     daGui: number
+    /** trong daGui: tin chờ "đợi shop một chút" (chatbot không trả lời được) */
+    tinCho: number
     boQua: number
     loi: number
-    /** lý do gần nhất của lần bỏ qua / lỗi — vd "Key Gemini hết tiền" */
+    /** lý do gần nhất (bỏ qua / lỗi / tin chờ) — vd "tin chờ — Key Gemini hết tiền" */
     lyDoGanNhat: string | null
 }
 
 /** Công tắc + số liệu 24 giờ qua của mọi gian (bảng chưa có ⇒ mọi gian tắt, số 0). */
 export async function tinhTrangTuTraLoi(db: any, kenhIds: string[]): Promise<TinhTrangTuTraLoi[]> {
-    const rong = (kenhId: string): TinhTrangTuTraLoi => ({ kenhId, bat: false, tatLyDo: null, tatLuc: null, daGui: 0, boQua: 0, loi: 0, lyDoGanNhat: null })
+    const rong = (kenhId: string): TinhTrangTuTraLoi => ({ kenhId, bat: false, tatLyDo: null, tatLuc: null, daGui: 0, tinCho: 0, boQua: 0, loi: 0, lyDoGanNhat: null })
     const kq = new Map(kenhIds.map(k => [k, rong(k)]))
     try {
         const cd: any[] = await db.$queryRawUnsafe(`SELECT "kenhId", "bat", "tatLyDo", "tatLuc" FROM "TuTraLoiCaiDat"`)
@@ -329,16 +364,19 @@ export async function tinhTrangTuTraLoi(db: any, kenhIds: string[]): Promise<Tin
             x.bat = !!c.bat; x.tatLyDo = c.tatLyDo || null; x.tatLuc = c.tatLuc ? new Date(c.tatLuc).toISOString() : null
         }
         const dem: any[] = await db.$queryRawUnsafe(
-            `SELECT "kenhId", "trangThai", COUNT(*)::int AS n FROM "TuTraLoiNhatKy" WHERE "luc" >= ${BAY_GIO} - interval '24 hours' GROUP BY 1, 2`)
+            `SELECT "kenhId", "trangThai", COALESCE("lyDo" LIKE $1, false) AS "laTinCho", COUNT(*)::int AS n FROM "TuTraLoiNhatKy"
+              WHERE "luc" >= ${BAY_GIO} - interval '24 hours' GROUP BY 1, 2, 3`, `${TIEN_TO_TIN_CHO}%`)
         for (const d of dem) {
             const x = kq.get(String(d.kenhId)); if (!x) continue
-            if (d.trangThai === 'da_gui') x.daGui = Number(d.n) || 0
-            else if (d.trangThai === 'bo_qua') x.boQua = Number(d.n) || 0
-            else if (d.trangThai === 'loi') x.loi = Number(d.n) || 0
+            const n = Number(d.n) || 0
+            if (d.trangThai === 'da_gui') { x.daGui += n; if (d.laTinCho) x.tinCho += n }
+            else if (d.trangThai === 'bo_qua') x.boQua += n
+            else if (d.trangThai === 'loi') x.loi += n
         }
+        // Lý do gần nhất của MỌI dòng có lý do — kể cả tin chờ (vd "tin chờ — Key Gemini hết tiền": chủ shop cần biết vì sao)
         const lyDo: any[] = await db.$queryRawUnsafe(
             `SELECT DISTINCT ON ("kenhId") "kenhId", "lyDo" FROM "TuTraLoiNhatKy"
-              WHERE "trangThai" IN ('bo_qua', 'loi') AND "lyDo" IS NOT NULL AND "luc" >= ${BAY_GIO} - interval '24 hours'
+              WHERE "lyDo" IS NOT NULL AND "luc" >= ${BAY_GIO} - interval '24 hours'
               ORDER BY "kenhId", "luc" DESC`)
         for (const l of lyDo) { const x = kq.get(String(l.kenhId)); if (x) x.lyDoGanNhat = l.lyDo }
     } catch (e) {
