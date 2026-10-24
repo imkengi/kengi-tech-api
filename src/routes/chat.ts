@@ -379,6 +379,7 @@ router.post('/backfill-channels', chatAuth, async (req: AuthRequest, res: Respon
 import { ShopeeService } from '../services/platforms'
 import { laTinCuaGian, laTinTuDong, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
 import { soanGoiYChoSan } from './chatbot'
+import { tenSanPhamCuaGian, khoTuTraLoiSql, datTuTraLoi, tinhTrangTuTraLoi } from '../lib/tuTraLoiShopee'
 
 // Helper: load channel credentials and create ShopeeService
 async function getShopeeServiceForChannel(prisma: any, channelId: string): Promise<{ shopee: ShopeeService; channel: any }> {
@@ -591,9 +592,10 @@ router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest
                 imageUrl: m.imageUrl || null,
                 isRead: true,
                 createdAt: safeTimestampToISO(m.createdTimestamp) || new Date().toISOString(),
-                // Tin tự động trả lời / Shopee gửi thay gian (source server: voucher, combo…) — web ghi "Tự động", và
-                // không tính là đã trả lời khách (khớp tachCauHoiShopee)
+                // Tin tự động: chatbot của mình (auto_reply qua openapi — web ghi "Chatbot") hoặc Shopee tự sinh thay gian
+                // (source server: lời chào, voucher, combo… — web ghi "Tự động", KHÔNG tính là đã trả lời; khớp tachCauHoiShopee)
                 tuDong: cuaGian && (laTinTuDong(m) || m.source === 'server'),
+                tuShopee: cuaGian && m.source === 'server',
                 // Shopee-specific
                 shopeeMessageType: m.messageType,
                 shopeeSourceContent: m.sourceContent,
@@ -648,16 +650,11 @@ router.post('/shopee/goi-y', chatAuth, goiYLimiter, async (req: AuthRequest, res
 
         // Thẻ sản phẩm / tin nhắn từ trang sản phẩm ⇒ tên + SKU hàng của ĐÚNG gian (công cụ tra theo tên / SKU, không theo mã Shopee)
         const maSp: string[] = [...new Set(ds.map(m => String(m.itemId || '')).filter(Boolean))].slice(0, 10)
-        const tenSanPham = new Map<string, string>()
-        if (maSp.length) {
-            const sp: any[] = await prisma.onlineProduct.findMany({
-                where: { channelId: channel.id, platformProductId: { in: maSp } },
-                select: { platformProductId: true, name: true, sku: true },
-            })
-            for (const x of sp) tenSanPham.set(String(x.platformProductId), `${x.name}${x.sku ? ` (SKU ${x.sku})` : ''}`)
-        }
+        const tenSanPham = await tenSanPhamCuaGian(prisma, channel.id, maSp)
+        // Tin chatbot đã TỰ trả lời tính là đã trả lời — khỏi soạn nháp lại cho câu đã được trả lời
+        const daGui = await khoTuTraLoiSql(prisma).maTinDaGui(channel.id, conversationId)
 
-        const tach = tachCauHoiShopee(ds, channel.shopId, tenSanPham)
+        const tach = tachCauHoiShopee(ds, channel.shopId, tenSanPham, daGui)
         if (!tach) {
             res.json({ success: true, data: { canSoan: false, lyDo: 'Khách chưa nhắn gì mới sau câu trả lời của shop' } })
             return
@@ -683,6 +680,54 @@ router.post('/shopee/goi-y', chatAuth, goiYLimiter, async (req: AuthRequest, res
         console.error('[chat shopee goi-y]', moTaLoi(err)) // chỉ lỗi, không kèm nội dung tin
         const { status, body } = platformChatError('shopee', err)
         res.status(status).json(body)
+    }
+})
+
+/* ─── TỰ TRẢ LỜI BẰNG CHATBOT (24/10/2026, lib/tuTraLoiShopee.ts) ───────────────────────────────────────────────
+ * GET  /tu-tra-loi            — công tắc + số liệu 24 giờ qua của từng gian Shopee (ai vào trang chat cũng xem được)
+ * PUT  /tu-tra-loi/:kenhId    — { bat } — CHỈ quản lý. Luật Chat API Shopee cấm chatbot trả lời: web hiện cảnh báo,
+ *                               chủ shop tự bật; Shopee báo chặn thì gian tự tắt (tatLyDo). */
+const QUAN_LY_TU_TRA_LOI = ['admin', 'manager', 'owner', 'superadmin']
+
+router.get('/tu-tra-loi', chatAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const kenh: any[] = await prisma.$queryRawUnsafe(
+            `SELECT "id", "name" FROM "OnlineChannel" WHERE "platform" = 'shopee' AND COALESCE("status", 'active') <> 'inactive' ORDER BY "name"`)
+        const tt = await tinhTrangTuTraLoi(prisma, kenh.map(k => String(k.id)))
+        const ten = new Map(kenh.map(k => [String(k.id), String(k.name || '')]))
+        res.json({ success: true, data: tt.map(x => ({ ...x, ten: ten.get(x.kenhId) || '' })) })
+    } catch (err: any) {
+        console.error('[chat tu-tra-loi]', moTaLoi(err))
+        res.status(500).json({ success: false, error: 'Không đọc được cài đặt tự trả lời' })
+    }
+})
+
+router.put('/tu-tra-loi/:kenhId', chatAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const vaiTro = String(req.user?.role || '').toLowerCase()
+        if (!(req as any).__viaAdminKey && !QUAN_LY_TU_TRA_LOI.includes(vaiTro)) {
+            res.status(403).json({ success: false, error: 'Chỉ admin / quản lý mới bật tắt được tự trả lời' })
+            return
+        }
+        if (typeof req.body?.bat !== 'boolean') {
+            res.status(400).json({ success: false, error: 'Thiếu bat (true / false)' })
+            return
+        }
+        const prisma = req.storePrisma!
+        const kenh: any[] = await prisma.$queryRawUnsafe(
+            `SELECT "id" FROM "OnlineChannel" WHERE "id" = $1 AND "platform" = 'shopee' LIMIT 1`, String(req.params.kenhId))
+        if (!kenh.length) {
+            res.status(404).json({ success: false, error: 'Không có gian Shopee này' })
+            return
+        }
+        const nguoi = String(req.user?.email || req.user?.userId || '') || null
+        await datTuTraLoi(prisma, String(kenh[0].id), req.body.bat, nguoi)
+        console.log(`[chat tu-tra-loi] ${nguoi || 'admin-key'} ${req.body.bat ? 'BẬT' : 'tắt'} tự trả lời kênh ${kenh[0].id}`)
+        res.json({ success: true, data: { kenhId: String(kenh[0].id), bat: req.body.bat } })
+    } catch (err: any) {
+        console.error('[chat tu-tra-loi PUT]', moTaLoi(err))
+        res.status(500).json({ success: false, error: 'Không lưu được cài đặt tự trả lời' })
     }
 })
 

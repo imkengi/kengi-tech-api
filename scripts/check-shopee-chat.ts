@@ -14,6 +14,10 @@
  *   D. Gợi ý trả lời bằng chatbot (nhân viên tự bấm gửi): câu cần trả lời = tin khách SAU lần cuối NGƯỜI của gian trả lời
  *      (tin tự động / Shopee gửi thay không tính); lịch sử xen kẽ khách–shop, mở đầu bằng khách; thẻ sản phẩm ra TÊN hàng;
  *      kho kiến thức chọn đúng gian; luật nháp Shopee cấm kéo khách ra ngoài sàn.
+ *   E. Tự trả lời bằng chatbot (lib/tuTraLoiShopee.ts, công tắc từng gian mặc định tắt): gửi qua send_autoreply_message
+ *      (KHÔNG send_message — không giả làm người gõ), có dòng "(Tin nhắn tự động)"; mỗi tin khách MỘT lần (giữ chỗ trước
+ *      khi gửi, chạy trùng không gửi đôi); tin chatbot đã gửi tính là đã trả lời; AI lỗi / chưa đủ căn cứ / câu có SĐT,
+ *      Zalo, link ngoài ⇒ không gửi; trần hội thoại / giờ; Shopee báo chặn chatbot ⇒ gian tự tắt.
  */
 process.env.SHOPEE_FORWARD_PROXY = ''   // không bao giờ ra mạng: httpGet bị thay bằng bản giả
 
@@ -21,6 +25,7 @@ import { ShopeeService, laTinCuaGian, laTinTuDong, tachCauHoiShopee, chuTinShope
 import { chonShopChoKenh, LUAT_NHAP_SAN, loiAiChoNguoiDung } from '../src/routes/chatbot'
 import { LoiGeminiTamThoi, LoiGeminiHetTien } from '../src/services/aiAgentRunner'
 import { ghiTinHieuChat, docTinHieuChat } from '../src/lib/tinHieuChat'
+import { tuTraLoiShopee, kiemCauTuDong, phanLoaiLoiGui, KhoTuTraLoi, PhuThuocTuTraLoi, DUOI_TU_DONG, TRAN_HOI_THOAI, TRAN_GIO } from '../src/lib/tuTraLoiShopee'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -160,6 +165,86 @@ async function main() {
     // lỗi thường còn mang "402" giờ chỉ là DeepSeek (Gemini 402 đã thành LoiGeminiHetTien ở bộ chạy)
     const loiDS = loiAiChoNguoiDung(new Error('Tài khoản DeepSeek hết tiền (402) — nạp thêm ở platform.deepseek.com: Insufficient Balance'))
     ok('39. DeepSeek hết tiền (402) ⇒ nói đúng DeepSeek, không báo nhầm thành key Gemini', /DeepSeek hết tiền/.test(loiDS) && !/Gemini/.test(loiDS), loiDS)
+
+    console.log('— E. Tự trả lời bằng chatbot —')
+    const khach = (id: string, text: string, ex: Partial<TinShopeeGoiY> = {}): TinShopeeGoiY => ({ messageId: id, messageType: 'text', content: text, fromId: 777, fromShopId: 0, status: 'user_chat', source: 'ios', ...ex })
+    const chaoShopee: TinShopeeGoiY = { messageId: 's1', messageType: 'text', content: 'Xin chao', fromId: 900, fromShopId: 42, status: 'auto_reply', source: 'server' }
+    const botGui: TinShopeeGoiY = { messageId: 'bot-cu', messageType: 'text', content: 'Da bao hanh 12 thang', fromId: 900, fromShopId: 42, status: 'auto_reply', source: 'openapi' }
+    ok('40. tin chatbot đã gửi (auto_reply qua openapi) tính là ĐÃ trả lời; lời chào Shopee (server) thì không', tachCauHoiShopee([khach('c1', 'Q'), botGui], 42, rong) === null && tachCauHoiShopee([khach('c1', 'Q'), chaoShopee], 42, rong)?.cauHoi === 'Q')
+    ok('41. mã tin chatbot ghi trong nhật ký cũng tính là đã trả lời (kể cả Shopee gắn nguồn khác); trả về người mua để gửi', tachCauHoiShopee([khach('c1', 'Q'), { ...chaoShopee, messageId: 'bot-x' }], 42, rong, new Set(['bot-x'])) === null && tachCauHoiShopee([khach('c1', 'Q')], 42, rong)?.nguoiMuaId === '777')
+    const dai = kiemCauTuDong('a'.repeat(900))
+    ok('42. soát câu tự gửi: SĐT / Zalo / sàn khác / link ngoài ⇒ không gửi; link Shopee được; câu dự phòng không gửi; ≤ 600 ký tự kèm "(Tin nhắn tự động)"',
+        !kiemCauTuDong('Goi 0912 345 678 nhe').ok && !kiemCauTuDong('Nhắn Zalo shop nhé').ok && !kiemCauTuDong('Bên TikTok rẻ hơn').ok && !kiemCauTuDong('Xem https://kengi.vn/sp').ok
+        && kiemCauTuDong('Xem https://shopee.vn/product/1/2 nhé').ok && !kiemCauTuDong('Dạ shop đã nhận được tin nhắn của mình ạ. Nhân viên sẽ phản hồi bạn trong thời gian sớm nhất nhé!').ok
+        && dai.ok && dai.cau.length <= 600 && dai.cau.endsWith(DUOI_TU_DONG), dai.ok ? dai.cau.length : dai)
+    ok('43. lỗi Shopee: unexpected_bot_msg / hành vi đáng ngờ ⇒ TẮT gian; 5 tin chưa đáp ⇒ bỏ hội thoại; lạ ⇒ lỗi',
+        phanLoaiLoiGui(new Error('Shopee sendAutoReply: unexpected_bot_msg - x')).loai === 'tat' && phanLoaiLoiGui(new Error('block_by_internal_safety_strategies')).loai === 'tat'
+        && phanLoaiLoiGui(new Error('reach_5_message_limit')).loai === 'bo_qua' && phanLoaiLoiGui(new Error('ECONNRESET')).loai === 'loi')
+
+    // Kho + Shopee + chatbot GIẢ trong bộ nhớ
+    const dung = (o: { bat?: boolean; tin?: TinShopeeGoiY[]; loiGui?: string; soan?: PhuThuocTuTraLoi['soanGoiY']; themGio?: number; themHoiThoai?: number } = {}) => {
+        const caiDat = new Map<string, { bat: boolean; tatLyDo?: string }>([['k1', { bat: o.bat ?? true }]])
+        const nk = new Map<string, { kenhId: string; hoiThoaiId: string; trangThai: string; lyDo: string | null; maTinGui: string | null }>()
+        const kho: KhoTuTraLoi = {
+            async docCaiDat(k) { return caiDat.get(k) ?? null },
+            async giuCho(k, h, t) { const key = `${k}|${h}|${t}`; if (nk.has(key)) return false; nk.set(key, { kenhId: k, hoiThoaiId: h, trangThai: 'dang', lyDo: null, maTinGui: null }); return true },
+            async ghiKetQua(k, h, t, tt, ly, ma) { Object.assign(nk.get(`${k}|${h}|${t}`)!, { trangThai: tt, lyDo: ly, maTinGui: ma || null }) },
+            async demDaGui(k, gio, h) { return [...nk.values()].filter(x => x.kenhId === k && x.trangThai === 'da_gui' && (!h || x.hoiThoaiId === h)).length + (h ? (o.themHoiThoai || 0) : gio === 1 ? (o.themGio || 0) : 0) },
+            async maTinDaGui(k, h) { return new Set([...nk.values()].filter(x => x.kenhId === k && x.hoiThoaiId === h && x.maTinGui).map(x => x.maTinGui!)) },
+            async tat(k, ly) { caiDat.set(k, { bat: false, tatLyDo: ly }) },
+        }
+        const gui: { toId: number; text: string }[] = []; let goiTinThuong = 0; let docTin = 0
+        const shopee = {
+            async getMessages() { docTin++; return { messages: (o.tin || [khach('c1', 'bao hanh bao lau'), chaoShopee]).slice().reverse() } },
+            async sendAutoReplyMessage(toId: number, text: string) { if (o.loiGui) throw new Error(`Shopee sendAutoReply: ${o.loiGui} - x`); gui.push({ toId, text }); return { messageId: `bot${gui.length}` } },
+            async sendMessage() { goiTinThuong++; return { messageId: 'x' } },
+        }
+        let soLanSoan = 0
+        const pt: PhuThuocTuTraLoi = {
+            kho, docKenh: async () => ({ id: 'k1', shopId: '42', name: 'Gian A', accessToken: 't' }), taoShopee: () => shopee as any,
+            tenSanPham: async () => new Map(), cho: async () => { },
+            soanGoiY: async (...a) => { soLanSoan++; return o.soan ? o.soan(...a) : { traLoi: 'Dạ sản phẩm bảo hành 12 tháng ạ', canNhanVien: false } },
+        }
+        return { pt, caiDat, nk, gui, dem: () => ({ goiTinThuong, docTin, soLanSoan }) }
+    }
+    const kenhThu = { id: 'k1', shopId: '42', name: 'Gian A' }
+    const pushKhach = { conversation_id: '555', from_shop_id: 0 }
+
+    const e44 = dung({ bat: false })
+    ok('44. công tắc TẮT (mặc định) ⇒ không đọc tin, không gọi AI, không gửi', await tuTraLoiShopee(kenhThu, pushKhach, e44.pt) === 'tat' && e44.dem().docTin === 0 && e44.dem().soLanSoan === 0)
+    const e45 = dung()
+    ok('45. push của chính gian (from_shop_id = shop) ⇒ bỏ ngay', await tuTraLoiShopee(kenhThu, { conversation_id: '555', from_shop_id: 42 }, e45.pt) === 'tin_cua_gian' && e45.dem().docTin === 0)
+    const e46 = dung()
+    const k46 = await tuTraLoiShopee(kenhThu, pushKhach, e46.pt)
+    ok('46. bật ⇒ gửi MỘT tin qua send_autoreply_message (không send_message) tới người mua, cuối có "(Tin nhắn tự động)"; nhật ký da_gui + mã tin',
+        k46 === 'da_gui' && e46.gui.length === 1 && e46.gui[0]!.toId === 777 && e46.gui[0]!.text.endsWith(DUOI_TU_DONG) && e46.dem().goiTinThuong === 0
+        && [...e46.nk.values()][0]?.trangThai === 'da_gui' && [...e46.nk.values()][0]?.maTinGui === 'bot1', { k46, gui: e46.gui, nk: [...e46.nk.values()] })
+    ok('47. cùng tin khách được push lại (Shopee đẩy lại / máy khác) ⇒ không gửi lần hai', await tuTraLoiShopee(kenhThu, pushKhach, e46.pt) === 'da_xu_ly' && e46.gui.length === 1)
+
+    const e48 = dung()
+    let tha!: () => void
+    const cua = new Promise<void>(r => { tha = r })
+    e48.pt.cho = () => cua
+    const luotDau = tuTraLoiShopee(kenhThu, pushKhach, e48.pt)
+    const r2 = await tuTraLoiShopee(kenhThu, pushKhach, e48.pt)
+    tha(); await luotDau
+    ok('48. hai push cùng hội thoại tới gần nhau (khách nhắn liền mấy tin) ⇒ lượt sau chờ lượt đầu, chỉ MỘT tin được gửi', r2 === 'dang_cho' && e48.gui.length === 1, { r2, gui: e48.gui.length })
+
+    const e49 = dung({ soan: async () => ({ traLoi: 'Dạ shop đã nhận được tin nhắn của mình ạ. Nhân viên sẽ phản hồi bạn trong thời gian sớm nhất nhé!', canNhanVien: true, loi: 'Key Gemini của cửa hàng đã HẾT TIỀN' }) })
+    ok('49. AI lỗi (key hết tiền) ⇒ không gửi câu dự phòng; nhật ký ghi lý do', await tuTraLoiShopee(kenhThu, pushKhach, e49.pt) === 'loi' && e49.gui.length === 0 && /HẾT TIỀN/.test(String([...e49.nk.values()][0]?.lyDo)))
+    const e50 = dung({ soan: async () => ({ traLoi: 'Dạ để shop kiểm tra đơn rồi báo bạn ạ', canNhanVien: true }) })
+    ok('50. AI chưa đủ căn cứ (khiếu nại / hỏi đơn) ⇒ không gửi, để nhân viên', await tuTraLoiShopee(kenhThu, pushKhach, e50.pt) === 'bo_qua' && e50.gui.length === 0)
+    const e51 = dung({ loiGui: 'unexpected_bot_msg' })
+    const k51 = await tuTraLoiShopee(kenhThu, pushKhach, e51.pt)
+    ok('51. Shopee báo tin chatbot ⇒ gian TỰ TẮT kèm lý do', k51 === 'gian_tu_tat' && e51.caiDat.get('k1')?.bat === false && /chatbot/.test(String(e51.caiDat.get('k1')?.tatLyDo)), { k51, cd: e51.caiDat.get('k1') })
+    const e52 = dung({ themHoiThoai: TRAN_HOI_THOAI })
+    ok(`52. hội thoại đã tự trả lời ${TRAN_HOI_THOAI} lần / 24 giờ ⇒ để nhân viên, không gọi AI`, await tuTraLoiShopee(kenhThu, pushKhach, e52.pt) === 'bo_qua' && e52.gui.length === 0 && e52.dem().soLanSoan === 0)
+    const e53 = dung({ themGio: TRAN_GIO })
+    ok(`53. gian gửi ${TRAN_GIO} tin tự động / giờ ⇒ tự tắt (khỏi bị coi là spam)`, await tuTraLoiShopee(kenhThu, pushKhach, e53.pt) === 'gian_tu_tat' && e53.caiDat.get('k1')?.bat === false && e53.gui.length === 0)
+    const e54 = dung({ tin: [khach('c1', 'Q'), chaoShopee, { ...botGui, messageId: 'nv1', status: 'normal', source: 'mini_webchat' }] })
+    ok('54. nhân viên đã trả lời trong lúc chờ gom tin ⇒ không chen vào, không giữ chỗ', await tuTraLoiShopee(kenhThu, pushKhach, e54.pt) === 'khong_can' && e54.gui.length === 0 && e54.nk.size === 0)
+    const e55 = dung({ soan: async () => ({ traLoi: 'Bạn nhắn Zalo 0912345678 cho shop nhé', canNhanVien: false }) })
+    ok('55. AI lỡ đưa SĐT / Zalo ⇒ không gửi', await tuTraLoiShopee(kenhThu, pushKhach, e55.pt) === 'bo_qua' && e55.gui.length === 0)
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

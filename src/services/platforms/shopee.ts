@@ -40,6 +40,8 @@ export interface TinShopeeGoiY {
     messageId: string
     messageType: string
     content: string
+    /** mã TÀI KHOẢN người gửi — tin khách thì là người mua (to_id khi gửi trả lời) */
+    fromId?: number | string
     fromShopId?: number | string
     status?: string
     source?: string
@@ -70,14 +72,15 @@ export function chuTinShopee(m: TinShopeeGoiY, tenSanPham: Map<string, string>):
 }
 
 /**
- * Câu KHÁCH cần trả lời + lịch sử, cho chatbot soạn NHÁP (24/10/2026). ds: cũ → mới.
- * Câu hỏi = các tin khách sau lần cuối NGƯỜI của gian trả lời — tin tự động (auto_reply) và tin Shopee gửi thay gian
- * (source server: voucher, combo…) không tính là đã trả lời. Không có ⇒ null (khách chưa hỏi gì mới).
+ * Câu KHÁCH cần trả lời + lịch sử, cho chatbot soạn nháp / tự trả lời (24/10/2026). ds: cũ → mới.
+ * Câu hỏi = các tin khách sau lần cuối gian ĐÃ TRẢ LỜI — tin Shopee tự sinh thay gian (source server: lời chào tự động,
+ * voucher, combo…) không tính là đã trả lời; tin chatbot của mình gửi (daGuiIds, hoặc auto_reply qua openapi) thì tính.
+ * Không có ⇒ null (khách chưa hỏi gì mới). nguoiMuaId = người gửi tin khách cuối (to_id khi trả lời).
  * Lịch sử: ≤ 12 lượt, gộp tin liền nhau cùng bên, lượt đầu là khách (Gemini đòi user / model xen kẽ).
  */
-export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, tenSanPham: Map<string, string>):
-    { cauHoi: string; lichSu: LuotHoiThoai[]; tinCuoiId: string } | null {
-    const nguoiTraLoi = (m: TinShopeeGoiY) => laTinCuaGian(m, shopId) && !laTinTuDong(m) && m.source !== 'server'
+export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, tenSanPham: Map<string, string>, daGuiIds: Set<string> = new Set()):
+    { cauHoi: string; lichSu: LuotHoiThoai[]; tinCuoiId: string; nguoiMuaId: string } | null {
+    const nguoiTraLoi = (m: TinShopeeGoiY) => laTinCuaGian(m, shopId) && (m.source !== 'server' || daGuiIds.has(m.messageId))
     const hoi: TinShopeeGoiY[] = []
     let i = ds.length - 1
     for (; i >= 0; i--) {
@@ -98,7 +101,8 @@ export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, t
     }
     let gon = lichSu.slice(-12)
     while (gon.length && gon[0]!.role !== 'user') gon = gon.slice(1)
-    return { cauHoi, lichSu: gon, tinCuoiId: hoi[hoi.length - 1]!.messageId }
+    const cuoi = hoi[hoi.length - 1]!
+    return { cauHoi, lichSu: gon, tinCuoiId: cuoi.messageId, nguoiMuaId: String(cuoi.fromId ?? '') }
 }
 
 export class ShopeeService extends PlatformService {
@@ -1779,7 +1783,8 @@ export class ShopeeService extends PlatformService {
         }
 
         const data = await this.httpPost(url, body)
-        console.log('[Shopee Chat] send_message response:', JSON.stringify(data).substring(0, 300))
+        // Không log thân phản hồi — có nguyên chữ tin vừa gửi (cam kết không lưu nội dung chat)
+        console.log(`[Shopee Chat] send_message: ${data.error ? `lỗi ${data.error}` : `ok ${data.response?.message_id || ''}`}`)
 
         if (data.error) throw new Error(`Shopee sendMessage: ${data.error} - ${data.message}`)
 
@@ -1787,6 +1792,19 @@ export class ShopeeService extends PlatformService {
             messageId: String(data.response?.message_id || ''),
             conversationId: String(data.response?.conversation_id || ''),
         }
+    }
+
+    /**
+     * Gửi tin TỰ ĐỘNG (24/10/2026) — POST /api/v2/sellerchat/send_autoreply_message. Shopee đánh dấu là tin tự động
+     * (status auto_reply), chỉ nhận chữ, ≤ 600 ký tự, chung hạn mức ngày với send_message. Lỗi ném kèm MÃ Shopee
+     * (unexpected_bot_msg, block_by_internal_safety_strategies, reach_5_message_limit…) để bên gọi phân loại.
+     */
+    async sendAutoReplyMessage(toId: number, text: string): Promise<{ messageId: string }> {
+        const url = this.apiUrl('/api/v2/sellerchat/send_autoreply_message')
+        const data = await this.httpPost(url, { to_id: toId, content: { text } })
+        console.log(`[Shopee Chat] send_autoreply_message: ${data.error ? `lỗi ${data.error}` : `ok ${data.response?.message_id || ''}`}`)
+        if (data.error) throw new Error(`Shopee sendAutoReply: ${data.error} - ${data.message}`)
+        return { messageId: String(data.response?.message_id || '') }
     }
 
     /**

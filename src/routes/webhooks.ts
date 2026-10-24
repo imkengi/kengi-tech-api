@@ -10,6 +10,8 @@ import { moTaLoi } from '../lib/gomLoi'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { ghiTinHieuChat } from '../lib/tinHieuChat'
+import { tuTraLoiShopee, phuThuocTuTraLoiThat } from '../lib/tuTraLoiShopee'
+import { soanGoiYChoSan } from './chatbot'
 import { processComment } from '../services/fanpageAutoReply'
 import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
 import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
@@ -339,6 +341,11 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
             messageType: content.message_type || 'text',
             text: content.content?.text || '',
         }).catch(() => { })
+        /* Tự trả lời bằng chatbot (24/10/2026, lib/tuTraLoiShopee.ts) — công tắc từng gian, MẶC ĐỊNH TẮT. Chạy NỀN (đợi
+         * gom tin + một lượt AI 5–20 giây), không giữ push trong hộp thư; tuTraLoiShopee không bao giờ ném. */
+        const sch = resolvedSchema || ''
+        void tuTraLoiShopee(channel, content, phuThuocTuTraLoiThat(storePrisma, (cauHoi, lichSu, tenKenh) =>
+            soanGoiYChoSan(storePrisma, sch, '', { name: tenKenh, platform: 'shopee' }, cauHoi, lichSu)))
         console.log(`[Shopee Webhook] 💬 New chat message → published for channel ${channel.name}`)
         return xongPush('tin nhắn chat')
     }
