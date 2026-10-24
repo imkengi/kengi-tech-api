@@ -377,6 +377,7 @@ router.post('/backfill-channels', chatAuth, async (req: AuthRequest, res: Respon
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ShopeeService } from '../services/platforms'
+import { laTinCuaGian, laTinTuDong } from '../services/platforms/shopee'
 
 // Helper: load channel credentials and create ShopeeService
 async function getShopeeServiceForChannel(prisma: any, channelId: string): Promise<{ shopee: ShopeeService; channel: any }> {
@@ -576,22 +577,26 @@ router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest
             })
         )
 
-        // Map to our ChatMessage-like format
-        const shopId = parseInt(channel.shopId || '0')
-        const messages = result.messages.map((m: any) => ({
-            id: m.messageId,
-            conversationId,
-            senderName: m.fromId === shopId ? (channel.name || 'Shop') : m.fromName,
-            senderType: m.fromId === shopId ? 'staff' : 'customer',
-            content: m.content,
-            contentType: m.messageType === 'image' ? 'image' : 'text',
-            imageUrl: m.imageUrl || null,
-            isRead: true,
-            createdAt: safeTimestampToISO(m.createdTimestamp) || new Date().toISOString(),
-            // Shopee-specific
-            shopeeMessageType: m.messageType,
-            shopeeSourceContent: m.sourceContent,
-        }))
+        // Map to our ChatMessage-like format — bên gửi theo from_shop_id (laTinCuaGian), KHÔNG theo from_id
+        const messages = result.messages.map((m: any) => {
+            const cuaGian = laTinCuaGian(m, channel.shopId)
+            return {
+                id: m.messageId,
+                conversationId,
+                senderName: cuaGian ? (channel.name || 'Shop') : m.fromName,
+                senderType: cuaGian ? 'staff' : 'customer',
+                content: m.content,
+                contentType: m.messageType === 'image' ? 'image' : 'text',
+                imageUrl: m.imageUrl || null,
+                isRead: true,
+                createdAt: safeTimestampToISO(m.createdTimestamp) || new Date().toISOString(),
+                // Tin tự động trả lời của gian — web ghi "Tự động" để khỏi tưởng nhân viên gõ
+                tuDong: cuaGian && laTinTuDong(m),
+                // Shopee-specific
+                shopeeMessageType: m.messageType,
+                shopeeSourceContent: m.sourceContent,
+            }
+        })
 
         // Reverse to chronological order (oldest first, newest last) for chat display
         messages.reverse()

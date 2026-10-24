@@ -9,10 +9,12 @@
  *   A. getConversationList — mọi trang 'older'; trang đầu KHÔNG mốc; trang sau mốc = cursor; mặc định 1 trang;
  *      trả hasMore/nextOffset thật (không còn "đã lấy hết" giả); bắt đầu từ cursor được.
  *   B. lib/tinHieuChat.ts — ghi tín hiệu (không nội dung), tạo bảng lười một lần, thiếu bảng ⇒ rỗng.
+ *   C. Bên gửi (24/10/2026: mọi tin hiện bên khách vì so from_id — mã TÀI KHOẢN — với shopId): tin của gian theo
+ *      from_shop_id; tin tự động trả lời gắn cờ; get_message KHÔNG ghi nội dung tin ra log.
  */
 process.env.SHOPEE_FORWARD_PROXY = ''   // không bao giờ ra mạng: httpGet bị thay bằng bản giả
 
-import { ShopeeService } from '../src/services/platforms/shopee'
+import { ShopeeService, laTinCuaGian, laTinTuDong } from '../src/services/platforms/shopee'
 import { ghiTinHieuChat, docTinHieuChat } from '../src/lib/tinHieuChat'
 
 let dat = 0, hong = 0
@@ -90,6 +92,29 @@ async function main() {
     let nem = false
     try { await docTinHieuChat(hong2) } catch { nem = true }
     ok('17. lỗi khác (mất kết nối) ⇒ NÉM, không nuốt thành "không có gì mới"', nem)
+
+    console.log('— C. Bên gửi tin —')
+    // Số liệu dựng theo hình dạng THẬT đo 24/10: from_id là mã tài khoản (khác hẳn shopId), from_shop_id mới là mã gian
+    const tin = (fromId: number, fromShopId: number, toShopId: number, status: string, source: string, text: string) =>
+        ({ message_id: `m${fromId}${text.length}`, message_type: 'text', from_id: fromId, from_shop_id: fromShopId, to_id: 1, to_shop_id: toShopId, status, source, created_timestamp: 1761270000, content: { text } })
+    const s6 = new ShopeeGia([{ error: '', response: { messages: [
+        tin(555000111, 0, 42, 'user_chat', 'ios', 'NOI-DUNG-KHACH-BI-MAT'),
+        tin(900000222, 42, 0, 'auto_reply', 'server', 'Xin chao tu dong'),
+        tin(900000222, 42, 0, 'normal', 'openapi', 'Bao hanh 12 thang'),
+        tin(777000333, 99, 42, 'user_chat', 'android', 'khach co gian rieng'),
+    ], page_result: { has_more: false } } }])
+    const daLog: string[] = []
+    const logGoc = console.log
+    console.log = (...a: any[]) => { daLog.push(a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')) }
+    let k6: Awaited<ReturnType<ShopeeService['getMessages']>>
+    try { k6 = await s6.getMessages('c1') } finally { console.log = logGoc }
+    const ben = k6.messages.map(m => laTinCuaGian(m, '42') ? 'gian' : 'khach')
+    ok('18. bên gửi theo from_shop_id: khách · gian (tự động) · gian (gửi từ Kengi) · khách có gian riêng', ben.join() === 'khach,gian,gian,khach', ben)
+    ok('19. KHÔNG còn so from_id với shopId (from_id là mã tài khoản — không bao giờ bằng mã gian)', k6.messages.every(m => String(m.fromId) !== '42') && ben.includes('gian'))
+    ok('20. shopId số hay chuỗi đều khớp; shopId rỗng/0 ⇒ không tin nào thành của gian', laTinCuaGian({ fromShopId: 42 }, 42) && laTinCuaGian({ fromShopId: '42' }, '42') && !laTinCuaGian({ fromShopId: 0 }, '0') && !laTinCuaGian({ fromShopId: 0 }, '') && !laTinCuaGian({}, undefined))
+    ok('21. tin tự động: auto_reply + offwork_autoreply; normal / user_chat thì không', laTinTuDong({ status: 'auto_reply' }) && laTinTuDong({ status: 'offwork_autoreply' }) && !laTinTuDong({ status: 'normal' }) && !laTinTuDong({ status: 'user_chat' }) && !laTinTuDong({}))
+    ok('22. getMessages mang status/source/toShopId cho route dùng', k6.messages[1]!.status === 'auto_reply' && k6.messages[2]!.source === 'openapi' && k6.messages[0]!.toShopId === 42, k6.messages.map(m => [m.status, m.source, m.toShopId]))
+    ok('23. get_message KHÔNG ghi nội dung tin của người mua ra log (cam kết với Shopee)', !daLog.some(l => l.includes('NOI-DUNG-KHACH-BI-MAT')), daLog)
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

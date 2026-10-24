@@ -18,6 +18,23 @@ const INSTANT_CACHE_OK_MS = 6 * 3600 * 1000
 const INSTANT_CACHE_ERR_MS = 30 * 60 * 1000
 const instantChannelCache = new Map<string, { ids: Set<number>; at: number; ttl: number }>()
 
+/**
+ * Tin chat do GIAN gửi (nhân viên, tự động trả lời, voucher/combo Shopee gửi thay gian…) hay do KHÁCH gửi.
+ * get_message: `from_id` là mã TÀI KHOẢN người gửi, `from_shop_id` mới là mã GIAN người gửi. Bản cũ so from_id
+ * với shopId ⇒ không bao giờ khớp, mọi tin hiện bên khách (24/10/2026). Khách tự có gian riêng thì from_shop_id
+ * là gian CỦA HỌ ⇒ vẫn khác gian mình — đúng là tin khách.
+ */
+export function laTinCuaGian(m: { fromShopId?: number | string | null }, shopId: number | string | null | undefined): boolean {
+    const gian = String(shopId ?? '').trim()
+    if (!gian || gian === '0') return false
+    return String(m.fromShopId ?? '') === gian
+}
+
+/** Tin tự động trả lời của gian (status auto_reply / offwork_autoreply) — không phải người gõ. */
+export function laTinTuDong(m: { status?: string | null }): boolean {
+    return /auto_?reply/i.test(String(m.status || ''))
+}
+
 export class ShopeeService extends PlatformService {
     get platformName() { return 'shopee' }
 
@@ -1601,8 +1618,15 @@ export class ShopeeService extends PlatformService {
             imageUrl?: string
             fromId: number
             fromName: string
+            /** Mã GIAN của người gửi — tin của khách thì khác mã gian mình (xem laTinCuaGian) */
+            fromShopId: number
             toId: number
             toName: string
+            toShopId: number
+            /** normal | auto_reply | offwork_autoreply | user_chat | … (tài liệu get_message) */
+            status: string
+            /** ios | android | mini_webchat | openapi (gửi từ Kengi) | server | … */
+            source: string
             createdTimestamp: number
             sourceContent?: any
         }>
@@ -1615,9 +1639,8 @@ export class ShopeeService extends PlatformService {
             `&page_size=${params.pageSize || 25}`
         if (params.offset) url += `&offset=${params.offset}`
 
+        // KHÔNG log thân phản hồi: chứa nguyên nội dung tin nhắn của người mua (cam kết với Shopee không lưu nội dung chat)
         const data = await this.httpGet(url)
-        console.log('[Shopee Chat] get_message FULL response:', JSON.stringify(data).substring(0, 2000))
-        if (data.response) console.log('[Shopee Chat] message response.keys:', JSON.stringify(Object.keys(data.response || {})))
 
         if (data.error && data.error !== '') throw new Error(`Shopee getMessages: ${data.error} - ${data.message}`)
 
@@ -1651,8 +1674,12 @@ export class ShopeeService extends PlatformService {
                     imageUrl,
                     fromId: m.from_id || 0,
                     fromName: m.from_user_name || '',
+                    fromShopId: Number(m.from_shop_id) || 0,
                     toId: m.to_id || 0,
                     toName: m.to_user_name || '',
+                    toShopId: Number(m.to_shop_id) || 0,
+                    status: String(m.status || ''),
+                    source: String(m.source || ''),
                     createdTimestamp: m.created_timestamp || 0,
                     sourceContent: m.content,
                 }
