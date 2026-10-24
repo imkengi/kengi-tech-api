@@ -31,7 +31,7 @@ import {
 import { duongVao, laKhoaWebhook, kiemUrlDauRa, guiDauRa, kemTheo, taoGoiDauRa, KetQuaDauRa } from '../lib/chatbotWebhook'
 import { getStorePrisma, registryPrisma } from '../lib/prisma'
 import { layKeyAi } from '../lib/keyAi'
-import { chayAgent, LoiGeminiTamThoi } from '../services/aiAgentRunner'
+import { chayAgent, LoiGeminiTamThoi, LoiGeminiHetTien } from '../services/aiAgentRunner'
 import { Tool, ToolError } from '../lib/mcpTypes'
 
 const router = Router()
@@ -181,13 +181,13 @@ async function kenhCuaShop(prisma: any, shop: DongShopChatbot): Promise<string> 
 }
 
 /** Lỗi AI ⇒ câu người dùng làm theo được. 24/10/2026: key Gemini KENGISTORE hết tín dụng trả trước (HTTP 402) — câu thô
- *  tiếng Anh bị cắt giữa chừng, chủ shop không biết phải nạp tiền. */
+ *  tiếng Anh bị cắt giữa chừng, chủ shop không biết phải nạp tiền. Bộ chạy đã xếp 402 vào LoiGeminiHetTien — lớp CON của
+ *  LoiGeminiTamThoi nên phải xét trước, kẻo thành "thử lại sau". Không dò "402" trong chữ nữa: lỗi thường còn mang 402 chỉ là
+ *  DeepSeek hết tiền, câu của nó đã nói đúng nhà cung cấp — dò chữ là báo nhầm thành Gemini. */
 export function loiAiChoNguoiDung(e: any): string {
+    if (e instanceof LoiGeminiHetTien) return LoiGeminiHetTien.CAU
     if (e instanceof LoiGeminiTamThoi) return 'AI đang quá tải / hết hạn mức — thử lại sau ít phút'
     const s = String(e?.message || e)
-    if (/\b402\b|prepayment|credits are depleted|billing/i.test(s)) {
-        return 'Key Gemini của cửa hàng đã HẾT TIỀN (Google báo hết tín dụng trả trước) — nạp thêm ở AI Studio, hoặc nhập key khác / key DeepSeek ở Cài đặt › Trợ lý AI'
-    }
     if (/\b(401|403)\b|API key not valid|PERMISSION_DENIED/i.test(s)) return 'Key AI của cửa hàng sai hoặc đã bị khoá — kiểm tra ở Cài đặt › Trợ lý AI'
     return `AI lỗi: ${s.slice(0, 200)}`
 }
@@ -241,7 +241,7 @@ async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: Don
     if (khoaPhien) ghiPhien(khoaPhien, tin.cauHoi, traLoi)
     return {
         ...nen, traLoi, canNhanVien, sanPham, congCu: kq.toolCalls.map(t => ({ ten: t.name, ok: t.ok })),
-        ...(kq.doiSangDeepSeek ? { ghiChu: 'Trả lời bằng DeepSeek (Gemini quá tải / hết hạn mức)' } : {}),
+        ...(kq.doiSangDeepSeek ? { ghiChu: kq.geminiHetTien ? 'Trả lời bằng DeepSeek (key Gemini HẾT TIỀN — nạp ở AI Studio hoặc đổi key)' : 'Trả lời bằng DeepSeek (Gemini quá tải / hết hạn mức)' } : {}),
     }
 }
 

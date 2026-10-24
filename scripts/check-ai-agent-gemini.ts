@@ -10,6 +10,9 @@
 process.env.DATABASE_URL = 'postgresql://khong:khong@127.0.0.1:1/khong-bao-gio'
 process.env.DIRECT_URL = process.env.DATABASE_URL
 delete process.env.GEMINI_MODEL
+// key chung ở env (layKeyAi lùi về đây) mà có thì ca "không có DeepSeek" sẽ chuyển DeepSeek — để rỗng, dotenv không ghi đè
+process.env.GEMINI_API_KEY = ''
+process.env.DEEPSEEK_API_KEY = ''
 
 const daGoi: { model: string; body: any }[] = []
 let kichBan: (model: string, lan: number) => { status: number; body?: any; headers?: any } = () => ({ status: 200 })
@@ -170,6 +173,48 @@ async function main() {
     try { await chay('K11', { deepseekKey: 'sk-thu-DSK' }) } catch (e) { loi = e }
     kiem('DeepSeek hết tiền (402) ⇒ báo rõ, không thử lại vô ích', /hết tiền/.test(loi?.message || '') && goiDS.length === 1, { m: loi?.message, n: goiDS.length })
 
+    console.log('━━ Key Gemini HẾT TIỀN (402 — KENGISTORE 24/10): báo ngay bằng tiếng Việt; có DeepSeek thì chạy tiếp bằng DeepSeek')
+    const { LoiGeminiHetTien } = await import('../src/services/aiAgentRunner')
+    /* lượt hỏng ⇒ ca đó trượt kèm câu lỗi, các ca sau vẫn chạy (không sập cả bộ) */
+    const thuChay = (apiKey: string, extra: any = {}) => chay(apiKey, extra).catch((e: any) => ({ loi: e?.message || String(e) }) as any)
+    // Câu Google trả THẬT ngày 24/10 (key KENGISTORE)
+    const het402 = { status: 402, body: { error: { code: 402, message: 'Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.' } } }
+    daGoi.length = 0; goiDS.length = 0
+    kichBan = () => het402
+    loi = null
+    try { await chay('K12') } catch (e) { loi = e }
+    kiem('402 ⇒ LoiGeminiHetTien, vẫn là LoiGeminiTamThoi (để chayAgent chuyển được DeepSeek)', loi instanceof LoiGeminiHetTien && loi instanceof LoiGeminiTamThoi && loi.tamThoi === true, loi?.message)
+    kiem('402 ⇒ đúng 1 lần gọi: không thử lại, không đổi model (thanh toán tính theo project)', daGoi.length === 1, daGoi.map(g => g.model))
+    kiem('câu báo: HẾT TIỀN, nạp ở AI Studio, đổi key ở Cài đặt › Trợ lý AI, key DeepSeek ở mục AI & MCP — KHÔNG "thử lại sau"',
+        /HẾT TIỀN/.test(loi?.message) && /AI Studio/.test(loi?.message) && /Cài đặt › Trợ lý AI/.test(loi?.message) && /DeepSeek dự phòng ở mục AI & MCP/.test(loi?.message) && !/thử lại sau/.test(loi?.message), loi?.message)
+    kiem('câu cho người dùng (LoiGeminiHetTien.CAU) không lẫn chữ Anh của Google; câu đầy đủ giữ chi tiết để soi', /HẾT TIỀN/.test(LoiGeminiHetTien.CAU) && !/prepayment|billing/i.test(LoiGeminiHetTien.CAU) && /HTTP 402 — Your prepayment credits/.test(loi?.message))
+    daGoi.length = 0
+    kichBan = () => traLoi('đã nạp tiền')
+    r = await thuChay('K12')
+    kiem('hết tiền KHÔNG bị nhớ như 404: nạp xong, lượt sau gọi lại 3.8 ngay', daGoi[0]?.model === 'gemini-3.8-flash' && r.reply === 'đã nạp tiền', { goi: daGoi.map(g => g.model), loi: r.loi })
+    // kiểu câu Google Cloud khi project chưa bật / bị tắt thanh toán (mã 403, không phải 402)
+    daGoi.length = 0
+    kichBan = () => ({ status: 403, body: { error: { code: 403, message: 'This API method requires billing to be enabled. Please enable billing on project #1 then retry.', status: 'PERMISSION_DENIED' } } })
+    loi = null
+    try { await chay('K13') } catch (e) { loi = e }
+    kiem('mã khác 402 mà câu báo thanh toán ("requires billing to be enabled") ⇒ cũng LoiGeminiHetTien, 1 lần gọi', loi instanceof LoiGeminiHetTien && daGoi.length === 1, { m: loi?.message, n: daGoi.length })
+    daGoi.length = 0
+    kichBan = (m) => (m === 'gemini-3.8-flash' ? { status: 429, body: { error: { code: 429, message: 'You exceeded your current quota, please check your plan and billing details.', status: 'RESOURCE_EXHAUSTED' } } } : traLoi('ok bằng 3.7'))
+    r = await thuChay('K14')
+    kiem('429 thường ngày ("…check your plan and billing details") KHÔNG bị coi là hết tiền: vẫn sang model kế', daGoi.map(g => g.model).join() === 'gemini-3.8-flash,gemini-3.7-flash' && r.reply === 'ok bằng 3.7', { goi: daGoi.map(g => g.model), loi: r.loi })
+    daGoi.length = 0; goiDS.length = 0
+    kichBan = () => het402
+    kichBanDS = () => dsTraLoi('xong bằng DeepSeek khi Gemini hết tiền')
+    r = await thuChay('K15', { deepseekKey: 'sk-thu-DSK' })
+    kiem('có key DeepSeek ⇒ lượt KHÔNG hỏng: chạy tiếp bằng DeepSeek', r.reply === 'xong bằng DeepSeek khi Gemini hết tiền' && goiDS.length === 1, { r, ds: goiDS.length })
+    kiem('…Gemini chỉ bị gọi 1 lần trước khi chuyển (không thử đủ các model)', daGoi.length === 1, daGoi.map(g => g.model))
+    kiem('…kết quả ghi lý do HẾT TIỀN + cờ geminiHetTien', /HẾT TIỀN/.test(r.doiSangDeepSeek || '') && r.geminiHetTien === true, { d: r.doiSangDeepSeek, h: r.geminiHetTien })
+    daGoi.length = 0; goiDS.length = 0
+    kichBan = (m) => (m === 'gemini-2.5-flash' ? { status: 404, body: {} } : { status: 429, body: q429(NGAY) })
+    kichBanDS = () => dsTraLoi('ok')
+    r = await thuChay('K16', { deepseekKey: 'sk-thu-DSK' })
+    kiem('chuyển DeepSeek vì hết hạn mức (không phải hết tiền) ⇒ KHÔNG gắn cờ geminiHetTien', !!r.doiSangDeepSeek && !r.geminiHetTien, { d: r.doiSangDeepSeek, h: r.geminiHetTien })
+
     // ─── Cron: hẹn chạy lại khi lỗi tạm thời ─────────────────────────────────
     console.log('━━ Cron: lỗi tạm thời → hẹn lại 15 phút; đã ghi thì KHÔNG chạy lại')
     const runs: any[] = []
@@ -217,6 +262,23 @@ async function main() {
     kichBanDS = () => dsTraLoi('Đã soạn 3 bài')
     await chayMotJob(sp, job, 'THU', 'cron')
     kiem('cron: cửa hàng có key DeepSeek ⇒ lượt chạy XONG (ok), tóm tắt ghi "chạy bằng DeepSeek"', runs.at(-1).status === 'ok' && /Chạy bằng DeepSeek dự phòng/.test(runs.at(-1).summary || '') && goiDS[0]?.headers?.Authorization === 'Bearer sk-thu-cron', runs.at(-1))
+
+    console.log('━━ Cron: key Gemini HẾT TIỀN ⇒ không hẹn "tạm thời" 15 phút (chờ không tự khỏi); có DeepSeek thì lượt vẫn xong')
+    const { tinhLanChayKe } = await import('../src/services/aiAgentSchedule')
+    runs.length = 0
+    daGoi.length = 0; goiDS.length = 0
+    sp.storeSettings.findFirst = async () => ({ geminiApiKey: 'KCRON3' })
+    kichBan = () => het402
+    await chayMotJob(sp, job, 'THU', 'cron')
+    const lichThuong = tinhLanChayKe(job as any, new Date())
+    kiem('hết tiền, không có DeepSeek ⇒ lỗi bảo NẠP TIỀN, không có "Tạm thời — tự thử lại"', runs.at(-1).status === 'error' && /HẾT TIỀN/.test(runs.at(-1).errorMessage) && !/^Tạm thời/.test(runs.at(-1).errorMessage), runs.at(-1).errorMessage)
+    kiem('…lượt kế theo lịch thường, không hẹn lại sau 15 phút', Math.abs(jobGhi.nextRunAt.getTime() - lichThuong.getTime()) < 5_000, { hen: jobGhi.nextRunAt, lich: lichThuong })
+    runs.length = 0
+    daGoi.length = 0; goiDS.length = 0
+    sp.storeSettings.findFirst = async () => ({ geminiApiKey: 'KCRON3', deepseekApiKey: 'sk-thu-cron' })
+    kichBanDS = () => dsTraLoi('Đã soạn 2 bài')
+    await chayMotJob(sp, job, 'THU', 'cron')
+    kiem('hết tiền + có DeepSeek ⇒ lượt XONG, tóm tắt ghi chạy bằng DeepSeek vì key Gemini HẾT TIỀN', runs.at(-1).status === 'ok' && /Chạy bằng DeepSeek dự phòng — Key Gemini của cửa hàng đã HẾT TIỀN/.test(runs.at(-1).summary || ''), runs.at(-1))
 
     console.log('━━ Nhịp Cloud Scheduler: giành job nguyên tử, khoá nhịp')
     const { gianhJob } = await import('../src/cron/aiAgentCron')

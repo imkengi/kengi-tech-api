@@ -19,7 +19,7 @@ process.env.SHOPEE_FORWARD_PROXY = ''   // không bao giờ ra mạng: httpGet b
 
 import { ShopeeService, laTinCuaGian, laTinTuDong, tachCauHoiShopee, chuTinShopee, TinShopeeGoiY } from '../src/services/platforms/shopee'
 import { chonShopChoKenh, LUAT_NHAP_SAN, loiAiChoNguoiDung } from '../src/routes/chatbot'
-import { LoiGeminiTamThoi } from '../src/services/aiAgentRunner'
+import { LoiGeminiTamThoi, LoiGeminiHetTien } from '../src/services/aiAgentRunner'
 import { ghiTinHieuChat, docTinHieuChat } from '../src/lib/tinHieuChat'
 
 let dat = 0, hong = 0
@@ -152,10 +152,14 @@ async function main() {
     ok('34. nhiều shop chatbot mà không shop nào khớp ⇒ null (kho rỗng, không lấy nhầm kho gian khác)', chonShopChoKenh(shops, { name: 'Kengi Electric', platform: 'shopee' }) === null)
     ok('35. cửa hàng chỉ có MỘT shop chatbot ⇒ dùng nó cho mọi gian', chonShopChoKenh([shops[2]!], { name: 'Kengi Electric', platform: 'shopee' })?.id === 'c' && chonShopChoKenh([], { name: 'X', platform: 'shopee' }) === null)
     ok('36. luật nháp Shopee: chỉ NHÁP cho người duyệt, cấm SĐT / Zalo / link ngoài / sàn khác', /NHÁP/.test(LUAT_NHAP_SAN.shopee!) && /số điện thoại/.test(LUAT_NHAP_SAN.shopee!) && /Zalo/.test(LUAT_NHAP_SAN.shopee!) && /sàn khác/.test(LUAT_NHAP_SAN.shopee!))
-    // Câu Google trả THẬT ngày 24/10 (key KENGISTORE): HTTP 402 hết tín dụng trả trước
-    const loi402 = loiAiChoNguoiDung(new Error('Gemini lỗi HTTP 402 (gemini-3.8-flash): Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.'))
-    ok('37. key Gemini hết tiền (402) ⇒ câu tiếng Việt bảo NẠP TIỀN / đổi key, không phải câu Anh bị cắt', /HẾT TIỀN/.test(loi402) && /Cài đặt › Trợ lý AI/.test(loi402) && !/prepayment/.test(loi402), loi402)
+    // Câu Google trả THẬT ngày 24/10 (key KENGISTORE): HTTP 402 hết tín dụng trả trước — bộ chạy AI xếp vào LoiGeminiHetTien
+    // (fetch 402 ⇒ LoiGeminiHetTien: check-ai-agent-gemini)
+    const loi402 = loiAiChoNguoiDung(new LoiGeminiHetTien('gemini-3.8-flash: HTTP 402 — Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.'))
+    ok('37. key Gemini hết tiền (402) ⇒ câu tiếng Việt bảo NẠP TIỀN / đổi key — không "thử lại sau" (lớp con của lỗi tạm thời), không câu Anh', /HẾT TIỀN/.test(loi402) && /Cài đặt › Trợ lý AI/.test(loi402) && !/thử lại sau/.test(loi402) && !/prepayment/.test(loi402), loi402)
     ok('38. quá tải tạm thời ⇒ "thử lại sau"; key sai ⇒ kiểm tra key; lỗi lạ ⇒ giữ nguyên (cắt 200)', /thử lại sau/.test(loiAiChoNguoiDung(new LoiGeminiTamThoi('429 RESOURCE_EXHAUSTED'))) && /sai hoặc đã bị khoá/.test(loiAiChoNguoiDung(new Error('HTTP 400: API key not valid'))) && loiAiChoNguoiDung(new Error('x'.repeat(300))).length === 'AI lỗi: '.length + 200)
+    // lỗi thường còn mang "402" giờ chỉ là DeepSeek (Gemini 402 đã thành LoiGeminiHetTien ở bộ chạy)
+    const loiDS = loiAiChoNguoiDung(new Error('Tài khoản DeepSeek hết tiền (402) — nạp thêm ở platform.deepseek.com: Insufficient Balance'))
+    ok('39. DeepSeek hết tiền (402) ⇒ nói đúng DeepSeek, không báo nhầm thành key Gemini', /DeepSeek hết tiền/.test(loiDS) && !/Gemini/.test(loiDS), loiDS)
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

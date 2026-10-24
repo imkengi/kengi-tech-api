@@ -35,6 +35,20 @@ export class LoiGeminiTamThoi extends Error {
     readonly tamThoi = true
 }
 
+/** Key Gemini HẾT TIỀN — HTTP 402 hết tín dụng trả trước (key KENGISTORE 24/10/2026). Kế thừa LoiGeminiTamThoi để chayAgent
+ *  chuyển sang DeepSeek y như hết hạn mức ("hết hạn mức thì đổi qua DeepSeek"), nhưng KHÔNG tự khỏi: chờ / thử lại vô ích,
+ *  phải nạp tiền hoặc đổi key ⇒ cron không hẹn chạy lại, chỗ hiện lỗi phải xét lớp này TRƯỚC LoiGeminiTamThoi. */
+export class LoiGeminiHetTien extends LoiGeminiTamThoi {
+    /** Câu cho người dùng, không kèm chi tiết kỹ thuật. Key DeepSeek chỉ nhập được ở Marketing Studio (tab Trợ lý AI của
+     *  trang Cài đặt chỉ có ô Gemini). */
+    static readonly CAU = 'Key Gemini của cửa hàng đã HẾT TIỀN (Google báo hết tín dụng trả trước) — nạp thêm ở AI Studio (ai.studio/projects), đổi key Gemini khác ở Cài đặt › Trợ lý AI, hoặc thêm key DeepSeek dự phòng ở mục AI & MCP (Marketing Studio)'
+    constructor(chiTiet: string) { super(`${LoiGeminiHetTien.CAU}. (${chiTiet})`) }
+}
+/* Google báo hết tiền / chưa bật thanh toán. Thường là HTTP 402 ("Your prepayment credits are depleted…"); dò thêm chữ cho
+ * trường hợp mang mã khác (403 "requires billing to be enabled"…). KHÔNG dò chữ "billing" trần: câu 429 thường ngày của
+ * Google ("…please check your plan and billing details") là hết hạn mức — chờ được, không phải hết tiền. */
+const HET_TIEN = /prepayment|credits? (?:are |is |have been )?(?:depleted|exhausted)|(?:enable|requires?) billing|billing account[^.]{0,60}\b(?:disabled|closed|suspended)/i
+
 /**
  * Tool ĐẨY RA NGOÀI cho người lạ thấy hoặc động vào tiền/kho.
  * Job tự động muốn dùng phải khai TÊN CỤ THỂ trong allowedTools — bật allowWrite
@@ -71,6 +85,8 @@ export type KetQuaChay = {
     chamTran: boolean
     /** Lượt này (từ một bước nào đó) chạy bằng DeepSeek vì Gemini hết hạn mức / quá tải — lý do kèm theo. */
     doiSangDeepSeek?: string
+    /** …và lý do là key Gemini HẾT TIỀN (LoiGeminiHetTien) — không tự khỏi như quá tải, phải báo nạp tiền / đổi key. */
+    geminiHetTien?: boolean
 }
 
 export type ThamSoChay = {
@@ -159,6 +175,9 @@ async function callGemini(contents: any[], apiKey: string, systemPrompt: string,
                 return data
             }
             const loi = data?.error?.message || text.slice(0, 200)
+            /* Hết tiền: thanh toán tính theo PROJECT của key ⇒ đổi model hay thử lại đều vô ích — báo ngay. Không nhớ vào
+             * khongDungChoKey: nạp tiền xong là lượt sau chạy lại được ngay. */
+            if (res.status === 402 || HET_TIEN.test(loi)) throw new LoiGeminiHetTien(`${model}: HTTP ${res.status} — ${String(loi).slice(0, 200)}`)
             if (res.status === 404) {
                 bo.add(model); khongDungChoKey.set(apiKey, bo)
                 vet.push(`${model}: không dùng được với key này`)
@@ -246,6 +265,7 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
      * tới hết lượt: không quay lại Gemini giữa chừng (Gemini 3 cần "thought signature" của
      * chính nó ở các lượt gọi tool trước). */
     let doiSangDeepSeek: string | undefined = !p.apiKey && p.deepseekKey ? 'Chưa có key Gemini — chạy bằng DeepSeek.' : undefined
+    let geminiHetTien: boolean | undefined
 
     for (let step = 0; step < maxSteps; step++) {
         let data: any
@@ -260,6 +280,7 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
                      * lượt (bài đã lưu mà chưa duyệt). */
                     if (!(e instanceof LoiGeminiTamThoi) || !p.deepseekKey) throw e
                     doiSangDeepSeek = e.message.slice(0, 400)
+                    if (e instanceof LoiGeminiHetTien) geminiHetTien = true
                     console.warn(`[AiAgent] Gemini không dùng được ở bước ${step + 1} → chuyển sang DeepSeek: ${doiSangDeepSeek}`)
                     data = await goiDeepSeek(contents, p.deepseekKey, p.systemPrompt, dung)
                 }
@@ -277,7 +298,7 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
 
         if (!calls.length) {
             const reply = parts.filter(x => x.text).map(x => x.text).join('\n').trim()
-            return { reply: reply || '(không có nội dung trả lời)', toolCalls, steps: step + 1, chamTran: false, doiSangDeepSeek }
+            return { reply: reply || '(không có nội dung trả lời)', toolCalls, steps: step + 1, chamTran: false, doiSangDeepSeek, geminiHetTien }
         }
 
         p.onStep?.({ step: step + 1, calls: calls.map((c: any) => c.name) })
@@ -313,5 +334,6 @@ export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
         steps: maxSteps,
         chamTran: true,
         doiSangDeepSeek,
+        geminiHetTien,
     }
 }

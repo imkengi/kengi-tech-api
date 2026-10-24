@@ -12,7 +12,7 @@
 
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
-import { chayAgent } from '../services/aiAgentRunner'
+import { chayAgent, LoiGeminiHetTien } from '../services/aiAgentRunner'
 import { TOOLS } from '../routes/mcp'
 import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedule'
 import { ToolCtx } from '../lib/mcpTypes'
@@ -105,7 +105,9 @@ export async function chayMotJob(
         /* Lượt đã GHI dữ liệu (soạn/duyệt/lên lịch bài…) thì tuyệt đối không tự chạy lại:
          * chạy lại cả chỉ thị là soạn trùng bài. Để người đọc kết quả rồi quyết. */
         const daGhi = toolCalls.some(tc => tc.ok && TOOLS.find(t => t.name === tc.name)?.write)
-        if (e?.tamThoi && trigger === 'cron' && !daGhi) {
+        /* Key Gemini HẾT TIỀN (lớp con của lỗi tạm thời, để có DeepSeek thì chuyển): 15 phút sau vẫn hết — không hẹn lại,
+         * không ghi "Tạm thời"; câu lỗi đã bảo nạp tiền / đổi key, lượt kế theo lịch thường. */
+        if (e?.tamThoi && !(e instanceof LoiGeminiHetTien) && trigger === 'cron' && !daGhi) {
             const truoc: any[] = await storePrisma.aiAgentRun.findMany({
                 where: { jobId: job.id, id: { not: run.id } },
                 orderBy: { startedAt: 'desc' }, take: TOI_DA_THU_LAI,
