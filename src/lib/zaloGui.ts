@@ -203,6 +203,18 @@ export function dienMau(noiDung: string, v: { tenKhach?: string | null; maKhach?
     return s
 }
 
+/** Câu lỗi n8n trả về + GỢI Ý cách xử lý (25/10/2026 — chủ shop "sao gửi k được": webhook n8n chỉ trả
+ *  "Workflow execution failed", lý do thật "zpw_sek bị thiếu hoặc không đúng" = phiên đăng nhập Zalo của
+ *  node Zalo đã hết hạn — chỉ thấy khi mở n8n). */
+export function loiGuiN8n(thongBao: string): string {
+    const s = String(thongBao || '').slice(0, 200)
+    if (/zpw_sek|cookie|imei|đăng nhập|dang nhap|login|session|phiên/i.test(s))
+        return `n8n: ${s} — phiên đăng nhập Zalo trong n8n đã hết hạn: đăng nhập lại Zalo ở credential của node Zalo trong n8n rồi bấm "Gửi lại tin lỗi"`
+    if (/workflow execution failed|error in workflow|workflow could not be started|problem in node/i.test(s))
+        return `n8n: ${s} — mở n8n › Executions xem node nào lỗi (hay gặp nhất: phiên đăng nhập Zalo hết hạn, cần đăng nhập lại Zalo trong n8n)`
+    return `n8n: ${s}`
+}
+
 /** Gửi MỘT tin vào MỘT nhóm qua n8n (dùng cho cả gửi thử lẫn hàng đợi) */
 export async function guiMotNhom(url: string, tin: {
     dotId: string | null; groupId: string; noiDung: string; anh: string[]; tieuDe?: string | null
@@ -214,7 +226,7 @@ export async function guiMotNhom(url: string, tin: {
     }, 30_000)
     if (r.ok && !(r.data && (r.data.success === false || r.data.ok === false))) return { ok: true, loi: null }
     const thongBao = r.data?.error || r.data?.message || r.text || `HTTP ${r.status}`
-    return { ok: false, loi: `n8n: ${String(thongBao).slice(0, 300)}` }
+    return { ok: false, loi: loiGuiN8n(thongBao) }
 }
 
 const LAN_THU_TOI_DA = 3
