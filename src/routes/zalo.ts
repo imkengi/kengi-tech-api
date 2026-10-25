@@ -25,6 +25,9 @@
  *   POST /api/zalo/dang-nhap/qr           LUỒNG SSE: mã QR → đã quét → xong (chỉ quản lý, không nhận khoá API)
  *   POST /api/zalo/dang-nhap/kiem-tra     đăng nhập lại từ bản lưu — cứu được lần kết luận "hết hạn" nhầm
  *   POST /api/zalo/dang-xuat              quên phiên trong Kengi
+ *
+ * TUỲ CHỌN GỬI (25/10/2026, lib/zaloTuyChon.ts): /gui-thu + /dot-gui nhận `tuyChon` {mucDo, nhacCaNhom, tuXoa,
+ * henGio}; thẻ định dạng [đậm]… nằm ngay trong noiDung. POST /api/zalo/dot-gui/:id/gui-ngay = bỏ giờ hẹn.
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -43,6 +46,7 @@ import {
     docChiMucKhach, goiYKhach, kiemUrlN8n, goiN8n, docNhomTuN8n, luuNhomQuet, chonKenhGui, guiQuaKenh, CAU_CHUA_CO_KENH,
 } from '../lib/zaloGui'
 import { docTrangThai, dangNhapQR, kiemTraPhien, dangXuat, dsNhomZalo, LoiPhienZalo, laLoiZalo, type SuKienQR } from '../lib/zaloKengi'
+import { docTuyChon, luuTuyChonDot, docTuyChonCacDot, boHenGio } from '../lib/zaloTuyChon'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 import { dungBienDoanhSo, docCauHinhDoanhSo, tinhDoanhSo, bienDoanhSo, CauHinhDoanhSo } from '../lib/zaloDoanhSo'
 
@@ -655,6 +659,9 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
         const gid = chuoiGid(b.groupId)
         if (!/^\d{6,25}$/.test(gid)) { res.status(400).json({ success: false, error: 'Chọn nhóm để gửi thử' }); return }
         if (!String(b.noiDung || '').trim() && !docAnh(b.anh).length) { res.status(400).json({ success: false, error: 'Tin trống' }); return }
+        // Gửi thử dùng đủ tuỳ chọn (định dạng, mức độ, nhắc cả nhóm, tự xoá) — trừ hẹn giờ: thử là gửi NGAY
+        const tuyChon = docTuyChon(b.tuyChon, false)
+        if (typeof tuyChon === 'string') { res.status(400).json({ success: false, error: tuyChon }); return }
         const nhom = await sp.zaloNhom.findUnique({ where: { groupId: gid } })
         const k = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { code: true, name: true } }) : null
         let bien: Record<string, string> | null = null
@@ -667,7 +674,7 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
         }
         const kq = await guiQuaKenh(sp, kenh, {
             dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
-            maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: nhom?.tenNhom || null, bien,
+            maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: nhom?.tenNhom || null, bien, tuyChon,
         })
         if (!kq.ok) { res.status(502).json({ success: false, error: kq.loi, ...(kq.matPhien ? { hetHan: true } : {}) }); return }
         res.json({ success: true, data: { kenh: kenh.loai } })
@@ -728,6 +735,8 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         const noiDung = String(b.noiDung || '').trim()
         const anh = docAnh(b.anh)
         if (!noiDung && !anh.length) { res.status(400).json({ success: false, error: 'Tin trống — nhập nội dung hoặc thêm ảnh' }); return }
+        const tuyChon = docTuyChon(b.tuyChon)
+        if (typeof tuyChon === 'string') { res.status(400).json({ success: false, error: tuyChon }); return }
         const ids = [...new Set<string>((Array.isArray(b.groupIds) ? b.groupIds : []).map(chuoiGid).filter((g: string) => /^\d{6,25}$/.test(g)))]
         if (!ids.length) { res.status(400).json({ success: false, error: 'Chưa chọn nhóm nào' }); return }
         if (ids.length > 2000) { res.status(400).json({ success: false, error: 'Tối đa 2.000 nhóm một đợt' }); return }
@@ -767,6 +776,12 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
                 nguoiTao: req.user?.email || req.user?.userId || null, doanhSo: cfgDs ? JSON.stringify(cfgDs) : null,
             },
         })
+        // Tuỳ chọn + giờ hẹn ghi TRƯỚC khi có hàng chờ: ghi sau thì nhịp gửi có thể lọt vào giữa và gửi luôn
+        // tin hẹn 8 giờ sáng mai. Ghi hỏng ⇒ huỷ đợt (chưa có hàng chờ nào) rồi báo lỗi.
+        try { await luuTuyChonDot(sp, dot.id, tuyChon) } catch (e: any) {
+            await sp.zaloDotGui.updateMany({ where: { id: dot.id }, data: { trangThai: 'huy' } })
+            throw e
+        }
         await sp.zaloDotGuiNhom.createMany({
             data: guiToi.map(gid => ({
                 dotId: dot.id, groupId: gid, customerId: theoNhom.get(gid)?.customerId || null,
@@ -776,7 +791,7 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             skipDuplicates: true,
         })
         const phut = Math.ceil(guiToi.length / Math.max(1, ch?.guiMoiPhut || 4))
-        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, kenh: kenh.loai } })
+        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, kenh: kenh.loai, henGio: tuyChon.henGio } })
     } catch (e: any) {
         console.error('[zalo] dot-gui:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
@@ -791,6 +806,9 @@ router.get('/dot-gui', authMiddleware, async (req: AuthRequest, res: Response) =
         const dem: any[] = dots.length
             ? await sp.zaloDotGuiNhom.groupBy({ by: ['dotId', 'trangThai'], where: { dotId: { in: dots.map((d: any) => d.id) } }, _count: true })
             : []
+        // Tuỳ chọn gửi (mức độ, nhắc cả nhóm, tự xoá, giờ hẹn) — đọc hỏng thì danh sách vẫn hiện, chỉ thiếu nhãn
+        let tuyChon = new Map<string, any>()
+        try { tuyChon = await docTuyChonCacDot(sp, dots.map((d: any) => d.id)) } catch (e: any) { console.error('[zalo] dot-gui tuyChon:', e?.message || e) }
         res.json({
             success: true,
             data: dots.map((d: any) => {
@@ -800,7 +818,7 @@ router.get('/dot-gui', authMiddleware, async (req: AuthRequest, res: Response) =
                 try { anh = d.anh ? JSON.parse(d.anh) : [] } catch { anh = [] }
                 let doanhSo: any = null
                 try { doanhSo = d.doanhSo ? JSON.parse(d.doanhSo) : null } catch { doanhSo = null }
-                return { ...d, anh, doanhSo, dem: c }
+                return { ...d, anh, doanhSo, dem: c, tuyChon: tuyChon.get(d.id) || null }
             }),
         })
     } catch (e: any) {
@@ -833,6 +851,17 @@ router.post('/dot-gui/:id/huy', authMiddleware, requirePermission('customers.cre
         await sp.zaloDotGui.updateMany({ where: { id }, data: { trangThai: 'huy' } })
         const r = await sp.zaloDotGuiNhom.updateMany({ where: { dotId: id, trangThai: 'cho' }, data: { trangThai: 'huy' } })
         res.json({ success: true, data: { soNhomDung: r.count } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/dot-gui/:id/gui-ngay — đợt đang HẸN GIỜ thì gửi luôn ─────
+router.post('/dot-gui/:id/gui-ngay', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const co = await boHenGio(req.storePrisma as any, String(req.params.id))
+        if (!co) { res.status(400).json({ success: false, error: 'Đợt này không hẹn giờ (hoặc đã tới giờ gửi)' }); return }
+        res.json({ success: true })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }

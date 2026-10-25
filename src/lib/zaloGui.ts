@@ -25,6 +25,7 @@
 import { registryPrisma, getStorePrisma } from './prisma'
 import { nhanDangAnh } from './anhSanPham'
 import { docTrangThai, guiTinNhom, giuPhien, kichThuocAnh, type AnhGui, type KetQuaGuiZalo } from './zaloKengi'
+import { soanTin, docTuyChonCacDot, dotChuaToiGio, type TuyChonTin } from './zaloTuyChon'
 
 // ─── Gợi ý ghép nhóm ↔ khách ────────────────────────────────────────────────
 
@@ -223,14 +224,19 @@ export function loiGuiN8n(thongBao: string): string {
     return `n8n: ${s}`
 }
 
-/** Gửi MỘT tin vào MỘT nhóm qua n8n (dùng cho cả gửi thử lẫn hàng đợi) */
+/** Gửi MỘT tin vào MỘT nhóm qua n8n (dùng cho cả gửi thử lẫn hàng đợi). Chữ đi dạng THƯỜNG (bỏ thẻ
+ *  [đậm]…); định dạng + tuỳ chọn kèm riêng (dinhDang, tuyChon) cho workflow nào muốn tự dùng. */
 export async function guiMotNhom(url: string, tin: {
     dotId: string | null; groupId: string; noiDung: string; anh: string[]; tieuDe?: string | null
     maKhach?: string | null; tenKhach?: string | null; tenNhom?: string | null; bien?: Record<string, string> | null
+    tuyChon?: TuyChonTin | null
 }): Promise<{ ok: boolean; loi: string | null }> {
+    // Vị trí định dạng tính trên đúng chữ gửi đi — nên soạn KHÔNG chèn @All (n8n tự quyết nhắc cả nhóm)
+    const soan = soanTin(dienMau(tin.noiDung, tin), tin.tuyChon ? { ...tin.tuyChon, nhacCaNhom: false } : null)
     const r = await goiN8n(url, {
         loai: 'gui_tin', ...tin,
-        noiDung: dienMau(tin.noiDung, tin),
+        noiDung: soan.msg,
+        ...(soan.styles.length ? { dinhDang: soan.styles } : {}),
     }, 30_000)
     if (r.ok && !(r.data && (r.data.success === false || r.data.ok === false))) return { ok: true, loi: null }
     const thongBao = r.data?.error || r.data?.message || r.text || `HTTP ${r.status}`
@@ -289,6 +295,7 @@ export async function taiAnhGui(urls: string[]): Promise<{ anh: AnhGui[]; loi: s
 export interface TinGui {
     dotId: string | null; groupId: string; noiDung: string; anh: string[]; tieuDe?: string | null
     maKhach?: string | null; tenKhach?: string | null; tenNhom?: string | null; bien?: Record<string, string> | null
+    tuyChon?: TuyChonTin | null
 }
 
 /** Gửi một tin qua kênh đã chọn. `anhSan`: ảnh đã tải (cả đợt dùng chung một bộ ảnh — tải một lần mỗi nhịp). */
@@ -296,7 +303,9 @@ export async function guiQuaKenh(sp: any, kenh: KenhGui, tin: TinGui, anhSan?: {
     if (kenh.loai === 'n8n') return { ...(await guiMotNhom(kenh.url, tin)), matPhien: false }
     const t = anhSan || (tin.anh.length ? await taiAnhGui(tin.anh) : { anh: [], loi: null })
     if (t.loi) return { ok: false, loi: t.loi, matPhien: false }
-    return guiTinNhom(sp, tin.groupId, dienMau(tin.noiDung, tin), t.anh)
+    // Điền mẫu TRƯỚC rồi mới đọc thẻ định dạng: vị trí phải tính trên đúng chữ của nhóm này
+    const s = soanTin(dienMau(tin.noiDung, tin), tin.tuyChon)
+    return guiTinNhom(sp, tin.groupId, s.msg, t.anh, { styles: s.styles, mentions: s.mentions, urgency: s.urgency, ttl: s.ttl })
 }
 
 const LAN_THU_TOI_DA = 3
@@ -318,10 +327,16 @@ export async function guiTiepCuaHang(sp: any, tuy: {
         data: { trangThai: 'loi', loi: 'Không rõ đã gửi chưa (máy dừng giữa lúc gửi) — kiểm trong nhóm Zalo rồi gửi lại tay nếu cần' },
     })
     const toiDa = Math.min(30, Math.max(1, Number(ch?.guiMoiPhut) || 4))
-    const hang = await sp.zaloDotGuiNhom.findMany({ where: { trangThai: 'cho' }, orderBy: { id: 'asc' }, take: toiDa })
+    // Đợt hẹn giờ chưa tới: loại ngay trong câu hỏi — để chúng lọt vào `take` là chặn mất lượt của đợt khác
+    const chuaToiGio = await dotChuaToiGio(sp)
+    const hang = await sp.zaloDotGuiNhom.findMany({
+        where: { trangThai: 'cho', ...(chuaToiGio.length ? { dotId: { notIn: chuaToiGio } } : {}) },
+        orderBy: { id: 'asc' }, take: toiDa,
+    })
     let daGui = 0, loi = 0
     const dotCache = new Map<string, any>()
     const anhTheoDot = new Map<string, { anh: AnhGui[]; loi: string | null }>()
+    const tuyChonDot = hang.length ? await docTuyChonCacDot(sp, hang.map((h: any) => h.dotId)) : new Map<string, TuyChonTin>()
     for (const h of hang) {
         if (Date.now() - batDau > nganSachMs) break   // phần còn lại để nhịp sau — đừng giữ nhịp cron quá lâu
         // Giành dòng: hai bản máy cùng chạy nhịp thì chỉ một bên gửi
@@ -340,6 +355,7 @@ export async function guiTiepCuaHang(sp: any, tuy: {
         const kq = await gui(sp, kenh, {
             dotId: dot.id, groupId: h.groupId, noiDung: dot.noiDung, anh, tieuDe: dot.tieuDe,
             maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: h.tenNhom, bien,
+            tuyChon: tuyChonDot.get(dot.id) || null,
         }, anhSan)
         if (kq.ok) { daGui++; await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: 'da_gui', loi: null, guiLuc: new Date() } }) }
         else if (kq.matPhien) {
@@ -348,7 +364,8 @@ export async function guiTiepCuaHang(sp: any, tuy: {
             return { daGui, loi, tamDung: kq.loi || 'Phiên Zalo hết hạn' }
         } else {
             loi++
-            const conThu = (h.lanThu + 1) < LAN_THU_TOI_DA
+            // Một phần tin đã tới nhóm (khongThuLai) ⇒ dừng ở "lỗi" luôn, tự gửi lại là khách nhận chữ hai lần
+            const conThu = !kq.khongThuLai && (h.lanThu + 1) < LAN_THU_TOI_DA
             await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: conThu ? 'cho' : 'loi', loi: kq.loi } })
         }
         await new Promise(r => setTimeout(r, nghiMs()))   // giãn trong cùng một phút

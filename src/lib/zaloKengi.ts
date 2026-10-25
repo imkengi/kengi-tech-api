@@ -372,32 +372,57 @@ export async function dangNhapQR(sp: any, nguoi: string | null, phat: (s: SuKien
 // ─── Gửi tin + quét nhóm ────────────────────────────────────────────────────
 
 export interface AnhGui { data: Buffer; ten: string; rong?: number; cao?: number }
-export interface KetQuaGuiZalo { ok: boolean; loi: string | null; matPhien: boolean }
+/** khongThuLai: một phần tin ĐÃ tới nhóm (chữ đi rồi, ảnh hỏng) — gửi lại tự động là khách nhận chữ hai lần */
+export interface KetQuaGuiZalo { ok: boolean; loi: string | null; matPhien: boolean; khongThuLai?: boolean }
+/** Tuỳ chọn đã soạn (lib/zaloTuyChon.ts soanTin) */
+export interface TuyChonZca { styles?: Array<{ start: number; len: number; st: string }>; mentions?: Array<{ pos: number; uid: string; len: number }>; urgency?: 0 | 1 | 2; ttl?: number }
 
-/** Gửi MỘT tin (đã điền mẫu) vào MỘT nhóm. 1 ảnh + chữ ⇒ chữ thành chú thích ảnh; nhiều ảnh ⇒ chữ trước, album sau. */
-export async function guiTinNhom(sp: any, groupId: string, noiDung: string, anh: AnhGui[] = []): Promise<KetQuaGuiZalo> {
+/** Gửi MỘT tin (đã điền mẫu, đã soạn — lib/zaloTuyChon.ts) vào MỘT nhóm; tách lần gửi theo cacLanGui. */
+/**
+ * Các lần gọi sendMessage cho một tin (thuần — bộ kiểm soát được). Tách "chữ trước, ảnh sau" khi: có tuỳ
+ * chọn (chú thích ảnh của zca-js bỏ mất định dạng / nhắc tên / mức độ), hoặc NHIỀU ảnh (zca-js vốn tự tách
+ * bên trong; tự tách thì mới biết chữ đã đi chưa khi ảnh hỏng ⇒ không gửi lại chữ lần hai). 1 ảnh + chữ
+ * thường ⇒ một lần, chữ làm chú thích ảnh (một tin trọn vẹn).
+ */
+export function cacLanGui(noiDung: string, anh: AnhGui[], tuy: TuyChonZca = {}): any[] {
+    const msg = String(noiDung || '')   // PHẢI là chuỗi — zca-js đọc msg.length kể cả khi chỉ gửi ảnh
+    const dinhKem = anh.map(a => ({
+        data: a.data, filename: a.ten as `${string}.${string}`,
+        metadata: { totalSize: a.data.length, width: a.rong, height: a.cao },
+    }))
+    const kieu = {
+        ...(tuy.styles?.length ? { styles: tuy.styles } : {}),
+        ...(tuy.mentions?.length ? { mentions: tuy.mentions } : {}),
+        ...(tuy.urgency ? { urgency: tuy.urgency } : {}),
+        ...(tuy.ttl ? { ttl: tuy.ttl } : {}),
+    }
+    if (dinhKem.length && msg && (dinhKem.length > 1 || tuy.styles?.length || tuy.mentions?.length || tuy.urgency)) {
+        return [{ msg, ...kieu }, { msg: '', attachments: dinhKem, ...(tuy.ttl ? { ttl: tuy.ttl } : {}) }]
+    }
+    return [{ msg, ...(dinhKem.length ? { attachments: dinhKem } : {}), ...kieu }]
+}
+
+export async function guiTinNhom(sp: any, groupId: string, noiDung: string, anh: AnhGui[] = [], tuy: TuyChonZca = {}): Promise<KetQuaGuiZalo> {
     let p: PhienNho
     try { p = await layApi(sp) } catch (e: any) {
         if (e instanceof LoiPhienZalo) return { ok: false, loi: e.message, matPhien: true }
         return { ok: false, loi: `Không kết nối được Zalo: ${moTa(e)}`, matPhien: false }
     }
+    let daGuiChu = false
     try {
-        await p.api.sendMessage({
-            msg: String(noiDung || ''),   // PHẢI là chuỗi — zca-js đọc msg.length kể cả khi chỉ gửi ảnh
-            attachments: anh.map(a => ({
-                data: a.data, filename: a.ten as `${string}.${string}`,
-                metadata: { totalSize: a.data.length, width: a.rong, height: a.cao },
-            })),
-        }, String(groupId), ThreadType.Group)
+        for (const lan of cacLanGui(noiDung, anh, tuy)) {
+            await p.api.sendMessage(lan, String(groupId), ThreadType.Group)
+            if (lan.msg) daGuiChu = true
+        }
         await ghiLaiSauKhiDung(sp, p)
         return { ok: true, loi: null, matPhien: false }
     } catch (e: any) {
-        const loi = `Zalo: ${moTa(e)}`
+        const loi = daGuiChu ? `Đã gửi phần chữ, ẢNH lỗi (${moTa(e)}) — kiểm nhóm rồi gửi ảnh tay nếu cần` : `Zalo: ${moTa(e)}`
         if (laLoiZalo(e) && !laLoiTamThoi(e) && Date.now() - p.kiemLuc > KIEM_LAI_SAU_MS) {
             const kt = await kiemTraPhien(sp)
-            if (kt.song === false) return { ok: false, loi: `${loi} — ${CAU_HET_HAN}`, matPhien: true }
+            if (kt.song === false && !daGuiChu) return { ok: false, loi: `${loi} — ${CAU_HET_HAN}`, matPhien: true }
         }
-        return { ok: false, loi, matPhien: false }
+        return { ok: false, loi, matPhien: false, ...(daGuiChu ? { khongThuLai: true } : {}) }
     }
 }
 
