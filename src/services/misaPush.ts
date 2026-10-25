@@ -604,7 +604,8 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
          * ⇒ CHỈ phiếu Lấy HĐ (Transaction.layHoaDon — /hoadon nhóm Zalo) hoặc của khách "luôn lấy hoá đơn" (Customer.luonLayHoaDon —
          * "2 dạng khách: 1 khách luôn luôn lấy hoá đơn, còn 1 dạng thì tuỳ hứng"), mà khách CÓ MST, mới mang đối tượng MISA (bảng nối → mã → MST).
          * Mọi phiếu khác — khách lẻ, khách không MST, khách có MST mà không lấy HĐ, đơn sàn — người mua "Bán cho người tiêu dùng",
-         * KHÔNG mã đối tượng, không địa chỉ / MST ("không có lưu mã khách hàng"); tên khách thật ở diễn giải. */
+         * KHÔNG mã đối tượng, không địa chỉ / MST ("không có lưu mã khách hàng"). Chủ shop 24/10/2026: "diễn giải lý do cũng là bán cho
+         * người tiêu dùng chứ" ⇒ diễn giải (Lý do nộp) cũng chỉ "Bán cho người tiêu dùng", không còn tên khách thật — xem ghiChu bên dưới. */
         const san = detectOnlinePlatform(tx.receiptNumber)
         const mstKhach = chuanMst(tx.customer?.taxCode)
         let maKhach: string | null = null
@@ -825,7 +826,8 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
         const soPxk = `PXK-${rn}`, soHd = `HD-${rn}`
         const guidPxk = guidTatDinh(ts.schema, 'banhang-pxk', tx.id)
         const guidHd = guidTatDinh(ts.schema, 'banhang-hd', tx.id)
-        const ghiChu = `Bán hàng cho ${d.doiTuong}`.slice(0, 250)
+        // Diễn giải phiếu bán + hoá đơn; bán cho người tiêu dùng thì đúng nhãn đó như ô người mua (chủ shop 24/10/2026), khách có MST thì "Bán hàng cho <tên>"
+        const ghiChu = (tieuDung || `Bán hàng cho ${d.doiTuong}`).slice(0, 250)
         d.payload = {
             voucher_type: 13,
             reftype,
@@ -858,7 +860,7 @@ async function keHoachBanHang(sp: any, caiDat: CaiDatDay, dm: DanhMucMisa, ts: T
                     branch_id: caiDat.branchId,
                     refdate: ngayCT, posted_date: ngayCT, in_reforder: thoiDiem,
                     ...doiTuong,
-                    journal_memo: `Xuất kho bán hàng cho ${d.doiTuong}`.slice(0, 250),
+                    journal_memo: (tieuDung ? `Xuất kho ${tieuDung.toLowerCase()}` : `Xuất kho bán hàng cho ${d.doiTuong}`).slice(0, 250),
                     is_get_new_id: true,
                     is_posted_finance: true,
                     is_posted_inventory_book_finance: true,
