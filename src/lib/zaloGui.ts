@@ -1,8 +1,9 @@
 /**
  * ZALO CÁ NHÂN QUA n8n — QUÉT NHÓM + GỢI Ý GHÉP + GỬI TIN CHO KHÁCH (18/10/2026)
  *
- * Kengi không tự đọc/gửi được Zalo cá nhân. Mọi việc với Zalo đi qua webhook n8n mà chủ
- * shop dán vào trang Khách Hàng › Chăm Sóc Khách Hàng (bảng ZaloCauHinh):
+ * Kengi không tự ĐỌC được tin Zalo cá nhân. GỬI + QUÉT NHÓM đi qua phiên Zalo đăng nhập ngay
+ * trong Kengi (từ 25/10/2026 — xem KÊNH GỬI bên dưới), hoặc webhook n8n mà chủ shop dán vào
+ * trang Khách Hàng › Chăm Sóc Khách Hàng (bảng ZaloCauHinh):
  *
  *   n8nQuetUrl  Kengi POST {storeCode, callbackUrl} → n8n lấy danh sách nhóm của tài khoản
  *               Zalo rồi TRẢ NGAY trong phản hồi ({groups:[{groupId,name}]}) hoặc POST về
@@ -14,9 +15,16 @@
  * Giành dòng bằng CAS (cho → dang) nên hai bản máy chạy song song không gửi trùng.
  * Dòng kẹt ở 'dang' (máy chết giữa lúc gọi n8n) KHÔNG tự gửi lại — không biết tin đã đi
  * chưa, gửi lại là khách nhận hai lần; đánh dấu lỗi để người xem quyết.
+ *
+ * KÊNH GỬI (25/10/2026): cửa hàng ĐÃ ĐĂNG NHẬP ZALO NGAY TRONG KENGI (lib/zaloKengi.ts) thì gửi + quét
+ * thẳng, không qua n8n; chưa đăng nhập mới dùng webhook n8n như cũ. Phiên Kengi hết hạn ⇒ hàng đợi TẠM
+ * DỪNG (dòng giữ nguyên 'cho', không tính lượt) chứ KHÔNG rơi sang n8n — n8n hay chết cùng kiểu, và
+ * rơi sang thì cả đợt thành lỗi khó hiểu. Đăng xuất hẳn trong Kengi thì n8n lại là kênh gửi.
  */
 
 import { registryPrisma, getStorePrisma } from './prisma'
+import { nhanDangAnh } from './anhSanPham'
+import { docTrangThai, guiTinNhom, giuPhien, kichThuocAnh, type AnhGui, type KetQuaGuiZalo } from './zaloKengi'
 
 // ─── Gợi ý ghép nhóm ↔ khách ────────────────────────────────────────────────
 
@@ -229,22 +237,91 @@ export async function guiMotNhom(url: string, tin: {
     return { ok: false, loi: loiGuiN8n(thongBao) }
 }
 
+// ─── Kênh gửi: Zalo đăng nhập trong Kengi (ưu tiên) hoặc n8n ────────────────
+
+export type KenhGui = { loai: 'kengi' } | { loai: 'n8n'; url: string }
+
+/** kenh null + tamDung có chữ = phiên Kengi hết hạn (chờ quét lại); cả hai null = chưa có cách gửi nào */
+export async function chonKenhGui(sp: any, ch?: { n8nGuiUrl?: string | null } | null): Promise<{ kenh: KenhGui | null; tamDung: string | null }> {
+    const phien = await docTrangThai(sp)
+    if (phien.coPhien) {
+        if (phien.trangThai === 'song') return { kenh: { loai: 'kengi' }, tamDung: null }
+        return { kenh: null, tamDung: 'Phiên Zalo trong Kengi đã hết hạn — quét lại mã QR ở mục Đăng nhập Zalo, tin sẽ gửi tiếp' }
+    }
+    if (ch?.n8nGuiUrl) return { kenh: { loai: 'n8n', url: ch.n8nGuiUrl }, tamDung: null }
+    return { kenh: null, tamDung: null }
+}
+
+export const CAU_CHUA_CO_KENH = 'Chưa đăng nhập Zalo (Chăm Sóc Khách Hàng › Đăng nhập Zalo) và chưa dán webhook GỬI TIN của n8n'
+
+const ANH_TOI_DA_BYTE = 10 * 1024 * 1024
+
+/**
+ * Tải ảnh của tin (link https công khai — thường là ảnh đã tải lên qua /api/zalo/anh) để gửi thẳng qua
+ * Zalo. Cùng bộ chặn mạng nội bộ với webhook n8n (link do người dùng đưa, đừng để máy chủ gọi vào trong).
+ * Một ảnh hỏng = cả tin hỏng: gửi thiếu ảnh mà vẫn báo "đã gửi" là sai.
+ */
+export async function taiAnhGui(urls: string[]): Promise<{ anh: AnhGui[]; loi: string | null }> {
+    const anh: AnhGui[] = []
+    for (const [i, url] of urls.slice(0, 10).entries()) {
+        const chan = kiemUrlN8n(url)
+        if (chan) return { anh: [], loi: `Ảnh ${i + 1}: ${chan}` }
+        const ctrl = new AbortController()
+        const hen = setTimeout(() => ctrl.abort(), 20_000)
+        try {
+            const r = await fetch(url, { signal: ctrl.signal, redirect: 'error' } as any)
+            if (!r.ok) return { anh: [], loi: `Không tải được ảnh ${i + 1} (HTTP ${r.status})` }
+            if (Number(r.headers.get('content-length') || 0) > ANH_TOI_DA_BYTE) return { anh: [], loi: `Ảnh ${i + 1} quá 10MB` }
+            const buf = Buffer.from(await r.arrayBuffer())
+            if (buf.length > ANH_TOI_DA_BYTE) return { anh: [], loi: `Ảnh ${i + 1} quá 10MB` }
+            const loai = nhanDangAnh(buf)
+            if (!loai || loai === 'heic') return { anh: [], loi: `Ảnh ${i + 1} không phải JPG / PNG / WEBP` }
+            const duoi = loai === 'image/png' ? 'png' : loai === 'image/webp' ? 'webp' : 'jpg'
+            const kt = kichThuocAnh(buf)
+            anh.push({ data: buf, ten: `anh-${i + 1}.${duoi}`, rong: kt?.rong, cao: kt?.cao })
+        } catch (e: any) {
+            return { anh: [], loi: `Không tải được ảnh ${i + 1}: ${e?.name === 'AbortError' ? 'quá 20 giây' : String(e?.message || e).slice(0, 120)}` }
+        } finally { clearTimeout(hen) }
+    }
+    return { anh, loi: null }
+}
+
+export interface TinGui {
+    dotId: string | null; groupId: string; noiDung: string; anh: string[]; tieuDe?: string | null
+    maKhach?: string | null; tenKhach?: string | null; tenNhom?: string | null; bien?: Record<string, string> | null
+}
+
+/** Gửi một tin qua kênh đã chọn. `anhSan`: ảnh đã tải (cả đợt dùng chung một bộ ảnh — tải một lần mỗi nhịp). */
+export async function guiQuaKenh(sp: any, kenh: KenhGui, tin: TinGui, anhSan?: { anh: AnhGui[]; loi: string | null }): Promise<KetQuaGuiZalo> {
+    if (kenh.loai === 'n8n') return { ...(await guiMotNhom(kenh.url, tin)), matPhien: false }
+    const t = anhSan || (tin.anh.length ? await taiAnhGui(tin.anh) : { anh: [], loi: null })
+    if (t.loi) return { ok: false, loi: t.loi, matPhien: false }
+    return guiTinNhom(sp, tin.groupId, dienMau(tin.noiDung, tin), t.anh)
+}
+
 const LAN_THU_TOI_DA = 3
 
-/** Gửi tiếp hàng đợi của MỘT cửa hàng — tối đa `guiMoiPhut` nhóm. */
-export async function guiTiepCuaHang(sp: any, nganSachMs = 40_000): Promise<{ daGui: number; loi: number }> {
+/** Gửi tiếp hàng đợi của MỘT cửa hàng — tối đa `guiMoiPhut` nhóm. `gui`/`nghiMs` chỉ để bộ kiểm thay chỗ. */
+export async function guiTiepCuaHang(sp: any, tuy: {
+    nganSachMs?: number; gui?: typeof guiQuaKenh; nghiMs?: () => number
+} = {}): Promise<{ daGui: number; loi: number; tamDung?: string }> {
     const batDau = Date.now()
+    const nganSachMs = tuy.nganSachMs ?? 40_000
+    const gui = tuy.gui ?? guiQuaKenh
+    const nghiMs = tuy.nghiMs ?? (() => 1500 + Math.floor(Math.random() * 2500))
     const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
-    if (!ch?.n8nGuiUrl) return { daGui: 0, loi: 0 }
-    // Dòng kẹt 'dang' > 10 phút: máy chết giữa lúc gọi n8n — không rõ đã gửi chưa ⇒ báo, không tự gửi lại
+    const { kenh, tamDung } = await chonKenhGui(sp, ch)
+    if (!kenh) return { daGui: 0, loi: 0, ...(tamDung ? { tamDung } : {}) }
+    // Dòng kẹt 'dang' > 10 phút: máy chết giữa lúc gửi — không rõ tin đã đi chưa ⇒ báo, không tự gửi lại
     await sp.zaloDotGuiNhom.updateMany({
         where: { trangThai: 'dang', guiLuc: { lt: new Date(Date.now() - 10 * 60_000) } },
-        data: { trangThai: 'loi', loi: 'Không rõ đã gửi chưa (máy dừng giữa lúc gọi n8n) — kiểm trong nhóm Zalo rồi gửi lại tay nếu cần' },
+        data: { trangThai: 'loi', loi: 'Không rõ đã gửi chưa (máy dừng giữa lúc gửi) — kiểm trong nhóm Zalo rồi gửi lại tay nếu cần' },
     })
-    const toiDa = Math.min(30, Math.max(1, Number(ch.guiMoiPhut) || 4))
+    const toiDa = Math.min(30, Math.max(1, Number(ch?.guiMoiPhut) || 4))
     const hang = await sp.zaloDotGuiNhom.findMany({ where: { trangThai: 'cho' }, orderBy: { id: 'asc' }, take: toiDa })
     let daGui = 0, loi = 0
     const dotCache = new Map<string, any>()
+    const anhTheoDot = new Map<string, { anh: AnhGui[]; loi: string | null }>()
     for (const h of hang) {
         if (Date.now() - batDau > nganSachMs) break   // phần còn lại để nhịp sau — đừng giữ nhịp cron quá lâu
         // Giành dòng: hai bản máy cùng chạy nhịp thì chỉ một bên gửi
@@ -258,17 +335,23 @@ export async function guiTiepCuaHang(sp: any, nganSachMs = 40_000): Promise<{ da
         try { anh = dot.anh ? JSON.parse(dot.anh) : [] } catch { anh = [] }
         let bien: Record<string, string> | null = null
         try { bien = h.bien ? JSON.parse(h.bien) : null } catch { bien = null }
-        const kq = await guiMotNhom(ch.n8nGuiUrl, {
+        let anhSan = anhTheoDot.get(dot.id)
+        if (kenh.loai === 'kengi' && !anhSan && anh.length) { anhSan = await taiAnhGui(anh); anhTheoDot.set(dot.id, anhSan) }
+        const kq = await gui(sp, kenh, {
             dotId: dot.id, groupId: h.groupId, noiDung: dot.noiDung, anh, tieuDe: dot.tieuDe,
             maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: h.tenNhom, bien,
-        })
+        }, anhSan)
         if (kq.ok) { daGui++; await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: 'da_gui', loi: null, guiLuc: new Date() } }) }
-        else {
+        else if (kq.matPhien) {
+            // Phiên Zalo chết giữa đợt: trả dòng về hàng đợi, KHÔNG tính lượt — quét lại QR là gửi tiếp
+            await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: 'cho', lanThu: h.lanThu, loi: kq.loi } })
+            return { daGui, loi, tamDung: kq.loi || 'Phiên Zalo hết hạn' }
+        } else {
             loi++
             const conThu = (h.lanThu + 1) < LAN_THU_TOI_DA
             await sp.zaloDotGuiNhom.update({ where: { id: h.id }, data: { trangThai: conThu ? 'cho' : 'loi', loi: kq.loi } })
         }
-        await new Promise(r => setTimeout(r, 1500 + Math.floor(Math.random() * 2500)))   // giãn trong cùng một phút
+        await new Promise(r => setTimeout(r, nghiMs()))   // giãn trong cùng một phút
     }
     // Đợt không còn gì chờ ⇒ xong
     for (const dotId of dotCache.keys()) {
@@ -282,13 +365,19 @@ export async function guiTiepCuaHang(sp: any, nganSachMs = 40_000): Promise<{ da
 export async function nhipGuiZalo(): Promise<string> {
     const stores: any[] = await (registryPrisma as any).store.findMany({ where: { status: 'active' }, select: { schema: true, code: true } })
     const ra: string[] = []
+    const xetGiuPhien = new Date().getUTCMinutes() % 5 === 3
     for (const s of stores) {
         try {
             const sp = getStorePrisma(s.schema) as any
+            // Giữ phiên Zalo trong Kengi (~25 phút/lần, lib/zaloKengi.ts): chết thì biết trước khi chủ shop tạo đợt
+            if (xetGiuPhien) {
+                const gp = await giuPhien(sp).catch((e: any) => `loi ${String(e?.message || e).slice(0, 60)}`)
+                if (gp) ra.push(`${s.code}:phien-${gp}`)
+            }
             const coViec = await sp.zaloDotGuiNhom.count({ where: { trangThai: 'cho' } }).catch(() => 0)
             if (!coViec) continue
             const kq = await guiTiepCuaHang(sp)
-            ra.push(`${s.code}:+${kq.daGui}${kq.loi ? `/loi${kq.loi}` : ''}`)
+            ra.push(`${s.code}:+${kq.daGui}${kq.loi ? `/loi${kq.loi}` : ''}${kq.tamDung ? '/tam-dung' : ''}`)
         } catch (e: any) { ra.push(`${s.code}:loi ${String(e?.message || e).slice(0, 80)}`) }
     }
     return ra.join(' ') || 'khong-co-gi'

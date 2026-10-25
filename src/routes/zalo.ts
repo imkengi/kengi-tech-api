@@ -19,6 +19,12 @@
  * "/hoadon" (18/10/2026): khách nhắn lệnh này trong nhóm = lấy hoá đơn cho MỌI phiếu bán của
  * khách trong ngày (giờ VN) đó. CHỈ LƯU YÊU CẦU — hoá đơn xuất bên MISA, KHÔNG ghi gì lên phiếu.
  * Xem lib/zaloNhom.ts mục YÊU CẦU HOÁ ĐƠN.
+ *
+ * ĐĂNG NHẬP ZALO NGAY TRONG KENGI (25/10/2026) — gửi tin nhóm + quét nhóm không cần n8n (lib/zaloKengi.ts):
+ *   GET  /api/zalo/dang-nhap              trạng thái phiên (tên, ảnh, sống / hết hạn) — không bao giờ có cookie
+ *   POST /api/zalo/dang-nhap/qr           LUỒNG SSE: mã QR → đã quét → xong (chỉ quản lý, không nhận khoá API)
+ *   POST /api/zalo/dang-nhap/kiem-tra     đăng nhập lại từ bản lưu — cứu được lần kết luận "hết hạn" nhầm
+ *   POST /api/zalo/dang-xuat              quên phiên trong Kengi
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -34,8 +40,9 @@ import {
     type DongNhomZalo,
 } from '../lib/zaloNhom'
 import {
-    docChiMucKhach, goiYKhach, kiemUrlN8n, goiN8n, docNhomTuN8n, luuNhomQuet, guiMotNhom,
+    docChiMucKhach, goiYKhach, kiemUrlN8n, goiN8n, docNhomTuN8n, luuNhomQuet, chonKenhGui, guiQuaKenh, CAU_CHUA_CO_KENH,
 } from '../lib/zaloGui'
+import { docTrangThai, dangNhapQR, kiemTraPhien, dangXuat, dsNhomZalo, LoiPhienZalo, laLoiZalo, type SuKienQR } from '../lib/zaloKengi'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 import { dungBienDoanhSo, docCauHinhDoanhSo, tinhDoanhSo, bienDoanhSo, CauHinhDoanhSo } from '../lib/zaloDoanhSo'
 
@@ -448,11 +455,22 @@ router.get('/yeu-cau-hoa-don', authMiddleware, async (req: AuthRequest, res: Res
 
 const CALLBACK_QUET = 'https://api.kengi.vn/api/zalo/nhom/quet'
 
+/** Lỗi phiên / lỗi Zalo là lời nhắn cho người dùng — hiện nguyên văn; lỗi máy mình thì che như mọi route */
+function loiChoNguoiDung(e: any): string {
+    if (e instanceof LoiPhienZalo) return e.message
+    if (laLoiZalo(e)) return `Zalo: ${String(e?.message || '').slice(0, 200)}`
+    return errMsg(e)
+}
+
 // ─── GET /api/zalo/cau-hinh ─────────────────────────────────────────────────
+// Kèm phienZalo (trạng thái đăng nhập Zalo trong Kengi) — trang cần biết có kênh gửi nào không
 router.get('/cau-hinh', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const ch = await (req.storePrisma as any).zaloCauHinh.findUnique({ where: { id: 'default' } })
-        res.json({ success: true, data: ch || { id: 'default', n8nQuetUrl: null, n8nGuiUrl: null, guiMoiPhut: 4, quetLuc: null, quetKetQua: null }, callbackQuet: CALLBACK_QUET })
+        const sp = req.storePrisma as any
+        const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
+        let phienZalo: any = null
+        try { phienZalo = await docTrangThai(sp) } catch (e: any) { console.error('[zalo] cau-hinh phienZalo:', e?.message || e) }
+        res.json({ success: true, data: ch || { id: 'default', n8nQuetUrl: null, n8nGuiUrl: null, guiMoiPhut: 4, quetLuc: null, quetKetQua: null }, callbackQuet: CALLBACK_QUET, phienZalo })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }
@@ -479,13 +497,31 @@ router.put('/cau-hinh', authMiddleware, requirePermission('customers.create'), c
 })
 
 // ─── POST /api/zalo/nhom/quet-ngay — nút "Quét lại nhóm" ────────────────────
-// Gọi webhook quét của n8n. n8n trả danh sách ngay thì lưu luôn; không thì n8n POST về
+// Đã đăng nhập Zalo trong Kengi: đọc thẳng danh sách nhóm của tài khoản (lib/zaloKengi.ts).
+// Chưa thì gọi webhook quét của n8n. n8n trả danh sách ngay thì lưu luôn; không thì n8n POST về
 // /api/zalo/nhom/quet sau (kèm X-API-Key + X-Store-Code như gửi tin).
 router.post('/nhom/quet-ngay', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
     try {
         const sp = req.storePrisma as any
+        const phien = await docTrangThai(sp)
+        if (phien.coPhien) {
+            if (phien.trangThai !== 'song') { res.status(400).json({ success: false, error: 'Phiên Zalo trong Kengi đã hết hạn — quét lại mã QR ở mục Đăng nhập Zalo', hetHan: true }); return }
+            const kq = await dsNhomZalo(sp)
+            const ds = docNhomTuN8n(kq.raw)
+            if (!ds.length && kq.soId) {
+                res.status(502).json({ success: false, error: `Zalo có ${kq.soId} nhóm nhưng không đọc được thông tin nhóm nào${kq.loLoi.length ? ` (${kq.loLoi[0]})` : ''} — thử lại sau ít phút` })
+                return
+            }
+            const luu = await luuNhomQuet(sp, ds)
+            const thieu = kq.soId - ds.length
+            res.json({
+                success: true,
+                data: { ...luu, quaKengi: true, ...(thieu > 0 ? { canhBao: `${thieu} nhóm chưa đọc được thông tin${kq.loLoi.length ? ` (${kq.loLoi[0]})` : ''} — bấm quét lại sau` } : {}) },
+            })
+            return
+        }
         const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
-        if (!ch?.n8nQuetUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook QUÉT NHÓM của n8n (mục Kết nối n8n)', chuaCauHinh: true }); return }
+        if (!ch?.n8nQuetUrl) { res.status(400).json({ success: false, error: 'Chưa đăng nhập Zalo (mục Đăng nhập Zalo) và chưa dán webhook QUÉT NHÓM của n8n', chuaCauHinh: true }); return }
         const r = await goiN8n(ch.n8nQuetUrl, { loai: 'quet_nhom', storeCode: req.user?.storeCode || null, callbackUrl: CALLBACK_QUET }, 90_000)
         if (!r.ok) { res.status(502).json({ success: false, error: `n8n báo lỗi: ${r.data?.error || r.data?.message || r.text || 'HTTP ' + r.status}` }); return }
         const ds = docNhomTuN8n(r.data)
@@ -496,7 +532,8 @@ router.post('/nhom/quet-ngay', authMiddleware, requirePermission('customers.crea
         res.json({ success: true, data: await luuNhomQuet(sp, ds) })
     } catch (e: any) {
         console.error('[zalo] quet-ngay:', e?.message || e)
-        res.status(500).json({ success: false, error: errMsg(e) })
+        res.status(e instanceof LoiPhienZalo ? 400 : laLoiZalo(e) ? 502 : 500)
+            .json({ success: false, error: loiChoNguoiDung(e), ...(e instanceof LoiPhienZalo ? { hetHan: true } : {}) })
     }
 })
 
@@ -508,6 +545,77 @@ router.post('/nhom/quet', authMiddleware, canGhi, async (req: AuthRequest, res: 
         res.json({ success: true, data: await luuNhomQuet(req.storePrisma as any, ds) })
     } catch (e: any) {
         console.error('[zalo] nhom/quet:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/* ═══ ĐĂNG NHẬP ZALO NGAY TRONG KENGI (25/10/2026) — lõi ở lib/zaloKengi.ts ═══ */
+
+const QUAN_LY = ['admin', 'manager', 'owner', 'superadmin']
+
+/** Đăng nhập / đăng xuất Zalo công ty: chỉ quản lý ĐĂNG NHẬP kengi.vn — khoá API (n8n) không được đổi tài khoản Zalo */
+function chiQuanLy(req: AuthRequest, res: Response, next: NextFunction): void {
+    if ((req as any).viaApiKey) { res.status(403).json({ success: false, error: 'Đăng nhập Zalo chỉ làm được khi đăng nhập kengi.vn, không dùng khoá API' }); return }
+    if (!QUAN_LY.includes(String(req.user?.role || '').toLowerCase())) { res.status(403).json({ success: false, error: 'Chỉ chủ cửa hàng / quản lý mới đăng nhập hoặc đăng xuất Zalo' }); return }
+    next()
+}
+
+// ─── GET /api/zalo/dang-nhap — trạng thái phiên (KHÔNG BAO GIỜ có cookie) ────
+router.get('/dang-nhap', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        res.json({ success: true, data: await docTrangThai(req.storePrisma as any) })
+    } catch (e: any) {
+        console.error('[zalo] dang-nhap:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/dang-nhap/qr — LUỒNG SSE ────────────────────────────────
+// Mỗi dòng "data: {loai, …}": qr (ảnh data:image/png, sống 100 giây) → da_quet (tên, ảnh đại diện) →
+// xong | het_han | tu_choi | loi. Trình duyệt đóng kết nối = huỷ chờ quét.
+router.post('/dang-nhap/qr', authMiddleware, chiQuanLy, async (req: AuthRequest, res: Response) => {
+    const huy = new AbortController()
+    res.on('close', () => { if (!res.writableEnded) huy.abort() })
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    })
+    res.flushHeaders()
+    const conMo = () => !res.writableEnded && !res.destroyed
+    const phat = (s: SuKienQR) => { if (conMo()) res.write(`data: ${JSON.stringify(s)}\n\n`) }
+    const nhip = setInterval(() => { if (conMo()) res.write(': giu-ket-noi\n\n') }, 15_000)
+    try {
+        await dangNhapQR(req.storePrisma as any, req.user?.email || req.user?.userId || null, phat, huy.signal)
+    } catch (e: any) {
+        console.error('[zalo] dang-nhap/qr:', e?.message || e)
+        phat({ loai: 'loi', loi: loiChoNguoiDung(e) })
+    } finally {
+        clearInterval(nhip)
+        if (conMo()) res.end()
+    }
+})
+
+// ─── POST /api/zalo/dang-nhap/kiem-tra — đăng nhập lại từ bản lưu ───────────
+// Cả khi đang "hết hạn": kết luận nhầm (Zalo trục trặc) thì bấm đây là sống lại, khỏi quét QR.
+router.post('/dang-nhap/kiem-tra', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const kiemTra = await kiemTraPhien(sp, true)
+        res.json({ success: true, data: { ...(await docTrangThai(sp)), kiemTra } })
+    } catch (e: any) {
+        console.error('[zalo] dang-nhap/kiem-tra:', e?.message || e)
+        res.status(500).json({ success: false, error: loiChoNguoiDung(e) })
+    }
+})
+
+// ─── POST /api/zalo/dang-xuat — quên phiên trong Kengi ──────────────────────
+router.post('/dang-xuat', authMiddleware, chiQuanLy, async (req: AuthRequest, res: Response) => {
+    try {
+        res.json({ success: true, data: { daXoa: await dangXuat(req.storePrisma as any) } })
+    } catch (e: any) {
+        console.error('[zalo] dang-xuat:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })
@@ -542,7 +650,8 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
         const sp = req.storePrisma as any
         const b = req.body || {}
         const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
-        if (!ch?.n8nGuiUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook GỬI TIN của n8n (mục Kết nối n8n)' }); return }
+        const { kenh, tamDung } = await chonKenhGui(sp, ch)
+        if (!kenh) { res.status(400).json({ success: false, error: tamDung || CAU_CHUA_CO_KENH, ...(tamDung ? { hetHan: true } : {}) }); return }
         const gid = chuoiGid(b.groupId)
         if (!/^\d{6,25}$/.test(gid)) { res.status(400).json({ success: false, error: 'Chọn nhóm để gửi thử' }); return }
         if (!String(b.noiDung || '').trim() && !docAnh(b.anh).length) { res.status(400).json({ success: false, error: 'Tin trống' }); return }
@@ -556,15 +665,15 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
             const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, [nhom.customerId])
             bien = bienDoanhSo(theoKhach.get(nhom.customerId), cfg, nhomHang)
         }
-        const kq = await guiMotNhom(ch.n8nGuiUrl, {
+        const kq = await guiQuaKenh(sp, kenh, {
             dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
             maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: nhom?.tenNhom || null, bien,
         })
-        if (!kq.ok) { res.status(502).json({ success: false, error: kq.loi }); return }
-        res.json({ success: true })
+        if (!kq.ok) { res.status(502).json({ success: false, error: kq.loi, ...(kq.matPhien ? { hetHan: true } : {}) }); return }
+        res.json({ success: true, data: { kenh: kenh.loai } })
     } catch (e: any) {
         console.error('[zalo] gui-thu:', e?.message || e)
-        res.status(500).json({ success: false, error: errMsg(e) })
+        res.status(500).json({ success: false, error: loiChoNguoiDung(e) })
     }
 })
 
@@ -613,7 +722,9 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         const sp = req.storePrisma as any
         const b = req.body || {}
         const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
-        if (!ch?.n8nGuiUrl) { res.status(400).json({ success: false, error: 'Chưa dán webhook GỬI TIN của n8n (mục Kết nối n8n)' }); return }
+        // Phiên Kengi hết hạn thì CHẶN tạo đợt (quét lại QR trước) — tạo xong nằm chờ cả ngày mới gửi là tin cũ
+        const { kenh, tamDung } = await chonKenhGui(sp, ch)
+        if (!kenh) { res.status(400).json({ success: false, error: tamDung || CAU_CHUA_CO_KENH, ...(tamDung ? { hetHan: true } : {}) }); return }
         const noiDung = String(b.noiDung || '').trim()
         const anh = docAnh(b.anh)
         if (!noiDung && !anh.length) { res.status(400).json({ success: false, error: 'Tin trống — nhập nội dung hoặc thêm ảnh' }); return }
@@ -664,8 +775,8 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             })),
             skipDuplicates: true,
         })
-        const phut = Math.ceil(guiToi.length / Math.max(1, ch.guiMoiPhut || 4))
-        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua } })
+        const phut = Math.ceil(guiToi.length / Math.max(1, ch?.guiMoiPhut || 4))
+        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, kenh: kenh.loai } })
     } catch (e: any) {
         console.error('[zalo] dot-gui:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
