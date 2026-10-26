@@ -26,6 +26,7 @@ import { registryPrisma, getStorePrisma } from './prisma'
 import { nhanDangAnh } from './anhSanPham'
 import { docTrangThai, guiTinNhom, giuPhien, kichThuocAnh, type AnhGui, type KetQuaGuiZalo } from './zaloKengi'
 import { soanTin, docTuyChonCacDot, dotChuaToiGio, type TuyChonTin } from './zaloTuyChon'
+import { chupNoDauNgay } from './zaloGiaoDichNgay'
 
 // ─── Gợi ý ghép nhóm ↔ khách ────────────────────────────────────────────────
 
@@ -391,6 +392,9 @@ export async function nhipGuiZalo(): Promise<string> {
                 const gp = await giuPhien(sp).catch((e: any) => `loi ${String(e?.message || e).slice(0, 60)}`)
                 if (gp) ra.push(`${s.code}:phien-${gp}`)
             }
+            // Chụp nợ đầu ngày (0–6 giờ sáng VN, một lần/ngày, lib/zaloGiaoDichNgay.ts) — để tin cuối ngày tính "đã trả hôm nay"
+            const chup = await chupNoDauNgay(sp).catch((e: any) => `loi ${String(e?.message || e).slice(0, 60)}`)
+            if (chup) ra.push(`${s.code}:no-dau-ngay ${chup}`)
             // Lịch gửi định kỳ (26/10/2026, lib/zaloLichGui.ts): tới giờ thì tạo đợt — đợt đó gửi ngay ở dưới.
             // Nạp động: zaloLichGui dùng lại hàm của file này, nạp tĩnh là vòng import.
             const { nhipLichGui } = await import('./zaloLichGui')
