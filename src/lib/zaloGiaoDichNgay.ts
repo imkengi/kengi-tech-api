@@ -4,19 +4,27 @@
  * Chủ shop: "không phải công nợ ngày mà hôm nay đã mua bao nhiêu và thanh toán bao nhiêu á".
  * Biến: {muaHomNay} {soDonHomNay} {daTraHomNay} {noDauNgay} {homNay} (+ {congNo} {ngayChot} ở lib/zaloLichGui.ts).
  *
- * VÌ SAO "ĐÃ TRẢ" PHẢI SUY TỪ SỐ DƯ: đo 26/10/2026 (HUTI) — 7 ngày qua 0 dòng sổ nợ (DebtEntry) cho các khách
- * có nhóm Zalo: phiếu thu KiotViet KHÔNG có webhook, về Kengi trễ hàng tuần và gắn vào hoá đơn cũ không ngày
- * (xem memory lich-su-cong-no-lech-kiotviet). Cộng phiếu thu ⇒ "đã trả 0đ" cho người vừa trả tiền. Còn số dư
- * Customer.debt thì đúng gần như tức thì (webhook customer.update ⇒ hỏi lại KiotViet). Nên:
+ * "ĐÃ TRẢ" LẤY TỪ GIAO DỊCH (26/10 tối, chủ shop: "phần thanh toán là lấy trong phần giao dịch chứ k có gắn trên phiếu
+ * mà"). Bản đầu suy từ số dư (nợ 0 giờ + mua − nợ hiện tại) nên phải chờ ảnh chụp 0 giờ: ngày đầu không khách nào có số.
+ * Nay mỗi khách:
  *
- *     đã trả hôm nay = nợ ĐẦU NGÀY + mua hôm nay − nợ HIỆN TẠI
+ *     đã trả hôm nay = Σ tiền đã thu trên hoá đơn HÔM NAY + Σ phiếu thu nợ ghi ngày hôm nay
  *
- * khớp số dư KiotViet bằng cấu tạo. "Nợ đầu ngày" = ảnh chụp lúc 0 giờ VN (bảng NoKhachDauNgay, tạo lười, chỉ
- * cửa hàng có nhóm Zalo nối khách, giữ 40 ngày). Chụp trễ (sau 6 giờ sáng) = không tin; khách nối nhóm SAU lúc
- * chụp = không có số ⇒ BỎ khách đó, không đoán 0 (thiếu ≠ 0).
+ * - Tiền đã thu của MỘT hoá đơn (completed + partial, cùng tập với "mua") = max(amountReceived − change, Σ Payment khác
+ *   'credit'). POS Kengi: amountReceived là tiền khách đưa, change là tiền thối thật. KiotViet: amountReceived = Σ phiếu
+ *   thu của hoá đơn, còn change là phần trả DƯ đem trừ nợ cũ (một lần trả cho nhiều hoá đơn) — tiền đó khách trả thật
+ *   hôm nay, Σ Payment giữ lại nó. Lấy max thì đúng cả hai mà khỏi đoán nguồn hoá đơn.
+ * - Phiếu thu nợ = DebtEntry 'payment' (thu nợ ở Kengi, phiếu thu KiotViet chỉ đi sổ quỹ — đều mang ngày chứng từ), TRỪ
+ *   "Giảm nợ do trả hàng…" (trả hàng, không phải trả tiền) và "Thanh toán nợ HĐ <hoá đơn hôm nay>" (khoản đó đã thành
+ *   Payment của chính hoá đơn ở trên — cộng nữa là đếm đôi).
  *
- * Bỏ thay vì báo sai: khách có phiếu trả hàng trong ngày (tiền trả hàng lẫn vào "đã trả" — đo 30 ngày: 4 phiếu),
- * và khách có số "đã trả" âm (vd hoá đơn ngày cũ mới về hôm nay) — cả hai báo rõ trong xem trước.
+ * CHƯA THẤY: khách trả nợ CŨ bằng phiếu thu KiotViet được phân bổ vào hoá đơn cũ. Payment không có cột ngày và KiotViet
+ * không bắn webhook cho phiếu thu (memory lich-su-cong-no-lech-kiotviet), nên hôm đó "đã trả" thiếu phần này; {congNo}
+ * vẫn đúng vì số dư lấy thẳng từ KiotViet.
+ *
+ * {noDauNgay} vẫn là ảnh chụp lúc 0 giờ VN (bảng NoKhachDauNgay, tạo lười, chỉ cửa hàng có nhóm Zalo nối khách, giữ 40
+ * ngày). Chụp trễ (sau 6 giờ sáng) = không tin; khách nối nhóm SAU lúc chụp = không có số ⇒ tin bỏ dòng chứa {noDauNgay}
+ * (zaloGui dienMau), không đoán 0 (thiếu ≠ 0).
  */
 
 import { dinhTien } from './zaloDoanhSo'
@@ -27,12 +35,14 @@ const LECH_VN_MS = 7 * 3600_000
 const MOC_XONG = '__xong__'           // dòng đánh dấu "đã chụp ngày này" — giành lượt giữa các bản máy
 const CHUP_TRE_NHAT_GIO = 6           // chụp sau 6 giờ sáng VN thì số "đầu ngày" đã lẫn giao dịch sáng
 const GIU_NGAY = 40
-const SAI_SO_DONG = 1000              // lệch làm tròn của sàn / KiotViet — âm quá mức này mới là không khớp
+// Mô tả DebtEntry do code ghi (routes/returns.ts, routes/transactions.ts /pay-debt) — đổi bên đó thì đổi theo
+const MO_TA_TRA_HANG = 'Giảm nợ do trả hàng%'
+const MO_TA_THU_NO_HD = 'Thanh toán nợ HĐ '
 
 /** Biến tổng kết trong ngày có trong tin? */
 export const dungBienHomNay = (noiDung: string) => /\{\s*(muaHomNay|soDonHomNay|daTraHomNay|noDauNgay|homNay)\s*\}/i.test(String(noiDung || ''))
-/** Biến cần ảnh chụp nợ đầu ngày? */
-export const canNoDauNgay = (noiDung: string) => /\{\s*(daTraHomNay|noDauNgay)\s*\}/i.test(String(noiDung || ''))
+/** Biến cần ảnh chụp nợ đầu ngày? Chỉ {noDauNgay} — {daTraHomNay} lấy từ giao dịch */
+export const canNoDauNgay = (noiDung: string) => /\{\s*noDauNgay\s*\}/i.test(String(noiDung || ''))
 
 /** 'YYYY-MM-DD' theo ngày VN */
 export const ngayVN = (d: Date) => new Date(d.getTime() + LECH_VN_MS).toISOString().slice(0, 10)
@@ -105,32 +115,40 @@ export async function chupNoDauNgay(sp: any, luc = new Date()): Promise<string> 
 
 export interface SoNgay {
     mua: number; soDon: number; noNay: number
-    noDau: number | null       // null = chưa có ảnh chụp đầu ngày cho khách này
-    daTra: number | null       // null = không tính được (thiếu ảnh chụp / có trả hàng / âm)
-    lyDoKhongTinh: 'chua_chup' | 'tra_hang' | 'khong_khop' | null
+    daTra: number              // tiền khách trả hôm nay — lấy từ giao dịch (xem đầu file)
+    noDau: number | null       // null = chưa có ảnh chụp đầu ngày cho khách này ⇒ tin bỏ dòng {noDauNgay}
 }
 
 /**
  * Mua / trả trong ngày VN của `luc` cho từng khách. `khach` mang số dư HIỆN TẠI (Customer.debt).
- * Mua = Σ tổng hoá đơn (completed + partial — ghi nợ vẫn là mua) có ngày bán từ 0 giờ VN tới `luc`.
+ * Mua = Σ tổng hoá đơn (completed + partial — ghi nợ vẫn là mua) có ngày bán từ 0 giờ VN tới `luc`; đã trả xem đầu file.
  */
 export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: number | null }>, luc: Date): Promise<{ theoKhach: Map<string, SoNgay>; chupLuc: Date | null; chupTre: boolean }> {
     const theoKhach = new Map<string, SoNgay>()
     const ids = [...new Set(khach.map(k => k.id).filter(Boolean))]
     if (!ids.length) return { theoKhach, chupLuc: null, chupTre: false }
     const tu = dauNgayVN(luc)
+    const HOM_NAY = `t."customerId" = ANY($1::text[]) AND t."status" = ANY($2::text[])
+            AND COALESCE(t."transactionDate", t."createdAt") >= $3 AND COALESCE(t."transactionDate", t."createdAt") <= $4`
     const mua: any[] = await sp.$queryRawUnsafe(
-        `SELECT t."customerId" AS k, COALESCE(SUM(t."total"), 0)::float AS tien, COUNT(*)::int AS don
+        `SELECT t."customerId" AS k, COALESCE(SUM(t."total"), 0)::float AS tien, COUNT(*)::int AS don,
+                COALESCE(SUM(GREATEST(COALESCE(t."amountReceived", 0) - COALESCE(t."change", 0),
+                    (SELECT COALESCE(SUM(p."amount"), 0) FROM "Payment" p WHERE p."transactionId" = t."id" AND p."type" <> 'credit'), 0)), 0)::float AS thu
            FROM "Transaction" t
-          WHERE t."customerId" = ANY($1::text[]) AND t."status" = ANY($2::text[])
-            AND COALESCE(t."transactionDate", t."createdAt") >= $3 AND COALESCE(t."transactionDate", t."createdAt") <= $4
+          WHERE ${HOM_NAY}
           GROUP BY t."customerId"`,
         ids, [...TRANG_THAI_TINH], tu, luc)
-    const muaTheo = new Map(mua.map(r => [String(r.k), { tien: Number(r.tien) || 0, don: Number(r.don) || 0 }]))
-    const tra: any[] = await sp.$queryRawUnsafe(
-        `SELECT DISTINCT t."customerId" AS k FROM "ReturnOrder" r JOIN "Transaction" t ON t."receiptNumber" = r."originalInvoice"
-          WHERE r."status" <> 'rejected' AND r."createdAt" >= $2 AND t."customerId" = ANY($1::text[])`, ids, tu)
-    const coTraHang = new Set(tra.map(r => String(r.k)))
+    const muaTheo = new Map(mua.map(r => [String(r.k), { tien: Number(r.tien) || 0, don: Number(r.don) || 0, thu: Number(r.thu) || 0 }]))
+    const phieu: any[] = await sp.$queryRawUnsafe(
+        `SELECT d."customerId" AS k, COALESCE(SUM(d."amount"), 0)::float AS tien
+           FROM "DebtEntry" d
+          WHERE d."customerId" = ANY($1::text[]) AND d."type" = 'payment' AND d."createdAt" >= $3 AND d."createdAt" <= $4
+            AND d."description" NOT LIKE $5::text
+            AND NOT EXISTS (SELECT 1 FROM "Transaction" t WHERE ${HOM_NAY}
+                               AND t."customerId" = d."customerId" AND d."description" = $6::text || t."receiptNumber")
+          GROUP BY d."customerId"`,
+        ids, [...TRANG_THAI_TINH], tu, luc, MO_TA_TRA_HANG, MO_TA_THU_NO_HD)
+    const phieuTheo = new Map(phieu.map(r => [String(r.k), Number(r.tien) || 0]))
 
     let chupLuc: Date | null = null
     const noDau = new Map<string, number>()
@@ -145,19 +163,12 @@ export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: n
     }
     const chupTre = !!chupLuc && new Date(chupLuc.getTime() + LECH_VN_MS).getUTCHours() >= CHUP_TRE_NHAT_GIO
     for (const k of khach) {
-        const m = muaTheo.get(k.id) || { tien: 0, don: 0 }
-        const noNay = Number(k.debt) || 0
+        const m = muaTheo.get(k.id) || { tien: 0, don: 0, thu: 0 }
         const dau = chupTre ? undefined : noDau.get(k.id)
-        let daTra: number | null = null
-        let lyDo: SoNgay['lyDoKhongTinh'] = null
-        if (dau === undefined) lyDo = 'chua_chup'
-        else if (coTraHang.has(k.id)) lyDo = 'tra_hang'
-        else {
-            const x = Math.round(dau + m.tien - noNay)
-            if (x < -SAI_SO_DONG) lyDo = 'khong_khop'
-            else daTra = Math.max(0, x)
-        }
-        theoKhach.set(k.id, { mua: Math.round(m.tien), soDon: m.don, noNay, noDau: dau ?? null, daTra, lyDoKhongTinh: lyDo })
+        theoKhach.set(k.id, {
+            mua: Math.round(m.tien), soDon: m.don, noNay: Number(k.debt) || 0,
+            daTra: Math.max(0, Math.round(m.thu + (phieuTheo.get(k.id) || 0))), noDau: dau ?? null,
+        })
     }
     return { theoKhach, chupLuc, chupTre }
 }
@@ -165,18 +176,10 @@ export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: n
 /** "26/10/2026" */
 const homNayVN = (luc: Date) => { const s = ngayVN(luc); return `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` }
 
-/** Biến tổng kết trong ngày của MỘT khách (null ⇒ khách này không có đủ số — đừng gửi) */
-export function bienHomNay(s: SoNgay, luc: Date, canTra: boolean): Record<string, string> | null {
-    if (canTra && s.daTra === null) return null
+/** Biến tổng kết trong ngày của MỘT khách. Chưa có ảnh chụp 0 giờ ⇒ không có {noDauNgay} (dienMau bỏ dòng đó). */
+export function bienHomNay(s: SoNgay, luc: Date): Record<string, string> {
     return {
-        muaHomNay: dinhTien(s.mua), soDonHomNay: String(s.soDon), homNay: homNayVN(luc),
-        ...(s.daTra !== null ? { daTraHomNay: dinhTien(s.daTra) } : {}),
+        muaHomNay: dinhTien(s.mua), soDonHomNay: String(s.soDon), daTraHomNay: dinhTien(s.daTra), homNay: homNayVN(luc),
         ...(s.noDau !== null ? { noDauNgay: dinhTien(Math.max(0, s.noDau)) } : {}),
     }
-}
-
-export const LY_DO_BO: Record<NonNullable<SoNgay['lyDoKhongTinh']>, string> = {
-    chua_chup: 'chưa có số nợ đầu ngày (Kengi chụp lúc 0 giờ — khách nối nhóm sau giờ đó, hoặc ngày đầu dùng)',
-    tra_hang: 'có phiếu trả hàng hôm nay (chưa tách được tiền trả hàng khỏi tiền thanh toán)',
-    khong_khop: 'số không khớp (vd hoá đơn ngày cũ mới về hôm nay)',
 }

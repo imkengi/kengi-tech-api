@@ -28,7 +28,7 @@ import crypto from 'crypto'
 import { docTuyChon, luuTuyChonDot, type TuyChonTin } from './zaloTuyChon'
 import { tinhDoanhSo, bienDoanhSo, dungBienDoanhSo, dinhTien, type CauHinhDoanhSo } from './zaloDoanhSo'
 import { chonKenhGui, CAU_CHUA_CO_KENH, dienMau } from './zaloGui'
-import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay, LY_DO_BO, type SoNgay } from './zaloGiaoDichNgay'
+import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay } from './zaloGiaoDichNgay'
 
 const BANG = '"ZaloLichGui"'
 const LECH_VN_MS = 7 * 3600_000          // Việt Nam UTC+7, không đổi giờ
@@ -198,20 +198,18 @@ export interface KetQuaSoan {
     boKhongNo: number      // khách không nợ / nợ dưới mức tối thiểu
     boKhongMua: number     // khách không có doanh số trong kỳ
     boKhongGiaoDich: number   // khách không mua, không trả tiền trong ngày (lọc chiKhachCoGiaoDich)
-    boHomNay: Partial<Record<NonNullable<SoNgay['lyDoKhongTinh']>, number>>   // không đủ số "hôm nay" — theo lý do
-    /** VẪN GỬI nhưng thiếu số "đã trả" (chưa có số nợ 0 giờ…) ⇒ tin bỏ dòng {daTraHomNay} (zaloGui dienMau) */
-    thieuTra: number
+    /** VẪN GỬI nhưng chưa có số nợ 0 giờ ⇒ tin bỏ dòng {noDauNgay} (zaloGui dienMau) */
+    thieuNoDau: number
     doanhSo: (CauHinhDoanhSo & { nhomHang: string }) | null
 }
 
 /** Mô tả các nhóm bị bỏ (xem trước / kết quả lượt chạy) */
-export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongMua' | 'boKhongGiaoDich' | 'boHomNay'>): string {
+export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongMua' | 'boKhongGiaoDich'>): string {
     return [
         s.boKhongNo ? `${s.boKhongNo} khách không nợ / dưới mức` : '',
         s.boKhongGiaoDich ? `${s.boKhongGiaoDich} khách không mua / không trả tiền hôm nay` : '',
         s.boKhongMua ? `${s.boKhongMua} khách không có doanh số` : '',
         s.boChuaNoi ? `${s.boChuaNoi} nhóm chưa nối khách` : '',
-        ...Object.entries(s.boHomNay || {}).filter(([, n]) => n).map(([ly, n]) => `${n} khách ${LY_DO_BO[ly as keyof typeof LY_DO_BO]}`),
     ].filter(Boolean).join(', ')
 }
 
@@ -220,15 +218,14 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
     const canCongNo = dungBienCongNo(lich.noiDung)
     const canDoanhSo = dungBienDoanhSo(lich.noiDung) && !!lich.doanhSo
     const canHomNay = dungBienHomNay(lich.noiDung)
-    const canTra = canNoDauNgay(lich.noiDung)
+    const canNoDau = canNoDauNgay(lich.noiDung)
     const locGiaoDich = !!lich.doiTuong.chiKhachCoGiaoDich
     const canKhach = canCongNo || canDoanhSo || canHomNay || locGiaoDich || lich.doiTuong.chiKhachCoNo
     const nhom: any[] = await sp.zaloNhom.findMany({
         where: lich.doiTuong.loai === 'chon' ? { groupId: { in: lich.doiTuong.groupIds } } : { customerId: { not: null } },
         select: { groupId: true, customerId: true, tenNhom: true },
     })
-    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0, thieuTra = 0
-    const boHomNay: KetQuaSoan['boHomNay'] = {}
+    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0, thieuNoDau = 0
     // Nhóm đã chọn mà chưa có trong bảng nối (chỉ quét thấy) — vẫn gửi được nếu tin không cần số của khách
     if (lich.doiTuong.loai === 'chon') {
         const coSan = new Set(nhom.map(n => n.groupId))
@@ -257,20 +254,13 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
         const no = k ? Number(k.debt) || 0 : null
         if (lich.doiTuong.chiKhachCoNo && !(no !== null && no > 0 && no >= lich.doiTuong.noToiThieu)) { boKhongNo++; continue }
         const sn = k && ngay ? ngay.theoKhach.get(k.id) : undefined
-        if (locGiaoDich && !(sn && (sn.mua > 0 || (sn.daTra ?? 0) > 0))) {
-            // Không mua mà chưa tính được "đã trả" (thiếu ảnh chụp…) ⇒ không biết có trả tiền không: báo theo lý do, đừng gộp vào "không giao dịch"
-            if (sn && sn.mua === 0 && sn.daTra === null && sn.lyDoKhongTinh) boHomNay[sn.lyDoKhongTinh] = (boHomNay[sn.lyDoKhongTinh] || 0) + 1
-            else boKhongGiaoDich++
-            continue
-        }
+        if (locGiaoDich && !(sn && (sn.mua > 0 || sn.daTra > 0))) { boKhongGiaoDich++; continue }
         let bien: Record<string, string> = {}
         if (canCongNo && no !== null) bien = { ...bien, ...bienCongNo(no, luc) }
         if (canHomNay && sn) {
-            let b = bienHomNay(sn, luc, canTra)
-            // Chưa tính được "đã trả" (chưa có số nợ 0 giờ…) ⇒ vẫn gửi phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
-            if (!b && canTra) { b = bienHomNay(sn, luc, false); if (b) thieuTra++ }
-            if (!b) { const ly = sn.lyDoKhongTinh || 'chua_chup'; boHomNay[ly] = (boHomNay[ly] || 0) + 1; continue }
-            bien = { ...bien, ...b }
+            // Chưa có số nợ 0 giờ ⇒ vẫn gửi; dienMau bỏ dòng {noDauNgay} (26/10/2026)
+            if (canNoDau && sn.noDau === null) thieuNoDau++
+            bien = { ...bien, ...bienHomNay(sn, luc) }
         }
         if (ds && cfgDs && k) {
             const s = ds.theoKhach.get(k.id)
@@ -282,7 +272,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
             maKhach: k?.code || null, tenKhach: k?.name || null, bien: Object.keys(bien).length ? bien : null, no,
         })
     }
-    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boHomNay, thieuTra, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
+    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
 }
 
 /** Tin mẫu đã điền cho một dòng (xem trước) */
@@ -491,7 +481,7 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
     const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
     const { kenh, tamDung } = await chonKenhGui(sp, ch)
     if (!kenh) return boQua(tamDung || CAU_CHUA_CO_KENH)
-    // Số nợ / số "đã trả" (suy từ số dư) đều cần số dư còn mới
+    // Số nợ / nợ đầu ngày (ảnh chụp số dư) đều cần số dư còn mới
     if ((dungBienCongNo(lich.noiDung) || canNoDauNgay(lich.noiDung)) && !opt.boQuaKiemTraNo) {
         const t = await kiemSoNoTuoi(sp, luc)
         if (!t.ok) {
@@ -502,9 +492,8 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
     const soan = await soanNguoiNhan(sp, lich, luc)
     if (!soan.dong.length) {
         const vi = moTaBo(soan)
-        // Bỏ hết vì thiếu số "hôm nay" (chưa chụp nợ đầu ngày…) là chuyện cần biết ⇒ báo chuông; bỏ vì không ai nợ / không ai mua thì bình thường
-        const thieuSo = Object.values(soan.boHomNay || {}).some(n => (n || 0) > 0)
-        return boQua(`Không có nhóm nào cần gửi${vi ? ` (${vi})` : ''}`, thieuSo)
+        // Bỏ vì không ai nợ / không ai mua là bình thường ⇒ không báo chuông
+        return boQua(`Không có nhóm nào cần gửi${vi ? ` (${vi})` : ''}`, false)
     }
     const dot = await sp.zaloDotGui.create({
         data: {
@@ -519,7 +508,7 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
         skipDuplicates: true,
     })
     const bo = moTaBo(soan)
-    const thieu = soan.thieuTra ? `; ${soan.thieuTra} tin không có dòng "đã thanh toán" (chưa có số nợ 0 giờ)` : ''
+    const thieu = soan.thieuNoDau ? `; ${soan.thieuNoDau} tin không có dòng "nợ đầu ngày" (chưa có số nợ 0 giờ)` : ''
     const ketQua = `Đã xếp ${soan.dong.length} nhóm${bo ? ` (bỏ ${bo})` : ''}${thieu}${opt.thuCong ? ' — chạy tay' : ''}`
     await ghiKetQua(sp, lich.id, ketQua, dot.id, luc)
     return { dotId: dot.id, soNhom: soan.dong.length, ketQua, boQua: false }

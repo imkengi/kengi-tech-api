@@ -54,7 +54,7 @@ import {
     dsLich, layLich, docDuLieuLich, taoLich, suaLich, datBat, xoaLich, chayLich, soanNguoiNhan, tinMau, lanDau,
     moTaTanSuat, kiemSoNoTuoi, dungBienCongNo, bienCongNo, moTaBo,
 } from '../lib/zaloLichGui'
-import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay, LY_DO_BO } from '../lib/zaloGiaoDichNgay'
+import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay } from '../lib/zaloGiaoDichNgay'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 import { dungBienDoanhSo, docCauHinhDoanhSo, tinhDoanhSo, bienDoanhSo, CauHinhDoanhSo } from '../lib/zaloDoanhSo'
 
@@ -692,11 +692,8 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
             if (!kh) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số mua / thanh toán — chọn nhóm đã nối khách' }); return }
             const luc = new Date()
             const { theoKhach } = await soNgayCuaKhach(sp, [{ id: kh.id, debt: kh.debt }], luc)
-            const s = theoKhach.get(kh.id)!
-            // Chưa tính được "đã trả" ⇒ vẫn gửi thử phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
-            const bh = bienHomNay(s, luc, canNoDauNgay(b.noiDung)) ?? bienHomNay(s, luc, false)
-            if (!bh) { res.status(400).json({ success: false, error: `Chưa tính được số hôm nay cho khách này: ${LY_DO_BO[s.lyDoKhongTinh || 'chua_chup']}` }); return }
-            bien = { ...(bien || {}), ...bh }
+            // Chưa có số nợ 0 giờ ⇒ không có {noDauNgay}, dienMau bỏ dòng đó (26/10/2026)
+            bien = { ...(bien || {}), ...bienHomNay(theoKhach.get(kh.id)!, luc) }
         }
         const kq = await guiQuaKenh(sp, kenh, {
             dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
@@ -797,7 +794,7 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         }
 
         // Số dư chưa đủ mới (KiotViet chưa đối chiếu / webhook im) ⇒ 409 canXacNhan: người bấm thấy lý do rồi mới quyết.
-        // Áp cho {congNo} và cho "đã trả hôm nay" (suy từ số dư — lib/zaloGiaoDichNgay.ts).
+        // Áp cho {congNo} và {noDauNgay} (ảnh chụp số dư — lib/zaloGiaoDichNgay.ts).
         if ((dungBienCongNo(noiDung) || canNoDauNgay(noiDung)) && b.boQuaKiemTraNo !== true) {
             const t = await kiemSoNoTuoi(sp)
             if (!t.ok) { res.status(409).json({ success: false, error: t.lyDo, canXacNhan: true }); return }
@@ -818,31 +815,25 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             guiToi = conLai
             if (!guiToi.length) { res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${boChuaNoi} nhóm chưa nối khách nên không có số nợ` }); return }
         }
-        // Tổng kết hôm nay {muaHomNay} {daTraHomNay}… (26/10/2026): khách thiếu số (chưa chụp nợ đầu ngày, có trả hàng…) bị bỏ
-        let boHomNay = 0, thieuTra = 0
+        // Tổng kết hôm nay {muaHomNay} {daTraHomNay}… (26/10/2026): nhóm chưa nối khách bị bỏ; chưa có số nợ 0 giờ ⇒ tin
+        // bỏ dòng {noDauNgay} (dienMau), vẫn gửi
+        let thieuNoDau = 0
         if (dungBienHomNay(noiDung)) {
             const luc = new Date()
             const kIds = [...new Set<string>(guiToi.map(g => theoNhom.get(g)?.customerId).filter(Boolean))]
             const khs: any[] = kIds.length ? await sp.customer.findMany({ where: { id: { in: kIds } }, select: { id: true, debt: true } }) : []
             const { theoKhach } = await soNgayCuaKhach(sp, khs, luc)
-            const lyDo = new Map<string, number>()
             const conLai: string[] = []
             for (const gid of guiToi) {
                 const kid = theoNhom.get(gid)?.customerId
                 const s = kid ? theoKhach.get(kid) : undefined
                 if (!s) { boChuaNoi++; continue }
-                let bh = bienHomNay(s, luc, canNoDauNgay(noiDung))
-                // Chưa tính được "đã trả" ⇒ vẫn gửi phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
-                if (!bh && canNoDauNgay(noiDung)) { bh = bienHomNay(s, luc, false); if (bh) thieuTra++ }
-                if (!bh) { boHomNay++; const l = LY_DO_BO[s.lyDoKhongTinh || 'chua_chup']; lyDo.set(l, (lyDo.get(l) || 0) + 1); continue }
-                bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bh })
+                if (canNoDauNgay(noiDung) && s.noDau === null) thieuNoDau++
+                bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bienHomNay(s, luc) })
                 conLai.push(gid)
             }
             guiToi = conLai
-            if (!guiToi.length) {
-                res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${[...lyDo].map(([l, n]) => `${n} khách ${l}`).join('; ') || `${boChuaNoi} nhóm chưa nối khách`}` })
-                return
-            }
+            if (!guiToi.length) { res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${boChuaNoi} nhóm chưa nối khách` }); return }
         }
 
         const dot = await sp.zaloDotGui.create({
@@ -866,7 +857,7 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             skipDuplicates: true,
         })
         const phut = Math.ceil(guiToi.length / Math.max(1, ch?.guiMoiPhut || 4))
-        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, boHomNay, thieuTra, kenh: kenh.loai, henGio: tuyChon.henGio } })
+        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, thieuNoDau, kenh: kenh.loai, henGio: tuyChon.henGio } })
     } catch (e: any) {
         console.error('[zalo] dot-gui:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
@@ -984,7 +975,7 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
             success: true,
             data: {
                 soNhom: soan.dong.length, boChuaNoi: soan.boChuaNoi, boKhongNo: soan.boKhongNo, boKhongMua: soan.boKhongMua,
-                boKhongGiaoDich: soan.boKhongGiaoDich, boHomNay: soan.boHomNay, thieuTra: soan.thieuTra, moTaBo: moTaBo(soan),
+                boKhongGiaoDich: soan.boKhongGiaoDich, thieuNoDau: soan.thieuNoDau, moTaBo: moTaBo(soan),
                 tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
                 ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,
