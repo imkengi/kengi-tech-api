@@ -28,6 +28,9 @@
  *
  * TUỲ CHỌN GỬI (25/10/2026, lib/zaloTuyChon.ts): /gui-thu + /dot-gui nhận `tuyChon` {mucDo, nhacCaNhom, tuXoa,
  * henGio}; thẻ định dạng [đậm]… nằm ngay trong noiDung. POST /api/zalo/dot-gui/:id/gui-ngay = bỏ giờ hẹn.
+ *
+ * GỬI ĐỊNH KỲ (26/10/2026, lib/zaloLichGui.ts): /api/zalo/lich-gui (GET, POST, PUT /:id, DELETE /:id, POST /:id/bat,
+ * POST /:id/chay-ngay, POST /xem). Biến công nợ {congNo} {ngayChot} dùng được cả trong /gui-thu + /dot-gui.
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -47,6 +50,10 @@ import {
 } from '../lib/zaloGui'
 import { docTrangThai, dangNhapQR, kiemTraPhien, dangXuat, dsNhomZalo, LoiPhienZalo, laLoiZalo, type SuKienQR } from '../lib/zaloKengi'
 import { docTuyChon, luuTuyChonDot, docTuyChonCacDot, boHenGio } from '../lib/zaloTuyChon'
+import {
+    dsLich, layLich, docDuLieuLich, taoLich, suaLich, datBat, xoaLich, chayLich, soanNguoiNhan, tinMau, tinhLanToi,
+    moTaTanSuat, kiemSoNoTuoi, dungBienCongNo, bienCongNo,
+} from '../lib/zaloLichGui'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 import { dungBienDoanhSo, docCauHinhDoanhSo, tinhDoanhSo, bienDoanhSo, CauHinhDoanhSo } from '../lib/zaloDoanhSo'
 
@@ -672,6 +679,12 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
             const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, [nhom.customerId])
             bien = bienDoanhSo(theoKhach.get(nhom.customerId), cfg, nhomHang)
         }
+        // Công nợ {congNo} {ngayChot} (26/10/2026) — số dư của khách nhóm này, chốt ngay lúc gửi thử
+        if (dungBienCongNo(b.noiDung)) {
+            const kh = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { debt: true } }) : null
+            if (!kh) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số nợ — chọn nhóm đã nối khách' }); return }
+            bien = { ...(bien || {}), ...bienCongNo(Number(kh.debt) || 0, new Date()) }
+        }
         const kq = await guiQuaKenh(sp, kenh, {
             dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
             maKhach: k?.code || null, tenKhach: k?.name || null, tenNhom: nhom?.tenNhom || null, bien, tuyChon,
@@ -768,6 +781,28 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
                 res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${boChuaNoi} nhóm chưa nối khách, ${boKhongMua} khách không có doanh số trong kỳ` })
                 return
             }
+        }
+
+        // Công nợ {congNo} {ngayChot} (26/10/2026): số dư CHỐT lúc tạo đợt, nhóm chưa nối khách bị bỏ. Số nợ chưa đủ mới
+        // (KiotViet chưa đối chiếu / webhook im) ⇒ 409 canXacNhan: người bấm thấy lý do rồi mới quyết gửi tiếp.
+        if (dungBienCongNo(noiDung)) {
+            if (b.boQuaKiemTraNo !== true) {
+                const t = await kiemSoNoTuoi(sp)
+                if (!t.ok) { res.status(409).json({ success: false, error: t.lyDo, canXacNhan: true }); return }
+            }
+            const luc = new Date()
+            const kIds = [...new Set<string>(guiToi.map(g => theoNhom.get(g)?.customerId).filter(Boolean))]
+            const khs: any[] = kIds.length ? await sp.customer.findMany({ where: { id: { in: kIds } }, select: { id: true, debt: true } }) : []
+            const noTheoKhach = new Map<string, number>(khs.map(k => [k.id, Number(k.debt) || 0]))
+            const conLai: string[] = []
+            for (const gid of guiToi) {
+                const kid = theoNhom.get(gid)?.customerId
+                if (!kid || !noTheoKhach.has(kid)) { boChuaNoi++; continue }
+                bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bienCongNo(noTheoKhach.get(kid)!, luc) })
+                conLai.push(gid)
+            }
+            guiToi = conLai
+            if (!guiToi.length) { res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${boChuaNoi} nhóm chưa nối khách nên không có số nợ` }); return }
         }
 
         const dot = await sp.zaloDotGui.create({
@@ -876,6 +911,114 @@ router.post('/dot-gui/:id/gui-lai-loi', authMiddleware, requirePermission('custo
         if (r.count) await sp.zaloDotGui.updateMany({ where: { id }, data: { trangThai: 'dang_gui' } })
         res.json({ success: true, data: { soNhom: r.count } })
     } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/* ═══ GỬI ĐỊNH KỲ — công nợ / doanh số / tin bất kỳ theo lịch (26/10/2026) — lõi ở lib/zaloLichGui.ts ═══ */
+
+const veLich = (l: any) => ({ ...l, moTa: moTaTanSuat(l.tanSuat) })
+
+// ─── GET /api/zalo/lich-gui ─────────────────────────────────────────────────
+router.get('/lich-gui', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        res.json({ success: true, data: (await dsLich(req.storePrisma as any)).map(veLich) })
+    } catch (e: any) {
+        console.error('[zalo] lich-gui:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/lich-gui/xem — xem trước (KHÔNG ghi gì): ai nhận, số chốt nếu chạy bây giờ, tin mẫu ─
+router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create'), async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const d = docDuLieuLich(req.body)
+        if (typeof d === 'string') { res.status(400).json({ success: false, error: d }); return }
+        const luc = new Date()
+        const soan = await soanNguoiNhan(sp, d, luc)
+        const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
+        const { kenh, tamDung } = await chonKenhGui(sp, ch)
+        const noTuoi = dungBienCongNo(d.noiDung) ? await kiemSoNoTuoi(sp, luc) : { ok: true, lyDo: null }
+        res.json({
+            success: true,
+            data: {
+                soNhom: soan.dong.length, boChuaNoi: soan.boChuaNoi, boKhongNo: soan.boKhongNo, boKhongMua: soan.boKhongMua,
+                tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
+                ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
+                tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,
+                lanToi: tinhLanToi(d.tanSuat, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
+                noTuoi, kenh: kenh?.loai || null, tamDung, doanhSo: soan.doanhSo,
+            },
+        })
+    } catch (e: any) {
+        console.error('[zalo] lich-gui/xem:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/lich-gui — tạo lịch ─────────────────────────────────────
+router.post('/lich-gui', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const d = docDuLieuLich(req.body)
+        if (typeof d === 'string') { res.status(400).json({ success: false, error: d }); return }
+        const l = await taoLich(req.storePrisma as any, d, req.user?.email || req.user?.userId || null)
+        res.json({ success: true, data: veLich(l) })
+    } catch (e: any) {
+        console.error('[zalo] POST lich-gui:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── PUT /api/zalo/lich-gui/:id — sửa lịch (giờ chạy kế tiếp tính lại) ──────
+router.put('/lich-gui/:id', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const d = docDuLieuLich(req.body)
+        if (typeof d === 'string') { res.status(400).json({ success: false, error: d }); return }
+        const l = await suaLich(req.storePrisma as any, String(req.params.id), d)
+        if (!l) { res.status(404).json({ success: false, error: 'Không tìm thấy lịch gửi' }); return }
+        res.json({ success: true, data: veLich(l) })
+    } catch (e: any) {
+        console.error('[zalo] PUT lich-gui:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/lich-gui/:id/bat {bat} — bật / tạm tắt ──────────────────
+router.post('/lich-gui/:id/bat', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const l = await datBat(req.storePrisma as any, String(req.params.id), req.body?.bat === true)
+        if (!l) { res.status(404).json({ success: false, error: 'Không tìm thấy lịch gửi' }); return }
+        res.json({ success: true, data: veLich(l) })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── DELETE /api/zalo/lich-gui/:id — xoá lịch (các đợt đã gửi vẫn giữ trong lịch sử) ─
+router.delete('/lich-gui/:id', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const co = await xoaLich(req.storePrisma as any, String(req.params.id))
+        if (!co) { res.status(404).json({ success: false, error: 'Không tìm thấy lịch gửi' }); return }
+        res.json({ success: true })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/zalo/lich-gui/:id/chay-ngay {boQuaKiemTraNo?} — chạy một lượt NGAY (không đổi giờ lượt tới) ─
+// Số nợ chưa đủ mới ⇒ 409 canXacNhan kèm lý do: người bấm đọc rồi tự quyết gửi tiếp.
+router.post('/lich-gui/:id/chay-ngay', authMiddleware, requirePermission('customers.create'), canGhi, async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const l = await layLich(sp, String(req.params.id))
+        if (!l) { res.status(404).json({ success: false, error: 'Không tìm thấy lịch gửi' }); return }
+        const kq = await chayLich(sp, l, { thuCong: true, boQuaKiemTraNo: req.body?.boQuaKiemTraNo === true })
+        if (kq.canXacNhan) { res.status(409).json({ success: false, error: kq.ketQua, canXacNhan: true }); return }
+        if (kq.boQua) { res.status(400).json({ success: false, error: kq.ketQua }); return }
+        res.json({ success: true, data: kq })
+    } catch (e: any) {
+        console.error('[zalo] lich-gui chay-ngay:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })

@@ -165,8 +165,10 @@ async function damBaoBang(sp: any): Promise<void> {
 
 /** Có bảng chưa — đường đọc dùng cái này để KHÔNG tạo bảng ở cửa hàng chưa từng dùng tuỳ chọn */
 async function coBang(sp: any): Promise<boolean> {
-    if (daTaoBang.has(await tenSchema(sp))) return true
+    const schema = await tenSchema(sp)
+    if (daTaoBang.has(schema)) return true
     const r: any[] = await sp.$queryRawUnsafe(`SELECT to_regclass('"ZaloDotTuyChon"') IS NOT NULL AS co`)
+    if (r[0]?.co) daTaoBang.add(schema)   // nhớ "đã có" — nhịp gửi mỗi phút khỏi hỏi lại
     return !!r[0]?.co
 }
 

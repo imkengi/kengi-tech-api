@@ -391,6 +391,11 @@ export async function nhipGuiZalo(): Promise<string> {
                 const gp = await giuPhien(sp).catch((e: any) => `loi ${String(e?.message || e).slice(0, 60)}`)
                 if (gp) ra.push(`${s.code}:phien-${gp}`)
             }
+            // Lịch gửi định kỳ (26/10/2026, lib/zaloLichGui.ts): tới giờ thì tạo đợt — đợt đó gửi ngay ở dưới.
+            // Nạp động: zaloLichGui dùng lại hàm của file này, nạp tĩnh là vòng import.
+            const { nhipLichGui } = await import('./zaloLichGui')
+            const lg = await nhipLichGui(sp).catch((e: any) => `loi ${String(e?.message || e).slice(0, 60)}`)
+            if (lg) ra.push(`${s.code}:lich ${lg}`)
             const coViec = await sp.zaloDotGuiNhom.count({ where: { trangThai: 'cho' } }).catch(() => 0)
             if (!coViec) continue
             const kq = await guiTiepCuaHang(sp)
