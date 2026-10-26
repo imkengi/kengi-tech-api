@@ -693,8 +693,9 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
             const luc = new Date()
             const { theoKhach } = await soNgayCuaKhach(sp, [{ id: kh.id, debt: kh.debt }], luc)
             const s = theoKhach.get(kh.id)!
-            const bh = bienHomNay(s, luc, canNoDauNgay(b.noiDung))
-            if (!bh) { res.status(400).json({ success: false, error: `Chưa tính được "đã trả hôm nay" cho khách này: ${LY_DO_BO[s.lyDoKhongTinh || 'chua_chup']}` }); return }
+            // Chưa tính được "đã trả" ⇒ vẫn gửi thử phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
+            const bh = bienHomNay(s, luc, canNoDauNgay(b.noiDung)) ?? bienHomNay(s, luc, false)
+            if (!bh) { res.status(400).json({ success: false, error: `Chưa tính được số hôm nay cho khách này: ${LY_DO_BO[s.lyDoKhongTinh || 'chua_chup']}` }); return }
             bien = { ...(bien || {}), ...bh }
         }
         const kq = await guiQuaKenh(sp, kenh, {
@@ -818,7 +819,7 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             if (!guiToi.length) { res.status(400).json({ success: false, error: `Không còn nhóm nào để gửi: ${boChuaNoi} nhóm chưa nối khách nên không có số nợ` }); return }
         }
         // Tổng kết hôm nay {muaHomNay} {daTraHomNay}… (26/10/2026): khách thiếu số (chưa chụp nợ đầu ngày, có trả hàng…) bị bỏ
-        let boHomNay = 0
+        let boHomNay = 0, thieuTra = 0
         if (dungBienHomNay(noiDung)) {
             const luc = new Date()
             const kIds = [...new Set<string>(guiToi.map(g => theoNhom.get(g)?.customerId).filter(Boolean))]
@@ -830,7 +831,9 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
                 const kid = theoNhom.get(gid)?.customerId
                 const s = kid ? theoKhach.get(kid) : undefined
                 if (!s) { boChuaNoi++; continue }
-                const bh = bienHomNay(s, luc, canNoDauNgay(noiDung))
+                let bh = bienHomNay(s, luc, canNoDauNgay(noiDung))
+                // Chưa tính được "đã trả" ⇒ vẫn gửi phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
+                if (!bh && canNoDauNgay(noiDung)) { bh = bienHomNay(s, luc, false); if (bh) thieuTra++ }
                 if (!bh) { boHomNay++; const l = LY_DO_BO[s.lyDoKhongTinh || 'chua_chup']; lyDo.set(l, (lyDo.get(l) || 0) + 1); continue }
                 bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bh })
                 conLai.push(gid)
@@ -863,7 +866,7 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
             skipDuplicates: true,
         })
         const phut = Math.ceil(guiToi.length / Math.max(1, ch?.guiMoiPhut || 4))
-        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, boHomNay, kenh: kenh.loai, henGio: tuyChon.henGio } })
+        res.json({ success: true, data: { dotId: dot.id, soNhom: guiToi.length, uocTinhPhut: phut, boChuaNoi, boKhongMua, boHomNay, thieuTra, kenh: kenh.loai, henGio: tuyChon.henGio } })
     } catch (e: any) {
         console.error('[zalo] dot-gui:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
@@ -981,7 +984,7 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
             success: true,
             data: {
                 soNhom: soan.dong.length, boChuaNoi: soan.boChuaNoi, boKhongNo: soan.boKhongNo, boKhongMua: soan.boKhongMua,
-                boKhongGiaoDich: soan.boKhongGiaoDich, boHomNay: soan.boHomNay, moTaBo: moTaBo(soan),
+                boKhongGiaoDich: soan.boKhongGiaoDich, boHomNay: soan.boHomNay, thieuTra: soan.thieuTra, moTaBo: moTaBo(soan),
                 tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
                 ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,

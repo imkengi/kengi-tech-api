@@ -199,6 +199,8 @@ export interface KetQuaSoan {
     boKhongMua: number     // khách không có doanh số trong kỳ
     boKhongGiaoDich: number   // khách không mua, không trả tiền trong ngày (lọc chiKhachCoGiaoDich)
     boHomNay: Partial<Record<NonNullable<SoNgay['lyDoKhongTinh']>, number>>   // không đủ số "hôm nay" — theo lý do
+    /** VẪN GỬI nhưng thiếu số "đã trả" (chưa có số nợ 0 giờ…) ⇒ tin bỏ dòng {daTraHomNay} (zaloGui dienMau) */
+    thieuTra: number
     doanhSo: (CauHinhDoanhSo & { nhomHang: string }) | null
 }
 
@@ -225,7 +227,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
         where: lich.doiTuong.loai === 'chon' ? { groupId: { in: lich.doiTuong.groupIds } } : { customerId: { not: null } },
         select: { groupId: true, customerId: true, tenNhom: true },
     })
-    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0
+    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0, thieuTra = 0
     const boHomNay: KetQuaSoan['boHomNay'] = {}
     // Nhóm đã chọn mà chưa có trong bảng nối (chỉ quét thấy) — vẫn gửi được nếu tin không cần số của khách
     if (lich.doiTuong.loai === 'chon') {
@@ -264,7 +266,9 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
         let bien: Record<string, string> = {}
         if (canCongNo && no !== null) bien = { ...bien, ...bienCongNo(no, luc) }
         if (canHomNay && sn) {
-            const b = bienHomNay(sn, luc, canTra)
+            let b = bienHomNay(sn, luc, canTra)
+            // Chưa tính được "đã trả" (chưa có số nợ 0 giờ…) ⇒ vẫn gửi phần biết chắc; dienMau bỏ dòng {daTraHomNay} (26/10/2026)
+            if (!b && canTra) { b = bienHomNay(sn, luc, false); if (b) thieuTra++ }
             if (!b) { const ly = sn.lyDoKhongTinh || 'chua_chup'; boHomNay[ly] = (boHomNay[ly] || 0) + 1; continue }
             bien = { ...bien, ...b }
         }
@@ -278,7 +282,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
             maKhach: k?.code || null, tenKhach: k?.name || null, bien: Object.keys(bien).length ? bien : null, no,
         })
     }
-    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boHomNay, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
+    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boHomNay, thieuTra, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
 }
 
 /** Tin mẫu đã điền cho một dòng (xem trước) */
@@ -515,7 +519,8 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
         skipDuplicates: true,
     })
     const bo = moTaBo(soan)
-    const ketQua = `Đã xếp ${soan.dong.length} nhóm${bo ? ` (bỏ ${bo})` : ''}${opt.thuCong ? ' — chạy tay' : ''}`
+    const thieu = soan.thieuTra ? `; ${soan.thieuTra} tin không có dòng "đã thanh toán" (chưa có số nợ 0 giờ)` : ''
+    const ketQua = `Đã xếp ${soan.dong.length} nhóm${bo ? ` (bỏ ${bo})` : ''}${thieu}${opt.thuCong ? ' — chạy tay' : ''}`
     await ghiKetQua(sp, lich.id, ketQua, dot.id, luc)
     return { dotId: dot.id, soNhom: soan.dong.length, ketQua, boQua: false }
 }

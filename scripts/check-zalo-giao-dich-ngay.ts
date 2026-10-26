@@ -4,6 +4,8 @@
  * Chủ shop 26/10/2026: "không phải công nợ ngày mà hôm nay đã mua bao nhiêu và thanh toán bao nhiêu á".
  * Lõi ở lib/zaloGiaoDichNgay.ts: đã trả hôm nay = nợ ĐẦU NGÀY (ảnh chụp 0 giờ) + mua hôm nay − nợ HIỆN TẠI.
  * Sai ở đây là báo khách "đã trả 0đ" khi họ vừa trả, hay báo số âm — nên mỗi ca một phép. Prisma giả.
+ * Mục 7 (26/10 tối, chủ shop "có [mua] mà sao lại không có"): ngày đầu chưa có ảnh chụp ⇒ khách CÓ MUA vẫn nhận tin, chỉ
+ * bỏ dòng "đã trả" (dienMau) — trước đó bỏ cả khách ⇒ 18 khách mua mà xem trước "0 nhóm".
  */
 process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat(32)
 
@@ -11,6 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { chupNoDauNgay, soNgayCuaKhach, bienHomNay, dungBienHomNay, canNoDauNgay, ngayVN } from '../src/lib/zaloGiaoDichNgay'
 import { soanNguoiNhan, chayLich, type LichGui } from '../src/lib/zaloLichGui'
+import { dienMau } from '../src/lib/zaloGui'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -118,7 +121,7 @@ async function main() {
         const s = { mua: 10_000_000, soDon: 2, noNay: 12_000_000, noDau: 5_000_000, daTra: 3_000_000, lyDoKhongTinh: null }
         const b = bienHomNay(s, LUC, true)!
         ok('3a. {muaHomNay} {soDonHomNay} {daTraHomNay} {noDauNgay} {homNay}', b.muaHomNay === '10.000.000đ' && b.soDonHomNay === '2' && b.daTraHomNay === '3.000.000đ' && b.noDauNgay === '5.000.000đ' && b.homNay === '26/10/2026', b)
-        ok('3b. Tin cần "đã trả" mà không tính được ⇒ null (bỏ khách, không gửi)', bienHomNay({ ...s, daTra: null, lyDoKhongTinh: 'tra_hang' }, LUC, true) === null)
+        ok('3b. Tin cần "đã trả" mà không tính được ⇒ null (nơi gọi lấy bộ biến KHÔNG có "đã trả", dienMau bỏ dòng — xem mục 7)', bienHomNay({ ...s, daTra: null, lyDoKhongTinh: 'tra_hang' }, LUC, true) === null)
         const chiMua = bienHomNay({ ...s, daTra: null, noDau: null, lyDoKhongTinh: 'chua_chup' }, LUC, false)
         ok('3c. Tin chỉ có {muaHomNay} ⇒ vẫn gửi được khi chưa có ảnh chụp', !!chiMua && chiMua.muaHomNay === '10.000.000đ' && !('daTraHomNay' in chiMua!), chiMua)
         ok('3d. Nhận diện biến', dungBienHomNay('Hôm nay mua {muaHomNay}') && !canNoDauNgay('Hôm nay mua {muaHomNay}') && canNoDauNgay('đã trả {daTraHomNay}'))
@@ -161,6 +164,34 @@ async function main() {
         ok('6a. nhipGuiZalo chụp nợ đầu ngày mỗi nhịp', /chupNoDauNgay\(sp\)/.test(gui))
         ok('6b. /gui-thu + /dot-gui điền biến hôm nay', (route.match(/dungBienHomNay\(/g) || []).length >= 2 && /bienHomNay\(s, luc, canNoDauNgay\(/.test(route))
         ok('6c. /dot-gui kiểm số dư còn mới cả khi chỉ dùng {daTraHomNay}', /\(dungBienCongNo\(noiDung\) \|\| canNoDauNgay\(noiDung\)\) && b\.boQuaKiemTraNo !== true/.test(route))
+        ok('6d. /gui-thu + /dot-gui: thiếu số "đã trả" ⇒ lấy bộ biến không có "đã trả" (không báo lỗi / bỏ khách)',
+            /bienHomNay\(s, luc, canNoDauNgay\(b\.noiDung\)\) \?\? bienHomNay\(s, luc, false\)/.test(route) && /bh = bienHomNay\(s, luc, false\); if \(bh\) thieuTra\+\+/.test(route))
+    }
+
+    /* 7 — Thiếu số nợ 0 giờ mà CÓ MUA ⇒ vẫn gửi, bỏ dòng "đã trả" */
+    {
+        const mau = 'Chào {tenKhach}:\n- Hôm nay mua: [đậm]{muaHomNay}[/đậm] ({soDonHomNay} đơn)\n- Đã thanh toán: [đậm]{daTraHomNay}[/đậm]\n- Công nợ hiện tại: {congNo}\nCảm ơn!'
+        const thieu = dienMau(mau, { tenKhach: 'A8', bien: { muaHomNay: '2.000.000đ', soDonHomNay: '1', congNo: '5.000.000đ' } })
+        ok('7a. Thiếu {daTraHomNay} ⇒ bỏ CẢ DÒNG "Đã thanh toán", giữ các dòng khác, không lọt chữ "{daTraHomNay}"',
+            !/daTraHomNay|Đã thanh toán/.test(thieu) && /Hôm nay mua: \[đậm\]2\.000\.000đ\[\/đậm\] \(1 đơn\)/.test(thieu) && /Công nợ hiện tại: 5\.000\.000đ/.test(thieu) && /Cảm ơn!$/.test(thieu), thieu)
+        const du = dienMau(mau, { tenKhach: 'A1', bien: { muaHomNay: '10.000.000đ', soDonHomNay: '2', daTraHomNay: '3.000.000đ', congNo: '12.000.000đ' } })
+        ok('7b. Đủ số ⇒ giữ nguyên dòng "Đã thanh toán"', /Đã thanh toán: \[đậm\]3\.000\.000đ\[\/đậm\]/.test(du) && du.split('\n').length === 5, du)
+
+        const KH8 = [...KHACH, { id: 'k8', code: 'A8', name: 'Mua, chưa có ảnh chụp', debt: 5_000_000 }]
+        const nhom = KH8.map((k, i) => ({ groupId: `200000000${i}`, customerId: k.id, tenNhom: k.code }))
+        const lich = { noiDung: mau, doanhSo: null, doiTuong: { loai: 'tat_ca' as const, groupIds: [], chiKhachCoNo: false, noToiThieu: 0, chiKhachCoGiaoDich: true } }
+        const { sp } = giaSp({ mua: [...MUA, { k: 'k8', tien: 2_000_000, don: 1 }], traHang: ['k4'], chup: CHUP, nhom, khach: KH8 })
+        const s = await soanNguoiNhan(sp, lich, LUC)
+        const k8 = s.dong.find(d => d.maKhach === 'A8')
+        ok('7c. Có mua mà chưa có số nợ 0 giờ ⇒ VẪN gửi (trước: bỏ cả khách); bien không có daTraHomNay; đếm thieuTra',
+            !!k8 && s.thieuTra === 1 && !('daTraHomNay' in (k8?.bien || {})) && k8?.bien?.muaHomNay === '2.000.000đ', { thieuTra: s.thieuTra, k8 })
+        ok('7d. Khách đủ số vẫn có "đã trả"; khách KHÔNG mua mà chưa có số vẫn bị bỏ (không biết có trả không)',
+            s.dong.find(d => d.maKhach === 'A1')?.bien?.daTraHomNay === '3.000.000đ' && s.boHomNay.chua_chup === 1, s.boHomNay)
+
+        const dau = giaSp({ mua: [{ k: 'k1', tien: 10_000_000, don: 2 }], chup: null, nhom, khach: KH8 })
+        const s2 = await soanNguoiNhan(dau.sp, lich, LUC)
+        ok('7e. Ngày ĐẦU (chưa có bảng ảnh chụp): khách có mua vẫn nhận tin — không còn "0 nhóm"',
+            s2.dong.length === 1 && s2.dong[0]!.maKhach === 'A1' && s2.thieuTra === 1, { dong: s2.dong.map(d => d.maKhach), thieuTra: s2.thieuTra, bo: s2.boHomNay })
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)

@@ -210,6 +210,11 @@ export function dienMau(noiDung: string, v: { tenKhach?: string | null; maKhach?
     for (const [k, gt] of Object.entries(v.bien || {})) {
         if (/^[a-zA-Z]+$/.test(k)) s = s.replace(new RegExp(`\\{\\s*${k}\\s*\\}`, 'gi'), () => String(gt))
     }
+    /* Tổng kết trong ngày (26/10/2026, chủ shop: "có [mua] mà sao lại không có"): khách chưa có số nợ 0 giờ (ngày đầu dùng,
+     * nối nhóm sau 0 giờ, có trả hàng…) thì KHÔNG có {daTraHomNay} / {noDauNgay} ⇒ BỎ CẢ DÒNG chứa biến đó — đừng gửi chữ
+     * "{daTraHomNay}" cho khách, cũng đừng đoán số; mua hôm nay / công nợ (biết chắc) vẫn gửi. */
+    const THIEU_SO = /\{\s*(daTraHomNay|noDauNgay)\s*\}/i
+    if (THIEU_SO.test(s)) s = s.split('\n').filter(dong => !THIEU_SO.test(dong)).join('\n')
     return s
 }
 
