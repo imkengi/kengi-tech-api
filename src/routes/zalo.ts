@@ -51,7 +51,7 @@ import {
 import { docTrangThai, dangNhapQR, kiemTraPhien, dangXuat, dsNhomZalo, LoiPhienZalo, laLoiZalo, type SuKienQR } from '../lib/zaloKengi'
 import { docTuyChon, luuTuyChonDot, docTuyChonCacDot, boHenGio } from '../lib/zaloTuyChon'
 import {
-    dsLich, layLich, docDuLieuLich, taoLich, suaLich, datBat, xoaLich, chayLich, soanNguoiNhan, tinMau, tinhLanToi,
+    dsLich, layLich, docDuLieuLich, taoLich, suaLich, datBat, xoaLich, chayLich, soanNguoiNhan, tinMau, lanDau,
     moTaTanSuat, kiemSoNoTuoi, dungBienCongNo, bienCongNo,
 } from '../lib/zaloLichGui'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
@@ -947,7 +947,7 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
                 tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
                 ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,
-                lanToi: tinhLanToi(d.tanSuat, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
+                lanToi: lanDau(d.tanSuat, d.batDauTu, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
                 noTuoi, kenh: kenh?.loai || null, tamDung, doanhSo: soan.doanhSo,
             },
         })

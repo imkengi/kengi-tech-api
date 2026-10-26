@@ -334,7 +334,11 @@ export async function layLich(sp: any, id: string): Promise<LichGui | null> {
     return rows[0] ? docDong(rows[0]) : null
 }
 
-export interface DuLieuLich { ten: string; noiDung: string; anh: string[]; tuyChon: TuyChonTin; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null; tanSuat: TanSuat }
+export interface DuLieuLich {
+    ten: string; noiDung: string; anh: string[]; tuyChon: TuyChonTin; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null; tanSuat: TanSuat
+    /** Lần chạy ĐẦU không sớm hơn mốc này (tab Gửi tin: "hẹn 08:00 mai, lặp hằng ngày" ⇒ không chạy 08:00 hôm nay) */
+    batDauTu: Date | null
+}
 
 /** Kiểm thân request tạo / sửa lịch. Trả CHUỖI = lỗi để báo người dùng. */
 export function docDuLieuLich(b: any): DuLieuLich | string {
@@ -353,7 +357,20 @@ export function docDuLieuLich(b: any): DuLieuLich | string {
     if (dungBienDoanhSo(noiDung) && !doanhSo) return 'Tin có {doanhSo} — chọn kỳ và nhóm hàng cho doanh số'
     const tanSuat = docTanSuat(b?.tanSuat)
     if (typeof tanSuat === 'string') return tanSuat
-    return { ten, noiDung, anh, tuyChon, doiTuong, doanhSo, tanSuat }
+    let batDauTu: Date | null = null
+    if (b?.batDauTu) {
+        const t = Date.parse(String(b.batDauTu))
+        if (!Number.isFinite(t)) return 'Giờ bắt đầu không hợp lệ'
+        if (t > Date.now() + 31 * 86_400_000) return 'Chỉ hẹn bắt đầu trước tối đa 31 ngày'
+        batDauTu = t > Date.now() ? new Date(t) : null
+    }
+    return { ten, noiDung, anh, tuyChon, doiTuong, doanhSo, tanSuat, batDauTu }
+}
+
+/** Lần chạy đầu: lần kế tiếp theo tần suất, nhưng KHÔNG sớm hơn batDauTu (đúng mốc thì chạy luôn mốc đó) */
+export function lanDau(ts: TanSuat, batDauTu: Date | null, bayGio = new Date()): Date {
+    const tu = batDauTu && batDauTu > bayGio ? new Date(batDauTu.getTime() - 1000) : bayGio
+    return tinhLanToi(ts, tu)
 }
 
 export async function taoLich(sp: any, d: DuLieuLich, nguoi: string | null, bayGio = new Date()): Promise<LichGui> {
@@ -363,7 +380,7 @@ export async function taoLich(sp: any, d: DuLieuLich, nguoi: string | null, bayG
         `INSERT INTO ${BANG} ("id", "ten", "noiDung", "anh", "tuyChon", "doiTuong", "doanhSo", "tanSuat", "bat", "lanToi", "nguoiTao")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9::timestamp(3), $10)`,
         id, d.ten, d.noiDung, JSON.stringify(d.anh), JSON.stringify({ ...d.tuyChon, henGio: null }), JSON.stringify(d.doiTuong),
-        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(tinhLanToi(d.tanSuat, bayGio)), nguoi)
+        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)), nguoi)
     return (await layLich(sp, id))!
 }
 
@@ -374,7 +391,7 @@ export async function suaLich(sp: any, id: string, d: DuLieuLich, bayGio = new D
         `UPDATE ${BANG} SET "ten" = $2, "noiDung" = $3, "anh" = $4, "tuyChon" = $5, "doiTuong" = $6, "doanhSo" = $7, "tanSuat" = $8,
             "lanToi" = $9::timestamp(3), "updatedAt" = now() WHERE "id" = $1`,
         id, d.ten, d.noiDung, JSON.stringify(d.anh), JSON.stringify({ ...d.tuyChon, henGio: null }), JSON.stringify(d.doiTuong),
-        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(tinhLanToi(d.tanSuat, bayGio)))
+        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)))
     return Number(n) ? layLich(sp, id) : null
 }
 

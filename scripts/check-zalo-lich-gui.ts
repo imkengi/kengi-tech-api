@@ -11,7 +11,7 @@ process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat
 import fs from 'fs'
 import path from 'path'
 import {
-    tinhLanToi, docTanSuat, moTaTanSuat, kyTuongDoi, docDoiTuong, docDuLieuLich, bienCongNo, gioVN,
+    tinhLanToi, lanDau, docTanSuat, moTaTanSuat, kyTuongDoi, docDoiTuong, docDuLieuLich, bienCongNo, gioVN,
     kiemSoNoTuoi, soanNguoiNhan, chayLich, nhipLichGui, type LichGui, type TanSuat,
 } from '../src/lib/zaloLichGui'
 
@@ -124,6 +124,13 @@ async function main() {
         ok('1k. Qua năm: ngày 15 từ 20/12/2026 ⇒ 15/01/2027', iso(tinhLanToi({ loai: 'thang', gio: '09:15', ngay: 15 }, T('2026-12-20T00:00:00Z'))) === '2027-01-15T02:15:00.000Z')
         ok('1l. Mô tả dễ đọc', moTaTanSuat({ loai: 'thang', gio: '08:00', ngay: 0 }) === 'Ngày cuối hằng tháng lúc 08:00' && moTaTanSuat({ loai: 'tuan', gio: '07:30', thu: 1 }) === 'Thứ Hai hằng tuần lúc 07:30')
         ok('1m. gioVN đổi đúng múi giờ', gioVN(T('2026-10-31T23:30:00Z')) === '06:30 01/11/2026')
+        // "Bắt đầu từ" (tab Gửi tin: hẹn giờ + lặp lại) — lần đầu không sớm hơn giờ hẹn
+        const sang = T('2026-10-26T00:30:00Z')   // 07:30 VN thứ Hai 26/10
+        ok('1n. Hằng ngày 08:00, hẹn bắt đầu 08:00 MAI ⇒ lần đầu 08:00 mai (không phải 08:00 hôm nay)',
+            iso(lanDau(ngay, T('2026-10-27T01:00:00Z'), sang)) === '2026-10-27T01:00:00.000Z')
+        ok('1o. Hẹn bắt đầu đúng 08:00 hôm nay ⇒ chạy luôn 08:00 hôm nay', iso(lanDau(ngay, T('2026-10-26T01:00:00Z'), sang)) === '2026-10-26T01:00:00.000Z')
+        ok('1p. Mốc bắt đầu đã qua ⇒ như không hẹn', iso(lanDau(ngay, T('2026-10-20T01:00:00Z'), sang)) === '2026-10-26T01:00:00.000Z')
+        ok('1q. Ngày 1 hằng tháng, bắt đầu từ 10/11 ⇒ 01/12', iso(lanDau({ loai: 'thang', gio: '08:00', ngay: 1 }, T('2026-11-10T01:00:00Z'), sang)) === '2026-12-01T01:00:00.000Z')
     }
 
     /* 2 — Kiểm dữ liệu */
