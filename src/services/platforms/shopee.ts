@@ -74,24 +74,33 @@ export function chuTinShopee(m: TinShopeeGoiY, tenSanPham: Map<string, string>):
 /**
  * Câu KHÁCH cần trả lời + lịch sử, cho chatbot soạn nháp / tự trả lời (24/10/2026). ds: cũ → mới.
  * Câu hỏi = các tin khách sau lần cuối gian ĐÃ TRẢ LỜI — tin Shopee tự sinh thay gian (source server: lời chào tự động,
- * voucher, combo…) không tính là đã trả lời; tin chatbot của mình gửi (daGuiIds, hoặc auto_reply qua openapi) thì tính.
+ * voucher, combo…) không tính là đã trả lời; tin chatbot của mình gửi (daGui, hoặc auto_reply qua openapi) thì tính.
  * Không có ⇒ null (khách chưa hỏi gì mới). nguoiMuaId = người gửi tin khách cuối (to_id khi trả lời).
  * Lịch sử: ≤ 12 lượt, gộp tin liền nhau cùng bên, lượt đầu là khách (Gemini đòi user / model xen kẽ).
+ *
+ * daGui = tin chatbot đã gửi; dạng Map thì kèm mã TIN KHÁCH mà nó trả lời (nhật ký). Tin chatbot chỉ trả lời TỚI tin khách
+ * đó: khách nhắn thêm lúc máy đang soạn (sau lúc đọc hội thoại, trước lúc gửi) thì câu trả lời đứng SAU tin ấy mà chưa hề
+ * đọc nó — đo 27/10/2026: tin như thế bị coi là đã trả lời và bỏ sót. Người của gian trả lời thì tính hết các tin trước.
  */
-export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, tenSanPham: Map<string, string>, daGuiIds: Set<string> = new Set()):
+export function tachCauHoiShopee(ds: TinShopeeGoiY[], shopId: number | string, tenSanPham: Map<string, string>, daGui: Set<string> | Map<string, string | null> = new Set()):
     { cauHoi: string; lichSu: LuotHoiThoai[]; tinCuoiId: string; nguoiMuaId: string } | null {
-    const nguoiTraLoi = (m: TinShopeeGoiY) => laTinCuaGian(m, shopId) && (m.source !== 'server' || daGuiIds.has(m.messageId))
-    const hoi: TinShopeeGoiY[] = []
-    let i = ds.length - 1
-    for (; i >= 0; i--) {
-        const m = ds[i]!
-        if (nguoiTraLoi(m)) break
-        if (!laTinCuaGian(m, shopId)) hoi.unshift(m)
-    }
+    const traLoiToi: Map<string, string | null> = daGui instanceof Map ? daGui : new Map([...daGui].map(id => [id, null]))
+    const nguoiTraLoi = (m: TinShopeeGoiY) => laTinCuaGian(m, shopId) && (m.source !== 'server' || traLoiToi.has(m.messageId))
+    // daTraToi: vị trí tin cuối đã được trả lời (tin khách tới đó coi như xong); i: câu trả lời cuối — lịch sử dừng ở đây
+    let daTraToi = -1, i = -1
+    ds.forEach((m, viTri) => {
+        if (!nguoiTraLoi(m)) return
+        i = viTri
+        const tinKhach = traLoiToi.get(m.messageId)
+        const j = tinKhach ? ds.findIndex(x => x.messageId === tinKhach) : -1
+        daTraToi = Math.max(daTraToi, j >= 0 && j < viTri ? j : viTri)
+    })
+    const hoi = ds.filter((m, viTri) => viTri > daTraToi && !laTinCuaGian(m, shopId))
     const cauHoi = hoi.map(m => chuTinShopee(m, tenSanPham).trim()).filter(Boolean).join('\n').slice(0, 2000)
     if (!cauHoi) return null
+    const trongHoi = new Set(hoi)
     const lichSu: LuotHoiThoai[] = []
-    for (const m of ds.slice(0, i + 1)) {
+    for (const m of ds.slice(0, i + 1).filter(x => !trongHoi.has(x))) {
         const text = chuTinShopee(m, tenSanPham).trim().slice(0, 2000)
         if (!text) continue
         const role = laTinCuaGian(m, shopId) ? 'model' : 'user'

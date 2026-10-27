@@ -15,10 +15,11 @@
  *      (tin tự động / Shopee gửi thay không tính); lịch sử xen kẽ khách–shop, mở đầu bằng khách; thẻ sản phẩm ra TÊN hàng;
  *      kho kiến thức chọn đúng gian; luật nháp Shopee cấm kéo khách ra ngoài sàn.
  *   E. Tự trả lời bằng chatbot (lib/tuTraLoiShopee.ts, công tắc từng gian mặc định tắt): gửi qua send_autoreply_message
- *      (KHÔNG send_message — không giả làm người gõ), có dòng "(Tin nhắn tự động)"; mỗi tin khách MỘT lần (giữ chỗ trước
- *      khi gửi, chạy trùng không gửi đôi); tin chatbot đã gửi tính là đã trả lời; AI lỗi / chưa đủ căn cứ / câu có SĐT,
- *      Zalo, link ngoài ⇒ gửi TIN CHỜ "đợi shop một chút" (≤ 1 lần / hội thoại / 3 giờ) thay vì câu đó; trần hội thoại /
- *      giờ; Shopee báo chặn chatbot ⇒ gian tự tắt.
+ *      (KHÔNG send_message — không giả làm người gõ), KHÔNG còn dòng "(Tin nhắn tự động)" (chủ shop bảo bỏ 27/10); mỗi tin
+ *      khách MỘT lần (giữ chỗ trước khi gửi, chạy trùng không gửi đôi); tin chatbot đã gửi chỉ tính là đã trả lời TỚI tin
+ *      khách nó đọc (khách nhắn chen lúc máy đang soạn vẫn được trả lời); AI chưa đủ căn cứ ⇒ VẪN gửi câu AI soạn; AI lỗi /
+ *      câu có SĐT, Zalo, link ngoài ⇒ gửi TIN CHỜ "đợi shop một chút" (≤ 1 lần / hội thoại / 30 phút); trần hội thoại chỉ là
+ *      lưới an toàn (27/10/2026: trần 5 là nguồn bỏ sót lớn nhất); Shopee báo chặn chatbot ⇒ gian tự tắt.
  */
 process.env.SHOPEE_FORWARD_PROXY = ''   // không bao giờ ra mạng: httpGet bị thay bằng bản giả
 
@@ -26,7 +27,7 @@ import { ShopeeService, laTinCuaGian, laTinTuDong, tachCauHoiShopee, chuTinShope
 import { chonShopChoKenh, LUAT_NHAP_SAN, loiAiChoNguoiDung } from '../src/routes/chatbot'
 import { LoiGeminiTamThoi, LoiGeminiHetTien } from '../src/services/aiAgentRunner'
 import { ghiTinHieuChat, docTinHieuChat } from '../src/lib/tinHieuChat'
-import { tuTraLoiShopee, kiemCauTuDong, phanLoaiLoiGui, KhoTuTraLoi, PhuThuocTuTraLoi, DUOI_TU_DONG, TRAN_HOI_THOAI, TRAN_GIO, CAU_CHO, TIEN_TO_TIN_CHO, GIO_TIN_CHO } from '../src/lib/tuTraLoiShopee'
+import { tuTraLoiShopee, kiemCauTuDong, phanLoaiLoiGui, KhoTuTraLoi, PhuThuocTuTraLoi, TRAN_HOI_THOAI, TRAN_GIO, CAU_CHO, TIEN_TO_TIN_CHO, PHUT_TIN_CHO, TIEN_TO_CAN_NHAN_VIEN } from '../src/lib/tuTraLoiShopee'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -174,10 +175,11 @@ async function main() {
     ok('40. tin chatbot đã gửi (auto_reply qua openapi) tính là ĐÃ trả lời; lời chào Shopee (server) thì không', tachCauHoiShopee([khach('c1', 'Q'), botGui], 42, rong) === null && tachCauHoiShopee([khach('c1', 'Q'), chaoShopee], 42, rong)?.cauHoi === 'Q')
     ok('41. mã tin chatbot ghi trong nhật ký cũng tính là đã trả lời (kể cả Shopee gắn nguồn khác); trả về người mua để gửi', tachCauHoiShopee([khach('c1', 'Q'), { ...chaoShopee, messageId: 'bot-x' }], 42, rong, new Set(['bot-x'])) === null && tachCauHoiShopee([khach('c1', 'Q')], 42, rong)?.nguoiMuaId === '777')
     const dai = kiemCauTuDong('a'.repeat(900))
-    ok('42. soát câu tự gửi: SĐT / Zalo / sàn khác / link ngoài ⇒ không gửi; link Shopee được; câu dự phòng không gửi; ≤ 600 ký tự kèm "(Tin nhắn tự động)"',
+    const ngan = kiemCauTuDong('  Dạ còn hàng ạ  ')
+    ok('42. soát câu tự gửi: SĐT / Zalo / sàn khác / link ngoài ⇒ không gửi; link Shopee được; câu dự phòng không gửi; cắt ≤ 600 ký tự; KHÔNG thêm "(Tin nhắn tự động)"',
         !kiemCauTuDong('Goi 0912 345 678 nhe').ok && !kiemCauTuDong('Nhắn Zalo shop nhé').ok && !kiemCauTuDong('Bên TikTok rẻ hơn').ok && !kiemCauTuDong('Xem https://kengi.vn/sp').ok
         && kiemCauTuDong('Xem https://shopee.vn/product/1/2 nhé').ok && !kiemCauTuDong('Dạ shop đã nhận được tin nhắn của mình ạ. Nhân viên sẽ phản hồi bạn trong thời gian sớm nhất nhé!').ok
-        && dai.ok && dai.cau.length <= 600 && dai.cau.endsWith(DUOI_TU_DONG), dai.ok ? dai.cau.length : dai)
+        && dai.ok && dai.cau.length === 600 && dai.cau.endsWith('…') && ngan.ok && ngan.cau === 'Dạ còn hàng ạ', { dai: dai.ok ? dai.cau.length : dai, ngan })
     ok('43. lỗi Shopee: unexpected_bot_msg / hành vi đáng ngờ ⇒ TẮT gian; 5 tin chưa đáp ⇒ bỏ hội thoại; lạ ⇒ lỗi',
         phanLoaiLoiGui(new Error('Shopee sendAutoReply: unexpected_bot_msg - x')).loai === 'tat' && phanLoaiLoiGui(new Error('block_by_internal_safety_strategies')).loai === 'tat'
         && phanLoaiLoiGui(new Error('reach_5_message_limit')).loai === 'bo_qua' && phanLoaiLoiGui(new Error('ECONNRESET')).loai === 'loi')
@@ -191,7 +193,7 @@ async function main() {
             async giuCho(k, h, t) { const key = `${k}|${h}|${t}`; if (nk.has(key)) return false; nk.set(key, { kenhId: k, hoiThoaiId: h, trangThai: 'dang', lyDo: null, maTinGui: null }); return true },
             async ghiKetQua(k, h, t, tt, ly, ma) { Object.assign(nk.get(`${k}|${h}|${t}`)!, { trangThai: tt, lyDo: ly, maTinGui: ma || null }) },
             async demDaGui(k, gio, h) { return [...nk.values()].filter(x => x.kenhId === k && x.trangThai === 'da_gui' && (!h || x.hoiThoaiId === h)).length + (h ? (o.themHoiThoai || 0) : gio === 1 ? (o.themGio || 0) : 0) },
-            async maTinDaGui(k, h) { return new Set([...nk.values()].filter(x => x.kenhId === k && x.hoiThoaiId === h && x.maTinGui).map(x => x.maTinGui!)) },
+            async maTinDaGui(k, h) { return new Map([...nk.entries()].filter(([, x]) => x.kenhId === k && x.hoiThoaiId === h && x.maTinGui).map(([key, x]) => [x.maTinGui!, key.split('|')[2]!])) },
             async demTinCho(k, h) { return [...nk.values()].filter(x => x.kenhId === k && x.hoiThoaiId === h && x.trangThai === 'da_gui' && String(x.lyDo || '').startsWith(TIEN_TO_TIN_CHO)).length },
             async tat(k, ly) { caiDat.set(k, { bat: false, tatLyDo: ly }) },
         }
@@ -218,8 +220,8 @@ async function main() {
     ok('45. push của chính gian (from_shop_id = shop) ⇒ bỏ ngay', await tuTraLoiShopee(kenhThu, { conversation_id: '555', from_shop_id: 42 }, e45.pt) === 'tin_cua_gian' && e45.dem().docTin === 0)
     const e46 = dung()
     const k46 = await tuTraLoiShopee(kenhThu, pushKhach, e46.pt)
-    ok('46. bật ⇒ gửi MỘT tin qua send_autoreply_message (không send_message) tới người mua, cuối có "(Tin nhắn tự động)"; nhật ký da_gui + mã tin',
-        k46 === 'da_gui' && e46.gui.length === 1 && e46.gui[0]!.toId === 777 && e46.gui[0]!.text.endsWith(DUOI_TU_DONG) && e46.dem().goiTinThuong === 0
+    ok('46. bật ⇒ gửi MỘT tin qua send_autoreply_message (không send_message) tới người mua, ĐÚNG câu AI soạn (không dòng "(Tin nhắn tự động)"); nhật ký da_gui + mã tin',
+        k46 === 'da_gui' && e46.gui.length === 1 && e46.gui[0]!.toId === 777 && e46.gui[0]!.text === 'Dạ sản phẩm bảo hành 12 tháng ạ' && e46.dem().goiTinThuong === 0
         && [...e46.nk.values()][0]?.trangThai === 'da_gui' && [...e46.nk.values()][0]?.maTinGui === 'bot1', { k46, gui: e46.gui, nk: [...e46.nk.values()] })
     ok('47. cùng tin khách được push lại (Shopee đẩy lại / máy khác) ⇒ không gửi lần hai', await tuTraLoiShopee(kenhThu, pushKhach, e46.pt) === 'da_xu_ly' && e46.gui.length === 1)
 
@@ -235,10 +237,13 @@ async function main() {
     const e49 = dung({ soan: async () => ({ traLoi: 'Dạ shop đã nhận được tin nhắn của mình ạ. Nhân viên sẽ phản hồi bạn trong thời gian sớm nhất nhé!', canNhanVien: true, loi: 'Key Gemini của cửa hàng đã HẾT TIỀN' }) })
     const k49 = await tuTraLoiShopee(kenhThu, pushKhach, e49.pt)
     ok('49. AI lỗi (key hết tiền) ⇒ gửi TIN CHỜ "đợi shop một chút" (không phải câu dự phòng của chatbot); nhật ký giữ lý do lỗi AI',
-        k49 === 'tin_cho' && e49.gui.length === 1 && e49.gui[0]!.text === CAU_CHO + DUOI_TU_DONG
+        k49 === 'tin_cho' && e49.gui.length === 1 && e49.gui[0]!.text === CAU_CHO
         && String([...e49.nk.values()][0]?.lyDo).startsWith(TIEN_TO_TIN_CHO) && /HẾT TIỀN/.test(String([...e49.nk.values()][0]?.lyDo)), { k49, gui: e49.gui, nk: [...e49.nk.values()] })
     const e50 = dung({ soan: async () => ({ traLoi: 'Dạ để shop kiểm tra đơn rồi báo bạn ạ', canNhanVien: true }) })
-    ok('50. AI chưa đủ căn cứ (khiếu nại / hỏi đơn) ⇒ gửi tin chờ, nhân viên trả lời sau', await tuTraLoiShopee(kenhThu, pushKhach, e50.pt) === 'tin_cho' && e50.gui.length === 1 && e50.gui[0]!.text.startsWith(CAU_CHO))
+    const k50 = await tuTraLoiShopee(kenhThu, pushKhach, e50.pt)
+    ok('50. AI chưa đủ căn cứ (khiếu nại / hỏi đơn) ⇒ VẪN gửi câu AI soạn (không im, không tin chờ chung); nhật ký ghi "cần nhân viên"',
+        k50 === 'da_gui' && e50.gui.length === 1 && e50.gui[0]!.text === 'Dạ để shop kiểm tra đơn rồi báo bạn ạ'
+        && String([...e50.nk.values()][0]?.lyDo).startsWith(TIEN_TO_CAN_NHAN_VIEN), { k50, gui: e50.gui, nk: [...e50.nk.values()] })
     const e51 = dung({ loiGui: 'unexpected_bot_msg' })
     const k51 = await tuTraLoiShopee(kenhThu, pushKhach, e51.pt)
     ok('51. Shopee báo tin chatbot ⇒ gian TỰ TẮT kèm lý do', k51 === 'gian_tu_tat' && e51.caiDat.get('k1')?.bat === false && /chatbot/.test(String(e51.caiDat.get('k1')?.tatLyDo)), { k51, cd: e51.caiDat.get('k1') })
@@ -249,18 +254,43 @@ async function main() {
     const e54 = dung({ tin: [khach('c1', 'Q'), chaoShopee, { ...botGui, messageId: 'nv1', status: 'normal', source: 'mini_webchat' }] })
     ok('54. nhân viên đã trả lời trong lúc chờ gom tin ⇒ không chen vào, không giữ chỗ', await tuTraLoiShopee(kenhThu, pushKhach, e54.pt) === 'khong_can' && e54.gui.length === 0 && e54.nk.size === 0)
     const e55 = dung({ soan: async () => ({ traLoi: 'Bạn nhắn Zalo 0912345678 cho shop nhé', canNhanVien: false }) })
-    ok('55. AI lỡ đưa SĐT / Zalo ⇒ KHÔNG gửi câu đó, gửi tin chờ thay', await tuTraLoiShopee(kenhThu, pushKhach, e55.pt) === 'tin_cho' && e55.gui.length === 1 && !/0912|Zalo/.test(e55.gui[0]!.text))
+    ok('55. AI lỡ đưa SĐT / Zalo ⇒ KHÔNG gửi câu đó, gửi tin chờ thay', await tuTraLoiShopee(kenhThu, pushKhach, e55.pt) === 'tin_cho' && e55.gui.length === 1 && e55.gui[0]!.text === CAU_CHO)
 
-    // Khách hỏi tiếp khi tin chờ vừa gửi (nhân viên chưa vào): KHÔNG gửi "đợi chút" lần hai trong GIO_TIN_CHO giờ
+    // AI LỖI liền hai lượt: tin chờ "đợi chút" không lặp nguyên câu trong PHUT_TIN_CHO phút
     const tinDong: TinShopeeGoiY[] = [khach('c1', 'doi tra the nao'), chaoShopee]
-    const e56 = dung({ tin: tinDong, soan: async () => ({ traLoi: 'x', canNhanVien: true }) })
+    const e56 = dung({ tin: tinDong, soan: async () => ({ traLoi: '', canNhanVien: true, loi: 'AI quá tải' }) })
     const k56a = await tuTraLoiShopee(kenhThu, pushKhach, e56.pt)
     tinDong.push({ ...botGui, messageId: 'bot1', content: CAU_CHO }, khach('c2', 'shop oi'))
     const k56b = await tuTraLoiShopee(kenhThu, pushKhach, e56.pt)
-    ok(`56. đã gửi tin chờ trong ${GIO_TIN_CHO} giờ ⇒ khách nhắn tiếp không bị "đợi chút" lần hai, để nhân viên`,
-        k56a === 'tin_cho' && k56b === 'bo_qua' && e56.gui.length === 1 && /đã gửi tin chờ/.test(String(e56.nk.get('k1|555|c2')?.lyDo)), { k56a, k56b, gui: e56.gui.length, nk: [...e56.nk.entries()] })
-    const e57 = dung({ loiGui: 'unexpected_bot_msg', soan: async () => ({ traLoi: 'x', canNhanVien: true }) })
+    ok(`56. AI lỗi mà đã gửi tin chờ trong ${PHUT_TIN_CHO} phút ⇒ không lặp "đợi chút" lần hai, để nhân viên`,
+        k56a === 'tin_cho' && k56b === 'loi' && e56.gui.length === 1 && /đã gửi tin chờ/.test(String(e56.nk.get('k1|555|c2')?.lyDo)), { k56a, k56b, gui: e56.gui.length, nk: [...e56.nk.entries()] })
+    // AI chưa đủ căn cứ liền hai lượt: lượt sau VẪN được trả lời (bản 24/10 im 3 giờ)
+    const tinNv: TinShopeeGoiY[] = [khach('c1', 'don cua toi dau roi')]
+    const e56c = dung({ tin: tinNv, soan: async () => ({ traLoi: 'Dạ shop kiểm tra đơn giúp bạn nhé', canNhanVien: true }) })
+    const k56c = await tuTraLoiShopee(kenhThu, pushKhach, e56c.pt)
+    tinNv.push({ ...botGui, messageId: 'bot1', content: 'Dạ shop kiểm tra đơn giúp bạn nhé' }, khach('c2', 'nhanh giup minh'))
+    const k56d = await tuTraLoiShopee(kenhThu, pushKhach, e56c.pt)
+    ok('56b. AI chưa đủ căn cứ hai lượt liền ⇒ CẢ HAI lượt đều được trả lời', k56c === 'da_gui' && k56d === 'da_gui' && e56c.gui.length === 2, { k56c, k56d, gui: e56c.gui.length })
+    const e57 = dung({ loiGui: 'unexpected_bot_msg', soan: async () => ({ traLoi: '', canNhanVien: true, loi: 'AI lỗi' }) })
     ok('57. Shopee chặn ngay cả tin chờ ⇒ gian tự tắt', await tuTraLoiShopee(kenhThu, pushKhach, e57.pt) === 'gian_tu_tat' && e57.caiDat.get('k1')?.bat === false)
+
+    // 27/10/2026 — khách nhắn CHEN lúc máy đang soạn: câu trả lời đứng sau tin ấy mà chưa hề đọc nó
+    const chen = tachCauHoiShopee([khach('c1', 'Q1'), khach('c2', 'Q2'), { ...botGui, messageId: 'bot1' }], 42, rong, new Map([['bot1', 'c1']]))
+    ok('58. câu chatbot trả lời c1 KHÔNG tính là đã trả lời c2 (tới sau lúc đọc) ⇒ câu cần trả lời = Q2; lịch sử Q1 → câu trả lời',
+        chen?.cauHoi === 'Q2' && chen?.tinCuoiId === 'c2' && JSON.stringify(chen?.lichSu.map(l => [l.role, l.parts[0]!.text])) === JSON.stringify([['user', 'Q1'], ['model', 'Da bao hanh 12 thang']]), chen)
+    ok('59. người của gian trả lời ⇒ mọi tin trước đó coi là xong; mã tin khách không có trong trang ⇒ như cũ (tính hết tin trước)',
+        tachCauHoiShopee([khach('c1', 'Q1'), khach('c2', 'Q2'), { ...botGui, messageId: 'nv', status: 'normal', source: 'mini_webchat' }], 42, rong) === null
+        && tachCauHoiShopee([khach('c1', 'Q1'), khach('c2', 'Q2'), { ...botGui, messageId: 'bot1' }], 42, rong, new Map([['bot1', 'c-cu-ngoai-trang']])) === null)
+    const tinChen: TinShopeeGoiY[] = [khach('c1', 'bao hanh bao lau')]
+    const cauHoiDaSoan: string[] = []
+    const e60 = dung({ tin: tinChen, soan: async (cauHoi) => { cauHoiDaSoan.push(cauHoi); return { traLoi: `Dạ trả lời ${cauHoiDaSoan.length}`, canNhanVien: false } } })
+    const k60a = await tuTraLoiShopee(kenhThu, pushKhach, e60.pt)
+    // tin c2 tới trong lúc lượt đầu đang soạn ⇒ trong hội thoại nó đứng TRƯỚC câu trả lời bot1
+    tinChen.push(khach('c2', 'giao may ngay'), { ...botGui, messageId: 'bot1', content: 'Dạ trả lời 1' })
+    const k60b = await tuTraLoiShopee(kenhThu, pushKhach, e60.pt)
+    ok('60. trọn luồng: khách nhắn chen ⇒ lượt sau VẪN trả lời tin chen (chỉ hỏi AI đúng câu đó), không gửi lại câu đầu',
+        k60a === 'da_gui' && k60b === 'da_gui' && e60.gui.length === 2 && cauHoiDaSoan[1] === 'giao may ngay' && e60.nk.has('k1|555|c2'), { k60a, k60b, cauHoiDaSoan, nk: [...e60.nk.keys()] })
+    ok(`61. trần hội thoại (${TRAN_HOI_THOAI} / 24 giờ) chỉ là lưới an toàn — không chặn hội thoại bình thường (trần 5 cũ là nguồn bỏ sót lớn nhất)`, TRAN_HOI_THOAI >= 20)
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

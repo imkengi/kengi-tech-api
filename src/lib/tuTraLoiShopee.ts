@@ -2,9 +2,9 @@
  * TỰ TRẢ LỜI CHAT SHOPEE BẰNG CHATBOT (24/10/2026).
  *
  * Chủ shop: "tự lấy api gắn trả lời theo bộ não chatbot đi". ⚠ Luật Chat API của Shopee ghi "chatbot replies are
- * prohibited" — chủ shop đã được báo nhiều lần, tự quyết và TỰ BẬT. Làm CÔNG KHAI: gửi qua send_autoreply_message
- * (Shopee đánh dấu là tin tự động — KHÔNG giả làm người gõ), cuối tin ghi "(Tin nhắn tự động)"; công tắc từng gian
- * MẶC ĐỊNH TẮT; Shopee báo chặn / nghi chatbot ⇒ gian TỰ TẮT kèm lý do để web báo.
+ * prohibited" — chủ shop đã được báo nhiều lần, tự quyết và TỰ BẬT. Gửi qua send_autoreply_message (Shopee đánh dấu là
+ * tin tự động — KHÔNG giả làm người gõ). Dòng "(Tin nhắn tự động)" cuối tin đã BỎ theo lời chủ shop 27/10/2026; công tắc
+ * từng gian MẶC ĐỊNH TẮT; Shopee báo chặn / nghi chatbot ⇒ gian TỰ TẮT kèm lý do để web báo.
  *
  * Luồng (gọi NỀN từ push mã 10 ở routes/webhooks.ts — không giữ hộp thư webhook):
  *  1. gian chưa bật ⇒ thôi. Tin do chính gian gửi (from_shop_id) ⇒ thôi.
@@ -15,9 +15,14 @@
  *     thì thà không trả lời (nhân viên vẫn thấy) còn hơn gửi đôi.
  *  5. trần: TRAN_HOI_THOAI lần / hội thoại / 24 giờ (quá ⇒ để nhân viên), TRAN_GIO tin / gian / giờ (quá ⇒ tự tắt).
  *  6. chatbot soạn (routes/chatbot.ts soanGoiYChoSan: kho kiến thức + giá thật của đúng gian, luật nháp Shopee).
- *  7. soát câu (SĐT / Zalo / link ngoài / sàn khác ⇒ bỏ), cắt ≤ 600 ký tự, gửi. Không trả lời được (AI lỗi / chưa đủ
- *     căn cứ / câu bị chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" (tối đa 1 lần / hội thoại / GIO_TIN_CHO giờ), nhân viên
- *     trả lời sau (web vẫn có nháp).
+ *  7. soát câu (SĐT / Zalo / link ngoài / sàn khác ⇒ bỏ), cắt ≤ 600 ký tự, gửi. AI chưa đủ căn cứ (hỏi đơn, khiếu nại…)
+ *     ⇒ VẪN gửi câu AI soạn (nó đã được dặn trả lời lịch sự là nhân viên sẽ hỗ trợ), nhật ký ghi "cần nhân viên". AI lỗi /
+ *     câu bị chặn ⇒ gửi TIN CHỜ "đợi shop một chút" (tối đa 1 lần / hội thoại / PHUT_TIN_CHO phút), nhân viên trả lời sau.
+ *
+ * 27/10/2026 (chủ shop: "vẫn còn bị bỏ sót tin nhắn"): đo 48 giờ, tin không ai trả lời phần lớn vì trần 5 tin / hội thoại /
+ * ngày, số còn lại vì "AI chưa đủ căn cứ" mà tin chờ đã gửi trong 3 giờ; thêm tin khách nhắn chen lúc máy đang soạn bị coi
+ * là đã trả lời (xem tachCauHoiShopee). Nay trần hội thoại 30, AI chưa chắc vẫn trả lời, tin chờ
+ * lặp lại được sau 30 phút, câu trả lời chỉ tính tới đúng tin khách nó đọc.
  * KHÔNG lưu nội dung tin: nhật ký chỉ có mã + trạng thái + lý do.
  */
 import { ShopeeService, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
@@ -26,14 +31,16 @@ import { laLoiThieuBang } from './tinHieuChat'
 import { moTaLoi } from './gomLoi'
 
 export const GOM_MS = 15_000
-export const TRAN_HOI_THOAI = 5
+/** Trần an toàn chống khách nhắn dồn / vòng lặp lạ — không phải để dừng trả lời (trần 5 cũ là nguồn bỏ sót lớn nhất, đo 27/10/2026) */
+export const TRAN_HOI_THOAI = 30
 export const TRAN_GIO = 60
-export const DUOI_TU_DONG = '\n\n(Tin nhắn tự động)'
-/** Tin chờ khi chatbot không trả lời được — mỗi hội thoại tối đa 1 lần / GIO_TIN_CHO giờ */
+/** Tin chờ khi chatbot không trả lời được — mỗi hội thoại tối đa 1 lần / PHUT_TIN_CHO phút */
 export const CAU_CHO = 'Dạ shop đã nhận được tin nhắn của bạn ạ. Bạn đợi shop một chút nhé, nhân viên sẽ trả lời bạn ngay!'
-export const GIO_TIN_CHO = 3
+export const PHUT_TIN_CHO = 30
 /** lyDo của dòng nhật ký tin chờ bắt đầu bằng chữ này (đếm tin chờ + web hiện lý do không trả lời được) */
 export const TIEN_TO_TIN_CHO = 'tin chờ — '
+/** lyDo của câu AI soạn khi chưa đủ căn cứ (vẫn gửi) — nhân viên nên xem lại hội thoại */
+export const TIEN_TO_CAN_NHAN_VIEN = 'cần nhân viên — '
 const DAI_TOI_DA = 600
 
 export type TrangThaiNhatKy = 'dang' | 'da_gui' | 'bo_qua' | 'loi'
@@ -49,10 +56,10 @@ export interface KhoTuTraLoi {
     ghiKetQua(kenhId: string, hoiThoaiId: string, tinKhachId: string, trangThai: TrangThaiNhatKy, lyDo: string | null, maTinGui?: string | null): Promise<void>
     /** số tin ĐÃ GỬI trong soGio giờ qua — cả gian, hoặc một hội thoại */
     demDaGui(kenhId: string, soGio: number, hoiThoaiId?: string): Promise<number>
-    /** mã các tin chatbot đã gửi trong hội thoại — tính là "đã trả lời" */
-    maTinDaGui(kenhId: string, hoiThoaiId: string): Promise<Set<string>>
-    /** số TIN CHỜ đã gửi cho hội thoại trong soGio giờ qua */
-    demTinCho(kenhId: string, hoiThoaiId: string, soGio: number): Promise<number>
+    /** tin chatbot đã gửi trong hội thoại: mã tin gửi → mã TIN KHÁCH nó trả lời (tachCauHoiShopee chỉ tính tới tin đó) */
+    maTinDaGui(kenhId: string, hoiThoaiId: string): Promise<Map<string, string>>
+    /** số TIN CHỜ đã gửi cho hội thoại trong soPhut phút qua */
+    demTinCho(kenhId: string, hoiThoaiId: string, soPhut: number): Promise<number>
     tat(kenhId: string, lyDo: string): Promise<void>
 }
 
@@ -73,15 +80,14 @@ export interface PhuThuocTuTraLoi {
 }
 
 /** Câu sắp gửi tự động: không SĐT / Zalo / mạng xã hội / sàn khác / link ngoài Shopee (Shopee cấm kéo khách ra ngoài);
- *  câu dự phòng của chatbot thì không gửi; cắt cho vừa 600 ký tự kể cả dòng "(Tin nhắn tự động)". */
+ *  câu dự phòng của chatbot thì không gửi; cắt cho vừa 600 ký tự. */
 export function kiemCauTuDong(cau: string): { ok: true; cau: string } | { ok: false; lyDo: string } {
     const s = String(cau || '').trim()
     if (!s || s === TRA_LOI_DU_PHONG) return { ok: false, lyDo: 'AI không soạn được câu trả lời' }
     if (/(?:\+84|\b0)[1-9](?:[\s.-]?\d){7,9}\b/.test(s)) return { ok: false, lyDo: 'câu có số điện thoại' }
     if (/zalo|facebook|\bfb\b|messenger|instagram|tiktok|lazada|\btiki\b|sendo/i.test(s)) return { ok: false, lyDo: 'câu nhắc kênh / sàn khác' }
     if (/https?:\/\/(?![\w.-]*shopee\.vn)|\bwww\.(?!shopee)/i.test(s)) return { ok: false, lyDo: 'câu có link ngoài Shopee' }
-    const than = s.length > DAI_TOI_DA - DUOI_TU_DONG.length ? `${s.slice(0, DAI_TOI_DA - DUOI_TU_DONG.length - 1).trimEnd()}…` : s
-    return { ok: true, cau: than + DUOI_TU_DONG }
+    return { ok: true, cau: s.length > DAI_TOI_DA ? `${s.slice(0, DAI_TOI_DA - 1).trimEnd()}…` : s }
 }
 
 /** Lỗi Shopee khi gửi ⇒ tắt cả gian (Shopee chặn / nghi chatbot / quá hạn mức) hay chỉ bỏ hội thoại này. */
@@ -187,30 +193,33 @@ async function sauGiuCho(
     if (!Number.isFinite(nguoiMua) || nguoiMua <= 0) { await ket('bo_qua', 'không rõ người mua'); return 'bo_qua' }
 
     const soan = await pt.soanGoiY(tach.cauHoi, tach.lichSu, String(kenh.name || ''))
-    /* Chatbot KHÔNG trả lời được (AI lỗi / chưa đủ căn cứ / câu bị soát chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" — chủ shop
-     * 24/10/2026: "nếu trả lời không được thì gửi đợi 1 chút chứ". Đúng kiểu tin Shopee dành send_autoreply_message
-     * ("We'll reply to your inquiry as soon as possible"). Mỗi hội thoại tối đa 1 tin chờ / GIO_TIN_CHO giờ. */
+    /* AI chưa đủ căn cứ (hỏi đơn, khiếu nại, khách muốn gặp người…) ⇒ VẪN gửi câu nó soạn — prompt dặn trả lời lịch sự là
+     * nhân viên sẽ hỗ trợ, nên câu đó đã là câu "đợi" đúng ngữ cảnh. Bản 24/10 gửi tin chờ chung rồi im 3 giờ ⇒ khách hỏi
+     * tiếp không ai đáp (27/10/2026: "vẫn còn bị bỏ sót tin nhắn").
+     * Chatbot KHÔNG soạn được (AI lỗi / câu bị soát chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" — chủ shop 24/10/2026: "nếu trả
+     * lời không được thì gửi đợi 1 chút chứ". Đúng kiểu tin Shopee dành send_autoreply_message. Mỗi hội thoại tối đa 1 tin
+     * chờ / PHUT_TIN_CHO phút — đừng lặp nguyên một câu dồn dập. */
     let khongTraLoi: string | null = null
     let cau = ''
     if (soan.loi) khongTraLoi = soan.loi
-    else if (soan.canNhanVien) khongTraLoi = 'AI chưa đủ căn cứ'
     else {
         const kiem = kiemCauTuDong(soan.traLoi)
         if (kiem.ok) cau = kiem.cau
         else khongTraLoi = kiem.lyDo
     }
     if (khongTraLoi) {
-        if ((await pt.kho.demTinCho(kenhId, hoiThoaiId, GIO_TIN_CHO)) > 0) {
+        if ((await pt.kho.demTinCho(kenhId, hoiThoaiId, PHUT_TIN_CHO)) > 0) {
             const t: TrangThaiNhatKy = soan.loi ? 'loi' : 'bo_qua'
-            await ket(t, `${khongTraLoi} — đã gửi tin chờ trong ${GIO_TIN_CHO} giờ qua, để nhân viên`)
+            await ket(t, `${khongTraLoi} — đã gửi tin chờ trong ${PHUT_TIN_CHO} phút qua, để nhân viên`)
             return t
         }
-        cau = CAU_CHO + DUOI_TU_DONG
+        cau = CAU_CHO
     }
 
     try {
         const gui = await shopee.sendAutoReplyMessage(nguoiMua, cau)
-        await ket('da_gui', khongTraLoi ? `${TIEN_TO_TIN_CHO}${khongTraLoi}` : null, gui.messageId || undefined)
+        const lyDo = khongTraLoi ? `${TIEN_TO_TIN_CHO}${khongTraLoi}` : soan.canNhanVien ? `${TIEN_TO_CAN_NHAN_VIEN}AI chưa đủ căn cứ` : null
+        await ket('da_gui', lyDo, gui.messageId || undefined)
         return khongTraLoi ? 'tin_cho' : 'da_gui'
     } catch (e) {
         const pl = phanLoaiLoiGui(e)
@@ -304,16 +313,16 @@ export function khoTuTraLoiSql(db: any): KhoTuTraLoi {
         async maTinDaGui(kenhId, hoiThoaiId) {
             try {
                 const r: any[] = await db.$queryRawUnsafe(
-                    `SELECT "maTinGui" FROM "TuTraLoiNhatKy" WHERE "kenhId" = $1 AND "hoiThoaiId" = $2 AND "maTinGui" IS NOT NULL`, kenhId, hoiThoaiId)
-                return new Set(r.map(x => String(x.maTinGui)))
-            } catch (e) { if (thieu(e)) return new Set(); throw e }
+                    `SELECT "maTinGui", "tinKhachId" FROM "TuTraLoiNhatKy" WHERE "kenhId" = $1 AND "hoiThoaiId" = $2 AND "maTinGui" IS NOT NULL`, kenhId, hoiThoaiId)
+                return new Map(r.map(x => [String(x.maTinGui), String(x.tinKhachId)]))
+            } catch (e) { if (thieu(e)) return new Map(); throw e }
         },
-        async demTinCho(kenhId, hoiThoaiId, soGio) {
+        async demTinCho(kenhId, hoiThoaiId, soPhut) {
             try {
                 const r: any[] = await db.$queryRawUnsafe(
                     `SELECT COUNT(*)::int AS n FROM "TuTraLoiNhatKy"
                       WHERE "kenhId" = $1 AND "hoiThoaiId" = $2 AND "trangThai" = 'da_gui' AND "lyDo" LIKE $4
-                        AND "luc" >= ${BAY_GIO} - make_interval(hours => $3::int)`, kenhId, hoiThoaiId, soGio, `${TIEN_TO_TIN_CHO}%`)
+                        AND "luc" >= ${BAY_GIO} - make_interval(mins => $3::int)`, kenhId, hoiThoaiId, soPhut, `${TIEN_TO_TIN_CHO}%`)
                 return Number(r[0]?.n) || 0
             } catch (e) { if (thieu(e)) return 0; throw e }
         },
