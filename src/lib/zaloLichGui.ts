@@ -10,7 +10,10 @@
  * Biến: {tenKhach} {maKhach} {tenNhom} + công nợ {congNo} {ngayChot} + doanh số {doanhSo} {soLuong}
  * {soDon} {nhomHang} {tuNgay} {denNgay} theo kỳ TƯƠNG ĐỐI (hôm qua / tuần trước / tháng trước / tháng này)
  * + nhắc mua lại {thuHayMua} {hangLauKhongMua} {soMonLauKhongMua} (28/10/2026, lib/zaloNhacMuaLai.ts — lọc
- * doiTuong.chiKhachMaiHayMua: chỉ khách mà MAI là ngày hay mua và có món lâu chưa mua; nhóm hàng gợi ý doiTuong.nhomHangGoiY).
+ * doiTuong.chiKhachMaiHayMua: chỉ khách mà MAI là ngày hay mua và có món lâu chưa mua; nhóm hàng gợi ý doiTuong.nhomHangGoiY)
+ * + giới thiệu sản phẩm mỗi ngày {tenSanPham} {maSanPham} {giaBan} {donVi} {moTaSanPham} {thuongHieu} {nhomHangSp} (28/10/2026,
+ * lib/zaloGioiThieuSp.ts — lịch.gioiThieu: nguồn sản phẩm, mỗi lượt MỘT món xoay vòng cho mọi nhóm nhận, ảnh sản phẩm tự gửi kèm;
+ * trạng thái xoay vòng ở cột gioiThieuDaGui, xem trước không ghi).
  *
  * AN TOÀN — gửi sai số nợ cho khách là việc không rút lại được:
  *  - {congNo} = Customer.debt, nguồn sự thật (HUTI: bản sao số dư KiotViet, webhook làm tươi ngay +
@@ -32,6 +35,10 @@ import { tinhDoanhSo, bienDoanhSo, dungBienDoanhSo, dinhTien, type CauHinhDoanhS
 import { chonKenhGui, CAU_CHUA_CO_KENH, dienMau } from './zaloGui'
 import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay } from './zaloGiaoDichNgay'
 import { dungBienNhacMuaLai, thoiQuenMuaCuaKhach, maiLaNgayHayMua, bienNhacMuaLai } from './zaloNhacMuaLai'
+import {
+    docGioiThieu, dungBienGioiThieu, ungVienGioiThieu, chonSanPhamHomNay, thuTuSapToi, bienGioiThieu, anhGioiThieu, ghiDaGioiThieu,
+    type GioiThieuSp, type DaGioiThieu, type SanPhamGioiThieu,
+} from './zaloGioiThieuSp'
 
 const BANG = '"ZaloLichGui"'
 const LECH_VN_MS = 7 * 3600_000          // Việt Nam UTC+7, không đổi giờ
@@ -214,6 +221,8 @@ export interface KetQuaSoan {
     /** VẪN GỬI nhưng chưa có số nợ 0 giờ ⇒ tin bỏ dòng {noDauNgay} (zaloGui dienMau) */
     thieuNoDau: number
     doanhSo: (CauHinhDoanhSo & { nhomHang: string }) | null
+    /** Giới thiệu sản phẩm (lib/zaloGioiThieuSp.ts): món của lượt này + thứ tự sắp tới; sanPham null = không món nào đủ điều kiện */
+    gioiThieu: { sanPham: SanPhamGioiThieu | null; soUngVien: number; sapToi: SanPhamGioiThieu[]; soAnh: number } | null
 }
 
 /** Mô tả các nhóm bị bỏ (xem trước / kết quả lượt chạy) */
@@ -228,7 +237,21 @@ export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongM
 }
 
 /** Ai nhận + biến của từng nhóm, chốt tại `luc`. Dùng chung cho xem trước và lúc chạy thật. */
-export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null }, luc: Date): Promise<KetQuaSoan> {
+export async function soanNguoiNhan(
+    sp: any,
+    lich: { noiDung: string; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null; gioiThieu?: GioiThieuSp | null; gioiThieuDaGui?: DaGioiThieu | null },
+    luc: Date,
+): Promise<KetQuaSoan> {
+    // Giới thiệu sản phẩm (lib/zaloGioiThieuSp.ts): MỘT món cho mọi nhóm nhận của lượt này. Không món nào đủ điều kiện ⇒ không ai nhận.
+    let gioiThieu: KetQuaSoan['gioiThieu'] = null
+    let bienSp: Record<string, string> = {}
+    if (lich.gioiThieu) {
+        const uv = await ungVienGioiThieu(sp, lich.gioiThieu)
+        const sanPham = chonSanPhamHomNay(uv, lich.gioiThieuDaGui)
+        gioiThieu = { sanPham, soUngVien: uv.length, sapToi: thuTuSapToi(uv, lich.gioiThieuDaGui, 5), soAnh: lich.gioiThieu.soAnh }
+        if (!sanPham) return { dong: [], boChuaNoi: 0, boKhongNo: 0, boKhongMua: 0, boKhongGiaoDich: 0, boKhongDenLuot: 0, thieuNoDau: 0, doanhSo: null, gioiThieu }
+        bienSp = bienGioiThieu(sanPham)
+    }
     const canCongNo = dungBienCongNo(lich.noiDung)
     const canDoanhSo = dungBienDoanhSo(lich.noiDung) && !!lich.doanhSo
     const canHomNay = dungBienHomNay(lich.noiDung)
@@ -275,7 +298,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
         if (locGiaoDich && !(sn && (sn.mua > 0 || sn.daTra > 0))) { boKhongGiaoDich++; continue }
         const tq = k && thoiQuen ? thoiQuen.get(k.id) : undefined
         if (locMaiHayMua && !(maiLaNgayHayMua(tq, luc) && tq!.mon.length)) { boKhongDenLuot++; continue }
-        let bien: Record<string, string> = {}
+        let bien: Record<string, string> = { ...bienSp }
         if (canCongNo && no !== null) bien = { ...bien, ...bienCongNo(no, luc) }
         if (canNhac) bien = { ...bien, ...bienNhacMuaLai(tq) }
         if (canHomNay && sn) {
@@ -293,7 +316,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
             maKhach: k?.code || null, tenKhach: k?.name || null, bien: Object.keys(bien).length ? bien : null, no,
         })
     }
-    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boKhongDenLuot, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
+    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boKhongDenLuot, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null, gioiThieu }
 }
 
 /** Tin mẫu đã điền cho một dòng (xem trước) */
@@ -305,6 +328,8 @@ export const tinMau = (noiDung: string, d: DongGui | undefined) =>
 export interface LichGui {
     id: string; ten: string; noiDung: string; anh: string[]
     tuyChon: TuyChonTin; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null; tanSuat: TanSuat
+    /** Giới thiệu sản phẩm (28/10/2026) + trạng thái xoay vòng {productId: ISO}; lịch cũ không có ⇒ null */
+    gioiThieu?: GioiThieuSp | null; gioiThieuDaGui?: DaGioiThieu | null
     bat: boolean; lanToi: string | null; lanCuoi: string | null; lanCuoiDotId: string | null; lanCuoiKetQua: string | null
     nguoiTao: string | null; createdAt: string; updatedAt: string
 }
@@ -338,12 +363,23 @@ async function damBaoBang(sp: any): Promise<void> {
             "lanCuoiKetQua" TEXT,
             "nguoiTao" TEXT,
             "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
-            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+            "gioiThieu" TEXT,
+            "gioiThieuDaGui" TEXT
         )`)
     } catch (e: any) {
         if (!/already exists|duplicate key value/i.test(String(e?.message || ''))) throw e
     }
+    await damBaoCot(sp)
     daTaoBang.add(schema)
+}
+
+/** Cột thêm SAU khi bảng đã có ở cửa hàng (28/10/2026: giới thiệu sản phẩm) — idempotent, một lần mỗi tiến trình mỗi cửa hàng */
+async function damBaoCot(sp: any): Promise<void> {
+    for (const cot of ['gioiThieu', 'gioiThieuDaGui']) {
+        try { await sp.$executeRawUnsafe(`ALTER TABLE ${BANG} ADD COLUMN IF NOT EXISTS "${cot}" TEXT`) }
+        catch (e: any) { if (!/already exists|duplicate column/i.test(String(e?.message || ''))) throw e }
+    }
 }
 
 /** Có bảng chưa — nhịp nền dùng cái này để KHÔNG tạo bảng ở cửa hàng chưa từng đặt lịch */
@@ -351,7 +387,7 @@ async function coBang(sp: any): Promise<boolean> {
     const schema = await tenSchema(sp)
     if (daTaoBang.has(schema)) return true
     const r: any[] = await sp.$queryRawUnsafe(`SELECT to_regclass('"ZaloLichGui"') IS NOT NULL AS co`)
-    if (r[0]?.co) daTaoBang.add(schema)   // nhớ "đã có" — nhịp mỗi phút khỏi hỏi lại
+    if (r[0]?.co) { await damBaoCot(sp); daTaoBang.add(schema) }   // nhớ "đã có" — nhịp mỗi phút khỏi hỏi lại
     return !!r[0]?.co
 }
 
@@ -367,6 +403,7 @@ function docDong(r: any): LichGui {
         tuyChon: typeof tc === 'string' ? { mucDo: 0, nhacCaNhom: false, tuXoa: 0, henGio: null } : tc,
         doiTuong: json(r.doiTuong, { loai: 'tat_ca', groupIds: [], chiKhachCoNo: false, noToiThieu: 0 }),
         doanhSo: json(r.doanhSo, null), tanSuat: json(r.tanSuat, { loai: 'thang', gio: '08:00', ngay: 1 }),
+        gioiThieu: json(r.gioiThieu, null), gioiThieuDaGui: json(r.gioiThieuDaGui, null),
         bat: !!r.bat, lanToi: isoHoacNull(r.lanToi), lanCuoi: isoHoacNull(r.lanCuoi),
         lanCuoiDotId: r.lanCuoiDotId || null, lanCuoiKetQua: r.lanCuoiKetQua || null,
         nguoiTao: r.nguoiTao || null, createdAt: isoHoacNull(r.createdAt)!, updatedAt: isoHoacNull(r.updatedAt)!,
@@ -387,6 +424,8 @@ export async function layLich(sp: any, id: string): Promise<LichGui | null> {
 
 export interface DuLieuLich {
     ten: string; noiDung: string; anh: string[]; tuyChon: TuyChonTin; doiTuong: DoiTuong; doanhSo: DoanhSoDinhKy | null; tanSuat: TanSuat
+    /** Giới thiệu sản phẩm mỗi lượt (lib/zaloGioiThieuSp.ts); null = lịch thường */
+    gioiThieu: GioiThieuSp | null
     /** Lần chạy ĐẦU không sớm hơn mốc này (tab Gửi tin: "hẹn 08:00 mai, lặp hằng ngày" ⇒ không chạy 08:00 hôm nay) */
     batDauTu: Date | null
 }
@@ -406,6 +445,9 @@ export function docDuLieuLich(b: any): DuLieuLich | string {
     const doanhSo = docDoanhSoDinhKy(b?.doanhSo)
     if (typeof doanhSo === 'string') return doanhSo
     if (dungBienDoanhSo(noiDung) && !doanhSo) return 'Tin có {doanhSo} — chọn kỳ và nhóm hàng cho doanh số'
+    const gioiThieu = docGioiThieu(b?.gioiThieu)
+    if (typeof gioiThieu === 'string') return gioiThieu
+    if (dungBienGioiThieu(noiDung) && !gioiThieu) return 'Tin có {tenSanPham} — chọn sản phẩm hoặc nhóm hàng để giới thiệu'
     const tanSuat = docTanSuat(b?.tanSuat)
     if (typeof tanSuat === 'string') return tanSuat
     let batDauTu: Date | null = null
@@ -415,7 +457,7 @@ export function docDuLieuLich(b: any): DuLieuLich | string {
         if (t > Date.now() + 31 * 86_400_000) return 'Chỉ hẹn bắt đầu trước tối đa 31 ngày'
         batDauTu = t > Date.now() ? new Date(t) : null
     }
-    return { ten, noiDung, anh, tuyChon, doiTuong, doanhSo, tanSuat, batDauTu }
+    return { ten, noiDung, anh, tuyChon, doiTuong, doanhSo, gioiThieu, tanSuat, batDauTu }
 }
 
 /** Lần chạy đầu: lần kế tiếp theo tần suất, nhưng KHÔNG sớm hơn batDauTu (đúng mốc thì chạy luôn mốc đó) */
@@ -428,10 +470,11 @@ export async function taoLich(sp: any, d: DuLieuLich, nguoi: string | null, bayG
     await damBaoBang(sp)
     const id = crypto.randomUUID()
     await sp.$executeRawUnsafe(
-        `INSERT INTO ${BANG} ("id", "ten", "noiDung", "anh", "tuyChon", "doiTuong", "doanhSo", "tanSuat", "bat", "lanToi", "nguoiTao")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9::timestamp(3), $10)`,
+        `INSERT INTO ${BANG} ("id", "ten", "noiDung", "anh", "tuyChon", "doiTuong", "doanhSo", "tanSuat", "bat", "lanToi", "nguoiTao", "gioiThieu")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9::timestamp(3), $10, $11)`,
         id, d.ten, d.noiDung, JSON.stringify(d.anh), JSON.stringify({ ...d.tuyChon, henGio: null }), JSON.stringify(d.doiTuong),
-        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)), nguoi)
+        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)), nguoi,
+        d.gioiThieu ? JSON.stringify(d.gioiThieu) : null)
     return (await layLich(sp, id))!
 }
 
@@ -440,9 +483,10 @@ export async function suaLich(sp: any, id: string, d: DuLieuLich, bayGio = new D
     if (!(await coBang(sp))) return null
     const n = await sp.$executeRawUnsafe(
         `UPDATE ${BANG} SET "ten" = $2, "noiDung" = $3, "anh" = $4, "tuyChon" = $5, "doiTuong" = $6, "doanhSo" = $7, "tanSuat" = $8,
-            "lanToi" = $9::timestamp(3), "updatedAt" = now() WHERE "id" = $1`,
+            "lanToi" = $9::timestamp(3), "gioiThieu" = $10, "updatedAt" = now() WHERE "id" = $1`,
         id, d.ten, d.noiDung, JSON.stringify(d.anh), JSON.stringify({ ...d.tuyChon, henGio: null }), JSON.stringify(d.doiTuong),
-        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)))
+        d.doanhSo ? JSON.stringify(d.doanhSo) : null, JSON.stringify(d.tanSuat), gioUtc(lanDau(d.tanSuat, d.batDauTu, bayGio)),
+        d.gioiThieu ? JSON.stringify(d.gioiThieu) : null)
     return Number(n) ? layLich(sp, id) : null
 }
 
@@ -511,14 +555,21 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
         }
     }
     const soan = await soanNguoiNhan(sp, lich, luc)
+    const sanPham = soan.gioiThieu?.sanPham || null
+    // Lịch giới thiệu sản phẩm mà không món nào đủ điều kiện (hết hàng / chưa có ảnh / nguồn trống): KHÔNG bình thường ⇒ báo chuông
+    if (soan.gioiThieu && !sanPham) {
+        return boQua('Không có sản phẩm nào đủ điều kiện để giới thiệu — kiểm lại nguồn sản phẩm của lịch ("còn hàng", "có ảnh", nhóm hàng)')
+    }
     if (!soan.dong.length) {
         const vi = moTaBo(soan)
         // Bỏ vì không ai nợ / không ai mua là bình thường ⇒ không báo chuông
         return boQua(`Không có nhóm nào cần gửi${vi ? ` (${vi})` : ''}`, false)
     }
+    // Ảnh sản phẩm (ảnh đại diện trước) đi TRƯỚC ảnh thêm của lịch; tổng tối đa 10 như mọi đợt
+    const anhDot = sanPham && soan.gioiThieu ? [...anhGioiThieu(sanPham, soan.gioiThieu.soAnh), ...lich.anh].slice(0, 10) : lich.anh
     const dot = await sp.zaloDotGui.create({
         data: {
-            tieuDe: `${lich.ten} — ${gioVN(luc).slice(0, 11)}`.slice(0, 200), noiDung: lich.noiDung, anh: JSON.stringify(lich.anh),
+            tieuDe: `${lich.ten} — ${gioVN(luc).slice(0, 11)}${sanPham ? ` · ${sanPham.name}` : ''}`.slice(0, 200), noiDung: lich.noiDung, anh: JSON.stringify(anhDot),
             soNhom: soan.dong.length, nguoiTao: `lich:${lich.id}`, doanhSo: soan.doanhSo ? JSON.stringify(soan.doanhSo) : null,
         },
     })
@@ -528,9 +579,14 @@ export async function chayLich(sp: any, lich: LichGui, opt: { thuCong?: boolean;
         data: soan.dong.map(d => ({ dotId: dot.id, groupId: d.groupId, customerId: d.customerId, tenNhom: d.tenNhom, bien: d.bien ? JSON.stringify(d.bien) : null })),
         skipDuplicates: true,
     })
+    // Ghi "đã giới thiệu" ⇒ lượt sau xoay sang món khác (xem trước không đi qua đây nên không ghi)
+    if (sanPham) {
+        await sp.$executeRawUnsafe(`UPDATE ${BANG} SET "gioiThieuDaGui" = $2, "updatedAt" = now() WHERE "id" = $1`,
+            lich.id, JSON.stringify(ghiDaGioiThieu(lich.gioiThieuDaGui, sanPham.id, luc)))
+    }
     const bo = moTaBo(soan)
     const thieu = soan.thieuNoDau ? `; ${soan.thieuNoDau} tin không có dòng "nợ đầu ngày" (chưa có số nợ 0 giờ)` : ''
-    const ketQua = `Đã xếp ${soan.dong.length} nhóm${bo ? ` (bỏ ${bo})` : ''}${thieu}${opt.thuCong ? ' — chạy tay' : ''}`
+    const ketQua = `Đã xếp ${soan.dong.length} nhóm${bo ? ` (bỏ ${bo})` : ''}${thieu}${sanPham ? ` · giới thiệu "${sanPham.name}"` : ''}${opt.thuCong ? ' — chạy tay' : ''}`
     await ghiKetQua(sp, lich.id, ketQua, dot.id, luc)
     return { dotId: dot.id, soNhom: soan.dong.length, ketQua, boQua: false }
 }

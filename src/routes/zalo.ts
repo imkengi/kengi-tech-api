@@ -54,6 +54,7 @@ import {
     dsLich, layLich, docDuLieuLich, taoLich, suaLich, datBat, xoaLich, chayLich, soanNguoiNhan, tinMau, lanDau,
     moTaTanSuat, kiemSoNoTuoi, dungBienCongNo, bienCongNo, moTaBo,
 } from '../lib/zaloLichGui'
+import { anhGioiThieu } from '../lib/zaloGioiThieuSp'
 import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay } from '../lib/zaloGiaoDichNgay'
 import { nhanDangAnh, luuAnhSanPham } from '../lib/anhSanPham'
 import { dungBienDoanhSo, docCauHinhDoanhSo, tinhDoanhSo, bienDoanhSo, CauHinhDoanhSo } from '../lib/zaloDoanhSo'
@@ -967,10 +968,13 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
         const d = docDuLieuLich(req.body)
         if (typeof d === 'string') { res.status(400).json({ success: false, error: d }); return }
         const luc = new Date()
-        const soan = await soanNguoiNhan(sp, d, luc)
+        // Lịch đang sửa gửi kèm id: đọc trạng thái xoay vòng giới thiệu sản phẩm để chỉ đúng món của lượt tới (xem trước không ghi gì)
+        const cu = d.gioiThieu && req.body?.id ? await layLich(sp, String(req.body.id)) : null
+        const soan = await soanNguoiNhan(sp, { ...d, gioiThieuDaGui: cu?.gioiThieuDaGui || null }, luc)
         const ch = await sp.zaloCauHinh.findUnique({ where: { id: 'default' } })
         const { kenh, tamDung } = await chonKenhGui(sp, ch)
         const noTuoi = dungBienCongNo(d.noiDung) || canNoDauNgay(d.noiDung) ? await kiemSoNoTuoi(sp, luc) : { ok: true, lyDo: null }
+        const gt = soan.gioiThieu
         res.json({
             success: true,
             data: {
@@ -981,6 +985,11 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,
                 lanToi: lanDau(d.tanSuat, d.batDauTu, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
                 noTuoi, kenh: kenh?.loai || null, tamDung, doanhSo: soan.doanhSo,
+                gioiThieu: gt ? {
+                    soUngVien: gt.soUngVien,
+                    sanPham: gt.sanPham ? { id: gt.sanPham.id, name: gt.sanPham.name, sku: gt.sanPham.sku, gia: gt.sanPham.gia, donVi: gt.sanPham.donVi, moTa: gt.sanPham.moTa, anh: anhGioiThieu(gt.sanPham, gt.soAnh) } : null,
+                    sapToi: gt.sapToi.map(x => ({ id: x.id, name: x.name })),
+                } : null,
             },
         })
     } catch (e: any) {
