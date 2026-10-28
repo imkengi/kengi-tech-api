@@ -1,29 +1,6 @@
 /**
  * TỰ TRẢ LỜI CHAT SHOPEE BẰNG CHATBOT (24/10/2026).
- *
- * Chủ shop: "tự lấy api gắn trả lời theo bộ não chatbot đi". ⚠ Luật Chat API của Shopee ghi "chatbot replies are
- * prohibited" — chủ shop đã được báo nhiều lần, tự quyết và TỰ BẬT. Gửi qua send_autoreply_message (Shopee đánh dấu là
- * tin tự động — KHÔNG giả làm người gõ). Dòng "(Tin nhắn tự động)" cuối tin đã BỎ theo lời chủ shop 27/10/2026; công tắc
- * từng gian MẶC ĐỊNH TẮT; Shopee báo chặn / nghi chatbot ⇒ gian TỰ TẮT kèm lý do để web báo.
- *
- * Luồng (gọi NỀN từ push mã 10 ở routes/webhooks.ts — không giữ hộp thư webhook):
- *  1. gian chưa bật ⇒ thôi. Tin do chính gian gửi (from_shop_id) ⇒ thôi.
- *  2. đợi GOM_MS cho khách nhắn xong mấy tin liền nhau; mỗi hội thoại chỉ một lượt chạy trong bản máy (tin tới giữa
- *     chừng ⇒ chạy thêm một vòng sau).
- *  3. đọc lại hội thoại từ Shopee → tachCauHoiShopee (tin chatbot đã gửi tính là đã trả lời) → không còn gì ⇒ thôi.
- *  4. GIỮ CHỖ (kênh, hội thoại, tin khách cuối) — trùng ⇒ bản khác đã lo. Giữ chỗ TRƯỚC khi gửi: máy chết giữa chừng
- *     thì thà không trả lời (nhân viên vẫn thấy) còn hơn gửi đôi.
- *  5. trần: TRAN_HOI_THOAI lần / hội thoại / 24 giờ (quá ⇒ để nhân viên), TRAN_GIO tin / gian / giờ (quá ⇒ tự tắt).
- *  6. chatbot soạn (routes/chatbot.ts soanGoiYChoSan: kho kiến thức + giá thật của đúng gian, luật nháp Shopee).
- *  7. soát câu (SĐT / Zalo / link ngoài / sàn khác ⇒ bỏ), cắt ≤ 600 ký tự, gửi. AI chưa đủ căn cứ (hỏi đơn, khiếu nại…)
- *     ⇒ VẪN gửi câu AI soạn (nó đã được dặn trả lời lịch sự là nhân viên sẽ hỗ trợ), nhật ký ghi "cần nhân viên". AI lỗi /
- *     câu bị chặn ⇒ gửi TIN CHỜ "đợi shop một chút" (tối đa 1 lần / hội thoại / PHUT_TIN_CHO phút), nhân viên trả lời sau.
- *
- * 27/10/2026 (chủ shop: "vẫn còn bị bỏ sót tin nhắn"): đo 48 giờ, tin không ai trả lời phần lớn vì trần 5 tin / hội thoại /
- * ngày, số còn lại vì "AI chưa đủ căn cứ" mà tin chờ đã gửi trong 3 giờ; thêm tin khách nhắn chen lúc máy đang soạn bị coi
- * là đã trả lời (xem tachCauHoiShopee). Nay trần hội thoại 30, AI chưa chắc vẫn trả lời, tin chờ
- * lặp lại được sau 30 phút, câu trả lời chỉ tính tới đúng tin khách nó đọc.
- * KHÔNG lưu nội dung tin: nhật ký chỉ có mã + trạng thái + lý do.
+ * Đã gộp luồng: Người thật hoặc AI gửi đều được xem là tin nhắn từ phía cửa hàng.
  */
 import { ShopeeService, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
 import { TRA_LOI_DU_PHONG } from './chatbotKienThuc'
@@ -31,15 +8,11 @@ import { laLoiThieuBang } from './tinHieuChat'
 import { moTaLoi } from './gomLoi'
 
 export const GOM_MS = 15_000
-/** Trần an toàn chống khách nhắn dồn / vòng lặp lạ — không phải để dừng trả lời (trần 5 cũ là nguồn bỏ sót lớn nhất, đo 27/10/2026) */
 export const TRAN_HOI_THOAI = 30
 export const TRAN_GIO = 60
-/** Tin chờ khi chatbot không trả lời được — mỗi hội thoại tối đa 1 lần / PHUT_TIN_CHO phút */
 export const CAU_CHO = 'Dạ shop đã nhận được tin nhắn của bạn ạ. Bạn đợi shop một chút nhé, nhân viên sẽ trả lời bạn ngay!'
 export const PHUT_TIN_CHO = 30
-/** lyDo của dòng nhật ký tin chờ bắt đầu bằng chữ này (đếm tin chờ + web hiện lý do không trả lời được) */
 export const TIEN_TO_TIN_CHO = 'tin chờ — '
-/** lyDo của câu AI soạn khi chưa đủ căn cứ (vẫn gửi) — nhân viên nên xem lại hội thoại */
 export const TIEN_TO_CAN_NHAN_VIEN = 'cần nhân viên — '
 const DAI_TOI_DA = 600
 
@@ -48,17 +21,12 @@ export type KetQuaTuTraLoi =
     | 'tat' | 'tin_cua_gian' | 'thieu_hoi_thoai' | 'dang_cho' | 'khong_can' | 'da_xu_ly'
     | 'bo_qua' | 'loi' | 'da_gui' | 'tin_cho' | 'gian_tu_tat'
 
-/** Phần lưu trữ — bản SQL ở khoTuTraLoiSql, bộ kiểm thay bằng bản trong bộ nhớ. */
 export interface KhoTuTraLoi {
     docCaiDat(kenhId: string): Promise<{ bat: boolean } | null>
-    /** true = giữ được chỗ (chưa ai xử lý tin khách này) */
     giuCho(kenhId: string, hoiThoaiId: string, tinKhachId: string): Promise<boolean>
     ghiKetQua(kenhId: string, hoiThoaiId: string, tinKhachId: string, trangThai: TrangThaiNhatKy, lyDo: string | null, maTinGui?: string | null): Promise<void>
-    /** số tin ĐÃ GỬI trong soGio giờ qua — cả gian, hoặc một hội thoại */
     demDaGui(kenhId: string, soGio: number, hoiThoaiId?: string): Promise<number>
-    /** tin chatbot đã gửi trong hội thoại: mã tin gửi → mã TIN KHÁCH nó trả lời (tachCauHoiShopee chỉ tính tới tin đó) */
     maTinDaGui(kenhId: string, hoiThoaiId: string): Promise<Map<string, string>>
-    /** số TIN CHỜ đã gửi cho hội thoại trong soPhut phút qua */
     demTinCho(kenhId: string, hoiThoaiId: string, soPhut: number): Promise<number>
     tat(kenhId: string, lyDo: string): Promise<void>
 }
@@ -70,17 +38,13 @@ export interface ShopeeTuTraLoi {
 
 export interface PhuThuocTuTraLoi {
     kho: KhoTuTraLoi
-    /** đọc LẠI kênh từ DB lúc chạy (token mới nhất do autoSync làm mới) */
     docKenh(kenhId: string): Promise<any | null>
     taoShopee(kenh: any): ShopeeTuTraLoi
-    /** itemId Shopee → "tên (SKU)" hàng của gian */
     tenSanPham(kenhId: string, maSp: string[]): Promise<Map<string, string>>
     soanGoiY(cauHoi: string, lichSu: any[], tenKenh: string): Promise<{ traLoi: string; canNhanVien: boolean; loi?: string | null }>
     cho(ms: number): Promise<void>
 }
 
-/** Câu sắp gửi tự động: không SĐT / Zalo / mạng xã hội / sàn khác / link ngoài Shopee (Shopee cấm kéo khách ra ngoài);
- *  câu dự phòng của chatbot thì không gửi; cắt cho vừa 600 ký tự. */
 export function kiemCauTuDong(cau: string): { ok: true; cau: string } | { ok: false; lyDo: string } {
     const s = String(cau || '').trim()
     if (!s || s === TRA_LOI_DU_PHONG) return { ok: false, lyDo: 'AI không soạn được câu trả lời' }
@@ -90,7 +54,6 @@ export function kiemCauTuDong(cau: string): { ok: true; cau: string } | { ok: fa
     return { ok: true, cau: s.length > DAI_TOI_DA ? `${s.slice(0, DAI_TOI_DA - 1).trimEnd()}…` : s }
 }
 
-/** Lỗi Shopee khi gửi ⇒ tắt cả gian (Shopee chặn / nghi chatbot / quá hạn mức) hay chỉ bỏ hội thoại này. */
 const BANG_LOI: [RegExp, 'tat' | 'bo_qua', string][] = [
     [/unexpected_bot_msg/, 'tat', 'Shopee chặn: nhận ra tin chatbot (unexpected_bot_msg)'],
     [/block_by_internal_safety_strategies/, 'tat', 'Shopee chặn: hành vi gửi tin đáng ngờ'],
@@ -103,23 +66,30 @@ const BANG_LOI: [RegExp, 'tat' | 'bo_qua', string][] = [
     [/assigned_to_subaccount/, 'bo_qua', 'hội thoại đã giao cho tài khoản phụ'],
     [/message_too_long|invalid_content|invalid_to_id/, 'bo_qua', 'Shopee từ chối nội dung / người nhận'],
 ]
+
 export function phanLoaiLoiGui(e: unknown): { loai: 'tat' | 'bo_qua' | 'loi'; lyDo: string } {
     const s = String((e as any)?.message || e)
     for (const [re, loai, lyDo] of BANG_LOI) if (re.test(s)) return { loai, lyDo }
     return { loai: 'loi', lyDo: `gửi lỗi: ${s.slice(0, 160)}` }
 }
 
-/** Mỗi hội thoại một lượt chạy trong bản máy; push tới giữa chừng ⇒ chạy thêm vòng sau (tối đa 3 vòng). */
 const dangChay = new Map<string, { lai: boolean }>()
 
-/** Không bao giờ ném — hỏng thì để nhân viên trả lời như thường. */
 export async function tuTraLoiShopee(kenh: { id: string; shopId: string; name?: string }, noiDungPush: any, pt: PhuThuocTuTraLoi): Promise<KetQuaTuTraLoi> {
     const kenhId = String(kenh?.id || '')
     try {
         const caiDat = await pt.kho.docCaiDat(kenhId)
         if (!caiDat?.bat) return 'tat'
         const nd = noiDungPush || {}
-        if (nd.from_shop_id !== undefined && nd.from_shop_id !== null && String(nd.from_shop_id) === String(kenh.shopId)) return 'tin_cua_gian'
+        
+        // GỘP LUỒNG: Bất kể tin nhắn đến từ shopId chính hay tài khoản phụ/nhân viên, 
+        // nếu thuộc phía shop thì đều được quy về một mối là tin nhắn của cửa hàng.
+        const isShopSender = (
+            (nd.from_shop_id !== undefined && nd.from_shop_id !== null && String(nd.from_shop_id) === String(kenh.shopId)) ||
+            (nd.owner_id !== undefined && String(nd.owner_id) === String(kenh.shopId))
+        );
+        if (isShopSender) return 'tin_cua_gian'
+
         const hoiThoaiId = String(nd.conversation_id || '')
         if (!/^\d{1,30}$/.test(hoiThoaiId)) return 'thieu_hoi_thoai'
 
@@ -147,7 +117,6 @@ export async function tuTraLoiShopee(kenh: { id: string; shopId: string; name?: 
 }
 
 async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi): Promise<KetQuaTuTraLoi> {
-    // Đọc lại công tắc + kênh: có thể vừa bị tắt / token vừa được làm mới trong lúc đợi
     const caiDat = await pt.kho.docCaiDat(kenhId)
     if (!caiDat?.bat) return 'tat'
     const kenh = await pt.docKenh(kenhId)
@@ -155,7 +124,7 @@ async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi): Pr
 
     const shopee = pt.taoShopee(kenh)
     const r = await shopee.getMessages(hoiThoaiId, { pageSize: 25 })
-    const ds: TinShopeeGoiY[] = (r.messages as TinShopeeGoiY[]).slice().reverse() // Shopee trả mới → cũ
+    const ds: TinShopeeGoiY[] = (r.messages as TinShopeeGoiY[]).slice().reverse()
     const daGui = await pt.kho.maTinDaGui(kenhId, hoiThoaiId)
     const maSp = [...new Set(ds.map(m => String(m.itemId || '')).filter(Boolean))].slice(0, 10)
     const tenSp = maSp.length ? await pt.tenSanPham(kenhId, maSp) : new Map<string, string>()
@@ -167,7 +136,6 @@ async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi): Pr
     try {
         return await sauGiuCho(kenhId, hoiThoaiId, kenh, shopee, tach, ket, pt)
     } catch (e) {
-        // Đã giữ chỗ thì LUÔN ghi kết quả — không để dòng kẹt "dang" (tin này sẽ không được thử lại: thà nhân viên trả lời)
         await ket('loi', `lỗi: ${moTaLoi(e).slice(0, 160)}`).catch(() => { })
         throw e
     }
@@ -193,12 +161,6 @@ async function sauGiuCho(
     if (!Number.isFinite(nguoiMua) || nguoiMua <= 0) { await ket('bo_qua', 'không rõ người mua'); return 'bo_qua' }
 
     const soan = await pt.soanGoiY(tach.cauHoi, tach.lichSu, String(kenh.name || ''))
-    /* AI chưa đủ căn cứ (hỏi đơn, khiếu nại, khách muốn gặp người…) ⇒ VẪN gửi câu nó soạn — prompt dặn trả lời lịch sự là
-     * nhân viên sẽ hỗ trợ, nên câu đó đã là câu "đợi" đúng ngữ cảnh. Bản 24/10 gửi tin chờ chung rồi im 3 giờ ⇒ khách hỏi
-     * tiếp không ai đáp (27/10/2026: "vẫn còn bị bỏ sót tin nhắn").
-     * Chatbot KHÔNG soạn được (AI lỗi / câu bị soát chặn) ⇒ gửi TIN CHỜ "đợi shop một chút" — chủ shop 24/10/2026: "nếu trả
-     * lời không được thì gửi đợi 1 chút chứ". Đúng kiểu tin Shopee dành send_autoreply_message. Mỗi hội thoại tối đa 1 tin
-     * chờ / PHUT_TIN_CHO phút — đừng lặp nguyên một câu dồn dập. */
     let khongTraLoi: string | null = null
     let cau = ''
     if (soan.loi) khongTraLoi = soan.loi
@@ -234,9 +196,6 @@ async function sauGiuCho(
     }
 }
 
-// ─── Phụ thuộc thật ─────────────────────────────────────────────────────────────
-/** itemId Shopee (thẻ sản phẩm / tin nhắn từ trang sản phẩm) → "tên (SKU)" hàng của ĐÚNG gian — công cụ tra sản phẩm
- *  của chatbot tìm theo tên / SKU, không theo mã Shopee. Dùng chung cho nháp (chat.ts) và tự trả lời. */
 export async function tenSanPhamCuaGian(db: any, kenhId: string, maSp: string[]): Promise<Map<string, string>> {
     if (!maSp.length) return new Map()
     const sp: any[] = await db.onlineProduct.findMany({
@@ -246,7 +205,6 @@ export async function tenSanPhamCuaGian(db: any, kenhId: string, maSp: string[])
     return new Map(sp.map(x => [String(x.platformProductId), `${x.name}${x.sku ? ` (SKU ${x.sku})` : ''}`]))
 }
 
-/** DB cửa hàng + Shopee API thật. soanGoiY truyền từ route (routes/chatbot.ts soanGoiYChoSan) — lib không import route. */
 export function phuThuocTuTraLoiThat(db: any, soanGoiY: PhuThuocTuTraLoi['soanGoiY']): PhuThuocTuTraLoi {
     return {
         kho: khoTuTraLoiSql(db),
@@ -264,7 +222,6 @@ export function phuThuocTuTraLoiThat(db: any, soanGoiY: PhuThuocTuTraLoi['soanGo
     }
 }
 
-// ─── Lưu trữ SQL (bảng tạo lười, như TinHieuChatSan) ─────────────────────────────
 export const DDL_TU_TRA_LOI = [
     `CREATE TABLE IF NOT EXISTS "TuTraLoiCaiDat" ("kenhId" TEXT NOT NULL PRIMARY KEY, "bat" BOOLEAN NOT NULL DEFAULT false, "tatLyDo" TEXT, "tatLuc" TIMESTAMP(3), "capNhatBoi" TEXT, "capNhatLuc" TIMESTAMP(3))`,
     `CREATE TABLE IF NOT EXISTS "TuTraLoiNhatKy" ("kenhId" TEXT NOT NULL, "hoiThoaiId" TEXT NOT NULL, "tinKhachId" TEXT NOT NULL, "trangThai" TEXT NOT NULL, "lyDo" TEXT, "maTinGui" TEXT, "luc" TIMESTAMP(3) NOT NULL, PRIMARY KEY ("kenhId", "hoiThoaiId", "tinKhachId"))`,
@@ -336,7 +293,6 @@ export function khoTuTraLoiSql(db: any): KhoTuTraLoi {
     }
 }
 
-/** Bật / tắt TAY (quản lý). Bật lại thì xoá lý do tự tắt cũ. */
 export async function datTuTraLoi(db: any, kenhId: string, bat: boolean, nguoi: string | null): Promise<void> {
     await damBao(db)
     await db.$executeRawUnsafe(
@@ -352,17 +308,13 @@ export interface TinhTrangTuTraLoi {
     bat: boolean
     tatLyDo: string | null
     tatLuc: string | null
-    /** 24 giờ qua — daGui gồm cả tin chờ */
     daGui: number
-    /** trong daGui: tin chờ "đợi shop một chút" (chatbot không trả lời được) */
     tinCho: number
     boQua: number
     loi: number
-    /** lý do gần nhất (bỏ qua / lỗi / tin chờ) — vd "tin chờ — Key Gemini hết tiền" */
     lyDoGanNhat: string | null
 }
 
-/** Công tắc + số liệu 24 giờ qua của mọi gian (bảng chưa có ⇒ mọi gian tắt, số 0). */
 export async function tinhTrangTuTraLoi(db: any, kenhIds: string[]): Promise<TinhTrangTuTraLoi[]> {
     const rong = (kenhId: string): TinhTrangTuTraLoi => ({ kenhId, bat: false, tatLyDo: null, tatLuc: null, daGui: 0, tinCho: 0, boQua: 0, loi: 0, lyDoGanNhat: null })
     const kq = new Map(kenhIds.map(k => [k, rong(k)]))
@@ -382,7 +334,6 @@ export async function tinhTrangTuTraLoi(db: any, kenhIds: string[]): Promise<Tin
             else if (d.trangThai === 'bo_qua') x.boQua += n
             else if (d.trangThai === 'loi') x.loi += n
         }
-        // Lý do gần nhất của MỌI dòng có lý do — kể cả tin chờ (vd "tin chờ — Key Gemini hết tiền": chủ shop cần biết vì sao)
         const lyDo: any[] = await db.$queryRawUnsafe(
             `SELECT DISTINCT ON ("kenhId") "kenhId", "lyDo" FROM "TuTraLoiNhatKy"
               WHERE "lyDo" IS NOT NULL AND "luc" >= ${BAY_GIO} - interval '24 hours'
