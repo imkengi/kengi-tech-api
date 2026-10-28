@@ -125,6 +125,9 @@ export async function dongBoCayDanhMuc(
      * "người dùng đã xếp cha khác" và bỏ qua — nhìn ra ngoài thì y như thiếu danh mục.
      * Giữ sổ này để tên trùng thì tạo danh mục RIÊNG thay vì tranh nhau một chỗ. */
     const idDaChiem = new Set<string>()
+    /* ĐỌC HỎNG ≠ KHÔNG CÓ: các câu tra ánh xạ / tra tên dưới đây KHÔNG được `.catch(() => null)` nữa — CSDL
+     * chập chờn mà coi là "chưa có" thì rơi xuống tạo mới, đẻ danh mục trùng (cùng lỗi với resolveCategory bên
+     * kiotvietSync.ts). Lỗi lan ra try/catch của từng danh mục ⇒ boQua + ghi vào loi, lượt sau tự chữa. */
 
     for (const x of dm) {
         try {
@@ -133,7 +136,7 @@ export async function dongBoCayDanhMuc(
             const anhXa = await sp.kiotVietMap.findUnique({
                 where: { entity_kvId: { entity: 'category', kvId: x.kvId } },
                 select: { localId: true },
-            }).catch(() => null)
+            })
             /* Bỏ qua ánh xạ nếu danh mục đó ĐÃ bị một nhóm KiotViet khác nhận trong lượt
              * này. Lượt chạy trước (khi chưa có sổ idDaChiem) đã ghi ÁNH XẠ SAI: hai mã
              * KiotViet trùng tên cùng trỏ MỘT danh mục Kengi. Chỉ chặn ở đường dò-theo-tên
@@ -141,7 +144,7 @@ export async function dongBoCayDanhMuc(
              * cha khác", tức ĐỔ LỖI NHẦM cho người dùng trong khi họ không xếp gì cả.
              * Bỏ qua ở đây thì nó rơi xuống nhánh tạo mới và ánh xạ được ghi lại cho đúng. */
             if (anhXa?.localId && !idDaChiem.has(anhXa.localId)) {
-                const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } }).catch(() => null)
+                const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } })
                 if (con) localId = con.id      // ánh xạ có thể trỏ danh mục đã xoá
             }
 
@@ -149,7 +152,6 @@ export async function dongBoCayDanhMuc(
                 // Lấy danh mục cùng tên ĐẦU TIÊN CHƯA BỊ CHIẾM — trùng tên thì cái sau tự tạo mới.
                 const cungTen: Array<{ id: string }> = await sp.category
                     .findMany({ where: { name: x.ten }, select: { id: true }, take: 20 })
-                    .catch(() => [])
                 const chuaChiem = cungTen.find(c => !idDaChiem.has(c.id))
                 if (chuaChiem) localId = chuaChiem.id
             }
@@ -254,7 +256,7 @@ async function taoVong(sp: any, id: string, chaId: string): Promise<boolean> {
     for (let i = 0; i < 20 && p; i++) {
         if (p === id) return true
         const n: { parentId: string | null } | null =
-            await sp.category.findUnique({ where: { id: p }, select: { parentId: true } }).catch(() => null)
+            await sp.category.findUnique({ where: { id: p }, select: { parentId: true } })   // đọc hỏng ⇒ lan ra, không coi là "không có cha"
         p = n?.parentId ?? null
     }
     return false

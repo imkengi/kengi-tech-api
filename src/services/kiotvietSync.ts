@@ -449,6 +449,11 @@ async function resolveCategory(
     sp: any, name: string | undefined, fallbackId: string | null | undefined,
     cache: Map<string, string>, apply: boolean, kvCategoryId?: any,
 ): Promise<string | null> {
+    /* ĐỌC HỎNG ≠ KHÔNG CÓ. Ba câu tra dưới đây từng `.catch(() => null)`: CSDL chập chờn (P1001 "Can't reach
+     * database server", engine chưa nối lúc máy chủ vừa khởi động) thì "không thấy" ⇒ rơi xuống TẠO MỚI ⇒ đẻ
+     * danh mục gốc trùng tên, không ánh xạ (đo HUTI 28/10/2026: 27 nhóm như vậy, toàn sinh đúng lúc hộp thư
+     * webhook chạy giữa cơn lỗi CSDL). Nay để lỗi lan ra: syncProducts ghi lỗi cho đúng mã hàng đó, hộp thư
+     * webhook / lượt đêm chạy lại — KHÔNG tạo danh mục khi chưa tra được. (scripts/check-kv-doc-hong-khong-tao.ts) */
     // 1) Theo mã KiotViet — chắc chắn nhất, phân biệt được lá trùng tên khác nhánh
     const kvId = String(kvCategoryId ?? '').trim()
     if (kvId) {
@@ -457,9 +462,9 @@ async function resolveCategory(
         const anhXa = await sp.kiotVietMap.findUnique({
             where: { entity_kvId: { entity: 'category', kvId } },
             select: { localId: true },
-        }).catch(() => null)
+        })
         if (anhXa?.localId) {
-            const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } }).catch(() => null)
+            const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } })
             if (con) { cache.set(dem, con.id); return con.id }   // ánh xạ có thể trỏ danh mục đã xoá
         }
     }
@@ -468,7 +473,7 @@ async function resolveCategory(
     const key = (name || '').trim() || 'Nhập từ KiotViet'
     if (cache.has(key)) return cache.get(key)!
 
-    const found = await sp.category.findFirst({ where: { name: key }, select: { id: true } }).catch(() => null)
+    const found = await sp.category.findFirst({ where: { name: key }, select: { id: true } })
     if (found) { cache.set(key, found.id); return found.id }
 
     // Chưa có nhóm này: chạy thật thì tạo, chạy thử thì coi như sẽ tạo được
@@ -494,7 +499,8 @@ async function resolveBrand(
     if (!key) return null
     if (cache.has(key)) return cache.get(key)!
 
-    const found = await sp.brand.findFirst({ where: { name: key }, select: { id: true } }).catch(() => null)
+    // Đọc hỏng thì để lỗi lan ra, KHÔNG tạo thương hiệu trùng (cùng lý do với resolveCategory ở trên)
+    const found = await sp.brand.findFirst({ where: { name: key }, select: { id: true } })
     if (found) { cache.set(key, found.id); return found.id }
 
     if (!apply) { cache.set(key, null); return null }   // chạy thử không tạo thật
