@@ -975,7 +975,7 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
             success: true,
             data: {
                 soNhom: soan.dong.length, boChuaNoi: soan.boChuaNoi, boKhongNo: soan.boKhongNo, boKhongMua: soan.boKhongMua,
-                boKhongGiaoDich: soan.boKhongGiaoDich, thieuNoDau: soan.thieuNoDau, moTaBo: moTaBo(soan),
+                boKhongGiaoDich: soan.boKhongGiaoDich, boKhongDenLuot: soan.boKhongDenLuot, thieuNoDau: soan.thieuNoDau, moTaBo: moTaBo(soan),
                 tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
                 ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,

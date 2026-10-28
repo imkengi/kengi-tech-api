@@ -43,8 +43,8 @@ export function docCauHinhDoanhSo(v: any): CauHinhDoanhSo | null | string {
     return { categoryIds, tu, den, chiKhachCoDoanhSo: !!v.chiKhachCoDoanhSo }
 }
 
-/** Nhóm đã chọn + mọi nhóm con (cây danh mục KiotViet 3 cấp) và tên để chèn {nhomHang} */
-async function moRongNhom(sp: any, ids: string[]): Promise<{ tatCa: string[]; ten: string }> {
+/** Nhóm đã chọn + mọi nhóm con (cây danh mục KiotViet 3 cấp) và tên để chèn {nhomHang}. Dùng chung với lib/zaloNhacMuaLai.ts */
+export async function moRongNhom(sp: any, ids: string[]): Promise<{ tatCa: string[]; ten: string }> {
     if (!ids.length) return { tatCa: [], ten: 'tất cả mặt hàng' }
     const ds: { id: string; name: string; parentId: string | null }[] = await sp.category.findMany({ select: { id: true, name: true, parentId: true } })
     const con = new Map<string, string[]>()

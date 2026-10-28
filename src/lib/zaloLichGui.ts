@@ -8,7 +8,9 @@
  * (ZaloDotGui) với số liệu CHỐT ngay lúc đó cho từng nhóm, rồi hàng đợi gửi giãn nhịp như mọi đợt.
  *
  * Biến: {tenKhach} {maKhach} {tenNhom} + công nợ {congNo} {ngayChot} + doanh số {doanhSo} {soLuong}
- * {soDon} {nhomHang} {tuNgay} {denNgay} theo kỳ TƯƠNG ĐỐI (hôm qua / tuần trước / tháng trước / tháng này).
+ * {soDon} {nhomHang} {tuNgay} {denNgay} theo kỳ TƯƠNG ĐỐI (hôm qua / tuần trước / tháng trước / tháng này)
+ * + nhắc mua lại {thuHayMua} {hangLauKhongMua} {soMonLauKhongMua} (28/10/2026, lib/zaloNhacMuaLai.ts — lọc
+ * doiTuong.chiKhachMaiHayMua: chỉ khách mà MAI là ngày hay mua và có món lâu chưa mua; nhóm hàng gợi ý doiTuong.nhomHangGoiY).
  *
  * AN TOÀN — gửi sai số nợ cho khách là việc không rút lại được:
  *  - {congNo} = Customer.debt, nguồn sự thật (HUTI: bản sao số dư KiotViet, webhook làm tươi ngay +
@@ -29,6 +31,7 @@ import { docTuyChon, luuTuyChonDot, type TuyChonTin } from './zaloTuyChon'
 import { tinhDoanhSo, bienDoanhSo, dungBienDoanhSo, dinhTien, type CauHinhDoanhSo } from './zaloDoanhSo'
 import { chonKenhGui, CAU_CHUA_CO_KENH, dienMau } from './zaloGui'
 import { dungBienHomNay, canNoDauNgay, soNgayCuaKhach, bienHomNay } from './zaloGiaoDichNgay'
+import { dungBienNhacMuaLai, thoiQuenMuaCuaKhach, maiLaNgayHayMua, bienNhacMuaLai } from './zaloNhacMuaLai'
 
 const BANG = '"ZaloLichGui"'
 const LECH_VN_MS = 7 * 3600_000          // Việt Nam UTC+7, không đổi giờ
@@ -143,6 +146,10 @@ export interface DoiTuong {
     loai: 'tat_ca' | 'chon'; groupIds: string[]; chiKhachCoNo: boolean; noToiThieu: number
     /** Chỉ khách có MUA hoặc TRẢ TIỀN trong ngày (tổng kết cuối ngày — không nhắn khách không giao dịch) */
     chiKhachCoGiaoDich?: boolean
+    /** Chỉ khách mà NGÀY MAI là thứ hay mua VÀ có món lâu chưa mua (nhắc mua lại trước một hôm — lib/zaloNhacMuaLai.ts) */
+    chiKhachMaiHayMua?: boolean
+    /** Nhóm hàng được gợi ý trong {hangLauKhongMua} (kể cả nhóm con); rỗng = mọi nhóm */
+    nhomHangGoiY?: string[]
 }
 export interface DoanhSoDinhKy { categoryIds: string[]; ky: KyDoanhSo; chiKhachCoDoanhSo: boolean }
 
@@ -154,7 +161,12 @@ export function docDoiTuong(raw: any): DoiTuong | string {
     if (loai === 'chon' && !groupIds.length) return 'Chưa chọn nhóm nhận nào'
     if (groupIds.length > 2000) return 'Tối đa 2.000 nhóm'
     const noToiThieu = Math.max(0, Math.round(Number(raw.noToiThieu) || 0))
-    return { loai, groupIds: loai === 'chon' ? groupIds : [], chiKhachCoNo: raw.chiKhachCoNo === true, noToiThieu, chiKhachCoGiaoDich: raw.chiKhachCoGiaoDich === true }
+    const nhomHangGoiY = [...new Set<string>((Array.isArray(raw.nhomHangGoiY) ? raw.nhomHangGoiY : []).map(String).filter(Boolean))]
+    if (nhomHangGoiY.length > 50) return 'Chọn tối đa 50 nhóm hàng gợi ý'
+    return {
+        loai, groupIds: loai === 'chon' ? groupIds : [], chiKhachCoNo: raw.chiKhachCoNo === true, noToiThieu,
+        chiKhachCoGiaoDich: raw.chiKhachCoGiaoDich === true, chiKhachMaiHayMua: raw.chiKhachMaiHayMua === true, nhomHangGoiY,
+    }
 }
 
 export function docDoanhSoDinhKy(raw: any): DoanhSoDinhKy | null | string {
@@ -198,16 +210,18 @@ export interface KetQuaSoan {
     boKhongNo: number      // khách không nợ / nợ dưới mức tối thiểu
     boKhongMua: number     // khách không có doanh số trong kỳ
     boKhongGiaoDich: number   // khách không mua, không trả tiền trong ngày (lọc chiKhachCoGiaoDich)
+    boKhongDenLuot: number    // mai không phải ngày hay mua, hoặc không có món lâu chưa mua (lọc chiKhachMaiHayMua)
     /** VẪN GỬI nhưng chưa có số nợ 0 giờ ⇒ tin bỏ dòng {noDauNgay} (zaloGui dienMau) */
     thieuNoDau: number
     doanhSo: (CauHinhDoanhSo & { nhomHang: string }) | null
 }
 
 /** Mô tả các nhóm bị bỏ (xem trước / kết quả lượt chạy) */
-export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongMua' | 'boKhongGiaoDich'>): string {
+export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongMua' | 'boKhongGiaoDich'> & { boKhongDenLuot?: number }): string {
     return [
         s.boKhongNo ? `${s.boKhongNo} khách không nợ / dưới mức` : '',
         s.boKhongGiaoDich ? `${s.boKhongGiaoDich} khách không mua / không trả tiền hôm nay` : '',
+        s.boKhongDenLuot ? `${s.boKhongDenLuot} khách mai không phải ngày hay mua / không có món lâu chưa mua` : '',
         s.boKhongMua ? `${s.boKhongMua} khách không có doanh số` : '',
         s.boChuaNoi ? `${s.boChuaNoi} nhóm chưa nối khách` : '',
     ].filter(Boolean).join(', ')
@@ -220,12 +234,14 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
     const canHomNay = dungBienHomNay(lich.noiDung)
     const canNoDau = canNoDauNgay(lich.noiDung)
     const locGiaoDich = !!lich.doiTuong.chiKhachCoGiaoDich
-    const canKhach = canCongNo || canDoanhSo || canHomNay || locGiaoDich || lich.doiTuong.chiKhachCoNo
+    const canNhac = dungBienNhacMuaLai(lich.noiDung)
+    const locMaiHayMua = !!lich.doiTuong.chiKhachMaiHayMua
+    const canKhach = canCongNo || canDoanhSo || canHomNay || locGiaoDich || lich.doiTuong.chiKhachCoNo || canNhac || locMaiHayMua
     const nhom: any[] = await sp.zaloNhom.findMany({
         where: lich.doiTuong.loai === 'chon' ? { groupId: { in: lich.doiTuong.groupIds } } : { customerId: { not: null } },
         select: { groupId: true, customerId: true, tenNhom: true },
     })
-    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0, thieuNoDau = 0
+    let boChuaNoi = 0, boKhongNo = 0, boKhongMua = 0, boKhongGiaoDich = 0, boKhongDenLuot = 0, thieuNoDau = 0
     // Nhóm đã chọn mà chưa có trong bảng nối (chỉ quét thấy) — vẫn gửi được nếu tin không cần số của khách
     if (lich.doiTuong.loai === 'chon') {
         const coSan = new Set(nhom.map(n => n.groupId))
@@ -246,6 +262,8 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
     }
     // Mua / trả trong ngày (lib/zaloGiaoDichNgay.ts) — cần cho biến hôm nay và cho bộ lọc "có giao dịch"
     const ngay = canHomNay || locGiaoDich ? await soNgayCuaKhach(sp, khach.map(k => ({ id: k.id, debt: k.debt })), luc) : null
+    // Thứ hay mua + món lâu chưa mua (lib/zaloNhacMuaLai.ts) — cần cho biến nhắc mua lại và bộ lọc "mai là ngày hay mua"
+    const thoiQuen = canNhac || locMaiHayMua ? await thoiQuenMuaCuaKhach(sp, khach.map(k => k.id), { luc, categoryIds: lich.doiTuong.nhomHangGoiY || [] }) : null
 
     const dong: DongGui[] = []
     for (const n of nhom) {
@@ -255,8 +273,11 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
         if (lich.doiTuong.chiKhachCoNo && !(no !== null && no > 0 && no >= lich.doiTuong.noToiThieu)) { boKhongNo++; continue }
         const sn = k && ngay ? ngay.theoKhach.get(k.id) : undefined
         if (locGiaoDich && !(sn && (sn.mua > 0 || sn.daTra > 0))) { boKhongGiaoDich++; continue }
+        const tq = k && thoiQuen ? thoiQuen.get(k.id) : undefined
+        if (locMaiHayMua && !(maiLaNgayHayMua(tq, luc) && tq!.mon.length)) { boKhongDenLuot++; continue }
         let bien: Record<string, string> = {}
         if (canCongNo && no !== null) bien = { ...bien, ...bienCongNo(no, luc) }
+        if (canNhac) bien = { ...bien, ...bienNhacMuaLai(tq) }
         if (canHomNay && sn) {
             // Chưa có số nợ 0 giờ ⇒ vẫn gửi; dienMau bỏ dòng {noDauNgay} (26/10/2026)
             if (canNoDau && sn.noDau === null) thieuNoDau++
@@ -272,7 +293,7 @@ export async function soanNguoiNhan(sp: any, lich: { noiDung: string; doiTuong: 
             maKhach: k?.code || null, tenKhach: k?.name || null, bien: Object.keys(bien).length ? bien : null, no,
         })
     }
-    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
+    return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boKhongDenLuot, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null }
 }
 
 /** Tin mẫu đã điền cho một dòng (xem trước) */
