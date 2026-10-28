@@ -986,8 +986,8 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
                 lanToi: lanDau(d.tanSuat, d.batDauTu, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
                 noTuoi, kenh: kenh?.loai || null, tamDung, doanhSo: soan.doanhSo,
                 gioiThieu: gt ? {
-                    soUngVien: gt.soUngVien,
-                    sanPham: gt.sanPham ? { id: gt.sanPham.id, name: gt.sanPham.name, sku: gt.sanPham.sku, gia: gt.sanPham.gia, donVi: gt.sanPham.donVi, moTa: gt.sanPham.moTa, anh: anhGioiThieu(gt.sanPham, gt.soAnh) } : null,
+                    soUngVien: gt.soUngVien, soMon: gt.soMon, cachChon: gt.cachChon, guiGia: gt.guiGia,
+                    ds: gt.ds.map(p => ({ id: p.id, name: p.name, sku: p.sku, gia: p.gia, donVi: p.donVi, moTa: p.moTa, anh: anhGioiThieu([p], gt.soAnh) })),
                     sapToi: gt.sapToi.map(x => ({ id: x.id, name: x.name })),
                 } : null,
             },

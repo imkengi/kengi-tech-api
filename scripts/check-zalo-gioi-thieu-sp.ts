@@ -1,16 +1,17 @@
 /**
  * Kiểm GIỚI THIỆU SẢN PHẨM MỖI NGÀY qua Zalo — npx tsx scripts/check-zalo-gioi-thieu-sp.ts
  *
- * Chủ shop 28/10/2026: "thêm giới thiệu sản phẩm, sẽ gồm ảnh và 1 vài thông tin sản phẩm để giới thiệu cho khách mỗi ngày".
+ * Chủ shop 28/10/2026: "thêm giới thiệu sản phẩm, sẽ gồm ảnh và 1 vài thông tin sản phẩm để giới thiệu cho khách mỗi ngày",
+ * rồi "có option không gửi giá chứ, mỗi người mỗi giá mà, với lại có chế độ chọn random mỗi ngày gửi sản phẩm 2 hoặc 3".
  * Lõi lib/zaloGioiThieuSp.ts, nối vào lib/zaloLichGui.ts. Sai ở đây là: hai hôm gửi cùng một món khi còn món khác, gửi món
- * hết hàng / không ảnh / ngừng kinh doanh, gửi "Giá: " trống, xem trước làm lệch vòng xoay, nguồn trống mà im lặng.
- * Prisma giả, không gọi Zalo thật.
+ * hết hàng / không ảnh / ngừng kinh doanh, GỬI GIÁ khi chủ shop đã tắt, gửi "Giá: " trống, xem trước làm lệch vòng xoay,
+ * nguồn trống mà im lặng. Prisma giả, không gọi Zalo thật.
  */
 process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat(32)
 
 import {
-    docGioiThieu, dungBienGioiThieu, ungVienGioiThieu, chonSanPhamHomNay, thuTuSapToi, ghiDaGioiThieu, bienGioiThieu, rutGonMoTa,
-    TOI_DA_NHO, type GioiThieuSp,
+    docGioiThieu, dungBienGioiThieu, ungVienGioiThieu, chonSanPhamLuotNay, thuTuSapToi, ghiDaGioiThieu, bienGioiThieu, rutGonMoTa,
+    anhGioiThieu, TOI_DA_NHO, type GioiThieuSp,
 } from '../src/lib/zaloGioiThieuSp'
 import { dienMau } from '../src/lib/zaloGui'
 import { docDuLieuLich, soanNguoiNhan, chayLich, type LichGui } from '../src/lib/zaloLichGui'
@@ -50,7 +51,7 @@ const KHACH = [{ id: 'k1', code: 'TS002', name: 'Trãi Thu', debt: 0 }, { id: 'k
 
 /** Prisma giả: lọc product.findMany theo where như Prisma; ghi lại SQL ghi trạng thái; không có nhóm chờ gửi */
 function giaSp() {
-    const st = { dot: [] as any[], dong: [] as any[], thongBao: [] as any[], daGui: null as any, sqlDaGui: 0, lich: [] as any[] }
+    const st = { dot: [] as any[], dong: [] as any[], thongBao: [] as any[], daGui: null as any, sqlDaGui: 0 }
     const locSp = (where: any) => SP.filter(p => {
         if (where.productType && p.productType !== where.productType) return false
         if ('mergedIntoId' in where && p.mergedIntoId !== where.mergedIntoId) return false
@@ -91,14 +92,15 @@ function giaSp() {
     return { sp, st }
 }
 
-const cfgNhom = (x: Partial<GioiThieuSp> = {}): GioiThieuSp => ({ nguon: 'nhom', sanPham: [], categoryIds: ['c1'], chiConHang: true, chiCoAnh: true, soAnh: 2, ...x })
+const cfgNhom = (x: Partial<GioiThieuSp> = {}): GioiThieuSp => ({ nguon: 'nhom', sanPham: [], categoryIds: ['c1'], chiConHang: true, chiCoAnh: true, soAnh: 2, soMon: 1, cachChon: 'lan_luot', guiGia: false, ...x })
 const lichMau = (x: Partial<LichGui> = {}): LichGui => ({
-    id: 'lich-gt-1111', ten: 'Giới thiệu sản phẩm mỗi ngày', noiDung: 'Hôm nay: [đậm]{tenSanPham}[/đậm]\nGiá: {giaBan}/{donVi}\n{moTaSanPham}', anh: ['https://x/qr.png'],
+    id: 'lich-gt-1111', ten: 'Giới thiệu sản phẩm mỗi ngày', noiDung: 'Hôm nay:\n{danhSachSanPham}\nGiá: {giaBan}/{donVi}', anh: ['https://x/qr.png'],
     tuyChon: { mucDo: 0, nhacCaNhom: false, tuXoa: 0, henGio: null },
     doiTuong: { loai: 'tat_ca', groupIds: [], chiKhachCoNo: false, noToiThieu: 0 },
     doanhSo: null, gioiThieu: cfgNhom(), gioiThieuDaGui: null, tanSuat: { loai: 'ngay', gio: '09:00' },
     bat: true, lanToi: null, lanCuoi: null, lanCuoiDotId: null, lanCuoiKetQua: null, nguoiTao: null, createdAt: '', updatedAt: '', ...x,
 })
+const anhMong = (ids: string[], soAnh: number) => ids.flatMap(id => [...SP.find(p => p.id === id)!.images].filter(i => /^https:\/\//.test(i.url)).sort((a, b) => Number(!!b.isPrimary) - Number(!!a.isPrimary)).slice(0, soAnh).map(i => i.url))
 
 async function main() {
     console.log('\n▶ Giới thiệu sản phẩm mỗi ngày qua Zalo\n')
@@ -109,14 +111,17 @@ async function main() {
         ok('1b. Nguồn lạ ⇒ lỗi', typeof docGioiThieu({ nguon: 'x' }) === 'string')
         ok('1c. Chọn từng món mà không có món ⇒ lỗi', typeof docGioiThieu({ nguon: 'chon', sanPham: [] }) === 'string')
         const c = docGioiThieu({ nguon: 'chon', sanPham: [{ id: 'a', name: 'A' }, { id: 'a', name: 'A lặp' }, { id: ' b ', name: 'B' }, { id: '' }], categoryIds: ['c9'] }) as GioiThieuSp
-        ok('1d. Chọn từng món: bỏ trùng / rỗng, giữ thứ tự, không giữ nhóm hàng, soAnh mặc định 1', typeof c === 'object' && c.sanPham.map(x => x.id).join(',') === 'a,b' && c.categoryIds.length === 0 && c.soAnh === 1 && c.chiConHang && c.chiCoAnh, c)
-        const n = docGioiThieu({ nguon: 'nhom', categoryIds: ['c1', 'c1', ' c2 '], sanPham: [{ id: 'a' }], soAnh: 5, chiConHang: false }) as GioiThieuSp
-        ok('1e. Theo nhóm: bỏ trùng, không giữ danh sách món, soAnh kẹp 3, chiConHang false giữ false', typeof n === 'object' && n.categoryIds.join(',') === 'c1,c2' && n.sanPham.length === 0 && n.soAnh === 3 && n.chiConHang === false && n.chiCoAnh === true, n)
-        ok('1f. soAnh âm ⇒ 0, chuỗi "2" ⇒ 2', (docGioiThieu({ nguon: 'nhom', soAnh: -2 }) as GioiThieuSp).soAnh === 0 && (docGioiThieu({ nguon: 'nhom', soAnh: '2' }) as GioiThieuSp).soAnh === 2)
+        ok('1d. Chọn từng món: bỏ trùng / rỗng, giữ thứ tự, không giữ nhóm hàng; mặc định soAnh 1, soMon 1, lần lượt, KHÔNG gửi giá',
+            typeof c === 'object' && c.sanPham.map(x => x.id).join(',') === 'a,b' && c.categoryIds.length === 0 && c.soAnh === 1 && c.soMon === 1 && c.cachChon === 'lan_luot' && c.guiGia === false && c.chiConHang && c.chiCoAnh, c)
+        const n = docGioiThieu({ nguon: 'nhom', categoryIds: ['c1', 'c1', ' c2 '], sanPham: [{ id: 'a' }], soAnh: 5, chiConHang: false, soMon: 7, cachChon: 'ngau_nhien', guiGia: true }) as GioiThieuSp
+        ok('1e. Theo nhóm: bỏ trùng, không giữ danh sách món, soAnh kẹp 3, soMon kẹp 3, ngẫu nhiên, gửi giá, chiConHang false giữ false',
+            typeof n === 'object' && n.categoryIds.join(',') === 'c1,c2' && n.sanPham.length === 0 && n.soAnh === 3 && n.soMon === 3 && n.cachChon === 'ngau_nhien' && n.guiGia === true && n.chiConHang === false && n.chiCoAnh === true, n)
+        ok('1f. soAnh âm ⇒ 0, soMon 0 ⇒ 1, chuỗi "2" ⇒ 2, cachChon lạ ⇒ lần lượt, guiGia "true" (chuỗi) ⇒ false',
+            (() => { const g = docGioiThieu({ nguon: 'nhom', soAnh: -2, soMon: 0, cachChon: 'x', guiGia: 'true' }) as GioiThieuSp; const h = docGioiThieu({ nguon: 'nhom', soAnh: '2', soMon: '2' }) as GioiThieuSp; return g.soAnh === 0 && g.soMon === 1 && g.cachChon === 'lan_luot' && g.guiGia === false && h.soAnh === 2 && h.soMon === 2 })())
         ok('1g. Quá 200 món / quá 50 nhóm ⇒ lỗi',
             typeof docGioiThieu({ nguon: 'chon', sanPham: Array.from({ length: 201 }, (_, i) => ({ id: `p${i}`, name: 'x' })) }) === 'string'
             && typeof docGioiThieu({ nguon: 'nhom', categoryIds: Array.from({ length: 51 }, (_, i) => `c${i}`) }) === 'string')
-        ok('1h. Nhận biết biến sản phẩm', dungBienGioiThieu('x {tenSanPham}') && dungBienGioiThieu('{ giaBan }') && !dungBienGioiThieu('{congNo} {doanhSo}'))
+        ok('1h. Nhận biết biến sản phẩm', dungBienGioiThieu('x {danhSachSanPham}') && dungBienGioiThieu('x {tenSanPham}') && dungBienGioiThieu('{ giaBan }') && !dungBienGioiThieu('{congNo} {doanhSo}'))
     }
 
     /* 2 — Ứng viên */
@@ -131,57 +136,94 @@ async function main() {
         ok('2c. Hàng đánh dấu NGỪNG KINH DOANH bị loại dù đủ điều kiện khác', uv3.length === 0, uv3.map(x => x.id))
         const uv4 = await ungVienGioiThieu(sp, cfgNhom({ categoryIds: [] }))
         ok('2d. Không chọn nhóm = mọi nhóm', uv4.map(x => x.id).sort().join(',') === 'sp1,sp5', uv4.map(x => x.id))
-        const uv5 = await ungVienGioiThieu(sp, { nguon: 'chon', sanPham: [{ id: 'sp5', name: '' }, { id: 'sp1', name: '' }, { id: 'sp2', name: '' }], categoryIds: [], chiConHang: true, chiCoAnh: true, soAnh: 1 })
+        const uv5 = await ungVienGioiThieu(sp, cfgNhom({ nguon: 'chon', sanPham: [{ id: 'sp5', name: '' }, { id: 'sp1', name: '' }, { id: 'sp2', name: '' }], categoryIds: [] }))
         ok('2e. Chọn từng món: giữ ĐÚNG thứ tự chọn (sp5 trước sp1), sp2 hết hàng bị loại', uv5.map(x => x.id).join(',') === 'sp5,sp1', uv5.map(x => x.id))
         const sp1 = uv.find(x => x.id === 'sp1')!
         ok('2f. Ảnh: đại diện đứng đầu, bỏ link không https', sp1.anh.join(',') === 'https://img/1.jpg,https://img/2.jpg,https://img/4.jpg', sp1.anh)
         ok('2g. Mô tả dài cắt ở ranh giới câu, ≤ 402 ký tự, kết bằng ". …"', !!sp1.moTa && sp1.moTa.length <= 402 && /\. …$/.test(sp1.moTa), { dai: sp1.moTa?.length, duoi: sp1.moTa?.slice(-12) })
-        ok('2h. Mô tả ngắn giữ nguyên; rỗng ⇒ null', rutGonMoTa('  Ấm 1.8L\r\n') === 'Ấm 1.8L' && rutGonMoTa('') === null && rutGonMoTa(null) === null)
+        ok('2h. Mô tả ngắn giữ nguyên; rỗng ⇒ null; trần tuỳ chọn', rutGonMoTa('  Ấm 1.8L\r\n') === 'Ấm 1.8L' && rutGonMoTa('') === null && rutGonMoTa(null) === null && rutGonMoTa(MO_TA_DAI, 160)!.length <= 162)
         const uv6 = await ungVienGioiThieu(sp, cfgNhom({ categoryIds: ['khong-co'] }))
         ok('2i. Nhóm đã xoá ⇒ không ứng viên (không rơi về mọi nhóm)', uv6.length === 0)
     }
 
-    /* 3 — Xoay vòng */
+    /* 3 — Xoay vòng: lần lượt + ngẫu nhiên */
     {
-        const uv = [{ id: 'A' }, { id: 'B' }, { id: 'C' }]
-        const t0 = '2026-10-26T02:00:00.000Z', t1 = '2026-10-27T02:00:00.000Z', t2 = '2026-10-28T02:00:00.000Z'
-        ok('3a. Chưa gửi món nào ⇒ món ĐẦU theo thứ tự', chonSanPhamHomNay(uv, null)?.id === 'A' && chonSanPhamHomNay(uv, {})?.id === 'A')
-        ok('3b. Đã gửi A ⇒ B (chưa gửi bao giờ ưu tiên hơn A)', chonSanPhamHomNay(uv, { A: t0 })?.id === 'B')
-        ok('3c. Đã gửi A, B ⇒ C', chonSanPhamHomNay(uv, { A: t0, B: t1 })?.id === 'C')
-        ok('3d. Hết vòng ⇒ món gửi LÂU NHẤT (A)', chonSanPhamHomNay(uv, { A: t0, B: t1, C: t2 })?.id === 'A')
-        ok('3e. Vòng hai: A gửi lại ⇒ B là món lâu nhất', chonSanPhamHomNay(uv, { A: '2026-10-29T02:00:00.000Z', B: t1, C: t2 })?.id === 'B')
-        ok('3f. Không ứng viên ⇒ null', chonSanPhamHomNay([], { A: t0 }) === null)
-        ok('3g. Giờ gửi hỏng dạng ⇒ coi như chưa gửi', chonSanPhamHomNay(uv, { A: t0, B: 'rác', C: t2 })?.id === 'B')
-        ok('3h. Món ngoài danh sách (đã bỏ khỏi nguồn) không ảnh hưởng', chonSanPhamHomNay(uv, { Z: t0, A: t1, B: t2, C: t2 })?.id === 'A')
-        ok('3i. Thứ tự sắp tới: chưa gửi trước, rồi lâu nhất; giới hạn n', thuTuSapToi(uv, { A: t0, B: t1 }, 5).map(x => x.id).join(',') === 'C,A,B' && thuTuSapToi(uv, null, 2).map(x => x.id).join(',') === 'A,B')
+        const uv = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }]
+        const luc = new Date('2026-10-28T02:00:00Z')
+        const ngay = (n: number) => new Date(luc.getTime() - n * 86_400_000).toISOString()
+        const LL = { soMon: 1, cachChon: 'lan_luot' as const }
+        const id = (xs: { id: string }[]) => xs.map(x => x.id).join(',')
+        ok('3a. Chưa gửi món nào ⇒ món ĐẦU theo thứ tự', id(chonSanPhamLuotNay(uv, null, LL, luc)) === 'A' && id(chonSanPhamLuotNay(uv, {}, LL, luc)) === 'A')
+        ok('3b. Đã gửi A ⇒ B (chưa gửi bao giờ ưu tiên hơn A)', id(chonSanPhamLuotNay(uv, { A: ngay(2) }, LL, luc)) === 'B')
+        ok('3c. Hết vòng ⇒ món gửi LÂU NHẤT', id(chonSanPhamLuotNay(uv, { A: ngay(4), B: ngay(3), C: ngay(2), D: ngay(1) }, LL, luc)) === 'A')
+        ok('3d. Vòng hai: A gửi lại ⇒ B là món lâu nhất', id(chonSanPhamLuotNay(uv, { A: ngay(0), B: ngay(3), C: ngay(2), D: ngay(1) }, LL, luc)) === 'B')
+        ok('3e. Không ứng viên ⇒ []', chonSanPhamLuotNay([], { A: ngay(1) }, LL, luc).length === 0)
+        ok('3f. Giờ gửi hỏng dạng ⇒ coi như chưa gửi', id(chonSanPhamLuotNay(uv, { A: ngay(1), B: 'rác', C: ngay(2), D: ngay(3) }, LL, luc)) === 'B')
+        ok('3g. Món ngoài danh sách (đã bỏ khỏi nguồn) không ảnh hưởng', id(chonSanPhamLuotNay(uv, { Z: ngay(9), A: ngay(1), B: ngay(2), C: ngay(3), D: ngay(4) }, LL, luc)) === 'D')
+        ok('3h. Mỗi lượt 2 món, lần lượt: hai món chưa gửi theo thứ tự', id(chonSanPhamLuotNay(uv, null, { soMon: 2, cachChon: 'lan_luot' }, luc)) === 'A,B')
+        ok('3i. Mỗi lượt 3 món sau khi đã gửi A, B ⇒ C, D rồi tới A (gửi lâu hơn B)', id(chonSanPhamLuotNay(uv, { A: ngay(2), B: ngay(1) }, { soMon: 3, cachChon: 'lan_luot' }, luc)) === 'C,D,A')
+        ok('3j. soMon ngoài khoảng kẹp 1–3', chonSanPhamLuotNay(uv, null, { soMon: 9, cachChon: 'lan_luot' }, luc).length === 3 && chonSanPhamLuotNay(uv, null, { soMon: 0, cachChon: 'lan_luot' }, luc).length === 1)
+        ok('3k. Thứ tự sắp tới: chưa gửi trước, rồi lâu nhất; giới hạn n', id(thuTuSapToi(uv, { A: ngay(2), B: ngay(1) }, 5)) === 'C,D,A,B' && id(thuTuSapToi(uv, null, 2)) === 'A,B')
+
+        // Ngẫu nhiên: rng giả cho kết quả xác định
+        const rngKhong = () => 0            // Fisher–Yates với j luôn = 0
+        const NN2 = { soMon: 2, cachChon: 'ngau_nhien' as const }
+        const r1 = chonSanPhamLuotNay(uv, { A: ngay(1), B: ngay(10) }, NN2, luc, rngKhong)
+        ok('3l. Ngẫu nhiên: bỏ món gửi trong 7 ngày (A), bốc trong B, C, D — đủ 2 món, không trùng', r1.length === 2 && !r1.some(x => x.id === 'A') && new Set(r1.map(x => x.id)).size === 2 && r1.every(x => 'BCD'.includes(x.id)), id(r1))
+        let khacNhau = false
+        for (let i = 0; i < 30 && !khacNhau; i++) { if (id(chonSanPhamLuotNay(uv, { A: ngay(1) }, NN2, luc, Math.random)) !== id(chonSanPhamLuotNay(uv, { A: ngay(1) }, NN2, luc, Math.random))) khacNhau = true }
+        ok('3m. Ngẫu nhiên thật sự đổi kết quả giữa các lần (30 lần thử)', khacNhau)
+        const r2 = chonSanPhamLuotNay(uv, { A: ngay(1), B: ngay(2), C: ngay(3), D: ngay(4) }, NN2, luc, rngKhong)
+        ok('3n. Cả 4 món đều gửi trong 7 ngày ⇒ lấy 2 món gửi LÂU NHẤT (D, C) rồi trộn', r2.length === 2 && r2.map(x => x.id).sort().join(',') === 'C,D', id(r2))
+        const r3 = chonSanPhamLuotNay(uv, { A: ngay(1), B: ngay(2), C: ngay(30) }, NN2, luc, rngKhong)
+        ok('3o. Chỉ C, D ngoài 7 ngày ⇒ đúng hai món đó', r3.map(x => x.id).sort().join(',') === 'C,D', id(r3))
+        ok('3p. Ít ứng viên hơn soMon ⇒ gửi hết số có', chonSanPhamLuotNay([{ id: 'A' }], null, { soMon: 3, cachChon: 'ngau_nhien' }, luc, rngKhong).length === 1)
+        ok('3q. rng trả giá trị ngoài [0,1) không làm vỡ (kẹp)', chonSanPhamLuotNay(uv, null, NN2, luc, () => 1.7).length === 2 && chonSanPhamLuotNay(uv, null, NN2, luc, () => -1).length === 2)
+
         const to = Object.fromEntries(Array.from({ length: TOI_DA_NHO + 4 }, (_, i) => [`p${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString()]))
-        const sau = ghiDaGioiThieu(to, 'moi', new Date('2026-10-28T02:00:00Z'))
-        ok(`3j. Sổ "đã gửi" kẹp ${TOI_DA_NHO} món: bỏ món cũ nhất, giữ món vừa ghi`, Object.keys(sau).length === TOI_DA_NHO && !('p0' in sau) && !('p4' in sau) && 'p5' in sau && sau.moi === '2026-10-28T02:00:00.000Z', Object.keys(sau).length)
-        ok('3k. Ghi lại không làm hỏng sổ cũ (bản sao)', (() => { const g = { A: t0 }; const s2 = ghiDaGioiThieu(g, 'B', new Date(t1)); return g.B === undefined && s2.A === t0 && s2.B === t1 })())
+        const sau = ghiDaGioiThieu(to, ['moi1', 'moi2'], new Date('2026-10-28T02:00:00Z'))
+        ok(`3r. Sổ "đã gửi" ghi NHIỀU món, kẹp ${TOI_DA_NHO}: bỏ món cũ nhất, giữ món vừa ghi`, Object.keys(sau).length === TOI_DA_NHO && !('p0' in sau) && !('p5' in sau) && 'p6' in sau && sau.moi1 === '2026-10-28T02:00:00.000Z' && sau.moi2 === sau.moi1, Object.keys(sau).length)
+        ok('3s. Ghi lại không làm hỏng sổ cũ (bản sao)', (() => { const g = { A: ngay(2) }; const s2 = ghiDaGioiThieu(g, 'B', luc); return g.B === undefined && s2.A === ngay(2) && s2.B === luc.toISOString() })())
     }
 
-    /* 4 — Biến + bỏ dòng thiếu dữ liệu */
+    /* 4 — Biến + bỏ dòng thiếu dữ liệu + tắt giá */
     {
         const { sp } = giaSp()
         const uv = await ungVienGioiThieu(sp, cfgNhom({ chiConHang: false, chiCoAnh: false }))
-        const sp1 = uv.find(x => x.id === 'sp1')!, sp3 = uv.find(x => x.id === 'sp3')!
-        const b1 = bienGioiThieu(sp1)
-        ok('4a. Biến đủ: tên, mã, giá định dạng đ, đơn vị, mô tả, thương hiệu, nhóm hàng', b1.tenSanPham === 'Nồi cơm điện A' && b1.maSanPham === 'NCA' && b1.giaBan === '850.000đ' && b1.donVi === 'cái' && !!b1.moTaSanPham && b1.thuongHieu === 'Sunhouse' && b1.nhomHangSp === 'Sunhouse', b1)
-        const b3 = bienGioiThieu(sp3)
-        ok('4b. Giá 0 / không mô tả / không thương hiệu ⇒ KHÔNG đặt biến', !('giaBan' in b3) && !('moTaSanPham' in b3) && !('thuongHieu' in b3) && b3.donVi === 'bộ', b3)
+        const sp1 = uv.find(x => x.id === 'sp1')!, sp3 = uv.find(x => x.id === 'sp3')!, sp5 = uv.find(x => x.id === 'sp5')!
+        const b1 = bienGioiThieu([sp1], { guiGia: true })
+        ok('4a. Một món, gửi giá: tên, mã, giá định dạng đ, đơn vị, mô tả, thương hiệu, nhóm hàng, khối danh sách có giá',
+            b1.tenSanPham === 'Nồi cơm điện A' && b1.maSanPham === 'NCA' && b1.giaBan === '850.000đ' && b1.donVi === 'cái' && !!b1.moTaSanPham && b1.thuongHieu === 'Sunhouse' && b1.nhomHangSp === 'Sunhouse'
+            && b1.danhSachSanPham.startsWith('[đậm]Nồi cơm điện A[/đậm] — 850.000đ/cái\n'), b1)
+        const b1k = bienGioiThieu([sp1], { guiGia: false })
+        ok('4b. Một món, TẮT giá: không có {giaBan}, khối danh sách không có giá (khách sỉ mỗi người một giá)',
+            !('giaBan' in b1k) && b1k.danhSachSanPham.startsWith('[đậm]Nồi cơm điện A[/đậm]\n') && !/đ\//.test(b1k.danhSachSanPham), b1k.danhSachSanPham.slice(0, 60))
+        const b3 = bienGioiThieu([sp3], { guiGia: true })
+        ok('4c. Giá 0 / không mô tả / không thương hiệu ⇒ KHÔNG đặt biến, khối chỉ có tên', !('giaBan' in b3) && !('moTaSanPham' in b3) && !('thuongHieu' in b3) && b3.donVi === 'bộ' && b3.danhSachSanPham === '[đậm]Bếp gas C[/đậm]', b3)
         const mau = 'Hôm nay: {tenSanPham}\nGiá: {giaBan}/{donVi}\n{moTaSanPham}\nHãng: {thuongHieu}\nNhắn Hưng Tín nhé!'
         const tin3 = dienMau(mau, { bien: b3 })
-        ok('4c. dienMau bỏ CẢ DÒNG "Giá:", mô tả, hãng khi thiếu — không gửi "Giá: /bộ"', tin3 === 'Hôm nay: Bếp gas C\nNhắn Hưng Tín nhé!', tin3)
-        const tin1 = dienMau(mau, { bien: b1 })
-        ok('4d. Đủ dữ liệu thì giữ đủ dòng', tin1.startsWith('Hôm nay: Nồi cơm điện A\nGiá: 850.000đ/cái\n') && tin1.includes('Hãng: Sunhouse') && tin1.endsWith('Nhắn Hưng Tín nhé!'), tin1)
+        ok('4d. dienMau bỏ CẢ DÒNG "Giá:", mô tả, hãng khi thiếu — không gửi "Giá: /bộ"', tin3 === 'Hôm nay: Bếp gas C\nNhắn Hưng Tín nhé!', tin3)
+        const tinK = dienMau(mau, { bien: b1k })
+        ok('4e. Tắt giá mà mẫu còn dòng "Giá: {giaBan}" ⇒ dòng đó tự bỏ, phần khác giữ', !tinK.includes('Giá:') && tinK.includes('Hãng: Sunhouse'), tinK)
+        const b2 = bienGioiThieu([sp1, sp5], { guiGia: true })
+        ok('4f. Hai món: khối đánh số 1. 2., mỗi món tên đậm + giá + mô tả ngắn; tên nối ", "; không có {giaBan} {donVi} {moTaSanPham}',
+            b2.danhSachSanPham.startsWith('1. [đậm]Nồi cơm điện A[/đậm] — 850.000đ/cái\n') && b2.danhSachSanPham.includes('\n2. [đậm]Máy xay E[/đậm] — 1.200.000đ/cái\nMáy xay 2 cối')
+            && b2.tenSanPham === 'Nồi cơm điện A, Máy xay E' && b2.maSanPham === 'NCA, MXE' && !('giaBan' in b2) && !('donVi' in b2) && !('moTaSanPham' in b2) && b2.thuongHieu === 'Sunhouse', b2)
+        const moTaMon1 = b2.danhSachSanPham.split('\n2. ')[0].split('\n').slice(1).join('\n')
+        ok('4g. Nhiều món thì mô tả mỗi món rút còn ≤ 162 ký tự', moTaMon1.length > 0 && moTaMon1.length <= 162, moTaMon1.length)
+        const tin2 = dienMau('Hôm nay:\n{danhSachSanPham}\nGiá: {giaBan}/{donVi}\nCảm ơn!', { bien: bienGioiThieu([sp1, sp5], { guiGia: false }) })
+        ok('4h. Hai món, tắt giá: khối không có giá, dòng "Giá:" lẻ tự bỏ, giữ dòng cuối', tin2.includes('1. [đậm]Nồi cơm điện A[/đậm]\n') && !tin2.includes('Giá:') && !/đ\//.test(tin2) && tin2.endsWith('Cảm ơn!'), tin2)
+        ok('4i. Ảnh của lượt: mỗi món ≤ soAnh, đại diện trước, cả lượt ≤ 10', anhGioiThieu([sp1, sp5], 2).join(',') === 'https://img/1.jpg,https://img/2.jpg,https://img/e.jpg' && anhGioiThieu([sp1, sp5], 0).length === 0
+            && anhGioiThieu(Array(5).fill(sp1), 3).length === 10)
+        ok('4j. Không món ⇒ không biến', Object.keys(bienGioiThieu([], { guiGia: true })).length === 0)
     }
 
     /* 5 — Thân request lịch */
     {
         const goc = { ten: 'GT', doiTuong: { loai: 'tat_ca' }, tanSuat: { loai: 'ngay', gio: '09:00' } }
-        ok('5a. Tin có {tenSanPham} mà không chọn nguồn ⇒ lỗi', typeof docDuLieuLich({ ...goc, noiDung: 'Giới thiệu {tenSanPham}' }) === 'string')
-        const d = docDuLieuLich({ ...goc, noiDung: 'Giới thiệu {tenSanPham}', gioiThieu: { nguon: 'nhom', categoryIds: ['c1'], soAnh: 3 } })
-        ok('5b. Có nguồn ⇒ nhận, giữ cấu hình', typeof d === 'object' && d.gioiThieu?.nguon === 'nhom' && d.gioiThieu.soAnh === 3, d)
+        ok('5a. Tin có {danhSachSanPham} mà không chọn nguồn ⇒ lỗi', typeof docDuLieuLich({ ...goc, noiDung: 'Giới thiệu {danhSachSanPham}' }) === 'string')
+        const d = docDuLieuLich({ ...goc, noiDung: 'Giới thiệu {danhSachSanPham}', gioiThieu: { nguon: 'nhom', categoryIds: ['c1'], soAnh: 3, soMon: 2, cachChon: 'ngau_nhien', guiGia: true } })
+        ok('5b. Có nguồn ⇒ nhận, giữ cấu hình', typeof d === 'object' && d.gioiThieu?.nguon === 'nhom' && d.gioiThieu.soAnh === 3 && d.gioiThieu.soMon === 2 && d.gioiThieu.cachChon === 'ngau_nhien' && d.gioiThieu.guiGia === true, d)
         const d2 = docDuLieuLich({ ...goc, noiDung: 'Tin thường' })
         ok('5c. Lịch thường ⇒ gioiThieu null', typeof d2 === 'object' && d2.gioiThieu === null)
         ok('5d. Cấu hình sai ⇒ lỗi của chính nó', typeof docDuLieuLich({ ...goc, noiDung: 'x {tenSanPham}', gioiThieu: { nguon: 'chon', sanPham: [] } }) === 'string')
@@ -190,12 +232,12 @@ async function main() {
     /* 6 — Nối vào lịch: soạn, chạy, xoay vòng, không ghi khi xem trước */
     {
         const { sp, st } = giaSp()
-        const lich = lichMau()
+        const lich = lichMau()                      // 1 món / lượt, lần lượt, không gửi giá
         const luc = new Date('2026-10-29T02:00:00Z')
         const soan = await soanNguoiNhan(sp, lich, luc)
-        const dauTien = soan.gioiThieu?.sanPham?.id
-        ok('6a. Soạn: 2 nhóm nhận, cùng MỘT món, biến sản phẩm có trong từng dòng', soan.dong.length === 2 && !!dauTien && soan.dong.every(d => d.bien?.tenSanPham === soan.gioiThieu?.sanPham?.name && d.bien?.giaBan), soan.dong.map(d => d.bien))
-        ok('6b. soUngVien = 2, sắp tới liệt kê đủ 2 món, món đầu = món lượt này', soan.gioiThieu?.soUngVien === 2 && soan.gioiThieu?.sapToi.length === 2 && soan.gioiThieu?.sapToi[0]?.id === dauTien, soan.gioiThieu?.sapToi.map(x => x.id))
+        const dauTien = soan.gioiThieu?.ds[0]?.id
+        ok('6a. Soạn: 2 nhóm nhận, cùng MỘT món, khối danh sách trong từng dòng, KHÔNG có giá', soan.dong.length === 2 && !!dauTien && soan.dong.every(d => d.bien?.danhSachSanPham?.includes(soan.gioiThieu!.ds[0].name) && !d.bien?.giaBan), soan.dong.map(d => d.bien))
+        ok('6b. soUngVien = 2, sắp tới liệt kê đủ 2 món, món đầu = món lượt này, cấu hình trả kèm', soan.gioiThieu?.soUngVien === 2 && soan.gioiThieu?.sapToi.length === 2 && soan.gioiThieu?.sapToi[0]?.id === dauTien && soan.gioiThieu?.soMon === 1 && soan.gioiThieu?.guiGia === false, soan.gioiThieu?.sapToi.map(x => x.id))
         ok('6c. Xem trước (soạn) KHÔNG ghi trạng thái', st.sqlDaGui === 0)
 
         const kq = await chayLich(sp, lich, { bayGio: luc })
@@ -203,9 +245,7 @@ async function main() {
         const anhDot = JSON.parse(dot?.anh || '[]')
         const spDaGui = SP.find(p => p.id === dauTien)!
         ok('6d. Chạy: tạo đợt, không bỏ', !kq.boQua && kq.soNhom === 2 && st.dot.length === 1 && st.dong.length === 2, kq)
-        // Ảnh mong đợi: tối đa soAnh = 2 ảnh https của món được chọn, ảnh đại diện trước, rồi tới ảnh QR của lịch
-        const anhMong = [...spDaGui.images].filter(i => /^https:\/\//.test(i.url)).sort((a, b) => Number(!!b.isPrimary) - Number(!!a.isPrimary)).slice(0, 2).map(i => i.url)
-        ok('6e. Ảnh đợt = ảnh sản phẩm (≤ soAnh, đại diện trước) rồi tới ảnh QR của lịch', anhDot.join(',') === [...anhMong, 'https://x/qr.png'].join(','), { anhDot, anhMong })
+        ok('6e. Ảnh đợt = ảnh sản phẩm (≤ soAnh, đại diện trước) rồi tới ảnh QR của lịch', anhDot.join(',') === [...anhMong([dauTien!], 2), 'https://x/qr.png'].join(','), { anhDot })
         ok('6f. Tiêu đề đợt + kết quả nêu tên món', String(dot.tieuDe).includes(spDaGui.name) && kq.ketQua.includes(`giới thiệu "${spDaGui.name}"`), { tieuDe: dot.tieuDe, ketQua: kq.ketQua })
         ok('6g. Ghi trạng thái: đúng món, đúng giờ', st.sqlDaGui === 1 && st.daGui?.[dauTien!] === luc.toISOString(), st.daGui)
 
@@ -214,12 +254,24 @@ async function main() {
         ok('6h. Lượt sau xoay sang món KHÁC', !kq2.boQua && dot2 && !String(dot2.tieuDe).includes(spDaGui.name) && Object.keys(st.daGui).length === 2, { tieuDe: dot2?.tieuDe, daGui: st.daGui })
         const kq3 = await chayLich(sp, { ...lich, gioiThieuDaGui: st.daGui }, { bayGio: new Date('2026-10-31T02:00:00Z') })
         ok('6i. Hết vòng ⇒ quay lại món đầu', !kq3.boQua && String(st.dot[2]?.tieuDe).includes(spDaGui.name), st.dot[2]?.tieuDe)
+
+        // 2 món một lượt, gửi giá
+        const { sp: spB, st: stB } = giaSp()
+        const lich2 = lichMau({ gioiThieu: cfgNhom({ soMon: 2, guiGia: true, soAnh: 1 }), gioiThieuDaGui: null })
+        const kqB = await chayLich(spB, lich2, { bayGio: luc })
+        const dotB = stB.dot[0]
+        const bienB = JSON.parse(stB.dong[0].bien)
+        ok('6j. Hai món một lượt: đợt có ảnh của cả hai (mỗi món 1) + QR, tiêu đề nêu cả hai, ghi trạng thái 2 món',
+            // thứ tự lần lượt theo tên: "Máy xay E" (sp5) trước "Nồi cơm điện A" (sp1) ⇒ ảnh e.jpg, 1.jpg rồi QR
+            !kqB.boQua && JSON.parse(dotB.anh).join(',') === [...anhMong(['sp5', 'sp1'], 1), 'https://x/qr.png'].join(',')
+            && String(dotB.tieuDe).includes('Nồi cơm điện A') && String(dotB.tieuDe).includes('Máy xay E') && Object.keys(stB.daGui || {}).sort().join(',') === 'sp1,sp5', { anh: dotB.anh, tieuDe: dotB.tieuDe, daGui: stB.daGui })
+        ok('6k. Khối danh sách 2 món có số thứ tự và giá (bật gửi giá)', /^1\. \[đậm\]/.test(bienB.danhSachSanPham) && bienB.danhSachSanPham.includes('\n2. [đậm]') && bienB.danhSachSanPham.includes('850.000đ/cái') && bienB.danhSachSanPham.includes('1.200.000đ/cái'), bienB.danhSachSanPham)
     }
 
     /* 7 — Nguồn trống / lịch thường */
     {
         const { sp, st } = giaSp()
-        const lich = lichMau({ gioiThieu: { nguon: 'chon', sanPham: [{ id: 'sp2', name: 'Ấm siêu tốc B' }], categoryIds: [], chiConHang: true, chiCoAnh: true, soAnh: 1 } })
+        const lich = lichMau({ gioiThieu: cfgNhom({ nguon: 'chon', sanPham: [{ id: 'sp2', name: 'Ấm siêu tốc B' }], categoryIds: [] }) })
         const kq = await chayLich(sp, lich, { bayGio: new Date('2026-10-29T02:00:00Z') })
         ok('7a. Chỉ chọn món hết hàng ⇒ bỏ lượt, nêu lý do, KHÔNG tạo đợt', kq.boQua && /Không có sản phẩm nào đủ điều kiện/.test(kq.ketQua) && st.dot.length === 0, kq)
         ok('7b. Lượt tự động bỏ vì nguồn trống ⇒ BÁO CHUÔNG (không bình thường như "không ai nợ")', st.thongBao.length === 1 && /Không có sản phẩm/.test(String(st.thongBao[0]?.message)), st.thongBao)

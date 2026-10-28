@@ -216,7 +216,7 @@ export function dienMau(noiDung: string, v: { tenKhach?: string | null; maKhach?
      * Nhắc mua lại (28/10/2026, lib/zaloNhacMuaLai.ts): khách chưa rõ thứ hay mua / không có món lâu chưa mua ⇒ biến không
      * được đặt ⇒ cũng bỏ cả dòng — không gửi "mấy món này lâu chưa lấy:" rồi trống không.
      * Giới thiệu sản phẩm (28/10/2026, lib/zaloGioiThieuSp.ts): món chưa có giá / mô tả / thương hiệu ⇒ bỏ dòng "Giá: " trống. */
-    const THIEU_SO = /\{\s*(daTraHomNay|noDauNgay|thuHayMua|hangLauKhongMua|soMonLauKhongMua|tenSanPham|maSanPham|giaBan|donVi|moTaSanPham|thuongHieu|nhomHangSp)\s*\}/i
+    const THIEU_SO = /\{\s*(daTraHomNay|noDauNgay|thuHayMua|hangLauKhongMua|soMonLauKhongMua|danhSachSanPham|tenSanPham|maSanPham|giaBan|donVi|moTaSanPham|thuongHieu|nhomHangSp)\s*\}/i
     if (THIEU_SO.test(s)) s = s.split('\n').filter(dong => !THIEU_SO.test(dong)).join('\n')
     return s
 }
