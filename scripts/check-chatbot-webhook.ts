@@ -10,7 +10,7 @@
 import { chayAgent } from '../src/services/aiAgentRunner'
 import { congCuChatbot } from '../src/routes/chatbot'
 import { tachCoNhanVien, soanPromptChatbot, DAU_NHAN_VIEN, docTinNhan } from '../src/lib/chatbotKienThuc'
-import { laIpNoiBo, kiemUrlDauRa, guiDauRa, kemTheo, taoGoiDauRa, duongVao, laKhoaWebhook, taoKhoaWebhook } from '../src/lib/chatbotWebhook'
+import { laIpNoiBo, kiemUrlDauRa, guiDauRa, kemTheo, taoGoiDauRa, duongVao, laKhoaWebhook, taoKhoaWebhook, gocApiCongKhai } from '../src/lib/chatbotWebhook'
 import fs from 'fs'
 import path from 'path'
 
@@ -133,9 +133,22 @@ async function kiemVaoRa() {
     dung('đường dẫn đầu vào: mã cửa hàng viết thường + khoá 32 hex; khoá lạ ⇒ null',
         laKhoaWebhook(khoa) && duongVao('KENGISTORE', khoa) === `https://api.kengi.vn/api/chatbot/vao/kengistore/${khoa}`
         && duongVao('KENGISTORE', 'abc') === null && duongVao('../x', khoa) === null && taoKhoaWebhook() !== khoa)
+    // 29/10/2026: ca trên xanh suốt 21→29/10 vì máy chạy soát KHÔNG đặt PUBLIC_API_URL, còn prod đặt gốc không /api ⇒ link 404
+    const lech = [undefined, '', '  ', 'https://api.kengi.vn', 'https://api.kengi.vn/', 'https://api.kengi.vn/api', 'https://api.kengi.vn/api/', ' https://api.kengi.vn/api// \n']
+        .filter(v => gocApiCongKhai(v) !== 'https://api.kengi.vn/api')
+    dung('gốc API công khai: có / không /api, thừa gạch chéo, rỗng ⇒ đều ra https://api.kengi.vn/api', lech.length === 0, lech)
+    dung('gốc API công khai: tên miền khác giữ nguyên, chỉ nối /api',
+        gocApiCongKhai('https://kengi-tech-api-445765742612.asia-southeast1.run.app') === 'https://kengi-tech-api-445765742612.asia-southeast1.run.app/api')
 
     // ── chốt nguồn ──
     const route = fs.readFileSync(path.join(__dirname, '../src/routes/chatbot.ts'), 'utf8')
+    const envProd = fs.readFileSync(path.join(__dirname, '../cloudbuild.yaml'), 'utf8').match(/PUBLIC_API_URL=([^,\s]+)/)?.[1]
+    const mount = fs.readFileSync(path.join(__dirname, '../src/index.ts'), 'utf8')
+        .match(/import (\w+) from '\.\/routes\/chatbot'[\s\S]*?app\.use\('([^']+)', \1\)/)?.[2]
+    const vaoProd = envProd ? duongVao('KENGISTORE', khoa, gocApiCongKhai(envProd)) : null
+    dung('đường dẫn đầu vào với PUBLIC_API_URL của prod (cloudbuild.yaml) trúng đúng route đã mount (index.ts), không rơi 404',
+        !!envProd && !!mount && !!vaoProd && new URL(vaoProd).pathname === `${mount}/vao/kengistore/${khoa}`
+        && route.includes("router.post('/vao/:ma/:khoa'"), { envProd, mount, vaoProd })
     const doanVao = route.slice(route.indexOf("router.post('/vao/:ma/:khoa'"), route.indexOf("router.get('/vao/:ma/:khoa'"))
     dung('đầu vào: không cần đăng nhập, tra theo đường dẫn, gửi ra đầu ra', doanVao.includes('timTheoDuongVao(') && !doanVao.includes('authMiddleware') && doanVao.includes('guiKetQuaRa('))
     const doanTim = route.slice(route.indexOf('async function timTheoDuongVao('), route.indexOf("router.post('/vao/:ma/:khoa'"))

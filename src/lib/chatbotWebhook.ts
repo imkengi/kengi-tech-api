@@ -18,17 +18,24 @@ import crypto from 'crypto'
 import dns from 'dns'
 import net from 'net'
 
-export const API_CONG_KHAI = (process.env.PUBLIC_API_URL || 'https://api.kengi.vn/api').replace(/\/+$/, '')
+/** Gốc API công khai, LUÔN kết thúc bằng /api. PUBLIC_API_URL là gốc KHÔNG có /api (cloudbuild.yaml đặt https://api.kengi.vn;
+ *  driveOAuth.ts, kiotvietWebhookWatchdog.ts cũng hiểu vậy) — 21→29/10/2026 nối thẳng nên trang chatbot hiện link đầu vào
+ *  https://api.kengi.vn/chatbot/vao/… ⇒ 404. Nhận cả hai dạng (có / không /api) cho khỏi lệch lần nữa. */
+export function gocApiCongKhai(raw: unknown): string {
+    const goc = String(raw ?? '').trim().replace(/\/+$/, '').replace(/\/api$/, '')
+    return `${goc || 'https://api.kengi.vn'}/api`
+}
+export const API_CONG_KHAI = gocApiCongKhai(process.env.PUBLIC_API_URL)
 
 /** Khoá bí mật 32 ký tự hex (đường dẫn đầu vào / header đầu ra) */
 export const taoKhoaWebhook = (): string => crypto.randomBytes(16).toString('hex')
 export const laKhoaWebhook = (s: unknown): s is string => typeof s === 'string' && /^[a-f0-9]{32}$/.test(s)
 
-/** URL đầu vào của một shop — mã cửa hàng viết thường */
-export function duongVao(maCuaHang: unknown, khoa: unknown): string | null {
+/** URL đầu vào của một shop — mã cửa hàng viết thường. `goc` chỉ để bộ soát thử đúng giá trị PUBLIC_API_URL của prod. */
+export function duongVao(maCuaHang: unknown, khoa: unknown, goc: string = API_CONG_KHAI): string | null {
     const ma = String(maCuaHang ?? '').trim().toLowerCase()
     if (!/^[a-z0-9_-]{2,40}$/.test(ma) || !laKhoaWebhook(khoa)) return null
-    return `${API_CONG_KHAI}/chatbot/vao/${ma}/${khoa}`
+    return `${goc}/chatbot/vao/${ma}/${khoa}`
 }
 
 // ─── Chặn SSRF ───────────────────────────────────────────────────────────────
