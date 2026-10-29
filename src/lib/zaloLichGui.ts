@@ -9,7 +9,7 @@
  *
  * Biến: {tenKhach} {maKhach} {tenNhom} + công nợ {congNo} {ngayChot} + doanh số {doanhSo} {soLuong}
  * {soDon} {nhomHang} {tuNgay} {denNgay} theo kỳ TƯƠNG ĐỐI (hôm qua / tuần trước / tháng trước / tháng này)
- * + nhắc mua lại {thuHayMua} {hangLauKhongMua} {soMonLauKhongMua} (28/10/2026, lib/zaloNhacMuaLai.ts — lọc
+ * + nhắc mua lại {thuHayMua} {hangLauKhongMua} {hangLauKhongMuaChiTiet} {soMonLauKhongMua} (28/10/2026, lib/zaloNhacMuaLai.ts — lọc
  * doiTuong.chiKhachMaiHayMua: chỉ khách mà MAI là ngày hay mua và có món lâu chưa mua; nhóm hàng gợi ý doiTuong.nhomHangGoiY)
  * + giới thiệu sản phẩm mỗi ngày {tenSanPham} {maSanPham} {giaBan} {donVi} {moTaSanPham} {thuongHieu} {nhomHangSp} (28/10/2026,
  * lib/zaloGioiThieuSp.ts — lịch.gioiThieu: nguồn sản phẩm, mỗi lượt MỘT món xoay vòng cho mọi nhóm nhận, ảnh sản phẩm tự gửi kèm;
@@ -230,7 +230,7 @@ export function moTaBo(s: Pick<KetQuaSoan, 'boChuaNoi' | 'boKhongNo' | 'boKhongM
     return [
         s.boKhongNo ? `${s.boKhongNo} khách không nợ / dưới mức` : '',
         s.boKhongGiaoDich ? `${s.boKhongGiaoDich} khách không mua / không trả tiền hôm nay` : '',
-        s.boKhongDenLuot ? `${s.boKhongDenLuot} khách mai không phải ngày hay mua / không có món lâu chưa mua` : '',
+        s.boKhongDenLuot ? `${s.boKhongDenLuot} khách mai không phải ngày hay mua hoặc không có món tới lượt` : '',
         s.boKhongMua ? `${s.boKhongMua} khách không có doanh số` : '',
         s.boChuaNoi ? `${s.boChuaNoi} nhóm chưa nối khách` : '',
     ].filter(Boolean).join(', ')

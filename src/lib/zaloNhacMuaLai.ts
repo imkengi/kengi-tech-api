@@ -4,7 +4,7 @@
  * Chủ shop: "khi đã xác định được số ngày hay mua thì bên gửi tin chăm sóc khách hàng sẽ có mục chăm sóc khách hàng,
  * nghĩa là trước 1 ngày sẽ gợi ý những mặt hàng đã lâu rồi không mua (những mặt hàng này sẽ là được chọn nhóm hàng gợi ý)".
  *
- * Biến: {thuHayMua} {hangLauKhongMua} {soMonLauKhongMua}. Bộ lọc người nhận `doiTuong.chiKhachMaiHayMua` = chỉ khách mà
+ * Biến: {thuHayMua} {hangLauKhongMua} {hangLauKhongMuaChiTiet} {soMonLauKhongMua}. Bộ lọc người nhận `doiTuong.chiKhachMaiHayMua` = chỉ khách mà
  * NGÀY MAI (giờ VN) là thứ hay mua VÀ có ít nhất một món lâu chưa mua; nhóm hàng được gợi ý = `doiTuong.nhomHangGoiY`
  * (rỗng = mọi nhóm). Lịch đặt chạy hằng ngày (vd 17:00) ⇒ mỗi khách nhận tin đúng một hôm trước ngày mình hay ghé.
  *
@@ -17,6 +17,10 @@
  * và CHƯA "thôi mua" (quá max(4 × nhịp, nhịp + 90) ngày là khách đã bỏ món — nhắc là làm phiền, luật này cũng của Sơ đồ).
  * Nhịp đọc 24 tháng (một món mua 2 lần/năm cần 2 năm mới thấy nhịp). Hàng đã xoá khỏi danh mục không vào (JOIN Product).
  * Hàng trả: không trừ — khách trả vẫn là "đã mua" theo nghĩa thói quen; Sơ đồ cũng tính vậy.
+ *
+ * 29/10/2026 — chủ shop xem trước tin rồi chê "sao trông nó rối thế": 7 dòng "- tên (lần cuối dd/mm, hay lấy N)" đọc như
+ * bảng kê, "hay lấy 4" không ai hiểu 4 gì. {hangLauKhongMua} nay chỉ là danh sách ĐÁNH SỐ tên món (khách trả lời "lấy
+ * món 1, 3" được); ai cần ngày mua cuối + số lượng thường lấy thì dùng {hangLauKhongMuaChiTiet} (đơn vị = Product.baseUnit).
  */
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
@@ -33,10 +37,10 @@ export const SOM_NGAY = 3            // tới lượt trong 3 ngày tới cũng 
 export const TEN_THU = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 
 /** Tin có dùng biến nhắc mua lại? */
-export const dungBienNhacMuaLai = (noiDung: string) => /\{\s*(thuHayMua|hangLauKhongMua|soMonLauKhongMua)\s*\}/i.test(String(noiDung || ''))
+export const dungBienNhacMuaLai = (noiDung: string) => /\{\s*(thuHayMua|hangLauKhongMua|hangLauKhongMuaChiTiet|soMonLauKhongMua)\s*\}/i.test(String(noiDung || ''))
 
 export interface ThuHayMua { dinh: number[]; ro: boolean; tong: number; max: number }
-export interface MonGoiY { productId: string; ten: string; sku: string | null; lanCuoi: Date; nhipNgay: number; quaNgay: number; soLan: number; slMoiLan: number }
+export interface MonGoiY { productId: string; ten: string; sku: string | null; donVi: string; lanCuoi: Date; nhipNgay: number; quaNgay: number; soLan: number; slMoiLan: number }
 export interface ThoiQuenMua { thu: ThuHayMua; mon: MonGoiY[] }
 
 /** Thứ hay mua từ số phiếu theo thứ (mảng 7 phần tử, chỉ số = getDay) */
@@ -109,7 +113,7 @@ export async function thoiQuenMuaCuaKhach(
     const thamSo: any[] = [khach, [...TRANG_THAI_TINH], tuNhip]
     if (categoryIds.length) thamSo.push(tatCa)
     const mon: any[] = await sp.$queryRawUnsafe(
-        `SELECT t."customerId" AS k, ti."productId" AS p, p."name" AS ten, p."sku" AS sku,
+        `SELECT t."customerId" AS k, ti."productId" AS p, p."name" AS ten, p."sku" AS sku, p."baseUnit" AS dv,
                 array_agg(DISTINCT to_char(COALESCE(t."transactionDate", t."createdAt") + interval '7 hours', 'YYYY-MM-DD')) AS ngay,
                 COALESCE(SUM(ti."quantity"), 0)::float AS sl
            FROM "Transaction" t
@@ -117,7 +121,7 @@ export async function thoiQuenMuaCuaKhach(
            JOIN "Product" p ON p."id" = ti."productId"
           WHERE t."customerId" = ANY($1::text[]) AND t."status" = ANY($2::text[])
             AND COALESCE(t."transactionDate", t."createdAt") >= $3 ${locNhom}
-          GROUP BY 1, 2, 3, 4`,
+          GROUP BY 1, 2, 3, 4, 5`,
         ...thamSo,
     )
     for (const r of mon) {
@@ -127,7 +131,7 @@ export async function thoiQuenMuaCuaKhach(
         const kq = monLauKhongMua(ngay, luc)
         if (!kq) continue
         const soLan = new Set(ngay.map((d: Date) => d.getTime())).size
-        tq.mon.push({ productId: r.p, ten: String(r.ten || ''), sku: r.sku || null, lanCuoi: kq.lanCuoi, nhipNgay: kq.nhipNgay, quaNgay: kq.quaNgay, soLan, slMoiLan: Math.max(1, Math.round((Number(r.sl) || 0) / soLan)) })
+        tq.mon.push({ productId: r.p, ten: String(r.ten || ''), sku: r.sku || null, donVi: String(r.dv || '').trim(), lanCuoi: kq.lanCuoi, nhipNgay: kq.nhipNgay, quaNgay: kq.quaNgay, soLan, slMoiLan: Math.max(1, Math.round((Number(r.sl) || 0) / soLan)) })
     }
     // Quá lượt nhiều nhất lên đầu; tin chỉ nêu TOI_DA_MON món kẻo dài
     for (const tq of ra.values()) {
@@ -148,7 +152,8 @@ export function bienNhacMuaLai(tq: ThoiQuenMua | undefined): Record<string, stri
     if (!tq) return bien
     if (tq.thu.ro) bien.thuHayMua = tq.thu.dinh.map(t => TEN_THU[t]).join(' và ')
     if (tq.mon.length) {
-        bien.hangLauKhongMua = tq.mon.map(m => `- ${m.ten} (lần cuối ${ddmm(m.lanCuoi)}, hay lấy ${m.slMoiLan})`).join('\n')
+        bien.hangLauKhongMua = tq.mon.map((m, i) => `${i + 1}. ${m.ten}`).join('\n')
+        bien.hangLauKhongMuaChiTiet = tq.mon.map((m, i) => `${i + 1}. ${m.ten} (lần cuối ${ddmm(m.lanCuoi)}, thường lấy ${m.slMoiLan}${m.donVi ? ` ${m.donVi}` : ''})`).join('\n')
         bien.soMonLauKhongMua = String(tq.mon.length)
     }
     return bien

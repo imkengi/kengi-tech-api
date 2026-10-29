@@ -88,20 +88,22 @@ async function main() {
     /* 4 — Biến + bỏ dòng khi thiếu */
     {
         const MAU = 'Chào {tenKhach}, mai là {thuHayMua}.\nMấy món lâu chưa lấy:\n{hangLauKhongMua}\nCảm ơn!'
-        ok('4a. Nhận ra biến nhắc mua lại trong tin', dungBienNhacMuaLai(MAU) && dungBienNhacMuaLai('{ soMonLauKhongMua }') && !dungBienNhacMuaLai('{congNo}'))
+        ok('4a. Nhận ra biến nhắc mua lại trong tin', dungBienNhacMuaLai(MAU) && dungBienNhacMuaLai('{ soMonLauKhongMua }') && dungBienNhacMuaLai('{hangLauKhongMuaChiTiet}') && !dungBienNhacMuaLai('{congNo}'))
         ok('4b. Không có thói quen ⇒ không biến nào', Object.keys(bienNhacMuaLai(undefined)).length === 0)
         const chiThu = bienNhacMuaLai({ thu: thuHayMua([0, 3, 0, 0, 0, 0, 3]), mon: [] })
         ok('4c. Rõ thứ mà không có món ⇒ chỉ {thuHayMua} = "Thứ Hai và Thứ Bảy"', chiThu.thuHayMua === 'Thứ Hai và Thứ Bảy' && !('hangLauKhongMua' in chiThu) && !('soMonLauKhongMua' in chiThu))
         const mon = [
-            { productId: 'p1', ten: 'Dầu ăn 1L', sku: 'DA1L', lanCuoi: NGAY('2026-03-02'), nhipNgay: 30, quaNgay: 60, soLan: 3, slMoiLan: 12 },
-            { productId: 'p2', ten: 'Nước mắm', sku: null, lanCuoi: NGAY('2026-10-05'), nhipNgay: 14, quaNgay: 12, soLan: 5, slMoiLan: 2 },
+            { productId: 'p1', ten: 'Dầu ăn 1L', sku: 'DA1L', donVi: 'chai', lanCuoi: NGAY('2026-03-02'), nhipNgay: 30, quaNgay: 60, soLan: 3, slMoiLan: 12 },
+            { productId: 'p2', ten: 'Nước mắm', sku: null, donVi: '', lanCuoi: NGAY('2026-10-05'), nhipNgay: 14, quaNgay: 12, soLan: 5, slMoiLan: 2 },
         ]
         const b = bienNhacMuaLai({ thu: thuHayMua([0, 0, 0, 0, 0, 0, 4]), mon })
-        ok('4d. Danh sách món: mỗi dòng "- tên (lần cuối dd/mm, hay lấy N)", đếm đúng', b.hangLauKhongMua === '- Dầu ăn 1L (lần cuối 02/03, hay lấy 12)\n- Nước mắm (lần cuối 05/10, hay lấy 2)' && b.soMonLauKhongMua === '2' && b.thuHayMua === 'Thứ Bảy', b)
+        ok('4d. {hangLauKhongMua} = danh sách ĐÁNH SỐ chỉ tên món (29/10: chủ shop chê bảng kê "hay lấy 4" rối), đếm đúng', b.hangLauKhongMua === '1. Dầu ăn 1L\n2. Nước mắm' && b.soMonLauKhongMua === '2' && b.thuHayMua === 'Thứ Bảy', b)
+        ok('4d2. {hangLauKhongMuaChiTiet} = kèm lần cuối + thường lấy N đơn vị (không có đơn vị thì bỏ)', b.hangLauKhongMuaChiTiet === '1. Dầu ăn 1L (lần cuối 02/03, thường lấy 12 chai)\n2. Nước mắm (lần cuối 05/10, thường lấy 2)', b.hangLauKhongMuaChiTiet)
         const tin = dienMau(MAU, { tenKhach: 'Phú', bien: b })
-        ok('4e. Điền đủ: thứ + danh sách nhiều dòng', tin === 'Chào Phú, mai là Thứ Bảy.\nMấy món lâu chưa lấy:\n- Dầu ăn 1L (lần cuối 02/03, hay lấy 12)\n- Nước mắm (lần cuối 05/10, hay lấy 2)\nCảm ơn!', tin)
+        ok('4e. Điền đủ: thứ + danh sách nhiều dòng', tin === 'Chào Phú, mai là Thứ Bảy.\nMấy món lâu chưa lấy:\n1. Dầu ăn 1L\n2. Nước mắm\nCảm ơn!', tin)
         const thieu = dienMau(MAU, { tenKhach: 'Phú', bien: chiThu })
         ok('4f. Không có món ⇒ dòng {hangLauKhongMua} BỎ, dòng còn lại giữ (không gửi danh sách trống)', thieu === 'Chào Phú, mai là Thứ Hai và Thứ Bảy.\nMấy món lâu chưa lấy:\nCảm ơn!', thieu)
+        ok('4f2. Dòng {hangLauKhongMuaChiTiet} cũng bỏ khi không có món', dienMau('A\n{hangLauKhongMuaChiTiet}\nB', { tenKhach: 'Phú', bien: chiThu }) === 'A\nB')
         ok('4g. Không có thói quen ⇒ cả dòng {thuHayMua} cũng bỏ', dienMau(MAU, { tenKhach: 'Phú', bien: {} }) === 'Mấy món lâu chưa lấy:\nCảm ơn!')
         ok('4h. TEN_THU theo getDay: 0 = Chủ nhật, 6 = Thứ Bảy', TEN_THU[0] === 'Chủ nhật' && TEN_THU[6] === 'Thứ Bảy' && TEN_THU.length === 7)
     }
@@ -113,7 +115,7 @@ async function main() {
             theoThu: [...dongThu('k1', [0, 0, 0, 0, 0, 1, 5]), ...dongThu('k2', [1, 1, 1, 0, 0, 0, 0])],
             mon: [
                 // k1: 3 món tới lượt + 1 chưa tới + 1 thôi mua; dầu ăn mua nhiều nhất
-                { k: 'k1', p: 'p1', ten: 'Dầu ăn 1L', sku: 'DA1L', cat: 'c-thuc-pham', ngay: ['2026-07-01', '2026-07-31', '2026-08-30'], sl: 36 },     // nhịp 30, qua 61
+                { k: 'k1', p: 'p1', ten: 'Dầu ăn 1L', sku: 'DA1L', dv: 'chai', cat: 'c-thuc-pham', ngay: ['2026-07-01', '2026-07-31', '2026-08-30'], sl: 36 },     // nhịp 30, qua 61
                 { k: 'k1', p: 'p2', ten: 'Nước mắm', sku: null, cat: 'c-gia-vi', ngay: ['2026-09-01', '2026-09-15', '2026-09-29', '2026-10-13'], sl: 8 }, // nhịp 14, qua 17
                 { k: 'k1', p: 'p3', ten: 'Bột ngọt', sku: 'BN', cat: 'c-gia-vi', ngay: ['2026-08-01', '2026-10-01'], sl: 2 },                         // nhịp 61, qua 29 ⇒ chưa
                 { k: 'k1', p: 'p4', ten: 'Nồi chiên', sku: 'NC', cat: 'c-gia-dung', ngay: ['2025-01-01', '2025-02-01'], sl: 2 },                       // thôi mua
@@ -127,13 +129,13 @@ async function main() {
         ok('5a. k1: thứ Bảy 5/6 ⇒ rõ; k2: 3 phiếu ⇒ chưa; k3 không có phiếu vẫn có dòng (không rõ, 0 món)',
             k1.thu.ro && k1.thu.dinh[0] === 6 && !k2.thu.ro && !!k3 && !k3.thu.ro && k3.mon.length === 0)
         ok('5b. k1: 3 món tới lượt (bỏ "chưa tới" + "thôi mua"), quá lượt nhiều nhất lên đầu', k1.mon.map(m => m.productId).join(',') === 'p1,p2,p5', k1.mon.map(m => `${m.productId}:${m.quaNgay}/${m.nhipNgay}`))
-        ok('5c. Số lần + hay lấy mỗi lần: dầu ăn 36/3 = 12', k1.mon[0]!.soLan === 3 && k1.mon[0]!.slMoiLan === 12 && k1.mon[0]!.ten === 'Dầu ăn 1L')
+        ok('5c. Số lần + hay lấy mỗi lần: dầu ăn 36/3 = 12; đơn vị theo baseUnit, thiếu ⇒ rỗng', k1.mon[0]!.soLan === 3 && k1.mon[0]!.slMoiLan === 12 && k1.mon[0]!.ten === 'Dầu ăn 1L' && k1.mon[0]!.donVi === 'chai' && k1.mon[1]!.donVi === '')
         ok('5d. k2 mua 1 lần ⇒ 0 món', k2.mon.length === 0)
         const sqlThu = st.sql.find(x => /EXTRACT\(DOW/.test(x.sql))!, sqlMon = st.sql.find(x => /array_agg/.test(x.sql))!
         ok('5e. SQL thứ: + interval 7 giờ trước khi lấy DOW, lọc completed+partial, 12 tháng',
             /interval '7 hours'/.test(sqlThu.sql) && sqlThu.p[1].join() === 'completed,partial' && Math.abs((luc.getTime() - sqlThu.p[2].getTime()) / 86400000 - 366) < 1)
         ok('5f. SQL món: gom NGÀY VN dạng text, cửa sổ 24 tháng, không lọc nhóm khi chưa chọn (chỉ 3 tham số)',
-            /to_char\(COALESCE\(t\."transactionDate", t\."createdAt"\) \+ interval '7 hours', 'YYYY-MM-DD'\)/.test(sqlMon.sql) && !/categoryId/.test(sqlMon.sql) && sqlMon.p.length === 3 && Math.abs((luc.getTime() - sqlMon.p[2].getTime()) / 86400000 - 732) < 1)
+            /to_char\(COALESCE\(t\."transactionDate", t\."createdAt"\) \+ interval '7 hours', 'YYYY-MM-DD'\)/.test(sqlMon.sql) && /p\."baseUnit" AS dv/.test(sqlMon.sql) && !/categoryId/.test(sqlMon.sql) && sqlMon.p.length === 3 && Math.abs((luc.getTime() - sqlMon.p[2].getTime()) / 86400000 - 732) < 1)
 
         // Lọc nhóm hàng: chọn "Thực phẩm" ⇒ gồm cả nhóm con "Gia vị", bỏ "Gia dụng"
         const { sp: sp2, st: st2 } = giaSp({ theoThu: dongThu('k1', [0, 0, 0, 0, 0, 1, 5]), mon: (sp as any).__mon, danhMuc: [{ id: 'c-thuc-pham', name: 'Thực phẩm', parentId: null }, { id: 'c-gia-vi', name: 'Gia vị', parentId: 'c-thuc-pham' }, { id: 'c-gia-dung', name: 'Gia dụng', parentId: null }] })
@@ -180,8 +182,8 @@ async function main() {
         ok('6c. Chỉ k1 được gửi; k2 (không món) + k3 (mai không phải ngày hay mua) ⇒ boKhongDenLuot = 2; nhóm chưa nối không vào danh sách',
             soan.dong.length === 1 && soan.dong[0]!.customerId === 'k1' && soan.boKhongDenLuot === 2 && soan.boChuaNoi === 0, { dong: soan.dong.map(d => d.customerId), bo: soan.boKhongDenLuot, chuaNoi: soan.boChuaNoi })
         const tin = tinMau(MAU, soan.dong[0])
-        ok('6d. Tin mẫu điền đủ thứ + món', tin === 'Chào An, mai là Thứ Bảy — ngày anh/chị hay ghé.\nMấy món lâu rồi chưa thấy lấy:\n- Dầu ăn 1L (lần cuối 30/08, hay lấy 12)\nCần thì nhắn shop nhé!', tin)
-        ok('6e. moTaBo nói rõ vì sao bỏ', moTaBo(soan) === '2 khách mai không phải ngày hay mua / không có món lâu chưa mua', moTaBo(soan))
+        ok('6d. Tin mẫu điền đủ thứ + món', tin === 'Chào An, mai là Thứ Bảy — ngày anh/chị hay ghé.\nMấy món lâu rồi chưa thấy lấy:\n1. Dầu ăn 1L\nCần thì nhắn shop nhé!', tin)
+        ok('6e. moTaBo nói rõ vì sao bỏ', moTaBo(soan) === '2 khách mai không phải ngày hay mua hoặc không có món tới lượt', moTaBo(soan))
         // Chọn đích danh nhóm chưa nối khách ⇒ tin cần số của khách ⇒ bỏ, đếm boChuaNoi
         const soanChon = await soanNguoiNhan(sp, { noiDung: MAU, doiTuong: { ...(doiTuong as any), loai: 'chon', groupIds: ['1000000001', '1000000004'] }, doanhSo: null }, luc)
         ok('6e2. Chọn nhóm chưa nối khách ⇒ bỏ (boChuaNoi = 1), k1 vẫn nhận', soanChon.dong.length === 1 && soanChon.boChuaNoi === 1 && moTaBo(soanChon).includes('1 nhóm chưa nối khách'), moTaBo(soanChon))
