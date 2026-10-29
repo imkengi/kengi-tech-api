@@ -17,7 +17,7 @@ import {
 import { quyetDinh, timKhach, phieuTrongCuaSo, CUA_SO_NGAY, type BangKhach, type PhieuLayHd, type NhomZalo, type DongXemTruoc } from '../src/lib/hoaDonMisaZalo'
 import {
     ketLuanTrangThai, docPdf, bienHoaDon, linkHoaDon, chonUngVien, nhanTrangThaiGui, trongGioGui, xepMot, TOKEN_RE, MAU_MAC_DINH, LAN_TU_DONG_TOI_DA,
-    type DongDaGui,
+    docLinkXem, moHoaDon, TRANG_TRA_CUU_MISA, type DongDaGui,
 } from '../src/lib/guiHoaDonMisa'
 import { dienMau } from '../src/lib/zaloGui'
 
@@ -535,12 +535,40 @@ async function main() {
         ok('11z2. Gửi tay bắt buộc HĐ ĐÃ gửi ⇒ gửi lại (đợt mới), tự động thì vẫn "đã có"',
             ep2.ketQua === 'da_xep' && dot.length === soDotTruoc + 2 && so2.get('ABCD1234EFGH').dotId === dot[dot.length - 1].id
             && (await xepMot(spG, 'HUTI', knG, uvA, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)).ketQua === 'da_co', { ep2 })
+        // ĐO 29/10/2026: HĐ HUTI ngày 26/10 tải PDF ⇒ TemplateNotSupport (mẫu cũ) — dự phòng bằng link xem /invoice/publishview
+        ok('11z4. docLinkXem: [{TransactionID, Link https}] ⇒ link; mã khác / không https ⇒ lỗi (không mở nhầm HĐ)',
+            docLinkXem([{ TransactionID: 'M0', Link: 'https://x/0' }, { TransactionID: 'M1', Link: 'https://view.meinvoice.vn/a' }], 'M1') === 'https://view.meinvoice.vn/a'
+            && (await nem(async () => docLinkXem([{ TransactionID: 'KHAC', Link: 'https://x' }], 'M1'))).includes('link xem')
+            && (await nem(async () => docLinkXem([{ TransactionID: 'M1', Link: 'http://x' }], 'M1'))).includes('link xem')
+            && docLinkXem(JSON.stringify([{ transactionid: 'M1', link: 'https://y/1' }]), 'M1') === 'https://y/1')
+        const goiXem = misaGia((g) => g.url.includes('/invoice/Download?') ? { json: { Success: true, Data: [{ TransactionID: 'TNS1', Data: null, ErrorCode: 'TemplateNotSupport' }] } }
+            : g.url.endsWith('/invoice/publishview') ? { json: { Success: true, Data: [{ TransactionID: 'TNS1', Link: 'https://view.meinvoice.vn/tns1' }] } }
+                : { json: { Success: true, Data: 'TK-TICH-HOP' } })
+        const mo1 = await moHoaDon(spMeinvoice, knG, 'TNS1')
+        ok('11z5. PDF "TemplateNotSupport" ⇒ mở bằng link xem MISA (gọi publishview với thân [mã tra cứu])',
+            mo1.loai === 'xem' && (mo1 as any).link === 'https://view.meinvoice.vn/tns1' && (mo1 as any).loiPdf.includes('TemplateNotSupport')
+            && JSON.stringify(goiXem.find(g => g.url.endsWith('/invoice/publishview'))?.body) === '["TNS1"]', mo1)
+        misaGia((g) => g.url.includes('/invoice/Download?') ? { json: { Success: true, Data: [{ TransactionID: 'TNS1', ErrorCode: 'TemplateNotSupport' }] } }
+            : g.url.endsWith('/invoice/publishview') ? { json: { Success: false, ErrorCode: 'InvoiceNotFound' } } : { json: { Success: true, Data: 'TK-TICH-HOP' } })
+        const moHong = await nem(() => moHoaDon(spMeinvoice, knG, 'TNS1'))
+        ok('11z6. PDF lẫn link xem đều hỏng ⇒ lỗi gồm cả hai lý do', moHong.includes('TemplateNotSupport') && moHong.includes('InvoiceNotFound'), moHong)
+        misaGia((g) => g.url.includes('/invoice/Download?') ? { json: { Success: true, Data: [{ TransactionID: 'EEEE1234EFGH', ErrorCode: 'TemplateNotSupport' }] } }
+            : g.url.endsWith('/invoice/publishview') ? { json: { Success: true, Data: [{ TransactionID: 'EEEE1234EFGH', Link: 'https://view.meinvoice.vn/e' }] } } : { json: { Success: true, Data: 'TK-TICH-HOP' } })
+        const uvE = { ...uvA, dong: { ...uvA.dong, hoaDon: { ...hd, maTraCuu: 'EEEE1234EFGH' } } }
+        const e1 = await xepMot(spG, 'HUTI', knG, uvE, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)
+        ok('11z7. Tự động: PDF không tải được nhưng link xem mở được ⇒ vẫn xếp gửi (link trong tin không chết)', e1.ketQua === 'da_xep', e1)
+        pdfTra = [{ TransactionID: 'ABCD1234EFGH', Data: pdf64 }]
+        misaGia((g) => g.url.includes('/invoice/Download?') ? { json: { Success: true, Data: pdfTra } } : { json: { Success: true, Data: 'TK-TICH-HOP' } })
+
 
         const goc = path.join(__dirname, '..', 'src')
         const route = fs.readFileSync(path.join(goc, 'routes', 'meInvoice.ts'), 'utf8')
         const viTriCongKhai = route.indexOf("router.get('/hd/:ma/:token'")
         const viTriDangNhap = route.indexOf('router.use(')
         ok('11v. Link công khai /hd/:ma/:token khai TRƯỚC lớp đăng nhập', viTriCongKhai > 0 && viTriDangNhap > viTriCongKhai)
+        ok('11v2. Link công khai: không có PDF ⇒ chuyển sang link xem MISA (không nhớ link có hạn); không nốt ⇒ mã tra cứu + trang tra cứu MISA',
+            /kq\.loai === 'xem'\) \{ res\.setHeader\('Cache-Control', 'no-store'\); res\.redirect\(302, kq\.link\)/.test(route) && route.includes('TRANG_TRA_CUU_MISA')
+            && TRANG_TRA_CUU_MISA === 'https://www.meinvoice.vn/tra-cuu')
         const qk = (/QUA_KHOA_QUAN_TRI = new Set\(\[([^\]]*)\]\)/.exec(route) || [])[1] || ''
         ok('11w. Khoá quản trị KHÔNG gửi được tin / sửa cài đặt gửi; gửi tay + sửa cài đặt cần einvoice.config',
             !qk.includes("'POST /gui'") && !qk.includes("'PUT /gui/cai-dat'") && /router\.post\('\/gui', CAU_HINH/.test(route) && /router\.put\('\/gui\/cai-dat', CAU_HINH/.test(route), qk)

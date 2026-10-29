@@ -210,6 +210,52 @@ export async function taiPdf(sp: any, kn: KetNoiMeInvoice, maTraCuu: string, mtt
     return docPdf(data, maTraCuu)
 }
 
+/** Trang tra cứu hoá đơn chính thức của MISA (đo 29/10/2026: 200, "Tra Cứu Hóa Đơn Điện Tử … | meInvoice.vn") */
+export const TRANG_TRA_CUU_MISA = 'https://www.meinvoice.vn/tra-cuu'
+
+/** Link XEM trong trả về /invoice/publishview — hàm thuần. Tài liệu: Data = [{TransactionID, Link}] (chưa đo ⇒ dò nhiều tên; chỉ nhận https). */
+export function docLinkXem(data: any, maTraCuu: string): string {
+    const d = moChuoiJson(data)
+    if (typeof d === 'string') {
+        if (/^https:\/\//i.test(d.trim())) return d.trim()
+        throw new LoiMeInvoice('MISA không trả link xem hoá đơn.')
+    }
+    const ds: any[] = Array.isArray(d) ? d : d && typeof d === 'object' ? [d] : []
+    const coMa = ds.filter(x => x && typeof x === 'object' && docTruong(x, 'TransactionID') !== undefined)
+    const muc = coMa.length ? coMa.find(x => String(docTruong(x, 'TransactionID')) === maTraCuu) : ds.length === 1 ? ds[0] : undefined
+    const link = typeof muc === 'string' ? muc : muc && typeof muc === 'object' ? docTruong(muc, 'Link', 'Url', 'ViewLink', 'LinkView') : undefined
+    if (typeof link !== 'string' || !/^https:\/\//i.test(link.trim())) {
+        const maLoi = muc && typeof muc === 'object' ? docTruong(muc, 'ErrorCode') : null
+        throw new LoiMeInvoice(`MISA không trả link xem hoá đơn${maLoi ? ` (${maLoi})` : ''}.`)
+    }
+    return link.trim()
+}
+
+/** Link xem hoá đơn chính thức trên MISA — CÓ HẠN, nên chỉ lấy đúng lúc khách bấm */
+export async function linkXemMisa(sp: any, kn: KetNoiMeInvoice, maTraCuu: string): Promise<string> {
+    return docLinkXem(await goiApi(sp, kn, 'tichHop', '/invoice/publishview', [maTraCuu]), maTraCuu)
+}
+
+export type CachMo = { loai: 'pdf'; buf: Buffer } | { loai: 'xem'; link: string; loiPdf: string }
+
+/**
+ * Mở hoá đơn cho khách: PDF có chữ ký số, không được thì trang xem của MISA. ĐO 29/10/2026 HUTI: HĐ ngày 26/10 (cả HĐ không gửi) đều
+ * "TemplateNotSupport" khi tải PDF, từ 27/10 thì tải được — trạng thái MISA giống hệt ⇒ đổi mẫu hoá đơn; link xem là đường dự phòng.
+ */
+export async function moHoaDon(sp: any, kn: KetNoiMeInvoice, maTraCuu: string, mtt = false): Promise<CachMo> {
+    try {
+        return { loai: 'pdf', buf: await taiPdf(sp, kn, maTraCuu, mtt) }
+    } catch (e: any) {
+        if (!(e instanceof LoiMeInvoice)) throw e
+        try {
+            return { loai: 'xem', link: await linkXemMisa(sp, kn, maTraCuu), loiPdf: e.message }
+        } catch (e2: any) {
+            if (!(e2 instanceof LoiMeInvoice)) throw e2
+            throw new LoiMeInvoice(`${e.message} Link xem: ${e2.message}`)
+        }
+    }
+}
+
 // ─── Link bền + biến của tin ───────────────────────────────────────────────────
 
 /** Gốc API công khai — cloudbuild đặt PUBLIC_API_URL KHÔNG có /api; vẫn đỡ kiểu có /api */
@@ -354,10 +400,11 @@ export async function xepMot(
             return { ketQua: tt, lyDo: st.lyDo || 'Không gửi được' }
         }
         try {
-            await taiPdf(sp, kn, ma, uv.mtt)
+            // PDF hoặc trang xem của MISA — một trong hai mở được thì link trong tin không chết
+            await moHoaDon(sp, kn, ma, uv.mtt)
         } catch (e: any) {
             if (!(e instanceof LoiMeInvoice)) throw e
-            const lyDo = `Chưa tải được PDF từ MISA: ${e.message}`.slice(0, 400)
+            const lyDo = `Chưa mở được hoá đơn trên MISA: ${e.message}`.slice(0, 400)
             await ghiKhongGui(sp, ma, g, 'loi', lyDo, nguon, nguoi, Date.now())
             return { ketQua: 'loi', lyDo }
         }
@@ -431,8 +478,11 @@ export async function guiTay(sp: any, maCuaHang: string, maTraCuu: string, ngay:
         if (!kl.guiDuoc && kl.lyDo) luuY.push(kl.lyDo)
         else if (kl.ghiChu) luuY.push(`Đây là ${kl.ghiChu}`)
     } catch (e: any) { luuY.push(`Không hỏi được trạng thái MISA: ${String(e?.message || e).slice(0, 160)}`) }
-    try { await taiPdf(sp, kn, maTraCuu, mtt) } catch (e: any) {
-        luuY.push(`MISA chưa trả được PDF lúc gửi (${String(e?.message || e).slice(0, 120)}) — link trong tin tự tải lại khi khách mở`)
+    try {
+        const mo = await moHoaDon(sp, kn, maTraCuu, mtt)
+        if (mo.loai === 'xem') luuY.push(`MISA không cho tải PDF hoá đơn này (${mo.loiPdf.slice(0, 100)}) — link trong tin sẽ mở trang xem hoá đơn của MISA`)
+    } catch (e: any) {
+        luuY.push(`Chưa mở được hoá đơn trên MISA (${String(e?.message || e).slice(0, 140)}) — khách tra bằng mã tra cứu tại meinvoice.vn/tra-cuu; link tự thử lại khi khách mở`)
     }
     const cd = await docCaiDat(sp)
     const kq = await xepMot(sp, maCuaHang, kn, { dong: d, raw: ph.tho[i], mtt }, { guiDuoc: true, vinhVien: false, lyDo: null }, cd.mauTin || MAU_MAC_DINH, 'tay', nguoi, true)
@@ -511,18 +561,34 @@ export async function nhipGuiHoaDonMisa(bayGio = new Date()): Promise<string> {
 
 // ─── Link công khai: tải PDF theo token ────────────────────────────────────────
 
-/** Dòng đã xếp gửi theo token ⇒ PDF từ MISA. null = token không có / chưa từng gửi. */
-export async function pdfTheoToken(sp: any, token: string): Promise<{ buf: Buffer; ten: string } | null> {
+export type MoTheoToken =
+    | { loai: 'pdf'; buf: Buffer; ten: string }
+    | { loai: 'xem'; link: string }
+    | { loai: 'loi'; maTraCuu: string; so: string | null }
+
+/**
+ * Dòng đã xếp gửi theo token ⇒ PDF từ MISA, không được thì link xem của MISA, không được nữa thì mã tra cứu để khách tự tra.
+ * null = token không có / chưa từng gửi.
+ */
+export async function moTheoToken(sp: any, token: string): Promise<MoTheoToken | null> {
     if (!TOKEN_RE.test(token)) return null
     const co: any[] = await sp.$queryRawUnsafe(`SELECT to_regclass('${BANG_GUI}')::text AS t`)
     if (!co[0]?.t) return null
     const r: any = ((await sp.$queryRawUnsafe(`SELECT * FROM ${BANG_GUI} WHERE "token" = $1 AND "trangThai" IN ('da_xep','dang_xep')`, token)) as any[])[0]
     if (!r) return null
+    const ma = String(r.maTraCuu)
     const kn = await docKetNoi(sp)
-    if (!kn) throw new LoiMeInvoice('Cửa hàng đã ngắt kết nối meInvoice.')
-    const buf = await taiPdf(sp, kn, String(r.maTraCuu), r.mtt === true)
-    const ten = `HoaDon-${String(r.kyHieu || '').replace(/[^0-9A-Za-z]/g, '')}-${String(r.so || '').replace(/[^0-9A-Za-z]/g, '')}.pdf`
-    return { buf, ten }
+    if (!kn) return { loai: 'loi', maTraCuu: ma, so: r.so ?? null }
+    try {
+        const mo = await moHoaDon(sp, kn, ma, r.mtt === true)
+        if (mo.loai === 'xem') return { loai: 'xem', link: mo.link }
+        const ten = `HoaDon-${String(r.kyHieu || '').replace(/[^0-9A-Za-z]/g, '')}-${String(r.so || '').replace(/[^0-9A-Za-z]/g, '')}.pdf`
+        return { loai: 'pdf', buf: mo.buf, ten }
+    } catch (e: any) {
+        if (!(e instanceof LoiMeInvoice)) throw e
+        console.error('[meinvoice/hd]', ma.slice(0, 4) + '…', e.message)
+        return { loai: 'loi', maTraCuu: ma, so: r.so ?? null }
+    }
 }
 
 // ─── Màn hình: trạng thái gửi của từng hoá đơn ────────────────────────────────

@@ -8,8 +8,8 @@
  *   POST   /ket-noi/thu   thử đăng nhập cả hai đường (lấy token mới)                          einvoice.config
  *   POST   /soi           {tu, den?} CHỈ ĐỌC: hoá đơn ĐÃ PHÁT HÀNH (danh sách tích hợp /invoice/paging — mọi kênh lập) +
  *                         xem trước hoá đơn nào sẽ gửi nhóm Zalo nào (chưa gửi gì)              einvoice.view
- *   POST   /do-tho        {tu, den?, trangThai?, bienThe?, maTraCuu?, taiPdf?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo từng biến
- *                         thể + trạng thái theo mã tra cứu + tải thử PDF (không trả tệp) — đo trước khi map    einvoice.view
+ *   POST   /do-tho        {tu, den?, trangThai?, bienThe?, maTraCuu?, taiPdf?, xemLink?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo
+ *                         từng biến thể + trạng thái theo mã tra cứu + tải thử PDF / link xem (không trả tệp, không trả link)  einvoice.view
  * Gửi hoá đơn qua nhóm Zalo (29/10/2026, lib/guiHoaDonMisa.ts):
  *   GET    /gui/cai-dat   tự động gửi + mẫu tin + kênh Zalo                                    einvoice.view
  *   PUT    /gui/cai-dat   {tuDong?, mauTin?}                                                   einvoice.config
@@ -31,8 +31,8 @@ import {
 } from '../lib/meInvoice'
 import { xemTruocGui, NHAN_KET_QUA } from '../lib/hoaDonMisaZalo'
 import {
-    docCaiDat, luuCaiDat, guiTay, dsGanDay, trangThaiGuiNhieu, pdfTheoToken, moTaKenhZalo, docPdf, MAU_MAC_DINH, BIEN_HOA_DON, TOKEN_RE,
-    LAN_TU_DONG_TOI_DA,
+    docCaiDat, luuCaiDat, guiTay, dsGanDay, trangThaiGuiNhieu, moTheoToken, moTaKenhZalo, docPdf, docLinkXem, MAU_MAC_DINH, BIEN_HOA_DON, TOKEN_RE,
+    LAN_TU_DONG_TOI_DA, TRANG_TRA_CUU_MISA,
 } from '../lib/guiHoaDonMisa'
 
 const router = Router()
@@ -60,10 +60,18 @@ router.get('/hd/:ma/:token', async (req: Request, res: Response) => {
     try {
         const { registryPrisma, getStorePrisma } = await import('../lib/prisma')
         const store: any = await (registryPrisma as any).store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
-        const kq = store ? await pdfTheoToken(getStorePrisma(store.schema), token) : null
+        const kq = store ? await moTheoToken(getStorePrisma(store.schema), token) : null
         if (!kq) { trang(404, 'Link hoá đơn không đúng hoặc đã bị gỡ.'); return }
+        // Mẫu hoá đơn MISA không cho tải PDF (TemplateNotSupport, đo 29/10/2026) ⇒ sang trang xem chính thức của MISA (link có hạn, lấy mới mỗi lần)
+        if (kq.loai === 'xem') { res.setHeader('Cache-Control', 'no-store'); res.redirect(302, kq.link); return }
+        if (kq.loai === 'loi') {
+            const maTc = kq.maTraCuu.replace(/[^0-9A-Za-z_-]/g, '')
+            trang(503, `Chưa mở được bản hoá đơn${kq.so ? ` số ${String(kq.so).replace(/[^0-9A-Za-z]/g, '')}` : ''} lúc này. Quý khách có thể tra cứu hoá đơn gốc tại `
+                + `<a href="${TRANG_TRA_CUU_MISA}">meinvoice.vn/tra-cuu</a> với mã tra cứu: <b style="font-family:monospace">${maTc}</b>, hoặc thử lại link sau ít phút.`)
+            return
+        }
         // nhớ ít phút: khách bấm lại / Zalo mở thử link thì khỏi gọi MISA lần nữa
-        pdfNho.set(khoa, { ...kq, het: Date.now() + PDF_NHO_MS })
+        pdfNho.set(khoa, { buf: kq.buf, ten: kq.ten, het: Date.now() + PDF_NHO_MS })
         for (const [k, v] of pdfNho) if (v.het < Date.now() || pdfNho.size > 40) pdfNho.delete(k)
         guiPdf(kq.buf, kq.ten)
     } catch (e: any) {
@@ -207,6 +215,24 @@ router.post('/do-tho', XEM, async (req: AuthRequest, res: Response) => {
             const kn = await docKetNoi(req.storePrisma)
             if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
             res.json({ success: true, data: { coMaDaLuu: kn.coMa, trangThaiHd: await doTrangThai(req.storePrisma, kn, ma, b.mayTinhTien === true) } })
+            return
+        }
+        // link xem chính thức (/invoice/publishview) — trả HÌNH + tên miền, KHÔNG trả link (link xem được hoá đơn)
+        if (typeof b.xemLink === 'string' && b.xemLink) {
+            const ma = String(b.xemLink).trim()
+            if (!/^[0-9A-Za-z_-]{4,40}$/.test(ma)) { res.status(400).json({ success: false, error: 'xemLink (mã tra cứu) không hợp lệ' }); return }
+            const kn = await docKetNoi(req.storePrisma)
+            if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
+            const { status, tv, text } = await goiApiTho(req.storePrisma, kn, 'tichHop', '/invoice/publishview', [ma])
+            let xem: { ok: boolean; tenMien?: string; loi?: string } = { ok: false }
+            if (tv.ok) { try { xem = { ok: true, tenMien: new URL(docLinkXem(tv.data, ma)).hostname } } catch (e: any) { xem = { ok: false, loi: e.message } } }
+            const d = Array.isArray(tv.data) ? tv.data[0] : tv.data
+            res.json({
+                success: true, data: {
+                    httpStatus: status, ok: tv.ok, loi: tv.loi || null, hinh: tv.ok ? moTaHinh(tv.data) : null,
+                    truong: d && typeof d === 'object' ? Object.keys(d).sort() : null, xem, tho: tv.ok ? null : String(text || '').slice(0, 400),
+                },
+            })
             return
         }
         // tải thử PDF (/invoice/Download) — chỉ trả HÌNH + có phải PDF không, KHÔNG trả tệp
