@@ -9,7 +9,7 @@
  */
 process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat(32)
 
-import { thuHayMua, monLauKhongMua, thuNgayMaiVN, maiLaNgayHayMua, bienNhacMuaLai, dungBienNhacMuaLai, thoiQuenMuaCuaKhach, TEN_THU, TOI_DA_MON } from '../src/lib/zaloNhacMuaLai'
+import { thuHayMua, monLauKhongMua, thuNgayMaiVN, maiLaNgayHayMua, bienNhacMuaLai, dungBienNhacMuaLai, baoLauRoi, thoiQuenMuaCuaKhach, TEN_THU, TOI_DA_MON } from '../src/lib/zaloNhacMuaLai'
 import { soanNguoiNhan, tinMau, docDoiTuong, moTaBo } from '../src/lib/zaloLichGui'
 import { dienMau } from '../src/lib/zaloGui'
 
@@ -97,10 +97,17 @@ async function main() {
             { productId: 'p2', ten: 'Nước mắm', sku: null, donVi: '', lanCuoi: NGAY('2026-10-05'), nhipNgay: 14, quaNgay: 12, soLan: 5, slMoiLan: 2 },
         ]
         const b = bienNhacMuaLai({ thu: thuHayMua([0, 0, 0, 0, 0, 0, 4]), mon })
-        ok('4d. {hangLauKhongMua} = danh sách ĐÁNH SỐ chỉ tên món (29/10: chủ shop chê bảng kê "hay lấy 4" rối), đếm đúng', b.hangLauKhongMua === '1. Dầu ăn 1L\n2. Nước mắm' && b.soMonLauKhongMua === '2' && b.thuHayMua === 'Thứ Bảy', b)
-        ok('4d2. {hangLauKhongMuaChiTiet} = kèm lần cuối + thường lấy N đơn vị (không có đơn vị thì bỏ)', b.hangLauKhongMuaChiTiet === '1. Dầu ăn 1L (lần cuối 02/03, thường lấy 12 chai)\n2. Nước mắm (lần cuối 05/10, thường lấy 2)', b.hangLauKhongMuaChiTiet)
+        ok('4d. {hangLauKhongMua} = danh sách ĐÁNH SỐ tên món + "đã bao lâu" chưa lấy (29/10: chủ shop chê bảng kê rối, rồi muốn khách "sốt ruột"), đếm đúng', b.hangLauKhongMua === '1. Dầu ăn 1L – đã 60 ngày\n2. Nước mắm – đã 12 ngày' && b.soMonLauKhongMua === '2' && b.thuHayMua === 'Thứ Bảy', b)
+        ok('4d2. {hangLauKhongMuaChiTiet} = kèm lần cuối + thường lấy N đơn vị (không có đơn vị thì bỏ)', b.hangLauKhongMuaChiTiet === '1. Dầu ăn 1L – đã 60 ngày (lần cuối 02/03, thường lấy 12 chai)\n2. Nước mắm – đã 12 ngày (lần cuối 05/10, thường lấy 2)', b.hangLauKhongMuaChiTiet)
+        const thuT7 = thuHayMua([0, 0, 0, 0, 0, 0, 4])
+        ok('4d3. Món lâu nhất lên đầu dù dữ liệu đưa ngược thứ tự', bienNhacMuaLai({ thu: thuT7, mon: [mon[1]!, mon[0]!] }).hangLauKhongMua === '1. Dầu ăn 1L – đã 60 ngày\n2. Nước mắm – đã 12 ngày')
+        ok('4d4. Mua hôm nay / hôm qua (quaNgay < 2, món mua hằng ngày) ⇒ không ghi "đã …"', bienNhacMuaLai({ thu: thuT7, mon: [{ ...mon[1]!, quaNgay: 1 }, { ...mon[0]!, quaNgay: 0 }] }).hangLauKhongMua === '1. Nước mắm\n2. Dầu ăn 1L')
+        const mocBaoLau = [0, 1, 45, 89, 90, 95, 107, 171, 180, 360, 365, 400, 730]
+        ok('4d5. baoLauRoi: dưới 90 nói ngày, rồi tháng làm tròn nửa tháng, từ 1 năm nói năm + tháng',
+            mocBaoLau.map(baoLauRoi).join('|') === 'hôm nay|1 ngày|45 ngày|89 ngày|3 tháng|3 tháng|3 tháng rưỡi|5 tháng rưỡi|6 tháng|1 năm|1 năm|1 năm 1 tháng|2 năm',
+            mocBaoLau.map(n => `${n}→${baoLauRoi(n)}`).join(' '))
         const tin = dienMau(MAU, { tenKhach: 'Phú', bien: b })
-        ok('4e. Điền đủ: thứ + danh sách nhiều dòng', tin === 'Chào Phú, mai là Thứ Bảy.\nMấy món lâu chưa lấy:\n1. Dầu ăn 1L\n2. Nước mắm\nCảm ơn!', tin)
+        ok('4e. Điền đủ: thứ + danh sách nhiều dòng', tin === 'Chào Phú, mai là Thứ Bảy.\nMấy món lâu chưa lấy:\n1. Dầu ăn 1L – đã 60 ngày\n2. Nước mắm – đã 12 ngày\nCảm ơn!', tin)
         const thieu = dienMau(MAU, { tenKhach: 'Phú', bien: chiThu })
         ok('4f. Không có món ⇒ dòng {hangLauKhongMua} BỎ, dòng còn lại giữ (không gửi danh sách trống)', thieu === 'Chào Phú, mai là Thứ Hai và Thứ Bảy.\nMấy món lâu chưa lấy:\nCảm ơn!', thieu)
         ok('4f2. Dòng {hangLauKhongMuaChiTiet} cũng bỏ khi không có món', dienMau('A\n{hangLauKhongMuaChiTiet}\nB', { tenKhach: 'Phú', bien: chiThu }) === 'A\nB')
@@ -182,7 +189,7 @@ async function main() {
         ok('6c. Chỉ k1 được gửi; k2 (không món) + k3 (mai không phải ngày hay mua) ⇒ boKhongDenLuot = 2; nhóm chưa nối không vào danh sách',
             soan.dong.length === 1 && soan.dong[0]!.customerId === 'k1' && soan.boKhongDenLuot === 2 && soan.boChuaNoi === 0, { dong: soan.dong.map(d => d.customerId), bo: soan.boKhongDenLuot, chuaNoi: soan.boChuaNoi })
         const tin = tinMau(MAU, soan.dong[0])
-        ok('6d. Tin mẫu điền đủ thứ + món', tin === 'Chào An, mai là Thứ Bảy — ngày anh/chị hay ghé.\nMấy món lâu rồi chưa thấy lấy:\n1. Dầu ăn 1L\nCần thì nhắn shop nhé!', tin)
+        ok('6d. Tin mẫu điền đủ thứ + món (+ đã bao lâu: lần cuối 30/08, chạy 30/10 ⇒ 61 ngày)', tin === 'Chào An, mai là Thứ Bảy — ngày anh/chị hay ghé.\nMấy món lâu rồi chưa thấy lấy:\n1. Dầu ăn 1L – đã 61 ngày\nCần thì nhắn shop nhé!', tin)
         ok('6e. moTaBo nói rõ vì sao bỏ', moTaBo(soan) === '2 khách mai không phải ngày hay mua hoặc không có món tới lượt', moTaBo(soan))
         // Chọn đích danh nhóm chưa nối khách ⇒ tin cần số của khách ⇒ bỏ, đếm boChuaNoi
         const soanChon = await soanNguoiNhan(sp, { noiDung: MAU, doiTuong: { ...(doiTuong as any), loai: 'chon', groupIds: ['1000000001', '1000000004'] }, doanhSo: null }, luc)

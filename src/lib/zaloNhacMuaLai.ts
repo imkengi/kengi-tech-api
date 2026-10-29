@@ -21,6 +21,9 @@
  * 29/10/2026 — chủ shop xem trước tin rồi chê "sao trông nó rối thế": 7 dòng "- tên (lần cuối dd/mm, hay lấy N)" đọc như
  * bảng kê, "hay lấy 4" không ai hiểu 4 gì. {hangLauKhongMua} nay chỉ là danh sách ĐÁNH SỐ tên món (khách trả lời "lấy
  * món 1, 3" được); ai cần ngày mua cuối + số lượng thường lấy thì dùng {hangLauKhongMuaChiTiet} (đơn vị = Product.baseUnit).
+ * Cùng ngày chủ shop thêm: "muốn thể hiện lấy gần nhất là bao lâu rồi để người ta sốt ruột" ⇒ mỗi dòng kèm " – đã 61 ngày" /
+ * "– đã 5 tháng rưỡi" / "– đã 1 năm 2 tháng" (baoLauRoi từ quaNgay; dưới 2 ngày không ghi), danh sách xếp món LÂU NHẤT lên
+ * đầu — còn chọn TOI_DA_MON món vẫn theo quá lượt so với nhịp (món mua đều mà trễ vài ngày đáng nhắc hơn món nửa năm một lần).
  */
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
@@ -143,6 +146,25 @@ export async function thoiQuenMuaCuaKhach(
 
 const ddmm = (d: Date) => { const v = new Date(d.getTime() + LECH_VN_MS); return `${String(v.getUTCDate()).padStart(2, '0')}/${String(v.getUTCMonth() + 1).padStart(2, '0')}` }
 
+const THANG_NGAY = 365.25 / 12
+
+/** "Đã bao lâu" cho tin nhắn, từ số ngày: dưới 90 nói ngày ("45 ngày"), rồi tháng làm tròn nửa tháng ("3 tháng", "5 tháng rưỡi"), từ 1 năm nói năm + tháng ("1 năm 2 tháng"). 0 ⇒ "hôm nay". */
+export function baoLauRoi(ngay: number): string {
+    const n = Math.max(0, Math.floor(Number(ngay) || 0))
+    if (n < 1) return 'hôm nay'
+    if (n < 90) return `${n} ngày`
+    if (n < 365) {
+        const nua = Math.round((n / THANG_NGAY) * 2) / 2
+        if (nua >= 12) return '1 năm'
+        return `${Math.floor(nua)} tháng${nua % 1 ? ' rưỡi' : ''}`
+    }
+    const thang = Math.round(n / THANG_NGAY), nam = Math.floor(thang / 12), du = thang % 12
+    return du ? `${nam} năm ${du} tháng` : `${nam} năm`
+}
+
+/** Một dòng trong danh sách: "3. Tên món – đã 61 ngày" (+ đuôi chi tiết nếu có); mua trong 2 ngày nay thì không ghi "đã …" */
+const dongMon = (m: MonGoiY, i: number, duoi = '') => `${i + 1}. ${m.ten}${m.quaNgay >= 2 ? ` – đã ${baoLauRoi(m.quaNgay)}` : ''}${duoi}`
+
 /**
  * Biến chèn vào tin của MỘT khách. Không có thói quen rõ / không có món ⇒ KHÔNG đặt biến đó: zaloGui.dienMau bỏ cả
  * dòng còn chứa biến (như {noDauNgay}) — đừng gửi "mấy món này lâu chưa lấy:" rồi trống không.
@@ -152,9 +174,10 @@ export function bienNhacMuaLai(tq: ThoiQuenMua | undefined): Record<string, stri
     if (!tq) return bien
     if (tq.thu.ro) bien.thuHayMua = tq.thu.dinh.map(t => TEN_THU[t]).join(' và ')
     if (tq.mon.length) {
-        bien.hangLauKhongMua = tq.mon.map((m, i) => `${i + 1}. ${m.ten}`).join('\n')
-        bien.hangLauKhongMuaChiTiet = tq.mon.map((m, i) => `${i + 1}. ${m.ten} (lần cuối ${ddmm(m.lanCuoi)}, thường lấy ${m.slMoiLan}${m.donVi ? ` ${m.donVi}` : ''})`).join('\n')
-        bien.soMonLauKhongMua = String(tq.mon.length)
+        const ds = [...tq.mon].sort((a, b) => b.quaNgay - a.quaNgay)   // lâu nhất lên đầu (sort ổn định: bằng nhau giữ thứ tự quá lượt)
+        bien.hangLauKhongMua = ds.map((m, i) => dongMon(m, i)).join('\n')
+        bien.hangLauKhongMuaChiTiet = ds.map((m, i) => dongMon(m, i, ` (lần cuối ${ddmm(m.lanCuoi)}, thường lấy ${m.slMoiLan}${m.donVi ? ` ${m.donVi}` : ''})`)).join('\n')
+        bien.soMonLauKhongMua = String(ds.length)
     }
     return bien
 }
