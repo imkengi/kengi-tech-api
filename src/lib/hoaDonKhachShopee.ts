@@ -68,6 +68,21 @@ export interface KetQuaLayHoaDon {
 }
 
 /**
+ * Phiếu đơn Shopee VỪA LÊN (từ `tuLuc`) còn trống thông tin HĐ ⇒ hỏi Shopee ngay lúc đồng bộ đơn, không đợi hàng đợi 20:30
+ * (chủ shop 29/10/2026: "khi lấy đơn thì lấy luôn thông tin cần xuất hoá đơn luôn nha"). Đo 15/10: HĐ công ty / hộ KD đọc rõ
+ * mọi trường ở MỌI trạng thái đơn ⇒ lấy sớm là có ngay, nhân viên thấy "khách cần HĐ MST" từ lúc đơn mới về. Gọi từ cron
+ * autoSync và POST /channels/:id/sync sau processNewOrders; null = không có phiếu nào cần hỏi.
+ */
+export async function layHoaDonKhachPhieuMoi(prisma: any, tuLuc: Date, opts: { dichVu?: (kenh: any) => Promise<any> } = {}): Promise<KetQuaLayHoaDon | null> {
+    const phieu: { id: string; receiptNumber: string }[] = await prisma.transaction.findMany({
+        where: { receiptNumber: { startsWith: 'ONLINE-SPE-' }, createdAt: { gte: tuLuc }, vatBuyerInfo: null },
+        select: { id: true, receiptNumber: true }, take: 300,
+    })
+    if (!phieu.length) return null
+    return layHoaDonKhachShopee(prisma, phieu, { ghi: true, dichVu: opts.dichVu })
+}
+
+/**
  * Hỏi Shopee thông tin xuất HĐ cho các PHIẾU đơn Shopee (receiptNumber `ONLINE-SPE-…`), ghi thông tin DÙNG ĐƯỢC lên phiếu đang
  * TRỐNG vatBuyerInfo (không đè thông tin nhân viên gõ tay / đã lấy trước). Lỗi Shopee không ném ra ngoài — gom ở `loi`.
  */

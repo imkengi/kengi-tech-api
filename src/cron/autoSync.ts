@@ -2,6 +2,7 @@ import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
+import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
 import { choXong } from '../lib/choXong'
 
@@ -349,9 +350,19 @@ async function runAutoSync() {
                             } catch { }
                         }
                         // Convert eligible orders to transactions + inventory
+                        const batDauChuyen = new Date(Date.now() - 60_000)   // phiếu lên trong lượt này (trừ hao lệch giờ máy chủ / CSDL)
                         const converted = await processNewOrders(storePrisma, channel.id)
                         if (converted > 0) {
                             console.log(`[AutoSync] ${store.name}/${channel.name}: ${converted} orders → transactions`)
+                            // Thông tin xuất HĐ khách khai trên Shopee — hỏi ngay khi phiếu vừa lên, không đợi hàng đợi 20:30
+                            // (chủ shop 29/10/2026: "khi lấy đơn thì lấy luôn thông tin cần xuất hoá đơn"). Lỗi không làm hỏng lượt.
+                            if (String(channel.platform).toLowerCase() === 'shopee') {
+                                try {
+                                    const hd = await layHoaDonKhachPhieuMoi(storePrisma, batDauChuyen)
+                                    if (hd?.daGhiPhieu.length) console.log(`[AutoSync] ${store.name}/${channel.name}: ghi thông tin HĐ khách cho ${hd.daGhiPhieu.length}/${hd.daHoi} phiếu Shopee mới`)
+                                    if (hd?.loi.length) console.warn(`[AutoSync] ${store.name}/${channel.name}: lấy thông tin HĐ khách Shopee lỗi — ${hd.loi[0]}`)
+                                } catch (e: any) { console.warn(`[AutoSync] ${store.name}/${channel.name}: lấy thông tin HĐ khách Shopee hỏng —`, fmtErr(e)) }
+                            }
                         }
                     } catch (err: any) {
                         // err.message rỗng thì dòng log thành "Error syncing X:" cụt lủn,

@@ -63,6 +63,7 @@ import loyaltyRoutes from './routes/loyalty'
 import reviewRoutes from './routes/reviews'
 import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
+import kiemLaiDonSanRoutes from './routes/kiemLaiDonSan'
 import kiotvietRoutes from './routes/kiotviet'
 import misaRoutes from './routes/misa'
 import misaDayRoutes from './routes/misaDay'
@@ -333,6 +334,7 @@ app.use('/api/attendance', attendanceRoutes)
 app.use('/api/loyalty', loyaltyRoutes)
 app.use('/api/reviews', reviewRoutes)
 app.use('/api/payroll', payrollRoutes)
+app.use('/api/online-orders', kiemLaiDonSanRoutes)   // /kiem-lai — mount TRƯỚC, kẻo `/:id` của router đơn online nuốt mất
 app.use('/api/online-orders', onlineOrderRoutes)
 app.use('/api/drive-videos', driveVideoRoutes) // Video đóng gói trên Google Drive ↔ đơn sàn (ghép theo mã vận đơn)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)

@@ -2756,6 +2756,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 import { getPlatformService, isSupportedPlatform, TikTokService, LazadaService, type PlatformOrder } from '../services/platforms'
 import { quyetDinhTuChoiTikTok, laHoanNhanhKhongTuChoiDuoc, TIKTOK_HOAN_NHANH_THONG_BAO } from '../services/platforms/tiktok'
 import { processNewOrders, convertOnlineOrderToTransaction } from '../services/orderSync'
+import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
 
 // GET /api/online-orders/channels/:id/auth-url
@@ -3576,10 +3577,20 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
 
         // Auto-convert eligible orders to transactions + deduct inventory
         let converted = 0
+        const batDauChuyen = new Date(Date.now() - 60_000)   // phiếu lên trong lượt này (trừ hao lệch giờ máy chủ / CSDL)
         try {
             converted = await processNewOrders(prisma, channel.id)
         } catch (e: any) {
             console.error('Order conversion error:', e.message)
+        }
+        // Thông tin xuất HĐ khách khai trên Shopee — hỏi ngay khi phiếu vừa lên (chủ shop 29/10/2026), không đợi hàng đợi 20:30
+        let hoaDonKhach = 0
+        if (channel.platform === 'shopee' && converted > 0) {
+            try {
+                const hd = await layHoaDonKhachPhieuMoi(prisma, batDauChuyen)
+                hoaDonKhach = hd?.daGhiPhieu.length || 0
+                if (hd?.loi.length) errors.push(`Thông tin HĐ khách Shopee: ${hd.loi[0]}`)
+            } catch (e: any) { console.warn('[Sync] lấy thông tin HĐ khách Shopee:', e?.message || e) }
         }
 
         // ── Batch refresh status của đơn cũ chưa kết thúc ──────────────────────
@@ -4099,7 +4110,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             success: true,
             data: {
                 imported, updated, statusRefreshed, productsSynced,
-                errors: errors.length, total: allOrders.length, converted,
+                errors: errors.length, total: allOrders.length, converted, hoaDonKhach,
                 // Dừng giữa chừng (hết giờ, hoặc sàn chặn) → báo rõ LÝ DO để
                 // người dùng biết bấm tiếp hay ngồi chờ
                 partial: !!stoppedAt,
