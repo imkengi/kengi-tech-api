@@ -574,7 +574,13 @@ export async function dsHoaDonWeb(sp: any, kn: KetNoiMeInvoice, tu: string, den:
     return { tho: dong.map(d => d.raw), dong, ngayCat: [...ngayCat].sort(), loiNguon, khongDocDuoc, demNguon }
 }
 
-export interface BienTheDo { nguon: NguonWeb; coMa: boolean; trangThai: string; tu: string; den: string; start: number; length: number }
+/**
+ * 'tichHop' = POST /invoice/paging "Danh sách hóa đơn theo ký hiệu" (token TÍCH HỢP, body Skip/Take/ListInvTemplate) — tài liệu: dùng khi
+ * đối tác đồng bộ danh sách HĐ về. 29/10/2026 HUTI: web app chỉ có 11 HĐ năm 2026 mà số HĐ tháng 10 đã 00003393 ⇒ HĐ lập từ AMIS
+ * không nằm ở web app; đo đường này trước khi đổi nguồn soi.
+ */
+export type NguonDo = NguonWeb | 'tichHop'
+export interface BienTheDo { nguon: NguonDo; coMa: boolean; trangThai: string; tu: string; den: string; start: number; length: number; kyHieu?: string[] }
 
 /** Bản ghi rút gọn để đo: giữ tên trường, cắt giá trị dài, object/mảng con chỉ còn khung */
 function rutGon(o: any): any {
@@ -592,10 +598,13 @@ function rutGon(o: any): any {
 export async function doTho(sp: any, kn: KetNoiMeInvoice, bienThe: BienTheDo[]) {
     const ket: any[] = []
     for (const b of bienThe) {
-        const duong = `${NGUON_WEB[b.nguon].duong}?invoiceWithCode=${b.coMa ? 'true' : 'false'}`
-        const than = { Start: b.start, Length: b.length, Sort: 'InvDate', FromDate: b.tu, ToDate: b.den, PublishStatus: b.trangThai }
+        const tichHop = b.nguon === 'tichHop'
+        const duong = `${b.nguon === 'tichHop' ? '/invoice/paging' : NGUON_WEB[b.nguon].duong}?invoiceWithCode=${b.coMa ? 'true' : 'false'}`
+        const than = tichHop
+            ? { FromDate: b.tu, ToDate: b.den, Skip: b.start, Take: b.length, ListInvTemplate: b.kyHieu || [] }
+            : { Start: b.start, Length: b.length, Sort: 'InvDate', FromDate: b.tu, ToDate: b.den, PublishStatus: b.trangThai }
         try {
-            const { status, tv, text } = await goiApiTho(sp, kn, 'web', duong, than)
+            const { status, tv, text } = await goiApiTho(sp, kn, tichHop ? 'tichHop' : 'web', duong, than)
             const tach = tv.ok ? tachDanhSach(tv.data) : null
             const d = moChuoiJson(tv.data)
             ket.push({

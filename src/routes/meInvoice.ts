@@ -159,17 +159,19 @@ router.post('/do-tho', XEM, async (req: AuthRequest, res: Response) => {
         if (sai(tu, den)) { res.status(400).json({ success: false, error: `Ngày dạng YYYY-MM-DD, "đến" không trước "từ", tối đa ${DO_TOI_DA_NGAY} ngày` }); return }
         if (!TRANG_THAI_WEB[trangThai]) { res.status(400).json({ success: false, error: 'trangThai phải là 0, 4, 6 hoặc 7' }); return }
 
-        // mặc định: cả khoảng MỘT lần, 3 bản ghi — thường có mã / thường không mã / máy tính tiền
+        // mặc định: cả khoảng MỘT lần, 3 bản ghi — web thường có mã / không mã / máy tính tiền / danh sách tích hợp (theo ký hiệu)
         const goc = { trangThai, tu, den, start: 0, length: 3 }
         let bienThe: BienTheDo[] = [
             { nguon: 'thuong', coMa: true, ...goc },
             { nguon: 'thuong', coMa: false, ...goc },
             { nguon: 'mtt', coMa: true, ...goc },
+            { nguon: 'tichHop', coMa: true, ...goc },
         ]
         if (Array.isArray(b.bienThe) && b.bienThe.length) {
             if (b.bienThe.length > 8) { res.status(400).json({ success: false, error: 'Tối đa 8 biến thể một lần' }); return }
             bienThe = b.bienThe.map((x: any) => ({
-                nguon: x?.nguon === 'mtt' ? 'mtt' : 'thuong',
+                nguon: x?.nguon === 'mtt' || x?.nguon === 'tichHop' ? x.nguon : 'thuong',
+                kyHieu: Array.isArray(x?.kyHieu) ? x.kyHieu.map((k: any) => String(k).trim()).filter((k: string) => /^[0-9A-Z]{1,12}$/i.test(k)).slice(0, 10) : undefined,
                 coMa: x?.coMa !== false,
                 trangThai: TRANG_THAI_WEB[String(x?.trangThai)] ? String(x.trangThai) : trangThai,
                 tu: laNgay(x?.tu) ? x.tu : tu,

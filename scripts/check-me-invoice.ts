@@ -291,6 +291,16 @@ async function main() {
         ok('8s. Dò thô gửi đúng cả khoảng một lần, Length nhỏ, đúng đường từng biến thể',
             goiD.filter(g => g.url.includes('/invoiceweb/paging')).every(g => g.body.FromDate === '2026-10-01' && g.body.ToDate === '2026-10-29' && g.body.Length === 3)
             && goiD.filter(g => g.url.includes(MTT)).length === 1 && goiD.filter(g => g.url.includes(THUONG)).length === 2)
+        // danh sách TÍCH HỢP theo ký hiệu (/invoice/paging): token tích hợp, Skip/Take/ListInvTemplate, data {Total, Items}
+        const goiT = misaGia((g) => g.url.includes('/invoice/paging?')
+            ? { json: { Success: true, Data: { Total: 3393, Items: [{ TransactionID: 'MTC1', InvNo: '00003393', InvDate: '2026-10-07', BuyerName: 'Công ty A', BuyerTaxCode: '0312345678', TotalAmount: 13251981, Status: 1 }] } } }
+            : { json: { Success: true, Data: 'TK-TICH-HOP-2' } })
+        const th = await doTho(sp, kn, [{ ...bt('thuong', true), nguon: 'tichHop', kyHieu: ['1C26TSG'] }])
+        const gT = goiT.find(g => g.url.includes('/invoice/paging?'))!
+        ok('8t. Dò thô danh sách tích hợp: /invoice/paging, Bearer token TÍCH HỢP, không TaxCode, body Skip/Take/ListInvTemplate; đọc {Total, Items}',
+            !!gT && gT.url.includes('invoiceWithCode=true') && gT.headers.Authorization?.startsWith('Bearer ') && gT.headers.Authorization !== 'Bearer TK-WEB' && !('TaxCode' in gT.headers)
+            && gT.body.Skip === 0 && gT.body.Take === 3 && gT.body.ListInvTemplate.join() === '1C26TSG' && gT.body.FromDate === '2026-10-01'
+            && th[0].ok && th[0].soDong === 1 && th[0].tong === 3393 && th[0].truong.includes('TransactionID'), { gT, th })
     }
 
     /* 9 — Khớp hoá đơn ↔ khách ↔ yêu cầu (chủ shop: chỉ khách gõ /hoadon, hoặc khách lấy định kỳ) */
