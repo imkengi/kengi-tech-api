@@ -28,6 +28,7 @@
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
 import { moRongNhom } from './zaloDoanhSo'
+import { bangGop, type CapGop } from './zaloNhomKhach'
 
 const LECH_VN_MS = 7 * 3600_000
 const NGAY_MS = 86_400_000
@@ -80,10 +81,11 @@ export const maiLaNgayHayMua = (tq: ThoiQuenMua | undefined, luc: Date) => !!tq 
  * Hai câu SQL gộp cho CẢ danh sách khách — lịch nhắc chạy mỗi ngày cho hàng trăm nhóm Zalo, không hỏi từng người.
  */
 export async function thoiQuenMuaCuaKhach(
-    sp: any, customerIds: string[], opts: { luc?: Date; categoryIds?: string[]; toiDaMon?: number } = {},
+    sp: any, customerIds: string[], opts: { luc?: Date; categoryIds?: string[]; toiDaMon?: number; gop?: CapGop[] } = {},
 ): Promise<Map<string, ThoiQuenMua>> {
     const ra = new Map<string, ThoiQuenMua>()
-    const khach = [...new Set(customerIds.filter(Boolean))]
+    const g = bangGop(opts.gop)   // nhóm nối nhiều mã: phiếu của các mã cộng về khoá (groupId) — lib/zaloNhomKhach.ts
+    const khach = [...new Set([...customerIds, ...g.ids].filter(Boolean))]
     if (!khach.length) return ra
     const luc = opts.luc || new Date()
     const toiDa = opts.toiDaMon ?? TOI_DA_MON
@@ -104,12 +106,13 @@ export async function thoiQuenMuaCuaKhach(
         khach, [...TRANG_THAI_TINH], tuThu,
     )
     const dem = new Map<string, number[]>()
-    for (const r of theoThu) {
-        const d = dem.get(r.k) || Array(7).fill(0)
-        d[Number(r.thu)] = Number(r.so) || 0
-        dem.set(r.k, d)
+    for (const r of theoThu) for (const key of g.khoaCua(String(r.k))) {
+        const d = dem.get(key) || Array(7).fill(0)
+        d[Number(r.thu)] = (d[Number(r.thu)] || 0) + (Number(r.so) || 0)
+        dem.set(key, d)
     }
-    for (const id of khach) ra.set(id, { thu: thuHayMua(dem.get(id) || []), mon: [] })
+    const cacKhoa = g.coGop ? g.khoa : khach
+    for (const key of cacKhoa) ra.set(key, { thu: thuHayMua(dem.get(key) || []), mon: [] })
 
     // Ngày mua từng món — gom theo NGÀY VN, trả chuỗi 'YYYY-MM-DD' (Prisma đọc text[] chắc hơn timestamp[])
     const locNhom = categoryIds.length ? `AND p."categoryId" = ANY($4::text[])` : ''
@@ -127,14 +130,23 @@ export async function thoiQuenMuaCuaKhach(
           GROUP BY 1, 2, 3, 4, 5`,
         ...thamSo,
     )
-    for (const r of mon) {
-        const tq = ra.get(r.k)
+    // Gộp theo (khoá, món): nhóm nối nhiều mã thì ngày mua của các mã HỢP LẠI rồi mới tính nhịp — mua xen kẽ hai mã vẫn ra đúng nhịp
+    const gom = new Map<string, { key: string; p: string; ten: any; sku: any; dv: any; ngay: Set<string>; sl: number }>()
+    for (const r of mon) for (const key of g.khoaCua(String(r.k))) {
+        const kk = `${key}\u0001${r.p}`
+        const x = gom.get(kk) || { key, p: String(r.p), ten: r.ten, sku: r.sku, dv: r.dv, ngay: new Set<string>(), sl: 0 }
+        for (const s of (Array.isArray(r.ngay) ? r.ngay : [])) x.ngay.add(String(s))
+        x.sl += Number(r.sl) || 0
+        gom.set(kk, x)
+    }
+    for (const x of gom.values()) {
+        const tq = ra.get(x.key)
         if (!tq) continue
-        const ngay = (Array.isArray(r.ngay) ? r.ngay : []).map((s: string) => new Date(Date.parse(`${s}T00:00:00+07:00`))).filter((d: Date) => Number.isFinite(d.getTime()))
+        const ngay = [...x.ngay].map(s => new Date(Date.parse(`${s}T00:00:00+07:00`))).filter(d => Number.isFinite(d.getTime()))
         const kq = monLauKhongMua(ngay, luc)
         if (!kq) continue
-        const soLan = new Set(ngay.map((d: Date) => d.getTime())).size
-        tq.mon.push({ productId: r.p, ten: String(r.ten || ''), sku: r.sku || null, donVi: String(r.dv || '').trim(), lanCuoi: kq.lanCuoi, nhipNgay: kq.nhipNgay, quaNgay: kq.quaNgay, soLan, slMoiLan: Math.max(1, Math.round((Number(r.sl) || 0) / soLan)) })
+        const soLan = new Set(ngay.map(d => d.getTime())).size
+        tq.mon.push({ productId: x.p, ten: String(x.ten || ''), sku: x.sku || null, donVi: String(x.dv || '').trim(), lanCuoi: kq.lanCuoi, nhipNgay: kq.nhipNgay, quaNgay: kq.quaNgay, soLan, slMoiLan: Math.max(1, Math.round(x.sl / soLan)) })
     }
     // Quá lượt nhiều nhất lên đầu; tin chỉ nêu TOI_DA_MON món kẻo dài
     for (const tq of ra.values()) {

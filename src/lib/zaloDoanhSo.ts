@@ -16,6 +16,7 @@
  */
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
+import { bangGop, type CapGop } from './zaloNhomKhach'
 
 export interface CauHinhDoanhSo {
     categoryIds: string[]          // rỗng = mọi mặt hàng
@@ -61,11 +62,16 @@ export async function moRongNhom(sp: any, ids: string[]): Promise<{ tatCa: strin
     return { tatCa: [...tatCa], ten: ids.map(id => ten.get(id)).filter(Boolean).join(', ') || '(nhóm hàng đã xoá)' }
 }
 
-/** Doanh số trong kỳ của từng khách (đã trừ hàng trả). Khách không mua ⇒ không có trong Map. */
-export async function tinhDoanhSo(sp: any, cfg: CauHinhDoanhSo, customerIds: string[]): Promise<{ theoKhach: Map<string, SoLieuKhach>; nhomHang: string }> {
+/**
+ * Doanh số trong kỳ của từng khách (đã trừ hàng trả). Khách không mua ⇒ không có trong Map.
+ * `gop` (29/10/2026, lib/zaloNhomKhach.ts): nhóm Zalo nối nhiều mã ⇒ số của các mã cộng về khoá (groupId); SQL vẫn hỏi
+ * theo từng mã, cộng ở đây. Không truyền ⇒ Map theo customerId như cũ.
+ */
+export async function tinhDoanhSo(sp: any, cfg: CauHinhDoanhSo, customerIds: string[], gop?: CapGop[]): Promise<{ theoKhach: Map<string, SoLieuKhach>; nhomHang: string }> {
     const { tatCa, ten } = await moRongNhom(sp, cfg.categoryIds)
     const theoKhach = new Map<string, SoLieuKhach>()
-    const khach = [...new Set(customerIds.filter(Boolean))]
+    const g = bangGop(gop)
+    const khach = [...new Set([...customerIds, ...g.ids].filter(Boolean))]
     if (!khach.length || (cfg.categoryIds.length && !tatCa.length)) return { theoKhach, nhomHang: ten }
     const tu = new Date(`${cfg.tu}T00:00:00+07:00`), den = new Date(`${cfg.den}T23:59:59.999+07:00`)
     const locNhom = cfg.categoryIds.length ? `AND p."categoryId" = ANY($5::text[])` : ''
@@ -83,7 +89,14 @@ export async function tinhDoanhSo(sp: any, cfg: CauHinhDoanhSo, customerIds: str
           GROUP BY t."customerId"`,
         ...thamSo,
     )
-    for (const r of ban) theoKhach.set(r.k, { tien: Number(r.tien) || 0, soLuong: Number(r.sl) || 0, soDon: Number(r.don) || 0 })
+    // Cộng về khoá: một mã nằm ở hai nhóm thì nhận số ở cả hai; không gộp thì khoá = chính mã
+    for (const r of ban) for (const key of g.khoaCua(String(r.k))) {
+        const s = theoKhach.get(key) || { tien: 0, soLuong: 0, soDon: 0 }
+        s.tien += Number(r.tien) || 0
+        s.soLuong += Number(r.sl) || 0
+        s.soDon += Number(r.don) || 0
+        theoKhach.set(key, s)
+    }
 
     // Hàng trả của chính các phiếu đó — theo giá thực đã bán trên phiếu gốc (đơn giá trên phiếu trả có khi là giá niêm yết)
     const tra: any[] = await sp.$queryRawUnsafe(
@@ -102,13 +115,14 @@ export async function tinhDoanhSo(sp: any, cfg: CauHinhDoanhSo, customerIds: str
           GROUP BY t."customerId"`,
         ...thamSo,
     )
-    for (const r of tra) {
-        const s = theoKhach.get(r.k)
+    for (const r of tra) for (const key of g.khoaCua(String(r.k))) {
+        const s = theoKhach.get(key)
         if (!s) continue
-        s.tien = Math.max(0, s.tien - (Number(r.tien) || 0))
-        s.soLuong = Math.max(0, s.soLuong - (Number(r.sl) || 0))
+        s.tien -= Number(r.tien) || 0
+        s.soLuong -= Number(r.sl) || 0
     }
-    for (const s of theoKhach.values()) s.tien = Math.round(s.tien)
+    // Trả nhiều hơn mua trong kỳ (trả hàng của kỳ trước) ⇒ 0, không ra số âm
+    for (const s of theoKhach.values()) { s.tien = Math.max(0, Math.round(s.tien)); s.soLuong = Math.max(0, s.soLuong) }
     return { theoKhach, nhomHang: ten }
 }
 

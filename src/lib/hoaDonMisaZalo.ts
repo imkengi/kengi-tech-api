@@ -17,6 +17,7 @@
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
 import { mstChuan, type HoaDonMisa } from './meInvoice'
+import { nhomCoKhachThem } from './zaloNhomKhach'
 
 /** Phiếu "Lấy HĐ" cách ngày hoá đơn tối đa bấy nhiêu ngày (HĐ gộp cả tháng vẫn lọt) */
 export const CUA_SO_NGAY = 45
@@ -192,6 +193,21 @@ export async function xemTruocGui(sp: any, hoaDons: HoaDonMisa[], daCapMa: boole
             const ds = nhomTheoKhach.get(n.customerId) || []
             ds.push({ groupId: String(n.groupId), tenNhom: n.tenNhom || null })
             nhomTheoKhach.set(n.customerId, ds)
+        }
+    }
+    // Khách là MÃ THÊM của nhóm (nhóm nối nhiều mã, lib/zaloNhomKhach.ts) ⇒ hoá đơn của mã đó cũng gửi vào nhóm ấy
+    const themNhom = await nhomCoKhachThem(sp, ids)
+    if (themNhom.size) {
+        const gids = [...new Set([...themNhom.values()].flat())]
+        const tenNhom = new Map<string, string | null>()
+        for (let i = 0; i < gids.length; i += 500) {
+            const ds: any[] = await sp.zaloNhom.findMany({ where: { groupId: { in: gids.slice(i, i + 500) } }, select: { groupId: true, tenNhom: true } })
+            for (const n of ds) tenNhom.set(String(n.groupId), n.tenNhom || null)
+        }
+        for (const [cid, gs] of themNhom) {
+            const ds = nhomTheoKhach.get(cid) || []
+            for (const g of gs) if (!ds.some(x => x.groupId === g)) ds.push({ groupId: g, tenNhom: tenNhom.get(g) ?? null })
+            nhomTheoKhach.set(cid, ds)
         }
     }
 

@@ -31,6 +31,10 @@
  *
  * GỬI ĐỊNH KỲ (26/10/2026, lib/zaloLichGui.ts): /api/zalo/lich-gui (GET, POST, PUT /:id, DELETE /:id, POST /:id/bat,
  * POST /:id/chay-ngay, POST /xem). Biến công nợ {congNo} {ngayChot} dùng được cả trong /gui-thu + /dot-gui.
+ *
+ * NHÓM NỐI NHIỀU MÃ KHÁCH (29/10/2026, lib/zaloNhomKhach.ts): POST/PUT /nhom nhận `customerIds[]` (mã đầu = mã chính, còn lại
+ * là mã thêm ở bảng lười ZaloNhomKhach); GET /nhom và GET /nhom/:groupId trả thêm `khachThem`. Mọi số trong tin (nợ, mua
+ * hôm nay, doanh số, món nhắc) và lệnh "/hoadon" gộp đủ các mã của nhóm.
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -42,9 +46,10 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
 import {
-    nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, danhDauLayHoaDon, ngayVN,
+    nhapNhomZalo, docFileNhomZalo, laLenhHoaDon, dsYeuCauHoaDon, danhDauLayHoaDonNhom, ngayVN,
     type DongNhomZalo,
 } from '../lib/zaloNhom'
+import { docKhachThem, ghiKhachThem, xoaKhachThem, nhomCoKhachThem, khachCuaNhom, capGopTheoNhom, TOI_DA_MA, type CapGop } from '../lib/zaloNhomKhach'
 import {
     docChiMucKhach, goiYKhach, kiemUrlN8n, goiN8n, docNhomTuN8n, luuNhomQuet, chonKenhGui, guiQuaKenh, CAU_CHUA_CO_KENH,
 } from '../lib/zaloGui'
@@ -80,6 +85,22 @@ function canGhi(req: AuthRequest, res: Response, next: NextFunction): void {
 
 const chuoiGid = (v: any) => String(v ?? '').trim()
 
+/** Danh sách mã khách từ thân request: `customerIds` (mảng, mã đầu = mã chính) hoặc `customerId` (bản web cũ, một mã). null = không gửi. */
+function docMaKhach(b: any): string[] | null {
+    if (Array.isArray(b?.customerIds)) return [...new Set<string>(b.customerIds.map((x: any) => String(x ?? '').trim()).filter(Boolean))]
+    if (b?.customerId !== undefined) return b.customerId ? [String(b.customerId).trim()] : []
+    return null
+}
+
+/** Các khách theo id, GIỮ THỨ TỰ đã gửi; thiếu khách nào / quá nhiều mã ⇒ trả câu lỗi cho người dùng */
+async function timKhachTheoId(sp: any, ids: string[]): Promise<Array<{ id: string; code: string }> | string> {
+    if (ids.length > TOI_DA_MA) return `Một nhóm nối tối đa ${TOI_DA_MA} mã khách`
+    const ds: any[] = await sp.customer.findMany({ where: { id: { in: ids } }, select: { id: true, code: true } })
+    const theoId = new Map<string, any>(ds.map(k => [k.id, k]))
+    if (ids.some(id => !theoId.has(id))) return 'Không tìm thấy khách hàng'
+    return ids.map(id => theoId.get(id))
+}
+
 // ─── GET /api/zalo/nhom/:groupId ────────────────────────────────────────────
 router.get('/nhom/:groupId', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -90,11 +111,15 @@ router.get('/nhom/:groupId', authMiddleware, async (req: AuthRequest, res: Respo
         const khach = nhom.customerId
             ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: CHON_KHACH })
             : null
+        // Mã THÊM (nhóm nối nhiều mã, lib/zaloNhomKhach.ts) — giữ thứ tự đã nối
+        const them = (await docKhachThem(sp, [nhom.groupId])).get(nhom.groupId) || []
+        const dsThem: any[] = them.length ? await sp.customer.findMany({ where: { id: { in: them } }, select: CHON_KHACH }) : []
         res.json({
             success: true,
             data: {
                 groupId: nhom.groupId, tenNhom: nhom.tenNhom, maKhach: nhom.maKhach,
                 khach,
+                khachThem: them.map(id => dsThem.find(k => k.id === id)).filter(Boolean),
                 // Nhóm nối mã chưa có trên Kengi: nói ra, đừng để n8n tưởng khách không có thông tin HĐ
                 ghiChu: khach ? null : `Mã ${nhom.maKhach} chưa có khách trên Kengi`,
             },
@@ -124,16 +149,23 @@ async function thongKeTin(sp: any): Promise<Map<string, { soTin: number; tinCuoi
 router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const sp = req.storePrisma as any
-        const where: any = {}
-        if (req.query.customerId) where.customerId = String(req.query.customerId)
-        if (req.query.chuaNoi === '1') where.customerId = null
+        const dk: any[] = []
+        if (req.query.customerId) {
+            // Khách là mã chính HOẶC mã thêm của nhóm (nhóm nối nhiều mã, lib/zaloNhomKhach.ts)
+            const cid = String(req.query.customerId)
+            const laThem = (await nhomCoKhachThem(sp, [cid])).get(cid) || []
+            dk.push(laThem.length ? { OR: [{ customerId: cid }, { groupId: { in: laThem } }] } : { customerId: cid })
+        }
+        if (req.query.chuaNoi === '1') dk.push({ customerId: null })
         if (req.query.q) {
             const q = String(req.query.q)
-            where.OR = [{ maKhach: { contains: q, mode: 'insensitive' } }, { tenNhom: { contains: q, mode: 'insensitive' } }, { groupId: q }]
+            dk.push({ OR: [{ maKhach: { contains: q, mode: 'insensitive' } }, { tenNhom: { contains: q, mode: 'insensitive' } }, { groupId: q }] })
         }
+        const where: any = dk.length ? { AND: dk } : {}
         const rows = await sp.zaloNhom.findMany({ where, orderBy: { maKhach: 'asc' }, take: 2000 })
         const tong = await sp.zaloNhom.count({ where })
-        const ids = [...new Set<string>(rows.map((r: any) => r.customerId).filter(Boolean))]
+        const them = await docKhachThem(sp, rows.map((r: any) => String(r.groupId)))
+        const ids = [...new Set<string>([...rows.map((r: any) => r.customerId), ...[...them.values()].flat()].filter(Boolean))]
         const khach = ids.length
             ? await sp.customer.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, phone: true, taxCode: true } })
             : []
@@ -147,6 +179,8 @@ router.get('/nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
             data: rows.map((r: any) => ({
                 ...r,
                 khach: r.customerId ? (theoId.get(r.customerId) || null) : null,
+                // Mã thêm còn trên Kengi (khách đã xoá thì không hiện)
+                khachThem: (them.get(String(r.groupId)) || []).map(id => theoId.get(id)).filter(Boolean),
                 soTin: tk.get(r.groupId)?.soTin || 0,
                 tinCuoi: tk.get(r.groupId)?.tinCuoi || null,
                 goiY: !r.customerId && cm ? goiYKhach(cm, r.tenNhom) : [],
@@ -199,15 +233,20 @@ router.post('/nhom', authMiddleware, requirePermission('customers.create'), canG
         const b = req.body || {}
         const gid = chuoiGid(b.groupId)
         if (!/^\d{6,25}$/.test(gid)) { res.status(400).json({ success: false, error: 'Group ID phải là dãy số' }); return }
-        const k = b.customerId ? await sp.customer.findUnique({ where: { id: String(b.customerId) }, select: { id: true, code: true } }) : null
-        if (!k) { res.status(400).json({ success: false, error: 'Chọn khách hàng để nối' }); return }
+        // Nhiều mã một nhóm (29/10/2026, lib/zaloNhomKhach.ts): mã đầu là mã chính, các mã sau là mã thêm
+        const ma = docMaKhach(b) || []
+        if (!ma.length) { res.status(400).json({ success: false, error: 'Chọn khách hàng để nối' }); return }
+        const khs = await timKhachTheoId(sp, ma)
+        if (typeof khs === 'string') { res.status(400).json({ success: false, error: khs }); return }
+        const k = khs[0]!
         const cu = await sp.zaloNhom.findUnique({ where: { groupId: gid } })
-        if (cu) { res.status(409).json({ success: false, error: `Nhóm này đã nối với ${cu.maKhach} — dùng "Đổi khách"` }); return }
+        if (cu) { res.status(409).json({ success: false, error: `Nhóm này đã nối với ${cu.maKhach} — nối thêm mã hoặc bỏ nối ở mục "Đã nối khách"` }); return }
         const nhom = await sp.zaloNhom.create({
             data: { groupId: gid, tenNhom: b.tenNhom ? String(b.tenNhom).trim().slice(0, 200) : null, maKhach: k.code, customerId: k.id },
         })
+        if (khs.length > 1) await ghiKhachThem(sp, gid, khs.slice(1).map(x => x.id))
         const soTin = await ganTinTheoNhom(sp, gid, k.id)
-        res.json({ success: true, data: { ...nhom, soTinGan: soTin } })
+        res.json({ success: true, data: { ...nhom, maThem: khs.slice(1).map(x => x.code), soTinGan: soTin } })
     } catch (e: any) {
         console.error('[zalo] POST nhom:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
@@ -224,13 +263,23 @@ router.put('/nhom/:id', authMiddleware, requirePermission('customers.create'), c
         const data: any = {}
         if (typeof b.tenNhom === 'string') data.tenNhom = b.tenNhom.trim().slice(0, 200) || null
         let soTin = 0
-        if (b.customerId !== undefined) {
-            const k = b.customerId ? await sp.customer.findUnique({ where: { id: String(b.customerId) }, select: { id: true, code: true } }) : null
-            if (b.customerId && !k) { res.status(400).json({ success: false, error: 'Không tìm thấy khách hàng' }); return }
-            data.customerId = k?.id || null
-            if (k) data.maKhach = k.code
+        // Nhiều mã một nhóm (lib/zaloNhomKhach.ts): `customerIds` = TRỌN danh sách (mã đầu = mã chính, rỗng = thôi nối khách);
+        // `customerId` (bản web cũ) = chỉ đổi mã chính, mã thêm giữ nguyên (mã thêm được chọn làm chính thì rời danh sách thêm)
+        const ma = docMaKhach(b)
+        let themMoi: string[] | null = null
+        if (ma) {
+            const khs = ma.length ? await timKhachTheoId(sp, ma) : []
+            if (typeof khs === 'string') { res.status(400).json({ success: false, error: khs }); return }
+            data.customerId = khs[0]?.id || null
+            if (khs[0]) data.maKhach = khs[0].code
+            if (Array.isArray(b.customerIds)) themMoi = khs.slice(1).map(x => x.id)
+            else {
+                const cu = (await docKhachThem(sp, [nhom.groupId])).get(nhom.groupId) || []
+                if (data.customerId && cu.includes(data.customerId)) themMoi = cu.filter(x => x !== data.customerId)
+            }
         }
         const moi = await sp.zaloNhom.update({ where: { id: nhom.id }, data })
+        if (themMoi) await ghiKhachThem(sp, nhom.groupId, themMoi)
         if ('customerId' in data && data.customerId !== nhom.customerId) soTin = await ganTinTheoNhom(sp, nhom.groupId, data.customerId)
         res.json({ success: true, data: { ...moi, soTinGan: soTin } })
     } catch (e: any) {
@@ -247,6 +296,7 @@ router.delete('/nhom/:id', authMiddleware, requirePermission('customers.create')
         const nhom = await sp.zaloNhom.findUnique({ where: { id: String(req.params.id) } })
         if (!nhom) { res.status(404).json({ success: false, error: 'Không tìm thấy nhóm' }); return }
         await sp.zaloNhom.delete({ where: { id: nhom.id } })
+        await xoaKhachThem(sp, nhom.groupId)
         const soTin = await ganTinTheoNhom(sp, nhom.groupId, null)
         res.json({ success: true, data: { groupId: nhom.groupId, soTinGo: soTin } })
     } catch (e: any) {
@@ -318,8 +368,9 @@ router.post('/tin', authMiddleware, canGhi, async (req: AuthRequest, res: Respon
             throw e
         }
         // /hoadon ⇒ bật cột "Lấy HĐ" cho phiếu của khách trong ngày (phiếu tạo sau: nhịp cron tick)
+        // Nhóm nối nhiều mã: bật cho phiếu của MỌI mã trong nhóm (lib/zaloNhomKhach.ts)
         const layHoaDon = yc === true && tin.customerId
-            ? await danhDauLayHoaDon(sp, tin.customerId, ngayVN(tin.thoiDiem))
+            ? await danhDauLayHoaDonNhom(sp, gid, tin.customerId, ngayVN(tin.thoiDiem))
             : null
         res.json({
             success: true,
@@ -673,28 +724,32 @@ router.post('/gui-thu', authMiddleware, requirePermission('customers.create'), c
         if (typeof tuyChon === 'string') { res.status(400).json({ success: false, error: tuyChon }); return }
         const nhom = await sp.zaloNhom.findUnique({ where: { groupId: gid } })
         const k = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { code: true, name: true } }) : null
+        // Mọi mã của nhóm (mã chính + mã thêm, lib/zaloNhomKhach.ts) — số trong tin gộp các mã, khoá tra = gid
+        const thanhVien = nhom ? khachCuaNhom(nhom.customerId, (await docKhachThem(sp, [gid])).get(gid)) : []
+        const gop: CapGop[] = thanhVien.map(id => ({ id, key: gid }))
         let bien: Record<string, string> | null = null
         if (dungBienDoanhSo(b.noiDung)) {
             const cfg = docCauHinhDoanhSo(b.doanhSo)
             if (typeof cfg === 'string' || !cfg) { res.status(400).json({ success: false, error: cfg || 'Tin có {doanhSo} — chọn nhóm hàng và kỳ doanh số' }); return }
             if (!nhom?.customerId) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có doanh số — chọn nhóm đã nối (vd T1)' }); return }
-            const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, [nhom.customerId])
-            bien = bienDoanhSo(theoKhach.get(nhom.customerId), cfg, nhomHang)
+            const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, thanhVien, gop)
+            bien = bienDoanhSo(theoKhach.get(gid), cfg, nhomHang)
         }
-        // Công nợ {congNo} {ngayChot} (26/10/2026) — số dư của khách nhóm này, chốt ngay lúc gửi thử
+        // Số dư của mọi mã trong nhóm — cho {congNo} và tổng kết hôm nay
+        const khs: any[] = thanhVien.length && (dungBienCongNo(b.noiDung) || dungBienHomNay(b.noiDung))
+            ? await sp.customer.findMany({ where: { id: { in: thanhVien } }, select: { id: true, debt: true } }) : []
+        // Công nợ {congNo} {ngayChot} (26/10/2026) — số dư của khách nhóm này (cộng mọi mã), chốt ngay lúc gửi thử
         if (dungBienCongNo(b.noiDung)) {
-            const kh = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { debt: true } }) : null
-            if (!kh) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số nợ — chọn nhóm đã nối khách' }); return }
-            bien = { ...(bien || {}), ...bienCongNo(Number(kh.debt) || 0, new Date()) }
+            if (!nhom?.customerId || !khs.length) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số nợ — chọn nhóm đã nối khách' }); return }
+            bien = { ...(bien || {}), ...bienCongNo(khs.reduce((s, x) => s + (Number(x.debt) || 0), 0), new Date()) }
         }
-        // Tổng kết hôm nay {muaHomNay} {daTraHomNay}… — số của khách nhóm này, tính ngay lúc gửi thử
+        // Tổng kết hôm nay {muaHomNay} {daTraHomNay}… — số của khách nhóm này (cộng mọi mã), tính ngay lúc gửi thử
         if (dungBienHomNay(b.noiDung)) {
-            const kh = nhom?.customerId ? await sp.customer.findUnique({ where: { id: nhom.customerId }, select: { id: true, debt: true } }) : null
-            if (!kh) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số mua / thanh toán — chọn nhóm đã nối khách' }); return }
+            if (!nhom?.customerId || !khs.length) { res.status(400).json({ success: false, error: 'Nhóm gửi thử chưa nối khách nên không có số mua / thanh toán — chọn nhóm đã nối khách' }); return }
             const luc = new Date()
-            const { theoKhach } = await soNgayCuaKhach(sp, [{ id: kh.id, debt: kh.debt }], luc)
+            const { theoKhach } = await soNgayCuaKhach(sp, khs.map(x => ({ id: x.id, debt: x.debt })), luc, gop)
             // Chưa có số nợ 0 giờ ⇒ không có {noDauNgay}, dienMau bỏ dòng đó (26/10/2026)
-            bien = { ...(bien || {}), ...bienHomNay(theoKhach.get(kh.id)!, luc) }
+            bien = { ...(bien || {}), ...bienHomNay(theoKhach.get(gid)!, luc) }
         }
         const kq = await guiQuaKenh(sp, kenh, {
             dotId: null, groupId: gid, noiDung: String(b.noiDung || ''), anh: docAnh(b.anh), tieuDe: b.tieuDe || null,
@@ -721,24 +776,37 @@ router.post('/doanh-so/xem', authMiddleware, requirePermission('customers.create
             where: { customerId: { not: null }, ...(ids.length ? { groupId: { in: ids } } : {}) },
             select: { groupId: true, customerId: true, tenNhom: true },
         })
-        const kIds = [...new Set<string>(nhom.map(n => n.customerId))]
+        // Nhóm nối nhiều mã (lib/zaloNhomKhach.ts): doanh số của nhóm = cộng các mã, tra theo groupId
+        const them = await docKhachThem(sp, nhom.map(n => String(n.groupId)))
+        const gop = capGopTheoNhom(nhom, them)
+        const kIds = [...new Set<string>(gop.map(c => c.id))]
         const khach: any[] = kIds.length ? await sp.customer.findMany({ where: { id: { in: kIds } }, select: { id: true, code: true, name: true } }) : []
         const theoId = new Map(khach.map(k => [k.id, k]))
-        const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, kIds)
+        const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, kIds, gop)
         const ds = nhom.map(n => {
-            const s = theoKhach.get(n.customerId)
+            const s = theoKhach.get(String(n.groupId))
             return {
                 groupId: n.groupId, tenNhom: n.tenNhom, customerId: n.customerId,
                 maKhach: theoId.get(n.customerId)?.code || null, tenKhach: theoId.get(n.customerId)?.name || null,
+                soMaThem: (them.get(String(n.groupId)) || []).length,
                 tien: s?.tien || 0, soLuong: s?.soLuong || 0, soDon: s?.soDon || 0,
             }
         }).sort((a, b) => b.tien - a.tien)
+        // Tổng: mỗi bộ mã tính một lần (một khách có hai nhóm thì không cộng đôi — như trước)
+        const daTinh = new Set<string>()
+        let tongTien = 0
+        for (const n of nhom) {
+            const bo = khachCuaNhom(n.customerId, them.get(String(n.groupId))).sort().join(',')
+            if (daTinh.has(bo)) continue
+            daTinh.add(bo)
+            tongTien += theoKhach.get(String(n.groupId))?.tien || 0
+        }
         res.json({
             success: true,
             data: {
                 nhomHang, tu: cfg.tu, den: cfg.den, ds,
                 soNhomChuaNoi: ids.length ? ids.length - nhom.length : 0,
-                tongTien: [...theoKhach.values()].reduce((a, s) => a + s.tien, 0),
+                tongTien,
             },
         })
     } catch (e: any) {
@@ -768,6 +836,10 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         const quet: any[] = await sp.zaloNhomQuet.findMany({ where: { groupId: { in: ids } }, select: { groupId: true, tenNhom: true } })
         const theoNhom = new Map<string, any>(nhom.map(n => [n.groupId, n]))
         const tenQuet = new Map<string, string | null>(quet.map(q => [q.groupId, q.tenNhom]))
+        // Nhóm nối nhiều mã (lib/zaloNhomKhach.ts): số của nhóm = cộng các mã, tra theo groupId
+        const them = await docKhachThem(sp, nhom.map(n => String(n.groupId)))
+        const gop = capGopTheoNhom(nhom, them)
+        const thanhVien = (gid: string) => khachCuaNhom(theoNhom.get(gid)?.customerId, them.get(gid))
 
         // Báo doanh số: số CHỐT ngay lúc tạo đợt cho từng nhóm; nhóm chưa nối khách / (tuỳ chọn) khách không mua thì bỏ
         let guiToi = ids
@@ -777,13 +849,13 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         if (dungBienDoanhSo(noiDung)) {
             const cfg = docCauHinhDoanhSo(b.doanhSo)
             if (typeof cfg === 'string' || !cfg) { res.status(400).json({ success: false, error: cfg || 'Tin có {doanhSo} — chọn nhóm hàng và kỳ doanh số' }); return }
-            const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, nhom.map(n => n.customerId).filter(Boolean))
+            const { theoKhach, nhomHang } = await tinhDoanhSo(sp, cfg, gop.map(c => c.id), gop)
             cfgDs = { ...cfg, nhomHang }
             guiToi = []
             for (const gid of ids) {
                 const kid = theoNhom.get(gid)?.customerId
                 if (!kid) { boChuaNoi++; continue }
-                const s = theoKhach.get(kid)
+                const s = theoKhach.get(gid)
                 if (cfg.chiKhachCoDoanhSo && !(s && s.tien > 0)) { boKhongMua++; continue }
                 bienTheoNhom.set(gid, bienDoanhSo(s, cfg, nhomHang))
                 guiToi.push(gid)
@@ -803,14 +875,16 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         // Công nợ {congNo} {ngayChot} (26/10/2026): số dư CHỐT lúc tạo đợt, nhóm chưa nối khách bị bỏ.
         if (dungBienCongNo(noiDung)) {
             const luc = new Date()
-            const kIds = [...new Set<string>(guiToi.map(g => theoNhom.get(g)?.customerId).filter(Boolean))]
+            const kIds = [...new Set<string>(guiToi.flatMap(g => thanhVien(g)))]
             const khs: any[] = kIds.length ? await sp.customer.findMany({ where: { id: { in: kIds } }, select: { id: true, debt: true } }) : []
             const noTheoKhach = new Map<string, number>(khs.map(k => [k.id, Number(k.debt) || 0]))
             const conLai: string[] = []
             for (const gid of guiToi) {
                 const kid = theoNhom.get(gid)?.customerId
                 if (!kid || !noTheoKhach.has(kid)) { boChuaNoi++; continue }
-                bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bienCongNo(noTheoKhach.get(kid)!, luc) })
+                // Nợ của nhóm = cộng mọi mã còn trên Kengi
+                const no = thanhVien(gid).reduce((s, id) => s + (noTheoKhach.get(id) || 0), 0)
+                bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bienCongNo(no, luc) })
                 conLai.push(gid)
             }
             guiToi = conLai
@@ -821,13 +895,14 @@ router.post('/dot-gui', authMiddleware, requirePermission('customers.create'), c
         let thieuNoDau = 0
         if (dungBienHomNay(noiDung)) {
             const luc = new Date()
-            const kIds = [...new Set<string>(guiToi.map(g => theoNhom.get(g)?.customerId).filter(Boolean))]
+            const kIds = [...new Set<string>(guiToi.flatMap(g => thanhVien(g)))]
             const khs: any[] = kIds.length ? await sp.customer.findMany({ where: { id: { in: kIds } }, select: { id: true, debt: true } }) : []
-            const { theoKhach } = await soNgayCuaKhach(sp, khs, luc)
+            const trongDot = new Set(guiToi)
+            const { theoKhach } = await soNgayCuaKhach(sp, khs, luc, gop.filter(c => trongDot.has(c.key)))
             const conLai: string[] = []
             for (const gid of guiToi) {
                 const kid = theoNhom.get(gid)?.customerId
-                const s = kid ? theoKhach.get(kid) : undefined
+                const s = kid ? theoKhach.get(gid) : undefined
                 if (!s) { boChuaNoi++; continue }
                 if (canNoDauNgay(noiDung) && s.noDau === null) thieuNoDau++
                 bienTheoNhom.set(gid, { ...(bienTheoNhom.get(gid) || {}), ...bienHomNay(s, luc) })
@@ -981,7 +1056,7 @@ router.post('/lich-gui/xem', authMiddleware, requirePermission('customers.create
                 soNhom: soan.dong.length, boChuaNoi: soan.boChuaNoi, boKhongNo: soan.boKhongNo, boKhongMua: soan.boKhongMua,
                 boKhongGiaoDich: soan.boKhongGiaoDich, boKhongDenLuot: soan.boKhongDenLuot, thieuNoDau: soan.thieuNoDau, moTaBo: moTaBo(soan),
                 tongNo: soan.dong.reduce((a, x) => a + (x.no && x.no > 0 ? x.no : 0), 0),
-                ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, no: x.no, bien: x.bien })),
+                ds: soan.dong.slice(0, 500).map(x => ({ groupId: x.groupId, tenNhom: x.tenNhom, maKhach: x.maKhach, tenKhach: x.tenKhach, soMaThem: x.soMaThem || 0, no: x.no, bien: x.bien })),
                 tinMau: tinMau(d.noiDung, soan.dong[0]), nhomMau: soan.dong[0]?.tenNhom || null,
                 lanToi: lanDau(d.tanSuat, d.batDauTu, luc).toISOString(), moTa: moTaTanSuat(d.tanSuat),
                 noTuoi, kenh: kenh?.loai || null, tamDung, doanhSo: soan.doanhSo,

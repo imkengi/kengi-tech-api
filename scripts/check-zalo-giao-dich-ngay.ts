@@ -179,7 +179,8 @@ async function main() {
         const route = doc('routes', 'zalo.ts')
         const lib = doc('lib', 'zaloGiaoDichNgay.ts')
         ok('6a. nhipGuiZalo chụp nợ đầu ngày mỗi nhịp', /chupNoDauNgay\(sp\)/.test(gui))
-        ok('6b. /gui-thu + /dot-gui điền biến hôm nay', (route.match(/dungBienHomNay\(/g) || []).length >= 2 && /bienHomNay\(theoKhach\.get\(kh\.id\)!, luc\)/.test(route) && /\.\.\.bienHomNay\(s, luc\)/.test(route))
+        // 29/10/2026: số tra theo groupId (nhóm nối nhiều mã, lib/zaloNhomKhach.ts) — gửi thử lấy theoKhach.get(gid)
+        ok('6b. /gui-thu + /dot-gui điền biến hôm nay', (route.match(/dungBienHomNay\(/g) || []).length >= 2 && /bienHomNay\(theoKhach\.get\(gid\)!, luc\)/.test(route) && /\.\.\.bienHomNay\(s, luc\)/.test(route))
         ok('6c. /dot-gui kiểm số dư còn mới khi có {congNo} / {noDauNgay}', /\(dungBienCongNo\(noiDung\) \|\| canNoDauNgay\(noiDung\)\) && b\.boQuaKiemTraNo !== true/.test(route))
         ok('6d. /dot-gui: thiếu số nợ 0 giờ ⇒ đếm thieuNoDau, không bỏ khách', /if \(canNoDauNgay\(noiDung\) && s\.noDau === null\) thieuNoDau\+\+/.test(route) && !/LY_DO_BO|boHomNay/.test(route))
         ok('6e. Tiền đã thu MỖI đơn = max(amountReceived − change, Σ Payment khác credit), chỉ đơn completed + partial',

@@ -27,6 +27,9 @@
  *  - Không nhóm nào cần gửi (vd không ai còn nợ) ⇒ không tạo đợt rỗng.
  *
  * Bảng ZaloLichGui tạo lười (cùng nếp lib/zaloKengi.ts) — KHÔNG thêm model Prisma.
+ *
+ * NHÓM NỐI NHIỀU MÃ KHÁCH (29/10/2026, lib/zaloNhomKhach.ts): số của nhóm = cộng các mã — {congNo} = Σ nợ, mua / đã trả hôm
+ * nay, doanh số, thói quen mua đều gộp qua cặp `CapGop` (khoá = groupId); {tenKhach} {maKhach} vẫn của mã chính.
  */
 
 import crypto from 'crypto'
@@ -39,6 +42,7 @@ import {
     docGioiThieu, dungBienGioiThieu, ungVienGioiThieu, chonSanPhamLuotNay, thuTuSapToi, bienGioiThieu, anhGioiThieu, ghiDaGioiThieu,
     type GioiThieuSp, type DaGioiThieu, type SanPhamGioiThieu, type CachChon,
 } from './zaloGioiThieuSp'
+import { docKhachThem, capGopTheoNhom, khachCuaNhom } from './zaloNhomKhach'
 
 const BANG = '"ZaloLichGui"'
 const LECH_VN_MS = 7 * 3600_000          // Việt Nam UTC+7, không đổi giờ
@@ -210,7 +214,12 @@ export async function kiemSoNoTuoi(sp: any, bayGio = new Date()): Promise<{ ok: 
     return { ok: true, lyDo: null }
 }
 
-export interface DongGui { groupId: string; customerId: string | null; tenNhom: string | null; maKhach: string | null; tenKhach: string | null; bien: Record<string, string> | null; no: number | null }
+export interface DongGui {
+    groupId: string; customerId: string | null; tenNhom: string | null; maKhach: string | null; tenKhach: string | null
+    bien: Record<string, string> | null; no: number | null
+    /** Số mã THÊM của nhóm (nhóm nối nhiều mã, lib/zaloNhomKhach.ts) — số trong tin đã gộp cả các mã này */
+    soMaThem?: number
+}
 export interface KetQuaSoan {
     dong: DongGui[]
     boChuaNoi: number      // nhóm chưa nối khách mà tin cần số của khách
@@ -275,7 +284,10 @@ export async function soanNguoiNhan(
         const tenQuet = new Map(quet.map(q => [q.groupId, q.tenNhom]))
         for (const g of lich.doiTuong.groupIds) if (!coSan.has(g)) nhom.push({ groupId: g, customerId: null, tenNhom: tenQuet.get(g) || null })
     }
-    const ids = [...new Set<string>(nhom.map(n => n.customerId).filter(Boolean))]
+    // Nhóm nối nhiều mã (lib/zaloNhomKhach.ts): số của nhóm = cộng các mã ⇒ các lib tính số nhận cặp gộp, tra theo groupId
+    const them = await docKhachThem(sp, nhom.map(n => String(n.groupId)))
+    const gop = capGopTheoNhom(nhom, them)
+    const ids = [...new Set<string>(gop.map(c => c.id))]
     const khach: any[] = ids.length ? await sp.customer.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, debt: true } }) : []
     const theoId = new Map(khach.map(k => [k.id, k]))
 
@@ -284,22 +296,24 @@ export async function soanNguoiNhan(
     if (canDoanhSo && lich.doanhSo) {
         const { tu, den } = kyTuongDoi(lich.doanhSo.ky, luc)
         cfgDs = { categoryIds: lich.doanhSo.categoryIds, tu, den, chiKhachCoDoanhSo: lich.doanhSo.chiKhachCoDoanhSo }
-        ds = await tinhDoanhSo(sp, cfgDs, ids)
+        ds = await tinhDoanhSo(sp, cfgDs, ids, gop)
     }
     // Mua / trả trong ngày (lib/zaloGiaoDichNgay.ts) — cần cho biến hôm nay và cho bộ lọc "có giao dịch"
-    const ngay = canHomNay || locGiaoDich ? await soNgayCuaKhach(sp, khach.map(k => ({ id: k.id, debt: k.debt })), luc) : null
+    const ngay = canHomNay || locGiaoDich ? await soNgayCuaKhach(sp, khach.map(k => ({ id: k.id, debt: k.debt })), luc, gop) : null
     // Thứ hay mua + món lâu chưa mua (lib/zaloNhacMuaLai.ts) — cần cho biến nhắc mua lại và bộ lọc "mai là ngày hay mua"
-    const thoiQuen = canNhac || locMaiHayMua ? await thoiQuenMuaCuaKhach(sp, khach.map(k => k.id), { luc, categoryIds: lich.doiTuong.nhomHangGoiY || [] }) : null
+    const thoiQuen = canNhac || locMaiHayMua ? await thoiQuenMuaCuaKhach(sp, ids, { luc, categoryIds: lich.doiTuong.nhomHangGoiY || [], gop }) : null
 
     const dong: DongGui[] = []
     for (const n of nhom) {
         const k = n.customerId ? theoId.get(n.customerId) : null
         if (canKhach && !k) { boChuaNoi++; continue }
-        const no = k ? Number(k.debt) || 0 : null
+        // Mọi mã của nhóm còn trên Kengi (mã chính + mã thêm): nợ cộng dồn; số mua / thói quen đã gộp sẵn theo groupId
+        const thanhVien: any[] = khachCuaNhom(n.customerId, them.get(String(n.groupId))).map(id => theoId.get(id)).filter(Boolean)
+        const no = k ? thanhVien.reduce((s, x) => s + (Number(x.debt) || 0), 0) : null
         if (lich.doiTuong.chiKhachCoNo && !(no !== null && no > 0 && no >= lich.doiTuong.noToiThieu)) { boKhongNo++; continue }
-        const sn = k && ngay ? ngay.theoKhach.get(k.id) : undefined
+        const sn = k && ngay ? ngay.theoKhach.get(String(n.groupId)) : undefined
         if (locGiaoDich && !(sn && (sn.mua > 0 || sn.daTra > 0))) { boKhongGiaoDich++; continue }
-        const tq = k && thoiQuen ? thoiQuen.get(k.id) : undefined
+        const tq = k && thoiQuen ? thoiQuen.get(String(n.groupId)) : undefined
         if (locMaiHayMua && !(maiLaNgayHayMua(tq, luc) && tq!.mon.length)) { boKhongDenLuot++; continue }
         let bien: Record<string, string> = { ...bienSp }
         if (canCongNo && no !== null) bien = { ...bien, ...bienCongNo(no, luc) }
@@ -310,13 +324,14 @@ export async function soanNguoiNhan(
             bien = { ...bien, ...bienHomNay(sn, luc) }
         }
         if (ds && cfgDs && k) {
-            const s = ds.theoKhach.get(k.id)
+            const s = ds.theoKhach.get(String(n.groupId))
             if (cfgDs.chiKhachCoDoanhSo && !(s && s.tien > 0)) { boKhongMua++; continue }
             bien = { ...bien, ...bienDoanhSo(s, cfgDs, ds.nhomHang) }
         }
         dong.push({
             groupId: n.groupId, customerId: k?.id || null, tenNhom: n.tenNhom || null,
             maKhach: k?.code || null, tenKhach: k?.name || null, bien: Object.keys(bien).length ? bien : null, no,
+            soMaThem: Math.max(0, thanhVien.length - 1),
         })
     }
     return { dong, boChuaNoi, boKhongNo, boKhongMua, boKhongGiaoDich, boKhongDenLuot, thieuNoDau, doanhSo: cfgDs && ds ? { ...cfgDs, nhomHang: ds.nhomHang } : null, gioiThieu }

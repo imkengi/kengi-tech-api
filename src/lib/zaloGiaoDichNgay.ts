@@ -29,6 +29,7 @@
 
 import { dinhTien } from './zaloDoanhSo'
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
+import { bangGop, sqlKhachDangNoi, type CapGop } from './zaloNhomKhach'
 
 const BANG = '"NoKhachDauNgay"'
 const LECH_VN_MS = 7 * 3600_000
@@ -102,10 +103,12 @@ export async function chupNoDauNgay(sp: any, luc = new Date()): Promise<string> 
         `INSERT INTO ${BANG} ("ngay", "customerId", "debt", "chupLuc") VALUES ($1, '${MOC_XONG}', 0, now()) ON CONFLICT DO NOTHING`, ngay)
     daChup.set(schema, ngay)
     if (!Number(n)) return ''
+    // Mã chính + mã thêm (nhóm nối nhiều mã, lib/zaloNhomKhach.ts) — thiếu một mã là nhóm đó không có {noDauNgay}
+    const khachNoi = await sqlKhachDangNoi(sp)
     const soKhach = await sp.$executeRawUnsafe(
         `INSERT INTO ${BANG} ("ngay", "customerId", "debt", "chupLuc")
          SELECT $1, c."id", COALESCE(c."debt", 0), now() FROM "Customer" c
-          WHERE c."id" IN (SELECT "customerId" FROM "ZaloNhom" WHERE "customerId" IS NOT NULL)
+          WHERE c."id" IN (${khachNoi})
          ON CONFLICT DO NOTHING`, ngay)
     await sp.$executeRawUnsafe(`DELETE FROM ${BANG} WHERE "ngay" < $1`, ngayVN(new Date(luc.getTime() - GIU_NGAY * 86_400_000)))
     return `chup ${Number(soKhach) || 0}`
@@ -123,9 +126,10 @@ export interface SoNgay {
  * Mua / trả trong ngày VN của `luc` cho từng khách. `khach` mang số dư HIỆN TẠI (Customer.debt).
  * Mua = Σ tổng hoá đơn (completed + partial — ghi nợ vẫn là mua) có ngày bán từ 0 giờ VN tới `luc`; đã trả xem đầu file.
  */
-export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: number | null }>, luc: Date): Promise<{ theoKhach: Map<string, SoNgay>; chupLuc: Date | null; chupTre: boolean }> {
+export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: number | null }>, luc: Date, gop?: CapGop[]): Promise<{ theoKhach: Map<string, SoNgay>; chupLuc: Date | null; chupTre: boolean }> {
     const theoKhach = new Map<string, SoNgay>()
-    const ids = [...new Set(khach.map(k => k.id).filter(Boolean))]
+    const g = bangGop(gop)   // nhóm nối nhiều mã: số của các mã cộng về khoá (groupId) — lib/zaloNhomKhach.ts
+    const ids = [...new Set([...khach.map(k => k.id), ...g.ids].filter(Boolean))]
     if (!ids.length) return { theoKhach, chupLuc: null, chupTre: false }
     const tu = dauNgayVN(luc)
     const HOM_NAY = `t."customerId" = ANY($1::text[]) AND t."status" = ANY($2::text[])
@@ -162,13 +166,19 @@ export async function soNgayCuaKhach(sp: any, khach: Array<{ id: string; debt: n
         }
     }
     const chupTre = !!chupLuc && new Date(chupLuc.getTime() + LECH_VN_MS).getUTCHours() >= CHUP_TRE_NHAT_GIO
-    for (const k of khach) {
-        const m = muaTheo.get(k.id) || { tien: 0, don: 0, thu: 0 }
-        const dau = chupTre ? undefined : noDau.get(k.id)
-        theoKhach.set(k.id, {
-            mua: Math.round(m.tien), soDon: m.don, noNay: Number(k.debt) || 0,
-            daTra: Math.max(0, Math.round(m.thu + (phieuTheo.get(k.id) || 0))), noDau: dau ?? null,
-        })
+    const noTheoId = new Map<string, number>(khach.map(k => [k.id, Number(k.debt) || 0] as [string, number]))
+    // Cộng về khoá (nhóm nối nhiều mã): mua / đã trả / nợ cộng dồn; nợ đầu ngày chỉ có khi ĐỦ mọi mã có ảnh chụp (thiếu ≠ 0)
+    const cacKhoa = g.coGop ? g.khoa : khach.map(k => k.id)
+    for (const key of cacKhoa) {
+        let tien = 0, don = 0, thu = 0, phieu = 0, no = 0, dau = 0, thieuDau = false
+        for (const id of g.idsCua(key)) {
+            const m = muaTheo.get(id) || { tien: 0, don: 0, thu: 0 }
+            tien += m.tien; don += m.don; thu += m.thu; phieu += phieuTheo.get(id) || 0
+            no += noTheoId.get(id) || 0
+            const d = chupTre ? undefined : noDau.get(id)
+            if (d === undefined) thieuDau = true; else dau += d
+        }
+        theoKhach.set(key, { mua: Math.round(tien), soDon: don, noNay: no, daTra: Math.max(0, Math.round(thu + phieu)), noDau: thieuDau ? null : dau })
     }
     return { theoKhach, chupLuc, chupTre }
 }

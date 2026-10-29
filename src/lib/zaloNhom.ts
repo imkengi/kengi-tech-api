@@ -19,6 +19,7 @@
  */
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'
+import { docKhachThem, khachCuaNhom } from './zaloNhomKhach'
 
 export interface DongNhomZalo {
     maKhach: string
@@ -227,9 +228,11 @@ export async function dsYeuCauHoaDon(sp: any, ymd: string) {
     })
     const theoKhach = new Map<string, any[]>()
     const chuaNoi: any[] = []
+    // Nhóm nối nhiều mã (lib/zaloNhomKhach.ts): một tin /hoadon = yêu cầu cho phiếu của MỌI mã trong nhóm
+    const them = await docKhachThem(sp, [...new Set<string>(tin.map((t: any) => String(t.groupId)))])
     for (const t of tin) {
         if (!t.customerId) { chuaNoi.push({ groupId: t.groupId, thoiDiem: t.thoiDiem, nguoiGui: t.nguoiGui, noiDung: t.noiDung }); continue }
-        theoKhach.set(t.customerId, [...(theoKhach.get(t.customerId) || []), t])
+        for (const id of khachCuaNhom(t.customerId, them.get(String(t.groupId)))) theoKhach.set(id, [...(theoKhach.get(id) || []), t])
     }
     const khachHang: any[] = []
     for (const [customerId, ds] of theoKhach) {
@@ -280,6 +283,17 @@ export async function danhDauLayHoaDon(sp: any, customerId: string, ymd: string)
     return { ngay: ymd, daBat: r.count, tongPhieu }
 }
 
+/** Như trên cho CẢ NHÓM: nhóm nối nhiều mã thì bật cho phiếu của mọi mã (lib/zaloNhomKhach.ts). `customerId` = mã chính của nhóm. */
+export async function danhDauLayHoaDonNhom(sp: any, groupId: string, customerId: string, ymd: string): Promise<{ ngay: string; daBat: number; tongPhieu: number; soMa: number }> {
+    const ids = khachCuaNhom(customerId, (await docKhachThem(sp, [groupId])).get(String(groupId)))
+    let daBat = 0, tongPhieu = 0
+    for (const id of ids) {
+        const r = await danhDauLayHoaDon(sp, id, ymd)
+        daBat += r.daBat; tongPhieu += r.tongPhieu
+    }
+    return { ngay: ymd, daBat, tongPhieu, soMa: ids.length }
+}
+
 /**
  * Quét lại yêu cầu /hoadon của HÔM NAY và HÔM QUA (giờ VN) — bắt phiếu tạo sau tin nhắn.
  * Một khách một ngày chỉ làm một lần. Bảng ZaloTin chưa có (cửa hàng chưa migrate) ⇒ bỏ qua.
@@ -290,12 +304,15 @@ export async function apYeuCauHoaDonGanDay(sp: any): Promise<{ soKhachNgay: numb
     const tu = khoangNgayVN(homQua).tu
     const tin: any[] = await sp.zaloTin.findMany({
         where: { yeuCauHoaDon: true, customerId: { not: null }, thoiDiem: { gte: tu } },
-        select: { customerId: true, thoiDiem: true },
+        select: { customerId: true, groupId: true, thoiDiem: true },
     }).catch((e: any) => { if (/ZaloTin|does not exist/i.test(String(e?.message))) return []; throw e })
+    // Nhóm nối nhiều mã (lib/zaloNhomKhach.ts): bật cho phiếu của MỌI mã trong nhóm
+    const them = tin.length ? await docKhachThem(sp, [...new Set<string>(tin.map(t => String(t.groupId)))]) : new Map<string, string[]>()
     const cap = new Set<string>()
     for (const t of tin) {
         const ngay = ngayVN(new Date(t.thoiDiem))
-        if (ngay === homNay || ngay === homQua) cap.add(`${t.customerId}|${ngay}`)
+        if (ngay !== homNay && ngay !== homQua) continue
+        for (const id of khachCuaNhom(t.customerId, them.get(String(t.groupId)))) cap.add(`${id}|${ngay}`)
     }
     let daBat = 0
     for (const k of cap) {
