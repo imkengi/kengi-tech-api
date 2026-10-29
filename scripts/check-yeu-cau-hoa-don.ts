@@ -5,7 +5,7 @@
  * chặn trước khi hỏi CSDL; thông tin HĐ thiếu / sai bị từ chối với câu nói rõ; ghi đúng khoá đường xuất HĐ đang đọc
  * (name/taxCode/address/email/nationalId); trạng thái đơn nói đúng với khách; che MST / email khi nhắc lại.
  */
-import { ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau } from '../src/lib/yeuCauHoaDon'
+import { ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau, donTuPhieu, maPhieuUngVien } from '../src/lib/yeuCauHoaDon'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet?: unknown) => {
@@ -61,6 +61,27 @@ dung('đang giao', trangThaiDonKhach({ status: 'shipping' }, true) === 'dang_gia
 dung('che MST / email', cheMst('0312345678') === '***678' && cheEmail('ketoan@kengi.vn') === 'k***@kengi.vn' && cheMst('') === '' && cheEmail('xx') === '')
 dung('ngày giờ VN', ngayVN('2026-10-19T17:30:00Z') === '20/10/2026' && ngayVN(null) === '' && ngayVN('rác') === '')
 dung('cửa hàng mặc định KENGISTORE; danh sách lạ bị lọc', bang(cuaHangNhanYeuCau(undefined), ['KENGISTORE']) && bang(cuaHangNhanYeuCau(' huti , x;y ,KENGISTORE'), ['HUTI', 'KENGISTORE']) && bang(cuaHangNhanYeuCau(''), ['KENGISTORE']))
+
+
+// 5. đơn đã bị cron dọn xoá ⇒ dựng lại từ phiếu bán (29/10/2026: khách tra mã đơn tháng 8 bị "không tìm thấy" dù HĐ đã xuất)
+const phieu = {
+    receiptNumber: 'ONLINE-SPE-2608010000TEST', status: 'completed', total: 92000, createdAt: '2026-07-31T10:12:54Z',
+    transactionDate: '2026-07-31T10:05:18Z', notes: 'Đơn online shopee - SPE-2608010000TEST',
+    items: [{ productName: 'Món A', quantity: 1, unitPrice: 92000, lineTotal: 92000 }],
+}
+const dp = donTuPhieu(phieu, 'Kengi Store')
+dung('phiếu completed ⇒ đã giao; mã bỏ ONLINE-; gian hàng; sàn theo ghi chú; ngày đặt = transactionDate; không có ngày giao',
+    dp.tuPhieu && dp.orderNumber === 'SPE-2608010000TEST' && trangThaiDonKhach(dp, true) === 'da_giao' && dp.channelName === 'Kengi Store'
+    && dp.platform === 'shopee' && dp.total === 92000 && ngayVN(dp.createdAt) === '31/07/2026' && dp.deliveredAt === null
+    && dp.items.length === 1 && dp.items[0].productName === 'Món A' && dp.items[0].lineTotal === 92000, dp)
+dung('phiếu voided (đảo do huỷ / hoàn / giao thất bại) ⇒ đã huỷ', trangThaiDonKhach(donTuPhieu({ ...phieu, status: 'voided' }), true) === 'da_huy')
+dung('phiếu returned / có returnedAt ⇒ trả hàng',
+    trangThaiDonKhach(donTuPhieu({ ...phieu, status: 'returned' }), true) === 'tra_hang'
+    && trangThaiDonKhach(donTuPhieu({ ...phieu, returnedAt: '2026-08-10T00:00:00Z' }), true) === 'tra_hang')
+const dt = donTuPhieu({ receiptNumber: 'ONLINE-TIK-586612345678901234', status: 'completed', createdAt: '2026-08-01T00:00:00Z' })
+dung('không ghi chú ⇒ sàn theo tiền tố; thiếu transactionDate ⇒ createdAt; không dòng hàng; không gian hàng',
+    dt.platform === 'tiktok' && ngayVN(dt.createdAt) === '01/08/2026' && dt.items.length === 0 && dt.channelName === null && dt.total === 0, dt)
+dung('mã phiếu ứng viên = ONLINE- + từng mã đơn', bang(maPhieuUngVien(['SPE-X', 'TIK-X']), ['ONLINE-SPE-X', 'ONLINE-TIK-X']))
 
 console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
 process.exit(loi ? 1 : 0)

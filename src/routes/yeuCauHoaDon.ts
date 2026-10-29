@@ -22,6 +22,7 @@ import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { traMst, LoiTraMst } from '../lib/traMst'
 import {
     ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau, KENH_THEO_TIEN_TO,
+    donTuPhieu, maPhieuUngVien,
 } from '../lib/yeuCauHoaDon'
 
 const router = Router()
@@ -71,17 +72,35 @@ async function docCuaHang(): Promise<CuaHang[]> {
 /** Tìm đơn theo mã khách nhập trong các cửa hàng nhận yêu cầu — đơn sàn + phiếu bán + hoá đơn đã xuất (nếu có). */
 async function timDon(ungVien: string[]) {
     for (const ch of await moCuaHang()) {
-        const o = await ch.prisma.onlineOrder.findFirst({
+        let o: any = await ch.prisma.onlineOrder.findFirst({
             where: { orderNumber: { in: ungVien } },
             select: {
                 orderNumber: true, platform: true, channelName: true, status: true, total: true, createdAt: true, deliveredAt: true,
                 items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true } },
             },
         })
-        if (!o) continue
-        const tx = await ch.prisma.transaction.findFirst({
-            where: { receiptNumber: `ONLINE-${o.orderNumber}` }, select: { id: true, vatBuyerInfo: true },
-        })
+        let tx: any = null
+        if (o) {
+            tx = await ch.prisma.transaction.findFirst({
+                where: { receiptNumber: `ONLINE-${o.orderNumber}` }, select: { id: true, vatBuyerInfo: true },
+            })
+        } else {
+            /* ĐƠN ĐÃ BỊ CRON DỌN XOÁ (cron/autoSync runCleanup: đơn kết thúc quá 18 ngày, chỉ xoá khi đã có phiếu) ⇒ dựng
+             * lại từ PHIẾU BÁN. 29/10/2026: khách tra mã đơn tháng 8 bị "không tìm thấy" dù HĐĐT đã xuất từ đầu tháng 8 —
+             * đo KENGISTORE, phiếu ONLINE- trước tháng 10 mất đơn gốc ~99% (tháng 8: 4.003/4.009, 3.234 phiếu đã có HĐĐT).
+             * Phiếu là sổ gốc, đơn chỉ là bản sao: phiếu còn thì khách vẫn tra / tải HĐ / gửi MST được (lib donTuPhieu). */
+            const p = await ch.prisma.transaction.findFirst({
+                where: { receiptNumber: { in: maPhieuUngVien(ungVien) } },
+                select: {
+                    id: true, receiptNumber: true, status: true, total: true, createdAt: true, transactionDate: true, returnedAt: true,
+                    notes: true, vatBuyerInfo: true,
+                    items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true } },
+                },
+            })
+            if (!p) continue
+            tx = { id: p.id, vatBuyerInfo: p.vatBuyerInfo }
+            o = donTuPhieu(p, await tenGianHangDonDaXoa(ch.prisma, p.receiptNumber))
+        }
         // Chỉ HĐ BÁN / THAY THẾ — HĐ điều chỉnh (trả hàng) cùng phiếu thì không phải tờ khách cần, tải theo Fkey cũng lệch số
         const hd = tx ? await ch.prisma.eInvoice.findFirst({
             where: { transactionId: tx.id, status: { in: TRANG_THAI_HD_DA_XUAT }, invoiceType: { in: ['SALE', 'REPLACEMENT'] } },
@@ -94,6 +113,21 @@ async function timDon(ungVien: string[]) {
         return { ch, o, tx, hd }
     }
     return null
+}
+
+/** Tên gian hàng ("Kengi Store" / "Kengi Tools") của đơn đã bị dọn: còn dấu ở PhiSanDon.kenhId (chép trước khi xoá, từ
+ *  21/10/2026 — lib/phiSanGiuLai). Cửa hàng chưa có bảng / đơn dọn trước mốc đó ⇒ null, trang khách dùng tên cửa hàng. */
+async function tenGianHangDonDaXoa(prisma: any, receiptNumber: string): Promise<string | null> {
+    try {
+        const ma = String(receiptNumber).replace(/^ONLINE-/, '')
+        const r: any[] = await prisma.$queryRawUnsafe('SELECT "kenhId" FROM "PhiSanDon" WHERE "orderNumber" = $1 LIMIT 1', ma)
+        const kenhId = r?.[0]?.kenhId
+        if (!kenhId) return null
+        const k = await prisma.onlineChannel.findUnique({ where: { id: String(kenhId) }, select: { name: true } })
+        return k?.name || null
+    } catch {
+        return null
+    }
 }
 
 function docThongTin(s: string | null | undefined): any {

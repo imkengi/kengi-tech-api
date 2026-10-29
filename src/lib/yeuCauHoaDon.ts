@@ -120,3 +120,64 @@ export function ngayVN(d: any): string {
     if (isNaN(t.getTime())) return ''
     return new Date(t.getTime() + 7 * 3600_000).toISOString().slice(0, 10).split('-').reverse().join('/')
 }
+
+/** Mã phiếu bán của từng mã đơn ứng viên — cùng luật orderSync / lib/donDuocXoa (`ONLINE-<orderNumber>`). */
+export const maPhieuUngVien = (ungVien: string[]): string[] => ungVien.map(m => `ONLINE-${m}`)
+
+/** Phần phiếu bán (Transaction + dòng hàng) đủ để dựng lại tóm tắt đơn cho khách. */
+export interface PhieuBanDonSan {
+    receiptNumber: string
+    status?: string | null
+    total?: number | null
+    createdAt?: any
+    transactionDate?: any
+    returnedAt?: any
+    notes?: string | null
+    items?: Array<{ productName?: string | null; quantity?: number | null; unitPrice?: number | null; lineTotal?: number | null }> | null
+}
+
+/** Đơn như route đọc từ OnlineOrder (cùng các cột select) — dựng được từ phiếu khi bản ghi đơn không còn. */
+export interface DonKhach {
+    orderNumber: string
+    platform: string | null
+    channelName: string | null
+    status: string
+    total: number
+    createdAt: any
+    deliveredAt: any
+    items: Array<{ productName: string; quantity: number; unitPrice: number; lineTotal: number }>
+    /** true = dựng từ phiếu bán vì bản ghi đơn sàn đã bị dọn */
+    tuPhieu: boolean
+}
+
+/**
+ * DỰNG LẠI ĐƠN TỪ PHIẾU BÁN khi bản ghi OnlineOrder đã bị cron dọn xoá (cron/autoSync runCleanup: đơn kết thúc quá
+ * 18 ngày, chỉ xoá khi đã có phiếu — phiếu là sổ gốc, đơn chỉ còn là bản sao). Đo 29/10/2026 KENGISTORE: phiếu
+ * ONLINE- trước tháng 10 mất đơn gốc ~99% (tháng 8: 4.003/4.009, trong đó 3.234 phiếu đã xuất HĐĐT) ⇒ khách tra mã
+ * đơn cũ hơn ~18 ngày đều bị "không tìm thấy" dù hoá đơn có thật. Phiếu còn thì vẫn tra / tải HĐ / gửi MST được.
+ *
+ * Trạng thái: cron chỉ xoá đơn đã kết thúc, nên phiếu `completed` ⇒ đã giao; `voided` (đảo do huỷ / hoàn / giao
+ * thất bại — xem services/suaPhieuDonDaXoa) ⇒ đã huỷ; `returned` / có returnedAt ⇒ trả hàng. Ngày giao không còn ⇒
+ * để trống (trang khách tự ẩn). Sàn lấy từ ghi chú phiếu "Đơn online shopee - …" (orderSync), không có thì theo tiền tố.
+ */
+export function donTuPhieu(p: PhieuBanDonSan, channelName?: string | null): DonKhach {
+    const orderNumber = String(p.receiptNumber || '').replace(/^ONLINE-/, '')
+    const st = String(p.status || '').toLowerCase()
+    const status = p.returnedAt || /return|hoan/.test(st) ? 'returned' : /void|cancel|huy/.test(st) ? 'cancelled' : 'completed'
+    const ghiChu = /^Đơn online\s+(\S+)/i.exec(String(p.notes || ''))
+    const platform = ghiChu ? ghiChu[1].toLowerCase() : (KENH_THEO_TIEN_TO[orderNumber.split('-')[0]] || '').toLowerCase() || null
+    return {
+        orderNumber,
+        platform,
+        channelName: channelName || null,
+        status,
+        total: Number(p.total) || 0,
+        createdAt: p.transactionDate || p.createdAt || null,
+        deliveredAt: null,
+        items: (p.items || []).map(i => ({
+            productName: String(i.productName || ''), quantity: Number(i.quantity) || 0,
+            unitPrice: Number(i.unitPrice) || 0, lineTotal: Number(i.lineTotal) || 0,
+        })),
+        tuPhieu: true,
+    }
+}
