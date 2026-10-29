@@ -384,8 +384,17 @@ async function main() {
         ok('11b. Chưa cấp mã ⇒ không gửi, KHÔNG bỏ hẳn (lượt sau thử lại)', !k.guiDuoc && !k.vinhVien && String(k.lyDo).includes('cấp mã'), k)
         k = ketLuanTrangThai(st({ IsDelete: true, DeletedReason: 'Lập sai' }), true)
         ok('11c. Bị xoá ⇒ bỏ hẳn, nói lý do MISA', !k.guiDuoc && k.vinhVien && String(k.lyDo).includes('Lập sai'), k)
+        // Bảng mã MISA (đọc lại 29/10/2026 — chủ shop gặp HĐ "= 3" bị chặn oan): 1 gốc · 2 huỷ · 3 THAY THẾ · 5 ĐIỀU CHỈNH; bị thay thế = RefInvoiceStatus 3
         k = ketLuanTrangThai(st({ EInvoiceStatus: 3 }), true)
-        ok('11d. EInvoiceStatus ≠ 1 (thay thế / điều chỉnh) ⇒ bỏ hẳn', !k.guiDuoc && k.vinhVien, k)
+        ok('11d. EInvoiceStatus 3 = hoá đơn THAY THẾ (hợp lệ) ⇒ GỬI, kèm ghi chú', k.guiDuoc && k.ghiChu === 'hoá đơn thay thế', k)
+        ok('11d1. EInvoiceStatus 5 = hoá đơn điều chỉnh ⇒ gửi; bị điều chỉnh (RefInvoiceStatus 5) vẫn còn hiệu lực ⇒ gửi',
+            ketLuanTrangThai(st({ EInvoiceStatus: 5 }), true).guiDuoc && ketLuanTrangThai(st({ RefInvoiceStatus: 5 }), true).guiDuoc)
+        k = ketLuanTrangThai(st({ EInvoiceStatus: 2 }), true)
+        ok('11d2. EInvoiceStatus 2 = bị huỷ ⇒ bỏ hẳn', !k.guiDuoc && k.vinhVien && String(k.lyDo).includes('huỷ'), k)
+        k = ketLuanTrangThai(st({ RefInvoiceStatus: 3 }), true)
+        ok('11d3. BỊ thay thế (RefInvoiceStatus 3) ⇒ bỏ hẳn (khách nhận hoá đơn thay thế)', !k.guiDuoc && k.vinhVien && String(k.lyDo).includes('thay thế'), k)
+        ok('11d4. Thuế không chấp nhận (SendTaxStatus 3 / 4) ⇒ bỏ hẳn, kể cả hoá đơn không mã',
+            ketLuanTrangThai(st({ SendTaxStatus: 4 }), true).vinhVien && ketLuanTrangThai(st({ SendTaxStatus: 3 }), false).vinhVien)
         k = ketLuanTrangThai(undefined, true)
         ok('11e. MISA không trả trạng thái ⇒ không gửi, thử lại sau (không đoán là được)', !k.guiDuoc && !k.vinhVien, k)
         ok('11f. CQT từ chối cấp mã ⇒ bỏ hẳn', ketLuanTrangThai(st({ SendTaxStatus: 3 }), true).vinhVien)
@@ -450,6 +459,12 @@ async function main() {
             },
             async $queryRawUnsafe(sql: string, ...p: any[]) {
                 const s = sql.replace(/\s+/g, ' ').trim()
+                if (s.startsWith('INSERT INTO "MeInvoiceDaGui"') && s.includes('RETURNING "token"') && !s.includes('WHERE')) {   // giành ÉP (gửi tay)
+                    const [ma, token, , , , , , customerId, maKhach, mtt, nguoi, luc] = p
+                    const c = so2.get(ma)
+                    if (!c) { so2.set(ma, { maTraCuu: ma, token, customerId, maKhach, mtt, trangThai: 'dang_xep', loi: null, lanThu: 0, nguon: 'tay', nguoi, capNhatLuc: luc }); return [{ token }] }
+                    Object.assign(c, { trangThai: 'dang_xep', loi: null, nguon: 'tay', nguoi, capNhatLuc: luc }); return [{ token: c.token }]
+                }
                 if (s.startsWith('INSERT INTO "MeInvoiceDaGui"') && s.includes('RETURNING "token"')) {   // giành
                     const [ma, token, , , , , , customerId, maKhach, mtt, nguon, nguoi, luc] = p
                     const c = so2.get(ma)
@@ -507,6 +522,20 @@ async function main() {
         ok('11u. Tạo dòng hàng đợi hỏng ⇒ đợt rỗng bị huỷ, sổ về "loi" (chưa tin nào đi ⇒ được thử lại)',
             dLoi.includes('mất kết nối DB') && so2.get('DDDD1234EFGH').trangThai === 'loi' && dot[2].trangThai === 'huy', { dLoi, so: so2.get('DDDD1234EFGH'), dot: dot[2] })
 
+        // Chủ shop 29/10/2026: "khi gửi tay thì bắt buộc gửi" — batBuoc bỏ qua cửa trạng thái / PDF, gửi cả HĐ đã bỏ / đã gửi, giữ link
+        const tokenC = so2.get('CCCC1234EFGH').token
+        const soDotTruoc = dot.length
+        pdfTra = [{ TransactionID: 'KHAC', Data: pdf64 }]   // PDF hỏng cũng không chặn gửi tay
+        const ep1 = await xepMot(spG, 'HUTI', knG, uvC, ketLuanTrangThai(st({ IsDelete: true }), true), MAU_MAC_DINH, 'tay', 'chu@x', true)
+        ok('11z1. Gửi tay bắt buộc: HĐ đã "bỏ" (bị xoá) + PDF hỏng ⇒ VẪN xếp gửi, giữ token cũ (link cũ chạy), sổ ghi gửi tay',
+            ep1.ketQua === 'da_xep' && dot.length === soDotTruoc + 1 && so2.get('CCCC1234EFGH').trangThai === 'da_xep'
+            && so2.get('CCCC1234EFGH').token === tokenC && so2.get('CCCC1234EFGH').nguon === 'tay', { ep1, so: so2.get('CCCC1234EFGH') })
+        pdfTra = [{ TransactionID: 'ABCD1234EFGH', Data: pdf64 }]
+        const ep2 = await xepMot(spG, 'HUTI', knG, uvA, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tay', 'chu@x', true)
+        ok('11z2. Gửi tay bắt buộc HĐ ĐÃ gửi ⇒ gửi lại (đợt mới), tự động thì vẫn "đã có"',
+            ep2.ketQua === 'da_xep' && dot.length === soDotTruoc + 2 && so2.get('ABCD1234EFGH').dotId === dot[dot.length - 1].id
+            && (await xepMot(spG, 'HUTI', knG, uvA, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)).ketQua === 'da_co', { ep2 })
+
         const goc = path.join(__dirname, '..', 'src')
         const route = fs.readFileSync(path.join(goc, 'routes', 'meInvoice.ts'), 'utf8')
         const viTriCongKhai = route.indexOf("router.get('/hd/:ma/:token'")
@@ -519,6 +548,9 @@ async function main() {
         ok('11x. Cron gọi nhipGuiHoaDonMisa mỗi 10 phút', /% 10 === 6\)[\s\S]{0,200}import\('\.\.\/lib\/guiHoaDonMisa'\)[\s\S]{0,120}nhipGuiHoaDonMisa\(\)/.test(cron))
         const libGui = fs.readFileSync(path.join(goc, 'lib', 'guiHoaDonMisa.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
         ok('11y. Phần gửi chỉ ĐỌC MISA (status / Download) — không phát hành, không gửi email, không xoá', !/\/invoice\/publishing|\/invoiceweb\/insert|\/invoiceweb\/delete|\/invoice\/sendemail/.test(libGui) && libGui.includes('/invoice/status') && libGui.includes('/invoice/Download'))
+        const thanGuiTay = (/export async function guiTay[\s\S]*?\n\}/.exec(libGui) || [''])[0]
+        ok('11z3. guiTay = bắt buộc gửi: gọi xepMot(…, true), KHÔNG chặn vì "khách không yêu cầu" / đã gửi / đã bỏ',
+            /'tay', nguoi, true\)/.test(thanGuiTay) && !/ketQua !== 'se_gui'/.test(thanGuiTay) && !/trangThai === 'bo_qua'/.test(thanGuiTay), thanGuiTay.slice(0, 200))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)

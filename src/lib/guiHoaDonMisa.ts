@@ -4,9 +4,10 @@
  * Ai được gửi: đúng luật soi (lib/hoaDonMisaZalo.ts — khách gõ /hoadon hoặc "Luôn lấy hoá đơn", đã nối nhóm Zalo).
  * Nguồn hoá đơn: danh sách ĐÃ PHÁT HÀNH /invoice/paging (lib/meInvoice.ts dsHoaDonPhatHanh — đo HUTI 29/10/2026).
  *
- * Một hoá đơn đi qua 4 cửa, hỏng cửa nào dừng ở đó, KHÔNG gửi:
- *   1. Trạng thái MISA ngay lúc gửi (/invoice/status — hình đo 29/10/2026): không bị xoá, EInvoiceStatus 1 (hoá đơn gốc đang hiệu
- *      lực), đã cấp mã (SendTaxStatus 2). Chưa cấp mã ⇒ lượt sau thử lại; xoá / thay thế / CQT từ chối ⇒ bỏ hẳn.
+ * TỰ ĐỘNG: một hoá đơn đi qua 4 cửa, hỏng cửa nào dừng ở đó, KHÔNG gửi:
+ *   1. Trạng thái MISA ngay lúc gửi (/invoice/status — hình đo 29/10/2026, bảng mã theo tài liệu): không bị xoá / huỷ (EInvoiceStatus 2) /
+ *      BỊ thay thế (RefInvoiceStatus 3), thuế chấp nhận (SendTaxStatus 2). Hoá đơn THAY THẾ (3) / ĐIỀU CHỈNH (5) là hoá đơn hợp lệ ⇒ gửi.
+ *      Chưa cấp mã ⇒ lượt sau thử lại; xoá / huỷ / bị thay thế / thuế từ chối ⇒ bỏ hẳn.
  *   2. Tải được PDF thật (/invoice/Download, phải mở đầu "%PDF") — link gửi khách không được là link chết.
  *   3. GIÀNH hoá đơn trong bảng MeInvoiceDaGui (khoá chính = mã tra cứu; INSERT … ON CONFLICT … WHERE trangThai = 'loi') — nhiều
  *      bản máy chạy cùng lúc thì chỉ một bên được xếp; đã xếp rồi thì KHÔNG BAO GIỜ xếp lại.
@@ -17,7 +18,9 @@
  * xem của MISA có hạn; link này bền). Token ngẫu nhiên 144 bit, lưu ở MeInvoiceDaGui.
  *
  * Tự động (nhipGuiHoaDonMisa — cron mỗi 10 phút, 7–21 giờ VN): chỉ cửa hàng BẬT, chỉ hoá đơn có ngày ≥ ngày bật (không dội hoá đơn
- * cũ vào nhóm khách), xét hôm nay + LUI_NGAY ngày trước (hoá đơn lập muộn / ghi lùi ngày). Gửi tay: một hoá đơn, chủ shop bấm.
+ * cũ vào nhóm khách), xét hôm nay + LUI_NGAY ngày trước (hoá đơn lập muộn / ghi lùi ngày).
+ * GỬI TAY = BẮT BUỘC GỬI (chủ shop 29/10/2026: "khi gửi tay thì bắt buộc gửi"): không qua cửa 1–2 (chỉ báo lưu ý), gửi được cả hoá đơn
+ * đã gửi / đã bỏ / khách không yêu cầu; chỉ dừng khi không thể gửi (chưa đăng nhập Zalo, không ra khách, khách chưa nối nhóm).
  */
 
 import crypto from 'crypto'
@@ -50,6 +53,8 @@ export const trongGioGui = (d: Date = new Date()) => { const h = (d.getUTCHours(
 // ─── Bảng (tạo lười — cùng nếp lib/meInvoice.ts) ───────────────────────────────
 
 const daTaoBang = new Set<string>()
+/** Lý do "bỏ" của luật CŨ (sáng 29/10/2026: mọi EInvoiceStatus ≠ 1) — chặn oan hoá đơn thay thế / điều chỉnh ⇒ xét lại */
+const BO_OAN = 'Trạng thái hoá đơn trên MISA = %'
 
 async function damBaoBangGui(sp: any): Promise<void> {
     const schema = await tenSchema(sp)
@@ -79,6 +84,9 @@ async function damBaoBangGui(sp: any): Promise<void> {
             if (!/already exists|duplicate key value/i.test(String(e?.message || ''))) throw e
         }
     }
+    // Bị chặn oan ⇒ trả về 'loi' cho tự động xét lại theo bảng mã đúng (dòng 'bo_qua' chưa từng có tin nào đi)
+    await sp.$executeRawUnsafe(`UPDATE ${BANG_GUI} SET "trangThai"='loi', "lanThu"=0, "loi"=$1 WHERE "trangThai"='bo_qua' AND "loi" LIKE $2`,
+        'Xét lại theo bảng mã MISA (trước bị chặn oan)', BO_OAN)
     daTaoBang.add(schema)
 }
 
@@ -137,9 +145,15 @@ export async function luuCaiDat(sp: any, b: { tuDong?: boolean; mauTin?: string 
 
 // ─── Trạng thái + PDF trên MISA ────────────────────────────────────────────────
 
-export interface KetLuanTrangThai { guiDuoc: boolean; vinhVien: boolean; lyDo: string | null }
+export interface KetLuanTrangThai { guiDuoc: boolean; vinhVien: boolean; lyDo: string | null; ghiChu?: string | null }
 
-/** Kết luận từ MỘT bản ghi /invoice/status (hình đo 29/10/2026) — hàm thuần */
+/**
+ * Kết luận TỰ ĐỘNG từ MỘT bản ghi /invoice/status (hình đo 29/10/2026) — hàm thuần. Bảng mã theo tài liệu MISA (đọc lại 29/10/2026 sau khi
+ * chủ shop gặp HĐ "= 3" bị chặn oan): EInvoiceStatus 1 gốc · 2 BỊ HUỶ · 3 hoá đơn THAY THẾ · 5 (4) hoá đơn ĐIỀU CHỈNH — 3/5 là hoá đơn hợp lệ
+ * phải gửi; hoá đơn BỊ thay thế nhận ra bằng RefInvoiceStatus 3 (bị điều chỉnh = 5, vẫn còn hiệu lực ⇒ vẫn gửi).
+ * SendTaxStatus 0 chưa gửi CQT · 1 đã gửi · 2 hợp lệ (thuế chấp nhận / đã cấp mã) · 3 không hợp lệ (thuế từ chối) · 4 TĐ không hợp lệ.
+ * Gửi TAY không qua cửa này (chủ shop 29/10/2026: "khi gửi tay thì bắt buộc gửi") — chỉ lấy lyDo làm lưu ý.
+ */
 export function ketLuanTrangThai(st: any, coMa: boolean): KetLuanTrangThai {
     if (!st || typeof st !== 'object') return { guiDuoc: false, vinhVien: false, lyDo: 'MISA không trả trạng thái hoá đơn — thử lại lượt sau' }
     const xoa = docTruong(st, 'IsDelete')
@@ -148,21 +162,16 @@ export function ketLuanTrangThai(st: any, coMa: boolean): KetLuanTrangThai {
         return { guiDuoc: false, vinhVien: true, lyDo: `Hoá đơn đã bị xoá trên MISA${lyDo ? ` (${String(lyDo).slice(0, 120)})` : ''}` }
     }
     const ei = Number(docTruong(st, 'EInvoiceStatus'))
-    if (ei !== 1) {
-        return { guiDuoc: false, vinhVien: true, lyDo: `Trạng thái hoá đơn trên MISA = ${Number.isFinite(ei) ? ei : '?'} — không phải hoá đơn gốc đang hiệu lực (có thể đã bị thay thế / điều chỉnh)` }
-    }
+    const lienQuan = Number(docTruong(st, 'RefInvoiceStatus'))
+    if (ei === 2) return { guiDuoc: false, vinhVien: true, lyDo: 'Hoá đơn đã bị huỷ trên MISA' }
+    if (lienQuan === 3) return { guiDuoc: false, vinhVien: true, lyDo: 'Hoá đơn đã bị thay thế bởi hoá đơn khác — khách nhận hoá đơn thay thế' }
     const thue = Number(docTruong(st, 'SendTaxStatus'))
+    if (thue === 3 || thue === 4) return { guiDuoc: false, vinhVien: true, lyDo: 'Cơ quan thuế không chấp nhận hoá đơn (không hợp lệ)' }
     if (coMa && thue !== 2) {
-        return thue === 3
-            ? { guiDuoc: false, vinhVien: true, lyDo: 'Cơ quan thuế từ chối cấp mã' }
-            : { guiDuoc: false, vinhVien: false, lyDo: `Chưa được cơ quan thuế cấp mã (trạng thái ${Number.isFinite(thue) ? thue : '?'}) — thử lại lượt sau` }
+        return { guiDuoc: false, vinhVien: false, lyDo: `Chưa được cơ quan thuế cấp mã (trạng thái ${Number.isFinite(thue) ? thue : '?'}) — thử lại lượt sau` }
     }
-    if (!coMa && (thue === 3 || thue === 4)) {
-        return thue === 3
-            ? { guiDuoc: false, vinhVien: true, lyDo: 'Cơ quan thuế không tiếp nhận hoá đơn' }
-            : { guiDuoc: false, vinhVien: false, lyDo: 'Gửi cơ quan thuế lỗi — thử lại lượt sau' }
-    }
-    return { guiDuoc: true, vinhVien: false, lyDo: null }
+    const ghiChu = ei === 3 ? 'hoá đơn thay thế' : ei === 5 || ei === 4 ? 'hoá đơn điều chỉnh' : lienQuan === 5 ? 'hoá đơn đã có hoá đơn điều chỉnh' : null
+    return { guiDuoc: true, vinhVien: false, lyDo: null, ghiChu }
 }
 
 /** Trạng thái nhiều hoá đơn theo mã tra cứu (≤ 50 mã / lời gọi) */
@@ -282,6 +291,17 @@ async function gianh(sp: any, ma: string, g: GhiHd, nguon: string, nguoi: string
     return r[0]?.token ? String(r[0].token) : null
 }
 
+/** Giành ÉP cho gửi tay (chủ shop bấm = bắt buộc gửi, kể cả HĐ đã gửi / đã bỏ): luôn được, GIỮ token cũ ⇒ link cũ vẫn chạy */
+async function gianhEp(sp: any, ma: string, g: GhiHd, nguoi: string | null, luc: number): Promise<string> {
+    const r: any[] = await sp.$queryRawUnsafe(
+        `INSERT INTO ${BANG_GUI} (${COT}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'dang_xep',NULL,0,'tay',$11,$12,$12)
+         ON CONFLICT ("maTraCuu") DO UPDATE SET "trangThai"='dang_xep', "loi"=NULL, "nguon"='tay', "nguoi"=EXCLUDED."nguoi",
+             "customerId"=EXCLUDED."customerId", "maKhach"=EXCLUDED."maKhach", "capNhatLuc"=EXCLUDED."capNhatLuc"
+         RETURNING "token"`,
+        ma, taoToken(), g.refId, g.kyHieu, g.so, g.ngay, g.tongTien, g.customerId, g.maKhach, g.mtt, nguoi, luc)
+    return String(r[0].token)
+}
+
 /**
  * Dòng kẹt 'dang_xep' (máy dừng giữa lúc xếp): đợt đã có dòng hàng đợi ⇒ coi như đã xếp (hàng đợi sẽ gửi); chưa có dòng nào ⇒
  * chưa tin nào đi ⇒ huỷ đợt rỗng, trả về 'loi' để thử lại. Không bao giờ để một hoá đơn được xếp hai lần.
@@ -304,14 +324,19 @@ async function donKet(sp: any, bayGio = Date.now()) {
 // ─── Xếp gửi ───────────────────────────────────────────────────────────────────
 
 export type KetQuaXep =
-    | { ketQua: 'da_xep'; dotId: string; soNhom: number; lyDo: null }
+    | { ketQua: 'da_xep'; dotId: string; soNhom: number; lyDo: null; luuY?: string[] }
     | { ketQua: 'da_co' | 'bo_qua' | 'loi'; lyDo: string }
 
 export interface UngVien { dong: DongXemTruoc; raw: any; mtt: boolean }
 
-/** Một hoá đơn đã có kết luận trạng thái: tải thử PDF → giành → tạo đợt Zalo (đợt trước, ghi dotId, rồi mới tạo dòng hàng đợi) */
+/**
+ * Một hoá đơn đã có kết luận trạng thái: tải thử PDF → giành → tạo đợt Zalo (đợt trước, ghi dotId, rồi mới tạo dòng hàng đợi).
+ * `batBuoc` (gửi tay — chủ shop 29/10/2026: "khi gửi tay thì bắt buộc gửi"): KHÔNG qua cửa trạng thái / PDF (người gọi đã hỏi, chỉ để
+ * báo), giành ÉP — gửi cả hoá đơn đã gửi / đã bỏ; link giữ nguyên.
+ */
 export async function xepMot(
     sp: any, maCuaHang: string, kn: KetNoiMeInvoice, uv: UngVien, st: KetLuanTrangThai, mau: string, nguon: 'tu_dong' | 'tay', nguoi: string | null,
+    batBuoc = false,
 ): Promise<KetQuaXep> {
     const hd = uv.dong.hoaDon
     const ma = hd.maTraCuu
@@ -319,21 +344,26 @@ export async function xepMot(
     if (!ma) return { ketQua: 'bo_qua', lyDo: 'Hoá đơn không có mã tra cứu' }
     if (!khach || !uv.dong.nhom.length) return { ketQua: 'bo_qua', lyDo: 'Không có khách / nhóm Zalo để gửi' }
     const g: GhiHd = { refId: hd.refId, kyHieu: hd.kyHieu, so: hd.so, ngay: hd.ngay, tongTien: hd.tongTien, customerId: khach.id, maKhach: khach.code, mtt: uv.mtt }
-    if (!st.guiDuoc) {
-        const tt = st.vinhVien ? 'bo_qua' : 'loi'
-        await ghiKhongGui(sp, ma, g, tt, st.lyDo || 'Không gửi được', nguon, nguoi, Date.now())
-        return { ketQua: tt, lyDo: st.lyDo || 'Không gửi được' }
+    let token: string | null
+    if (batBuoc) {
+        token = await gianhEp(sp, ma, g, nguoi, Date.now())
+    } else {
+        if (!st.guiDuoc) {
+            const tt = st.vinhVien ? 'bo_qua' : 'loi'
+            await ghiKhongGui(sp, ma, g, tt, st.lyDo || 'Không gửi được', nguon, nguoi, Date.now())
+            return { ketQua: tt, lyDo: st.lyDo || 'Không gửi được' }
+        }
+        try {
+            await taiPdf(sp, kn, ma, uv.mtt)
+        } catch (e: any) {
+            if (!(e instanceof LoiMeInvoice)) throw e
+            const lyDo = `Chưa tải được PDF từ MISA: ${e.message}`.slice(0, 400)
+            await ghiKhongGui(sp, ma, g, 'loi', lyDo, nguon, nguoi, Date.now())
+            return { ketQua: 'loi', lyDo }
+        }
+        token = await gianh(sp, ma, g, nguon, nguoi, Date.now())
+        if (!token) return { ketQua: 'da_co', lyDo: 'Hoá đơn đã được xếp gửi trước đó' }
     }
-    try {
-        await taiPdf(sp, kn, ma, uv.mtt)
-    } catch (e: any) {
-        if (!(e instanceof LoiMeInvoice)) throw e
-        const lyDo = `Chưa tải được PDF từ MISA: ${e.message}`.slice(0, 400)
-        await ghiKhongGui(sp, ma, g, 'loi', lyDo, nguon, nguoi, Date.now())
-        return { ketQua: 'loi', lyDo }
-    }
-    const token = await gianh(sp, ma, g, nguon, nguoi, Date.now())
-    if (!token) return { ketQua: 'da_co', lyDo: 'Hoá đơn đã được xếp gửi trước đó' }
     let dotId: string | null = null
     try {
         const bien = bienHoaDon(hd, uv.raw, linkHoaDon(maCuaHang, token))
@@ -375,28 +405,38 @@ export async function moTaKenhZalo(sp: any): Promise<{ ok: boolean; lyDo: string
     return kiemKenhZalo(sp)
 }
 
-/** Gửi TAY một hoá đơn (chủ shop bấm) — đọc lại từ MISA, không tin dữ liệu trình duyệt; bỏ qua mốc "gửi từ ngày" của tự động */
+/**
+ * Gửi TAY một hoá đơn — chủ shop 29/10/2026: "khi gửi tay thì bắt buộc gửi". Đọc lại hoá đơn từ MISA (không tin dữ liệu trình duyệt),
+ * rồi gửi bất kể trạng thái MISA / khách có yêu cầu hay không / đã gửi rồi; trạng thái + tải thử PDF chỉ để BÁO (luuY).
+ * Chỉ dừng khi KHÔNG THỂ gửi: chưa đăng nhập Zalo, không ra khách Kengi, khách chưa nối nhóm Zalo.
+ */
 export async function guiTay(sp: any, maCuaHang: string, maTraCuu: string, ngay: string, nguoi: string): Promise<KetQuaXep> {
     const kn = await docKetNoi(sp)
     if (!kn) throw new LoiMeInvoice('Cửa hàng chưa nhập kết nối meInvoice.')
     await donKet(sp)
     const kenh = await kiemKenhZalo(sp)
     if (!kenh.ok) throw new LoiMeInvoice(kenh.lyDo || CAU_CHUA_CO_KENH)
-    const daCo = (await docDaGui(sp, [maTraCuu])).get(maTraCuu)
-    if (daCo && daCo.trangThai !== 'loi') {
-        return daCo.trangThai === 'bo_qua'
-            ? { ketQua: 'bo_qua', lyDo: daCo.loi || 'Đã bỏ hoá đơn này' }
-            : { ketQua: 'da_co', lyDo: 'Hoá đơn đã được xếp gửi trước đó' }
-    }
     const ph = await dsHoaDonPhatHanh(sp, kn, ngay, ngay)
     const i = ph.tho.findIndex(r => docHoaDon(r).maTraCuu === maTraCuu)
     if (i < 0) throw new LoiMeInvoice('Không thấy hoá đơn này trong danh sách MISA của ngày đó — soi lại rồi thử.')
     const { dong } = await xemTruocGui(sp, [docHoaDon(ph.tho[i])], true)
-    if (dong[0].ketQua !== 'se_gui') throw new LoiMeInvoice(`Không gửi: ${dong[0].lyDo}`)
+    const d = dong[0]
+    if (!d.khach) throw new LoiMeInvoice(`Không gửi được: ${d.lyDo}`)
+    if (!d.nhom.length) throw new LoiMeInvoice(`Không gửi được: khách ${d.khach.code} chưa nối nhóm Zalo nào`)
     const mtt = ph.dong[i].nguon === 'mtt'
-    const st = (await trangThaiNhieu(sp, kn, [maTraCuu], mtt)).get(maTraCuu)
+    const luuY: string[] = []
+    if (d.ketQua === 'khong_yeu_cau') luuY.push('Khách không yêu cầu hoá đơn — gửi theo lệnh tay')
+    try {
+        const kl = ketLuanTrangThai((await trangThaiNhieu(sp, kn, [maTraCuu], mtt)).get(maTraCuu), kn.coMa)
+        if (!kl.guiDuoc && kl.lyDo) luuY.push(kl.lyDo)
+        else if (kl.ghiChu) luuY.push(`Đây là ${kl.ghiChu}`)
+    } catch (e: any) { luuY.push(`Không hỏi được trạng thái MISA: ${String(e?.message || e).slice(0, 160)}`) }
+    try { await taiPdf(sp, kn, maTraCuu, mtt) } catch (e: any) {
+        luuY.push(`MISA chưa trả được PDF lúc gửi (${String(e?.message || e).slice(0, 120)}) — link trong tin tự tải lại khi khách mở`)
+    }
     const cd = await docCaiDat(sp)
-    return xepMot(sp, maCuaHang, kn, { dong: dong[0], raw: ph.tho[i], mtt }, ketLuanTrangThai(st, kn.coMa), cd.mauTin || MAU_MAC_DINH, 'tay', nguoi)
+    const kq = await xepMot(sp, maCuaHang, kn, { dong: d, raw: ph.tho[i], mtt }, { guiDuoc: true, vinhVien: false, lyDo: null }, cd.mauTin || MAU_MAC_DINH, 'tay', nguoi, true)
+    return kq.ketQua === 'da_xep' && luuY.length ? { ...kq, luuY } : kq
 }
 
 /** Ứng viên tự động: "sẽ gửi", có mã tra cứu, ngày ≥ mốc bật, chưa xếp / chưa bỏ / lỗi chưa quá lượt — hàm thuần */
