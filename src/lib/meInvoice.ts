@@ -17,6 +17,8 @@
  * CHƯA ĐO (28/10/2026 — chưa có tài khoản thật): tên trường "mã tra cứu" trong danh sách HĐ web (tài liệu chỉ nói "Số hóa đơn,
  * Mã tra cứu…"); `data` trả mảng hay chuỗi JSON; ToDate có tính trọn ngày không; token web sống bao lâu.
  * ⇒ đọc trường kiểu dò nhiều tên (docTruong), và "soi" trả nguyên tên trường để đo trước khi bật gửi.
+ * 29/10/2026 HUTI nối thật: hai đường đăng nhập đều được, nhưng /invoiceweb/paging trả 0 cả tuần ⇒ thêm danh sách máy tính tiền
+ * (/paging/calculating), báo "không đọc được" thay vì 0 khi hình lạ, và doTho (POST /api/meinvoice/do-tho) để đo hình thật.
  */
 
 import { maHoa, giaiMa, coKhoaVault } from './maHoaKhoa'
@@ -171,16 +173,45 @@ export function docHoaDon(raw: any): HoaDonMisa {
     }
 }
 
-/** Danh sách trong `data` của API phân trang: mảng thẳng, hoặc bọc {Items|Data|List…, Total…} */
-export function tachDanhSach(data: any): { ds: any[]; tong: number | null } {
+/** Có khoá (bất kể giá trị, kể cả null) không — phân biệt "MISA ghi rõ danh sách rỗng" với "hình lạ" */
+function coKhoa(o: any, ...ten: string[]): boolean {
+    if (!o || typeof o !== 'object') return false
+    const thuong = new Set(Object.keys(o).map(k => k.toLowerCase()))
+    return ten.some(t => thuong.has(t.toLowerCase()))
+}
+
+// docTruong không phân biệt hoa thường
+const KHOA_DS = ['Items', 'Data', 'List', 'PageData']
+const KHOA_TONG = ['Total', 'TotalCount', 'TotalRecord']
+
+/**
+ * Danh sách trong `data` của API phân trang: mảng thẳng, hoặc bọc {Items|Data|List…, Total…}.
+ * `docDuoc=false` = MISA trả HÌNH LẠ (object không có khoá danh sách, chuỗi không phải JSON…) ⇒ KHÔNG được hiểu là "0 hoá đơn".
+ */
+export function tachDanhSach(data: any): { ds: any[]; tong: number | null; docDuoc: boolean } {
     const d = moChuoiJson(data)
-    if (Array.isArray(d)) return { ds: d, tong: null }
-    if (d && typeof d === 'object') {
-        const ds = moChuoiJson(docTruong(d, 'Items', 'items', 'Data', 'data', 'List', 'list', 'PageData'))
-        const tong = Number(docTruong(d, 'Total', 'total', 'TotalCount', 'totalCount', 'TotalRecord'))
-        return { ds: Array.isArray(ds) ? ds : [], tong: Number.isFinite(tong) ? tong : null }
+    // success=true mà không kèm data ⇒ MISA không có gì để trả
+    if (d === undefined || d === null || (typeof d === 'string' && !d.trim())) return { ds: [], tong: null, docDuoc: true }
+    if (Array.isArray(d)) return { ds: d, tong: null, docDuoc: true }
+    if (typeof d === 'object') {
+        const ds = moChuoiJson(docTruong(d, ...KHOA_DS))
+        const t = Number(docTruong(d, ...KHOA_TONG))
+        const tong = Number.isFinite(t) ? t : null
+        if (Array.isArray(ds)) return { ds, tong, docDuoc: true }
+        // rỗng THẬT: khoá danh sách có mặt mà null, object rỗng, hoặc chỉ có tổng = 0
+        const rongThat = (ds === undefined && coKhoa(d, ...KHOA_DS)) || Object.keys(d).length === 0 || (tong === 0 && !coKhoa(d, ...KHOA_DS))
+        return { ds: [], tong, docDuoc: rongThat }
     }
-    return { ds: [], tong: null }
+    return { ds: [], tong: null, docDuoc: false }
+}
+
+/** HÌNH của dữ liệu (tên khoá, độ dài — không lộ giá trị) cho cảnh báo "không đọc được" */
+export function moTaHinh(data: any): string {
+    const d = moChuoiJson(data)
+    if (d === null || d === undefined) return 'rỗng'
+    if (Array.isArray(d)) return `mảng ${d.length} phần tử`
+    if (typeof d === 'object') return `object {${Object.keys(d).slice(0, 12).join(', ')}}`
+    return `${typeof d} "${String(d).slice(0, 60)}"`
 }
 
 // ─── Kết nối lưu theo cửa hàng (bảng tạo lười — cùng nếp lib/zaloKengi.ts) ─────
@@ -427,8 +458,11 @@ async function layToken(sp: any, kn: KetNoiMeInvoice, loai: LoaiToken): Promise<
 
 const laLoiToken = (status: number, loi: string) => status === 401 || /token|unauthori[sz]ed|hết hạn|het han/i.test(loi)
 
-/** Gọi một API (sau đăng nhập). Token bị từ chối ⇒ đăng nhập lại MỘT lần. */
-export async function goiApi(sp: any, kn: KetNoiMeInvoice, loai: LoaiToken, duong: string, body?: any, method = 'POST'): Promise<any> {
+export interface KetQuaGoi { status: number; tv: TraVe; text: string }
+
+/** Gọi một API (sau đăng nhập), trả NGUYÊN TRẠNG kể cả khi MISA báo lỗi — để đo. Token bị từ chối ⇒ đăng nhập lại MỘT lần. */
+export async function goiApiTho(sp: any, kn: KetNoiMeInvoice, loai: LoaiToken, duong: string, body?: any, method = 'POST'): Promise<KetQuaGoi> {
+    let kq: KetQuaGoi | null = null
     for (let lan = 0; lan < 2; lan++) {
         const token = await layToken(sp, kn, loai)
         const r = await goiHttp(kn.cong + duong, method, {
@@ -437,16 +471,19 @@ export async function goiApi(sp: any, kn: KetNoiMeInvoice, loai: LoaiToken, duon
             Authorization: `Bearer ${token}`,
             ...(loai === 'web' ? { TaxCode: kn.mst } : {}),
         }, body)
-        const tv = docTraVe(r.status, r.json, r.text)
-        if (tv.ok) return tv.data
-        if (lan === 0 && laLoiToken(r.status, tv.loi)) {
-            await xoaToken(sp, loai)
-            if (loai === 'tichHop') kn.tokenTichHop = null; else kn.tokenWeb = null
-            continue
-        }
-        throw new LoiMeInvoice(`MISA meInvoice ${duong.split('?')[0]}: ${tv.loi}`, r.status)
+        kq = { status: r.status, tv: docTraVe(r.status, r.json, r.text), text: r.text }
+        if (kq.tv.ok || lan > 0 || !laLoiToken(r.status, kq.tv.loi)) break
+        await xoaToken(sp, loai)
+        if (loai === 'tichHop') kn.tokenTichHop = null; else kn.tokenWeb = null
     }
-    throw new LoiMeInvoice('MISA meInvoice từ chối token hai lần liền.')
+    return kq!
+}
+
+/** Gọi một API (sau đăng nhập); MISA báo lỗi ⇒ ném NGUYÊN VĂN. */
+export async function goiApi(sp: any, kn: KetNoiMeInvoice, loai: LoaiToken, duong: string, body?: any, method = 'POST'): Promise<any> {
+    const { status, tv } = await goiApiTho(sp, kn, loai, duong, body, method)
+    if (tv.ok) return tv.data
+    throw new LoiMeInvoice(`MISA meInvoice ${duong.split('?')[0]}: ${tv.loi}`, status)
 }
 
 /** Thử đăng nhập CẢ HAI đường (lấy token mới, lưu lại) — kết quả từng đường, lỗi nguyên văn của MISA */
@@ -471,25 +508,111 @@ export async function thuKetNoi(sp: any) {
 export const TRANG_THAI_WEB: Record<string, string> = { '0': 'Chưa phát hành', '4': 'Chờ cấp mã', '6': 'Đã cấp mã', '7': 'Bị từ chối cấp mã' }
 
 /**
- * Hoá đơn trên web app meInvoice trong [tu, den] (YYYY-MM-DD) theo trạng thái phát hành — đi hết trang (100/trang), tối đa `tranTrang`
- * trang. Tài liệu khuyên lọc 1 ngày khi dữ liệu lớn ⇒ đi TỪNG NGÀY. `cat` = có ngày chạm trần (báo ra, không lặng lẽ cắt).
+ * Web app có HAI danh sách (tài liệu): hoá đơn thường, và hoá đơn khởi tạo từ MÁY TÍNH TIỀN (ký hiệu có chữ M, vd 1C26MAA) ở đường
+ * riêng /paging/calculating — loại này luôn có mã nên invoiceWithCode=true. 29/10/2026 HUTI soi /paging cả tuần, trạng thái 6/0/4 đều 0
+ * ⇒ đọc cả hai, không bắt chủ shop phải biết mình dùng loại nào.
+ */
+export const NGUON_WEB = {
+    thuong: { nhan: 'hoá đơn thường', duong: '/invoiceweb/paging' },
+    mtt: { nhan: 'hoá đơn máy tính tiền', duong: '/invoiceweb/paging/calculating' },
+} as const
+export type NguonWeb = keyof typeof NGUON_WEB
+const CAC_NGUON = Object.keys(NGUON_WEB) as NguonWeb[]
+
+const duongNguon = (nguon: NguonWeb, coMa: boolean) => `${NGUON_WEB[nguon].duong}?invoiceWithCode=${nguon === 'mtt' || coMa ? 'true' : 'false'}`
+
+export interface DongWeb { raw: any; nguon: NguonWeb }
+
+/**
+ * Hoá đơn trên web app meInvoice trong [tu, den] (YYYY-MM-DD) theo trạng thái phát hành, CẢ HAI danh sách — đi hết trang (100/trang),
+ * tối đa `tranTrang` trang. Tài liệu khuyên lọc 1 ngày khi dữ liệu lớn ⇒ đi TỪNG NGÀY. Không lặng lẽ ra 0:
+ *   ngayCat       ngày chạm trần trang
+ *   loiNguon      danh sách MISA báo lỗi (nguyên văn, kèm ngày) — các ngày sau của danh sách đó KHÔNG đọc
+ *   khongDocDuoc  MISA trả thành công mà hình lạ (moTaHinh) — ngày đó KHÔNG được hiểu là không có hoá đơn
+ * Cả hai danh sách đều lỗi ⇒ ném lỗi.
  */
 export async function dsHoaDonWeb(sp: any, kn: KetNoiMeInvoice, tu: string, den: string, trangThai = '6', tranTrang = 5) {
     const ngay: string[] = []
     for (let t = Date.parse(tu + 'T00:00:00Z'); t <= Date.parse(den + 'T00:00:00Z'); t += 86_400_000) ngay.push(new Date(t).toISOString().slice(0, 10))
     if (!ngay.length || ngay.length > 31) throw new LoiMeInvoice('Khoảng ngày phải từ 1 tới 31 ngày.')
-    const tho: any[] = []
-    const ngayCat: string[] = []
-    for (const n of ngay) {
-        for (let trang = 0; ; trang++) {
-            if (trang >= tranTrang) { ngayCat.push(n); break }
-            const data = await goiApi(sp, kn, 'web', `/invoiceweb/paging?invoiceWithCode=${kn.coMa ? 'true' : 'false'}`, {
-                Start: trang * MOI_TRANG, Length: MOI_TRANG, Sort: 'InvDate', FromDate: n, ToDate: n, PublishStatus: String(trangThai),
-            })
-            const { ds } = tachDanhSach(data)
-            tho.push(...ds)
-            if (ds.length < MOI_TRANG) break
+    const dong: DongWeb[] = []
+    const daCo = new Set<string>()
+    const ngayCat = new Set<string>()
+    const loiNguon: Partial<Record<NguonWeb, string>> = {}
+    const khongDocDuoc: { nguon: NguonWeb; ngay: string; hinh: string }[] = []
+    const demNguon: Record<NguonWeb, number> = { thuong: 0, mtt: 0 }
+    for (const nguon of CAC_NGUON) {
+        let dangNgay = ngay[0]
+        try {
+            for (const n of ngay) {
+                dangNgay = n
+                for (let trang = 0; ; trang++) {
+                    if (trang >= tranTrang) { ngayCat.add(n); break }
+                    const data = await goiApi(sp, kn, 'web', duongNguon(nguon, kn.coMa), {
+                        Start: trang * MOI_TRANG, Length: MOI_TRANG, Sort: 'InvDate', FromDate: n, ToDate: n, PublishStatus: String(trangThai),
+                    })
+                    const { ds, docDuoc } = tachDanhSach(data)
+                    if (!docDuoc) { khongDocDuoc.push({ nguon, ngay: n, hinh: moTaHinh(data) }); break }
+                    for (const r of ds) {
+                        // cùng một HĐ lọt vào cả hai danh sách / hai trang ⇒ đếm một lần (RefID, rồi ký hiệu + số)
+                        const h = docHoaDon(r)
+                        const khoa = h.refId || (h.kyHieu && h.so ? `${h.kyHieu}#${h.so}` : '')
+                        if (khoa && daCo.has(khoa)) continue
+                        if (khoa) daCo.add(khoa)
+                        dong.push({ raw: r, nguon })
+                        demNguon[nguon]++
+                    }
+                    if (ds.length < MOI_TRANG) break
+                }
+            }
+        } catch (e: any) {
+            if (!(e instanceof LoiMeInvoice)) throw e
+            loiNguon[nguon] = `từ ngày ${dangNgay}: ${e.message}`
         }
     }
-    return { tho, ngayCat }
+    if (CAC_NGUON.every(x => loiNguon[x])) throw new LoiMeInvoice(CAC_NGUON.map(x => `${NGUON_WEB[x].nhan} ${loiNguon[x]}`).join(' · '))
+    return { tho: dong.map(d => d.raw), dong, ngayCat: [...ngayCat].sort(), loiNguon, khongDocDuoc, demNguon }
+}
+
+export interface BienTheDo { nguon: NguonWeb; coMa: boolean; trangThai: string; tu: string; den: string; start: number; length: number }
+
+/** Bản ghi rút gọn để đo: giữ tên trường, cắt giá trị dài, object/mảng con chỉ còn khung */
+function rutGon(o: any): any {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return o
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k,
+        typeof v === 'string' && v.length > 160 ? v.slice(0, 160) + '…'
+            : v && typeof v === 'object' ? (Array.isArray(v) ? `[mảng ${v.length}]` : `{${Object.keys(v).slice(0, 15).join(', ')}}`)
+                : v]))
+}
+
+/**
+ * DÒ THÔ (chỉ đọc): gọi thẳng API danh sách theo từng biến thể, trả HÌNH dữ liệu MISA trả về + tối đa 2 bản ghi rút gọn — đo trước khi
+ * map. 29/10/2026: soi HUTI ra 0 cả tuần mà không phân biệt được "không có hoá đơn" với "đọc sai chỗ / sai hình".
+ */
+export async function doTho(sp: any, kn: KetNoiMeInvoice, bienThe: BienTheDo[]) {
+    const ket: any[] = []
+    for (const b of bienThe) {
+        const duong = `${NGUON_WEB[b.nguon].duong}?invoiceWithCode=${b.coMa ? 'true' : 'false'}`
+        const than = { Start: b.start, Length: b.length, Sort: 'InvDate', FromDate: b.tu, ToDate: b.den, PublishStatus: b.trangThai }
+        try {
+            const { status, tv, text } = await goiApiTho(sp, kn, 'web', duong, than)
+            const tach = tv.ok ? tachDanhSach(tv.data) : null
+            const d = moChuoiJson(tv.data)
+            ket.push({
+                bienThe: { ...b, duong }, httpStatus: status, ok: tv.ok, loi: tv.loi || null,
+                hinh: tv.ok ? moTaHinh(tv.data) : null,
+                docDuoc: tach?.docDuoc ?? null, soDong: tach ? tach.ds.length : null, tong: tach?.tong ?? null,
+                truong: tach?.ds[0] && typeof tach.ds[0] === 'object' ? Object.keys(tach.ds[0]).sort() : null,
+                mau: tach ? tach.ds.slice(0, 2).map(rutGon) : null,
+                // object mà không đọc ra danh sách ⇒ cho xem khung để biết danh sách nằm ở khoá nào
+                khung: tach && !tach.docDuoc && d && typeof d === 'object' && !Array.isArray(d) ? rutGon(d) : null,
+                // MISA báo lỗi / không phải JSON ⇒ mấy trăm ký tự đầu nguyên văn
+                tho: !tv.ok ? String(text || '').slice(0, 600) : null,
+            })
+        } catch (e: any) {
+            if (!(e instanceof LoiMeInvoice)) throw e
+            ket.push({ bienThe: { ...b, duong }, ok: false, loi: e.message })
+        }
+    }
+    return ket
 }

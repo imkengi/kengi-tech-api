@@ -12,7 +12,7 @@ import fs from 'fs'
 import path from 'path'
 import {
     docTruong, docTraVe, moTaLoi, tachToken, ngayHoaDon, docHoaDon, tachDanhSach, congHopLe, moTaKetNoi, mstChuan,
-    luuKetNoi, docKetNoi, thuKetNoi, goiApi, dsHoaDonWeb, LoiMeInvoice, CONG_MAC_DINH, type KetNoiMeInvoice, type HoaDonMisa,
+    luuKetNoi, docKetNoi, thuKetNoi, goiApi, dsHoaDonWeb, doTho, moTaHinh, LoiMeInvoice, CONG_MAC_DINH, type KetNoiMeInvoice, type HoaDonMisa,
 } from '../src/lib/meInvoice'
 import { quyetDinh, timKhach, phieuTrongCuaSo, CUA_SO_NGAY, type BangKhach, type PhieuLayHd, type NhomZalo } from '../src/lib/hoaDonMisaZalo'
 
@@ -144,6 +144,13 @@ async function main() {
         ok('5c. Chuỗi JSON mảng', tachDanhSach('[{"a":1},{"a":2},{"a":3}]').ds.length === 3)
         ok('5d. {Data:"[…]"} lồng chuỗi', tachDanhSach({ Data: '[{"a":1}]' }).ds.length === 1)
         ok('5e. Rác ⇒ rỗng, không nổ', tachDanhSach('lỗi gì đó').ds.length === 0 && tachDanhSach(null).ds.length === 0)
+        // 29/10: "0 hoá đơn" phải là rỗng THẬT, không phải hình lạ
+        ok('5f. data null / mảng rỗng / {Items:null} / {Total:0} ⇒ rỗng thật (docDuoc)',
+            [null, [], { Items: null }, { Total: 0 }, {}].every(v => tachDanhSach(v).docDuoc && tachDanhSach(v).ds.length === 0))
+        const la = tachDanhSach({ Result: [{ InvNo: '1' }], Count: 1 })
+        ok('5g. Object có danh sách ở khoá lạ ⇒ KHÔNG đọc được (không phải 0 hoá đơn)', !la.docDuoc && la.ds.length === 0, la)
+        ok('5h. Chuỗi không phải JSON / {Data:"rác"} ⇒ không đọc được', !tachDanhSach('lỗi gì đó').docDuoc && !tachDanhSach({ Data: 'rác' }).docDuoc)
+        ok('5i. moTaHinh: chỉ khung, không lộ giá trị', moTaHinh({ Result: [{ AccountObjectName: 'Công ty A' }], Count: 1 }) === 'object {Result, Count}' && moTaHinh([1, 2]) === 'mảng 2 phần tử' && moTaHinh(null) === 'rỗng')
     }
 
     /* 6 — Cổng tự đặt: chỉ https *.misa.vn / *.meinvoice.vn (chặn SSRF) */
@@ -185,13 +192,17 @@ async function main() {
 
     /* 8 — Gọi MISA giả: đúng header + tên trường từng đường đăng nhập, đăng nhập lại khi token bị từ chối */
     {
+        // hai danh sách web app: hoá đơn thường / máy tính tiền (29/10/2026)
+        const THUONG = '/invoiceweb/paging?'
+        const MTT = '/invoiceweb/paging/calculating?'
         const sp = spGia()
         await luuKetNoi(sp, { clientId: 'CID-9', clientSecret: 'SEC-9', mst: '0312345678', taiKhoan: 'kt@hungtin.vn', matKhau: 'mk9' }, 'chu')
         let dongPaging = 0
         const goi = misaGia((g) => {
             if (g.url.endsWith('/invoice/token')) return { json: { Success: true, Data: 'TK-TICH-HOP' } }
             if (g.url.endsWith('/invoiceweb/token')) return { json: { Success: true, Data: { access_token: 'TK-WEB' } } }
-            if (g.url.includes('/invoiceweb/paging')) {
+            if (g.url.includes(MTT)) return { json: { success: true, data: [] } }
+            if (g.url.includes(THUONG)) {
                 dongPaging++
                 if (dongPaging === 1) return { status: 401, json: { success: false, errorCode: 'TokenExpired' } }
                 const start = g.body.Start
@@ -212,7 +223,7 @@ async function main() {
         const truocKhi = goi.length
         const { tho, ngayCat } = await dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6')
         const sau = goi.slice(truocKhi)
-        const paging = sau.filter(g => g.url.includes('/invoiceweb/paging'))
+        const paging = sau.filter(g => g.url.includes(THUONG))
         ok('8e. Token bị từ chối (401) ⇒ đăng nhập web lại MỘT lần rồi đọc tiếp', sau.some(g => g.url.endsWith('/invoiceweb/token')) && tho.length === 120, { soGoi: sau.map(g => g.url.split('/meinvoice')[1]), tho: tho.length })
         ok('8f. Đi trang: Start 0 rồi 100, Length 100, một ngày FromDate=ToDate, PublishStatus chuỗi "6"',
             paging.slice(1).map(g => g.body.Start).join(',') === '0,100' && paging.every(g => g.body.Length === 100 && g.body.FromDate === '2026-10-28' && g.body.ToDate === '2026-10-28' && g.body.PublishStatus === '6'), paging.map(g => g.body))
@@ -220,9 +231,9 @@ async function main() {
             paging.slice(1).every(g => g.headers.Authorization === 'Bearer TK-WEB' && g.headers.ClientID === 'CID-9' && g.headers.TaxCode === '0312345678' && g.url.includes('invoiceWithCode=true')), paging[1]?.headers)
         ok('8h. Không chạm trần trang ⇒ ngayCat rỗng', ngayCat.length === 0, ngayCat)
         // trần trang: luôn trả đủ 100 ⇒ phải báo ngày bị cắt, không lặng lẽ
-        misaGia((g) => g.url.includes('/invoiceweb/paging')
+        misaGia((g) => g.url.includes(THUONG)
             ? { json: { success: true, data: Array.from({ length: 100 }, () => ({ InvNo: '1' })) } }
-            : { json: { Success: true, Data: 'TK' } })
+            : g.url.includes(MTT) ? { json: { success: true, data: [] } } : { json: { Success: true, Data: 'TK' } })
         const cat = await dsHoaDonWeb(sp, kn, '2026-10-27', '2026-10-28', '6', 2)
         ok('8i. Chạm trần trang ⇒ báo đúng ngày bị cắt (không cắt âm thầm)', cat.ngayCat.join(',') === '2026-10-27,2026-10-28' && cat.tho.length === 400, cat.ngayCat)
         // lỗi thật (không phải token) ⇒ ném nguyên văn, không thử lại vô tận
@@ -236,6 +247,50 @@ async function main() {
         const thu2 = await thuKetNoi(sp2)
         ok('8k. ClientID sai ⇒ thử kết nối báo lỗi cổng nguyên văn ở cả hai đường', !thu2.ok && String(thu2.tichHop.loi).includes('invalid subscription key') && String(thu2.web.loi).includes('invalid subscription key'), thu2)
         ok('8l. LoiMeInvoice là lỗi riêng (route hiện nguyên văn)', new LoiMeInvoice('x') instanceof Error && new LoiMeInvoice('x').name === 'LoiMeInvoice')
+
+        // 29/10/2026 — HUTI soi /paging cả tuần ra 0: đọc cả danh sách máy tính tiền, không để đọc hỏng thành 0
+        const goiM = misaGia((g) => {
+            if (g.url.includes(MTT)) return { json: { success: true, data: [{ RefID: 'r-2', InvSeries: '1C26MAA', InvNo: '9' }, { RefID: 'r-1', InvNo: '1' }] } }
+            if (g.url.includes(THUONG)) return { json: { success: true, data: [{ RefID: 'r-1', InvSeries: '1K26TAA', InvNo: '1' }] } }
+            return { json: { Success: true, Data: 'TK' } }
+        })
+        const hai = await dsHoaDonWeb(sp, { ...kn, coMa: false }, '2026-10-28', '2026-10-28', '6')
+        ok('8m. Đọc CẢ danh sách máy tính tiền (invoiceWithCode=true dù cấu hình không mã); HĐ trùng RefID đếm một lần',
+            goiM.some(g => g.url.includes('/invoiceweb/paging/calculating?invoiceWithCode=true')) && goiM.some(g => g.url.includes('/invoiceweb/paging?invoiceWithCode=false'))
+            && hai.tho.length === 2 && hai.demNguon.thuong === 1 && hai.demNguon.mtt === 1 && hai.dong.find(d => d.raw.RefID === 'r-2')?.nguon === 'mtt', { tho: hai.tho, dem: hai.demNguon })
+        const goiL = misaGia((g) => {
+            if (g.url.includes(MTT)) return { json: { success: false, errorCode: 'NotPermission', descriptionErrorCode: 'Không có quyền hoá đơn máy tính tiền' } }
+            if (g.url.includes(THUONG)) return { json: { success: true, data: [{ RefID: 'r-5', InvNo: '5' }] } }
+            return { json: { Success: true, Data: 'TK' } }
+        })
+        const motLoi = await dsHoaDonWeb(sp, kn, '2026-10-27', '2026-10-28', '6')
+        ok('8n. Một danh sách lỗi ⇒ giữ danh sách kia, lỗi nguyên văn kèm ngày, KHÔNG gọi tiếp danh sách lỗi',
+            motLoi.tho.length === 1 && String(motLoi.loiNguon.mtt).includes('Không có quyền hoá đơn máy tính tiền') && String(motLoi.loiNguon.mtt).includes('2026-10-27')
+            && !motLoi.loiNguon.thuong && goiL.filter(g => g.url.includes(MTT)).length === 1, { loi: motLoi.loiNguon, tho: motLoi.tho.length })
+        misaGia((g) => g.url.includes('/invoiceweb/paging') ? { json: { success: false, errorCode: 'InvalidTaxCode', descriptionErrorCode: 'MST không khớp' } } : { json: { Success: true, Data: 'TK' } })
+        const caHai = await nem(() => dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6'))
+        ok('8o. Cả hai danh sách lỗi ⇒ BÁO LỖI (không trả "0 hoá đơn")', caHai.includes('MST không khớp') && caHai.includes('hoá đơn thường') && caHai.includes('hoá đơn máy tính tiền'), caHai)
+        misaGia((g) => g.url.includes(THUONG) ? { json: { success: true, data: { Result: [{ InvNo: '1' }], Count: 1 } } }
+            : g.url.includes(MTT) ? { json: { success: true, data: [] } } : { json: { Success: true, Data: 'TK' } })
+        const la = await dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6')
+        ok('8p. Hình lạ ⇒ ghi "không đọc được" kèm khung, không lặng lẽ thành 0', la.tho.length === 0 && la.khongDocDuoc.length === 1
+            && la.khongDocDuoc[0].hinh === 'object {Result, Count}' && la.khongDocDuoc[0].nguon === 'thuong', la.khongDocDuoc)
+
+        const goiD = misaGia((g) => {
+            if (g.url.includes(MTT)) return { json: { success: true, data: [{ RefID: 'r-9', InvNo: '9', AccountObjectName: 'x'.repeat(300), Detail: [1, 2] }] } }
+            if (g.url.includes('/invoiceweb/paging?invoiceWithCode=false')) return { json: { success: false, errorCode: 'InvalidParameter', descriptionErrorCode: 'Sai loại hoá đơn' } }
+            if (g.url.includes(THUONG)) return { json: { success: true, data: { Result: [], Count: 0 } } }
+            return { json: { Success: true, Data: 'TK' } }
+        })
+        const bt = (nguon: 'thuong' | 'mtt', coMa: boolean) => ({ nguon, coMa, trangThai: '6', tu: '2026-10-01', den: '2026-10-29', start: 0, length: 3 })
+        const dt = await doTho(sp, kn, [bt('thuong', true), bt('thuong', false), bt('mtt', true)])
+        ok('8q. Dò thô: MISA báo lỗi ⇒ KHÔNG ném, trả lỗi nguyên văn + chữ thô', dt[1].ok === false && String(dt[1].loi).includes('Sai loại hoá đơn') && String(dt[1].tho).includes('InvalidParameter'), dt[1])
+        ok('8r. Dò thô: hình lạ ⇒ docDuoc=false + khung; có dữ liệu ⇒ tên trường + mẫu rút gọn',
+            dt[0].ok && dt[0].docDuoc === false && dt[0].khung?.Result === '[mảng 0]' && dt[2].soDong === 1 && dt[2].truong.join(',') === 'AccountObjectName,Detail,InvNo,RefID'
+            && dt[2].mau[0].AccountObjectName.length === 161 && dt[2].mau[0].Detail === '[mảng 2]', dt)
+        ok('8s. Dò thô gửi đúng cả khoảng một lần, Length nhỏ, đúng đường từng biến thể',
+            goiD.filter(g => g.url.includes('/invoiceweb/paging')).every(g => g.body.FromDate === '2026-10-01' && g.body.ToDate === '2026-10-29' && g.body.Length === 3)
+            && goiD.filter(g => g.url.includes(MTT)).length === 1 && goiD.filter(g => g.url.includes(THUONG)).length === 2)
     }
 
     /* 9 — Khớp hoá đơn ↔ khách ↔ yêu cầu (chủ shop: chỉ khách gõ /hoadon, hoặc khách lấy định kỳ) */
@@ -302,6 +357,8 @@ async function main() {
         ok('10d. Đã gắn /api/meinvoice', idx.includes("app.use('/api/meinvoice', meInvoiceRoutes)") && idx.includes("import meInvoiceRoutes from './routes/meInvoice'"))
         const lib = fs.readFileSync(path.join(goc, 'lib', 'meInvoice.ts'), 'utf8')
         ok('10e. Thư viện meInvoice CHỈ đọc: không gọi publishing / insert / delete / sendemail', !/\/invoice\/publishing|\/invoiceweb\/insert|\/invoiceweb\/delete|\/invoice\/sendemail/.test(lib.replace(/\/\*[\s\S]*?\*\//g, '')))
+        ok('10f. /do-tho: quyền xem, khoá quản trị được dùng để đo', /router\.post\('\/do-tho', XEM/.test(route) && ds.includes("'POST /do-tho'"), ds)
+        ok('10g. /soi báo cảnh báo khi một danh sách lỗi / hình lạ (không để 0 che đọc hỏng)', /canhBao/.test(route) && /web\.loiNguon/.test(route) && /web\.khongDocDuoc/.test(route))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)
