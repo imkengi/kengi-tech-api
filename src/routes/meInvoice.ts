@@ -6,10 +6,10 @@
  *   PUT    /ket-noi       lưu kết nối (Client Secret / mật khẩu để trống = giữ nguyên)         einvoice.config
  *   DELETE /ket-noi       xoá kết nối                                                         einvoice.config
  *   POST   /ket-noi/thu   thử đăng nhập cả hai đường (lấy token mới)                          einvoice.config
- *   POST   /soi           {tu, den?, trangThai?} CHỈ ĐỌC: hoá đơn trên web app meInvoice (thường + máy tính tiền) +
+ *   POST   /soi           {tu, den?} CHỈ ĐỌC: hoá đơn ĐÃ PHÁT HÀNH (danh sách tích hợp /invoice/paging — mọi kênh lập) +
  *                         xem trước hoá đơn nào sẽ gửi nhóm Zalo nào (chưa gửi gì)              einvoice.view
- *   POST   /do-tho        {tu, den?, trangThai?, bienThe?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo từng biến thể
- *                         (danh sách / có mã / khoảng ngày) — đo trước khi map                    einvoice.view
+ *   POST   /do-tho        {tu, den?, trangThai?, bienThe?, maTraCuu?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo từng biến thể
+ *                         (danh sách / có mã / khoảng ngày) + trạng thái theo mã tra cứu — đo trước khi map   einvoice.view
  *
  * Vận hành nội bộ (đo dữ liệu thật): x-admin-key + x-store-code CHỈ cho GET /ket-noi, POST /ket-noi/thu, POST /soi, POST /do-tho — không sửa/xoá.
  */
@@ -19,8 +19,8 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import {
-    LoiMeInvoice, docKetNoi, moTaKetNoi, luuKetNoi, xoaKetNoi, thuKetNoi, dsHoaDonWeb, docHoaDon, doTho, TRANG_THAI_WEB, NGUON_WEB,
-    type BienTheDo, type NguonWeb,
+    LoiMeInvoice, docKetNoi, moTaKetNoi, luuKetNoi, xoaKetNoi, thuKetNoi, dsHoaDonPhatHanh, docHoaDon, doTho, doTrangThai, TRANG_THAI_WEB, NGUON_WEB,
+    type BienTheDo,
 } from '../lib/meInvoice'
 import { xemTruocGui, NHAN_KET_QUA } from '../lib/hoaDonMisaZalo'
 
@@ -97,42 +97,41 @@ router.post('/soi', XEM, async (req: AuthRequest, res: Response) => {
         const b = req.body || {}
         const tu = String(b.tu || '')
         const den = b.den ? String(b.den) : tu
-        const trangThai = b.trangThai === undefined ? '6' : String(b.trangThai)
         if (!laNgay(tu) || !laNgay(den) || den < tu) { res.status(400).json({ success: false, error: 'Ngày phải dạng YYYY-MM-DD, "đến" không trước "từ"' }); return }
         if ((Date.parse(den) - Date.parse(tu)) / 86_400_000 + 1 > SOI_TOI_DA_NGAY) { res.status(400).json({ success: false, error: `Soi tối đa ${SOI_TOI_DA_NGAY} ngày một lần` }); return }
-        if (!TRANG_THAI_WEB[trangThai]) { res.status(400).json({ success: false, error: 'trangThai phải là 0, 4, 6 hoặc 7' }); return }
 
         const kn = await docKetNoi(req.storePrisma)
         if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
-        const web = await dsHoaDonWeb(req.storePrisma, kn, tu, den, trangThai)
-        const tho = web.tho
+        const ph = await dsHoaDonPhatHanh(req.storePrisma, kn, tu, den)
+        const tho = ph.tho
         const hoaDons = tho.map(docHoaDon)
+        // danh sách tích hợp chỉ có HĐ ĐÃ PHÁT HÀNH; trạng thái cấp mã / xoá / thay thế từng HĐ sẽ hỏi lại MISA ngay trước khi gửi.
         // xemTruocGui giữ thứ tự ⇒ dòng i là hoá đơn i
-        const { dong, dem } = await xemTruocGui(req.storePrisma, hoaDons, trangThai === '6')
+        const { dong, dem } = await xemTruocGui(req.storePrisma, hoaDons, true)
 
         // Không để "0 hoá đơn" che chuyện đọc hỏng
         const canhBao: string[] = []
-        for (const n of Object.keys(web.loiNguon) as NguonWeb[]) canhBao.push(`Không đọc được ${NGUON_WEB[n].nhan} ${web.loiNguon[n]}`)
-        if (web.khongDocDuoc.length) {
-            const k = web.khongDocDuoc
-            canhBao.push(`MISA trả dữ liệu Kengi chưa đọc được ở ${k.length} lượt (${k.slice(0, 3).map(x => `${NGUON_WEB[x.nguon].nhan} ngày ${x.ngay}: ${x.hinh}`).join('; ')}) — những ngày đó KHÔNG có nghĩa là không có hoá đơn.`)
+        if (ph.khongDocDuoc.length) {
+            const k = ph.khongDocDuoc
+            canhBao.push(`MISA trả dữ liệu Kengi chưa đọc được ở ${k.length} ngày (${k.slice(0, 3).map(x => `${x.ngay}: ${x.hinh}`).join('; ')}) — những ngày đó KHÔNG có nghĩa là không có hoá đơn.`)
         }
+        for (const t of ph.thieu) canhBao.push(`Ngày ${t.ngay}: MISA báo ${t.misa} hoá đơn mà Kengi mới đọc được ${t.doc}.`)
 
         // Tên trường MISA trả về (đo tên thật — tài liệu không ghi đủ) + một bản ghi mẫu nguyên văn
         const truong = [...new Set(tho.flatMap(r => (r && typeof r === 'object' ? Object.keys(r) : [])))].sort()
         res.json({
             success: true,
             data: {
-                tu, den, trangThai, nhanTrangThai: TRANG_THAI_WEB[trangThai],
-                tong: tho.length, ngayCat: web.ngayCat,
-                demNguon: web.demNguon, nhanNguon: { thuong: NGUON_WEB.thuong.nhan, mtt: NGUON_WEB.mtt.nhan },
+                tu, den, trangThai: 'phat_hanh', nhanTrangThai: 'Đã phát hành',
+                tong: tho.length, ngayCat: ph.ngayCat,
+                demNguon: ph.demNguon, nhanNguon: { thuong: NGUON_WEB.thuong.nhan, mtt: NGUON_WEB.mtt.nhan },
                 canhBao,
                 coMaTraCuu: hoaDons.filter(h => h.maTraCuu).length,
                 truong, mau: tho[0] ?? null,
                 dem, nhanKetQua: NHAN_KET_QUA,
                 catDong: dong.length > SOI_TOI_DA_DONG,
                 dong: dong.slice(0, SOI_TOI_DA_DONG).map((d, i) => ({
-                    nguon: web.dong[i]?.nguon ?? null,
+                    nguon: ph.dong[i]?.nguon ?? null,
                     refId: d.hoaDon.refId, kyHieu: d.hoaDon.kyHieu, so: d.hoaDon.so, ngay: d.hoaDon.ngay,
                     nguoiMua: d.hoaDon.tenNguoiMua, mst: d.hoaDon.mst, maKhach: d.hoaDon.maKhach, tongTien: d.hoaDon.tongTien,
                     coMaTraCuu: !!d.hoaDon.maTraCuu, trangThaiMisa: d.hoaDon.trangThai,
@@ -152,6 +151,15 @@ const soNgay = (tu: string, den: string) => (Date.parse(den) - Date.parse(tu)) /
 router.post('/do-tho', XEM, async (req: AuthRequest, res: Response) => {
     try {
         const b = req.body || {}
+        // trạng thái theo mã tra cứu (/invoice/status) — đo riêng, không cần ngày
+        if (Array.isArray(b.maTraCuu) && b.maTraCuu.length) {
+            const ma = b.maTraCuu.map((x: any) => String(x).trim()).filter((x: string) => /^[0-9A-Za-z_-]{4,40}$/.test(x)).slice(0, 20)
+            if (!ma.length) { res.status(400).json({ success: false, error: 'maTraCuu không hợp lệ' }); return }
+            const kn = await docKetNoi(req.storePrisma)
+            if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
+            res.json({ success: true, data: { coMaDaLuu: kn.coMa, trangThaiHd: await doTrangThai(req.storePrisma, kn, ma, b.mayTinhTien === true) } })
+            return
+        }
         const tu = String(b.tu || '')
         const den = b.den ? String(b.den) : tu
         const trangThai = b.trangThai === undefined ? '6' : String(b.trangThai)

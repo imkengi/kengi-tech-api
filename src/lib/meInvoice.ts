@@ -17,8 +17,9 @@
  * CHƯA ĐO (28/10/2026 — chưa có tài khoản thật): tên trường "mã tra cứu" trong danh sách HĐ web (tài liệu chỉ nói "Số hóa đơn,
  * Mã tra cứu…"); `data` trả mảng hay chuỗi JSON; ToDate có tính trọn ngày không; token web sống bao lâu.
  * ⇒ đọc trường kiểu dò nhiều tên (docTruong), và "soi" trả nguyên tên trường để đo trước khi bật gửi.
- * 29/10/2026 HUTI nối thật: hai đường đăng nhập đều được, nhưng /invoiceweb/paging trả 0 cả tuần ⇒ thêm danh sách máy tính tiền
- * (/paging/calculating), báo "không đọc được" thay vì 0 khi hình lạ, và doTho (POST /api/meinvoice/do-tho) để đo hình thật.
+ * 29/10/2026 HUTI nối thật, ĐO bằng doTho (POST /api/meinvoice/do-tho): /invoiceweb/paging chỉ thấy HĐ lập trên web app (năm 2026: 11)
+ * trong khi tháng 10 đã phát hành 351 HĐ (lập từ AMIS) ⇒ nguồn soi = /invoice/paging (danh sách tích hợp theo ký hiệu, dsHoaDonPhatHanh).
+ * Mã tra cứu = TransactionID (12 ký tự); mã khách = BuyerCode; ToDate tính trọn ngày. Hình lạ ⇒ báo "không đọc được", không ra 0.
  */
 
 import { maHoa, giaiMa, coKhoaVault } from './maHoaKhoa'
@@ -166,7 +167,7 @@ export function docHoaDon(raw: any): HoaDonMisa {
         ngay: ngayHoaDon(docTruong(raw, 'InvDate', 'InvoiceDate')),
         maKhach: chuoi(docTruong(raw, 'AccountObjectCode', 'BuyerCode')),
         mst: mstChuan(docTruong(raw, 'AccountObjectTaxCode', 'BuyerTaxCode')),
-        tenNguoiMua: chuoi(docTruong(raw, 'AccountObjectName', 'BuyerLegalName', 'BuyerFullName', 'ContactName')),
+        tenNguoiMua: chuoi(docTruong(raw, 'AccountObjectName', 'BuyerLegalName', 'BuyerFullName', 'BuyerName', 'ContactName')),
         tongTien: Number.isFinite(tong) ? tong : null,
         maTraCuu: chuoi(docTruong(raw, 'TransactionID', 'TransactionId', 'LookupCode', 'SearchCode')),
         trangThai: chuoi(docTruong(raw, 'PublishStatus', 'InvoiceStatus', 'Status')),
@@ -508,70 +509,89 @@ export async function thuKetNoi(sp: any) {
 export const TRANG_THAI_WEB: Record<string, string> = { '0': 'Chưa phát hành', '4': 'Chờ cấp mã', '6': 'Đã cấp mã', '7': 'Bị từ chối cấp mã' }
 
 /**
- * Web app có HAI danh sách (tài liệu): hoá đơn thường, và hoá đơn khởi tạo từ MÁY TÍNH TIỀN (ký hiệu có chữ M, vd 1C26MAA) ở đường
- * riêng /paging/calculating — loại này luôn có mã nên invoiceWithCode=true. 29/10/2026 HUTI soi /paging cả tuần, trạng thái 6/0/4 đều 0
- * ⇒ đọc cả hai, không bắt chủ shop phải biết mình dùng loại nào.
+ * Danh sách trên WEB APP (chỉ còn dùng để dò): hoá đơn thường, và hoá đơn MÁY TÍNH TIỀN ở đường riêng /paging/calculating (luôn có mã).
+ * ĐO 29/10/2026 HUTI: web app chỉ thấy HĐ lập trên web (năm 2026: 11 cái) — HĐ lập từ AMIS không nằm đây ⇒ KHÔNG phải nguồn soi.
  */
 export const NGUON_WEB = {
     thuong: { nhan: 'hoá đơn thường', duong: '/invoiceweb/paging' },
     mtt: { nhan: 'hoá đơn máy tính tiền', duong: '/invoiceweb/paging/calculating' },
 } as const
 export type NguonWeb = keyof typeof NGUON_WEB
-const CAC_NGUON = Object.keys(NGUON_WEB) as NguonWeb[]
 
-const duongNguon = (nguon: NguonWeb, coMa: boolean) => `${NGUON_WEB[nguon].duong}?invoiceWithCode=${nguon === 'mtt' || coMa ? 'true' : 'false'}`
+export interface DongHd { raw: any; nguon: NguonWeb }
 
-export interface DongWeb { raw: any; nguon: NguonWeb }
+const laMayTinhTien = (r: any) => { const v = docTruong(r, 'IsInvoiceCalculatingMachine'); return v === true || v === 'true' }
 
 /**
- * Hoá đơn trên web app meInvoice trong [tu, den] (YYYY-MM-DD) theo trạng thái phát hành, CẢ HAI danh sách — đi hết trang (100/trang),
- * tối đa `tranTrang` trang. Tài liệu khuyên lọc 1 ngày khi dữ liệu lớn ⇒ đi TỪNG NGÀY. Không lặng lẽ ra 0:
+ * Hoá đơn ĐÃ PHÁT HÀNH trong [tu, den] (YYYY-MM-DD) — POST /invoice/paging "Danh sách hóa đơn theo ký hiệu" (token TÍCH HỢP).
+ * ĐO 29/10/2026 HUTI: tháng 10 = 351 HĐ 1C26TSG, mọi kênh lập (AMIS, web app; máy tính tiền có cờ IsInvoiceCalculatingMachine);
+ * data = {PageData, TotalCount, Summary}; FromDate=ToDate một ngày ⇒ đúng HĐ ngày đó (27/10 = 14, 28/10 = 27) ⇒ đi TỪNG NGÀY,
+ * Skip/Take 100 tới hết TotalCount, tối đa `tranTrang` trang. Không lặng lẽ thiếu:
  *   ngayCat       ngày chạm trần trang
- *   loiNguon      danh sách MISA báo lỗi (nguyên văn, kèm ngày) — các ngày sau của danh sách đó KHÔNG đọc
  *   khongDocDuoc  MISA trả thành công mà hình lạ (moTaHinh) — ngày đó KHÔNG được hiểu là không có hoá đơn
- * Cả hai danh sách đều lỗi ⇒ ném lỗi.
+ *   thieu         đọc ít hơn TotalCount MISA báo
  */
-export async function dsHoaDonWeb(sp: any, kn: KetNoiMeInvoice, tu: string, den: string, trangThai = '6', tranTrang = 5) {
+export async function dsHoaDonPhatHanh(sp: any, kn: KetNoiMeInvoice, tu: string, den: string, tranTrang = 5) {
     const ngay: string[] = []
     for (let t = Date.parse(tu + 'T00:00:00Z'); t <= Date.parse(den + 'T00:00:00Z'); t += 86_400_000) ngay.push(new Date(t).toISOString().slice(0, 10))
     if (!ngay.length || ngay.length > 31) throw new LoiMeInvoice('Khoảng ngày phải từ 1 tới 31 ngày.')
-    const dong: DongWeb[] = []
+    const dong: DongHd[] = []
     const daCo = new Set<string>()
     const ngayCat = new Set<string>()
-    const loiNguon: Partial<Record<NguonWeb, string>> = {}
-    const khongDocDuoc: { nguon: NguonWeb; ngay: string; hinh: string }[] = []
+    const khongDocDuoc: { ngay: string; hinh: string }[] = []
+    const thieu: { ngay: string; misa: number; doc: number }[] = []
     const demNguon: Record<NguonWeb, number> = { thuong: 0, mtt: 0 }
-    for (const nguon of CAC_NGUON) {
-        let dangNgay = ngay[0]
-        try {
-            for (const n of ngay) {
-                dangNgay = n
-                for (let trang = 0; ; trang++) {
-                    if (trang >= tranTrang) { ngayCat.add(n); break }
-                    const data = await goiApi(sp, kn, 'web', duongNguon(nguon, kn.coMa), {
-                        Start: trang * MOI_TRANG, Length: MOI_TRANG, Sort: 'InvDate', FromDate: n, ToDate: n, PublishStatus: String(trangThai),
-                    })
-                    const { ds, docDuoc } = tachDanhSach(data)
-                    if (!docDuoc) { khongDocDuoc.push({ nguon, ngay: n, hinh: moTaHinh(data) }); break }
-                    for (const r of ds) {
-                        // cùng một HĐ lọt vào cả hai danh sách / hai trang ⇒ đếm một lần (RefID, rồi ký hiệu + số)
-                        const h = docHoaDon(r)
-                        const khoa = h.refId || (h.kyHieu && h.so ? `${h.kyHieu}#${h.so}` : '')
-                        if (khoa && daCo.has(khoa)) continue
-                        if (khoa) daCo.add(khoa)
-                        dong.push({ raw: r, nguon })
-                        demNguon[nguon]++
-                    }
-                    if (ds.length < MOI_TRANG) break
-                }
+    for (const n of ngay) {
+        let doc = 0
+        let tongNgay: number | null = null
+        let hong = false
+        for (let trang = 0; ; trang++) {
+            if (trang >= tranTrang) { ngayCat.add(n); break }
+            const data = await goiApi(sp, kn, 'tichHop', `/invoice/paging?invoiceWithCode=${kn.coMa ? 'true' : 'false'}`, {
+                FromDate: n, ToDate: n, Skip: trang * MOI_TRANG, Take: MOI_TRANG, ListInvTemplate: [],
+            })
+            const { ds, tong, docDuoc } = tachDanhSach(data)
+            if (!docDuoc) { khongDocDuoc.push({ ngay: n, hinh: moTaHinh(data) }); hong = true; break }
+            if (tong !== null) tongNgay = tong
+            doc += ds.length
+            for (const r of ds) {
+                // trang chồng nhau ⇒ đếm một lần (RefID, rồi mã tra cứu, rồi ký hiệu + số)
+                const h = docHoaDon(r)
+                const khoa = h.refId || h.maTraCuu || (h.kyHieu && h.so ? `${h.kyHieu}#${h.so}` : '')
+                if (khoa && daCo.has(khoa)) continue
+                if (khoa) daCo.add(khoa)
+                const nguon: NguonWeb = laMayTinhTien(r) ? 'mtt' : 'thuong'
+                dong.push({ raw: r, nguon })
+                demNguon[nguon]++
             }
-        } catch (e: any) {
-            if (!(e instanceof LoiMeInvoice)) throw e
-            loiNguon[nguon] = `từ ngày ${dangNgay}: ${e.message}`
+            if (ds.length < MOI_TRANG || (tongNgay !== null && doc >= tongNgay)) break
         }
+        if (!hong && !ngayCat.has(n) && tongNgay !== null && doc < tongNgay) thieu.push({ ngay: n, misa: tongNgay, doc })
     }
-    if (CAC_NGUON.every(x => loiNguon[x])) throw new LoiMeInvoice(CAC_NGUON.map(x => `${NGUON_WEB[x].nhan} ${loiNguon[x]}`).join(' · '))
-    return { tho: dong.map(d => d.raw), dong, ngayCat: [...ngayCat].sort(), loiNguon, khongDocDuoc, demNguon }
+    return { tho: dong.map(d => d.raw), dong, ngayCat: [...ngayCat].sort(), khongDocDuoc, thieu, demNguon }
+}
+
+/**
+ * DÒ trạng thái (chỉ đọc): POST /invoice/status theo mã tra cứu (inputType=1). Tài liệu TỰ MÂU THUẪN (StatusItem {StatusCode…} hay
+ * InvoiceStatus {SendTaxStatus, IsDelete, ReferenceType…}) ⇒ đo hình thật trước khi dùng để chặn gửi.
+ */
+export async function doTrangThai(sp: any, kn: KetNoiMeInvoice, maTraCuu: string[], mayTinhTien = false) {
+    const duong = `/invoice/status?inputType=1&invoiceWithCode=${kn.coMa ? 'true' : 'false'}&invoiceCalcu=${mayTinhTien ? 'true' : 'false'}`
+    try {
+        const { status, tv, text } = await goiApiTho(sp, kn, 'tichHop', duong, maTraCuu)
+        const d = moChuoiJson(tv.data)
+        const ds = Array.isArray(d) ? d : []
+        return {
+            duong, httpStatus: status, ok: tv.ok, loi: tv.loi || null, hinh: tv.ok ? moTaHinh(tv.data) : null,
+            truong: ds[0] && typeof ds[0] === 'object' ? Object.keys(ds[0]).sort() : null,
+            mau: ds.slice(0, 3).map(rutGon),
+            khung: d && typeof d === 'object' && !Array.isArray(d) ? rutGon(d) : null,
+            tho: !tv.ok ? String(text || '').slice(0, 600) : null,
+        }
+    } catch (e: any) {
+        if (!(e instanceof LoiMeInvoice)) throw e
+        return { duong, ok: false, loi: e.message }
+    }
 }
 
 /**
@@ -613,6 +633,8 @@ export async function doTho(sp: any, kn: KetNoiMeInvoice, bienThe: BienTheDo[]) 
                 docDuoc: tach?.docDuoc ?? null, soDong: tach ? tach.ds.length : null, tong: tach?.tong ?? null,
                 truong: tach?.ds[0] && typeof tach.ds[0] === 'object' ? Object.keys(tach.ds[0]).sort() : null,
                 mau: tach ? tach.ds.slice(0, 2).map(rutGon) : null,
+                // ký hiệu-số từng HĐ (không lộ người mua) — đối chiếu đủ/thiếu với màn hình MISA
+                dsSo: tach ? tach.ds.slice(0, 100).map(r => `${docTruong(r, 'InvSeries') ?? ''}-${docTruong(r, 'InvNo') ?? ''}`) : null,
                 // object mà không đọc ra danh sách ⇒ cho xem khung để biết danh sách nằm ở khoá nào
                 khung: tach && !tach.docDuoc && d && typeof d === 'object' && !Array.isArray(d) ? rutGon(d) : null,
                 // MISA báo lỗi / không phải JSON ⇒ mấy trăm ký tự đầu nguyên văn

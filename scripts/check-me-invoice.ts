@@ -12,7 +12,7 @@ import fs from 'fs'
 import path from 'path'
 import {
     docTruong, docTraVe, moTaLoi, tachToken, ngayHoaDon, docHoaDon, tachDanhSach, congHopLe, moTaKetNoi, mstChuan,
-    luuKetNoi, docKetNoi, thuKetNoi, goiApi, dsHoaDonWeb, doTho, moTaHinh, LoiMeInvoice, CONG_MAC_DINH, type KetNoiMeInvoice, type HoaDonMisa,
+    luuKetNoi, docKetNoi, thuKetNoi, goiApi, dsHoaDonPhatHanh, doTho, doTrangThai, moTaHinh, LoiMeInvoice, CONG_MAC_DINH, type KetNoiMeInvoice, type HoaDonMisa,
 } from '../src/lib/meInvoice'
 import { quyetDinh, timKhach, phieuTrongCuaSo, CUA_SO_NGAY, type BangKhach, type PhieuLayHd, type NhomZalo } from '../src/lib/hoaDonMisaZalo'
 
@@ -192,22 +192,23 @@ async function main() {
 
     /* 8 — Gọi MISA giả: đúng header + tên trường từng đường đăng nhập, đăng nhập lại khi token bị từ chối */
     {
-        // hai danh sách web app: hoá đơn thường / máy tính tiền (29/10/2026)
+        // NGUỒN SOI = danh sách tích hợp /invoice/paging (đo HUTI 29/10/2026: {PageData, TotalCount, Summary}); web app chỉ còn để dò
+        const TICH = '/invoice/paging?'
         const THUONG = '/invoiceweb/paging?'
         const MTT = '/invoiceweb/paging/calculating?'
+        const trangTich = (ds: any[], tong: number | null) => ({ json: { Success: true, Data: { PageData: ds, TotalCount: tong, Summary: {} } } })
         const sp = spGia()
         await luuKetNoi(sp, { clientId: 'CID-9', clientSecret: 'SEC-9', mst: '0312345678', taiKhoan: 'kt@hungtin.vn', matKhau: 'mk9' }, 'chu')
         let dongPaging = 0
         const goi = misaGia((g) => {
             if (g.url.endsWith('/invoice/token')) return { json: { Success: true, Data: 'TK-TICH-HOP' } }
             if (g.url.endsWith('/invoiceweb/token')) return { json: { Success: true, Data: { access_token: 'TK-WEB' } } }
-            if (g.url.includes(MTT)) return { json: { success: true, data: [] } }
-            if (g.url.includes(THUONG)) {
+            if (g.url.includes(TICH)) {
                 dongPaging++
-                if (dongPaging === 1) return { status: 401, json: { success: false, errorCode: 'TokenExpired' } }
-                const start = g.body.Start
-                const n = start === 0 ? 100 : 20
-                return { json: { success: true, data: Array.from({ length: n }, (_, i) => ({ InvNo: String(start + i + 1), InvDate: g.body.FromDate })) } }
+                if (dongPaging === 1) return { status: 401, json: { Success: false, ErrorCode: 'TokenExpired' } }
+                const skip = g.body.Skip
+                const n = skip === 0 ? 100 : 20
+                return trangTich(Array.from({ length: n }, (_, i) => ({ RefID: `r${skip + i}`, InvNo: String(skip + i + 1), InvDate: g.body.FromDate + 'T00:00:00+07:00', TransactionID: `MTC${skip + i}` })), 120)
             }
             return { status: 404, text: 'không có' }
         })
@@ -221,21 +222,19 @@ async function main() {
         ok('8d. Token lưu trong DB đã mã hoá', sp.dong().tokenWeb && sp.dong().tokenWeb !== 'TK-WEB' && sp.dong().tokenTichHop !== 'TK-TICH-HOP')
         const kn = (await docKetNoi(sp))!
         const truocKhi = goi.length
-        const { tho, ngayCat } = await dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6')
+        const { tho, ngayCat, thieu } = await dsHoaDonPhatHanh(sp, kn, '2026-10-28', '2026-10-28')
         const sau = goi.slice(truocKhi)
-        const paging = sau.filter(g => g.url.includes(THUONG))
-        ok('8e. Token bị từ chối (401) ⇒ đăng nhập web lại MỘT lần rồi đọc tiếp', sau.some(g => g.url.endsWith('/invoiceweb/token')) && tho.length === 120, { soGoi: sau.map(g => g.url.split('/meinvoice')[1]), tho: tho.length })
-        ok('8f. Đi trang: Start 0 rồi 100, Length 100, một ngày FromDate=ToDate, PublishStatus chuỗi "6"',
-            paging.slice(1).map(g => g.body.Start).join(',') === '0,100' && paging.every(g => g.body.Length === 100 && g.body.FromDate === '2026-10-28' && g.body.ToDate === '2026-10-28' && g.body.PublishStatus === '6'), paging.map(g => g.body))
-        ok('8g. Lời gọi web app có Authorization Bearer + ClientID + TaxCode; invoiceWithCode theo cấu hình',
-            paging.slice(1).every(g => g.headers.Authorization === 'Bearer TK-WEB' && g.headers.ClientID === 'CID-9' && g.headers.TaxCode === '0312345678' && g.url.includes('invoiceWithCode=true')), paging[1]?.headers)
-        ok('8h. Không chạm trần trang ⇒ ngayCat rỗng', ngayCat.length === 0, ngayCat)
+        const paging = sau.filter(g => g.url.includes(TICH))
+        ok('8e. Token bị từ chối (401) ⇒ đăng nhập TÍCH HỢP lại MỘT lần rồi đọc tiếp', sau.some(g => g.url.endsWith('/invoice/token')) && tho.length === 120, { soGoi: sau.map(g => g.url.split('/meinvoice')[1]), tho: tho.length })
+        ok('8f. Đi trang: Skip 0 rồi 100, Take 100, một ngày FromDate=ToDate, ListInvTemplate rỗng (mọi ký hiệu)',
+            paging.slice(1).map(g => g.body.Skip).join(',') === '0,100' && paging.every(g => g.body.Take === 100 && g.body.FromDate === '2026-10-28' && g.body.ToDate === '2026-10-28' && Array.isArray(g.body.ListInvTemplate) && g.body.ListInvTemplate.length === 0), paging.map(g => g.body))
+        ok('8g. Danh sách tích hợp: Bearer token TÍCH HỢP + ClientID, KHÔNG TaxCode; invoiceWithCode theo cấu hình',
+            paging.slice(1).every(g => g.headers.Authorization === 'Bearer TK-TICH-HOP' && g.headers.ClientID === 'CID-9' && !('TaxCode' in g.headers) && g.url.includes('invoiceWithCode=true')), paging[1]?.headers)
+        ok('8h. Đọc đủ TotalCount, không chạm trần ⇒ ngayCat + thieu rỗng', ngayCat.length === 0 && thieu.length === 0, { ngayCat, thieu })
         // trần trang: luôn trả đủ 100 ⇒ phải báo ngày bị cắt, không lặng lẽ
-        misaGia((g) => g.url.includes(THUONG)
-            ? { json: { success: true, data: Array.from({ length: 100 }, () => ({ InvNo: '1' })) } }
-            : g.url.includes(MTT) ? { json: { success: true, data: [] } } : { json: { Success: true, Data: 'TK' } })
-        const cat = await dsHoaDonWeb(sp, kn, '2026-10-27', '2026-10-28', '6', 2)
-        ok('8i. Chạm trần trang ⇒ báo đúng ngày bị cắt (không cắt âm thầm)', cat.ngayCat.join(',') === '2026-10-27,2026-10-28' && cat.tho.length === 400, cat.ngayCat)
+        misaGia((g) => g.url.includes(TICH) ? trangTich(Array.from({ length: 100 }, () => ({ InvNo: '1' })), 1000) : { json: { Success: true, Data: 'TK' } })
+        const cat = await dsHoaDonPhatHanh(sp, kn, '2026-10-27', '2026-10-28', 2)
+        ok('8i. Chạm trần trang ⇒ báo đúng ngày bị cắt (không cắt âm thầm)', cat.ngayCat.join(',') === '2026-10-27,2026-10-28' && cat.tho.length === 400 && cat.thieu.length === 0, cat.ngayCat)
         // lỗi thật (không phải token) ⇒ ném nguyên văn, không thử lại vô tận
         let lan = 0
         misaGia((g) => { if (g.url.includes('/invoiceweb/paging')) { lan++; return { json: { success: false, errorCode: 'InvalidParameter', descriptionErrorCode: 'FromDate không hợp lệ' } } } return { json: { Success: true, Data: 'TK' } } })
@@ -248,33 +247,24 @@ async function main() {
         ok('8k. ClientID sai ⇒ thử kết nối báo lỗi cổng nguyên văn ở cả hai đường', !thu2.ok && String(thu2.tichHop.loi).includes('invalid subscription key') && String(thu2.web.loi).includes('invalid subscription key'), thu2)
         ok('8l. LoiMeInvoice là lỗi riêng (route hiện nguyên văn)', new LoiMeInvoice('x') instanceof Error && new LoiMeInvoice('x').name === 'LoiMeInvoice')
 
-        // 29/10/2026 — HUTI soi /paging cả tuần ra 0: đọc cả danh sách máy tính tiền, không để đọc hỏng thành 0
-        const goiM = misaGia((g) => {
-            if (g.url.includes(MTT)) return { json: { success: true, data: [{ RefID: 'r-2', InvSeries: '1C26MAA', InvNo: '9' }, { RefID: 'r-1', InvNo: '1' }] } }
-            if (g.url.includes(THUONG)) return { json: { success: true, data: [{ RefID: 'r-1', InvSeries: '1K26TAA', InvNo: '1' }] } }
-            return { json: { Success: true, Data: 'TK' } }
-        })
-        const hai = await dsHoaDonWeb(sp, { ...kn, coMa: false }, '2026-10-28', '2026-10-28', '6')
-        ok('8m. Đọc CẢ danh sách máy tính tiền (invoiceWithCode=true dù cấu hình không mã); HĐ trùng RefID đếm một lần',
-            goiM.some(g => g.url.includes('/invoiceweb/paging/calculating?invoiceWithCode=true')) && goiM.some(g => g.url.includes('/invoiceweb/paging?invoiceWithCode=false'))
-            && hai.tho.length === 2 && hai.demNguon.thuong === 1 && hai.demNguon.mtt === 1 && hai.dong.find(d => d.raw.RefID === 'r-2')?.nguon === 'mtt', { tho: hai.tho, dem: hai.demNguon })
-        const goiL = misaGia((g) => {
-            if (g.url.includes(MTT)) return { json: { success: false, errorCode: 'NotPermission', descriptionErrorCode: 'Không có quyền hoá đơn máy tính tiền' } }
-            if (g.url.includes(THUONG)) return { json: { success: true, data: [{ RefID: 'r-5', InvNo: '5' }] } }
-            return { json: { Success: true, Data: 'TK' } }
-        })
-        const motLoi = await dsHoaDonWeb(sp, kn, '2026-10-27', '2026-10-28', '6')
-        ok('8n. Một danh sách lỗi ⇒ giữ danh sách kia, lỗi nguyên văn kèm ngày, KHÔNG gọi tiếp danh sách lỗi',
-            motLoi.tho.length === 1 && String(motLoi.loiNguon.mtt).includes('Không có quyền hoá đơn máy tính tiền') && String(motLoi.loiNguon.mtt).includes('2026-10-27')
-            && !motLoi.loiNguon.thuong && goiL.filter(g => g.url.includes(MTT)).length === 1, { loi: motLoi.loiNguon, tho: motLoi.tho.length })
-        misaGia((g) => g.url.includes('/invoiceweb/paging') ? { json: { success: false, errorCode: 'InvalidTaxCode', descriptionErrorCode: 'MST không khớp' } } : { json: { Success: true, Data: 'TK' } })
-        const caHai = await nem(() => dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6'))
-        ok('8o. Cả hai danh sách lỗi ⇒ BÁO LỖI (không trả "0 hoá đơn")', caHai.includes('MST không khớp') && caHai.includes('hoá đơn thường') && caHai.includes('hoá đơn máy tính tiền'), caHai)
-        misaGia((g) => g.url.includes(THUONG) ? { json: { success: true, data: { Result: [{ InvNo: '1' }], Count: 1 } } }
-            : g.url.includes(MTT) ? { json: { success: true, data: [] } } : { json: { Success: true, Data: 'TK' } })
-        const la = await dsHoaDonWeb(sp, kn, '2026-10-28', '2026-10-28', '6')
+        // 29/10/2026 — HĐ máy tính tiền nằm CHUNG danh sách tích hợp (cờ IsInvoiceCalculatingMachine); trang chồng ⇒ đếm một lần
+        const goiM = misaGia((g) => g.url.includes(TICH)
+            ? trangTich([{ RefID: 'r-1', InvNo: '1', IsInvoiceCalculatingMachine: false }, { RefID: 'r-2', InvSeries: '1C26MAA', InvNo: '2', IsInvoiceCalculatingMachine: true }, { RefID: 'r-1', InvNo: '1' }], 3)
+            : { json: { Success: true, Data: 'TK' } })
+        const hai = await dsHoaDonPhatHanh(sp, { ...kn, coMa: false }, '2026-10-28', '2026-10-28')
+        ok('8m. Máy tính tiền theo cờ IsInvoiceCalculatingMachine; trùng RefID đếm một lần; invoiceWithCode theo cấu hình (không mã)',
+            goiM.some(g => g.url.includes('/invoice/paging?invoiceWithCode=false')) && hai.tho.length === 2 && hai.demNguon.thuong === 1 && hai.demNguon.mtt === 1
+            && hai.dong.find(d => d.raw.RefID === 'r-2')?.nguon === 'mtt' && hai.thieu.length === 0, { tho: hai.tho, dem: hai.demNguon, thieu: hai.thieu })
+        misaGia((g) => g.url.includes(TICH) ? trangTich([{ RefID: 'a' }, { RefID: 'b' }, { RefID: 'c' }], 5) : { json: { Success: true, Data: 'TK' } })
+        const it = await dsHoaDonPhatHanh(sp, kn, '2026-10-28', '2026-10-28')
+        ok('8n. MISA báo TotalCount 5 mà chỉ trả 3 ⇒ ghi "thiếu" (không coi là đủ)', it.thieu.length === 1 && it.thieu[0].misa === 5 && it.thieu[0].doc === 3, it.thieu)
+        misaGia((g) => g.url.includes(TICH) ? { json: { Success: false, ErrorCode: 'InvalidTaxCode', Errors: ['MST không khớp'] } } : { json: { Success: true, Data: 'TK' } })
+        const loiDs = await nem(() => dsHoaDonPhatHanh(sp, kn, '2026-10-28', '2026-10-28'))
+        ok('8o. MISA báo lỗi ⇒ BÁO LỖI nguyên văn (không trả "0 hoá đơn")', loiDs.includes('MST không khớp') && loiDs.includes('InvalidTaxCode'), loiDs)
+        misaGia((g) => g.url.includes(TICH) ? { json: { Success: true, Data: { Result: [{ InvNo: '1' }], Count: 1 } } } : { json: { Success: true, Data: 'TK' } })
+        const la = await dsHoaDonPhatHanh(sp, kn, '2026-10-28', '2026-10-28')
         ok('8p. Hình lạ ⇒ ghi "không đọc được" kèm khung, không lặng lẽ thành 0', la.tho.length === 0 && la.khongDocDuoc.length === 1
-            && la.khongDocDuoc[0].hinh === 'object {Result, Count}' && la.khongDocDuoc[0].nguon === 'thuong', la.khongDocDuoc)
+            && la.khongDocDuoc[0].hinh === 'object {Result, Count}' && la.thieu.length === 0, la.khongDocDuoc)
 
         const goiD = misaGia((g) => {
             if (g.url.includes(MTT)) return { json: { success: true, data: [{ RefID: 'r-9', InvNo: '9', AccountObjectName: 'x'.repeat(300), Detail: [1, 2] }] } }
@@ -300,7 +290,16 @@ async function main() {
         ok('8t. Dò thô danh sách tích hợp: /invoice/paging, Bearer token TÍCH HỢP, không TaxCode, body Skip/Take/ListInvTemplate; đọc {Total, Items}',
             !!gT && gT.url.includes('invoiceWithCode=true') && gT.headers.Authorization?.startsWith('Bearer ') && gT.headers.Authorization !== 'Bearer TK-WEB' && !('TaxCode' in gT.headers)
             && gT.body.Skip === 0 && gT.body.Take === 3 && gT.body.ListInvTemplate.join() === '1C26TSG' && gT.body.FromDate === '2026-10-01'
-            && th[0].ok && th[0].soDong === 1 && th[0].tong === 3393 && th[0].truong.includes('TransactionID'), { gT, th })
+            && th[0].ok && th[0].soDong === 1 && th[0].tong === 3393 && th[0].truong.includes('TransactionID') && th[0].dsSo.join() === '-00003393', { gT, th })
+        // trạng thái theo mã tra cứu: tài liệu tự mâu thuẫn ⇒ chỉ ĐO, đúng tham số đường + thân là mảng mã
+        const goiS = misaGia((g) => g.url.includes('/invoice/status?')
+            ? { json: { Success: true, Data: [{ TransactionID: 'MTC1', SendTaxStatus: 2, IsDelete: false, ReferenceType: 0 }] } }
+            : { json: { Success: true, Data: 'TK' } })
+        const tt = await doTrangThai(sp, kn, ['MTC1'])
+        const gS = goiS.find(g => g.url.includes('/invoice/status?'))!
+        ok('8u. Dò trạng thái: /invoice/status?inputType=1 + invoiceWithCode + invoiceCalcu, thân = mảng mã tra cứu, token tích hợp; trả tên trường',
+            !!gS && gS.url.includes('inputType=1') && gS.url.includes('invoiceWithCode=true') && gS.url.includes('invoiceCalcu=false') && Array.isArray(gS.body) && gS.body[0] === 'MTC1'
+            && !('TaxCode' in gS.headers) && tt.ok && (tt as any).truong.includes('SendTaxStatus'), { gS, tt })
     }
 
     /* 9 — Khớp hoá đơn ↔ khách ↔ yêu cầu (chủ shop: chỉ khách gõ /hoadon, hoặc khách lấy định kỳ) */
@@ -359,7 +358,7 @@ async function main() {
         const m = /QUA_KHOA_QUAN_TRI = new Set\(\[([^\]]*)\]\)/.exec(route)
         const ds = m ? m[1] : ''
         ok('10a. Khoá quản trị KHÔNG được PUT/DELETE kết nối', !!m && !/PUT|DELETE/.test(ds) && ds.includes("'POST /soi'"), ds)
-        ok('10b. /soi: daCapMa = trangThai "6"', /xemTruocGui\(req\.storePrisma, hoaDons, trangThai === '6'\)/.test(route))
+        ok('10b. /soi đọc danh sách HĐ ĐÃ PHÁT HÀNH (tích hợp, mọi kênh lập), không phải web app', /dsHoaDonPhatHanh\(req\.storePrisma/.test(route) && !/dsHoaDonWeb/.test(route))
         ok('10c. PUT/DELETE/thử cần einvoice.config; xem/soi cần einvoice.view',
             /router\.put\('\/ket-noi', CAU_HINH/.test(route) && /router\.delete\('\/ket-noi', CAU_HINH/.test(route) && /router\.post\('\/ket-noi\/thu', CAU_HINH/.test(route)
             && /router\.get\('\/ket-noi', XEM/.test(route) && /router\.post\('\/soi', XEM/.test(route))
@@ -368,7 +367,7 @@ async function main() {
         const lib = fs.readFileSync(path.join(goc, 'lib', 'meInvoice.ts'), 'utf8')
         ok('10e. Thư viện meInvoice CHỈ đọc: không gọi publishing / insert / delete / sendemail', !/\/invoice\/publishing|\/invoiceweb\/insert|\/invoiceweb\/delete|\/invoice\/sendemail/.test(lib.replace(/\/\*[\s\S]*?\*\//g, '')))
         ok('10f. /do-tho: quyền xem, khoá quản trị được dùng để đo', /router\.post\('\/do-tho', XEM/.test(route) && ds.includes("'POST /do-tho'"), ds)
-        ok('10g. /soi báo cảnh báo khi một danh sách lỗi / hình lạ (không để 0 che đọc hỏng)', /canhBao/.test(route) && /web\.loiNguon/.test(route) && /web\.khongDocDuoc/.test(route))
+        ok('10g. /soi báo cảnh báo khi hình lạ / đọc thiếu so với TotalCount (không để 0 che đọc hỏng)', /canhBao/.test(route) && /ph\.khongDocDuoc/.test(route) && /ph\.thieu/.test(route))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)
