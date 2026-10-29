@@ -39,6 +39,8 @@ const router = Router()
 
 // ─── CÔNG KHAI: link hoá đơn trong tin Zalo — khai báo TRƯỚC lớp đăng nhập ─────
 const PDF_NHO_MS = 15 * 60_000
+/** Tối đa bấy nhiêu PDF trong RAM (~0,5 MB/tệp, đo 29/10/2026) — chủ shop 29/10: hạ 40 → 10 cho máy chủ 512 MB (từng tràn bộ nhớ) */
+const PDF_NHO_TOI_DA = 10
 const pdfNho = new Map<string, { buf: Buffer; ten: string; het: number }>()
 
 router.get('/hd/:ma/:token', async (req: Request, res: Response) => {
@@ -72,7 +74,8 @@ router.get('/hd/:ma/:token', async (req: Request, res: Response) => {
         }
         // nhớ ít phút: khách bấm lại / Zalo mở thử link thì khỏi gọi MISA lần nữa
         pdfNho.set(khoa, { buf: kq.buf, ten: kq.ten, het: Date.now() + PDF_NHO_MS })
-        for (const [k, v] of pdfNho) if (v.het < Date.now() || pdfNho.size > 40) pdfNho.delete(k)
+        // bỏ tệp hết hạn + tệp cũ nhất khi quá trần (Map giữ thứ tự thêm vào)
+        for (const [k, v] of pdfNho) if (v.het < Date.now() || pdfNho.size > PDF_NHO_TOI_DA) pdfNho.delete(k)
         guiPdf(kq.buf, kq.ten)
     } catch (e: any) {
         console.error('[meinvoice/hd]', e?.message || e)

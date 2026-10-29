@@ -569,6 +569,8 @@ async function main() {
         ok('11v2. Link công khai: không có PDF ⇒ chuyển sang link xem MISA (không nhớ link có hạn); không nốt ⇒ mã tra cứu + trang tra cứu MISA',
             /kq\.loai === 'xem'\) \{ res\.setHeader\('Cache-Control', 'no-store'\); res\.redirect\(302, kq\.link\)/.test(route) && route.includes('TRANG_TRA_CUU_MISA')
             && TRANG_TRA_CUU_MISA === 'https://www.meinvoice.vn/tra-cuu')
+        ok('11v3. PDF giữ tạm trong RAM tối đa 10 tệp (chủ shop 29/10: hạ từ 40 — máy chủ 512 MB) và trần dùng đúng hằng số',
+            /const PDF_NHO_TOI_DA = 10\b/.test(route) && /pdfNho\.size > PDF_NHO_TOI_DA/.test(route) && !/pdfNho\.size > \d/.test(route))
         const qk = (/QUA_KHOA_QUAN_TRI = new Set\(\[([^\]]*)\]\)/.exec(route) || [])[1] || ''
         ok('11w. Khoá quản trị KHÔNG gửi được tin / sửa cài đặt gửi; gửi tay + sửa cài đặt cần einvoice.config',
             !qk.includes("'POST /gui'") && !qk.includes("'PUT /gui/cai-dat'") && /router\.post\('\/gui', CAU_HINH/.test(route) && /router\.put\('\/gui\/cai-dat', CAU_HINH/.test(route), qk)
