@@ -14,7 +14,12 @@ import {
     docTruong, docTraVe, moTaLoi, tachToken, ngayHoaDon, docHoaDon, tachDanhSach, congHopLe, moTaKetNoi, mstChuan,
     luuKetNoi, docKetNoi, thuKetNoi, goiApi, dsHoaDonPhatHanh, doTho, doTrangThai, moTaHinh, LoiMeInvoice, CONG_MAC_DINH, type KetNoiMeInvoice, type HoaDonMisa,
 } from '../src/lib/meInvoice'
-import { quyetDinh, timKhach, phieuTrongCuaSo, CUA_SO_NGAY, type BangKhach, type PhieuLayHd, type NhomZalo } from '../src/lib/hoaDonMisaZalo'
+import { quyetDinh, timKhach, phieuTrongCuaSo, CUA_SO_NGAY, type BangKhach, type PhieuLayHd, type NhomZalo, type DongXemTruoc } from '../src/lib/hoaDonMisaZalo'
+import {
+    ketLuanTrangThai, docPdf, bienHoaDon, linkHoaDon, chonUngVien, nhanTrangThaiGui, trongGioGui, xepMot, TOKEN_RE, MAU_MAC_DINH, LAN_TU_DONG_TOI_DA,
+    type DongDaGui,
+} from '../src/lib/guiHoaDonMisa'
+import { dienMau } from '../src/lib/zaloGui'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -368,6 +373,152 @@ async function main() {
         ok('10e. Thư viện meInvoice CHỈ đọc: không gọi publishing / insert / delete / sendemail', !/\/invoice\/publishing|\/invoiceweb\/insert|\/invoiceweb\/delete|\/invoice\/sendemail/.test(lib.replace(/\/\*[\s\S]*?\*\//g, '')))
         ok('10f. /do-tho: quyền xem, khoá quản trị được dùng để đo', /router\.post\('\/do-tho', XEM/.test(route) && ds.includes("'POST /do-tho'"), ds)
         ok('10g. /soi báo cảnh báo khi hình lạ / đọc thiếu so với TotalCount (không để 0 che đọc hỏng)', /canhBao/.test(route) && /ph\.khongDocDuoc/.test(route) && /ph\.thieu/.test(route))
+    }
+
+    /* 11 — GỬI (29/10/2026, chủ shop: "làm phần gửi luôn đi"): 4 cửa — trạng thái MISA, PDF thật, giành một lần, hàng đợi Zalo */
+    {
+        // hình /invoice/status đo HUTI 29/10/2026
+        const st = (o: any = {}) => ({ TransactionID: 'M1', SendTaxStatus: 2, IsDelete: false, EInvoiceStatus: 1, ReferenceType: 0, ...o })
+        ok('11a. Đã cấp mã, không xoá, HĐ gốc ⇒ gửi được', ketLuanTrangThai(st(), true).guiDuoc)
+        let k = ketLuanTrangThai(st({ SendTaxStatus: 0 }), true)
+        ok('11b. Chưa cấp mã ⇒ không gửi, KHÔNG bỏ hẳn (lượt sau thử lại)', !k.guiDuoc && !k.vinhVien && String(k.lyDo).includes('cấp mã'), k)
+        k = ketLuanTrangThai(st({ IsDelete: true, DeletedReason: 'Lập sai' }), true)
+        ok('11c. Bị xoá ⇒ bỏ hẳn, nói lý do MISA', !k.guiDuoc && k.vinhVien && String(k.lyDo).includes('Lập sai'), k)
+        k = ketLuanTrangThai(st({ EInvoiceStatus: 3 }), true)
+        ok('11d. EInvoiceStatus ≠ 1 (thay thế / điều chỉnh) ⇒ bỏ hẳn', !k.guiDuoc && k.vinhVien, k)
+        k = ketLuanTrangThai(undefined, true)
+        ok('11e. MISA không trả trạng thái ⇒ không gửi, thử lại sau (không đoán là được)', !k.guiDuoc && !k.vinhVien, k)
+        ok('11f. CQT từ chối cấp mã ⇒ bỏ hẳn', ketLuanTrangThai(st({ SendTaxStatus: 3 }), true).vinhVien)
+
+        const pdf64 = Buffer.from('%PDF-1.4 hoa don thu').toString('base64')
+        ok('11g. docPdf: {TransactionID, Data base64} ⇒ đúng tệp PDF', docPdf([{ TransactionID: 'M0', Data: 'x' }, { TransactionID: 'M1', Data: pdf64 }], 'M1').subarray(0, 4).toString() === '%PDF')
+        ok('11h. docPdf: data là chuỗi JSON, khoá chữ thường "data" ⇒ vẫn đọc', docPdf(JSON.stringify([{ TransactionID: 'M1', data: pdf64 }]), 'M1').length > 4)
+        let loi = await nem(async () => docPdf([{ TransactionID: 'M1', Data: Buffer.from('<html>').toString('base64') }], 'M1'))
+        ok('11i. Không phải PDF ⇒ báo lỗi (không gửi link chết)', loi.includes('không phải PDF'), loi)
+        loi = await nem(async () => docPdf([{ TransactionID: 'M1', ErrorCode: 'InvoiceNotFound' }], 'M1'))
+        ok('11j. MISA không trả tệp ⇒ báo kèm mã lỗi', loi.includes('InvoiceNotFound'), loi)
+        loi = await nem(async () => docPdf([{ TransactionID: 'KHAC', Data: pdf64 }], 'M1'))
+        ok('11j2. Tệp trả về mang mã tra cứu KHÁC ⇒ lỗi, không lấy bừa (gửi nhầm hoá đơn người khác)', loi.includes('không trả tệp'), loi)
+
+        const hd: HoaDonMisa = { refId: 'r1', kyHieu: '1C26TSG', so: '00003655', ngay: '2026-10-28', maKhach: 'HT02', mst: '0312345678', tenNguoiMua: 'Công ty A', tongTien: 15_593_000, maTraCuu: 'ABCD1234EFGH', trangThai: null }
+        const link = linkHoaDon('HUTI', 'x'.repeat(24))
+        const tin = dienMau(MAU_MAC_DINH, { tenKhach: 'Điện máy HT', bien: bienHoaDon(hd, { InvoiceName: 'Hóa đơn giá trị gia tăng' }, link) })
+        ok('11k. Tin mặc định: loại HĐ, số, ký hiệu, ngày dd/mm/yyyy, tổng tiền có dấu chấm, mã tra cứu, link — không sót {biến}',
+            ['Điện máy HT', 'Hóa đơn giá trị gia tăng số 00003655', '1C26TSG', '28/10/2026', '15.593.000đ', 'ABCD1234EFGH', link].every(s => tin.includes(s)) && !/\{\w+\}/.test(tin), tin)
+        ok('11l. Link bền = /api/meinvoice/hd/<mã cửa hàng>/<token 24 ký tự> (gốc không lặp /api)', link === `https://api.kengi.vn/api/meinvoice/hd/HUTI/${'x'.repeat(24)}` && TOKEN_RE.test('x'.repeat(24)), link)
+
+        const d = (ma: string | null, ketQua: any = 'se_gui', ngay = '2026-10-28'): DongXemTruoc => ({
+            hoaDon: { ...hd, maTraCuu: ma, ngay }, ketQua, lyDo: '', khach: { id: 'k1', code: 'HT02', name: 'HT', luonLayHoaDon: true }, nhom: [{ groupId: 'g1', tenNhom: 'Nhóm HT02' }], phieu: [],
+        })
+        const so = (ma: string, trangThai: any, lanThu = 1) => [ma, { maTraCuu: ma, trangThai, lanThu } as DongDaGui] as [string, DongDaGui]
+        const dongs = [d('A'), d('B', 'khong_yeu_cau'), d('C', 'se_gui', '2026-10-20'), d(null), d('E'), d('F'), d('G'), d('H')]
+        const uv = chonUngVien(dongs, dongs.map(() => ({})), dongs.map(() => 'thuong'), new Map([so('E', 'da_xep'), so('F', 'bo_qua'), so('G', 'loi', 2), so('H', 'loi', LAN_TU_DONG_TOI_DA)]), '2026-10-25')
+        ok('11m. Tự động chỉ lấy: "sẽ gửi" + có mã tra cứu + ngày ≥ ngày bật + chưa xếp/bỏ + lỗi chưa quá lượt',
+            uv.map(u => u.dong.hoaDon.maTraCuu).join() === 'A,G', uv.map(u => u.dong.hoaDon.maTraCuu))
+
+        const r = (trangThai: any, o: any = {}) => ({ trangThai, loi: null, lanThu: 0, capNhatLuc: 1, dotId: 'd1', ...o }) as DongDaGui
+        ok('11n. Nhãn: mọi nhóm đã gửi ⇒ "Đã gửi Zalo"', nhanTrangThaiGui(r('da_xep'), [{ trangThai: 'da_gui', loi: null }, { trangThai: 'da_gui', loi: null }]).ma === 'da_gui')
+        ok('11o. Nhãn: còn nhóm chờ ⇒ đang chờ; chỉ còn lỗi ⇒ "Gửi Zalo lỗi" kèm lỗi; đợt huỷ hết ⇒ "Đã huỷ gửi"',
+            nhanTrangThaiGui(r('da_xep'), [{ trangThai: 'da_gui', loi: null }, { trangThai: 'cho', loi: null }]).ma === 'dang'
+            && nhanTrangThaiGui(r('da_xep'), [{ trangThai: 'loi', loi: 'Nhóm đã giải tán' }]).chiTiet === 'Nhóm đã giải tán'
+            && nhanTrangThaiGui(r('da_xep'), [{ trangThai: 'huy', loi: null }]).nhan === 'Đã huỷ gửi')
+        ok('11p. Giờ gửi tự động 7:00–20:59 giờ VN', !trongGioGui(new Date('2026-10-28T23:59:00Z')) && trongGioGui(new Date('2026-10-29T00:00:00Z'))
+            && trongGioGui(new Date('2026-10-29T13:59:00Z')) && !trongGioGui(new Date('2026-10-29T14:00:00Z')))
+
+        // Sổ MeInvoiceDaGui + hàng đợi Zalo giả — đủ để kiểm "giành một lần", lỗi thử lại, bỏ thì không bao giờ gửi
+        const so2 = new Map<string, any>()
+        const dot: any[] = []
+        const hang: any[] = []
+        let hongHangDoi = false
+        const spG: any = {
+            __schema: 'kiem_gui',
+            async $executeRawUnsafe(sql: string, ...p: any[]) {
+                const s = sql.replace(/\s+/g, ' ').trim()
+                if (s.startsWith('CREATE TABLE')) return 0
+                if (s.startsWith('UPDATE "MeInvoiceKetNoi"')) return 1   // lưu token đăng nhập — không phải việc của bộ kiểm này
+                if (s.startsWith('INSERT INTO "MeInvoiceDaGui"')) {   // ghiKhongGui
+                    const [ma, token, , , , , , customerId, maKhach, mtt, trangThai, loiG, , , luc] = p
+                    const c = so2.get(ma)
+                    if (!c) { so2.set(ma, { maTraCuu: ma, token, customerId, maKhach, mtt, trangThai, loi: loiG, lanThu: 1, capNhatLuc: luc }); return 1 }
+                    if (c.trangThai !== 'loi') return 0
+                    Object.assign(c, { trangThai, loi: loiG, lanThu: c.lanThu + 1, capNhatLuc: luc }); return 1
+                }
+                if (/^UPDATE "MeInvoiceDaGui" SET "dotId"=\$2/.test(s)) { so2.get(p[0]).dotId = p[1]; return 1 }
+                if (/^UPDATE "MeInvoiceDaGui" SET "trangThai"='da_xep'/.test(s)) { Object.assign(so2.get(p[0]), { trangThai: 'da_xep', soNhom: p[1], loi: null }); return 1 }
+                if (/^UPDATE "MeInvoiceDaGui" SET "trangThai"='loi'/.test(s)) { const c = so2.get(p[0]); if (c?.trangThai === 'dang_xep') Object.assign(c, { trangThai: 'loi', loi: p[1], dotId: null }); return 1 }
+                throw new Error('SQL lạ: ' + s.slice(0, 80))
+            },
+            async $queryRawUnsafe(sql: string, ...p: any[]) {
+                const s = sql.replace(/\s+/g, ' ').trim()
+                if (s.startsWith('INSERT INTO "MeInvoiceDaGui"') && s.includes('RETURNING "token"')) {   // giành
+                    const [ma, token, , , , , , customerId, maKhach, mtt, nguon, nguoi, luc] = p
+                    const c = so2.get(ma)
+                    if (!c) { so2.set(ma, { maTraCuu: ma, token, customerId, maKhach, mtt, trangThai: 'dang_xep', loi: null, lanThu: 0, nguon, nguoi, capNhatLuc: luc }); return [{ token }] }
+                    if (c.trangThai !== 'loi') return []
+                    Object.assign(c, { trangThai: 'dang_xep', loi: null, nguon, nguoi, capNhatLuc: luc }); return [{ token: c.token }]
+                }
+                throw new Error('SQL lạ: ' + s.slice(0, 80))
+            },
+            zaloDotGui: {
+                create: async ({ data }: any) => { const x = { id: `dot${dot.length + 1}`, ...data }; dot.push(x); return x },
+                updateMany: async ({ where, data }: any) => { dot.filter(x => x.id === where.id).forEach(x => Object.assign(x, data)); return { count: 1 } },
+            },
+            zaloDotGuiNhom: {
+                createMany: async ({ data }: any) => { if (hongHangDoi) throw new Error('mất kết nối DB'); hang.push(...data); return { count: data.length } },
+                count: async ({ where }: any) => hang.filter(x => x.dotId === where.dotId).length,
+            },
+        }
+        const spMeinvoice = spGia()
+        await luuKetNoi(spMeinvoice, { clientId: 'CID-9', clientSecret: 'SEC-9', mst: '0312345678', taiKhoan: 'kt@hungtin.vn', matKhau: 'mk9' }, 'chu')
+        const knG = (await docKetNoi(spMeinvoice))!
+        let pdfTra: any = [{ TransactionID: 'ABCD1234EFGH', Data: pdf64 }]
+        const goiPdf = misaGia((g) => g.url.includes('/invoice/Download?') ? { json: { Success: true, Data: pdfTra } } : { json: { Success: true, Data: 'TK-TICH-HOP' } })
+        const uvA = { dong: { ...d('ABCD1234EFGH'), nhom: [{ groupId: 'g1', tenNhom: 'Nhóm 1' }, { groupId: 'g2', tenNhom: null }] }, raw: { InvoiceName: 'Hóa đơn giá trị gia tăng' }, mtt: false }
+        const ok1 = await xepMot(spG, 'HUTI', knG, uvA, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tay', 'chu@x')
+        const dongSo = so2.get('ABCD1234EFGH')
+        const bienA = JSON.parse(hang[0]?.bien || '{}')
+        ok('11q. Đủ 4 cửa ⇒ MỘT đợt Zalo, mỗi nhóm một dòng, biến có link chứa đúng token trong sổ; sổ = da_xep + dotId',
+            ok1.ketQua === 'da_xep' && dot.length === 1 && hang.length === 2 && dongSo.trangThai === 'da_xep' && dongSo.dotId === 'dot1'
+            && bienA.linkHoaDon === linkHoaDon('HUTI', dongSo.token) && dot[0].noiDung === MAU_MAC_DINH && goiPdf.some(g => g.url.includes('downloadDataType=Pdf')), { ok1, dongSo, bienA })
+        const lai = await xepMot(spG, 'HUTI', knG, uvA, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)
+        ok('11r. Xếp lại hoá đơn đã gửi ⇒ "đã có", KHÔNG thêm đợt (không bao giờ gửi hai lần)', lai.ketQua === 'da_co' && dot.length === 1 && hang.length === 2, lai)
+
+        const uvB = { ...uvA, dong: { ...uvA.dong, hoaDon: { ...hd, maTraCuu: 'BBBB1234EFGH' } } }
+        const b1 = await xepMot(spG, 'HUTI', knG, uvB, ketLuanTrangThai(st({ SendTaxStatus: 0 }), true), MAU_MAC_DINH, 'tu_dong', null)
+        pdfTra = [{ TransactionID: 'BBBB1234EFGH', Data: Buffer.from('<html>').toString('base64') }]
+        const b2 = await xepMot(spG, 'HUTI', knG, uvB, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)
+        const tokenB = so2.get('BBBB1234EFGH').token
+        pdfTra = [{ TransactionID: 'BBBB1234EFGH', Data: pdf64 }]
+        const b3 = await xepMot(spG, 'HUTI', knG, uvB, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null)
+        ok('11s. Chưa cấp mã ⇒ lỗi (chưa đợt); PDF hỏng ⇒ lỗi lần 2; lượt sau đủ cửa ⇒ xếp gửi, GIỮ token cũ',
+            b1.ketQua === 'loi' && b2.ketQua === 'loi' && String(b2.lyDo).includes('PDF') && b3.ketQua === 'da_xep' && so2.get('BBBB1234EFGH').token === tokenB
+            && so2.get('BBBB1234EFGH').lanThu === 2 && dot.length === 2, { b1, b2, b3 })
+
+        const uvC = { ...uvA, dong: { ...uvA.dong, hoaDon: { ...hd, maTraCuu: 'CCCC1234EFGH' } } }
+        const c1 = await xepMot(spG, 'HUTI', knG, uvC, ketLuanTrangThai(st({ IsDelete: true }), true), MAU_MAC_DINH, 'tu_dong', null)
+        const c2 = await xepMot(spG, 'HUTI', knG, uvC, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tay', 'chu@x')
+        ok('11t. HĐ đã bỏ (bị xoá) ⇒ không bao giờ vào hàng đợi, kể cả lượt sau', c1.ketQua === 'bo_qua' && c2.ketQua !== 'da_xep' && so2.get('CCCC1234EFGH').trangThai === 'bo_qua' && dot.length === 2, { c1, c2 })
+
+        const uvD = { ...uvA, dong: { ...uvA.dong, hoaDon: { ...hd, maTraCuu: 'DDDD1234EFGH' } } }
+        pdfTra = [{ TransactionID: 'DDDD1234EFGH', Data: pdf64 }]
+        hongHangDoi = true
+        const dLoi = await nem(() => xepMot(spG, 'HUTI', knG, uvD, ketLuanTrangThai(st(), true), MAU_MAC_DINH, 'tu_dong', null))
+        hongHangDoi = false
+        ok('11u. Tạo dòng hàng đợi hỏng ⇒ đợt rỗng bị huỷ, sổ về "loi" (chưa tin nào đi ⇒ được thử lại)',
+            dLoi.includes('mất kết nối DB') && so2.get('DDDD1234EFGH').trangThai === 'loi' && dot[2].trangThai === 'huy', { dLoi, so: so2.get('DDDD1234EFGH'), dot: dot[2] })
+
+        const goc = path.join(__dirname, '..', 'src')
+        const route = fs.readFileSync(path.join(goc, 'routes', 'meInvoice.ts'), 'utf8')
+        const viTriCongKhai = route.indexOf("router.get('/hd/:ma/:token'")
+        const viTriDangNhap = route.indexOf('router.use(')
+        ok('11v. Link công khai /hd/:ma/:token khai TRƯỚC lớp đăng nhập', viTriCongKhai > 0 && viTriDangNhap > viTriCongKhai)
+        const qk = (/QUA_KHOA_QUAN_TRI = new Set\(\[([^\]]*)\]\)/.exec(route) || [])[1] || ''
+        ok('11w. Khoá quản trị KHÔNG gửi được tin / sửa cài đặt gửi; gửi tay + sửa cài đặt cần einvoice.config',
+            !qk.includes("'POST /gui'") && !qk.includes("'PUT /gui/cai-dat'") && /router\.post\('\/gui', CAU_HINH/.test(route) && /router\.put\('\/gui\/cai-dat', CAU_HINH/.test(route), qk)
+        const cron = fs.readFileSync(path.join(goc, 'routes', 'cronTick.ts'), 'utf8')
+        ok('11x. Cron gọi nhipGuiHoaDonMisa mỗi 10 phút', /% 10 === 6\)[\s\S]{0,200}import\('\.\.\/lib\/guiHoaDonMisa'\)[\s\S]{0,120}nhipGuiHoaDonMisa\(\)/.test(cron))
+        const libGui = fs.readFileSync(path.join(goc, 'lib', 'guiHoaDonMisa.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+        ok('11y. Phần gửi chỉ ĐỌC MISA (status / Download) — không phát hành, không gửi email, không xoá', !/\/invoice\/publishing|\/invoiceweb\/insert|\/invoiceweb\/delete|\/invoice\/sendemail/.test(libGui) && libGui.includes('/invoice/status') && libGui.includes('/invoice/Download'))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)

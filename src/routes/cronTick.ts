@@ -86,6 +86,14 @@ router.post('/tick', async (req: Request, res: Response) => {
             ra.layHoaDon = await nhipLayHoaDon()
         } catch (e: any) { ra.layHoaDon = 'loi: ' + (e?.message || e) }
     }
+    /* Gửi hoá đơn MISA meInvoice cho khách qua nhóm Zalo (29/10/2026, chủ shop: "làm phần gửi luôn đi"): mỗi 10 phút, 7–21 giờ VN,
+     * chỉ cửa hàng BẬT tự động gửi; hoá đơn đủ điều kiện vào hàng đợi Zalo (nhipGuiZalo gửi giãn nhịp). lib/guiHoaDonMisa.ts */
+    if (new Date().getUTCMinutes() % 10 === 6) {
+        try {
+            const { nhipGuiHoaDonMisa } = await import('../lib/guiHoaDonMisa')
+            ra.guiHoaDonMisa = await nhipGuiHoaDonMisa()
+        } catch (e: any) { ra.guiHoaDonMisa = 'loi: ' + (e?.message || e) }
+    }
     if (new Date().getUTCMinutes() % 10 === 0) {
         try { ra.nhacBangChungTikTok = (await nhacBangChungTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.nhacBangChungTikTok = 'loi: ' + (e?.message || e) }
     }

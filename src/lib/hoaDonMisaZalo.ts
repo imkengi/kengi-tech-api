@@ -11,7 +11,8 @@
  * Hoá đơn "Bán cho người tiêu dùng" (không mã đối tượng, không MST — misaPush đẩy mọi phiếu không Lấy HĐ kiểu này) KHÔNG
  * đoán khách: thiếu dữ liệu không phải bằng chứng là của ai.
  *
- * Bước 28/10/2026 CHỈ XEM TRƯỚC — chưa gửi gì. Bật gửi sau khi soi dữ liệu thật (skill data-sync-gate: đo trước khi map).
+ * 28/10/2026 chỉ xem trước. 29/10/2026 soi dữ liệu thật HUTI xong ⇒ GỬI ở lib/guiHoaDonMisa.ts (cùng luật này + hỏi lại trạng thái
+ * MISA + tải thử PDF + giành hoá đơn trước khi xếp vào hàng đợi Zalo).
  */
 
 import { TRANG_THAI_TINH } from './tinhLaiTongMuaKhach'

@@ -8,25 +8,71 @@
  *   POST   /ket-noi/thu   thử đăng nhập cả hai đường (lấy token mới)                          einvoice.config
  *   POST   /soi           {tu, den?} CHỈ ĐỌC: hoá đơn ĐÃ PHÁT HÀNH (danh sách tích hợp /invoice/paging — mọi kênh lập) +
  *                         xem trước hoá đơn nào sẽ gửi nhóm Zalo nào (chưa gửi gì)              einvoice.view
- *   POST   /do-tho        {tu, den?, trangThai?, bienThe?, maTraCuu?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo từng biến thể
- *                         (danh sách / có mã / khoảng ngày) + trạng thái theo mã tra cứu — đo trước khi map   einvoice.view
+ *   POST   /do-tho        {tu, den?, trangThai?, bienThe?, maTraCuu?, taiPdf?} CHỈ ĐỌC: hình dữ liệu MISA trả về theo từng biến
+ *                         thể + trạng thái theo mã tra cứu + tải thử PDF (không trả tệp) — đo trước khi map    einvoice.view
+ * Gửi hoá đơn qua nhóm Zalo (29/10/2026, lib/guiHoaDonMisa.ts):
+ *   GET    /gui/cai-dat   tự động gửi + mẫu tin + kênh Zalo                                    einvoice.view
+ *   PUT    /gui/cai-dat   {tuDong?, mauTin?}                                                   einvoice.config
+ *   POST   /gui           {maTraCuu, ngay} GỬI TAY một hoá đơn (đọc lại từ MISA, đủ 4 cửa)      einvoice.config
+ *   GET    /gui/gan-day   sổ hoá đơn đã xếp / lỗi / bỏ gần đây                                  einvoice.view
+ *   GET    /hd/:ma/:token CÔNG KHAI — link trong tin Zalo: tải PDF có chữ ký số từ MISA (token ngẫu nhiên 144 bit)
  *
- * Vận hành nội bộ (đo dữ liệu thật): x-admin-key + x-store-code CHỈ cho GET /ket-noi, POST /ket-noi/thu, POST /soi, POST /do-tho — không sửa/xoá.
+ * Vận hành nội bộ (đo dữ liệu thật): x-admin-key + x-store-code CHỈ cho các đường CHỈ ĐỌC trong QUA_KHOA_QUAN_TRI — không sửa,
+ * không xoá, KHÔNG GỬI (gửi tin cho khách là việc chủ shop bấm).
  */
 
-import { Router, Response, NextFunction } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import {
-    LoiMeInvoice, docKetNoi, moTaKetNoi, luuKetNoi, xoaKetNoi, thuKetNoi, dsHoaDonPhatHanh, docHoaDon, doTho, doTrangThai, TRANG_THAI_WEB, NGUON_WEB,
-    type BienTheDo,
+    LoiMeInvoice, docKetNoi, moTaKetNoi, luuKetNoi, xoaKetNoi, thuKetNoi, dsHoaDonPhatHanh, docHoaDon, doTho, doTrangThai, goiApiTho, moTaHinh,
+    TRANG_THAI_WEB, NGUON_WEB, type BienTheDo,
 } from '../lib/meInvoice'
 import { xemTruocGui, NHAN_KET_QUA } from '../lib/hoaDonMisaZalo'
+import {
+    docCaiDat, luuCaiDat, guiTay, dsGanDay, trangThaiGuiNhieu, pdfTheoToken, moTaKenhZalo, docPdf, MAU_MAC_DINH, BIEN_HOA_DON, TOKEN_RE,
+    LAN_TU_DONG_TOI_DA,
+} from '../lib/guiHoaDonMisa'
 
 const router = Router()
 
-const QUA_KHOA_QUAN_TRI = new Set(['GET /ket-noi', 'POST /ket-noi/thu', 'POST /soi', 'POST /do-tho'])
+// ─── CÔNG KHAI: link hoá đơn trong tin Zalo — khai báo TRƯỚC lớp đăng nhập ─────
+const PDF_NHO_MS = 15 * 60_000
+const pdfNho = new Map<string, { buf: Buffer; ten: string; het: number }>()
+
+router.get('/hd/:ma/:token', async (req: Request, res: Response) => {
+    const ma = String(req.params.ma || '')
+    const token = String(req.params.token || '')
+    const trang = (code: number, chu: string) => res.status(code).type('html').send(
+        `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hoá đơn</title></head>`
+        + `<body style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:48px auto;padding:0 16px;line-height:1.6;color:#1f2937"><p>${chu}</p></body></html>`)
+    const guiPdf = (buf: Buffer, ten: string) => {
+        res.setHeader('Content-Type', 'application/pdf')
+        res.setHeader('Content-Disposition', `inline; filename="${ten}"`)
+        res.setHeader('Cache-Control', 'private, max-age=300')
+        res.send(buf)
+    }
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(ma) || !TOKEN_RE.test(token)) { trang(404, 'Link hoá đơn không đúng.'); return }
+    const khoa = `${ma.toLowerCase()}/${token}`
+    const nho = pdfNho.get(khoa)
+    if (nho && nho.het > Date.now()) { guiPdf(nho.buf, nho.ten); return }
+    try {
+        const { registryPrisma, getStorePrisma } = await import('../lib/prisma')
+        const store: any = await (registryPrisma as any).store.findFirst({ where: { code: { equals: ma, mode: 'insensitive' } }, select: { schema: true } })
+        const kq = store ? await pdfTheoToken(getStorePrisma(store.schema), token) : null
+        if (!kq) { trang(404, 'Link hoá đơn không đúng hoặc đã bị gỡ.'); return }
+        // nhớ ít phút: khách bấm lại / Zalo mở thử link thì khỏi gọi MISA lần nữa
+        pdfNho.set(khoa, { ...kq, het: Date.now() + PDF_NHO_MS })
+        for (const [k, v] of pdfNho) if (v.het < Date.now() || pdfNho.size > 40) pdfNho.delete(k)
+        guiPdf(kq.buf, kq.ten)
+    } catch (e: any) {
+        console.error('[meinvoice/hd]', e?.message || e)
+        trang(503, 'Chưa tải được hoá đơn lúc này — vui lòng thử lại sau ít phút.')
+    }
+})
+
+const QUA_KHOA_QUAN_TRI = new Set(['GET /ket-noi', 'POST /ket-noi/thu', 'POST /soi', 'POST /do-tho', 'GET /gui/cai-dat', 'GET /gui/gan-day'])
 
 router.use(async (req: AuthRequest, res: Response, next: NextFunction) => {
     const adminKey = req.headers['x-admin-key'] as string
@@ -116,6 +162,8 @@ router.post('/soi', XEM, async (req: AuthRequest, res: Response) => {
             canhBao.push(`MISA trả dữ liệu Kengi chưa đọc được ở ${k.length} ngày (${k.slice(0, 3).map(x => `${x.ngay}: ${x.hinh}`).join('; ')}) — những ngày đó KHÔNG có nghĩa là không có hoá đơn.`)
         }
         for (const t of ph.thieu) canhBao.push(`Ngày ${t.ngay}: MISA báo ${t.misa} hoá đơn mà Kengi mới đọc được ${t.doc}.`)
+        // Đã xếp gửi / lỗi / bỏ của từng hoá đơn (sổ MeInvoiceDaGui + hàng đợi Zalo)
+        const gui = await trangThaiGuiNhieu(req.storePrisma, hoaDons.map(h => h.maTraCuu || ''))
 
         // Tên trường MISA trả về (đo tên thật — tài liệu không ghi đủ) + một bản ghi mẫu nguyên văn
         const truong = [...new Set(tho.flatMap(r => (r && typeof r === 'object' ? Object.keys(r) : [])))].sort()
@@ -134,7 +182,8 @@ router.post('/soi', XEM, async (req: AuthRequest, res: Response) => {
                     nguon: ph.dong[i]?.nguon ?? null,
                     refId: d.hoaDon.refId, kyHieu: d.hoaDon.kyHieu, so: d.hoaDon.so, ngay: d.hoaDon.ngay,
                     nguoiMua: d.hoaDon.tenNguoiMua, mst: d.hoaDon.mst, maKhach: d.hoaDon.maKhach, tongTien: d.hoaDon.tongTien,
-                    coMaTraCuu: !!d.hoaDon.maTraCuu, trangThaiMisa: d.hoaDon.trangThai,
+                    coMaTraCuu: !!d.hoaDon.maTraCuu, maTraCuu: d.hoaDon.maTraCuu, trangThaiMisa: d.hoaDon.trangThai,
+                    gui: d.hoaDon.maTraCuu ? gui.get(d.hoaDon.maTraCuu) ?? null : null,
                     ketQua: d.ketQua, lyDo: d.lyDo,
                     khach: d.khach ? { id: d.khach.id, code: d.khach.code, name: d.khach.name, luonLayHoaDon: d.khach.luonLayHoaDon } : null,
                     nhom: d.nhom.map(n => n.tenNhom || n.groupId),
@@ -158,6 +207,25 @@ router.post('/do-tho', XEM, async (req: AuthRequest, res: Response) => {
             const kn = await docKetNoi(req.storePrisma)
             if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
             res.json({ success: true, data: { coMaDaLuu: kn.coMa, trangThaiHd: await doTrangThai(req.storePrisma, kn, ma, b.mayTinhTien === true) } })
+            return
+        }
+        // tải thử PDF (/invoice/Download) — chỉ trả HÌNH + có phải PDF không, KHÔNG trả tệp
+        if (typeof b.taiPdf === 'string' && b.taiPdf) {
+            const ma = String(b.taiPdf).trim()
+            if (!/^[0-9A-Za-z_-]{4,40}$/.test(ma)) { res.status(400).json({ success: false, error: 'taiPdf (mã tra cứu) không hợp lệ' }); return }
+            const kn = await docKetNoi(req.storePrisma)
+            if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
+            const duong = `/invoice/Download?downloadDataType=Pdf&invoiceWithCode=${kn.coMa ? 'true' : 'false'}&invoiceCalcu=${b.mayTinhTien === true ? 'true' : 'false'}`
+            const { status, tv, text } = await goiApiTho(req.storePrisma, kn, 'tichHop', duong, [ma])
+            let pdf: { ok: boolean; dai?: number; loi?: string } = { ok: false }
+            if (tv.ok) { try { pdf = { ok: true, dai: docPdf(tv.data, ma).length } } catch (e: any) { pdf = { ok: false, loi: e.message } } }
+            const d = Array.isArray(tv.data) ? tv.data[0] : tv.data
+            res.json({
+                success: true, data: {
+                    duong: duong.split('?')[0], httpStatus: status, ok: tv.ok, loi: tv.loi || null, hinh: tv.ok ? moTaHinh(tv.data) : null,
+                    truong: d && typeof d === 'object' ? Object.keys(d).sort() : null, pdf, tho: tv.ok ? null : String(text || '').slice(0, 400),
+                },
+            })
             return
         }
         const tu = String(b.tu || '')
@@ -193,6 +261,62 @@ router.post('/do-tho', XEM, async (req: AuthRequest, res: Response) => {
         const kn = await docKetNoi(req.storePrisma)
         if (!kn) { res.status(400).json({ success: false, error: 'Cửa hàng chưa nhập kết nối meInvoice' }); return }
         res.json({ success: true, data: { coMaDaLuu: kn.coMa, ketQua: await doTho(req.storePrisma, kn, bienThe) } })
+    } catch (e: any) { traLoi(res, e) }
+})
+
+// ─── Gửi hoá đơn qua nhóm Zalo (lib/guiHoaDonMisa.ts) ─────────────────────────
+
+const nguoiCua = (req: AuthRequest) => String(req.user?.email || req.user?.userId || '')
+
+/** Mã cửa hàng (cho link hoá đơn) theo schema của phiên đăng nhập */
+async function maCuaHang(req: AuthRequest): Promise<string> {
+    const { registryPrisma } = await import('../lib/prisma')
+    const s: any = await (registryPrisma as any).store.findFirst({ where: { schema: req.user?.storeSchema }, select: { code: true } })
+    if (!s?.code) throw new LoiMeInvoice('Không xác định được mã cửa hàng.')
+    return String(s.code)
+}
+
+router.get('/gui/cai-dat', XEM, async (req: AuthRequest, res: Response) => {
+    try {
+        const [cd, kenh] = await Promise.all([docCaiDat(req.storePrisma), moTaKenhZalo(req.storePrisma)])
+        res.json({ success: true, data: { ...cd, mauMacDinh: MAU_MAC_DINH, bien: BIEN_HOA_DON, kenhZalo: kenh, lanTuDongToiDa: LAN_TU_DONG_TOI_DA } })
+    } catch (e: any) { traLoi(res, e) }
+})
+
+router.put('/gui/cai-dat', CAU_HINH, async (req: AuthRequest, res: Response) => {
+    try {
+        const b = req.body || {}
+        const cd = await luuCaiDat(req.storePrisma, {
+            tuDong: typeof b.tuDong === 'boolean' ? b.tuDong : undefined,
+            mauTin: b.mauTin === undefined ? undefined : (b.mauTin === null ? null : String(b.mauTin)),
+        }, nguoiCua(req))
+        res.json({ success: true, data: cd })
+    } catch (e: any) { traLoi(res, e) }
+})
+
+router.post('/gui', CAU_HINH, async (req: AuthRequest, res: Response) => {
+    try {
+        const b = req.body || {}
+        const ma = String(b.maTraCuu || '').trim()
+        const ngay = String(b.ngay || '')
+        if (!/^[0-9A-Za-z_-]{4,40}$/.test(ma) || !laNgay(ngay)) { res.status(400).json({ success: false, error: 'Cần mã tra cứu và ngày hoá đơn (YYYY-MM-DD)' }); return }
+        const kq = await guiTay(req.storePrisma, await maCuaHang(req), ma, ngay, nguoiCua(req))
+        const tt = (await trangThaiGuiNhieu(req.storePrisma, [ma])).get(ma) ?? null
+        res.json({ success: true, data: { ...kq, gui: tt } })
+    } catch (e: any) { traLoi(res, e) }
+})
+
+router.get('/gui/gan-day', XEM, async (req: AuthRequest, res: Response) => {
+    try {
+        const ds = await dsGanDay(req.storePrisma, Number(req.query.gioiHan) || 30)
+        const tt = await trangThaiGuiNhieu(req.storePrisma, ds.map(d => d.maTraCuu))
+        res.json({
+            success: true,
+            data: ds.map(d => ({
+                kyHieu: d.kyHieu, so: d.so, ngay: d.ngay, tongTien: d.tongTien, maKhach: d.maKhach, soNhom: d.soNhom,
+                nguon: d.nguon, nguoi: d.nguoi, capNhatLuc: d.capNhatLuc, gui: tt.get(d.maTraCuu) ?? null,
+            })),
+        })
     } catch (e: any) { traLoi(res, e) }
 })
 
