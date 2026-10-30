@@ -978,13 +978,25 @@ export class TikTokService extends PlatformService {
         hasMore: boolean
         nextOffset: string
     }> {
-        const query: Record<string, string> = { page_size: String(params.pageSize || 25), sort_order: 'DESC' }
-        if (params.offset) query.page_token = params.offset
-        const { url, headers } = this.buildUrl(`/customer_service/202309/conversations/${conversationId}/messages`, query)
-        const data = await this.httpGet(url, headers)
-        if (data.code !== 0) throw new Error(`TikTok messages: [${data.code}] ${data.message || 'Unknown error'}`)
+        /* TikTok chỉ cho page_size 1..10 (lỗi 36009004 "PageSize is invalid … <= 10" — đo prod 30/10/2026 ngay sau khi được
+         * cấp scope chat: danh sách hội thoại về mà khung tin nhắn trống). Muốn 25 tin thì lật trang bằng page_token tới khi
+         * đủ hoặc hết; trần 50 tin một lượt (mỗi trang một lượt gọi). */
+        const can = Math.min(50, Math.max(1, Number(params.pageSize) || 25))
+        let token = params.offset || ''
+        const tho: any[] = []
+        let conTrang = true
+        while (tho.length < can && conTrang) {
+            const query: Record<string, string> = { page_size: String(Math.min(10, can - tho.length)), sort_order: 'DESC' }
+            if (token) query.page_token = token
+            const { url, headers } = this.buildUrl(`/customer_service/202309/conversations/${conversationId}/messages`, query)
+            const data = await this.httpGet(url, headers)
+            if (data.code !== 0) throw new Error(`TikTok messages: [${data.code}] ${data.message || 'Unknown error'}`)
+            tho.push(...(data.data?.messages || []))
+            token = String(data.data?.next_page_token || '')
+            conTrang = !!token
+        }
 
-        const messages = (data.data?.messages || []).map((m: any) => {
+        const messages = tho.map((m: any) => {
             const { content, imageUrl } = this.parseImContent(m.type, m.content)
             let ts = Number(m.create_time || 0)
             if (ts > 1e12) ts = Math.floor(ts / 1000)
@@ -1000,11 +1012,7 @@ export class TikTokService extends PlatformService {
                 sourceContent: m.content,
             }
         })
-        return {
-            messages,
-            hasMore: !!data.data?.next_page_token,
-            nextOffset: String(data.data?.next_page_token || ''),
-        }
+        return { messages, hasMore: !!token, nextOffset: token }
     }
 
     /**
