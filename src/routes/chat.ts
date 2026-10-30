@@ -878,30 +878,33 @@ router.get('/tiktok/messages/:conversationId', chatAuth, async (req: AuthRequest
             offset: offset ? String(offset) : undefined,
         })
 
-        /* Bên gửi theo sender.role (tài liệu TikTok 30/10/2026): BUYER = khách; SHOP (trả lời tự động / FAQ của gian),
-         * CUSTOMER_SERVICE (nhân viên), ROBOT (chatbot TikTok) = phía cửa hàng; SYSTEM = tin hệ thống (vẽ giữa). Bản cũ chỉ nhận
-         * SHOP ⇒ tin chào tự động / hệ thống rơi sang bên khách (chủ shop: "chưa có phân biệt bên nào với bên nào"). */
-        const tenBen = (m: any) => {
-            if (m.fromRole === 'BUYER') return m.fromName || 'Khách TikTok'
-            if (m.fromRole === 'SYSTEM') return 'Hệ thống TikTok'
-            if (m.fromRole === 'ROBOT') return `${channel.name || 'Shop'} (tự động)`
-            return channel.name || 'Shop'
-        }
-        const messages = result.messages.filter((m: any) => m.isVisible !== false).map((m: any) => ({
-            id: m.messageId,
-            conversationId,
-            senderName: tenBen(m),
-            senderType: m.fromRole === 'BUYER' ? 'customer' : m.fromRole === 'SYSTEM' ? 'system' : 'staff',
-            senderRole: m.fromRole || null,
-            // ROBOT / SYSTEM là tin tự động của TikTok — không tính là shop đã trả lời (web dùng tuDong như Shopee)
-            tuDong: m.fromRole === 'ROBOT' || m.fromRole === 'SYSTEM',
-            // Tin không phải chữ (thẻ sản phẩm / đơn / thông báo…): ưu tiên bản chữ TikTok trả (need_plaintext, tiếng Việt)
-            content: m.messageType === 'text' ? m.content : (m.plaintext || m.content),
-            contentType: m.messageType === 'image' ? 'image' : 'text',
-            imageUrl: m.imageUrl || null,
-            isRead: true,
-            createdAt: m.createdTimestamp ? new Date(m.createdTimestamp * 1000).toISOString() : new Date().toISOString(),
-        }))
+        /* Bên gửi theo sender.role (tài liệu TikTok 30/10/2026): BUYER = khách; mọi vai trò khác (SHOP, CUSTOMER_SERVICE = nhân
+         * viên, ROBOT = chatbot TikTok, SYSTEM = tin hệ thống gửi qua gian) = MỘT luồng phía cửa hàng — chủ shop: "chatbot hay
+         * người nhắn thì chỉ đi 1 luồng người như bên Shopee". Bản cũ chỉ nhận SHOP ⇒ tin chào tự động / hệ thống rơi sang bên
+         * khách. Cùng nhãn với Shopee: tin TikTok tự sinh (ROBOT / SYSTEM) = "Tự động", tin chatbot Kengi (nhật ký tự trả lời) =
+         * "Chatbot"; người thật không nhãn. */
+        const daGui = await khoTuTraLoiSql(prisma).maTinDaGui(channel.id, String(conversationId))
+        const messages = result.messages.filter((m: any) => m.isVisible !== false).map((m: any) => {
+            const khach = m.fromRole === 'BUYER'
+            const tuTikTok = m.fromRole === 'ROBOT' || m.fromRole === 'SYSTEM'
+            const bot = !khach && daGui.has(String(m.messageId))
+            return {
+                id: m.messageId,
+                conversationId,
+                senderName: khach ? (m.fromName || 'Khách TikTok') : (channel.name || 'Shop'),
+                senderType: khach ? 'customer' : 'staff',
+                senderRole: m.fromRole || null,
+                // tuDong + tuShopee: cùng khuôn route Shopee — tuShopee=true ⇒ nhãn "Tự động" (sàn tự sinh), false ⇒ "Chatbot" (Kengi gửi)
+                tuDong: tuTikTok || bot,
+                ...(tuTikTok || bot ? { tuShopee: tuTikTok } : {}),
+                // Tin không phải chữ (thẻ sản phẩm / đơn / thông báo…): ưu tiên bản chữ TikTok trả (need_plaintext, tiếng Việt)
+                content: m.messageType === 'text' ? m.content : (m.plaintext || m.content),
+                contentType: m.messageType === 'image' ? 'image' : 'text',
+                imageUrl: m.imageUrl || null,
+                isRead: true,
+                createdAt: m.createdTimestamp ? new Date(m.createdTimestamp * 1000).toISOString() : new Date().toISOString(),
+            }
+        })
         // DESC từ TikTok → đảo thành cũ trước mới sau cho khung chat
         messages.reverse()
 

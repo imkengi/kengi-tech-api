@@ -5,11 +5,10 @@
  * hai bản máy), trần 30 tin/hội thoại/24 giờ và 60 tin/giờ ⇒ tự tắt, tin chờ 30 phút khi AI không soạn được, kho nhật ký
  * TuTraLoiNhatKy + công tắc TuTraLoiCaiDat DÙNG CHUNG (khoá theo kenhId). Khác Shopee:
  *  - Kích hoạt từ webhook TikTok loại 14 (data.sender.role, conversation_id); tin của gian = role ≠ BUYER.
- *  - Đọc tin qua TikTokService.getMessages (DESC ⇒ đảo). Vai trò người gửi (tài liệu TikTok): BUYER = khách; CUSTOMER_SERVICE =
- *    nhân viên; SHOP = tài khoản chính của gian — vừa là người thật, vừa là trả lời tự động / FAQ TikTok gửi thay gian;
- *    ROBOT / SYSTEM = tin tự động của TikTok, không tính là đã trả lời. SHOP đến trong vòng NGUONG_TU_DONG_GIAY sau tin khách
- *    được coi là tự động của TikTok (lời chào / FAQ bắn ngay) — người thật không trả lời nhanh thế; tin chatbot của mình thì
- *    tra nhật ký (daGui) nên luôn tính.
+ *  - Đọc tin qua TikTokService.getMessages (DESC ⇒ đảo). Vai trò người gửi (tài liệu TikTok): BUYER = khách; mọi vai trò khác
+ *    là phía cửa hàng. MỘT LUỒNG như Shopee (chủ shop 30/10: "chatbot hay người nhắn thì chỉ đi 1 luồng người như bên Shopee"):
+ *    SHOP (tài khoản gian) / CUSTOMER_SERVICE (nhân viên) / tin chatbot của mình (nhật ký daGui) đều = gian ĐÃ trả lời, không
+ *    đoán theo thời gian; chỉ ROBOT / SYSTEM (TikTok tự sinh thay gian — như source server của Shopee) là không tính.
  *  - Gửi theo conversationId (Send Message TEXT) — không có hàm "auto reply" riêng; TikTok không cấm chatbot như Shopee nhưng
  *    vẫn giữ trần và tự tắt khi bị từ chối: hết hạn mức ngày 45101004, mất quyền 105005/106011/106001.
  *  - Câu trả lời không được kéo khách ra ngoài TikTok (kiemCauTuDong(…, 'tiktok')).
@@ -21,9 +20,6 @@ import {
     type KhoTuTraLoi, type TrangThaiNhatKy, type KetQuaTuTraLoi,
 } from './tuTraLoiShopee'
 import { moTaLoi } from './gomLoi'
-
-/** SHOP nhắn trong chừng này giây sau tin khách = trả lời tự động của TikTok (lời chào / FAQ), không phải người */
-export const NGUONG_TU_DONG_GIAY = 20
 
 export interface TinTikTokGoiY {
     messageId: string
@@ -80,26 +76,17 @@ export const laTuDongTikTok = (m: TinTikTokGoiY) => ['ROBOT', 'SYSTEM'].includes
 
 /**
  * Câu KHÁCH cần trả lời + lịch sử (ds: cũ → mới, đã bỏ tin is_visible=false). Cùng luật tachCauHoiShopee: câu hỏi = các tin
- * khách sau lần cuối gian ĐÃ TRẢ LỜI; tin chatbot của mình (daGui) chỉ trả lời TỚI tin khách nó đã đọc. Không có ⇒ null.
+ * khách sau lần cuối gian ĐÃ TRẢ LỜI — người thật (SHOP / CUSTOMER_SERVICE) hay chatbot của mình đều là gian trả lời (một luồng);
+ * ROBOT / SYSTEM của TikTok không tính (trừ khi là tin mình gửi theo nhật ký). Tin chatbot (daGui) chỉ trả lời TỚI tin khách nó
+ * đã đọc. Không có ⇒ null.
  */
 export function tachCauHoiTikTok(ds: TinTikTokGoiY[], tenSanPham: Map<string, string>, daGui: Set<string> | Map<string, string | null> = new Set()):
     { cauHoi: string; lichSu: LuotHoiThoai[]; tinCuoiId: string } | null {
     const traLoiToi: Map<string, string | null> = daGui instanceof Map ? daGui : new Map([...daGui].map(id => [id, null]))
-    const vai = (m: TinTikTokGoiY) => String(m.fromRole || '').toUpperCase()
-    const nguoiTraLoi = (m: TinTikTokGoiY, viTri: number) => {
-        if (traLoiToi.has(m.messageId)) return true
-        const r = vai(m)
-        if (r === 'CUSTOMER_SERVICE') return true
-        if (r !== 'SHOP') return false
-        // SHOP: người thật hay FAQ / lời chào tự động của TikTok? Tự động thì bắn ngay sau tin khách
-        let truoc: TinTikTokGoiY | undefined
-        for (let k = viTri - 1; k >= 0; k--) if (laKhachTikTok(ds[k]!)) { truoc = ds[k]; break }
-        if (!truoc || !truoc.createdTimestamp || !m.createdTimestamp) return true
-        return m.createdTimestamp - truoc.createdTimestamp > NGUONG_TU_DONG_GIAY
-    }
+    const nguoiTraLoi = (m: TinTikTokGoiY) => traLoiToi.has(m.messageId) || (!laKhachTikTok(m) && !laTuDongTikTok(m))
     let daTraToi = -1, i = -1
     ds.forEach((m, viTri) => {
-        if (!nguoiTraLoi(m, viTri)) return
+        if (!nguoiTraLoi(m)) return
         i = viTri
         const tinKhach = traLoiToi.get(m.messageId)
         const j = tinKhach ? ds.findIndex(x => x.messageId === tinKhach) : -1

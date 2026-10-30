@@ -2,14 +2,15 @@
  * Kiểm CHAT TIKTOK: tách bên theo vai trò + TỰ TRẢ LỜI bằng chatbot — npx tsx scripts/check-tiktok-chat.ts (30/10/2026)
  *
  * Chủ shop ngay khi chat TikTok về: "chưa có phân biệt bên nào với bên nào nè, với lại chưa có tự trả lời nha". Lõi
- * lib/tuTraLoiTikTok.ts (cùng khuôn lib/tuTraLoiShopee.ts). Sai ở đây là: coi lời chào / FAQ tự động của TikTok (role SHOP bắn
- * ngay) là gian đã trả lời rồi bỏ mặc khách; trả lời một tin khách hai lần; gửi câu kéo khách sang Shopee / link ngoài; không tự
- * tắt khi TikTok hết hạn mức — mỗi thứ một ca. Prisma giả / dịch vụ giả.
+ * lib/tuTraLoiTikTok.ts (cùng khuôn lib/tuTraLoiShopee.ts). Sai ở đây là: coi tin ROBOT / SYSTEM của TikTok là gian đã trả lời
+ * rồi bỏ mặc khách; chatbot chen vào khi người của gian (SHOP / CUSTOMER_SERVICE) đã trả lời — chủ shop 30/10: "chatbot hay người
+ * nhắn thì chỉ đi 1 luồng người như bên Shopee"; trả lời một tin khách hai lần; gửi câu kéo khách sang Shopee / link ngoài; không
+ * tự tắt khi TikTok hết hạn mức — mỗi thứ một ca. Prisma giả / dịch vụ giả.
  */
 process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat(32)
 
 import {
-    chuTinTikTok, tachCauHoiTikTok, phanLoaiLoiGuiTikTok, tuTraLoiTikTok, NGUONG_TU_DONG_GIAY,
+    chuTinTikTok, tachCauHoiTikTok, phanLoaiLoiGuiTikTok, tuTraLoiTikTok,
     type TinTikTokGoiY, type PhuThuocTuTraLoiTikTok,
 } from '../src/lib/tuTraLoiTikTok'
 import { kiemCauTuDong, CAU_CHO, TRAN_GIO, type KhoTuTraLoi, type TrangThaiNhatKy } from '../src/lib/tuTraLoiShopee'
@@ -47,10 +48,10 @@ async function main() {
         const q = tin('BUYER', 'Giá bao nhiêu?')
         ok('2b. Nhân viên (CUSTOMER_SERVICE) đã trả lời sau ⇒ không cần', tachCauHoiTikTok([q, tin('CUSTOMER_SERVICE', 'Dạ 850k ạ')], SP) === null)
         const q2 = tin('BUYER', 'Có ship Hà Nội không?')
-        const faq = tin('SHOP', 'Cảm ơn bạn đã nhắn, shop sẽ trả lời ngay', { createdTimestamp: q2.createdTimestamp! + 3 })
-        ok('2c. SHOP bắn 3 giây sau tin khách = FAQ / lời chào tự động của TikTok ⇒ KHÔNG tính là trả lời, vẫn hỏi', tachCauHoiTikTok([q2, faq], SP)?.cauHoi === 'Có ship Hà Nội không?')
-        const nguoi = tin('SHOP', 'Dạ có ship Hà Nội ạ', { createdTimestamp: q2.createdTimestamp! + NGUONG_TU_DONG_GIAY + 40 })
-        ok('2d. SHOP trả lời sau 60 giây = người thật ⇒ đã trả lời', tachCauHoiTikTok([q2, nguoi], SP) === null)
+        const nhanh = tin('SHOP', 'Dạ có ship Hà Nội ạ', { createdTimestamp: q2.createdTimestamp! + 3 })
+        ok('2c. Tài khoản gian (SHOP) trả lời — dù chỉ 3 giây sau tin khách — vẫn là gian đã trả lời (một luồng người như Shopee, không đoán theo giờ)', tachCauHoiTikTok([q2, nhanh], SP) === null)
+        const roBot = tin('ROBOT', 'Cảm ơn bạn đã nhắn, shop sẽ trả lời ngay', { createdTimestamp: q2.createdTimestamp! + 3 })
+        ok('2d. Chatbot của TikTok (ROBOT) chào ngay sau tin khách ⇒ KHÔNG tính là trả lời, vẫn hỏi', tachCauHoiTikTok([q2, roBot], SP)?.cauHoi === 'Có ship Hà Nội không?')
         const q3 = tin('BUYER', 'Còn màu đỏ không?')
         ok('2e. ROBOT / SYSTEM sau tin khách không tính là trả lời và không vào lịch sử', (() => { const r = tachCauHoiTikTok([tin('SYSTEM', 'Đơn đã giao', { messageType: 'notification' }), q3, tin('ROBOT', 'Shop đang bận')], SP); return r?.cauHoi === 'Còn màu đỏ không?' && r.lichSu.length === 0 })())
         // chatbot của mình đã trả lời TỚI tin khách m-x; khách nhắn thêm sau đó ⇒ chỉ phần mới
