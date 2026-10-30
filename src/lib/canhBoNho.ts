@@ -21,7 +21,20 @@ function docSo(duong: string): number | null {
         return Number.isFinite(n) ? n : null      // memory.max = "max" khi không đặt trần
     } catch { return null }
 }
-const TRAN_MB = (() => { const n = docSo('/sys/fs/cgroup/memory.max'); return n ? Math.round(n / MB) : 512 })()
+/* Cloud Run gen1 (gVisor) chỉ có cgroup v1 (/sys/fs/cgroup/memory/…), không có v2 (memory.max / memory.current) — đo
+ * 30/10/2026: bản đầu chỉ đọc v2 ⇒ trần rơi về 512 cứng, mức dùng rơi về rss, dù dịch vụ đã 1Gi. Đọc v2 trước, v1 sau;
+ * v1 không đặt trần thì trả số khổng lồ (~2^63) ⇒ coi như không biết. Không đọc được thì 1024 = trần đang cấu hình. */
+const docTranMB = (): number => {
+    const v2 = docSo('/sys/fs/cgroup/memory.max')
+    const v1 = v2 ? null : docSo('/sys/fs/cgroup/memory/memory.limit_in_bytes')
+    const n = v2 ?? v1
+    return n && n < 64 * 1024 * MB ? Math.round(n / MB) : 1024
+}
+const TRAN_MB = docTranMB()
+const docDungMB = (): number | null => {
+    const n = docSo('/sys/fs/cgroup/memory.current') ?? docSo('/sys/fs/cgroup/memory/memory.usage_in_bytes')
+    return n === null ? null : Math.round(n / MB)
+}
 // Ngưỡng cảnh báo = 84% trần (430MB khi trần 512, ~860MB khi trần 1Gi — nâng 30/10/2026); đặt cứng bằng CANH_BO_NHO_MB
 const NGUONG_MB = Number(process.env.CANH_BO_NHO_MB) || Math.round(TRAN_MB * 0.84)
 
@@ -58,12 +71,12 @@ export interface AnhBoNho {
 
 export function chupBoNho(): AnhBoNho {
     const m = process.memoryUsage()
-    const cg = docSo('/sys/fs/cgroup/memory.current')
+    const cgMB = docDungMB()
     const ds = [...dangChay.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
         .map(([k, n]) => n > 1 ? `${k}×${n}` : k).join(', ')
     return {
         luc: new Date().toISOString(),
-        cgroupMB: cg === null ? null : Math.round(cg / MB),
+        cgroupMB: cgMB,
         tranMB: TRAN_MB,
         rssMB: Math.round(m.rss / MB),
         heapMB: Math.round(m.heapUsed / MB),
