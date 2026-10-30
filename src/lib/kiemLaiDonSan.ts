@@ -40,7 +40,7 @@ export interface PhieuKiem {
     transactionDate?: Date | string | null; createdAt?: Date | string | null
 }
 export interface HoaDonKiem {
-    id: string; status: string; invoiceType?: string | null; invoiceNumber?: string | null; invoiceDate?: string | null
+    id: string; transactionId?: string | null; status: string; invoiceType?: string | null; invoiceNumber?: string | null; invoiceDate?: Date | string | null
     totalAmount?: number | null; buyerTaxCode?: string | null; replacedByInvoiceId?: string | null; adjustedByInvoiceId?: string | null
     errorMessage?: string | null; createdAt?: Date | string | null
 }
@@ -97,7 +97,13 @@ const LO = 500
 export const dinhTien = (n: any) => `${Math.round(Number(n) || 0).toLocaleString('vi-VN')}đ`
 const time = (d: any) => { const t = d ? new Date(d).getTime() : NaN; return Number.isFinite(t) ? t : 0 }
 const iso = (d: any) => (d ? new Date(d).toISOString() : null)
-const ddmm = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s) }
+/** dd/mm/yyyy theo NGÀY VN. Prisma trả cột DateTime là Date — String(Date) ra "Fri Oct 09 2026 …" nên đổi sang giờ VN rồi mới cắt */
+const ddmm = (s: Date | string) => {
+    const t = s instanceof Date || /T\d{2}:/.test(String(s)) ? time(s) : 0
+    const chu = t ? new Date(t + 7 * 3600_000).toISOString() : String(s)
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(chu)
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : chu
+}
 
 /** Nền tảng từ đơn, hoặc từ tiền tố mã đơn khi đơn đã bị dọn (SPE/TIK/LZD — cùng quy ước routes/yeuCauHoaDon) */
 export function nenTangCuaMa(don: DonKiem | null, orderNumber: string): string {
@@ -146,6 +152,9 @@ export function soatMotDon(d: DuLieuMotDon, cfg: CauHinhKiem, bayGio: Date = new
     const hoanTien = traHangs.some(t => t.status === 'refunded')
     const traDangXuLy = traHangs.some(t => ['pending', 'approved', 'processing'].includes(t.status))
     const coTra = traHangs.length > 0 || sanBaoTra
+    /** Hàng đợi 20:30 chỉ né đơn sàn báo trả hoặc có phiếu trả ĐANG MỞ (pending/approved/processing/refunded — OPEN_RETURN_EXISTS ở
+     *  routes/einvoice); trả bị TỪ CHỐI thì đơn vẫn có hiệu lực và vẫn được xuất HĐ (30/10/2026) */
+    const traChanHd = sanBaoTra || hoanTien || traDangXuLy
     const phieuDao = phieu?.status === 'voided'
     const mstKhai = mstKhachKhai(phieu?.vatBuyerInfo)
 
@@ -224,7 +233,7 @@ export function soatMotDon(d: DuLieuMotDon, cfg: CauHinhKiem, bayGio: Date = new
     else if (huy || phieuDao) hoaDonB = { tt: 'bo_qua', ghiChu: huy ? 'Đơn huỷ' : 'Phiếu đã đảo' }
     else if (!phieu) hoaDonB = { tt: 'bo_qua', ghiChu: 'Chưa có phiếu để xuất' }
     else if (hdLoi) hoaDonB = { tt: 'loi', ghiChu: `Xuất HĐ lỗi: ${String(hdLoi.errorMessage || 'không rõ lý do').slice(0, 140)}`, hanhDong: 'Xuất lại ở Hàng đợi xuất HĐ' }
-    else if (coTra) hoaDonB = { tt: 'cho', ghiChu: 'Có trả hàng — hàng đợi không xuất' }
+    else if (traChanHd) hoaDonB = { tt: 'cho', ghiChu: 'Có trả hàng — hàng đợi không xuất' }
     else if (!daDon && !daGiao) hoaDonB = { tt: 'cho', ghiChu: 'Chờ giao xong mới xuất' }
     else if (gioTuKhiGiao !== null && gioTuKhiGiao < GIO_CHO_HANG_DOI) hoaDonB = { tt: 'cho', ghiChu: 'Mới giao — chờ hàng đợi 20:30' }
     else if (!cfg.tuXuat && !mstKhai) hoaDonB = { tt: 'cho', ghiChu: 'Tự xuất đang tắt — xuất tay ở Hàng đợi xuất HĐ' }
@@ -276,8 +285,10 @@ const CHON_DON = {
     deliveredAt: true, customerName: true, platformFee: true, platformFeeRate: true, netRevenue: true, khongKhopSku: true,
 } as const
 const CHON_PHIEU = { id: true, receiptNumber: true, status: true, total: true, notes: true, vatBuyerInfo: true, transactionDate: true, createdAt: true } as const
+/** transactionId PHẢI có: hàm nạp gom HĐ theo phiếu bằng chính cột này — thiếu thì mọi HĐ rơi vào khoá '' và đơn nào cũng
+ *  thành "chưa xuất HĐ" (30/10/2026, chủ shop: chi tiết đơn nói ĐÃ xuất mà tab Kiểm lại nói chưa) */
 const CHON_HD = {
-    id: true, status: true, invoiceType: true, invoiceNumber: true, invoiceDate: true, totalAmount: true, buyerTaxCode: true,
+    id: true, transactionId: true, status: true, invoiceType: true, invoiceNumber: true, invoiceDate: true, totalAmount: true, buyerTaxCode: true,
     replacedByInvoiceId: true, adjustedByInvoiceId: true, errorMessage: true, createdAt: true,
 } as const
 const CHON_TRA = { code: true, status: true, originalInvoice: true, refundAmount: true, totalRefund: true } as const

@@ -41,6 +41,8 @@ async function main() {
     {
         const r = soat()
         ok('1a. Đơn giao xong, phiếu khớp, vào sổ, phí thật, HĐ khớp, không trả ⇒ 4 ô ok/—, hoàn tất', r.phieu.tt === 'ok' && r.phi.tt === 'ok' && r.hoaDon.tt === 'ok' && r.traHang.tt === 'bo_qua' && r.hoanTat.tt === 'ok' && r.vanDe.length === 0, r)
+        const n1 = soat({ hoaDons: [hd({ invoiceDate: T('2026-10-09T00:00:00Z') })] }), n2 = soat({ hoaDons: [hd({ invoiceDate: T('2026-10-09T17:30:00Z') })] })
+        ok('1c. Ngày HĐ là Date (cột DateTime của Prisma) ⇒ "ngày 09/10/2026" theo giờ VN, không ra "Fri Oct 09 …"; 00:30 VN sang ngày mới', n1.hoaDon.ghiChu === 'HĐ 00000123 ngày 09/10/2026' && n2.hoaDon.ghiChu === 'HĐ 00000123 ngày 10/10/2026', [n1.hoaDon.ghiChu, n2.hoaDon.ghiChu])
         ok('1b. Số hiện: phiếu, số HĐ, phí, thực nhận', r.receiptNumber === 'ONLINE-SPE-2610290001AAAA' && r.soHoaDon === '00000123' && r.phiSan === 50_000 && r.thucNhan === 450_000 && !r.daDon && r.platform === 'shopee')
     }
 
@@ -102,6 +104,8 @@ async function main() {
         const dieuChinh = soat({ hoaDons: [hd({ adjustedByInvoiceId: 'e3', totalAmount: 500_000 }), hd({ id: 'e3', invoiceType: 'ADJUSTMENT', invoiceNumber: '00000140', totalAmount: -100_000 })] })
         ok('4k. Bản ĐIỀU CHỈNH không bị coi là HĐ hiệu lực; HĐ gốc đã điều chỉnh ⇒ ok, ghi chú', dieuChinh.hoaDon.tt === 'ok' && dieuChinh.soHoaDon === '00000123' && /điều chỉnh/.test(dieuChinh.hoaDon.ghiChu))
         ok('4l. Có trả hàng đang xử lý, chưa HĐ ⇒ chờ (hàng đợi không xuất)', soat({ hoaDons: [], traHangs: [{ code: 'RTN-SH-1', status: 'pending' }] }).hoaDon.tt === 'cho')
+        const tuChoi = soat({ hoaDons: [], traHangs: [{ code: 'RTN-SH-2', status: 'rejected' }] })
+        ok('4m. Trả hàng BỊ TỪ CHỐI không chặn hàng đợi (OPEN_RETURN_EXISTS bỏ rejected) ⇒ giao lâu mà chưa có HĐ là LỖI, không phải chờ', tuChoi.hoaDon.tt === 'loi' && tuChoi.traHang.tt === 'ok', [tuChoi.hoaDon, tuChoi.traHang])
     }
 
     /* 5 — Trả hàng */
@@ -132,13 +136,16 @@ async function main() {
         type O = { dons?: any[]; phieu?: any[]; dong?: Record<string, { tong: number; soDong: number }>; so?: string[]; hd?: any[]; tra?: any[]; phiGiu?: any[]; cfgHd?: any; cai?: any; khongCoHd?: boolean; khongCoPhiSan?: boolean }
         function giaSp(o: O) {
             const st = { goiPhieuIn: 0, goiPhieuStartsWith: 0, goiSo: 0, goiHd: 0, where: [] as any[] }
+            /** Prisma thật CHỈ trả trường có trong `select` — prisma giả phải làm y vậy, kẻo đọc trường không select vẫn "chạy" ở đây
+             *  mà ra undefined trên prod (30/10/2026: CHON_HD thiếu transactionId ⇒ đơn nào cũng "chưa xuất HĐ") */
+            const chon = (rows: any[], select?: Record<string, boolean>) => (select ? rows.map(r => Object.fromEntries(Object.keys(select).filter(k => select[k]).map(k => [k, r[k]]))) : rows)
             const sp: any = {
-                onlineOrder: { findMany: async ({ where, take }: any) => { st.where.push(where); return (o.dons || []).filter(d => (!where.channelId || d.channelId === where.channelId) && d.createdAt >= where.createdAt.gte && d.createdAt <= where.createdAt.lte).slice(0, take) } },
+                onlineOrder: { findMany: async ({ where, take, select }: any) => { st.where.push(where); return chon((o.dons || []).filter(d => (!where.channelId || d.channelId === where.channelId) && d.createdAt >= where.createdAt.gte && d.createdAt <= where.createdAt.lte).slice(0, take), select) } },
                 transaction: {
-                    findMany: async ({ where, take }: any) => {
-                        if (where.receiptNumber?.in) { st.goiPhieuIn++; return (o.phieu || []).filter(p => where.receiptNumber.in.includes(p.receiptNumber)) }
+                    findMany: async ({ where, take, select }: any) => {
+                        if (where.receiptNumber?.in) { st.goiPhieuIn++; return chon((o.phieu || []).filter(p => where.receiptNumber.in.includes(p.receiptNumber)), select) }
                         st.goiPhieuStartsWith++
-                        return (o.phieu || []).filter(p => p.receiptNumber.startsWith('ONLINE-')).slice(0, take)
+                        return chon((o.phieu || []).filter(p => p.receiptNumber.startsWith('ONLINE-')).slice(0, take), select)
                     },
                 },
                 $queryRawUnsafe: async (sql: string, ids: string[]) => {
@@ -147,8 +154,8 @@ async function main() {
                     return []
                 },
                 journalEntry: { findMany: async ({ where }: any) => { st.goiSo++; return (o.so || []).filter(r => where.reference.in.includes(r)).map(reference => ({ reference })) } },
-                eInvoice: { findMany: async ({ where }: any) => { st.goiHd++; if (o.khongCoHd) throw new Error('relation "EInvoice" does not exist'); return (o.hd || []).filter(h => where.transactionId.in.includes(h.transactionId)) } },
-                returnOrder: { findMany: async ({ where }: any) => (o.tra || []).filter(t => where.originalInvoice.in.includes(t.originalInvoice)) },
+                eInvoice: { findMany: async ({ where, select }: any) => { st.goiHd++; if (o.khongCoHd) throw new Error('relation "EInvoice" does not exist'); return chon((o.hd || []).filter(h => where.transactionId.in.includes(h.transactionId)), select) } },
+                returnOrder: { findMany: async ({ where, select }: any) => chon((o.tra || []).filter(t => where.originalInvoice.in.includes(t.originalInvoice)), select) },
                 eInvoiceConfig: { findFirst: async () => (o.cfgHd === undefined ? { active: true, extra: '{"autoIssueOnDelivery":true}' } : o.cfgHd) },
                 storeSettings: { findFirst: async () => (o.cai === undefined ? { autoCreateJournalEntries: true, businessType: 'company' } : o.cai) },
             }
@@ -195,6 +202,9 @@ async function main() {
         ok('7i. 1.200 đơn ⇒ phiếu hỏi 3 lô (500/500/200), đủ 1.200 dòng, không chạm trần', lon.st.goiPhieuIn === 3 && kl.ds.length === 1_200 && !kl.tongQuan.chamTran && kl.tongQuan.hoanTat === 1_200, { lo: lon.st.goiPhieuIn, so: kl.ds.length })
         const tran = await kiemLaiDonSan(lon.sp, { tu: TU, den: DEN, tran: 100, bayGio: BAY_GIO })
         ok('7j. Chạm trần ⇒ nói rõ chamTran', tran.tongQuan.chamTran && tran.ds.length === 100)
+        ok('7k. HĐ nối về đúng phiếu qua transactionId (prisma giả chỉ trả trường có trong select) ⇒ A1 và đơn đã dọn mang số HĐ, ô HĐ ok',
+            theoMa.get('SPE-A1')?.soHoaDon === '00000123' && theoMa.get('SPE-A1')?.hoaDon.tt === 'ok' && theoMa.get('SPE-DADON')?.hoaDon.tt === 'ok' && theoMa.get('SPE-A2')?.hoaDon.tt === 'loi',
+            [theoMa.get('SPE-A1')?.hoaDon, theoMa.get('SPE-DADON')?.hoaDon, theoMa.get('SPE-A2')?.hoaDon])
     }
 
     console.log(`\n${hong ? '✗' : '✓'} ${dat} đạt, ${hong} hỏng\n`)
