@@ -905,7 +905,7 @@ export class TikTokService extends PlatformService {
      * List chat conversations — GET /customer_service/202309/conversations.
      * Trả về shape giống ShopeeService.getConversationList để route dùng chung.
      */
-    async getConversationList(params: { pageSize?: number } = {}): Promise<{
+    async getConversationList(params: { pageSize?: number; offset?: string } = {}): Promise<{
         conversations: Array<{
             conversationId: string
             toId: number | string
@@ -922,21 +922,21 @@ export class TikTokService extends PlatformService {
         hasMore: boolean
         nextOffset: string
     }> {
-        const all: any[] = []
-        let pageToken: string | undefined
-        for (let page = 0; page < 10; page++) {
-            const query: Record<string, string> = { page_size: String(params.pageSize || 20) }
-            if (pageToken) query.page_token = pageToken
-            const { url, headers } = this.buildUrl('/customer_service/202309/conversations', query)
-            const data = await this.httpGet(url, headers)
-            if (data.code !== 0) throw new Error(`TikTok conversations: [${data.code}] ${data.message || 'Unknown error'}`)
-            all.push(...(data.data?.conversations || []))
-            pageToken = data.data?.next_page_token
-            if (!pageToken) break
-        }
+        /* Mỗi lượt gọi MỘT trang (page_size ≤ 20, tài liệu 30/10/2026). Bản cũ gom tới 10 trang (200 hội thoại) mỗi lần hỏi, mà
+         * web hỏi lại 15 giây/lần ⇒ cạn hạn mức 10.000 lượt/ngày của TikTok (lỗi 45101004) chỉ sau vài giờ mở trang. Trang sau
+         * lật bằng offset = next_page_token. locale vi-VN: tin hệ thống trả tiếng Việt. */
+        const query: Record<string, string> = { page_size: String(Math.min(20, Math.max(1, Number(params.pageSize) || 20))), locale: 'vi-VN' }
+        if (params.offset) query.page_token = params.offset
+        const { url, headers } = this.buildUrl('/customer_service/202309/conversations', query)
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) throw new Error(`TikTok conversations: [${data.code}] ${data.message || 'Unknown error'}`)
+        const all: any[] = data.data?.conversations || []
+        const nextOffset = String(data.data?.next_page_token || '')
 
         const conversations = all.map((c: any) => {
-            const buyer = (c.participants || []).find((p: any) => (p.role || '').toUpperCase() !== 'SHOP') || {}
+            // Người mua = participant role BUYER; hội thoại có thêm CUSTOMER_SERVICE thì "không phải SHOP" bắt nhầm nhân viên
+            const ds: any[] = c.participants || []
+            const buyer = ds.find((p: any) => (p.role || '').toUpperCase() === 'BUYER') || ds.find((p: any) => (p.role || '').toUpperCase() !== 'SHOP') || {}
             const latest = c.latest_message || {}
             const { content } = this.parseImContent(latest.type, latest.content)
             // create_time: epoch giây (chuẩn hóa nếu sàn trả ms)
@@ -957,7 +957,7 @@ export class TikTokService extends PlatformService {
             }
         })
         conversations.sort((a, b) => (b.lastMessageTimestamp || 0) - (a.lastMessageTimestamp || 0))
-        return { conversations, hasMore: false, nextOffset: '' }
+        return { conversations, hasMore: !!nextOffset, nextOffset }
     }
 
     /**
@@ -974,6 +974,10 @@ export class TikTokService extends PlatformService {
             fromRole: string
             createdTimestamp: number
             sourceContent?: any
+            /** bản chữ dễ đọc TikTok trả cho tin không phải chữ (need_plaintext) */
+            plaintext?: string
+            /** is_visible = false: TikTok bảo không hiện cho nhân viên */
+            isVisible: boolean
         }>
         hasMore: boolean
         nextOffset: string
@@ -981,12 +985,14 @@ export class TikTokService extends PlatformService {
         /* TikTok chỉ cho page_size 1..10 (lỗi 36009004 "PageSize is invalid … <= 10" — đo prod 30/10/2026 ngay sau khi được
          * cấp scope chat: danh sách hội thoại về mà khung tin nhắn trống). Muốn 25 tin thì lật trang bằng page_token tới khi
          * đủ hoặc hết; trần 50 tin một lượt (mỗi trang một lượt gọi). */
-        const can = Math.min(50, Math.max(1, Number(params.pageSize) || 25))
+        // Mặc định 10 tin = MỘT lượt gọi (hạn mức 10.000 lượt/ngày, web hỏi lại đều) — xem thêm bằng offset
+        const can = Math.min(50, Math.max(1, Number(params.pageSize) || 10))
         let token = params.offset || ''
         const tho: any[] = []
         let conTrang = true
         while (tho.length < can && conTrang) {
-            const query: Record<string, string> = { page_size: String(Math.min(10, can - tho.length)), sort_order: 'DESC' }
+            // need_plaintext: thẻ sản phẩm / đơn / thông báo… trả thêm bản chữ dễ đọc; locale vi-VN: tin hệ thống tiếng Việt
+            const query: Record<string, string> = { page_size: String(Math.min(10, can - tho.length)), sort_order: 'DESC', need_plaintext: 'true', locale: 'vi-VN' }
             if (token) query.page_token = token
             const { url, headers } = this.buildUrl(`/customer_service/202309/conversations/${conversationId}/messages`, query)
             const data = await this.httpGet(url, headers)
@@ -1007,9 +1013,12 @@ export class TikTokService extends PlatformService {
                 imageUrl,
                 fromId: m.sender?.im_user_id || '',
                 fromName: m.sender?.nickname || '',
-                fromRole: (m.sender?.role || '').toUpperCase(), // SHOP | BUYER
+                // BUYER | SHOP (trả lời tự động / FAQ của gian) | CUSTOMER_SERVICE (nhân viên) | ROBOT (chatbot TikTok) | SYSTEM — tài liệu 30/10/2026
+                fromRole: (m.sender?.role || '').toUpperCase(),
                 createdTimestamp: ts,
                 sourceContent: m.content,
+                plaintext: typeof m.plaintext === 'string' && m.plaintext.trim() ? m.plaintext.trim() : undefined,
+                isVisible: m.is_visible !== false,
             }
         })
         return { messages, hasMore: !!token, nextOffset: token }

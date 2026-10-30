@@ -621,13 +621,14 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
      *   4  đổi kiện hàng
      * Type 12 chính là loại mang vụ trả 4042223877292721302 mà mình xử lý hôm 11/09
      * — nó bị bỏ qua, phải chờ cron quét trả hàng mới thấy. */
-    if (pushType !== 1 && pushType !== 2 && pushType !== 4 && pushType !== 11 && pushType !== 12) {
+    // 14 = tin nhắn chat mới (scope Customer Service được cấp 30/10/2026) — không có order_id, xử lý riêng bên dưới
+    if (pushType !== 1 && pushType !== 2 && pushType !== 4 && pushType !== 11 && pushType !== 12 && pushType !== 14) {
         console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
         return boPush(`loại push ${pushType} không nhận`)
     }
 
     const orderId = data.order_id
-    if (pushType !== 2 && pushType !== 12 && !orderId) {
+    if (pushType !== 2 && pushType !== 12 && pushType !== 14 && !orderId) {
         console.log(`[TikTok Webhook] No order_id in data`)
         return boPush('push không có order_id')
     }
@@ -708,6 +709,27 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
         // so a signature mismatch can't inject data — log loudly but continue
         // rather than silently dropping real status updates.
         console.warn(`[TikTok Webhook] ⚠️ Signature mismatch for shop_id=${shopId} — processing anyway (order re-fetched from API)`)
+    }
+
+    // ── Type 14: tin nhắn chat mới (scope Customer Service, 30/10/2026) → tín hiệu cho web làm mới khung chat ──
+    // Cùng nếp push mã 10 của Shopee: ghi TinHieuChatSan (web hỏi 5 giây/lần) + publishEvent cho bản máy đang nối. Thân
+    // push: data.{message_id, conversation_id, type, content (JSON chuỗi), create_time, sender{im_user_id, role}}.
+    if (pushType === 14) {
+        const vaiTro = String(data.sender?.role || '').toUpperCase()
+        let text = ''
+        try { text = String(data.type || 'TEXT').toUpperCase() === 'TEXT' ? String(JSON.parse(String(data.content || '{}'))?.content || '') : '' } catch { text = '' }
+        await ghiTinHieuChat(storePrisma, String(channel.id), String(data.conversation_id || '') || null)
+        publishEvent(resolvedSchema || undefined, 'chat:new-platform-message', {
+            platform: 'tiktok',
+            channelId: channel.id,
+            channelName: channel.name,
+            conversationId: String(data.conversation_id || ''),
+            messageId: String(data.message_id || ''),
+            fromUserName: '',
+            messageType: String(data.type || 'TEXT').toLowerCase(),
+            text,
+        }).catch(() => { })
+        return xongPush(`chat TikTok (${vaiTro || '?'}) hội thoại ${data.conversation_id || ''}`)
     }
 
     // ── Type 2: return/refund status change → sync returns realtime ──

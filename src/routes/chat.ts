@@ -831,11 +831,12 @@ async function getTikTokServiceForChannel(prisma: any, channelId: string): Promi
 router.get('/tiktok/conversations', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { channelId, pageSize } = req.query
+        const { channelId, pageSize, offset } = req.query
         if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
 
         const { tiktok, channel } = await getTikTokServiceForChannel(prisma, channelId as string)
-        const result = await tiktok.getConversationList({ pageSize: parseInt(pageSize as string) || 20 })
+        // Một trang (≤ 20) mỗi lượt — hạn mức TikTok 10.000 lượt/ngày; trang sau bằng offset (30/10/2026)
+        const result = await tiktok.getConversationList({ pageSize: parseInt(pageSize as string) || 20, offset: offset ? String(offset) : undefined })
 
         const items = result.conversations.map((c: any) => ({
             id: c.conversationId,
@@ -853,7 +854,7 @@ router.get('/tiktok/conversations', chatAuth, async (req: AuthRequest, res: Resp
         // Sort thuần MỚI NHẤT TRƯỚC — đồng bộ với Shopee/nội bộ
         items.sort((a: any, b: any) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0))
 
-        res.json({ success: true, data: { items, total: items.length, hasMore: false, nextOffset: '', source: 'tiktok' } })
+        res.json({ success: true, data: { items, total: items.length, hasMore: result.hasMore, nextOffset: result.nextOffset, source: 'tiktok' } })
     } catch (err: any) {
         console.error('TikTok get conversations error:', err)
         const { status, body } = platformChatError('tiktok', err)
@@ -870,17 +871,31 @@ router.get('/tiktok/messages/:conversationId', chatAuth, async (req: AuthRequest
         if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
 
         const { tiktok, channel } = await getTikTokServiceForChannel(prisma, channelId as string)
+        // Mặc định 10 tin (= một lượt gọi TikTok; hạn mức 10.000 lượt/ngày, web hỏi lại đều) — xem thêm bằng offset
         const result = await tiktok.getMessages(conversationId as string, {
-            pageSize: parseInt(String(pageSize) || '25') || 25,
+            pageSize: parseInt(String(pageSize) || '10') || 10,
             offset: offset ? String(offset) : undefined,
         })
 
-        const messages = result.messages.map((m: any) => ({
+        /* Bên gửi theo sender.role (tài liệu TikTok 30/10/2026): BUYER = khách; SHOP (trả lời tự động / FAQ của gian),
+         * CUSTOMER_SERVICE (nhân viên), ROBOT (chatbot TikTok) = phía cửa hàng; SYSTEM = tin hệ thống (vẽ giữa). Bản cũ chỉ nhận
+         * SHOP ⇒ tin chào tự động / hệ thống rơi sang bên khách (chủ shop: "chưa có phân biệt bên nào với bên nào"). */
+        const tenBen = (m: any) => {
+            if (m.fromRole === 'BUYER') return m.fromName || 'Khách TikTok'
+            if (m.fromRole === 'SYSTEM') return 'Hệ thống TikTok'
+            if (m.fromRole === 'ROBOT') return `${channel.name || 'Shop'} (tự động)`
+            return channel.name || 'Shop'
+        }
+        const messages = result.messages.filter((m: any) => m.isVisible !== false).map((m: any) => ({
             id: m.messageId,
             conversationId,
-            senderName: m.fromRole === 'SHOP' ? (channel.name || 'Shop') : (m.fromName || 'Khách TikTok'),
-            senderType: m.fromRole === 'SHOP' ? 'staff' : 'customer',
-            content: m.content,
+            senderName: tenBen(m),
+            senderType: m.fromRole === 'BUYER' ? 'customer' : m.fromRole === 'SYSTEM' ? 'system' : 'staff',
+            senderRole: m.fromRole || null,
+            // ROBOT / SYSTEM là tin tự động của TikTok — không tính là shop đã trả lời (web dùng tuDong như Shopee)
+            tuDong: m.fromRole === 'ROBOT' || m.fromRole === 'SYSTEM',
+            // Tin không phải chữ (thẻ sản phẩm / đơn / thông báo…): ưu tiên bản chữ TikTok trả (need_plaintext, tiếng Việt)
+            content: m.messageType === 'text' ? m.content : (m.plaintext || m.content),
             contentType: m.messageType === 'image' ? 'image' : 'text',
             imageUrl: m.imageUrl || null,
             isRead: true,
