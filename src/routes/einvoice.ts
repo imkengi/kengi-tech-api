@@ -2572,7 +2572,11 @@ router.get('/:id', einvoiceAuth, async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma! as any
         const inv = await getInvoiceWithItems(prisma, String(req.params.id))
         if (!inv) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
-        res.json({ success: true, data: inv })
+        /* KHÔNG trả _config (30/10/2026): đó là NGUYÊN dòng cấu hình nhà cung cấp HĐĐT — apiUsername / apiPassword / apiSecret /
+         * apiKey thô — mà route này mọi người đăng nhập (cả thu ngân) gọi được. Web không đọc _config; XML / PDF dùng nội bộ
+         * qua getInvoiceWithItems. GET /config mới là đường xem cấu hình (đã che mật khẩu). Bộ soát: check:hddt-an-toan. */
+        const { _config, ...ra } = inv as any
+        res.json({ success: true, data: ra })
     } catch (err: any) {
         console.error('GET /einvoice/:id error:', err)
         console.error('[EInvoiceQueue route]', err?.message || err)
