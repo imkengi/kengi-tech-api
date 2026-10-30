@@ -20,6 +20,8 @@
 //   · PUT vào URL phiên KHÔNG cần Authorization — phiên đã tự mang quyền.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { guiThan } from './khoiVideo'
+
 /** 8MB — bội số của 256KB, dưới trần 32MB của Cloud Run. */
 export const KICH_THUOC_KHOI = 8 * 1024 * 1024
 
@@ -73,37 +75,32 @@ export async function guiKhoiResumable(
 ): Promise<KetQuaKhoi> {
     if (!laUrlTaiLenGoogle(sessionUrl)) throw new Error('URL phiên không thuộc Google — từ chối chuyển tiếp')
     const cuoi = offset + khoi.length - 1
-    const ac = new AbortController()
-    const timer = setTimeout(() => ac.abort(), 250_000)
-    try {
-        /* PHẢI đặt Content-Length BẰNG TAY. Đo 08/09/2026: Node 20 trên Cloud Run
-         * (undici cũ) KHÔNG tự đặt Content-Length cho thân Uint8Array → Google trả
-         * "411 Length Required" cho mọi khối. Node 24 cục bộ thì tự đặt nên lỗi
-         * không lộ khi thử ở máy. Truyền Buffer + khai độ dài là chắc ăn cả hai. */
-        const r = await fetch(sessionUrl, {
-            method: 'PUT',
-            headers: {
-                'Content-Range': `bytes ${offset}-${cuoi}/${total}`,
-                'Content-Length': String(khoi.length),
-            },
-            body: Buffer.from(khoi),
-            signal: ac.signal,
-        })
-        // 308 = Resume Incomplete: còn khối nữa. 200/201 = xong.
-        if (r.status === 308) {
-            const rng = r.headers.get('range') || ''
-            const m = rng.match(/bytes=0-(\d+)/)
-            return { xong: false, status: 308, daNhan: m && m[1] ? Number(m[1]) + 1 : offset + khoi.length }
-        }
-        if (r.ok) {
-            const text = await r.text()
-            let file: any = null
-            try { file = JSON.parse(text) } catch { /* Google đôi khi trả rỗng cho PATCH; với POST resumable thì có JSON */ }
-            return { xong: true, status: r.status, file }
-        }
-        const chiTiet = (await r.text().catch(() => '')).slice(0, 400)
-        throw new Error(`Google từ chối khối (HTTP ${r.status}) tại byte ${offset}. ${chiTiet}`)
-    } finally {
-        clearTimeout(timer)
+    /* PHẢI đặt Content-Length BẰNG TAY. Đo 08/09/2026: Node 20 trên Cloud Run
+     * (undici cũ) KHÔNG tự đặt Content-Length cho thân Uint8Array → Google trả
+     * "411 Length Required" cho mọi khối. Node 24 cục bộ thì tự đặt nên lỗi
+     * không lộ khi thử ở máy. Truyền Buffer + khai độ dài là chắc ăn cả hai.
+     * Gửi bằng node:https, KHÔNG fetch (27/10/2026): route cũ chép khối 3 lần
+     * (new Uint8Array → Buffer.from → fetch tự chép thân) — mỗi khối 6–8MB phình
+     * ~30MB, góp phần làm Cloud Run giết máy chủ vì vượt 512 MiB. lib/khoiVideo.ts */
+    const than = Buffer.from(khoi.buffer, khoi.byteOffset, khoi.byteLength)   // nhìn vào, không chép
+    const r = await guiThan(sessionUrl, {
+        method: 'PUT',
+        timeoutMs: 250_000,
+        headers: {
+            'Content-Range': `bytes ${offset}-${cuoi}/${total}`,
+            'Content-Length': String(than.length),
+        },
+    }, [than])
+    // 308 = Resume Incomplete: còn khối nữa. 200/201 = xong.
+    if (r.status === 308) {
+        const rng = String(r.headers.range || '')
+        const m = rng.match(/bytes=0-(\d+)/)
+        return { xong: false, status: 308, daNhan: m && m[1] ? Number(m[1]) + 1 : offset + khoi.length }
     }
+    if (r.status >= 200 && r.status < 300) {
+        let file: any = null
+        try { file = JSON.parse(r.text) } catch { /* Google đôi khi trả rỗng cho PATCH; với POST resumable thì có JSON */ }
+        return { xong: true, status: r.status, file }
+    }
+    throw new Error(`Google từ chối khối (HTTP ${r.status}) tại byte ${offset}. ${r.text.slice(0, 400)}`)
 }

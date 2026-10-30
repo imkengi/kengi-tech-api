@@ -1,6 +1,7 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
+import { guiJsonKemBase64, CHO_BASE64 } from '../../lib/khoiVideo'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE OPEN PLATFORM v2.0
@@ -403,44 +404,46 @@ export class ShopeeService extends PlatformService {
     ): Promise<any> {
         const proxy = process.env.SHOPEE_FORWARD_PROXY
 
-        const ac = new AbortController()
-        const timer = setTimeout(() => ac.abort(), 200_000)
-        try {
-            let r: Response
-            if (proxy) {
-                /* Qua Tino thì gửi JSON + base64, KHÔNG multipart. Đo 08/09/2026: tường
-                 * lửa hosting trả 403 HTML cho mọi yêu cầu có tệp đính kèm hoặc thân
-                 * nhị phân thô, còn thân JSON lớn thì vào PHP bình thường. PHP giải mã
-                 * rồi tự dựng multipart sang Shopee. */
-                const dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
-                if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải tệp')
-                r = await fetch(dich, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        secret: process.env.SHOPEE_FORWARD_SECRET || '',
-                        url,
-                        fields,
-                        part_b64: Buffer.from(dulieu).toString('base64'),
-                        file_field: opt.tenTruong,
-                        file_name: opt.tenFile,
-                        file_mime: opt.kieu,
-                    }),
-                    signal: ac.signal,
-                })
-            } else {
-                // Không proxy (dev / IP đã whitelist): multipart thẳng lên Shopee.
+        let status: number
+        let text: string
+        if (proxy) {
+            /* Qua Tino thì gửi JSON + base64, KHÔNG multipart. Đo 08/09/2026: tường
+             * lửa hosting trả 403 HTML cho mọi yêu cầu có tệp đính kèm hoặc thân
+             * nhị phân thô, còn thân JSON lớn thì vào PHP bình thường. PHP giải mã
+             * rồi tự dựng multipart sang Shopee.
+             * Thân JSON ghi THEO LÁT (27/10/2026): bản cũ dựng chuỗi base64 + chuỗi JSON
+             * của cả khối 10MB rồi fetch mã hoá lại ⇒ ~50MB mỗi khối, góp phần làm Cloud
+             * Run giết máy chủ vì vượt 512 MiB. Byte gửi đi y hệt — xem lib/khoiVideo.ts. */
+            const dich = proxy.replace(/shopee-forward\.php$/, 'shopee-forward-upload.php')
+            if (dich === proxy) throw new Error('SHOPEE_FORWARD_PROXY không kết thúc bằng shopee-forward.php — không suy ra được đường tải tệp')
+            const r = await guiJsonKemBase64(dich, {
+                secret: process.env.SHOPEE_FORWARD_SECRET || '',
+                url,
+                fields,
+                part_b64: CHO_BASE64,
+                file_field: opt.tenTruong,
+                file_name: opt.tenFile,
+                file_mime: opt.kieu,
+            }, dulieu, 200_000)
+            status = r.status
+            text = r.text
+        } else {
+            // Không proxy (dev / IP đã whitelist): multipart thẳng lên Shopee.
+            const ac = new AbortController()
+            const timer = setTimeout(() => ac.abort(), 200_000)
+            try {
                 const form = new FormData()
                 for (const [k, v] of Object.entries(fields)) form.set(k, String(v))
                 form.set(opt.tenTruong, new Blob([dulieu], { type: opt.kieu }), opt.tenFile)
-                r = await fetch(url, { method: 'POST', body: form, signal: ac.signal })
+                const r = await fetch(url, { method: 'POST', body: form, signal: ac.signal })
+                status = r.status
+                text = await r.text()
+            } finally {
+                clearTimeout(timer)
             }
-            const text = await r.text()
-            try { return JSON.parse(text) }
-            catch { throw new Error(`Đường tải tệp trả về không phải JSON (HTTP ${r.status}): ${text.slice(0, 200)}`) }
-        } finally {
-            clearTimeout(timer)
         }
+        try { return JSON.parse(text) }
+        catch { throw new Error(`Đường tải tệp trả về không phải JSON (HTTP ${status}): ${text.slice(0, 200)}`) }
     }
 
     async refreshAccessToken(): Promise<TokenResponse> {

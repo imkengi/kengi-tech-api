@@ -90,6 +90,21 @@ function memDel(pattern: string): void {
     }
 }
 
+/**
+ * Đo bộ đệm trong máy (GET /admin/do-bo-nho, 27/10/2026): số mục, tổng ký tự giá trị, số mục đã hết hạn mà còn
+ * nằm đó (memGet chỉ xoá mục hết hạn khi bị đọc lại). Heap bản máy chạy lâu ~140MB so với ~55MB lúc mới bật — đo
+ * trước rồi mới quyết có phải dọn bộ đệm hay không.
+ */
+export function thongKeBoDemTrongMay(): { dungBoNho: boolean; soMuc: number; kyTuMB: number; soMucHetHan: number } {
+    const nay = Date.now()
+    let kyTu = 0, hetHan = 0
+    for (const v of memoryCache.values()) {
+        kyTu += v.value.length
+        if (v.expiresAt > 0 && nay > v.expiresAt) hetHan++
+    }
+    return { dungBoNho: useMemory || !redis, soMuc: memoryCache.size, kyTuMB: Math.round(kyTu / 104857.6) / 10, soMucHetHan: hetHan }
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**

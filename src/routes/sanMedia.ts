@@ -452,7 +452,7 @@ router.post('/tai-len/chunk',
             if (buf.length === 0) { res.status(400).json({ success: false, error: 'Khối rỗng' }); return }
 
             const { guiKhoiResumable } = await import('../lib/driveChunkUpload')
-            const kq = await guiKhoiResumable(url, new Uint8Array(buf), offset, total)
+            const kq = await guiKhoiResumable(url, buf, offset, total)   // đưa thẳng Buffer, đừng chép (lib/khoiVideo.ts)
 
             if (kq.xong) {
                 const fileId = kq.file?.id || null

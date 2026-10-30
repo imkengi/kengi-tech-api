@@ -26,6 +26,7 @@
 import crypto from 'crypto'
 import { layTokenVideoShopee } from './shopeeVideoAuth'
 import { getStoreDriveWriter } from './driveOAuth'
+import { docKhoiDrive } from './khoiVideo'
 
 export type GiaiDoan = 'init' | 'parts' | 'complete' | 'processing' | 'cover' | 'edit' | 'post' | 'xong'
 
@@ -88,15 +89,6 @@ async function luu(prisma: any, id: string, tt: TienTrinh, them?: Record<string,
     tt.san = 'shopee'
     tt.capNhatLuc = new Date().toISOString()
     await prisma.sanMedia.update({ where: { id }, data: { tienTrinhDang: JSON.stringify(tt), ...(them || {}) } })
-}
-
-/** Một khối từ Drive theo Range — Drive hỗ trợ Range cho alt=media. */
-async function docKhoiDrive(drive: any, fileId: string, tu: number, den: number): Promise<Uint8Array> {
-    const r = await drive.files.get(
-        { fileId, alt: 'media', supportsAllDrives: true },
-        { responseType: 'arraybuffer', headers: { Range: `bytes=${tu}-${den}` } },
-    )
-    return new Uint8Array(r.data as ArrayBuffer)
 }
 
 function kiemLoiShopee(r: any, buoc: string) {
@@ -174,11 +166,13 @@ export async function buocDangShopee(prisma: any, mediaId: string, nganSachMs = 
         // ── 2. PARTS ───────────────────────────────────────────────────────────
         if (tt.giaiDoan === 'parts') {
             const { drive } = await getStoreDriveWriter(prisma)
+            // MỘT bộ đệm cho mọi khối của lượt này — khối 10MB, cấp mới mỗi khối là rác chồng rác (lib/khoiVideo.ts)
+            let boDem: Buffer | undefined
             while ((tt.phanXong ?? 0) < (tt.tongPhan ?? 0) && conGio()) {
                 const i = tt.phanXong ?? 0
                 const tu = i * (tt.partSize as number)
                 const den = Math.min(tt.fileSize as number, tu + (tt.partSize as number)) - 1
-                const khoi = await docKhoiDrive(drive, m.nguonId, tu, den)
+                const khoi = await docKhoiDrive(drive, m.nguonId, tu, den, boDem ??= Buffer.allocUnsafe(tt.partSize as number))
                 if (khoi.length !== den - tu + 1) throw new Error(`Khối ${i}: Drive trả ${khoi.length} byte, cần ${den - tu + 1} — Drive không tôn trọng Range?`)
                 const md5 = crypto.createHash('md5').update(khoi).digest('hex')
                 const r = await svc.taiKhoiMedia({ video_upload_id: tt.videoUploadId as string, part_seq: i, part_md5: md5 }, khoi)

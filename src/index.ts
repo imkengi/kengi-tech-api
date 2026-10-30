@@ -245,8 +245,11 @@ app.use('/api/tarot/auth', authLimiter) // đăng nhập Google của trang taro
 app.use('/api', apiLimiter)
 
 // ─── Request Logger (dev) ───────────────────────────────────────────────────
-app.use((req, _res, next) => {
+// + đếm yêu cầu đang chạy cho bộ canh RAM (lib/canhBoNho.ts) — RAM vọt thì log có tên việc
+import { batDauYeuCau, duongGon } from './lib/canhBoNho'
+app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.path} — origin: ${req.headers.origin || 'none'}`)
+    res.on('close', batDauYeuCau(duongGon(req.method, req.path)))
     next()
 })
 

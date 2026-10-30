@@ -23,6 +23,7 @@
 
 import { getStoreDriveWriter } from './driveOAuth'
 import { layTokenTikTok, moPhienDang, trangThaiDang, layHoSoNguoiDang, chiaKhoiTikTok } from './tiktokDangVideo'
+import { docKhoiDrive } from './khoiVideo'
 
 export type GiaiDoanTT = 'init' | 'parts' | 'check' | 'xong'
 
@@ -80,15 +81,6 @@ async function luu(prisma: any, id: string, tt: TienTrinhTT, them?: Record<strin
     tt.san = 'tiktok'
     tt.capNhatLuc = new Date().toISOString()
     await prisma.sanMedia.update({ where: { id }, data: { tienTrinhDang: JSON.stringify(tt), ...(them || {}) } })
-}
-
-/** Một khối từ Drive theo Range — Drive hỗ trợ Range cho alt=media. */
-async function docKhoiDrive(drive: any, fileId: string, tu: number, den: number): Promise<Uint8Array> {
-    const r = await drive.files.get(
-        { fileId, alt: 'media', supportsAllDrives: true },
-        { responseType: 'arraybuffer', headers: { Range: `bytes=${tu}-${den}` } },
-    )
-    return new Uint8Array(r.data as ArrayBuffer)
 }
 
 /** Link tải TikTok cấp có hạn dùng. Hết hạn thì làm lại phiên, đừng kẹt vĩnh viễn. */
@@ -197,8 +189,9 @@ export async function buocDangTikTok(
 
                 /* Content-Length PHẢI khai tay: undici của Node 20 KHÔNG tự đặt cho
                  * thân nhị phân (Node 24 thì có) nên chạy prod mới hỏng — đúng cái
-                 * bẫy đã dính với Google 411 hôm 08/09. */
-                const buf = Buffer.from(khoi)
+                 * bẫy đã dính với Google 411 hôm 08/09. khoi đã là Buffer (lib/khoiVideo.ts)
+                 * — đừng Buffer.from chép thêm bản nữa, fetch tự chép một lần rồi. */
+                const buf = khoi
                 const r = await fetch(tt.uploadUrl!, {
                     method: 'PUT',
                     headers: {

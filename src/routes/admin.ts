@@ -3,6 +3,8 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, dropBranchSchema, taoBangTuSqlDungSan, thongKeClientStore, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
+import { chupBoNho, dinhBoNho } from '../lib/canhBoNho'
+import { thongKeBoDemTrongMay } from '../lib/cache'
 import { chayTheoDot } from '../lib/poolGuard'
 import { khoHuHong } from '../lib/warehouseHelper'
 import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
@@ -14021,6 +14023,11 @@ router.get('/do-bo-nho', async (_req: Request, res: Response) => {
             client: thongKeClientStore(),
             cgroup: docCgroup(),
             thuMuc: doThuMuc(['/app/public/uploads', '/tmp', '/app/dist']),
+            // 27/10/2026: đỉnh RAM từ lúc bản máy khởi động + yêu cầu đang chạy lúc đỉnh (lib/canhBoNho.ts),
+            // bộ đệm trong máy (prod không có Redis — giữ tới 1000 mục, mục hết hạn chỉ xoá khi bị đọc lại)
+            dinh: dinhBoNho(),
+            dangChay: chupBoNho().dangChay,
+            boDem: thongKeBoDemTrongMay(),
         },
     })
 })
@@ -14034,7 +14041,8 @@ function docCgroup() {
     const v2 = doc('/sys/fs/cgroup/memory.current')
     const stat = doc('/sys/fs/cgroup/memory.stat') || doc('/sys/fs/cgroup/memory/memory.stat')
     const lay = (ten: string) => {
-        const m = stat.match(new RegExp('(?:^|\n)' + ten + ' (\d+)'))
+        // '\\d' — viết '\d' trong chuỗi thường là chữ 'd' trơn, regex không bao giờ khớp số (anon/file/shmem ra null tới 27/10/2026)
+        const m = stat.match(new RegExp('(?:^|\\n)' + ten + ' (\\d+)'))
         return m ? mb(Number(m[1])) : null
     }
     const dungMB = v2 ? mb(Number(v2.trim())) : (Number(doc('/sys/fs/cgroup/memory/memory.usage_in_bytes').trim()) ? mb(Number(doc('/sys/fs/cgroup/memory/memory.usage_in_bytes').trim())) : null)

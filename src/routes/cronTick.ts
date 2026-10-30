@@ -19,6 +19,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { nhipMktTuNgoai } from '../cron/mktWorker'
 import { quetTuNgoai } from '../cron/aiAgentCron'
 import { nhacBangChungTuNgoai } from '../cron/nhacBangChungTikTokCron'
+import { chupBoNho } from '../lib/canhBoNho'
 
 const router = Router()
 
@@ -37,6 +38,7 @@ router.post('/tick', async (req: Request, res: Response) => {
         return
     }
     const batDau = Date.now()
+    const ramDau = chupBoNho()
     const ra: Record<string, string> = {}
     /* Đăng bài trước (nhanh, có giờ hẹn), tác vụ AI sau (có thể vài phút). Một phần hỏng
      * không chặn phần kia. */
@@ -129,6 +131,11 @@ router.post('/tick', async (req: Request, res: Response) => {
             ra.khoTaiLieu = await nhipKhoTaiLieu(30_000)
         } catch (e: any) { ra.khoTaiLieu = 'loi: ' + (e?.message || e) }
     }
+    /* Một dòng mỗi nhịp (27/10/2026): RAM đầu → cuối nhịp + việc đăng video đã làm. Cloud Run từng giết máy chủ
+     * vì vượt 512 MiB giữa nhịp lúc đang đẩy video lên Shopee — dòng này cho thấy nhịp nào làm RAM nhích bao nhiêu. */
+    const ramCuoi = chupBoNho()
+    const video = ra.henGioVideo && ra.henGioVideo !== 'khong-co-viec' ? ` · video: ${ra.henGioVideo.slice(0, 160)}` : ''
+    console.log(`[Nhịp] ${Date.now() - batDau}ms · RAM ${ramDau.cgroupMB ?? ramDau.rssMB}→${ramCuoi.cgroupMB ?? ramCuoi.rssMB}/${ramCuoi.tranMB}MB (rss ${ramCuoi.rssMB}, heap ${ramCuoi.heapMB}, arrayBuffers ${ramCuoi.arrayBuffersMB})${video}`)
     res.json({ success: true, data: { ...ra, ms: Date.now() - batDau } })
 })
 
