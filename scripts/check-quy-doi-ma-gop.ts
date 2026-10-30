@@ -253,6 +253,9 @@ async function main() {
         ok('7i. Chạy thật: SP000197 −5 → 0 (đọc lại sau khi gộp)', ton.p197.stock === 0 && theo(that, 'EDH-CBZ010-E2')?.tonDichSau === 0)
         ok('7j. Giá vốn bình quân mã đích: 10 @1.000 + 20 @1.500 → 1.333', ton.c.costPrice === 1333 && theo(that, 'THUNG')?.giaDichSau === 1333, ton.c)
         ok('7k. Không còn mã kẹt → trả rỗng, không đọc cài đặt', (await donTonMaGop({ $queryRawUnsafe: async () => [] }, { chayThat: true, gop: gopGia })).length === 0)
+        goi.length = 0
+        const quaGio = await donTonMaGop(sp, { chayThat: false, gop: gopGia, hetHanLuc: Date.now() - 1 })
+        ok('7l. Hết ngân sách thời gian: vẫn làm ĐÚNG MỘT mã rồi dừng (không đói, không tràn tick)', goi.length === 1 && quaGio.filter(k => k.ketQua === 'se_don').length === 1, goi)
     }
 
     console.log('\n8. Nối dây + an toàn (soát mã nguồn)')
@@ -272,6 +275,8 @@ async function main() {
         ok('8e. Tên schema lạ → từ chối (không nối chuỗi bừa vào SQL)', /schema lạ/.test(nem2))
         const dt = doc('lib/donTonMaGop.ts')
         const thanNhip = (/export async function nhipDonTonMaGop[\s\S]*?\n\}/.exec(dt) || [''])[0]
+        ok('8g. Nhịp có ngân sách thời gian, truyền hạn xuống từng cửa hàng',
+            /nhipDonTonMaGop\(nganSachMs = 15_000\)/.test(dt) && /donTonMaGop\(getStorePrisma\(schema\), \{ chayThat: true, hetHanLuc \}\)/.test(dt))
         ok('8f. Nhịp dò bằng registry TRƯỚC, chỉ mở client cửa hàng khi có mã kẹt',
             thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') > 0 && thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') < thanNhip.indexOf('getStorePrisma(schema)'))
     }

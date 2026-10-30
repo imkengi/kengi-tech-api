@@ -88,15 +88,19 @@ export function giaVonSauDon(cach: string, p: {
 /**
  * Dời tồn kẹt của MỌI mã gộp trong một cửa hàng. `chayThat: false` = chỉ đọc
  * (phép gộp chạy thử chỉ đếm dòng). `gop` để bộ kiểm thay phép gộp thật.
+ * `hetHanLuc` (ms): quá giờ thì dừng sau mã đang làm — mã còn lại vẫn kẹt nên nhịp
+ * sau tự làm tiếp; luôn làm ít nhất một mã để không bao giờ đói.
  */
-export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: typeof mergeProduct }): Promise<KetQuaDon[]> {
+export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: typeof mergeProduct; hetHanLuc?: number }): Promise<KetQuaDon[]> {
     const gop = opts.gop || mergeProduct
     const rows: any[] = await sp.$queryRawUnsafe(sqlMaGopKet(null, false))
     if (rows.length === 0) return []
     const cach = await getCostPriceMethod(sp)
 
     const ra: KetQuaDon[] = []
+    let daGop = 0
     for (const r of rows) {
+        if (daGop > 0 && opts.hetHanLuc && Date.now() > opts.hetHanLuc) break
         const coSo: KetQuaDon = {
             tuSku: r.sku, sangSku: null, heSo: null, tonNguon: Number(r.stock) || 0, slDoi: 0,
             tonDichTruoc: null, tonDichSau: null, giaDichTruoc: null, giaDichSau: null, dongDoi: {}, ketQua: 'bo_qua',
@@ -136,6 +140,7 @@ export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: type
         // force: cặp này CHỦ SHOP đã gộp — chiều gộp đã chốt, chốt chặn "nghi gộp ngược" không áp ở đây.
         // giuLienKetSan: listing trỏ vào mã gộp là ĐÚNG (đẩy tồn chia hệ số) — chỉ dời tồn, không dời listing.
         const plan = await gop(sp, { fromSku: r.sku, toSku: d.sku, rate: heSo, dryRun: !opts.chayThat, force: true, giuLienKetSan: true, tinhGiaVonDich })
+        daGop++
         const sau: any = opts.chayThat ? await sp.product.findUnique({ where: { id: d.id }, select: { stock: true, costPrice: true } }) : null
         const giaThu = tinhGiaVonDich({ tonDich: Number(truoc?.stock) || 0, giaDich: Number(truoc?.costPrice) || 0, slDoi, giaNguon: Number(r.costPrice) || 0 })
         ra.push({
@@ -155,17 +160,23 @@ export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: type
  * Nhịp nền (cron/tick): dò mọi cửa hàng đang hoạt động bằng kết nối REGISTRY (cùng
  * CSDL, ghi rõ schema) — cửa hàng không có mã kẹt thì KHÔNG mở client riêng, vì mỗi
  * client giữ kết nối mà cả cụm chỉ có ~45. Có mã kẹt mới mở và dời thật.
+ * Ngân sách thời gian: tick dùng chung một phút với máy dựng video (có hôm ăn 40 giây)
+ * — quá ngân sách thì dừng, mã còn kẹt nhịp sau làm tiếp.
  */
-export async function nhipDonTonMaGop(): Promise<string> {
+export async function nhipDonTonMaGop(nganSachMs = 15_000): Promise<string> {
+    const hetHanLuc = Date.now() + nganSachMs
     const stores: any[] = await (registryPrisma as any).store.findMany({ where: { status: 'active' }, select: { schema: true, code: true } })
     const ra: string[] = []
+    let daLam = false
     for (const s of stores) {
         const schema = String(s.schema || '')
         if (!SCHEMA_RE.test(schema)) continue
+        if (daLam && Date.now() > hetHanLuc) { ra.push('het-gio'); break }
         try {
             const dem: any[] = await (registryPrisma as any).$queryRawUnsafe(sqlMaGopKet(schema, true))
             if (!(Number(dem[0]?.n) > 0)) continue
-            const kq = await donTonMaGop(getStorePrisma(schema), { chayThat: true })
+            daLam = true
+            const kq = await donTonMaGop(getStorePrisma(schema), { chayThat: true, hetHanLuc })
             for (const k of kq) {
                 console.log(`[donTonMaGop] ${s.code}: ${k.tuSku} → ${k.sangSku ?? '?'} ×${k.heSo ?? '?'} ` + (k.ketQua === 'da_don'
                     ? `tồn kẹt ${k.tonNguon} ⇒ +${k.slDoi} (mã đích ${k.tonDichTruoc} → ${k.tonDichSau}, giá vốn ${k.giaDichTruoc} → ${k.giaDichSau}) dòng ${JSON.stringify(k.dongDoi)}`
