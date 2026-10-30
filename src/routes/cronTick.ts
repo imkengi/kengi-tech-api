@@ -94,6 +94,14 @@ router.post('/tick', async (req: Request, res: Response) => {
             ra.guiHoaDonMisa = await nhipGuiHoaDonMisa()
         } catch (e: any) { ra.guiHoaDonMisa = 'loi: ' + (e?.message || e) }
     }
+    /* Tồn kẹt ở MÃ ĐÃ GỘP (30/10/2026, chủ shop: "phải luôn có logic chứ"): mỗi 10 phút dời sang mã đích ×hệ số,
+     * kèm dòng phiếu/thẻ kho + giá vốn. Dò bằng kết nối registry, cửa hàng không có gì thì không mở client. lib/donTonMaGop.ts */
+    if (new Date().getUTCMinutes() % 10 === 8) {
+        try {
+            const { nhipDonTonMaGop } = await import('../lib/donTonMaGop')
+            ra.donTonMaGop = await nhipDonTonMaGop()
+        } catch (e: any) { ra.donTonMaGop = 'loi: ' + (e?.message || e) }
+    }
     if (new Date().getUTCMinutes() % 10 === 0) {
         try { ra.nhacBangChungTikTok = (await nhacBangChungTuNgoai()) ? 'xong' : 'bo-qua' } catch (e: any) { ra.nhacBangChungTikTok = 'loi: ' + (e?.message || e) }
     }

@@ -6,11 +6,16 @@
  * 7 dòng / 4 mã kẹt như vậy từ 10/08. Lõi: lib/quyDoiMaGop.ts — dùng ở routes/importReceipts.ts (lưu +
  * hoàn tất nháp), inventory.ts (/receipts), importData.ts (Excel), lib/hoaDonDauVao.ts (đọc HĐ đầu vào).
  * Sai ở đây là kho lệch đúng bằng hệ số (1 thay vì 5) hoặc tổng phiếu lệch tiền — nên mỗi thứ một ca.
+ *
+ * Phần 6–7 (chủ shop 30/10: "phải luôn có logic chứ"): lib/donTonMaGop.ts — nhịp 10 phút dời MỌI tồn kẹt ở
+ * mã gộp sang mã đích (mọi đường: POS, kiểm kê, chuyển kho…), giá vốn theo cách tính của cửa hàng, KHÔNG
+ * đụng mã KiotViet/MISA đang ghi tồn (dời là phình tồn mãi).
  */
 import fs from 'fs'
 import path from 'path'
 import { giaiConTroGop, quyDoiDongMaGop, ghiChuQuyDoi, LoiQuyDoiMaGop } from '../src/lib/quyDoiMaGop'
 import { khopSanPhamHoaDon, type ParsedInvoiceItem } from '../src/lib/hoaDonDauVao'
+import { giaVonSauDon, donTonMaGop, sqlMaGopKet } from '../src/lib/donTonMaGop'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -173,6 +178,100 @@ async function main() {
         ok('5e. Nhập phiếu từ Excel đổi dòng trước khi lập phiếu', /quyDoiDongMaGop\(getPrisma\(req\), itemsData\)/.test(doc('routes/importData.ts')))
         const pr = doc('routes/products.ts')
         ok('5f. Danh sách SP: tồn CHI NHÁNH của mã gộp quy đổi từ mã đích (hết "1 quy đổi" sai)', /tonChiNhanhMaGop\(p\)/.test(pr))
+    }
+
+    console.log('\n6. Giá vốn mã đích khi dời tồn (giaVonSauDon) — y như một lần nhập')
+    {
+        const g = (cach: string, o: any) => giaVonSauDon(cach, { tonDich: 10, giaDich: 20000, slDoi: 10, giaNguon: 210000, heSo: 10, nguonMoiHon: true, ...o })
+        ok('6a. Cố định (fixed) → giữ nguyên', g('fixed', {}) === null)
+        ok('6b. Bình quân: 10 @20.000 + 10 @21.000 → 20.500', g('average', {}) === 20500, g('average', {}))
+        ok('6c. Bình quân, mã đích ÂM −22 nhận 70 cùng giá 19.829 → vẫn 19.829',
+            g('average', { tonDich: -22, giaDich: 19829, slDoi: 70, giaNguon: 198290 }) === 19829, g('average', { tonDich: -22, giaDich: 19829, slDoi: 70, giaNguon: 198290 }))
+        ok('6d. Bình quân mà dời xong vẫn ≤ 0 (−44 + 20) → giữ giá cũ', g('average', { tonDich: -44, giaDich: 14852, slDoi: 20, giaNguon: 148520 }) === 14852)
+        ok('6e. Giá nhập cuối: lần nhập vào mã gộp MỚI HƠN → lấy giá đó ÷ hệ số', g('lastImport', {}) === 21000)
+        ok('6f. Giá nhập cuối: mã đích có lần nhập mới hơn → giữ nguyên', g('lastImport', { nguonMoiHon: false }) === null)
+        ok('6g. Dời tồn ÂM (bán nhầm trên mã gộp) → không đổi giá vốn', g('average', { slDoi: -5 }) === null)
+        ok('6h. Mã gộp giá vốn 0 → không kéo giá mã đích về 0', g('average', { giaNguon: 0 }) === null)
+    }
+
+    console.log('\n7. Dọn tồn kẹt (donTonMaGop) — phép gộp thay bằng bản giả')
+    {
+        // Cửa hàng giả: tồn/giá sống để bản gộp giả cập nhật khi "chạy thật"
+        const ton: Record<string, { stock: number; costPrice: number }> = {
+            p197: { stock: -5, costPrice: 24964 }, c: { stock: 10, costPrice: 1000 },
+        }
+        const ungVien = [
+            { id: 'pe2', sku: 'EDH-CBZ010-E2', stock: 1, costPrice: 124820, dongBoNgoai: false },
+            { id: 'kv', sku: 'KV-VI', stock: 3, costPrice: 50000, dongBoNgoai: true },
+            { id: 'l', sku: 'LO', stock: 1, costPrice: 10, dongBoNgoai: false },
+            { id: 'x', sku: 'X', stock: 2, costPrice: 10, dongBoNgoai: false },
+            { id: 'a', sku: 'THUNG', stock: 1, costPrice: 30000, dongBoNgoai: false },
+        ]
+        const base = spGia()
+        const sp: any = {
+            ...base,
+            product: {
+                ...base.product,
+                findUnique: async ({ where }: any) => ton[where.id] ? { ...ton[where.id] } : null,
+            },
+            storeSettings: { findFirst: async () => ({ costPriceMethod: 'average' }) },
+            $queryRawUnsafe: async (sql: string) => {
+                if (/"mergedIntoId" IS NOT NULL/.test(sql)) return ungVien.map(u => ({ ...u }))
+                if (/MAX\("createdAt"\)/.test(sql)) return []
+                return []
+            },
+        }
+        const goi: any[] = []
+        const gopGia: any = async (_sp: any, o: any) => {
+            goi.push({ fromSku: o.fromSku, toSku: o.toSku, rate: o.rate, dryRun: o.dryRun, force: o.force, coGiaVon: typeof o.tinhGiaVonDich === 'function' })
+            const dichId = SP.find(p => p.sku === o.toSku)!.id
+            const nguon = ungVien.find(u => u.sku === o.fromSku)!
+            if (!o.dryRun) {
+                const t = ton[dichId]
+                const slDoi = Math.round(nguon.stock * o.rate)
+                const gm = o.tinhGiaVonDich({ tonDich: t.stock, giaDich: t.costPrice, slDoi, giaNguon: nguon.costPrice })
+                t.stock += slDoi
+                if (gm != null) t.costPrice = gm
+            }
+            return { rowsByTable: { ImportReceiptItem: 1, InventoryTransaction: 1 } }
+        }
+
+        const thu = await donTonMaGop(sp, { chayThat: false, gop: gopGia })
+        const theo = (ds: any[], sku: string) => ds.find(k => k.tuSku === sku)
+        ok('7a. Chạy thử: mọi lần gộp đều dryRun, tồn mã đích CHƯA đổi', goi.every(c => c.dryRun === true) && ton.p197.stock === -5, goi)
+        ok('7b. Ca thật: 1 vỉ EDH-CBZ010-E2 → +5 SP000197 (−5 → 0), dự kiến', theo(thu, 'EDH-CBZ010-E2')?.ketQua === 'se_don' && theo(thu, 'EDH-CBZ010-E2')?.slDoi === 5 && theo(thu, 'EDH-CBZ010-E2')?.tonDichSau === 0, theo(thu, 'EDH-CBZ010-E2'))
+        ok('7c. Mã KiotViet/MISA đang ghi tồn → BỎ QUA, không gọi gộp', theo(thu, 'KV-VI')?.ketQua === 'bo_qua' && /KiotViet\/MISA/.test(theo(thu, 'KV-VI')?.lyDo || '') && !goi.some(c => c.fromSku === 'KV-VI'))
+        ok('7d. 1 × 2,5 lẻ → BỎ QUA, không làm tròn', theo(thu, 'LO')?.ketQua === 'bo_qua' && /không phải số nguyên/.test(theo(thu, 'LO')?.lyDo || ''))
+        ok('7e. Gộp vòng tròn → BỎ QUA mã đó, mã khác vẫn chạy', theo(thu, 'X')?.ketQua === 'bo_qua' && /vòng tròn/.test(theo(thu, 'X')?.lyDo || '') && theo(thu, 'THUNG')?.ketQua === 'se_don')
+        ok('7f. Gộp nhiều nấc: dời THẲNG về mã cuối (CAI ×20)', goi.some(c => c.fromSku === 'THUNG' && c.toSku === 'CAI' && c.rate === 20))
+        ok('7g. Luôn force (chiều gộp chủ shop đã chốt) + có hàm tính giá vốn', goi.every(c => c.force === true && c.coGiaVon))
+
+        goi.length = 0
+        const that = await donTonMaGop(sp, { chayThat: true, gop: gopGia })
+        ok('7h. Chạy thật: gộp KHÔNG dryRun, ghi "da_don"', goi.length === 2 && goi.every(c => c.dryRun === false) && theo(that, 'EDH-CBZ010-E2')?.ketQua === 'da_don', goi)
+        ok('7i. Chạy thật: SP000197 −5 → 0 (đọc lại sau khi gộp)', ton.p197.stock === 0 && theo(that, 'EDH-CBZ010-E2')?.tonDichSau === 0)
+        ok('7j. Giá vốn bình quân mã đích: 10 @1.000 + 20 @1.500 → 1.333', ton.c.costPrice === 1333 && theo(that, 'THUNG')?.giaDichSau === 1333, ton.c)
+        ok('7k. Không còn mã kẹt → trả rỗng, không đọc cài đặt', (await donTonMaGop({ $queryRawUnsafe: async () => [] }, { chayThat: true, gop: gopGia })).length === 0)
+    }
+
+    console.log('\n8. Nối dây + an toàn (soát mã nguồn)')
+    {
+        const goc = path.join(__dirname, '..', 'src')
+        const doc = (f: string) => fs.readFileSync(path.join(goc, f), 'utf8')
+        const mp = doc('lib/mergeProduct.ts')
+        ok('8a. Phép gộp KHOÁ hai dòng sản phẩm (FOR UPDATE) rồi đọc lại tồn trong giao dịch', /FOR UPDATE/.test(mp) && /SET stock = stock \+ \$1 WHERE id = \$2`, slDoi, dst\.id/.test(mp) && !/Math\.round\(\(src\.stock \|\| 0\) \* rate\)/.test(mp))
+        ok('8b. Phép gộp nhân hệ số cả "số đã trả" (returnedQuantity)', /"returnedQuantity" = "returnedQuantity" \* \$\{rate\}/.test(mp))
+        const ct = doc('routes/cronTick.ts')
+        ok('8c. Nhịp nền gọi nhipDonTonMaGop mỗi 10 phút', /% 10 === 8\)[\s\S]{0,200}nhipDonTonMaGop/.test(ct))
+        const dem = sqlMaGopKet('branch_abc', true)
+        ok('8d. Câu dò nhanh ghi rõ schema + loại mã KiotViet/MISA', /"branch_abc"\."Product"/.test(dem) && /NOT EXISTS/.test(dem) && /'kiotviet','misa'/.test(dem))
+        let nem2 = ''
+        try { sqlMaGopKet('x"; DROP TABLE y; --', true) } catch (e: any) { nem2 = String(e?.message) }
+        ok('8e. Tên schema lạ → từ chối (không nối chuỗi bừa vào SQL)', /schema lạ/.test(nem2))
+        const dt = doc('lib/donTonMaGop.ts')
+        const thanNhip = (/export async function nhipDonTonMaGop[\s\S]*?\n\}/.exec(dt) || [''])[0]
+        ok('8f. Nhịp dò bằng registry TRƯỚC, chỉ mở client cửa hàng khi có mã kẹt',
+            thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') > 0 && thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') < thanNhip.indexOf('getStorePrisma(schema)'))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)

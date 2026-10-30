@@ -36,6 +36,9 @@ export async function mergeProduct(
         mainUnit?: 'source' | 'target'
         /** Tên đơn vị của mã nguồn (mặc định lấy ĐVT của chính nó) */
         unitName?: string
+        /** Giá vốn MỚI của mã đích khi tồn nguồn dời sang — tính TRONG giao dịch với số đã khoá.
+         *  Trả null = giữ nguyên. Không truyền = giữ nguyên (hành vi gộp tay xưa nay). */
+        tinhGiaVonDich?: (p: { tonDich: number; giaDich: number; slDoi: number; giaNguon: number }) => number | null
     },
 ): Promise<MergePlan> {
     const { fromSku, toSku, rate, dryRun } = opts
@@ -51,7 +54,7 @@ export async function mergeProduct(
     const cols = await sp.$queryRawUnsafe(`
         SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema = current_schema()
-          AND column_name IN ('productId','quantity','baseQuantity','costPrice','unitPrice','price','sku','productSku','productName','localProductId')`)
+          AND column_name IN ('productId','quantity','baseQuantity','returnedQuantity','costPrice','unitPrice','price','sku','productSku','productName','localProductId')`)
     const byTable: Record<string, Set<string>> = {}
     for (const c of cols as any[]) (byTable[c.table_name] ||= new Set()).add(c.column_name)
 
@@ -129,6 +132,15 @@ export async function mergeProduct(
     }
 
     await sp.$transaction(async (tx: any) => {
+        // KHOÁ hai dòng sản phẩm rồi đọc lại tồn: gộp tay và nhịp dọn tồn mã gộp
+        // (lib/donTonMaGop.ts) có thể chạy cùng lúc — đọc tồn TRƯỚC giao dịch là
+        // cộng hai lần cùng một số vào mã đích (30/10/2026).
+        const khoa: any[] = await tx.$queryRawUnsafe(
+            `SELECT id, stock, "costPrice" FROM "Product" WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`, src.id, dst.id)
+        const nguonNay = khoa.find((r: any) => r.id === src.id) || src
+        const dichNay = khoa.find((r: any) => r.id === dst.id) || dst
+        const slDoi = Math.round((Number(nguonNay.stock) || 0) * rate)
+
         // Gộp dòng đụng khoá trùng TRƯỚC khi chuyển hàng loạt
         for (const [t, keysets] of Object.entries(uniqByTable)) {
             if (!tables.includes(t)) continue
@@ -158,6 +170,8 @@ export async function mergeProduct(
             if (t === 'SkuMapping') sets.push(`"conversionRate" = COALESCE("conversionRate",1) * ${rate}`)
             if (cs.has('quantity')) sets.push(`"quantity" = "quantity" * ${rate}`)
             if (cs.has('baseQuantity')) sets.push(`"baseQuantity" = "baseQuantity" * ${rate}`)
+            // Số đã trả cùng đơn vị với số lượng — không nhân theo thì 1 vỉ đã trả thành 1 cái đã trả
+            if (cs.has('returnedQuantity')) sets.push(`"returnedQuantity" = "returnedQuantity" * ${rate}`)
             if (cs.has('costPrice')) sets.push(`"costPrice" = "costPrice" / ${rate}`)
             if (cs.has('unitPrice')) sets.push(`"unitPrice" = "unitPrice" / ${rate}`)
             if (cs.has('price')) sets.push(`"price" = "price" / ${rate}`)
@@ -172,7 +186,14 @@ export async function mergeProduct(
             await tx.$executeRawUnsafe(`UPDATE "OnlineProduct" SET "localProductId" = $1 WHERE "localProductId" = $2`, dst.id, src.id)
         }
         await tx.$executeRawUnsafe(
-            `UPDATE "Product" SET stock = stock + $1 WHERE id = $2`, Math.round((src.stock || 0) * rate), dst.id)
+            `UPDATE "Product" SET stock = stock + $1 WHERE id = $2`, slDoi, dst.id)
+        if (opts.tinhGiaVonDich && slDoi !== 0) {
+            const giaDich = Number(dichNay.costPrice) || 0
+            const g = opts.tinhGiaVonDich({ tonDich: Number(dichNay.stock) || 0, giaDich, slDoi, giaNguon: Number(nguonNay.costPrice) || 0 })
+            if (g != null && Number.isFinite(g) && g >= 0 && g !== giaDich) {
+                await tx.$executeRawUnsafe(`UPDATE "Product" SET "costPrice" = $1 WHERE id = $2`, g, dst.id)
+            }
+        }
         // KHÔNG dùng ON CONFLICT: ràng buộc (platformSku, platform) vô hiệu khi
         // platform = NULL (Postgres coi mọi NULL là khác nhau) → chạy gộp lần 2 là
         // đẻ thêm dòng trùng, đơn về lấy nhằm dòng nào thì theo hệ số dòng đó.
