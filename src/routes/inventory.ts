@@ -9,6 +9,7 @@ import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock 
 import { emitStockChanged } from '../lib/webhookDispatch'
 import { postStockAdjustJournal } from '../lib/autoJournalPurchase'
 import { docThamSoTonKho, cauTonKho } from '../lib/danhSachTonKho'
+import { quyDoiDongMaGop, LoiQuyDoiMaGop } from '../lib/quyDoiMaGop'
 
 const router = Router()
 
@@ -590,7 +591,15 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
         const prisma = req.storePrisma!
         // warehouseId is pulled out separately so it isn't spread into the
         // ImportReceipt.create payload (no such column on the model).
-        const { items, warehouseId, ...receiptData } = req.body
+        const { items: dongGui, warehouseId, ...receiptData } = req.body
+        // Mã ĐÃ GỘP → mã đích (SL × hệ số, đơn giá ÷ hệ số), y như /import-receipts
+        let items: any[]
+        try {
+            ({ items } = await quyDoiDongMaGop(prisma, dongGui))
+        } catch (e: any) {
+            if (e instanceof LoiQuyDoiMaGop) return res.status(400).json({ success: false, error: e.message, code: 'QUY_DOI_MA_GOP' })
+            throw e
+        }
 
         const code = await nextCode(prisma, 'importReceiptCodeSeq', 'PN', 3, '', 'ImportReceipt', 'code')
 

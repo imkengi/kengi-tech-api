@@ -97,12 +97,15 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
         // that branch's default "main" warehouse as `branchStock`. Product.stock is left
         // as the global cross-warehouse total for backward compatibility.
         let branchStockMap: Map<string, number> | null = null
+        let khoChiNhanhId: string | null = null
+        let laChiNhanhChinh = false
         if (branchContextId) {
             const branchWarehouse = await (prisma as any).warehouse.findFirst({
                 where: { type: 'main', isDefault: true, branchId: branchContextId },
                 select: { id: true },
             })
             if (branchWarehouse) {
+                khoChiNhanhId = branchWarehouse.id
                 const ids = filteredProducts.map((p: any) => p.id)
                 const bStocks = ids.length > 0
                     ? await (prisma as any).warehouseStock.findMany({
@@ -120,6 +123,7 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                     where: { id: branchContextId, isMainBranch: true },
                     select: { id: true },
                 }))
+                laChiNhanhChinh = isMainBranch
                 const missing = filteredProducts.filter((p: any) => !branchStockMap!.has(p.id))
                 for (const p of missing) {
                     try {
@@ -155,6 +159,22 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
             })
             : []
         const targetMap = new Map(mergedTargets.map((t: any) => [t.id, t]))
+        // Tồn CHI NHÁNH của mã gộp cũng quy đổi từ mã đích — đọc tồn riêng của mã gộp
+        // là hiện "1 quy đổi" trong khi mã đích đang −5 (chủ shop hỏi 30/10/2026).
+        const tonChiNhanhDich = new Map<string, number>()
+        if (khoChiNhanhId && mergedIds.length > 0) {
+            const rows = await (prisma as any).warehouseStock.findMany({
+                where: { warehouseId: khoChiNhanhId, productId: { in: mergedIds } },
+                select: { productId: true, quantity: true },
+            })
+            for (const r of rows) tonChiNhanhDich.set(r.productId, r.quantity)
+        }
+        const tonChiNhanhMaGop = (p: any) => {
+            const t: any = targetMap.get(p.mergedIntoId)
+            // Chưa có dòng kho: chi nhánh chính giữ tồn chung (Product.stock), chi nhánh khác = 0 — y như tự vá ở trên
+            const ton = tonChiNhanhDich.get(p.mergedIntoId) ?? (laChiNhanhChinh ? (t?.stock || 0) : 0)
+            return Math.round(ton / (Number(p.mergedRate) || 1) * 100) / 100
+        }
 
         const data = filteredProducts.map((p: any) => ({
             id: p.id,
@@ -185,7 +205,8 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                     donViGoc: (targetMap.get(p.mergedIntoId) as any).baseUnit || '',
                 }
                 : null,
-            branchStock: branchStockMap ? (branchStockMap.get(p.id) ?? 0) : null,
+            branchStock: !branchStockMap ? null
+                : (p.mergedIntoId && targetMap.has(p.mergedIntoId) ? tonChiNhanhMaGop(p) : (branchStockMap.get(p.id) ?? 0)),
             minStock: p.minStock,
             maxStock: p.maxStock,
             baseUnit: p.baseUnit,

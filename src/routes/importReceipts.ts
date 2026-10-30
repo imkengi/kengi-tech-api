@@ -10,6 +10,7 @@ import { emitStockChanged, emitEntityEvent, webhooksActive } from '../lib/webhoo
 import { postImportReceiptJournal, postExpenseJournal, refsOfImport, reverseJournalRefs } from '../lib/autoJournalPurchase'
 import { tinhHanTraTheoQuyTac, quyTacTuSupplier, nhanQuyTac, mucHanTra } from '../lib/dieuKhoanThanhToan'
 import { tongPhieuChuaTraTheoNcc, congNoHienThi } from '../lib/congNoNcc'
+import { quyDoiDongMaGop, ghiChuQuyDoi, LoiQuyDoiMaGop, type DaQuyDoi } from '../lib/quyDoiMaGop'
 
 /**
  * MỘT SỐ HOÁ ĐƠN CHỈ ĐƯỢC DÙNG MỘT LẦN CHO MỘT NHÀ CUNG CẤP.
@@ -743,8 +744,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
-        const { items, ...receiptData } = req.body
+        const { items: dongGui, ...receiptData } = req.body
         const user = (req as any).user
+
+        /* MÃ ĐÃ GỘP → mã đích TRƯỚC mọi phép tính tiền/tồn (30/10/2026 — chủ shop:
+         * "đã gộp mà khi nhập … không quy đổi"): 1 vỉ EDH-CBZ010-E2 = 5 cái SP000197,
+         * đơn giá ÷5, thành tiền giữ nguyên. Không đổi thì hàng kẹt ở mã gộp. */
+        let items: any[]
+        let daDoi: DaQuyDoi[] = []
+        try {
+            ({ items, daDoi } = await quyDoiDongMaGop(prisma, dongGui))
+        } catch (e: any) {
+            if (e instanceof LoiQuyDoiMaGop) return res.status(400).json({ success: false, error: e.message, code: 'QUY_DOI_MA_GOP' })
+            throw e
+        }
 
         /* Chặn trùng số hoá đơn TRƯỚC khi làm bất cứ việc gì khác: phiếu nhập
          * đụng vào tồn kho, giá vốn và bút toán, nên phát hiện muộn là phải gỡ
@@ -920,7 +933,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                         productName: item.productName,
                         productSku: item.productSku,
                         quantity: item.quantity,
-                        reason: `Nhập kho theo phiếu ${code}`,
+                        reason: `Nhập kho theo phiếu ${code}${ghiChuQuyDoi(daDoi, item.productSku)}`,
                         referenceId: code,
                         referenceType: 'import_receipt',
                         unitPrice: item.costPrice || 0,
@@ -955,6 +968,8 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                     ? (receipt as any).transactionDate.toISOString().slice(0, 10)
                     : null,
                 updatedAt: receipt.updatedAt.toISOString(),
+                // Dòng nào đã đổi từ mã gộp sang mã đích — giao diện báo cho người nhập biết
+                quyDoiMaGop: daDoi,
             },
         })
 
@@ -1000,6 +1015,27 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
             return
         }
 
+        /* Nháp lập TRƯỚC khi có quy đổi (hoặc AI agent lập) có thể còn dòng trỏ vào
+         * MÃ ĐÃ GỘP → đổi sang mã đích và SỬA LUÔN dòng phiếu, để phiếu, thẻ kho và
+         * tồn kho thuế cùng nói một mã. Không đổi được thì trả phiếu về nháp. */
+        let dongs: any[] = receipt.items
+        let daDoiNhap: DaQuyDoi[] = []
+        try {
+            ({ items: dongs, daDoi: daDoiNhap } = await quyDoiDongMaGop(prisma, receipt.items))
+        } catch (e: any) {
+            await prisma.importReceipt.updateMany({ where: { id: String(req.params.id), status: 'processing' }, data: { status: 'draft' } }).catch(() => { })
+            if (e instanceof LoiQuyDoiMaGop) { res.status(400).json({ success: false, error: e.message, code: 'QUY_DOI_MA_GOP' }); return }
+            throw e
+        }
+        for (const [i, cu] of receipt.items.entries()) {
+            const moi = dongs[i]
+            if (moi.productId === cu.productId) continue
+            await prisma.importReceiptItem.update({
+                where: { id: cu.id },
+                data: { productId: moi.productId, productSku: moi.productSku, productName: moi.productName, quantity: moi.quantity, costPrice: moi.costPrice, total: moi.total },
+            })
+        }
+
         const user = (req as any).user
         const dbUser = await prisma.user.findUnique({ where: { id: user.userId || user.id } })
         const userName = dbUser?.name || user.email || 'Unknown'
@@ -1019,7 +1055,7 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
             + (Number(rAny.shippingFee) || 0)
             + (Number(rAny.importTax) || 0) + (Number(rAny.otherFees) || 0)
             - (Number(rAny.totalDiscount) || 0)
-        const cTotal = receipt.items.reduce((s: number, it: any) => s + (Number(it.total) > 0 ? Number(it.total) : it.quantity * it.costPrice), 0)
+        const cTotal = dongs.reduce((s: number, it: any) => s + (Number(it.total) > 0 ? Number(it.total) : it.quantity * it.costPrice), 0)
         const landedUnit = (it: any) => {
             const lt = Number(it.total) > 0 ? Number(it.total) : it.quantity * it.costPrice
             const alloc = cTotal > 0 ? cExtra * (lt / cTotal) : 0
@@ -1029,7 +1065,7 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
         // POS check tồn theo WarehouseStock nên nhập hàng phải tăng cả kho này
         const defaultWarehouse = await getOrCreateDefaultWarehouse(prisma as any, receipt.branchId || null)
         const defaultWarehouseId: string | null = defaultWarehouse?.id || null
-        for (const item of receipt.items) {
+        for (const item of dongs) {
             // Fetch product BEFORE updating stock
             const productBefore = await prisma.product.findUnique({ where: { id: item.productId } })
             const currentStock = productBefore?.stock ?? 0
@@ -1064,7 +1100,7 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
                     productName: item.productName,
                     productSku: item.productSku,
                     quantity: item.quantity,
-                    reason: `Nhập kho theo phiếu ${receipt.code}`,
+                    reason: `Nhập kho theo phiếu ${receipt.code}${ghiChuQuyDoi(daDoiNhap, item.productSku)}`,
                     referenceId: receipt.code,
                     referenceType: 'import_receipt',
                     unitPrice: item.costPrice || 0,
@@ -1079,13 +1115,17 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
 
         const updated = await prisma.importReceipt.update({
             where: { id: String(req.params.id) },
-            data: { status: 'completed' },
+            data: {
+                status: 'completed',
+                // Dòng đã quy đổi thì tổng số lượng đổi theo đơn vị mã đích (thành tiền giữ nguyên)
+                ...(daDoiNhap.length ? { totalItems: dongs.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0) } : {}),
+            },
             include: { items: true },
         })
 
         res.json({
             success: true,
-            data: { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() },
+            data: { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), quyDoiMaGop: daDoiNhap },
         })
     } catch (err) {
         console.error('Complete import receipt error:', err)

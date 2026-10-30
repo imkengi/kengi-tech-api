@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { quyDoiDongMaGop } from '../lib/quyDoiMaGop'
 
 // Helper: get the per-branch prisma client from request (injected by authMiddleware)
 function getPrisma(req: AuthRequest): StorePrisma {
@@ -582,6 +583,9 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                     itemsData.push({ productId: product.id, productName: product.name, productSku: sku, quantity: qty, costPrice: price, discount: itemDiscount, total: Math.max(0, qty * price - itemDiscount) })
                 }
                 if (itemsData.length === 0) { orderIdx++; continue }
+                // Mã ĐÃ GỘP → mã đích (SL × hệ số, đơn giá ÷ hệ số), y như phiếu nhập trên web
+                const quyDoi = await quyDoiDongMaGop(getPrisma(req), itemsData)
+                itemsData.splice(0, itemsData.length, ...quyDoi.items)
 
                 const totalCost = itemsData.reduce((s, i) => s + i.total, 0)
                 const totalItems = itemsData.reduce((s, i) => s + i.quantity, 0)

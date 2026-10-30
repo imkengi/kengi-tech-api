@@ -13,6 +13,8 @@
 //  khoá bằng chính chuỗi đó, đổi cách đọc là mọi liên kết cũ trượt.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { giaiConTroGop } from './quyDoiMaGop'
+
 export type ParsedInvoiceItem = {
     name: string; unit: string; quantity: number; unitPrice: number; amount: number
     // Thuế GTGT theo TỪNG DÒNG — giá nhập kho tính GỒM VAT (HKD không khấu trừ đầu vào)
@@ -115,6 +117,24 @@ export async function mstCuaHang(prisma: any): Promise<string[]> {
 }
 
 /**
+ * Mã khớp được là MÃ ĐÃ GỘP (vd vỉ EDH-CBZ010-E2 → 5 cái SP000197) → form hiện luôn
+ * mã đích ×hệ số, y như lúc lưu phiếu (lib/quyDoiMaGop.ts). SL ra số lẻ hay con trỏ
+ * hỏng thì để nguyên dòng — lưu phiếu sẽ báo rõ, không làm tròn âm thầm ở đây.
+ */
+async function theoConTroGop(prisma: any, it: ParsedInvoiceItem): Promise<void> {
+    if (!it.productId) return
+    const d = (await giaiConTroGop(prisma, [it.productId]).catch(() => null))?.get(it.productId)
+    if (!d) return
+    const slSau = (Number(it.quantity) || 0) * d.heSo
+    if (Math.abs(slSau - Math.round(slSau)) > 1e-6) return
+    it.productId = d.id; it.productSku = d.sku
+    it.quantity = Math.round(slSau)
+    it.unitPrice = it.quantity > 0 && Number(it.amount) > 0 ? Number(it.amount) / it.quantity : (Number(it.unitPrice) || 0) / d.heSo
+    it.convertedBy = (Number(it.convertedBy) || 1) * d.heSo
+    it.unit = d.baseUnit || it.unit
+}
+
+/**
  * Khớp từng dòng hoá đơn vào mã hàng trong kho (SỬA TẠI CHỖ `items`):
  *   1. tên dòng = tên SP (không phân biệt hoa thường) hoặc = SKU
  *   2. LIÊN KẾT ĐÃ NHỚ: SkuMapping platform='invoice' (khoá = tên dòng) — kèm hệ số
@@ -129,6 +149,7 @@ export async function khopSanPhamHoaDon(prisma: any, items: ParsedInvoiceItem[],
         })
         if (found) {
             it.productId = found.id; it.productSku = found.sku; it.matched = true
+            await theoConTroGop(prisma, it)
             continue
         }
         // LIÊN KẾT ĐÃ NHỚ: người dùng từng link dòng hoá đơn cùng tên vào SP kho
@@ -149,6 +170,7 @@ export async function khopSanPhamHoaDon(prisma: any, items: ParsedInvoiceItem[],
                 it.convertedBy = rate
                 it.unit = remembered.product.baseUnit || it.unit
             }
+            await theoConTroGop(prisma, it)
             continue
         }
         if (opts.autoCreate) {
