@@ -133,8 +133,9 @@ export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: type
             giaVonSauDon(cach, { ...p, heSo, nguonMoiHon })
 
         const truoc: any = await sp.product.findUnique({ where: { id: d.id }, select: { stock: true, costPrice: true } })
-        // force: cặp này CHỦ SHOP đã gộp — chiều gộp đã chốt, chốt chặn "nghi gộp ngược" không áp ở đây
-        const plan = await gop(sp, { fromSku: r.sku, toSku: d.sku, rate: heSo, dryRun: !opts.chayThat, force: true, tinhGiaVonDich })
+        // force: cặp này CHỦ SHOP đã gộp — chiều gộp đã chốt, chốt chặn "nghi gộp ngược" không áp ở đây.
+        // giuLienKetSan: listing trỏ vào mã gộp là ĐÚNG (đẩy tồn chia hệ số) — chỉ dời tồn, không dời listing.
+        const plan = await gop(sp, { fromSku: r.sku, toSku: d.sku, rate: heSo, dryRun: !opts.chayThat, force: true, giuLienKetSan: true, tinhGiaVonDich })
         const sau: any = opts.chayThat ? await sp.product.findUnique({ where: { id: d.id }, select: { stock: true, costPrice: true } }) : null
         const giaThu = tinhGiaVonDich({ tonDich: Number(truoc?.stock) || 0, giaDich: Number(truoc?.costPrice) || 0, slDoi, giaNguon: Number(r.costPrice) || 0 })
         ra.push({

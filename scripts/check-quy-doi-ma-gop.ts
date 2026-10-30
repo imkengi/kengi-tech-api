@@ -223,7 +223,7 @@ async function main() {
         }
         const goi: any[] = []
         const gopGia: any = async (_sp: any, o: any) => {
-            goi.push({ fromSku: o.fromSku, toSku: o.toSku, rate: o.rate, dryRun: o.dryRun, force: o.force, coGiaVon: typeof o.tinhGiaVonDich === 'function' })
+            goi.push({ fromSku: o.fromSku, toSku: o.toSku, rate: o.rate, dryRun: o.dryRun, force: o.force, giuLienKetSan: o.giuLienKetSan, coGiaVon: typeof o.tinhGiaVonDich === 'function' })
             const dichId = SP.find(p => p.sku === o.toSku)!.id
             const nguon = ungVien.find(u => u.sku === o.fromSku)!
             if (!o.dryRun) {
@@ -245,6 +245,7 @@ async function main() {
         ok('7e. Gộp vòng tròn → BỎ QUA mã đó, mã khác vẫn chạy', theo(thu, 'X')?.ketQua === 'bo_qua' && /vòng tròn/.test(theo(thu, 'X')?.lyDo || '') && theo(thu, 'THUNG')?.ketQua === 'se_don')
         ok('7f. Gộp nhiều nấc: dời THẲNG về mã cuối (CAI ×20)', goi.some(c => c.fromSku === 'THUNG' && c.toSku === 'CAI' && c.rate === 20))
         ok('7g. Luôn force (chiều gộp chủ shop đã chốt) + có hàm tính giá vốn', goi.every(c => c.force === true && c.coGiaVon))
+        ok('7g2. KHÔNG dời liên kết listing sàn (listing vỉ trỏ mã gộp là đúng — đẩy tồn chia hệ số)', goi.every(c => c.giuLienKetSan === true))
 
         goi.length = 0
         const that = await donTonMaGop(sp, { chayThat: true, gop: gopGia })
@@ -261,6 +262,7 @@ async function main() {
         const mp = doc('lib/mergeProduct.ts')
         ok('8a. Phép gộp KHOÁ hai dòng sản phẩm (FOR UPDATE) rồi đọc lại tồn trong giao dịch', /FOR UPDATE/.test(mp) && /SET stock = stock \+ \$1 WHERE id = \$2`, slDoi, dst\.id/.test(mp) && !/Math\.round\(\(src\.stock \|\| 0\) \* rate\)/.test(mp))
         ok('8b. Phép gộp nhân hệ số cả "số đã trả" (returnedQuantity)', /"returnedQuantity" = "returnedQuantity" \* \$\{rate\}/.test(mp))
+        ok('8b2. Phép gộp chỉ dời link listing sàn khi KHÔNG yêu cầu giữ', /onlineProductLinks > 0 && !opts\.giuLienKetSan/.test(mp))
         const ct = doc('routes/cronTick.ts')
         ok('8c. Nhịp nền gọi nhipDonTonMaGop mỗi 10 phút', /% 10 === 8\)[\s\S]{0,200}nhipDonTonMaGop/.test(ct))
         const dem = sqlMaGopKet('branch_abc', true)

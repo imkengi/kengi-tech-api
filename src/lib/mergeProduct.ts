@@ -39,6 +39,9 @@ export async function mergeProduct(
         /** Giá vốn MỚI của mã đích khi tồn nguồn dời sang — tính TRONG giao dịch với số đã khoá.
          *  Trả null = giữ nguyên. Không truyền = giữ nguyên (hành vi gộp tay xưa nay). */
         tinhGiaVonDich?: (p: { tonDich: number; giaDich: number; slDoi: number; giaNguon: number }) => number | null
+        /** GIỮ liên kết listing sàn ở mã nguồn: listing bán theo VỈ trỏ vào mã gộp thì đẩy tồn/đơn về
+         *  đã tự đi theo con trỏ ×hệ số — dời link sang mã đích là đẩy số CÁI lên listing VỈ. */
+        giuLienKetSan?: boolean
     },
 ): Promise<MergePlan> {
     const { fromSku, toSku, rate, dryRun } = opts
@@ -182,7 +185,7 @@ export async function mergeProduct(
                 `UPDATE "${t}" SET ${sets.join(', ')} WHERE "productId" = $2`,
                 dst.id, src.id, dst.sku, dst.name)
         }
-        if (onlineProductLinks > 0) {
+        if (onlineProductLinks > 0 && !opts.giuLienKetSan) {
             await tx.$executeRawUnsafe(`UPDATE "OnlineProduct" SET "localProductId" = $1 WHERE "localProductId" = $2`, dst.id, src.id)
         }
         await tx.$executeRawUnsafe(
