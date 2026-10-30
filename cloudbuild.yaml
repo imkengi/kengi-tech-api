@@ -87,8 +87,9 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      # 1Gi từ 30/10/2026: 512Mi bị giết OOM lặp ở cron tick (chủ shop duyệt; RAM chỉ tính trong lúc xử lý yêu cầu)
       - '--memory'
-      - '512Mi'
+      - '1Gi'
       - '--cpu'
       - '1'
       - '--min-instances'
