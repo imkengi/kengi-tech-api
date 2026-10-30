@@ -162,10 +162,18 @@ export async function donTonMaGop(sp: any, opts: { chayThat: boolean; gop?: type
  * client giữ kết nối mà cả cụm chỉ có ~45. Có mã kẹt mới mở và dời thật.
  * Ngân sách thời gian: tick dùng chung một phút với máy dựng video (có hôm ăn 40 giây)
  * — quá ngân sách thì dừng, mã còn kẹt nhịp sau làm tiếp.
+ * Lỗi PHẢI ra console.error: cronTick chỉ nhét chuỗi trả về vào res.json (không ai đọc),
+ * dòng [Nhịp] không in nó ⇒ nhịp hỏng mà im lặng thì mã gộp lại kẹt tồn như trước.
  */
 export async function nhipDonTonMaGop(nganSachMs = 15_000): Promise<string> {
     const hetHanLuc = Date.now() + nganSachMs
-    const stores: any[] = await (registryPrisma as any).store.findMany({ where: { status: 'active' }, select: { schema: true, code: true } })
+    let stores: any[]
+    try {
+        stores = await (registryPrisma as any).store.findMany({ where: { status: 'active' }, select: { schema: true, code: true } })
+    } catch (e: any) {
+        console.error(`[donTonMaGop] lỗi đọc danh sách cửa hàng — ${String(e?.message || e).slice(0, 300)}`)
+        return 'loi: ' + String(e?.message || e).slice(0, 80)
+    }
     const ra: string[] = []
     let daLam = false
     for (const s of stores) {
@@ -184,6 +192,7 @@ export async function nhipDonTonMaGop(nganSachMs = 15_000): Promise<string> {
             }
             ra.push(`${s.code}:${kq.filter(k => k.ketQua === 'da_don').length}/${kq.length}`)
         } catch (e: any) {
+            console.error(`[donTonMaGop] ${s.code}: lỗi — ${String(e?.message || e).slice(0, 300)}`)
             ra.push(`${s.code}:loi ${String(e?.message || e).slice(0, 80)}`)
         }
     }

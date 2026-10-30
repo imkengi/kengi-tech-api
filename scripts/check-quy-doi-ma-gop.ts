@@ -279,6 +279,10 @@ async function main() {
             /nhipDonTonMaGop\(nganSachMs = 15_000\)/.test(dt) && /donTonMaGop\(getStorePrisma\(schema\), \{ chayThat: true, hetHanLuc \}\)/.test(dt))
         ok('8f. Nhịp dò bằng registry TRƯỚC, chỉ mở client cửa hàng khi có mã kẹt',
             thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') > 0 && thanNhip.indexOf('registryPrisma as any).$queryRawUnsafe') < thanNhip.indexOf('getStorePrisma(schema)'))
+        ok('8h. Nhịp hỏng thì GHI LỖI ra log (cronTick không in kết quả) — cả lúc đọc danh sách cửa hàng lẫn từng cửa hàng',
+            (thanNhip.match(/console\.error\(/g) || []).length >= 2
+            && /store\.findMany[\s\S]{0,200}catch \(e: any\) \{\s*console\.error\(/.test(thanNhip)
+            && /catch \(e: any\) \{\s*console\.error\(`\[donTonMaGop\] \$\{s\.code\}/.test(thanNhip))
     }
 
     console.log(`\n${hong === 0 ? '✅' : '❌'} ${dat} đạt, ${hong} hỏng\n`)
