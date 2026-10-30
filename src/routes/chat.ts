@@ -381,8 +381,8 @@ import { laTinCuaGian, laTinTuDong, tachCauHoiShopee, TinShopeeGoiY } from '../s
 import { soanGoiYChoSan } from './chatbot'
 import { tenSanPhamCuaGian, khoTuTraLoiSql, datTuTraLoi, tinhTrangTuTraLoi } from '../lib/tuTraLoiShopee'
 
-// Helper: load channel credentials and create ShopeeService
-async function getShopeeServiceForChannel(prisma: any, channelId: string): Promise<{ shopee: ShopeeService; channel: any }> {
+// Helper: load channel credentials and create ShopeeService (dùng chung với routes/chatChoDuyet.ts)
+export async function getShopeeServiceForChannel(prisma: any, channelId: string): Promise<{ shopee: ShopeeService; channel: any }> {
     const channels = await prisma.$queryRawUnsafe(
         `SELECT * FROM "OnlineChannel" WHERE "id" = $1 AND "platform" = 'shopee' LIMIT 1`, channelId
     ) as any[]
@@ -402,7 +402,7 @@ async function getShopeeServiceForChannel(prisma: any, channelId: string): Promi
 }
 
 // Helper: auto-refresh token if expired, update DB
-async function withTokenRefresh(prisma: any, channel: any, shopee: ShopeeService, fn: () => Promise<any>): Promise<any> {
+export async function withTokenRefresh(prisma: any, channel: any, shopee: ShopeeService, fn: () => Promise<any>): Promise<any> {
     try {
         return await fn()
     } catch (err: any) {

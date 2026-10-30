@@ -155,6 +155,8 @@ export function phanNhomThongBao(type: string, title = ''): { nhom: string; rout
         case 'dispute_result': return { nhom: 'khieu_nai', route: 'returns' }
         case 'new_order':
         case 'loi_nhuan_thap': return { nhom: 'don_hang', route: 'online-orders' }
+        // 30/10/2026: AI đã soạn nháp trả lời chat Shopee, chờ người duyệt (routes/chatChoDuyet.ts) — khẩn như đơn mới (hạn 12 giờ)
+        case 'chat_cho_duyet': return { nhom: 'don_hang', route: 'chat-duyet' }
         case 'einvoice': return { nhom: 'hoa_don', route: null }
         case 'payment_due': return { nhom: 'cong_no', route: 'payment-due' }
         case 'low_stock': return { nhom: 'kho', route: 'inventory' }

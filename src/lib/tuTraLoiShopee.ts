@@ -1,8 +1,13 @@
 /**
  * TỰ TRẢ LỜI CHAT SHOPEE BẰNG CHATBOT (24/10/2026).
  * Đã gộp luồng: Người thật hoặc AI gửi đều được xem là tin nhắn từ phía cửa hàng.
+ *
+ * 30/10/2026 — CHẾ ĐỘ CHỜ DUYỆT (mặc định cho Shopee, lib/choDuyetChat.ts): tin gửi bằng send_autoreply_message mang nhãn tự động
+ * nên Shopee không tính vào Tỷ lệ phản hồi Chat. Chế độ 'cho_duyet': AI soạn xong KHÔNG gửi, lưu nháp + báo điện thoại; người đọc
+ * rồi bấm Gửi trên app (send_message). Chế độ 'tu_gui' giữ đường cũ (tin tự động có nhãn). Cột TuTraLoiCaiDat."cheDo" NULL = cho_duyet.
  */
 import { ShopeeService, tachCauHoiShopee, TinShopeeGoiY } from '../services/platforms/shopee'
+import { khoChoDuyetSql, NhapMoi } from './choDuyetChat'
 import { TRA_LOI_DU_PHONG } from './chatbotKienThuc'
 import { laLoiThieuBang } from './tinHieuChat'
 import { moTaLoi } from './gomLoi'
@@ -16,13 +21,17 @@ export const TIEN_TO_TIN_CHO = 'tin chờ — '
 export const TIEN_TO_CAN_NHAN_VIEN = 'cần nhân viên — '
 const DAI_TOI_DA = 600
 
-export type TrangThaiNhatKy = 'dang' | 'da_gui' | 'bo_qua' | 'loi'
+/** cho_duyet = nháp chờ người bấm Gửi trên app (tính vào tỷ lệ phản hồi) · da_duyet = người đã duyệt và gửi */
+export type TrangThaiNhatKy = 'dang' | 'da_gui' | 'bo_qua' | 'loi' | 'cho_duyet' | 'da_duyet'
 export type KetQuaTuTraLoi =
     | 'tat' | 'tin_cua_gian' | 'thieu_hoi_thoai' | 'dang_cho' | 'khong_can' | 'da_xu_ly'
-    | 'bo_qua' | 'loi' | 'da_gui' | 'tin_cho' | 'gian_tu_tat'
+    | 'bo_qua' | 'loi' | 'da_gui' | 'tin_cho' | 'gian_tu_tat' | 'cho_duyet'
+/** cho_duyet = AI soạn nháp, người duyệt rồi gửi (mặc định Shopee) · tu_gui = gửi luôn bằng tin tự động có nhãn */
+export type CheDoTuTraLoi = 'cho_duyet' | 'tu_gui'
 
 export interface KhoTuTraLoi {
-    docCaiDat(kenhId: string): Promise<{ bat: boolean } | null>
+    /** cheDo vắng (kho giả / bản cũ) ⇒ coi như 'tu_gui' — kho SQL thật luôn trả rõ, NULL trong bảng = 'cho_duyet' */
+    docCaiDat(kenhId: string): Promise<{ bat: boolean; cheDo?: CheDoTuTraLoi } | null>
     giuCho(kenhId: string, hoiThoaiId: string, tinKhachId: string): Promise<boolean>
     ghiKetQua(kenhId: string, hoiThoaiId: string, tinKhachId: string, trangThai: TrangThaiNhatKy, lyDo: string | null, maTinGui?: string | null): Promise<void>
     demDaGui(kenhId: string, soGio: number, hoiThoaiId?: string): Promise<number>
@@ -43,6 +52,10 @@ export interface PhuThuocTuTraLoi {
     tenSanPham(kenhId: string, maSp: string[]): Promise<Map<string, string>>
     soanGoiY(cauHoi: string, lichSu: any[], tenKenh: string): Promise<{ traLoi: string; canNhanVien: boolean; loi?: string | null }>
     cho(ms: number): Promise<void>
+    /** Chế độ chờ duyệt: lưu nháp (null = đã có, push lặp) — vắng thì chế độ này không chạy được, rơi về gửi tự động */
+    luuChoDuyet?(n: NhapMoi): Promise<string | null>
+    /** Báo điện thoại / chuông web có nháp mới. Không được ném. */
+    baoChoDuyet?(n: NhapMoi & { id: string; tenGian: string }): Promise<void>
 }
 
 /** Câu AI soạn có gửi tự động được không — theo SÀN đang chat (30/10/2026: thêm TikTok, lib/tuTraLoiTikTok.ts): không kéo khách
@@ -99,6 +112,8 @@ export async function tuTraLoiShopee(kenh: { id: string; shopId: string; name?: 
         const hoiThoaiId = String(nd.conversation_id || '')
         if (!/^\d{1,30}$/.test(hoiThoaiId)) return 'thieu_hoi_thoai'
 
+        // tên tài khoản khách lấy từ push (get_message không có tên người gửi)
+        const tenKhach = String(nd.from_user_name || nd.to_name || '').trim().slice(0, 120) || null
         const khoa = `${kenhId}:${hoiThoaiId}`
         const dang = dangChay.get(khoa)
         if (dang) { dang.lai = true; return 'dang_cho' }
@@ -109,7 +124,7 @@ export async function tuTraLoiShopee(kenh: { id: string; shopId: string; name?: 
             for (let vong = 0; vong < 3; vong++) {
                 moc.lai = false
                 await pt.cho(GOM_MS)
-                kq = await mot(kenhId, hoiThoaiId, pt)
+                kq = await mot(kenhId, hoiThoaiId, pt, tenKhach)
                 if (!moc.lai || kq === 'gian_tu_tat' || kq === 'tat') break
             }
             return kq
@@ -122,7 +137,7 @@ export async function tuTraLoiShopee(kenh: { id: string; shopId: string; name?: 
     }
 }
 
-async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi): Promise<KetQuaTuTraLoi> {
+async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi, tenKhach: string | null = null): Promise<KetQuaTuTraLoi> {
     const caiDat = await pt.kho.docCaiDat(kenhId)
     if (!caiDat?.bat) return 'tat'
     const kenh = await pt.docKenh(kenhId)
@@ -140,7 +155,7 @@ async function mot(kenhId: string, hoiThoaiId: string, pt: PhuThuocTuTraLoi): Pr
     if (!(await pt.kho.giuCho(kenhId, hoiThoaiId, tach.tinCuoiId))) return 'da_xu_ly'
     const ket = (t: TrangThaiNhatKy, lyDo: string | null, ma?: string) => pt.kho.ghiKetQua(kenhId, hoiThoaiId, tach.tinCuoiId, t, lyDo, ma)
     try {
-        return await sauGiuCho(kenhId, hoiThoaiId, kenh, shopee, tach, ket, pt)
+        return await sauGiuCho(kenhId, hoiThoaiId, kenh, shopee, tach, ket, pt, { cheDo: caiDat.cheDo || 'tu_gui', tenKhach })
     } catch (e) {
         await ket('loi', `lỗi: ${moTaLoi(e).slice(0, 160)}`).catch(() => { })
         throw e
@@ -152,6 +167,7 @@ async function sauGiuCho(
     tach: NonNullable<ReturnType<typeof tachCauHoiShopee>>,
     ket: (t: TrangThaiNhatKy, lyDo: string | null, ma?: string) => Promise<void>,
     pt: PhuThuocTuTraLoi,
+    them: { cheDo: CheDoTuTraLoi; tenKhach: string | null } = { cheDo: 'tu_gui', tenKhach: null },
 ): Promise<KetQuaTuTraLoi> {
     if ((await pt.kho.demDaGui(kenhId, 1)) >= TRAN_GIO) {
         const lyDo = `quá ${TRAN_GIO} tin tự động trong 1 giờ — tự tắt cho Shopee khỏi coi là spam`
@@ -165,6 +181,8 @@ async function sauGiuCho(
     }
     const nguoiMua = Number(tach.nguoiMuaId)
     if (!Number.isFinite(nguoiMua) || nguoiMua <= 0) { await ket('bo_qua', 'không rõ người mua'); return 'bo_qua' }
+
+    if (them.cheDo === 'cho_duyet' && pt.luuChoDuyet) return await soanChoDuyet(kenhId, hoiThoaiId, kenh, tach, ket, pt, them.tenKhach)
 
     const soan = await pt.soanGoiY(tach.cauHoi, tach.lichSu, String(kenh.name || ''))
     let khongTraLoi: string | null = null
@@ -202,6 +220,35 @@ async function sauGiuCho(
     }
 }
 
+/** Chế độ chờ duyệt: soạn rồi LƯU NHÁP, không gửi gì cho khách — kể cả tin chờ (tin tự động không được tính, người sẽ trả lời).
+ *  Câu AI phạm luật (SĐT, kênh / sàn khác, link ngoài) hoặc AI hỏng ⇒ nháp TRỐNG kèm lý do, người tự gõ. */
+async function soanChoDuyet(
+    kenhId: string, hoiThoaiId: string, kenh: any,
+    tach: NonNullable<ReturnType<typeof tachCauHoiShopee>>,
+    ket: (t: TrangThaiNhatKy, lyDo: string | null, ma?: string) => Promise<void>,
+    pt: PhuThuocTuTraLoi, tenKhach: string | null,
+): Promise<KetQuaTuTraLoi> {
+    const soan = await pt.soanGoiY(tach.cauHoi, tach.lichSu, String(kenh.name || ''))
+    let cau = ''
+    let ghiChu: string | null = null
+    if (soan.loi) ghiChu = `AI không soạn được: ${soan.loi}`.slice(0, 300)
+    else {
+        const kiem = kiemCauTuDong(soan.traLoi)
+        if (kiem.ok) {
+            cau = kiem.cau
+            if (soan.canNhanVien) ghiChu = 'AI chưa đủ căn cứ — đọc kỹ trước khi gửi'
+        } else ghiChu = `AI soạn câu không dùng được (${kiem.lyDo}) — tự gõ câu trả lời`
+    }
+    const nhap: NhapMoi = {
+        kenhId, hoiThoaiId, tinKhachId: tach.tinCuoiId, nguoiMuaId: String(tach.nguoiMuaId), tenKhach,
+        traLoi: cau, canNhanVien: !!soan.canNhanVien, ghiChu,
+    }
+    const id = await pt.luuChoDuyet!(nhap)
+    await ket('cho_duyet', ghiChu ? `chờ duyệt — ${ghiChu}` : 'chờ duyệt')
+    if (id) await pt.baoChoDuyet?.({ ...nhap, id, tenGian: String(kenh.name || '') }).catch(() => { })
+    return 'cho_duyet'
+}
+
 export async function tenSanPhamCuaGian(db: any, kenhId: string, maSp: string[]): Promise<Map<string, string>> {
     if (!maSp.length) return new Map()
     const sp: any[] = await db.onlineProduct.findMany({
@@ -225,6 +272,19 @@ export function phuThuocTuTraLoiThat(db: any, soanGoiY: PhuThuocTuTraLoi['soanGo
         tenSanPham: (kenhId, maSp) => tenSanPhamCuaGian(db, kenhId, maSp),
         soanGoiY,
         cho: (ms) => new Promise(r => setTimeout(r, ms)),
+        luuChoDuyet: (n) => khoChoDuyetSql(db).luu(n),
+        async baoChoDuyet(n) {
+            // KHÔNG đưa chữ tin khách vào thông báo (cam kết không lưu / không phát tán nội dung chat)
+            const tieuDe = '💬 Chat Shopee chờ duyệt'
+            const noiDung = `${n.tenGian || 'Shopee'} · ${n.tenKhach || 'khách'}: AI đã soạn sẵn câu trả lời — bấm để xem và gửi`
+            try {
+                const tin = await db.notification.create({ data: { type: 'chat_cho_duyet', title: tieuDe, message: noiDung } }).catch(() => null)
+                const { sendPushToStore } = await import('../routes/notifications')
+                await sendPushToStore(db, tieuDe, noiDung, { id: tin?.id, type: 'chat_cho_duyet', route: 'chat-duyet' })
+            } catch (e) {
+                console.warn(`[Tự trả lời Shopee] không báo được nháp chờ duyệt: ${moTaLoi(e)}`)
+            }
+        },
     }
 }
 
@@ -232,6 +292,8 @@ export const DDL_TU_TRA_LOI = [
     `CREATE TABLE IF NOT EXISTS "TuTraLoiCaiDat" ("kenhId" TEXT NOT NULL PRIMARY KEY, "bat" BOOLEAN NOT NULL DEFAULT false, "tatLyDo" TEXT, "tatLuc" TIMESTAMP(3), "capNhatBoi" TEXT, "capNhatLuc" TIMESTAMP(3))`,
     `CREATE TABLE IF NOT EXISTS "TuTraLoiNhatKy" ("kenhId" TEXT NOT NULL, "hoiThoaiId" TEXT NOT NULL, "tinKhachId" TEXT NOT NULL, "trangThai" TEXT NOT NULL, "lyDo" TEXT, "maTinGui" TEXT, "luc" TIMESTAMP(3) NOT NULL, PRIMARY KEY ("kenhId", "hoiThoaiId", "tinKhachId"))`,
     `CREATE INDEX IF NOT EXISTS "TuTraLoiNhatKy_kenh_luc_idx" ON "TuTraLoiNhatKy" ("kenhId", "luc")`,
+    // 30/10/2026: chế độ từng gian (NULL = cho_duyet) — chỉ cần lúc GHI chế độ; đọc dùng SELECT * nên bảng cũ vẫn đọc được
+    `ALTER TABLE "TuTraLoiCaiDat" ADD COLUMN IF NOT EXISTS "cheDo" TEXT`,
 ]
 const daTao = new WeakSet<object>()
 const BAY_GIO = `(NOW() AT TIME ZONE 'UTC')`
@@ -247,8 +309,9 @@ export function khoTuTraLoiSql(db: any): KhoTuTraLoi {
     return {
         async docCaiDat(kenhId) {
             try {
-                const r: any[] = await db.$queryRawUnsafe(`SELECT "bat" FROM "TuTraLoiCaiDat" WHERE "kenhId" = $1`, kenhId)
-                return r[0] ? { bat: !!r[0].bat } : null
+                // SELECT * — bảng tạo trước 30/10 chưa có cột "cheDo" vẫn đọc được (vắng = NULL = cho_duyet)
+                const r: any[] = await db.$queryRawUnsafe(`SELECT * FROM "TuTraLoiCaiDat" WHERE "kenhId" = $1`, kenhId)
+                return r[0] ? { bat: !!r[0].bat, cheDo: docCheDo(r[0].cheDo) } : null
             } catch (e) { if (thieu(e)) return null; throw e }
         },
         async giuCho(kenhId, hoiThoaiId, tinKhachId) {
@@ -299,6 +362,17 @@ export function khoTuTraLoiSql(db: any): KhoTuTraLoi {
     }
 }
 
+export const docCheDo = (x: unknown): CheDoTuTraLoi => (x === 'tu_gui' ? 'tu_gui' : 'cho_duyet')
+
+/** Đổi chế độ một gian (giữ nguyên công tắc bật / tắt) */
+export async function datCheDoTuTraLoi(db: any, kenhId: string, cheDo: CheDoTuTraLoi, nguoi: string | null): Promise<void> {
+    await damBao(db)
+    await db.$executeRawUnsafe(
+        `INSERT INTO "TuTraLoiCaiDat" ("kenhId", "bat", "cheDo", "capNhatBoi", "capNhatLuc") VALUES ($1, false, $2, $3, ${BAY_GIO})
+         ON CONFLICT ("kenhId") DO UPDATE SET "cheDo" = EXCLUDED."cheDo", "capNhatBoi" = EXCLUDED."capNhatBoi", "capNhatLuc" = EXCLUDED."capNhatLuc"`,
+        kenhId, cheDo, nguoi)
+}
+
 export async function datTuTraLoi(db: any, kenhId: string, bat: boolean, nguoi: string | null): Promise<void> {
     await damBao(db)
     await db.$executeRawUnsafe(
@@ -312,6 +386,10 @@ export async function datTuTraLoi(db: any, kenhId: string, bat: boolean, nguoi: 
 export interface TinhTrangTuTraLoi {
     kenhId: string
     bat: boolean
+    /** Shopee: cho_duyet (mặc định) | tu_gui. TikTok bỏ qua trường này */
+    cheDo: CheDoTuTraLoi
+    /** Số nháp đang chờ người duyệt (bảng TuTraLoiChoDuyet) */
+    choDuyet: number
     tatLyDo: string | null
     tatLuc: string | null
     daGui: number
@@ -322,14 +400,18 @@ export interface TinhTrangTuTraLoi {
 }
 
 export async function tinhTrangTuTraLoi(db: any, kenhIds: string[]): Promise<TinhTrangTuTraLoi[]> {
-    const rong = (kenhId: string): TinhTrangTuTraLoi => ({ kenhId, bat: false, tatLyDo: null, tatLuc: null, daGui: 0, tinCho: 0, boQua: 0, loi: 0, lyDoGanNhat: null })
+    const rong = (kenhId: string): TinhTrangTuTraLoi => ({ kenhId, bat: false, cheDo: 'cho_duyet', choDuyet: 0, tatLyDo: null, tatLuc: null, daGui: 0, tinCho: 0, boQua: 0, loi: 0, lyDoGanNhat: null })
     const kq = new Map(kenhIds.map(k => [k, rong(k)]))
     try {
-        const cd: any[] = await db.$queryRawUnsafe(`SELECT "kenhId", "bat", "tatLyDo", "tatLuc" FROM "TuTraLoiCaiDat"`)
+        const cd: any[] = await db.$queryRawUnsafe(`SELECT * FROM "TuTraLoiCaiDat"`)
         for (const c of cd) {
             const x = kq.get(String(c.kenhId)); if (!x) continue
-            x.bat = !!c.bat; x.tatLyDo = c.tatLyDo || null; x.tatLuc = c.tatLuc ? new Date(c.tatLuc).toISOString() : null
+            x.bat = !!c.bat; x.cheDo = docCheDo(c.cheDo); x.tatLyDo = c.tatLyDo || null; x.tatLuc = c.tatLuc ? new Date(c.tatLuc).toISOString() : null
         }
+        try {
+            const cho: any[] = await db.$queryRawUnsafe(`SELECT "kenhId", COUNT(*)::int AS n FROM "TuTraLoiChoDuyet" WHERE "trangThai" = 'cho' GROUP BY 1`)
+            for (const c of cho) { const x = kq.get(String(c.kenhId)); if (x) x.choDuyet = Number(c.n) || 0 }
+        } catch (e) { if (!laLoiThieuBang(e, 'TuTraLoiChoDuyet')) throw e }
         const dem: any[] = await db.$queryRawUnsafe(
             `SELECT "kenhId", "trangThai", COALESCE("lyDo" LIKE $1, false) AS "laTinCho", COUNT(*)::int AS n FROM "TuTraLoiNhatKy"
               WHERE "luc" >= ${BAY_GIO} - interval '24 hours' GROUP BY 1, 2, 3`, `${TIEN_TO_TIN_CHO}%`)
