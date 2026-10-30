@@ -249,6 +249,8 @@ async function xuLyTin(prisma: any, schema: string, storeCode: string, shop: Don
 /** Luật riêng từng sàn cho câu NHÁP. Shopee cấm kéo khách ra ngoài sàn (SĐT, Zalo, link ngoài, sàn khác). */
 export const LUAT_NHAP_SAN: Record<string, string> = {
     shopee: 'Bạn đang soạn NHÁP để nhân viên duyệt rồi tự gửi trong khung chat SHOPEE. Chỉ nói về mua trên Shopee: KHÔNG đưa số điện thoại, Zalo, Facebook, website hay link ngoài Shopee, KHÔNG nhắc sàn khác (Shopee cấm kéo khách ra ngoài sàn). Tin trong ngoặc vuông như [Gửi thẻ sản phẩm: …] là mô tả thẻ khách đã gửi.',
+    // 30/10/2026 — tự trả lời TikTok (lib/tuTraLoiTikTok.ts): cùng luật không kéo khách ra ngoài sàn
+    tiktok: 'Bạn đang trả lời khách trong khung chat TIKTOK SHOP (câu này gửi thẳng cho khách). Chỉ nói về mua trên TikTok Shop: KHÔNG đưa số điện thoại, Zalo, Facebook, website hay link ngoài TikTok, KHÔNG nhắc sàn khác (TikTok cấm kéo khách ra ngoài sàn). Trả lời ngắn gọn, lễ phép. Tin trong ngoặc vuông như [Gửi thẻ sản phẩm: …] là mô tả thẻ khách đã gửi.',
 }
 
 /** Kho kiến thức cho một kênh sàn: shop chatbot gắn đúng kênh (ưu tiên đúng sàn) › chưa gắn kênh mà trùng tên › trùng tên ›

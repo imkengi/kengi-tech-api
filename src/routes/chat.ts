@@ -692,11 +692,12 @@ const QUAN_LY_TU_TRA_LOI = ['admin', 'manager', 'owner', 'superadmin']
 router.get('/tu-tra-loi', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
+        // 30/10/2026: thêm gian TikTok (lib/tuTraLoiTikTok.ts) — cùng bảng cài đặt / nhật ký, web phân biệt bằng `san`
         const kenh: any[] = await prisma.$queryRawUnsafe(
-            `SELECT "id", "name" FROM "OnlineChannel" WHERE "platform" = 'shopee' AND COALESCE("status", 'active') <> 'inactive' ORDER BY "name"`)
+            `SELECT "id", "name", "platform" FROM "OnlineChannel" WHERE "platform" IN ('shopee', 'tiktok') AND COALESCE("status", 'active') <> 'inactive' ORDER BY "platform", "name"`)
         const tt = await tinhTrangTuTraLoi(prisma, kenh.map(k => String(k.id)))
-        const ten = new Map(kenh.map(k => [String(k.id), String(k.name || '')]))
-        res.json({ success: true, data: tt.map(x => ({ ...x, ten: ten.get(x.kenhId) || '' })) })
+        const theoId = new Map(kenh.map(k => [String(k.id), k]))
+        res.json({ success: true, data: tt.map(x => ({ ...x, ten: String(theoId.get(x.kenhId)?.name || ''), san: String(theoId.get(x.kenhId)?.platform || 'shopee') })) })
     } catch (err: any) {
         console.error('[chat tu-tra-loi]', moTaLoi(err))
         res.status(500).json({ success: false, error: 'Không đọc được cài đặt tự trả lời' })
@@ -716,9 +717,9 @@ router.put('/tu-tra-loi/:kenhId', chatAuth, async (req: AuthRequest, res: Respon
         }
         const prisma = req.storePrisma!
         const kenh: any[] = await prisma.$queryRawUnsafe(
-            `SELECT "id" FROM "OnlineChannel" WHERE "id" = $1 AND "platform" = 'shopee' LIMIT 1`, String(req.params.kenhId))
+            `SELECT "id" FROM "OnlineChannel" WHERE "id" = $1 AND "platform" IN ('shopee', 'tiktok') LIMIT 1`, String(req.params.kenhId))
         if (!kenh.length) {
-            res.status(404).json({ success: false, error: 'Không có gian Shopee này' })
+            res.status(404).json({ success: false, error: 'Không có gian Shopee / TikTok này' })
             return
         }
         const nguoi = String(req.user?.email || req.user?.userId || '') || null

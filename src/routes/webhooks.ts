@@ -11,6 +11,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { ghiTinHieuChat } from '../lib/tinHieuChat'
 import { tuTraLoiShopee, phuThuocTuTraLoiThat } from '../lib/tuTraLoiShopee'
+import { tuTraLoiTikTok, phuThuocTuTraLoiTikTokThat } from '../lib/tuTraLoiTikTok'
 import { soanGoiYChoSan } from './chatbot'
 import { processComment } from '../services/fanpageAutoReply'
 import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../services/hopThuWebhook'
@@ -729,6 +730,13 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
             messageType: String(data.type || 'TEXT').toLowerCase(),
             text,
         }).catch(() => { })
+        /* Tự trả lời bằng chatbot (30/10/2026, lib/tuTraLoiTikTok.ts) — công tắc từng gian (chung bảng với Shopee), MẶC ĐỊNH
+         * TẮT. Chỉ tin của KHÁCH (role BUYER) mới kích; chạy NỀN, không giữ push trong hộp thư; không bao giờ ném. */
+        if (vaiTro === 'BUYER') {
+            const sch = resolvedSchema || ''
+            void tuTraLoiTikTok(channel, data, phuThuocTuTraLoiTikTokThat(storePrisma, (cauHoi, lichSu, tenKenh) =>
+                soanGoiYChoSan(storePrisma, sch, '', { name: tenKenh, platform: 'tiktok' }, cauHoi, lichSu)))
+        }
         return xongPush(`chat TikTok (${vaiTro || '?'}) hội thoại ${data.conversation_id || ''}`)
     }
 

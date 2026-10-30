@@ -45,12 +45,18 @@ export interface PhuThuocTuTraLoi {
     cho(ms: number): Promise<void>
 }
 
-export function kiemCauTuDong(cau: string): { ok: true; cau: string } | { ok: false; lyDo: string } {
+/** Câu AI soạn có gửi tự động được không — theo SÀN đang chat (30/10/2026: thêm TikTok, lib/tuTraLoiTikTok.ts): không kéo khách
+ *  ra ngoài sàn (SĐT, Zalo, Facebook, link ngoài, sàn khác) — nhắc chính sàn đang chat thì được. */
+export function kiemCauTuDong(cau: string, san: 'shopee' | 'tiktok' = 'shopee'): { ok: true; cau: string } | { ok: false; lyDo: string } {
     const s = String(cau || '').trim()
     if (!s || s === TRA_LOI_DU_PHONG) return { ok: false, lyDo: 'AI không soạn được câu trả lời' }
     if (/(?:\+84|\b0)[1-9](?:[\s.-]?\d){7,9}\b/.test(s)) return { ok: false, lyDo: 'câu có số điện thoại' }
-    if (/zalo|facebook|\bfb\b|messenger|instagram|tiktok|lazada|\btiki\b|sendo/i.test(s)) return { ok: false, lyDo: 'câu nhắc kênh / sàn khác' }
-    if (/https?:\/\/(?![\w.-]*shopee\.vn)|\bwww\.(?!shopee)/i.test(s)) return { ok: false, lyDo: 'câu có link ngoài Shopee' }
+    const sanKhac = san === 'tiktok'
+        ? /zalo|facebook|\bfb\b|messenger|instagram|shopee|lazada|\btiki\b|sendo/i
+        : /zalo|facebook|\bfb\b|messenger|instagram|tiktok|lazada|\btiki\b|sendo/i
+    if (sanKhac.test(s)) return { ok: false, lyDo: 'câu nhắc kênh / sàn khác' }
+    const linkNgoai = san === 'tiktok' ? /https?:\/\/(?![\w.-]*tiktok\.com)|\bwww\.(?!tiktok)/i : /https?:\/\/(?![\w.-]*shopee\.vn)|\bwww\.(?!shopee)/i
+    if (linkNgoai.test(s)) return { ok: false, lyDo: san === 'tiktok' ? 'câu có link ngoài TikTok' : 'câu có link ngoài Shopee' }
     return { ok: true, cau: s.length > DAI_TOI_DA ? `${s.slice(0, DAI_TOI_DA - 1).trimEnd()}…` : s }
 }
 
