@@ -18,6 +18,8 @@ import { quetHoaDonXmlEmail } from '../services/hoaDonXmlEmail'
 import { chonThiGiac } from '../lib/tarotAi'
 
 import * as xm2b from '../lib/xacMinh2BuocAdmin'
+import { SQL_TAO_BANG_PILOT } from '../lib/shopeePilot'
+
 const router = Router()
 
 // ─── Admin Auth ─────────────────────────────────────────────────────────────
@@ -2940,6 +2942,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )`)
+
+                /* SHOPEE PILOT (31/10/2026) — kế hoạch / nhật ký ghi / cấu hình của bảng điều khiển
+                 * Shopee Pilot. lib/shopeePilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
+                for (const sql of SQL_TAO_BANG_PILOT) await (sp as any).$executeRawUnsafe(sql)
 
                 /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
                  * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán

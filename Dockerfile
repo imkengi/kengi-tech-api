@@ -24,6 +24,8 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/dist ./dist
+# Giao diện tĩnh Shopee Pilot (index.ts phục vụ ở /shopee-pilot/)
+COPY public/shopee-pilot ./public/shopee-pilot
 ENV NODE_ENV=production
 EXPOSE 8080
 CMD ["node", "dist/index.js"]

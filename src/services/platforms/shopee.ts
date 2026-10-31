@@ -145,7 +145,9 @@ export class ShopeeService extends PlatformService {
     private static readonly FETCH_TIMEOUT_MS = 30_000
     private static readonly FETCH_RETRIES = 3
 
-    private async shopeeFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
+    /* soLan: số lần thử. Lệnh TẠO (add_item, add_discount) gọi với 1 — đứt mạng sau khi Shopee đã nhận mà
+     * thử lại là tạo TRÙNG; bên gọi tự báo "không rõ" để người kiểm trước. */
+    private async shopeeFetch(url: string, method: 'GET' | 'POST', body?: any, soLan: number = ShopeeService.FETCH_RETRIES): Promise<Response> {
         const proxy = process.env.SHOPEE_FORWARD_PROXY
         const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
         // Proxy đang chết → hỏng ngay, đừng để mỗi đơn treo 30s (xem proxyBreaker)
@@ -180,7 +182,7 @@ export class ShopeeService extends PlatformService {
         }
 
         let lastErr: any
-        for (let i = 0; i < ShopeeService.FETCH_RETRIES; i++) {
+        for (let i = 0; i < soLan; i++) {
             try {
                 const res = await attempt()
                 if (proxy) noteProxySuccess()
@@ -189,7 +191,7 @@ export class ShopeeService extends PlatformService {
                 lastErr = e
                 const timedOut = e?.name === 'AbortError'
                 // Đợi tăng dần: proxy nghẽn vì bị bắn dồn thì thử lại ngay chỉ làm nghẽn thêm.
-                if (i < ShopeeService.FETCH_RETRIES - 1) {
+                if (i < soLan - 1) {
                     console.warn(`[Shopee fetch] lần ${i + 1} ${timedOut ? 'quá hạn' : 'lỗi'} (${moTaLoi(e)}) — thử lại`)
                     await sleep(1000 * 2 ** i)
                 }
@@ -198,7 +200,7 @@ export class ShopeeService extends PlatformService {
         if (proxy) noteProxyFailure()
         const where = proxy ? `proxy ${proxy}` : 'Shopee trực tiếp'
         throw new Error(
-            `Gọi ${where} thất bại sau ${ShopeeService.FETCH_RETRIES} lần` +
+            `Gọi ${where} thất bại sau ${soLan} lần` +
             `${lastErr?.name === 'AbortError' ? ` (quá ${ShopeeService.FETCH_TIMEOUT_MS / 1000}s)` : ''}: ${lastErr?.message || lastErr}`
         )
     }
@@ -2110,7 +2112,7 @@ export class ShopeeService extends PlatformService {
 
     /** Tạo sản phẩm — v2.product.add_item. Trả item_id + cảnh báo (nếu Shopee có kèm). */
     async addItem(body: Record<string, any>): Promise<{ itemId: string; canhBao?: string; raw: any }> {
-        const data = await this.httpPost(this.apiUrl('/api/v2/product/add_item'), body)
+        const data = await this.parseResponse(await this.shopeeFetch(this.apiUrl('/api/v2/product/add_item'), 'POST', body, 1))
         if (data.error) throw new Error(`Shopee add_item: ${data.error} - ${data.message}`)
         const itemId = data.response?.item_id
         if (!itemId) throw new Error(`Shopee add_item không trả item_id: ${JSON.stringify(data).slice(0, 300)}`)
@@ -2125,6 +2127,34 @@ export class ShopeeService extends PlatformService {
         if (data.error) throw new Error(`Shopee unlist_item: ${data.error} - ${data.message}`)
         const fail = data.response?.failure_list?.[0]
         if (fail) throw new Error(`Shopee unlist_item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
+    }
+
+    // ─── Chương trình giảm giá của shop (v2.discount.*) — trang Khuyến mãi của Shopee Pilot ──
+    // Viết theo tài liệu Shopee v2, CHƯA đo trên gian thật (31/10/2026).
+
+    /** Tạo chương trình rỗng — MỘT lần gửi (đứt mạng mà thử lại là tạo trùng chương trình). */
+    async addDiscount(ten: string, batDau: number, ketThuc: number): Promise<number> {
+        const data = await this.parseResponse(await this.shopeeFetch(this.apiUrl('/api/v2/discount/add_discount'), 'POST', {
+            discount_name: ten.slice(0, 100), start_time: Math.floor(batDau), end_time: Math.floor(ketThuc),
+        }, 1))
+        if (data.error) throw new Error(`Shopee add_discount: ${data.error} - ${data.message}`)
+        const id = Number(data.response?.discount_id)
+        if (!id) throw new Error(`Shopee add_discount không trả discount_id: ${JSON.stringify(data).slice(0, 300)}`)
+        return id
+    }
+
+    /** Thêm mã vào chương trình. Mã không phân loại: item_promotion_price. Trả danh sách Shopee từ chối. */
+    async addDiscountItems(discountId: number, items: { item_id: number; purchase_limit: number; item_promotion_price: number }[]): Promise<{ loi: { itemId: number; lyDo: string }[] }> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/discount/add_discount_item'), { discount_id: discountId, item_list: items })
+        if (data.error) throw new Error(`Shopee add_discount_item: ${data.error} - ${data.message}`)
+        const loi = (data.response?.error_list || []).map((x: any) => ({ itemId: Number(x.item_id), lyDo: String(x.fail_message || x.fail_error || 'bị từ chối') }))
+        return { loi }
+    }
+
+    /** Xoá chương trình CHƯA bắt đầu (dọn chương trình rỗng khi mọi mã đều bị từ chối). */
+    async deleteDiscount(discountId: number): Promise<void> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/discount/delete_discount'), { discount_id: discountId })
+        if (data.error) throw new Error(`Shopee delete_discount: ${data.error} - ${data.message}`)
     }
 }
 

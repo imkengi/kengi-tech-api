@@ -3539,6 +3539,47 @@ model AiAgentRun {
   @@index([startedAt])
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SHOPEE PILOT — bảng điều khiển bán hàng Shopee (31/10/2026), lib/shopeePilot.ts
+//  Đọc/ghi bằng raw SQL (khoSql) và tự tạo bảng lần đầu dùng; khai ở đây để
+//  `prisma db push` không coi là bảng lạ mà xoá. Thời gian là epoch ms (BigInt) —
+//  tránh lệch múi giờ giữa timestamp không múi giờ và giờ phiên Postgres.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model ShopeePilotConfig {
+  id            String  @id // luôn 'default'
+  channelId     String? // gian Shopee Pilot quản (OnlineChannel.id)
+  executionMode String  @default("preview") // preview | auto
+  policy        String  @default("{}") // JSON ChinhSachPilot
+  updatedAt     BigInt  @default(0)
+}
+
+model ShopeePilotPlan {
+  id             String  @id
+  kind           String // publish | price | campaign
+  status         String // draft | running | succeeded | failed | partial | uncertain
+  idempotencyKey String? @unique
+  data           String  @default("{}")
+  result         String?
+  createdBy      String?
+  createdAt      BigInt
+  updatedAt      BigInt
+
+  @@index([createdAt])
+}
+
+model ShopeePilotWrite {
+  id        String  @id
+  action    String // publish | price | stock | campaign | campaignItems
+  status    String
+  planId    String?
+  payload   String  @default("{}")
+  response  String?
+  createdAt BigInt
+
+  @@index([createdAt])
+}
+
 // ─── Cổng đồng bộ KiotViet ─────────────────────────────────────────────────
 // Kéo hàng hoá/khách/NCC/hoá đơn từ KiotViet sang Kengi theo khoảng ngày, và
 // nhận webhook khi bên đó phát sinh. Xem src/services/kiotvietSync.ts để nắm
