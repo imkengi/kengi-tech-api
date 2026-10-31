@@ -1969,4 +1969,175 @@ export class ShopeeService extends PlatformService {
             stock: m.stock_info_v2?.seller_stock?.[0]?.stock ?? m.stock_info?.[0]?.current_stock ?? 0,
         }))
     }
+
+    // ─── ĐĂNG SẢN PHẨM MỚI (AI tự quản shop — 31/10/2026) ────────────────────────
+    // Nhóm v2.product.* ký CÓ TOKEN (apiUrl). Riêng v2.media_space.upload_image là
+    // API "public" ký kiểu PARTNER (urlCong) như nhóm v2.media.*.
+    // Mọi hàm NÉM lỗi kèm mã + message của Shopee — bên gọi (tool MCP) đưa nguyên
+    // văn cho AI đọc, vì lời từ chối của Shopee (thiếu thuộc tính bắt buộc, tên quá
+    // ngắn…) là thứ AI cần để tự sửa và gọi lại.
+
+    /** Ngành gợi ý cho một tên sản phẩm — v2.product.category_recommend. */
+    async categoryRecommend(itemName: string): Promise<number[]> {
+        const url = `${this.apiUrl('/api/v2/product/category_recommend')}&item_name=${encodeURIComponent(itemName.slice(0, 120))}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee category_recommend: ${data.error} - ${data.message}`)
+        return (data.response?.category_id || []).map(Number).filter((n: number) => n > 0)
+    }
+
+    /** Cây ngành của gian (cache 12 giờ theo shop — cây ngành gần như không đổi, mà mỗi lần ~2.000 dòng). */
+    async getCategories(language = 'vi'): Promise<{ id: number; chaId: number; ten: string; coCon: boolean }[]> {
+        const khoa = `${this.credentials.shopId}:${language}`
+        const hit = categoryCache.get(khoa)
+        if (hit && Date.now() - hit.at < CATEGORY_CACHE_MS) return hit.ds
+        const data = await this.httpGet(`${this.apiUrl('/api/v2/product/get_category')}&language=${encodeURIComponent(language)}`)
+        if (data.error) throw new Error(`Shopee get_category: ${data.error} - ${data.message}`)
+        const ds = (data.response?.category_list || []).map((c: any) => ({
+            id: Number(c.category_id),
+            chaId: Number(c.parent_category_id) || 0,
+            ten: String(c.display_category_name || c.original_category_name || ''),
+            coCon: !!c.has_children,
+        }))
+        categoryCache.set(khoa, { ds, at: Date.now() })
+        return ds
+    }
+
+    /**
+     * Thuộc tính của một ngành — v2.product.get_attribute_tree (bản mới), hỏng thì
+     * v2.product.get_attributes (bản cũ, Shopee đã báo ngừng). Chuẩn hoá về một dạng
+     * để AI đọc: bắt buộc hay không, kiểu nhập, danh sách giá trị có sẵn.
+     */
+    async getCategoryAttributes(categoryId: number, language = 'vi'): Promise<ThuocTinhNganh[]> {
+        const kieuNhap = (n: any): string => ({ 1: 'chon_mot', 2: 'chon_mot_hoac_go', 3: 'go_tu_do', 4: 'chon_nhieu', 5: 'chon_nhieu_hoac_go' } as Record<number, string>)[Number(n)] || String(n ?? '')
+        let loiMoi = ''
+        try {
+            const data = await this.httpGet(`${this.apiUrl('/api/v2/product/get_attribute_tree')}&category_id_list=${categoryId}&language=${encodeURIComponent(language)}`)
+            if (data.error) throw new Error(`${data.error} - ${data.message}`)
+            const nhom = (data.response?.list || []).find((x: any) => Number(x.category_id) === Number(categoryId)) || data.response?.list?.[0]
+            const cay: any[] = nhom?.attribute_tree || []
+            const tenDa = (x: any) => String(x?.multi_lang?.find((m: any) => m?.language === language)?.value || x?.name || x?.display_attribute_name || x?.original_attribute_name || '')
+            return cay.map((a: any) => ({
+                attributeId: Number(a.attribute_id),
+                ten: tenDa(a),
+                batBuoc: !!(a.mandatory ?? a.is_mandatory),
+                kieuNhap: kieuNhap(a.attribute_info?.input_type ?? a.input_type),
+                donVi: (a.attribute_info?.attribute_unit_list || a.attribute_unit || []) as string[],
+                toiDaGiaTri: Number(a.attribute_info?.max_value_count) || undefined,
+                giaTri: (a.attribute_value_list || []).slice(0, 60).map((v: any) => ({
+                    valueId: Number(v.value_id),
+                    ten: tenDa(v) || String(v.display_value_name || v.original_value_name || ''),
+                    donVi: v.value_unit || undefined,
+                })),
+                soGiaTri: (a.attribute_value_list || []).length,
+            }))
+        } catch (e: any) {
+            loiMoi = String(e?.message || e)
+        }
+        const data = await this.httpGet(`${this.apiUrl('/api/v2/product/get_attributes')}&category_id=${categoryId}&language=${encodeURIComponent(language)}`)
+        if (data.error) throw new Error(`Shopee get_attribute_tree: ${loiMoi} | get_attributes: ${data.error} - ${data.message}`)
+        return (data.response?.attribute_list || []).map((a: any) => ({
+            attributeId: Number(a.attribute_id),
+            ten: String(a.display_attribute_name || a.original_attribute_name || ''),
+            batBuoc: !!a.is_mandatory,
+            kieuNhap: String(a.input_type || ''),
+            donVi: a.attribute_unit ? [].concat(a.attribute_unit) : [],
+            giaTri: (a.attribute_value_list || []).slice(0, 60).map((v: any) => ({
+                valueId: Number(v.value_id),
+                ten: String(v.display_value_name || v.original_value_name || ''),
+                donVi: v.value_unit || undefined,
+            })),
+            soGiaTri: (a.attribute_value_list || []).length,
+        }))
+    }
+
+    /** Thương hiệu được phép của ngành + ngành có BẮT BUỘC thương hiệu không. Lọc theo tên nếu có. */
+    async getBrandList(categoryId: number, timTen?: string): Promise<{ batBuoc: boolean; thuongHieu: { brandId: number; ten: string }[]; conNua: boolean }> {
+        const ra: { brandId: number; ten: string }[] = []
+        let offset = 0, batBuoc = false, conNua = false
+        const can = String(timTen || '').trim().toLowerCase()
+        for (let trang = 0; trang < 10; trang++) {
+            const url = `${this.apiUrl('/api/v2/product/get_brand_list')}&category_id=${categoryId}&status=1&offset=${offset}&page_size=100&language=vi`
+            const data = await this.httpGet(url)
+            if (data.error) throw new Error(`Shopee get_brand_list: ${data.error} - ${data.message}`)
+            const r = data.response || {}
+            batBuoc = !!r.is_mandatory
+            for (const b of (r.brand_list || [])) {
+                const ten = String(b.display_brand_name || b.original_brand_name || '')
+                if (!can || ten.toLowerCase().includes(can)) ra.push({ brandId: Number(b.brand_id), ten })
+            }
+            conNua = !!r.has_next_page
+            if (!conNua || (!can && ra.length >= 100)) break
+            offset = Number(r.next_offset) || offset + 100
+        }
+        return { batBuoc, thuongHieu: ra.slice(0, 100), conNua }
+    }
+
+    /** Kênh vận chuyển của gian (nguyên dòng get_channel_list). */
+    async getLogisticsChannels(): Promise<any[]> {
+        const data = await this.httpGet(this.apiUrl('/api/v2/logistics/get_channel_list'))
+        if (data.error) throw new Error(`Shopee get_channel_list: ${data.error} - ${data.message}`)
+        return data.response?.logistics_channel_list || []
+    }
+
+    /** Giới hạn đăng của gian/ngành (giá min/max, độ dài tên, mô tả, số ảnh…) — nguyên response. */
+    async getItemLimit(categoryId?: number): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/product/get_item_limit')}${categoryId ? `&category_id=${categoryId}` : ''}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_item_limit: ${data.error} - ${data.message}`)
+        return data.response || {}
+    }
+
+    /**
+     * Nạp MỘT ảnh lên kho ảnh Shopee — v2.media_space.upload_image (multipart, trường
+     * `image`, ≤10MB, jpg/png). Đi chung guiFileMultipart: qua Tino thì khai
+     * file_field='image' (file trung chuyển nhận file_field từ 11/09/2026, mime
+     * trong danh sách trắng image/jpeg, image/png). Trả image_id dùng cho add_item.
+     */
+    async uploadImage(anh: Uint8Array, kieu: 'image/jpeg' | 'image/png'): Promise<{ imageId: string; url?: string }> {
+        if (anh.length > 10 * 1024 * 1024) throw new Error(`Ảnh nặng ${(anh.length / 1048576).toFixed(1)}MB — Shopee chặn trên 10MB`)
+        const data = await this.guiFileMultipart(
+            this.urlCong('/api/v2/media_space/upload_image'),
+            {},
+            anh,
+            { tenTruong: 'image', tenFile: kieu === 'image/png' ? 'anh.png' : 'anh.jpg', kieu },
+        )
+        if (data?.error) throw new Error(`Shopee upload_image: ${data.error} - ${data.message}`)
+        const info = data?.response?.image_info || data?.response?.image_info_list?.[0]?.image_info
+        const imageId = info?.image_id
+        if (!imageId) throw new Error(`Shopee upload_image trả về không có image_id: ${JSON.stringify(data).slice(0, 300)}`)
+        return { imageId: String(imageId), url: info?.image_url_list?.[0]?.image_url }
+    }
+
+    /** Tạo sản phẩm — v2.product.add_item. Trả item_id + cảnh báo (nếu Shopee có kèm). */
+    async addItem(body: Record<string, any>): Promise<{ itemId: string; canhBao?: string; raw: any }> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/product/add_item'), body)
+        if (data.error) throw new Error(`Shopee add_item: ${data.error} - ${data.message}`)
+        const itemId = data.response?.item_id
+        if (!itemId) throw new Error(`Shopee add_item không trả item_id: ${JSON.stringify(data).slice(0, 300)}`)
+        return { itemId: String(itemId), canhBao: data.warning || data.response?.warning || undefined, raw: data.response }
+    }
+
+    /** Ẩn (unlist=true) / hiện lại (false) một sản phẩm — v2.product.unlist_item. */
+    async unlistItem(itemId: string | number, unlist: boolean): Promise<void> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/product/unlist_item'), {
+            item_list: [{ item_id: Number(itemId), unlist }],
+        })
+        if (data.error) throw new Error(`Shopee unlist_item: ${data.error} - ${data.message}`)
+        const fail = data.response?.failure_list?.[0]
+        if (fail) throw new Error(`Shopee unlist_item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
+    }
 }
+
+export interface ThuocTinhNganh {
+    attributeId: number
+    ten: string
+    batBuoc: boolean
+    kieuNhap: string
+    donVi: string[]
+    toiDaGiaTri?: number
+    giaTri: { valueId: number; ten: string; donVi?: string }[]
+    soGiaTri: number
+}
+
+const CATEGORY_CACHE_MS = 12 * 3600 * 1000
+const categoryCache = new Map<string, { ds: { id: number; chaId: number; ten: string; coCon: boolean }[]; at: number }>()
