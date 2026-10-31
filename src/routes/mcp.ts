@@ -12,6 +12,7 @@ import { REPORT_TOOLS } from './mcpReportTools'
 import { ACCOUNTING_TOOLS } from './mcpAccountingTools'
 import { OPS_TOOLS } from './mcpOpsTools'
 import { TAX_TOOLS } from './mcpTaxTools'
+import { SHOPEE_TOOLS } from './mcpShopeeTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -72,7 +73,11 @@ const INSTRUCTIONS =
     'accounting_account_balance khi chỉ cần số dư nhanh. Mọi con số kế toán đều đi kèm TK Nợ/Có — nói rõ cặp tài khoản khi báo cáo. ' +
     'NHẬP HÀNG: check_duplicate_invoice TRƯỚC KHI lập phiếu (trùng số hoá đơn = khai trùng thuế GTGT, hệ thống sẽ chặn); create_draft_import_receipt chỉ tạo phiếu NHÁP, ' +
     'người thật phải bấm Hoàn tất trên web mới vào kho. list_payment_due cho hạn trả NCC, list_customer_debts cho khách nợ. ' +
-    'Tool ghi an toàn: create_supplier, create_expense (tự ghi bút toán), create_draft_import_receipt. KHÔNG có tool nào tự trả tiền NCC hay tự nhập kho — đó là việc của người.'
+    'Tool ghi an toàn: create_supplier, create_expense (tự ghi bút toán), create_draft_import_receipt. KHÔNG có tool nào tự trả tiền NCC hay tự nhập kho — đó là việc của người. ' +
+    'QUẢN GIAN SHOPEE (shopee_*): shopee_shop_info TRƯỚC (phí sàn đo từ đơn đã đối soát, kênh vận chuyển, giới hạn đăng) → shopee_sync_listings (tránh đăng trùng) → shopee_listing_candidates (hàng chưa đăng, còn tồn) → ' +
+    'shopee_suggest_price (giá đề xuất / GIÁ SÀN / hoà vốn) → shopee_category_suggest → shopee_category_attributes → shopee_create_listing (chay_thu=true để xem trước). ' +
+    'Chăm giá: shopee_review_listings → shopee_update_price / shopee_toggle_listing. Máy chủ TỪ CHỐI mọi giá dưới giá sàn và mọi hàng thiếu giá vốn — đừng tìm đường vòng. ' +
+    'Cân nặng, thuộc tính, mô tả phải là thông tin THẬT của sản phẩm (từ kho, mô tả, chỉ thị chủ shop) — không biết thì bỏ qua mặt hàng đó và báo lại, KHÔNG đoán.'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 // Lối 1: x-admin-key (+ x-store-code) — nội bộ. Lối 2: authMiddleware sẵn có
@@ -974,6 +979,8 @@ export const TOOLS: Tool[] = [
     ...TAX_TOOLS,
     // Vận hành: việc cần làm, NCC, hạn trả, công nợ, đơn, sao kê, kho, chi phí
     ...OPS_TOOLS,
+    // AI tự quản gian Shopee (31/10/2026) — đăng sản phẩm, tính giá theo phí sàn thật, soát/đổi giá
+    ...SHOPEE_TOOLS,
 ]
 
 function errContentThrow(message: string): never { throw new ToolError(message) }

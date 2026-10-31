@@ -54,6 +54,7 @@ router.get('/tools', authMiddleware, async (_req: AuthRequest, res: Response) =>
             ghiDuLieu: !!t.write,
             nhayCam: TOOL_NHAY_CAM.has(t.name),
             nhom: t.name.startsWith('fanpage_') ? 'fanpage'
+                : t.name.startsWith('shopee_') ? 'shopee (AI quản gian)'
                 : t.name.startsWith('marketing_') ? 'marketing (lên content)'
                     : 'bán lẻ',
         })),

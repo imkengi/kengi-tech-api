@@ -76,6 +76,10 @@ export const TOOL_NHAY_CAM = new Set([
     'fanpage_ads_set_campaign_status',
     'fanpage_boost_post',
     'fanpage_send_message',
+    // 31/10/2026: AI tự quản gian Shopee — đăng sản phẩm / đổi giá / ẩn-hiện là thao tác công khai trên sàn
+    'shopee_create_listing',
+    'shopee_update_price',
+    'shopee_toggle_listing',
 ])
 
 export type KetQuaChay = {

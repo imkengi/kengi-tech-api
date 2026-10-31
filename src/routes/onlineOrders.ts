@@ -2758,6 +2758,7 @@ import { quyetDinhTuChoiTikTok, laHoanNhanhKhongTuChoiDuoc, TIKTOK_HOAN_NHANH_TH
 import { processNewOrders, convertOnlineOrderToTransaction } from '../services/orderSync'
 import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
+import { luuDanhMucSan } from '../lib/shopeeTuQuan'
 
 // GET /api/online-orders/channels/:id/auth-url
 router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -4030,43 +4031,8 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         try {
             console.log(`[Sync] Starting product catalog sync for channel ${channel.name}...`)
             const { products } = await service.fetchProducts()
-            for (const p of products) {
-                await prisma.onlineProduct.upsert({
-                    where: {
-                        channelId_platformProductId: {
-                            channelId: channel.id,
-                            platformProductId: p.platformProductId,
-                        },
-                    },
-                    create: {
-                        channelId: channel.id,
-                        platform: channel.platform,
-                        platformProductId: p.platformProductId,
-                        name: p.name,
-                        sku: p.sku || null,
-                        price: p.price,
-                        stock: p.stock,
-                        status: p.status || 'NORMAL',
-                        imageUrl: p.imageUrl || null,
-                        categoryId: p.categoryId || null,
-                        categoryName: p.categoryName || null,
-                        syncedAt: new Date(),
-                    },
-                    update: {
-                        name: p.name,
-                        sku: p.sku || null,
-                        price: p.price,
-                        stock: p.stock,
-                        status: p.status || 'NORMAL',
-                        imageUrl: p.imageUrl || null,
-                        // Chỉ ghi đè ngành khi list API có trả (Shopee) — TikTok search không
-                        // trả nên giữ nguyên giá trị đã enrich, tránh xóa mất.
-                        ...(p.categoryId ? { categoryId: p.categoryId, categoryName: p.categoryName || null } : {}),
-                        syncedAt: new Date(),
-                    },
-                })
-                productsSynced++
-            }
+            // Dùng chung với tool MCP shopee_sync_listings (lib/shopeeTuQuan) — một đường ghi duy nhất
+            productsSynced = await luuDanhMucSan(prisma, channel, products)
             console.log(`[Sync] Product catalog: ${productsSynced} products synced`)
 
             // ── TikTok: enrich mã ngành hàng (nền, sau khi trả response) ──────────

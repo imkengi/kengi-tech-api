@@ -120,6 +120,67 @@ REST tương ứng: `GET /api/fanpage/pages/:pageId/conversations`, `GET /api/fa
 
 Các tool `fanpage_edit_post / delete_post / delete_comment / like_comment / send_message / ads_set_campaign_status / boost_post` nằm trong `TOOL_NHAY_CAM` — tác vụ tự động phải khai đích danh mới được dùng.
 
+### Shopee — AI tự quản một gian (thêm 2026-10-31 — `src/routes/mcpShopeeTools.ts`)
+
+AI tự đăng sản phẩm từ kho lên một gian Shopee, tự tính giá theo **phí sàn thật** của gian, rồi soát/đổi giá. Đơn về, trừ kho, đẩy tồn, chat khách vẫn đi đường sẵn có (autoSync / `dayTonLenSan` / chatbot Shopee) — `item_sku` = SKU kho nên đơn tự khớp, không phải nối listing tay.
+
+| Tool | Loại | Việc | Tham số |
+|---|---|---|---|
+| `shopee_shop_info` | đọc | Gọi đầu tiên: các gian, token, số listing + lần đồng bộ cuối, **mô hình phí** đo từ đơn, kênh vận chuyển đang bật, giới hạn đăng. | kenh |
+| `shopee_sync_listings` | ghi (nội bộ) | Kéo lại sản phẩm đang bán của gian vào `OnlineProduct` (chung hàm với nút Đồng bộ web) — chống đăng trùng. | kenh |
+| `shopee_listing_candidates` | đọc | Hàng kho chưa có trên gian, còn tồn; kèm giá vốn, ảnh, mô tả, `thieu`. | kenh, query, nhom_hang, chi_du_dieu_kien, limit |
+| `shopee_suggest_price` | đọc | Giá đề xuất / **giá sàn** / hoà vốn / lãi dự kiến + giá đang bán nơi khác. | **sku**, kenh, gia_thu, category_id, bien_loi_nhuan, bien_toi_thieu, phi_dong_goi, phi_quang_cao, lam_tron |
+| `shopee_category_suggest` | đọc | Ngành Shopee gợi ý theo tên + tìm trong cây ngành. | ten, tu_khoa, kenh |
+| `shopee_category_attributes` | đọc | Thuộc tính bắt buộc (kèm giá trị có sẵn), thương hiệu, giới hạn của ngành. | **category_id**, tim_thuong_hieu, day_du, kenh |
+| `shopee_create_listing` | ghi* | Đăng sản phẩm: nạp ảnh, khai tồn bán được, kênh vận chuyển, giá (bỏ trống = đề xuất). `chay_thu=true` xem trước. | **sku**, **category_id**, **can_nang_gram**, kenh, gia, ten, mo_ta, thuoc_tinh, brand_id, ten_thuong_hieu, dai/rong/cao_cm, kenh_van_chuyen, so_luong_dang, an_sau_khi_dang, chay_thu, +tham số giá |
+| `shopee_review_listings` | đọc | Soát giá listing đang bán: lãi/biên mỗi đơn, cờ dưới sàn / dưới mục tiêu / 14 ngày không bán, giá đề xuất. | kenh, chi_van_de, limit, +tham số giá |
+| `shopee_update_price` | ghi* | Đổi giá một listing (item_id hoặc sku). | **gia_moi**, item_id, sku, kenh, ly_do, bien_toi_thieu, phi_dong_goi, phi_quang_cao |
+| `shopee_toggle_listing` | ghi* | Ẩn / hiện lại một listing. | **item_id**, **an**, kenh, ly_do |
+
+\* nằm trong `TOOL_NHAY_CAM` — tác vụ tự động phải khai đích danh trong `allowedTools`.
+
+**Tính giá** (`src/lib/giaShopee.ts`): phí một đơn = `tyLe × giá + coDinh`. Hai tham số **đo từ đơn đã đối soát 90 ngày** của gian (`platformFee` = giá bán − thực nhận, lấy từ escrow): ≥ 15 đơn giá trải rộng → hồi quy tách phí cố định/đơn; ≥ 8 đơn → tỷ lệ tổng; gian mới chưa đủ đơn → **mượn số đo các gian Shopee khác của cửa hàng**; vẫn không có → `commissionRate` của kênh (kèm cảnh báo — mặc định 6% thường thấp hơn phí thật).
+`giá = (giá vốn + phí cố định + đóng gói) / (1 − tỷ lệ phí − biên mục tiêu − quảng cáo%)`, làm tròn lên. Tính cho đơn 1 sản phẩm.
+
+**Rào an toàn** (máy chủ chặn, không phụ thuộc AI tự giác):
+- Giá **dưới giá sàn** (biên tối thiểu, mặc định 5%, không nhận số âm) → `shopee_create_listing` / `shopee_update_price` từ chối. Thiếu giá vốn → không đăng, không đổi giá.
+- Đăng trùng: chặn nếu gian đã có listing nối hàng đó / cùng SKU / SKU ánh xạ về hàng đó. Danh mục gian cũ quá 2 ngày → `shopee_shop_info` nhắc `shopee_sync_listings`.
+- Hàng mã đã gộp, combo, dịch vụ, hết hàng, chưa có ảnh → từ chối kèm lý do. Tồn khai lên theo đúng luật đẩy tồn (kho mẹ − đơn treo nếu cửa hàng mượn kho).
+- `can_nang_gram` bắt buộc; prompt dặn AI không đoán cân nặng / thuộc tính / thông số.
+- Ảnh tải từ link sản phẩm (chặn link mạng nội bộ), chỉ JPG/PNG ≤ 10MB, nạp qua `v2.media_space.upload_image` (qua Tino: `file_field=image`).
+
+**Mẫu tác vụ tự động** (`POST /api/ai-jobs`). Một lượt agent tối đa **20 bước**, đăng một mặt hàng tốn ~4 bước (ngành → thuộc tính → đăng…) nên tách HAI tác vụ; chủ shop sửa chính sách giá ngay trong chỉ thị.
+
+Đăng hàng — mỗi 3 giờ, 2 mặt hàng/lượt:
+
+```json
+{
+  "name": "Shopee AI — đăng hàng",
+  "prompt": "Gian Shopee \"Kengi AI Shop\". Chính sách giá: biên lãi mục tiêu 18%, tối thiểu 8%, đóng gói 3.000đ/đơn, quảng cáo 3%. Gọi shopee_shop_info (có canhBaoDanhMuc thì shopee_sync_listings). shopee_listing_candidates chi_du_dieu_kien=true limit=5, đăng tối đa 2 mặt hàng: shopee_category_suggest → shopee_category_attributes → shopee_create_listing với đúng chính sách giá trên. Chỉ khai thuộc tính chắc chắn đúng; cân nặng lấy trong mô tả sản phẩm, không có thì BỎ QUA mặt hàng và ghi vào báo cáo. Báo cáo: đã đăng gì (link, giá, lãi dự kiến), mặt hàng nào cần chủ shop bổ sung thông tin.",
+  "scheduleKind": "interval", "intervalMinutes": 180,
+  "allowWrite": true,
+  "allowedTools": ["shopee_shop_info", "shopee_sync_listings", "shopee_listing_candidates", "shopee_suggest_price", "shopee_category_suggest", "shopee_category_attributes", "shopee_create_listing"],
+  "maxSteps": 20
+}
+```
+
+Soát giá — mỗi sáng:
+
+```json
+{
+  "name": "Shopee AI — soát giá",
+  "prompt": "Gian Shopee \"Kengi AI Shop\". Chính sách giá: biên lãi mục tiêu 18%, tối thiểu 8%, đóng gói 3.000đ/đơn, quảng cáo 3%. shopee_sync_listings rồi shopee_review_listings với đúng chính sách đó. Hàng DƯỚI GIÁ SÀN: shopee_update_price lên giaDeXuat. Hàng 14 ngày không bán mà biên > 25%: giảm về giaDeXuat. Tối đa 8 lần đổi giá. Báo cáo từng thay đổi (giá cũ → mới, lý do) và hàng thiếu giá vốn.",
+  "scheduleKind": "daily", "atHour": 7, "atMinute": 40,
+  "allowWrite": true,
+  "allowedTools": ["shopee_sync_listings", "shopee_review_listings", "shopee_suggest_price", "shopee_update_price"],
+  "maxSteps": 15
+}
+```
+
+Kiểm: `npm run check:shopee-ai` (tính giá, thân add_item, chọn vận chuyển, chặn link nội bộ, và chạy thật tool đăng/đổi giá trên prisma + Shopee giả).
+
+**Chưa đo trên gian thật** (31/10/2026): `category_recommend`, `get_attribute_tree`, `media_space.upload_image`, `add_item` viết theo tài liệu Shopee v2 — lần đầu nên chạy `shopee_create_listing` với `chay_thu=true`, rồi đăng thật một mặt hàng với `an_sau_khi_dang=true` để soát trên Seller Center trước khi giao cho tác vụ tự động.
+
 **Lấy API key + cấu hình nối Claude/Cursor:** kengi.vn/fanpage-manager → Trợ lý AI → tab **"Nối AI ngoài (MCP)"** (tạo key, chép config, nút kiểm tra kết nối gọi thẳng `tools/list`).
 
 ## Quy ước quan trọng
