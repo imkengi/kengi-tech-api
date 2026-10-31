@@ -52,6 +52,7 @@ import priceListRoutes from './routes/priceLists'
 import adminRoutes from './routes/admin'
 import mcpRoutes from './routes/mcp'
 import mcpAgentRoutes from './routes/mcpAgent'
+import shopeePilotRoutes from './routes/shopeePilot'
 import flashSaleRoutes from './routes/flashSales'
 import importDataRoutes from './routes/importData'
 import uploadRoutes from './routes/uploads'
@@ -180,6 +181,9 @@ app.use(express.json({
 }))
 import path from 'path'
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')))
+// Shopee Pilot — giao diện bán hàng Shopee của chủ shop (31/10/2026), API ở /api/shopee-pilot.
+// Tệp nằm ở public/shopee-pilot (Dockerfile chép vào ảnh chạy); đổi giao diện không cần build lại backend.
+app.use('/shopee-pilot', express.static(path.join(process.cwd(), 'public', 'shopee-pilot'), { index: 'index.html', maxAge: '5m' }))
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 
@@ -331,6 +335,7 @@ app.use('/api/uploads', uploadRoutes)
 app.use('/api/livestream', livestreamRoutes) // Kengi Stream studio (kengi.vn/ai-livestream)
 app.use('/api/mcp', mcpRoutes) // MCP server cho AI agent (Streamable HTTP, X-API-Key + x-store-code)
 app.use('/api/mcp-agent', mcpAgentRoutes) // Trợ lý AI dashboard (Gemini + MCP tools)
+app.use('/api/shopee-pilot', shopeePilotRoutes) // Shopee Pilot: bảng điều khiển bán hàng Shopee (giao diện ở /shopee-pilot/)
 app.use('/api/flash-sales', flashSaleRoutes) // Flash sale hàng loạt Shopee (hàng đợi tuần tự)
 app.use('/api/internal', syncRoutes)
 app.use('/api/announcements', announcementRoutes)

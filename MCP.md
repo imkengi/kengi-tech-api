@@ -181,6 +181,23 @@ Kiểm: `npm run check:shopee-ai` (tính giá, thân add_item, chọn vận chuy
 
 **Chưa đo trên gian thật** (31/10/2026): `category_recommend`, `get_attribute_tree`, `media_space.upload_image`, `add_item` viết theo tài liệu Shopee v2 — lần đầu nên chạy `shopee_create_listing` với `chay_thu=true`, rồi đăng thật một mặt hàng với `an_sau_khi_dang=true` để soát trên Seller Center trước khi giao cho tác vụ tự động.
 
+### Shopee Pilot — giao diện bán hàng Shopee chạy trên Kengi (thêm 2026-10-31)
+
+Giao diện "Shopee Pilot" của chủ shop (trước chạy bằng backend riêng trên máy Windows + `catalog.local.json` + worker) nay do Kengi phục vụ, dữ liệu lấy từ kho thật.
+
+- **Trang:** `https://api.kengi.vn/shopee-pilot/` — tệp tĩnh ở `public/shopee-pilot/` (Dockerfile chép vào ảnh chạy).
+- **Kết nối:** mã cửa hàng + API key quyền `read,write` (tạo ở Trợ lý AI → Nối AI ngoài (MCP)); khoá lưu trong trình duyệt, gửi bằng `X-API-Key` + `x-store-code`. Khoá chỉ-đọc bị `authMiddleware` chặn mọi POST; route chặn thêm vai trò không phải quản lý.
+- **API:** `src/routes/shopeePilot.ts` → `/api/shopee-pilot`: `GET /state`, `GET /guide`, `POST /{cycle|execute|price|listing|campaign|config|connection|listing-options|listing-attributes}` (trả `{result}` hoặc `{error}`). Nghiệp vụ ở `src/lib/shopeePilot.ts`.
+- **Sản phẩm:** listing của gian đã chọn (≤ 100) + hàng kho còn tồn chưa đăng (≤ 30). Giá đề xuất / giá sàn tính bằng `lib/giaShopee` theo phí đo từ đơn đã đối soát.
+- **Kế hoạch → thực thi:** mọi thao tác ghi tạo kế hoạch trước (`ShopeePilotPlan`); chế độ **Xem trước** (mặc định) thực thi không gọi Shopee, **Tự động** mới ghi. Đăng hàng / đổi giá đi đúng `dangSanPhamShopee` / `doiGiaShopee` (`lib/shopeeThaoTac.ts`) — chung đường với tool MCP nên chung rào giá sàn.
+- **Rào của chính sách** (máy chủ chặn): giá dưới giá sàn; đổi giá quá `maxPriceChangeRate` mỗi lần (trừ khi đang nâng lên giá sàn); quá `maxWritesPerDay` lần ghi / ngày giờ VN (tính cả lần hỏng); khuyến mãi giảm quá `maxDiscountRate`, dài quá `maxCampaignDays`, giá KM dưới sàn, mã vừa tăng giá trong `promotionCooldownHoursAfterIncrease` giờ. Khoá idempotency từ giao diện; thực thi giành kế hoạch nguyên tử `draft → running` nên bấm hai lần không chạy đúp.
+- **Không rõ kết quả:** `add_item` / `add_discount` chỉ gửi MỘT lần (thử lại sau khi Shopee đã nhận là tạo trùng). Đứt mạng sau khi gửi ⇒ kế hoạch `uncertain`, người kiểm trên Seller Center trước khi làm lại.
+- **Chu kỳ:** đồng bộ tồn (nếu bật, dùng `dayTonLenSan`), soát và đổi giá tối đa 10 mã (dưới sàn → nâng; dưới mục tiêu → nâng; 14 ngày không bán mà lãi cao hơn mục tiêu 10 điểm → giảm), báo hàng chưa đăng. Không tự đăng hàng mới (cần ngành + cân nặng thật) và không tự tạo khuyến mãi.
+- **Bảng:** `ShopeePilotConfig`, `ShopeePilotPlan`, `ShopeePilotWrite` (thời gian epoch ms). Khai trong `schema-store.prisma`, có trong `/admin/migrate`, và `khoSql` tự `CREATE TABLE IF NOT EXISTS` lần đầu dùng. Sau deploy nên chạy `POST /api/admin/sync-schemas` như mọi bảng mới.
+- **Khuyến mãi** dùng `v2.discount.add_discount` / `add_discount_item` / `delete_discount` — viết theo tài liệu, **chưa đo trên gian thật**; mã có phân loại chưa hỗ trợ.
+
+Kiểm: `npm run check:shopee-pilot` (chính sách, biên độ, chu kỳ, Xem trước không gọi Shopee, chạy đúp, giới hạn/ngày, `uncertain`, khuyến mãi một phần — kho trong bộ nhớ + Shopee giả).
+
 **Lấy API key + cấu hình nối Claude/Cursor:** kengi.vn/fanpage-manager → Trợ lý AI → tab **"Nối AI ngoài (MCP)"** (tạo key, chép config, nút kiểm tra kết nối gọi thẳng `tools/list`).
 
 ## Quy ước quan trọng
