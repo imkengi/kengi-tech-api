@@ -33,6 +33,8 @@ const DUOC_DUYET: Array<{ duong: string; ai: string }> = [
     { duong: 'Thuế → S2b - Doanh Thu', ai: 'CHỈ hộ kinh doanh (hkdOnly)' },
     { duong: 'Vận Hành → Chi Phí', ai: 'mọi loại hình (permission expenses.view)' },
     { duong: 'Bán Hàng Online → Đơn Hàng Online', ai: 'mọi loại hình (permission online_orders.view)' },
+    // 01/11/2026: mục 'Shopee Pilot' nhóm 'Bán Hàng Online' (layout.tsx, FE 3fd4c59) — href /pilot-shopee/, tabRieng, không companyOnly/hkdOnly
+    { duong: 'Bán Hàng Online → Shopee Pilot', ai: 'mọi loại hình (permission online_products.view; ghi chỉ quản lý / chủ)' },
     // 17/10/2026: nhóm 'Hệ Thống' › mục 'Cài Đặt' (layout.tsx), tab id 'ai' nhãn 'Trợ lý AI' (dashboard-settings/page.tsx) — lưu key chỉ admin
     { duong: 'Hệ Thống → Cài Đặt', ai: 'mọi loại hình (permission settings.view; tab Trợ lý AI: chỉ admin lưu key)' },
 ]
