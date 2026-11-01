@@ -11,9 +11,12 @@
  *  D2. 3.000 gian có phí biến động chủ shop KHÔNG khai (affiliate / voucher ở một phần đơn), 8–200 đơn đo: mọi giá máy
  *     tự ghi có lãi kỳ vọng ≥ 0. Rào cũ (3σ, từ 8 đơn) để lọt giá lỗ — ra rào 4σ + ≥ 30 đơn (SO_DON_TU_GHI).
  *  D3. Phí thật ở vùng giá chưa từng bán khác đường đo được (mức phí tối thiểu) ⇒ không ngoại suy dưới đơn rẻ nhất.
+ *  D4. Hoa hồng affiliate ĐO TỪNG ĐƠN (OnlineOrder.affiliateFee): tách khỏi phí khi đủ đơn biết; chưa khai / khai thiếu
+ *     mà đã đo được ⇒ sàn dùng mức đo; NULL ≠ 0; số lệch bị bỏ; 2.000 gian đang bù dần hoa hồng không lỗ.
  *  E. Đầu-cuối trên prisma giả + Shopee giả: chu kỳ Tự động; phí chưa đo; phí tỷ lệ trung bình + hàng rẻ; tool AI (chính
  *     sách nền, phí chưa đo, hiện lại hàng ẩn, đọc chính sách hỏng); khuyến mãi soát lại lúc thực thi (giá vốn tăng /
- *     chính sách chặt hơn / phân loại); đăng và đổi giá sau khi giá vốn tăng; thuế GTGT và lời nhắc theo loại hình.
+ *     chính sách chặt hơn / phân loại); đăng và đổi giá sau khi giá vốn tăng; thuế GTGT và lời nhắc theo loại hình;
+ *     hoa hồng affiliate đo được cao hơn mức khai (E11); cửa hàng chưa migrate cột affiliateFee (E12); đọc escrow (E13).
  *  F. Bộ chọn hồ sơ đăng: nhóm kèm số mã, tìm mã theo tên / SKU, cờ đã đăng / đã có hồ sơ.
  */
 import fs from 'fs'
@@ -58,7 +61,7 @@ const tsTu = (pol: ChinhSachPilot, giaVon: number, phi: { tyLe: number; coDinh: 
 
 // ─── Cửa hàng giả (phần E, F) ───────────────────────────────────────────────────
 
-type Don = { giaBan: number; phi: number }
+type Don = { giaBan: number; phi: number; aff?: number | null }
 const goi: string[] = []
 const ghiShopee = () => goi.filter(g => /^(add_item|update_price|add_discount|unlist)/.test(g))
 
@@ -66,7 +69,7 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string }) {
     const kenh = { id: 'ch1', name: 'Gian thử', platform: 'shopee', shopId: '777', accessToken: 'tok', apiKey: '1', apiSecret: 's', commissionRate: 6, tokenExpiresAt: new Date(Date.now() + 3600_000), createdAt: new Date() }
     const hang: Record<string, any> = {}
     const listing: any[] = []
-    const st = { don: o.don, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong' }
+    const st = { don: o.don, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0 }
     const baseInfo: Record<string, any> = {}
     const models: Record<string, any[]> = {}
     const kho = khoBoNho()
@@ -138,7 +141,14 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string }) {
                 return c ? [{ policy: JSON.stringify(c.policy) }] : []
             }
             if (sql.includes('"OnlineOrderItem"')) return []
-            if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return (v[0] || []).includes('ch1') ? st.don : []
+            if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) {
+                if (sql.includes('affiliateFee')) {
+                    st.hoiCotAff++
+                    // cửa hàng chưa chạy /admin/migrate cho cột mới
+                    if (st.thieuCotAff) throw new Error('Raw query failed. Code: `42703`. Message: `column o.affiliateFee does not exist`')
+                }
+                return (v[0] || []).includes('ch1') ? st.don : []
+            }
             if (sql.includes('FROM "Category" c')) {
                 const nhom = new Map<string, { total: number; inStock: number }>()
                 for (const h of Object.values(hang)) {
@@ -374,6 +384,95 @@ async function main() {
         const vua = tinhGiaDeXuat({ giaVon: 100000, phi: mau, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 100 })
         dung(`D3. hàng trong vùng giá đã đo (sàn ${vua.giaSan}đ) máy tự ghi được, lãi thật ${Math.round(vua.giaSan - phiThat(vua.giaSan) - 100000)}đ`,
             !lyDoPhiChuaDuTin(vua.giaSan, mau, 5) && vua.giaSan - phiThat(vua.giaSan) - 100000 >= 0.05 * vua.giaSan - 1)
+    }
+
+    // ─── D4. Hoa hồng affiliate ĐO TỪNG ĐƠN (OnlineOrder.affiliateFee) ─────────────────
+    {
+        // 40 đơn: phí thật 20% + 3.000đ, cứ 5 đơn có 1 đơn affiliate 10% — hoa hồng biết từng đơn
+        const goc = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000, a = i % 5 === 0 ? 0.1 * g : 0; return { giaBan: g, phi: 0.2 * g + 3000 + a, aff: a } })
+        const khongAff = (ds: { giaBan: number; phi: number }[]) => ds.map(d => ({ giaBan: d.giaBan, phi: d.phi }))
+        const mau = uocLuongPhi(goc, 6), af = mau.affiliate
+        dung('D4. đủ đơn biết hoa hồng ⇒ đo phí trên phí − hoa hồng: 20% + 3.000đ, hoa hồng cao nhất 10%, 8/40 đơn qua affiliate',
+            mau.nguon === 'hoi-quy-don' && Math.abs(mau.tyLe - 0.2) < 1e-6 && mau.coDinh === 3000 && af?.tachRieng === true
+            && Math.abs((af?.tyLeMax ?? 0) - 0.1) < 1e-9 && af?.soDonCo === 8 && af?.soDonBiet === 40, JSON.stringify({ tyLe: mau.tyLe, coDinh: mau.coDinh, af }))
+        // chủ shop KHÔNG khai affiliate (0%) — sàn vẫn tính 10% đo được: (100.000 + 3.000) / (1 − 20% − 5% − 10%) = 158.462 → 158.500
+        const ts: ThamSoGia = { giaVon: 100000, phi: mau, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 }
+        const kq = tinhGiaDeXuat(ts)
+        const laiAff = (g: number) => g - (0.3 * g + 3000) - 100000     // đơn affiliate, phí THẬT
+        dung(`D4. chưa khai affiliate mà đã đo được 10% ⇒ sàn ${kq.giaSan}đ, đơn affiliate ở giá sàn lãi ${Math.round(laiAff(kq.giaSan))}đ (≥ 5%)`,
+            kq.giaSan === 158500 && laiAff(kq.giaSan) / kq.giaSan >= 0.05 - 1e-4 && kq.thamSo.phiAffiliatePct === 10 && danhGiaGia(kq.giaSan, ts, true).hoaHongAffiliate === 15850,
+            `${kq.giaSan} ${kq.thamSo.phiAffiliatePct}%`)
+        const cu = tinhGiaDeXuat({ ...ts, phi: uocLuongPhi(khongAff(goc), 6) })
+        dung(`D4. cách cũ (không đọc hoa hồng từng đơn, chưa khai): sàn ${cu.giaSan}đ — đơn affiliate ở đó LỖ ${Math.round(laiAff(cu.giaSan))}đ`, laiAff(cu.giaSan) < 0)
+        // giá mục tiêu theo phí KỲ VỌNG (gồm hoa hồng trung bình) — không bị thổi lên như thể mọi đơn đều affiliate
+        const laiTB = (g: number) => g - (0.2 + af!.tyLeTB) * g - 3000 - 100000
+        dung(`D4. giá mục tiêu theo phí kỳ vọng (gồm hoa hồng TB ${(af!.tyLeTB * 100).toFixed(2)}%): ${kq.giaDeXuat}đ, đạt biên 15%; cách cũ ${cu.giaDeXuat}đ (lệch ≤ 2%)`,
+            laiTB(kq.giaDeXuat) / kq.giaDeXuat >= 0.15 - 1e-4 && Math.abs(kq.giaDeXuat - cu.giaDeXuat) / cu.giaDeXuat <= 0.02 && kq.thamSo.phiAffiliateTBPct > 0,
+            `${kq.giaDeXuat} / ${cu.giaDeXuat}`)
+        dung('D4. lãi dự kiến hiện cho chủ shop tính đúng phí kỳ vọng (gồm hoa hồng trung bình)', Math.abs(danhGiaGia(kq.giaDeXuat, ts).loiNhuan - laiTB(kq.giaDeXuat)) <= 1,
+            `${danhGiaGia(kq.giaDeXuat, ts).loiNhuan} / ${Math.round(laiTB(kq.giaDeXuat))}`)
+        const khai = tinhGiaDeXuat({ ...ts, phiAffiliatePct: 15 })
+        // 103.000 / (1 − 20% − 5% − 15%) = 171.667 → 171.700
+        dung(`D4. khai 15% (cao hơn mức đo 10%) ⇒ sàn theo mức khai: ${khai.giaSan}đ`, khai.thamSo.phiAffiliatePct === 15 && khai.giaSan === 171700, `${khai.giaSan}`)
+
+        const khongBiet = uocLuongPhi(goc.map(d => ({ ...d, aff: null })), 6)
+        dung('D4. mọi đơn chưa đọc hoa hồng (NULL) ⇒ y hệt mô hình cũ, không có phần affiliate — NULL không bị coi là 0',
+            JSON.stringify(khongBiet) === JSON.stringify(uocLuongPhi(khongAff(goc), 6)) && !khongBiet.affiliate)
+        // đang bù dần: 12/40 rồi 35/40 đơn biết (< 30 đơn / < 90% mẫu) ⇒ giữ mô hình gộp, mức đo cao nhất vẫn vào sàn
+        for (const soBiet of [12, 35]) {
+            const it = uocLuongPhi(goc.map((d, i) => (i < soBiet ? d : { ...d, aff: null })), 6)
+            const kqIt = tinhGiaDeXuat({ ...ts, phi: it })
+            dung(`D4. mới biết hoa hồng ${soBiet}/40 đơn ⇒ giữ phí gộp như cũ, sàn vẫn tính 10% đo được (${kqIt.giaSan}đ, đơn affiliate lãi ${(laiAff(kqIt.giaSan) / kqIt.giaSan * 100).toFixed(2)}%)`,
+                it.affiliate?.tachRieng === false && it.tyLe === uocLuongPhi(khongAff(goc), 6).tyLe && kqIt.thamSo.phiAffiliatePct === 10 && laiAff(kqIt.giaSan) / kqIt.giaSan >= 0.05 - 1e-4,
+                JSON.stringify(it.affiliate))
+        }
+        const du = uocLuongPhi(goc.map((d, i) => (i < 38 ? d : { ...d, aff: null })), 6)
+        dung('D4. biết 38/40 đơn (≥ 90% mẫu) ⇒ tách', du.affiliate?.tachRieng === true && du.soDon === 38)
+        const lech = uocLuongPhi(goc.map((d, i) => (i === 5 ? { ...d, aff: d.phi + 1 } : i === 6 ? { ...d, aff: -5 } : d)), 6)
+        dung('D4. đơn có hoa hồng > phí hoặc âm (số lệch) bị bỏ khỏi phép đo hoa hồng', lech.affiliate?.soDonBiet === 38 && Math.abs((lech.affiliate?.tyLeMax ?? 0) - 0.1) < 1e-9, JSON.stringify(lech.affiliate))
+        dung('D4. ghi chú mô hình phí nói rõ hoa hồng đo được', /cao nhất 10% một đơn/.test(mau.ghiChu) && /KHÔNG gồm hoa hồng/.test(mau.ghiChu), mau.ghiChu)
+
+        /* 2.000 gian: hoa hồng từng đơn biết 0–100% (đang bù dần), chủ shop khai thiếu / không khai, giỏ nhiều món
+         * (chỉ một phần qua affiliate). Đơn affiliate trọn mức a được BẢO ĐẢM khi mức đó đã biết — khai đủ, hoặc đã
+         * đo được ở một đơn; lãi kỳ vọng (trên mọi đơn) không bao giờ âm ở giá máy tự ghi. */
+        let ghi = 0, loAff = 0, loKyVong = 0, ghiCu = 0, loAffCu = 0, te = Infinity, tachRieng = 0
+        const vp: string[] = []
+        for (let s = 0; s < 2000; s++) {
+            const t0 = khoang(0.12, 0.28), b = chon([0, 1000, 3000, 5000])
+            const a = chon([0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3]), f = chon([0, 0.05, 0.1, 0.2, 0.4, 0.7])
+            const khaiA = chon([0, 0, a / 2, a, a * 1.5])
+            const n = chon([8, 12, 20, 30, 45, 100, 300, 600]), biet = chon([0, 0.3, 0.6, 0.95, 1])
+            const lo0 = chon([30000, 50000, 100000]), hi = lo0 * chon([1.1, 3, 10])
+            const don = Array.from({ length: n }, () => {
+                const g = Math.round(logKhoang(lo0, hi))
+                const r = rnd() < f ? a * chon([1, 1, 0.6]) : 0
+                return { giaBan: g, phi: (t0 + r) * g + b, aff: rnd() < biet ? r * g : null }
+            })
+            const m = uocLuongPhi(don, 6), mCu = uocLuongPhi(khongAff(don), 6)
+            if (m.affiliate?.tachRieng) tachRieng++
+            const daBiet = khaiA >= a - 1e-9 || (m.affiliate?.tyLeMax ?? 0) >= a - 1e-9
+            const phiKyVong = t0 + f * a * (2.6 / 3)
+            for (const giaVon of [10000, 40000, 150000, 600000]) {
+                const t: ThamSoGia = { giaVon, phi: m, bienLoiNhuanPct: 15, bienToiThieuPct: 5, phiAffiliatePct: khaiA * 100, lamTron: 1000 }
+                const k = tinhGiaDeXuat(t)
+                if (k.hopLe) for (const gia of [k.giaSan, k.giaDeXuat, Math.round((k.giaSan + k.giaDeXuat) / 2)]) {
+                    if (lyDoPhiChuaDuTin(gia, m, 5)) continue
+                    ghi++
+                    const bienAff = (gia - (t0 + a) * gia - b - giaVon) / gia, bienTB = (gia - phiKyVong * gia - b - giaVon) / gia
+                    if (daBiet) te = Math.min(te, bienAff)
+                    if (daBiet && bienAff < 0) { loAff++; if (vp.length < 3) vp.push(JSON.stringify({ t0, b, a, f, khaiA, n, biet, giaVon, gia, nguon: m.nguon })) }
+                    if (bienTB < 0) { loKyVong++; if (vp.length < 3) vp.push('kỳ vọng ' + JSON.stringify({ t0, b, a, f, khaiA, n, biet, giaVon, gia, nguon: m.nguon })) }
+                }
+                const kCu = tinhGiaDeXuat({ ...t, phi: mCu })
+                if (kCu.hopLe && daBiet && !lyDoPhiChuaDuTin(kCu.giaSan, mCu, 5)) {
+                    ghiCu++
+                    if (kCu.giaSan - (t0 + a) * kCu.giaSan - b - giaVon < 0) loAffCu++
+                }
+            }
+        }
+        dung(`D4. 2.000 gian (${tachRieng} đo tách hoa hồng): ${ghi} giá máy tự ghi — đơn affiliate trọn mức (đã khai hoặc đã đo) không lỗ, biên thấp nhất ${(te * 100).toFixed(2)}%; lãi kỳ vọng không âm`,
+            ghi > 3000 && tachRieng > 200 && loAff === 0 && loKyVong === 0, vp.join(' | '))
+        dung(`D4. cách cũ (không đọc hoa hồng từng đơn): ${loAffCu}/${ghiCu} giá sàn máy tự ghi làm đơn affiliate LỖ dù mức hoa hồng đã đo được`, loAffCu > 0)
     }
 
     const fetchGoc = globalThis.fetch
@@ -619,6 +718,79 @@ async function main() {
             H.st.loaiHinh = 'household'
             st = await xayTrangThai(H.ctx)
             dung('E10. hộ kinh doanh mà khai GTGT ⇒ nhắc là đang dư (Shopee đã khấu trừ trong tiền về)', /HỘ/.test(st.status.taxNote || ''), st.status.taxNote)
+        }
+
+        // ─── E11. Hoa hồng affiliate đo được cao hơn mức khai (chủ shop KHÔNG khai) ───────────
+        {
+            // 200 đơn: phí thật 20% + 3.000đ, cứ 5 đơn có 1 đơn affiliate 15% — hoa hồng từng đơn đã đọc từ escrow
+            const don = Array.from({ length: 200 }, (_, i) => {
+                const g = Math.round(50000 * Math.pow(16, (i * 37 % 200) / 200)), r = i % 5 === 0 ? 0.15 : 0
+                return { giaBan: g, phi: (0.2 + r) * g + 3000, aff: r * g }
+            })
+            HIEN = taoCuaHang({ don })
+            const H = HIEN
+            for (let i = 0; i < 30; i++) {
+                const sku = `M${i}`, von = Math.round(logKhoang(20000, 400000) / 100) * 100
+                H.themHang(sku, von)
+                H.themListing(sku, Math.round((von * khoang(0.9, 2.4)) / 1000) * 1000, String(1200 + i))
+            }
+            await luuCauHinh(H.ctx, {
+                executionMode: 'auto',
+                policy: { minMarginRate: 0.06, targetMarginRate: 0.15, maxPriceChangeRate: 0.3, affiliateRate: 0, packagingCost: 2000, adsRate: 0.03, maxWritesPerDay: 1000, automation: { publishNewProducts: false, reprice: true } },
+            })
+            const st = await xayTrangThai(H.ctx)
+            const fm = st.status.feeModel
+            dung('E11. trạng thái: phí đo tách hoa hồng, hoa hồng giá sàn 15% (đo được) dù chính sách khai 0%, kèm cảnh báo',
+                fm?.affiliate?.separated === true && Math.abs((fm?.floorAffiliateRate ?? 0) - 0.15) < 1e-9 && /15%/.test(fm?.affiliateWarning || '') && Math.abs(fm?.rate - 0.2) < 1e-6,
+                JSON.stringify({ aff: fm?.affiliate, san: fm?.floorAffiliateRate, w: fm?.affiliateWarning, rate: fm?.rate }))
+            const sp0 = st.products.find((p: any) => p.pricing?.floor)
+            dung('E11. sản phẩm hiện "lãi nếu đơn qua affiliate" dù chính sách chưa khai affiliate', sp0?.pricing?.affiliateProfit != null, JSON.stringify(sp0?.pricing))
+            const truoc = goi.length
+            for (let lan = 0; lan < 6; lan++) await chayChuKy(H.ctx)
+            const doi = goi.slice(truoc).filter(g => g.startsWith('update_price:'))
+            const sai: string[] = []
+            for (const g of doi) {
+                const [, item, giaS] = g.split(':'), gia = Number(giaS)
+                const l = H.listing.find(x => x.platformProductId === item)!
+                const von = H.hang[l.sku].costPrice
+                const laiAff = gia - (0.35 * gia + 3000) - von - 2000 - 0.03 * gia       // đơn affiliate 15%, phí THẬT
+                if (laiAff / gia < 0.06 - 0.001) sai.push(`${l.sku} giá ${gia} vốn ${von}: biên đơn affiliate ${(laiAff / gia * 100).toFixed(2)}%`)
+            }
+            const conLo = H.listing.filter(l => { const von = H.hang[l.sku].costPrice; return l.price - (0.35 * l.price + 3000) - von - 2000 - 0.03 * l.price < 0 })
+            dung(`E11. chu kỳ Tự động (6 lượt, chính sách khai affiliate 0%): ${doi.length} lần đổi giá — mọi giá giữ biên ≥ 6% kể cả đơn affiliate 15%`, doi.length >= 10 && sai.length === 0, sai.slice(0, 3).join(' | '))
+            dung(`E11. sau 6 lượt không còn listing nào lỗ với đơn affiliate 15% (${conLo.length} còn lỗ)`, conLo.length === 0, conLo.map(l => `${l.sku}@${l.price}`).join(', '))
+            const kh = H.kho._keHoach.find(k => k.kind === 'price' && k.data?.economics)
+            dung('E11. kế hoạch đổi giá mang "lãi nếu đơn qua affiliate" theo mức đo được', kh?.data?.economics?.affiliateProfit != null, JSON.stringify(kh?.data?.economics))
+        }
+
+        // ─── E12. Cửa hàng chưa migrate cột affiliateFee ──────────────────────────────
+        {
+            HIEN = taoCuaHang({ don: donSach() })
+            const H = HIEN
+            H.st.thieuCotAff = true
+            H.themHang('Q1', 100000); H.themListing('Q1', 200000, '1301')
+            const st = await xayTrangThai(H.ctx)
+            dung('E12. thiếu cột affiliateFee ⇒ vẫn đo phí như cũ (không rơi về 6% cấu hình), chỉ là chưa biết hoa hồng',
+                H.st.hoiCotAff > 0 && st.status.feeModel?.source === 'hoi-quy-don' && st.status.feeModel?.affiliate === null && st.products.find((p: any) => p.sku === 'Q1')?.pricing?.floor === 127200,
+                JSON.stringify({ hoi: H.st.hoiCotAff, fm: st.status.feeModel?.source, floor: st.products.find((p: any) => p.sku === 'Q1')?.pricing?.floor }))
+        }
+
+        // ─── E13. Đọc hoa hồng từ escrow Shopee ───────────────────────────────────────
+        {
+            const svc: any = new ShopeeService({ apiKey: '1', apiSecret: 's', accessToken: 't', shopId: '777' })
+            const hoi = async (them: any) => {
+                svc.httpGet = async () => ({ response: { order_income: { order_selling_price: 100000, escrow_amount: 70000, commission_fee: 9000, ...them } } })
+                return svc.getEscrowDetail('X1')
+            }
+            const k0 = await hoi({ order_ams_commission_fee: 0 }), k8 = await hoi({ order_ams_commission_fee: 8000 })
+            const thieu = await hoi({}), rong = await hoi({ order_ams_commission_fee: null }), am = await hoi({ order_ams_commission_fee: -1 })
+            dung('E13. escrow: hoa hồng 0 ⇒ 0 (biết chắc không qua affiliate), 8.000 ⇒ 8.000, phí vẫn = giá − thực nhận',
+                k0?.affiliateFee === 0 && k8?.affiliateFee === 8000 && k8?.totalFees === 30000, JSON.stringify({ k0, k8 }))
+            dung('E13. escrow thiếu trường / null / âm ⇒ null (chưa biết), KHÔNG phải 0', thieu?.affiliateFee === null && rong?.affiliateFee === null && am?.affiliateFee === null,
+                JSON.stringify([thieu?.affiliateFee, rong?.affiliateFee, am?.affiliateFee]))
+            const src = fs.readFileSync(path.join(__dirname, '../src/cron/autoSync.ts'), 'utf8')
+            dung('E13. lượt bù hoa hồng chỉ ghi cột affiliateFee và chỉ khi đọc được (không ghi 0 thay số thiếu)',
+                /e\?\.affiliateFee == null\) \{ khongRa\+\+/.test(src) && /data: \{ affiliateFee: e\.affiliateFee \}/.test(src) && /affiliateFee: null/.test(src))
         }
 
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────

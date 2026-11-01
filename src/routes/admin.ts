@@ -10350,7 +10350,7 @@ router.post('/sync-fees', async (req: Request, res: Response) => {
                     if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
                         await sp.onlineOrder.update({
                             where: { id: o.id },
-                            data: { platformFee: e.totalFees, netRevenue: e.escrowAmount },
+                            data: { platformFee: e.totalFees, netRevenue: e.escrowAmount, ...(e.affiliateFee != null ? { affiliateFee: e.affiliateFee } : {}) },
                         })
                         ok++
                         idVuaDoiSoat.push(o.id)

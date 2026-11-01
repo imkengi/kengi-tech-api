@@ -463,9 +463,9 @@ function giaUi(kq: KetQuaGia, ts: ThamSoGia, mauPhi?: MauPhi) {
         breakEven: kq.giaHoaVon || null,
         profit: dk ? dk.loiNhuan : null,
         marginRate: dk ? dk.bienPct / 100 : null,
-        // đơn đi qua affiliate (trọn hoa hồng) — trường hợp xấu nhất giá sàn phải giữ
-        affiliateProfit: xau && ts.phiAffiliatePct ? xau.loiNhuan : null,
-        affiliateMarginRate: xau && ts.phiAffiliatePct ? xau.bienPct / 100 : null,
+        // đơn đi qua affiliate (trọn hoa hồng, max mức khai / mức đo cao nhất) — trường hợp xấu nhất giá sàn phải giữ
+        affiliateProfit: xau && kq.thamSo.phiAffiliatePct ? xau.loiNhuan : null,
+        affiliateMarginRate: xau && kq.thamSo.phiAffiliatePct ? xau.bienPct / 100 : null,
         ...(kq.hopLe ? {} : { reason: kq.lyDo }),
         ...(chuaTin ? { autoBlocked: chuaTin } : {}),
     }
@@ -537,9 +537,20 @@ export async function xayTrangThai(ctx: NgCanh): Promise<any> {
         timUngVien(ctx.prisma, ch.id, { lim: TRAN_UNG_VIEN }),
     ])
     const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !(mauPhi.soDon >= SO_DON_TU_GHI)
+    const aff = mauPhi.affiliate
+    const affSan = Math.max(pol.affiliateRate, Math.min(aff?.tyLeMax ?? 0, 0.5))
     status.feeModel = {
         rate: mauPhi.tyLe, fixedPerOrder: mauPhi.coDinh, source: mauPhi.nguon, orders: mauPhi.soDon, note: mauPhi.ghiChu,
         minOrderPrice: mauPhi.giaBanMin ?? null,
+        // Hoa hồng affiliate đo từng đơn (OnlineOrder.affiliateFee) — separated: `rate` là phí KHÔNG gồm hoa hồng.
+        // floorAffiliateRate = hoa hồng giá sàn đang dùng = max(mức khai, mức cao nhất đo được ở một đơn).
+        affiliate: aff ? { separated: aff.tachRieng, avgRate: aff.tyLeTB, maxRate: aff.tyLeMax, ordersKnown: aff.soDonBiet, ordersWithAffiliate: aff.soDonCo } : null,
+        floorAffiliateRate: affSan,
+        ...(aff && aff.tyLeMax > pol.affiliateRate + 0.0005 ? {
+            affiliateWarning: `Có đơn trả hoa hồng affiliate tới ${Math.round(aff.tyLeMax * 1000) / 10}% giá bán — cao hơn mức khai ` +
+                `${Math.round(pol.affiliateRate * 1000) / 10}% trong chính sách, nên giá sàn đang tính theo ${Math.round(affSan * 1000) / 10}% để đơn affiliate không lỗ. ` +
+                'Mức đo tự hạ khi những đơn đó ra khỏi dữ liệu đo (tối đa 90 ngày).',
+        } : {}),
         trusted: !chuaTuGhi,
         // từ giá này trở lên máy mới tự ghi (dưới đó: kế hoạch để nháp chờ người duyệt); null = máy chưa tự ghi giá nào
         autoFromPrice: chuaTuGhi ? null : mauPhi.nguon === 'ty-le-don' ? Math.ceil(mauPhi.giaBanTB || 0) : Math.ceil(mauPhi.giaBanMin || 0),
@@ -633,7 +644,8 @@ export async function taoKeHoachGia(ctx: NgCanh, b: { sku: string; price: number
         snapshot: { price: giaCu, stock: Number(l.stock) || 0 },
         economics: {
             marginRate: dk.bienPct / 100, profit: dk.loiNhuan, floor: kq.giaSan, suggested: kq.hopLe ? kq.giaDeXuat : null,
-            ...(cfg.policy.affiliateRate > 0 ? { affiliateProfit: xau.loiNhuan, affiliateMarginRate: xau.bienPct / 100 } : {}),
+            // hoa hồng giá sàn dùng = max(mức khai, mức đo cao nhất) — đo được mà chưa khai vẫn phải hiện
+            ...(kq.thamSo.phiAffiliatePct > 0 ? { affiliateProfit: xau.loiNhuan, affiliateMarginRate: xau.bienPct / 100 } : {}),
         },
         ...(phiChuaTin ? { feeWarning: phiChuaTin, warning: phiChuaTin } : {}),
     }, b.idempotencyKey || null, ctx.nguoi))
@@ -674,7 +686,7 @@ export async function taoKeHoachDang(ctx: NgCanh, b: DauVaoDang): Promise<KeHoac
         images: thu.anhSeNap,
         economics: {
             marginRate: thu.phanTichGia.duKien.bienPct / 100, profit: thu.phanTichGia.duKien.loiNhuan, floor: thu.phanTichGia.giaSan, suggested: thu.phanTichGia.giaDeXuat,
-            ...(cfg.policy.affiliateRate > 0 ? { affiliateProfit: thu.phanTichGia.duKienAffiliate.loiNhuan, affiliateMarginRate: thu.phanTichGia.duKienAffiliate.bienPct / 100 } : {}),
+            ...(thu.phanTichGia.duKienAffiliate.hoaHongAffiliate > 0 ? { affiliateProfit: thu.phanTichGia.duKienAffiliate.loiNhuan, affiliateMarginRate: thu.phanTichGia.duKienAffiliate.bienPct / 100 } : {}),
         },
         feeNote: thu.phanTichGia.mauPhi,
         ...(thu.phanTichGia.canhBaoPhi ? { feeWarning: thu.phanTichGia.canhBaoPhi, warning: thu.phanTichGia.canhBaoPhi } : {}),

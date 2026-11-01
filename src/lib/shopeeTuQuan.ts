@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, type MauPhi, type DongPhiDon } from './giaShopee'
+import { uocLuongPhi, ghiChuAffiliate, type MauPhi, type DongPhiDon } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -76,17 +76,20 @@ export async function moDichVuShopee(prisma: any, ch: any): Promise<ShopeeServic
 
 async function dongPhi(prisma: any, channelIds: string[]): Promise<DongPhiDon[]> {
     if (!channelIds.length) return []
-    const rows: any[] = await prisma.$queryRawUnsafe(
+    // affiliateFee NULL (đơn đối soát trước khi có cột, chưa bù) ⇒ aff null = chưa biết, KHÔNG phải 0
+    const cau = (coAff: boolean) =>
         `SELECT (o."netRevenue" + o."platformFee")::float8 AS "giaBan", o."platformFee"::float8 AS phi
+                ${coAff ? `, o."affiliateFee"::float8 AS aff` : ''}
            FROM "OnlineOrder" o
           WHERE o."channelId" = ANY($1::text[]) AND o."netRevenue" > 0 AND o."platformFee" > 0
             AND ${daQuyetToanSql('o')}
             AND o."createdAt" >= NOW() - INTERVAL '90 days'
           ORDER BY o."createdAt" DESC
-          LIMIT 600`,
-        channelIds,
-    ).catch(() => [])
-    return rows.map(r => ({ giaBan: Number(r.giaBan) || 0, phi: Number(r.phi) || 0 }))
+          LIMIT 600`
+    const rows: any[] = await prisma.$queryRawUnsafe(cau(true), channelIds).catch((e: any) =>
+        // cửa hàng chưa migrate cột affiliateFee ⇒ đọc phí như cũ (hoa hồng chưa biết), đừng mất cả mô hình phí
+        /affiliateFee/.test(String(e?.message || '')) ? prisma.$queryRawUnsafe(cau(false), channelIds).catch(() => []) : [])
+    return rows.map(r => ({ giaBan: Number(r.giaBan) || 0, phi: Number(r.phi) || 0, aff: r.aff == null ? null : Number(r.aff) }))
 }
 
 /**
@@ -101,9 +104,15 @@ export async function docMauPhi(prisma: any, ch: any): Promise<MauPhi> {
         where: { platform: 'shopee', id: { not: ch.id } }, select: { id: true },
     }).catch(() => [])
     if (!khac.length) return rieng
-    const muon = uocLuongPhi(await dongPhi(prisma, khac.map(c => c.id)), ch.commissionRate)
+    // Mượn PHÍ, không mượn hoa hồng affiliate: mức hoa hồng do từng gian tự đặt — giữ số đo của chính gian (nếu có)
+    const muon = uocLuongPhi((await dongPhi(prisma, khac.map(c => c.id))).map(d => ({ giaBan: d.giaBan, phi: d.phi })), ch.commissionRate)
     if (muon.nguon === 'cau-hinh-kenh') return rieng
-    return { ...muon, ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian Shopee khác cùng cửa hàng. ${muon.ghiChu}` }
+    return {
+        ...muon,
+        ...(rieng.affiliate ? { affiliate: rieng.affiliate } : {}),
+        ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian Shopee khác cùng cửa hàng. ${muon.ghiChu}` +
+            (rieng.affiliate ? ` ${ghiChuAffiliate(rieng.affiliate)}` : ''),
+    }
 }
 
 // ─── Hàng kho ───────────────────────────────────────────────────────────────────

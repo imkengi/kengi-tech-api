@@ -41,6 +41,7 @@ const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
 const FEE_INTERVAL      = 6 * 60 * 60 * 1000   // 6 tiếng
 const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
 const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
+const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh Shopee
 
 let syncTimer:    NodeJS.Timeout | null = null
 let cleanupTimer: NodeJS.Timeout | null = null
@@ -557,6 +558,57 @@ async function runAutoSync() {
 //  CLEANUP — Xóa đơn COMPLETED/CANCELLED cũ hơn 18 ngày
 // ═══════════════════════════════════════════════════════════
 
+/** Đơn đã hỏi lại escrow mà vẫn không ra hoa hồng affiliate (sàn lỗi / thiếu trường) — tạm bỏ qua 24h, kẻo
+ *  vòng sau hỏi đúng mấy đơn mới nhất đó mãi và đơn cũ hơn không tới lượt. Chỉ trong bộ nhớ: khởi động
+ *  lại thì hỏi lại một lần, vô hại. */
+const buAffBoQua = new Map<string, number>()
+
+/**
+ * BÙ HOA HỒNG AFFILIATE (01/11/2026): cột OnlineOrder.affiliateFee sinh sau, nên đơn đã đối soát trước đó
+ * mang NULL (chưa đọc — KHÁC 0), mà vòng đối soát chính không bao giờ hỏi lại (chỉ quét platformFee = 0).
+ * Hỏi lại escrow và CHỈ ghi affiliateFee — phí / thực nhận đã đối soát giữ nguyên. Hết đơn NULL thì thôi
+ * gọi sàn. Trả số đơn đã ghi.
+ */
+async function buHoaHongAffiliate(sp: any, ch: any, batDau: number, mapWithConcurrency: any, ShopeeService: any): Promise<number> {
+    const now = Date.now()
+    for (const [id, luc] of buAffBoQua) if (now - luc > 24 * 3600_000) buAffBoQua.delete(id)
+    const boQua = [...buAffBoQua.keys()]
+    const orders: any[] = await sp.onlineOrder.findMany({
+        where: {
+            channelId: ch.id, platformFee: { gt: 0 }, affiliateFee: null,
+            status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
+            externalOrderId: { not: null },
+            createdAt: { gte: new Date(now - 45 * 86400_000) },
+            ...(boQua.length ? { id: { notIn: boQua } } : {}),
+        },
+        select: { id: true, externalOrderId: true },
+        orderBy: { createdAt: 'desc' },
+        take: AFF_BU_BATCH,
+    }).catch((e: any) => { console.warn(`[FeeSync] bù hoa hồng affiliate ${ch.name}: đọc đơn hỏng:`, fmtErr(e)); return [] })
+    if (!orders.length) return 0
+    const svc = new ShopeeService({
+        apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+        accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+        shopId: ch.shopId || undefined,
+    })
+    let ok = 0, khongRa = 0
+    await mapWithConcurrency(orders, async (o: any) => {
+        if (Date.now() - batDau > FEE_DEADLINE_MS) return
+        const sn = String(o.externalOrderId || '').replace(/^SPE-/i, '')
+        try {
+            const e = sn ? await svc.getEscrowDetail(sn) : null
+            if (e?.affiliateFee == null) { khongRa++; buAffBoQua.set(o.id, Date.now()); return }
+            await sp.onlineOrder.update({ where: { id: o.id }, data: { affiliateFee: e.affiliateFee } })
+            ok++
+        } catch {
+            khongRa++
+            buAffBoQua.set(o.id, Date.now())
+        }
+    }, 6)
+    console.log(`[FeeSync] ${ch.name}: bù hoa hồng affiliate ${ok} đơn (quét ${orders.length}, chưa đọc được ${khongRa})`)
+    return ok
+}
+
 /**
  * ĐỐI SOÁT PHÍ SÀN tự động: lấy escrow THẬT của Shopee cho đơn CHƯA có phí.
  * Vì sao phải chạy định kỳ: Shopee quyết toán rải rác NHIỀU NGÀY sau khi đơn phát
@@ -574,6 +626,7 @@ async function runFeeSync() {
             where: { status: 'active' }, select: { code: true, schema: true },
         })
         let tongCapNhat = 0
+        const kenhBuAff: { schema: string; ch: any }[] = []
         for (const store of stores) {
             if (Date.now() - batDau > FEE_DEADLINE_MS) break
             // Giữ client suốt lượt cửa hàng này — lý do xem giuClient() ở lib/prisma.ts.
@@ -597,6 +650,7 @@ async function runFeeSync() {
                     shopId: ch.shopId || undefined,
                 }
                 const svc: any = ch.platform === 'tiktok' ? new TTS(creds) : new ShopeeService(creds)
+                if (ch.platform === 'shopee') kenhBuAff.push({ schema: store.schema, ch })
                 // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
                 // lại chỉ tốn lượt gọi mà không bao giờ ra dữ liệu.
                 const orders = await sp.onlineOrder.findMany({
@@ -619,7 +673,7 @@ async function runFeeSync() {
                     const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
                     if (!sn) return
                     try {
-                        let phi: number | null = null, thucNhan: number | null = null
+                        let phi: number | null = null, thucNhan: number | null = null, aff: number | null = null
                         if (ch.platform === 'tiktok') {
                             const s = await svc.getOrderSettlement(sn)
                             if (s && (s.feeAmount > 0 || s.settlementAmount > 0)) {
@@ -628,13 +682,13 @@ async function runFeeSync() {
                         } else {
                             const e = await svc.getEscrowDetail(sn)
                             if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
-                                phi = e.totalFees; thucNhan = e.escrowAmount
+                                phi = e.totalFees; thucNhan = e.escrowAmount; aff = e.affiliateFee
                             }
                         }
                         if (phi === null) { chuaCo++; return }
                         await sp.onlineOrder.update({
                             where: { id: o.id },
-                            data: { platformFee: phi, netRevenue: thucNhan },
+                            data: { platformFee: phi, netRevenue: thucNhan, ...(aff !== null ? { affiliateFee: aff } : {}) },
                         })
                         ok++
                         idVuaDoiSoat.push(o.id)
@@ -672,8 +726,23 @@ async function runFeeSync() {
                 nhaClient()
             }
         }
-        if (tongCapNhat > 0) {
-            console.log(`[FeeSync] Xong: ${tongCapNhat} đơn, ${Math.round((Date.now() - batDau) / 1000)}s`)
+        /* Bù hoa hồng affiliate SAU khi mọi cửa hàng đã đối soát phí xong, bằng phần giờ còn lại — chạy
+         * xen giữa thì một cửa hàng nhiều đơn bù ăn hết giờ, cửa hàng sau mất lượt đối soát đơn mới. */
+        let tongBuAff = 0
+        for (const { schema, ch } of kenhBuAff) {
+            if (Date.now() - batDau > FEE_DEADLINE_MS) break
+            const nhaClient = giuClient(schema)
+            try {
+                tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, batDau, mapWithConcurrency, ShopeeService)
+            } catch (e: any) {
+                console.warn(`[FeeSync] bù hoa hồng affiliate ${ch.name} hỏng:`, fmtErr(e))
+            } finally {
+                nhaClient()
+            }
+        }
+        if (tongCapNhat > 0 || tongBuAff > 0) {
+            console.log(`[FeeSync] Xong: ${tongCapNhat} đơn` + (tongBuAff ? ` + bù hoa hồng affiliate ${tongBuAff} đơn` : '') +
+                `, ${Math.round((Date.now() - batDau) / 1000)}s`)
         }
     } catch (err: any) {
         console.error('[FeeSync] Lỗi:', err?.message || err)

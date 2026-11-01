@@ -15,16 +15,24 @@
  *  Gian mới chưa có đơn đối soát ⇒ rơi về OnlineChannel.commissionRate và NÓI RÕ
  *  là đang dùng số cấu hình (thường thấp hơn phí thật — mặc định 6%).
  *
+ *  HOA HỒNG AFFILIATE ĐO TỪNG ĐƠN (01/11/2026, OnlineOrder.affiliateFee = escrow
+ *  order_ams_commission_fee, nằm TRONG platformFee): đủ SO_DON_TU_GHI đơn và ≥ 90% mẫu biết
+ *  hoa hồng ⇒ mô hình trên đo trên phí − hoa hồng (phí KHÔNG gồm affiliate, `affiliate.tachRieng`),
+ *  kèm phần doanh thu trả affiliate trung bình (tyLeTB) và mức cao nhất một đơn (tyLeMax).
+ *  Ít đơn biết hơn (đang bù dần) ⇒ giữ mô hình gộp như cũ, nhưng tyLeMax vẫn vào giá sàn.
+ *
  *  ─── CÔNG THỨC GIÁ ────────────────────────────────────────────────────────────
  *  Lãi = P − (tyLe·P + coDinh) − giáVốn − phíĐóngGói − quảngCáo%·P − thuếGTGT·P [− affiliate%·P]
  *  Muốn Lãi = biên%·P  ⇒  P = (giáVốn + coDinh + phíĐóngGói) / (1 − tyLe − biên% − quảngCáo% − thuếGTGT [− affiliate%])
  *  thuếGTGT = v/(1+v): phần thuế đầu ra nằm trong giá bán của doanh nghiệp khấu trừ — escrow
  *  Shopee KHÔNG trừ khoản này nên phí đo từ đơn không có nó (hộ kinh doanh: Shopee khấu trừ
  *  thuế khoán ngay trong escrow ⇒ đã nằm trong phí đo, để 0).
- *  Giá MỤC TIÊU dùng phí đo thật (đã gồm hoa hồng affiliate TRUNG BÌNH của mọi đơn).
+ *  Giá MỤC TIÊU dùng phí đo thật (đã gồm hoa hồng affiliate TRUNG BÌNH của mọi đơn — mô
+ *  hình tách affiliate thì cộng lại tyLeTB).
  *  GIÁ SÀN (01/11/2026, chủ shop chọn) tính như MỌI đơn đều qua affiliate: phí đo + trọn
- *  hoa hồng affiliate — dư một chút vì phí đo đã gồm phần affiliate trung bình, chủ ý thận
- *  trọng: đơn affiliate bán đúng giá sàn vẫn đạt biên tối thiểu. Giá đề xuất ≥ giá sàn.
+ *  hoa hồng affiliate, mức hoa hồng = max(mức khai trong chính sách, tyLeMax đo được) — mô
+ *  hình gộp thì dư một chút vì phí đo đã gồm phần affiliate trung bình, chủ ý thận trọng:
+ *  đơn affiliate bán đúng giá sàn vẫn đạt biên tối thiểu. Giá đề xuất ≥ giá sàn.
  *  Giá hoà vốn = công thức sàn với biên = 0 (hoà vốn kể cả đơn qua affiliate).
  *  Tính cho đơn 1 sản phẩm (phí cố định gánh trọn) — chủ ý thận trọng.
  *
@@ -39,6 +47,21 @@ export interface DongPhiDon {
     giaBan: number
     /** tổng phí sàn đã khấu trừ */
     phi: number
+    /** hoa hồng affiliate của đơn — đã nằm trong `phi`. null / thiếu = chưa đọc được (KHÁC 0) */
+    aff?: number | null
+}
+
+/** Hoa hồng affiliate đo từ từng đơn đã đối soát (OnlineOrder.affiliateFee). */
+export interface AffiliateDo {
+    /** true ⇒ tyLe / coDinh / saiSo của mô hình là phí KHÔNG gồm affiliate (đo trên phí − hoa hồng) */
+    tachRieng: boolean
+    /** Σ hoa hồng / Σ giá bán các đơn biết hoa hồng (0..1) — phần doanh thu trả affiliate trung bình */
+    tyLeTB: number
+    /** hoa hồng / giá bán cao nhất trong MỘT đơn (0..0,5) — trường hợp xấu nhất, vào giá sàn */
+    tyLeMax: number
+    /** số đơn biết hoa hồng (kể cả 0) / số đơn có hoa hồng > 0 */
+    soDonBiet: number
+    soDonCo: number
 }
 
 export interface MauPhi {
@@ -55,6 +78,8 @@ export interface MauPhi {
     giaBanTB?: number
     /** sai số của phép đo — để biết ở mức giá nào phí đo đủ chắc cho máy tự ghi (saiSoTyLePhi) */
     saiSo?: { kieu: 'hoi-quy'; s2: number; n: number; tbX: number; sxx: number } | { kieu: 'ty-le'; se: number }
+    /** không có khi chưa đơn nào đọc được hoa hồng */
+    affiliate?: AffiliateDo
 }
 
 export const SO_DON_TOI_THIEU = 8
@@ -64,14 +89,48 @@ const SO_DON_HOI_QUY = 15
 export const SO_DON_TU_GHI = 30
 const HE_SO_SAI_SO = 4
 
+const phanTram = (r: number) => `${round2(r * 100)}%`
+
 /**
  * Ước lượng phí sàn từ đơn đã đối soát. Đủ đơn và giá trải rộng ⇒ hồi quy phí = a·giá + b
  * (tách được phí cố định/đơn). Không thì tỷ lệ tổng phí / tổng giá.
  * Dưới SO_DON_TOI_THIEU đơn ⇒ dùng tỷ lệ cấu hình của kênh.
+ * Đơn biết hoa hồng affiliate (`aff`) ⇒ kèm `affiliate`; đủ SO_DON_TU_GHI đơn và ≥ 90% mẫu biết thì đo
+ * phí trên phí − hoa hồng của chính những đơn đó (tách affiliate ra khỏi phí).
  */
 export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
     const ds = (dong || []).filter(d =>
         Number.isFinite(d.giaBan) && Number.isFinite(d.phi) && d.giaBan > 0 && d.phi >= 0 && d.phi < d.giaBan)
+    // Hoa hồng nằm TRONG phí: dòng có hoa hồng > phí là số lệch (escrow đổi sau lúc đối soát) — coi như chưa biết
+    const biet = ds.filter(d => d.aff != null && Number.isFinite(d.aff) && d.aff >= 0 && d.aff <= d.phi)
+    if (!biet.length) return doMauPhi(ds, tyLeCauHinhPct)
+    const affCua = (d: DongPhiDon) => Number(d.aff) || 0
+    const aff: AffiliateDo = {
+        // Tách khi đủ đơn VÀ gần trọn mẫu đã biết hoa hồng (đang bù dần thì chưa): tách trên một phần nhỏ của mẫu thì
+        // hoa hồng chỉ được nhìn qua ít đơn, dễ sót hẳn đơn affiliate mà mô hình gộp trên cả mẫu vẫn thấy (trong phí TB).
+        tachRieng: biet.length >= SO_DON_TU_GHI && biet.length >= 0.9 * ds.length,
+        tyLeTB: biet.reduce((s, d) => s + affCua(d), 0) / biet.reduce((s, d) => s + d.giaBan, 0),
+        tyLeMax: Math.min(0.5, biet.reduce((m, d) => Math.max(m, affCua(d) / d.giaBan), 0)),
+        soDonBiet: biet.length,
+        soDonCo: biet.filter(d => affCua(d) > 0).length,
+    }
+    const mau = aff.tachRieng
+        ? doMauPhi(biet.map(d => ({ giaBan: d.giaBan, phi: d.phi - affCua(d) })), tyLeCauHinhPct)
+        : doMauPhi(ds, tyLeCauHinhPct)
+    return { ...mau, affiliate: aff, ghiChu: `${mau.ghiChu} ${ghiChuAffiliate(aff)}` }
+}
+
+/** Một câu cho người đọc về hoa hồng affiliate đo được — nối sau ghiChu của mô hình phí. */
+export function ghiChuAffiliate(a: AffiliateDo): string {
+    if (!a.soDonCo) return `Hoa hồng affiliate đọc được ở ${a.soDonBiet} đơn: chưa đơn nào qua affiliate.`
+    return a.tachRieng
+        ? `Hoa hồng affiliate đo riêng từ ${a.soDonBiet} đơn (${a.soDonCo} đơn qua affiliate): trung bình ${phanTram(a.tyLeTB)} doanh thu, ` +
+            `cao nhất ${phanTram(a.tyLeMax)} một đơn — phí trên KHÔNG gồm hoa hồng; giá sàn tính hoa hồng ít nhất ${phanTram(a.tyLeMax)}.`
+        : `Hoa hồng affiliate mới đọc được ở ${a.soDonBiet} đơn (${a.soDonCo} đơn qua affiliate, cao nhất ${phanTram(a.tyLeMax)} một đơn) — ` +
+            `chưa đủ để tách, phí trên vẫn gộp hoa hồng trung bình; giá sàn tính hoa hồng ít nhất ${phanTram(a.tyLeMax)}.`
+}
+
+function doMauPhi(ds: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
     const cauHinh = Math.min(Math.max(Number(tyLeCauHinhPct) || 0, 0), 60) / 100
 
     if (ds.length < SO_DON_TOI_THIEU) {
@@ -129,7 +188,8 @@ export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi 
 export interface ThamSoGia {
     /** giá vốn 1 đơn vị bán */
     giaVon: number
-    phi: { tyLe: number; coDinh: number }
+    /** mô hình phí (MauPhi) — có `affiliate` thì dùng hoa hồng đo được, xem tyLeAffiliate / tyLePhiKyVong */
+    phi: { tyLe: number; coDinh: number; affiliate?: AffiliateDo }
     /** biên lãi mục tiêu trên giá bán, % */
     bienLoiNhuanPct: number
     /** biên tối thiểu — dưới mức này là "giá sàn", công cụ ghi từ chối. Mặc định 5, không < 0 */
@@ -138,7 +198,8 @@ export interface ThamSoGia {
     phiDongGoi?: number
     /** % giá bán dành cho quảng cáo / voucher shop */
     phiQuangCaoPct?: number
-    /** hoa hồng affiliate, % giá bán — CHỈ vào giá sàn / hoà vốn (như mọi đơn đều qua affiliate) */
+    /** hoa hồng affiliate khai trong chính sách, % giá bán — CHỈ vào giá sàn / hoà vốn (như mọi đơn đều qua
+     *  affiliate). Một đơn đã đo được hoa hồng cao hơn (phi.affiliate.tyLeMax) thì lấy số đo. */
     phiAffiliatePct?: number
     /** thuế suất GTGT đầu ra, % (doanh nghiệp khấu trừ) — phần thuế trong giá = v/(1+v) */
     thueGtgtPct?: number
@@ -172,8 +233,10 @@ export interface KetQuaGia {
     duKienAffiliate: DanhGiaGia | null
     canhBao: string[]
     thamSo: {
+        /** tyLePhiPct = mô hình phí (KHÔNG gồm affiliate khi đo tách); phiAffiliatePct = hoa hồng giá sàn dùng
+         *  (max mức khai, mức đo cao nhất); phiAffiliateTBPct = hoa hồng trung bình cộng vào giá mục tiêu khi đo tách */
         giaVon: number; tyLePhiPct: number; phiCoDinh: number; phiDongGoi: number; phiQuangCaoPct: number
-        phiAffiliatePct: number; thueGtgtPct: number; bienMucTieuPct: number; bienToiThieuPct: number; lamTron: number
+        phiAffiliatePct: number; phiAffiliateTBPct: number; thueGtgtPct: number; bienMucTieuPct: number; bienToiThieuPct: number; lamTron: number
     }
 }
 
@@ -183,14 +246,19 @@ const lamTronLen = (n: number, buoc: number) => Math.ceil(n / buoc) * buoc
 const pctKep = (v: any, max: number) => Math.min(Math.max(Number(v) || 0, 0), max)
 /** Phần thuế GTGT đầu ra trong giá bán đã gồm thuế: v/(1+v). */
 const tyLeThue = (t: { thueGtgtPct?: number }) => { const v = pctKep(t.thueGtgtPct, 10) / 100; return v / (1 + v) }
-const tyLeAffiliate = (t: { phiAffiliatePct?: number }) => pctKep(t.phiAffiliatePct, 50) / 100
+/** Hoa hồng affiliate XẤU NHẤT (giá sàn, hoà vốn, đơn qua affiliate): mức khai hoặc mức cao nhất đo được ở một đơn. */
+const tyLeAffiliate = (t: { phiAffiliatePct?: number; phi?: ThamSoGia['phi'] }) =>
+    Math.max(pctKep(t.phiAffiliatePct, 50), pctKep((Number(t.phi?.affiliate?.tyLeMax) || 0) * 100, 50)) / 100
+/** Phần hoa hồng trung bình cộng lại vào phí KỲ VỌNG — chỉ khi mô hình phí đo tách affiliate (không thì đã gộp sẵn). */
+const tyLeAffiliateTB = (phi: ThamSoGia['phi']) => (phi.affiliate?.tachRieng ? pctKep((Number(phi.affiliate.tyLeTB) || 0) * 100, 50) / 100 : 0)
 
 /**
  * Lãi của MỘT mức giá cụ thể (đơn 1 sản phẩm). `quaAffiliate` = đơn đi qua affiliate (trừ thêm
- * trọn hoa hồng) — trường hợp xấu nhất, là thứ giá sàn phải giữ.
+ * trọn hoa hồng) — trường hợp xấu nhất, là thứ giá sàn phải giữ. Không qua affiliate = đơn kỳ vọng
+ * (phí đo, gồm hoa hồng trung bình).
  */
 export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct' | 'phiAffiliatePct' | 'thueGtgtPct'>, quaAffiliate = false): DanhGiaGia {
-    const phiSan = t.phi.tyLe * gia + t.phi.coDinh
+    const phiSan = (t.phi.tyLe + (quaAffiliate ? 0 : tyLeAffiliateTB(t.phi))) * gia + t.phi.coDinh
     const quangCao = ((t.phiQuangCaoPct || 0) / 100) * gia
     const thue = tyLeThue(t) * gia
     const aff = quaAffiliate ? tyLeAffiliate(t) * gia : 0
@@ -207,7 +275,7 @@ export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'p
 
 /** Giá đạt đúng biên `bienPct` (chưa làm tròn). Infinity nếu mẫu số ≤ 0. */
 function giaDatBien(t: ThamSoGia, bienPct: number, quaAffiliate: boolean): number {
-    const mau = 1 - t.phi.tyLe - bienPct / 100 - (t.phiQuangCaoPct || 0) / 100 - tyLeThue(t) - (quaAffiliate ? tyLeAffiliate(t) : 0)
+    const mau = 1 - t.phi.tyLe - bienPct / 100 - (t.phiQuangCaoPct || 0) / 100 - tyLeThue(t) - (quaAffiliate ? tyLeAffiliate(t) : tyLeAffiliateTB(t.phi))
     if (mau <= 0.02) return Infinity
     return (t.giaVon + t.phi.coDinh + (t.phiDongGoi || 0)) / mau
 }
@@ -223,6 +291,7 @@ export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
         phiDongGoi: Math.round(t.phiDongGoi || 0),
         phiQuangCaoPct: t.phiQuangCaoPct || 0,
         phiAffiliatePct: round2(tyLeAffiliate(t) * 100),
+        phiAffiliateTBPct: round2(tyLeAffiliateTB(t.phi) * 100),
         thueGtgtPct: round2(pctKep(t.thueGtgtPct, 10)),
         bienMucTieuPct: bienMucTieu,
         bienToiThieuPct: bienToiThieu,
@@ -237,7 +306,8 @@ export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
     const san = giaDatBien(tp, bienToiThieu, true)
     const mucTieu = giaDatBien(tp, bienMucTieu, false)
     if (!Number.isFinite(mucTieu) || !Number.isFinite(san)) {
-        const tren = [`phí sàn ${thamSo.tyLePhiPct}%`, `quảng cáo ${thamSo.phiQuangCaoPct}%`,
+        // mục tiêu không đạt ⇒ phí kỳ vọng (gồm hoa hồng trung bình); chỉ sàn không đạt ⇒ phí đo + hoa hồng xấu nhất
+        const tren = [`phí sàn ${Number.isFinite(mucTieu) ? thamSo.tyLePhiPct : round2(thamSo.tyLePhiPct + thamSo.phiAffiliateTBPct)}%`, `quảng cáo ${thamSo.phiQuangCaoPct}%`,
             thamSo.thueGtgtPct ? `thuế GTGT ${thamSo.thueGtgtPct}%` : '',
             Number.isFinite(mucTieu) && thamSo.phiAffiliatePct ? `affiliate ${thamSo.phiAffiliatePct}%` : ''].filter(Boolean)
         return hong(`Biên lãi ${Number.isFinite(mucTieu) ? bienToiThieu : bienMucTieu}% + ${tren.join(' + ')} đã gần/vượt 100% giá bán — không có giá nào đạt. Giảm biên, quảng cáo hoặc affiliate.`)

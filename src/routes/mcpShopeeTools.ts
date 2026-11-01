@@ -24,7 +24,7 @@
 
 import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { lyDoChanPilot, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
-import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from '../lib/giaShopee'
+import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia, type MauPhi } from '../lib/giaShopee'
 import {
     chonKenhShopee, moDichVuShopee, docMauPhi, timHangKho, luuDanhMucSan, duongNganh,
 } from '../lib/shopeeTuQuan'
@@ -38,13 +38,22 @@ const NGAY = 86400_000
 /** Chính sách Shopee Pilot của cửa hàng làm nền giá cho tool — tham số AI chỉ được chặt hơn. */
 const nenPilot = async (prisma: any) => nenGia(await docChinhSachPilot(prisma))
 
+/** Hoa hồng affiliate đo từ từng đơn cho AI đọc — null = chưa đơn nào đọc được hoa hồng. */
+const tomTatAffiliate = (m: MauPhi) => m.affiliate ? {
+    phiDaTachRieng: m.affiliate.tachRieng,
+    trungBinhPct: Math.round(m.affiliate.tyLeTB * 10000) / 100,
+    caoNhatMotDonPct: Math.round(m.affiliate.tyLeMax * 10000) / 100,
+    soDonBiet: m.affiliate.soDonBiet,
+    soDonQuaAffiliate: m.affiliate.soDonCo,
+} : null
+
 /** Tham số chính sách giá dùng chung cho mọi tool có tính giá. */
 const THAM_SO_GIA = {
     bien_loi_nhuan: { type: 'number', description: 'Biên lãi MỤC TIÊU trên giá bán, %. Mặc định theo chính sách Shopee Pilot của cửa hàng (chưa đặt: 15). Lấy theo chỉ thị chủ shop nếu có.' },
     bien_toi_thieu: { type: 'number', description: 'Biên lãi TỐI THIỂU, % (giá sàn). Mặc định theo chính sách Shopee Pilot (chưa đặt: 5). Chỉ NÂNG được — truyền thấp hơn chính sách thì vẫn dùng mức chính sách. Không bao giờ bán lỗ.' },
     phi_dong_goi: { type: 'number', description: 'Chi phí đóng gói / vật tư mỗi đơn, VND. Mặc định theo chính sách Shopee Pilot; chỉ nâng được.' },
     phi_quang_cao: { type: 'number', description: '% giá bán dành cho quảng cáo / voucher shop. Mặc định theo chính sách Shopee Pilot; chỉ nâng được.' },
-    hoa_hong_affiliate: { type: 'number', description: '% hoa hồng affiliate — giá sàn tính như MỌI đơn đều qua affiliate. Mặc định theo chính sách Shopee Pilot; chỉ nâng được.' },
+    hoa_hong_affiliate: { type: 'number', description: '% hoa hồng affiliate — giá sàn tính như MỌI đơn đều qua affiliate. Mặc định theo chính sách Shopee Pilot; chỉ nâng được. Đã có đơn trả hoa hồng cao hơn thì giá sàn tự dùng mức đo được.' },
     lam_tron: { type: 'number', description: 'Làm tròn LÊN giá đề xuất theo bước này (VND). Mặc định theo chính sách Shopee Pilot (chưa đặt: 1000).' },
 } as const
 
@@ -98,7 +107,7 @@ const CAC_TOOL: Tool[] = [
                 ...(soListing === 0 || tuoiDanhMuc === null || tuoiDanhMuc > 2
                     ? { canhBaoDanhMuc: 'Danh mục listing của gian chưa đồng bộ gần đây — gọi shopee_sync_listings TRƯỚC khi đăng, nếu không có thể đăng TRÙNG sản phẩm đã có.' }
                     : {}),
-                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, soDon: mauPhi.soDon, ghiChu: mauPhi.ghiChu },
+                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, soDon: mauPhi.soDon, ghiChu: mauPhi.ghiChu, hoaHongAffiliate: tomTatAffiliate(mauPhi) },
                 vanChuyen,
                 gioiHanDang: gioiHan,
                 cacGian,
@@ -186,7 +195,7 @@ const CAC_TOOL: Tool[] = [
                     biChan: chanGiaDuoiSan(num(a.gia_thu, 0), kq) || lyDoPhiChuaDuTin(num(a.gia_thu, 0), mauPhi, cs.bienToiThieuPct),
                 } : undefined,
                 chinhSach: cs,
-                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, ghiChu: mauPhi.ghiChu },
+                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, ghiChu: mauPhi.ghiChu, hoaHongAffiliate: tomTatAffiliate(mauPhi) },
                 giaDangBanNoiKhac: khac.map(k => ({ gian: k.channel?.name, san: k.platform, gia: k.price, trangThai: k.status, laGianNay: k.channelId === ch.id })),
                 ghiChu: 'Lãi tính cho đơn 1 sản phẩm (phí cố định/đơn gánh trọn) — đơn nhiều món lãi cao hơn. Không gồm phí vận chuyển người mua trả.',
             }

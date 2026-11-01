@@ -1048,6 +1048,8 @@ export class ShopeeService extends PlatformService {
         transactionFee: number
         buyerTotal: number
         adsVoucherDiscount: number
+        /** hoa hồng affiliate (AMS) của đơn — đã nằm trong totalFees. null = Shopee không trả trường này (KHÁC 0) */
+        affiliateFee: number | null
     } | null> {
         const url = this.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`
         const data = await this.httpGet(url)
@@ -1080,6 +1082,10 @@ export class ShopeeService extends PlatformService {
         const totalFees = sellingPrice > 0 && escrowAmount > 0
             ? Math.max(0, sellingPrice - escrowAmount)
             : namedFees
+        // Hoa hồng affiliate: escrow_amount đã trừ khoản này nên nó nằm trong totalFees. Đơn không qua
+        // affiliate Shopee vẫn trả 0 (đo 01/11/2026) — thiếu trường thì để null, không đoán là 0.
+        const ams = Number(income.order_ams_commission_fee)
+        const affiliateFee = income.order_ams_commission_fee != null && Number.isFinite(ams) && ams >= 0 ? ams : null
         return {
             escrowAmount,
             totalFees,
@@ -1088,6 +1094,7 @@ export class ShopeeService extends PlatformService {
             transactionFee,
             buyerTotal: income.buyer_total_amount || 0,
             adsVoucherDiscount,
+            affiliateFee,
         }
     }
 

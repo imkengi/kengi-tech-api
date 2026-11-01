@@ -6468,6 +6468,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 let platformFee: number | null = null
                 let netRevenue: number | null = null
                 let adsVoucherDiscount = 0
+                let affiliateFee: number | null = null   // null = sàn không trả, giữ nguyên cột
 
                 if (channel.platform === 'shopee') {
                     const escrow = await service.getEscrowDetail(eid)
@@ -6476,6 +6477,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                         platformFee = escrow.totalFees
                         netRevenue = escrow.escrowAmount
                         adsVoucherDiscount = escrow.adsVoucherDiscount || 0
+                        affiliateFee = escrow.affiliateFee
                         // Ads Smart Voucher mới: chỉ quan sát, chưa biết seller có gánh hay không
                         if (adsVoucherDiscount > 0) {
                             console.log(`[sync-fees] ${order.orderNumber}: ads_voucher_discount=${adsVoucherDiscount}`)
@@ -6496,7 +6498,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 // hoá đơn GTGT cuối kỳ qua POST /api/tax/platform-fee-invoice.
                 await prisma.onlineOrder.update({
                     where: { id: order.id },
-                    data: { platformFee, netRevenue, adsVoucherDiscount },
+                    data: { platformFee, netRevenue, adsVoucherDiscount, ...(affiliateFee !== null ? { affiliateFee } : {}) },
                 })
 
                 updated++

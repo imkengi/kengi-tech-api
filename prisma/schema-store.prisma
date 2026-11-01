@@ -1966,6 +1966,9 @@ model OnlineOrder {
   platformFeeRate    Float     @default(0)
   netRevenue         Float     @default(0)
   adsVoucherDiscount Float     @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
+  // Hoa hồng affiliate của đơn (Shopee escrow order_ams_commission_fee) — ĐÃ NẰM TRONG platformFee,
+  // tách ra để hiện trong lợi nhuận đơn và để Shopee Pilot định giá. NULL = chưa đọc được, KHÁC 0.
+  affiliateFee       Float?
   // Hỏa tốc (Shopee Instant Delivery — giao ≤4h): nhận diện qua logistics_channel_id
   // thuộc get_channel_list có service_type_identifier='instant'. shipByDate là HẠN
   // bàn giao ĐVVC (ship_by_date) — KHÔNG phải ngày đã gửi hàng (shippedAt).
