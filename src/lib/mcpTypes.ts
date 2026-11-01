@@ -21,6 +21,9 @@ export type Tool = {
     description: string
     inputSchema: Record<string, unknown>
     write?: boolean
+    /** Tool thuộc tiện ích quản trị bật theo cửa hàng (vd 'shopee_pilot', lib/tienIchCuaHang) — run tự chặn
+     *  khi chưa bật; tools/list ẩn đi. */
+    tienIch?: string
     run: (args: any, ctx: ToolCtx) => Promise<unknown>
 }
 

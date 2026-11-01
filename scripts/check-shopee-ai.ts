@@ -17,6 +17,7 @@ import { TOOLS } from '../src/routes/mcp'
 import { TOOL_NHAY_CAM } from '../src/services/aiAgentRunner'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
+import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT, LOI_CHUA_BAT_PILOT, LOI_KHONG_KIEM_DUOC_PILOT } from '../src/lib/tienIchCuaHang'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -119,6 +120,22 @@ async function main() {
             SHOPEE_TOOL_NHAY_CAM.every(n => TOOL_NHAY_CAM.has(n) && SHOPEE_TOOLS.find(t => t.name === n)?.write === true))
         const docKhongGhi = ['shopee_shop_info', 'shopee_listing_candidates', 'shopee_suggest_price', 'shopee_category_suggest', 'shopee_category_attributes', 'shopee_review_listings']
         dung('tool tra cứu không đánh dấu ghi', docKhongGhi.every(n => SHOPEE_TOOLS.find(t => t.name === n)?.write !== true))
+        dung('mọi tool shopee_* gắn tiện ích shopee_pilot (tools/list ẩn khi chưa bật)', SHOPEE_TOOLS.every(t => t.tienIch === TIEN_ICH_SHOPEE_PILOT))
+    }
+
+    // ─── 5b. Tiện ích Shopee Pilot (01/11/2026): chưa bật ⇒ chặn trước khi chạm dữ liệu ────────────────────
+    {
+        datDemTienIch('CHUA_BAT', ['online', 'accounting'])
+        let chamPrisma = false
+        const prismaBay: any = new Proxy({}, { get: () => { chamPrisma = true; throw new Error('không được chạm prisma') } })
+        const chan = await Promise.all(SHOPEE_TOOLS.map(t =>
+            t.run({}, { prisma: prismaBay, scopes: 'read,write', storeCode: 'CHUA_BAT' }).then(() => null, (e: any) => e)))
+        dung('cửa hàng chưa bật Shopee Pilot ⇒ MỌI tool shopee_* báo đúng lỗi, không chạm dữ liệu',
+            chan.every(e => e instanceof ToolError && e.message === LOI_CHUA_BAT_PILOT) && !chamPrisma,
+            chan.map(e => e?.message || 'CHẠY ĐƯỢC').find(m => m !== LOI_CHUA_BAT_PILOT))
+        const khongMa = await SHOPEE_TOOLS[0]!.run({}, { prisma: prismaBay, scopes: 'read', storeCode: '' }).then(() => null, (e: any) => e)
+        dung('không biết cửa hàng nào ⇒ vẫn chặn nhưng báo "chưa kiểm tra được", không bảo là chưa bật',
+            khongMa instanceof ToolError && khongMa.message === LOI_KHONG_KIEM_DUOC_PILOT && !chamPrisma, khongMa?.message)
     }
 
     // ─── 6. Chạy tool trên prisma giả + Shopee giả ───────────────────────────────
@@ -169,6 +186,7 @@ async function main() {
             if (String(url).startsWith('https://storage.googleapis.com/')) return new Response(jpeg, { status: 200, headers: { 'content-type': 'image/jpeg' } })
             throw new Error(`fetch ngoài dự kiến: ${url}`)
         }
+        datDemTienIch('TEST', ['online', TIEN_ICH_SHOPEE_PILOT])   // cửa hàng thử đã được bật Shopee Pilot
         const ctx: any = { prisma, scopes: 'read,write', storeCode: 'TEST' }
         const tool = (n: string) => SHOPEE_TOOLS.find(t => t.name === n)!
         const chay = async (n: string, a: any) => { try { return { kq: await tool(n).run(a, ctx) as any } } catch (e: any) { return { loi: e } } }

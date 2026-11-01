@@ -18,6 +18,7 @@ import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedul
 import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
 import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
+import { docTienIch, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
@@ -198,12 +199,16 @@ async function quet(): Promise<void> {
                 }
             }
             /* SHOPEE PILOT chạy theo lịch (01/11/2026) — cùng nhịp, cùng cờ hasAiJobs (Pilot bật lịch thì bật cờ).
+             * CHỈ cửa hàng được quản trị bật tiện ích shopee_pilot (lib/tienIchCuaHang): tắt ở admin là lịch thôi
+             * chạy, cấu hình lịch vẫn giữ nguyên để bật lại là chạy tiếp. addOns có sẵn trên dòng registry vừa đọc.
              * Cửa hàng không dùng Pilot: một truy vấn hỏng-êm, không tạo bảng hộ. */
-            try {
-                const kq = await chayShopeePilotTheoLich(getStorePrisma(store.schema))
-                if (kq === 'da-chay' || kq === 'loi') console.log(`[ShopeePilot] lịch ${store.code}: ${kq}`)
-            } catch (e: any) {
-                console.error(`[ShopeePilot] lịch ${store.code}:`, e?.message || e)
+            if (docTienIch(store.addOns).includes(TIEN_ICH_SHOPEE_PILOT)) {
+                try {
+                    const kq = await chayShopeePilotTheoLich(getStorePrisma(store.schema))
+                    if (kq === 'da-chay' || kq === 'loi') console.log(`[ShopeePilot] lịch ${store.code}: ${kq}`)
+                } catch (e: any) {
+                    console.error(`[ShopeePilot] lịch ${store.code}:`, e?.message || e)
+                }
             }
         }
     } catch (e: any) {

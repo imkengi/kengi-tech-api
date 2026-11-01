@@ -12,6 +12,8 @@
  *  8. Chạy theo lịch: chưa tới hẹn thì thôi; tới hẹn thì một bản giành được, chạy, ghi kết quả, hẹn lượt kế.
  *  9. Khuyến mãi hàng có phân loại: giá KM từng phân loại theo giá vốn của SKU phân loại đó, phân loại thiếu vốn bị để ngoài.
  * 10. Kiểm tra API: từng bước chỉ đọc, một bước hỏng không chặn các bước khác.
+ * 11. Tiện ích theo cửa hàng (lib/tienIchCuaHang): chưa bật ⇒ chặn; đọc hỏng ⇒ chặn nhưng không bảo "chưa bật";
+ *     duyệt nâng cấp giữ Shopee Pilot đang bật và không để yêu cầu tự bật nó.
  */
 import {
     khoBoNho, chuanHoaChinhSach, vuotBienDong, quyetDinhGia, dauNgayVN, xayTrangThai, luuCauHinh,
@@ -21,6 +23,9 @@ import {
 import { tinhGiaDeXuat } from '../src/lib/giaShopee'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
+import {
+    docTienIch, giuTienIchQuanTri, lyDoChanPilot, datDemTienIch, TIEN_ICH_SHOPEE_PILOT, LOI_CHUA_BAT_PILOT,
+} from '../src/lib/tienIchCuaHang'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -265,6 +270,32 @@ async function main() {
         dung('"thử nạp ảnh" nạp đúng một ảnh', kt2.tong === 9 && goi.filter(g => g === 'upload').length === truocAnh + 1)
     } finally {
         ;(globalThis as any).fetch = fetchGoc
+    }
+
+    // ─── 11. Tiện ích theo cửa hàng (01/11/2026): chỉ cửa hàng được quản trị bật mới dùng ──────────────────
+    {
+        dung('đọc addOns: chuỗi JSON / mảng / rỗng / hỏng / phần tử lạ',
+            JSON.stringify(docTienIch('["online","shopee_pilot"]')) === '["online","shopee_pilot"]'
+            && docTienIch('').length === 0 && docTienIch('hỏng').length === 0 && docTienIch(null).length === 0
+            && JSON.stringify(docTienIch(['online', 1, null, 'shopee_pilot'])) === '["online","shopee_pilot"]')
+        dung('duyệt nâng cấp GIỮ Shopee Pilot đang bật (yêu cầu ở Cài đặt không bao giờ có nó)',
+            JSON.stringify(giuTienIchQuanTri('["online"]', '["accounting","shopee_pilot"]')) === '["online","shopee_pilot"]'
+            && JSON.stringify(giuTienIchQuanTri('[]', '["shopee_pilot"]')) === '["shopee_pilot"]')
+        dung('yêu cầu nâng cấp KHÔNG tự bật được Shopee Pilot (chỉ quản trị bật)',
+            JSON.stringify(giuTienIchQuanTri('["online","shopee_pilot"]', '["online"]')) === '["online"]'
+            && giuTienIchQuanTri(null, 'hỏng').length === 0)
+        dung('tiện ích thường vẫn theo yêu cầu như cũ (không đổi hành vi online / accounting)',
+            JSON.stringify(giuTienIchQuanTri('["accounting"]', '["online"]')) === '["accounting"]')
+
+        datDemTienIch('CH-BAT', ['online', TIEN_ICH_SHOPEE_PILOT])
+        datDemTienIch('CH-TAT', ['online', 'accounting'])
+        const bat = await lyDoChanPilot('CH-BAT')
+        const tat = await lyDoChanPilot('CH-TAT')
+        const khongMa = await lyDoChanPilot(undefined)
+        dung('cửa hàng được bật ⇒ cho qua', bat === null, JSON.stringify(bat))
+        dung('chưa bật ⇒ chặn, mã chua_bat_tien_ich', tat?.ma === 'chua_bat_tien_ich' && tat.loi === LOI_CHUA_BAT_PILOT, JSON.stringify(tat))
+        dung('không biết cửa hàng ⇒ chặn nhưng mã khong_kiem_duoc_tien_ich (không bảo là chưa bật)',
+            khongMa?.ma === 'khong_kiem_duoc_tien_ich' && khongMa.loi !== LOI_CHUA_BAT_PILOT, JSON.stringify(khongMa))
     }
 
     console.log(loi ? `\n❌ ${loi} kiểm tra hỏng` : '\n✅ Shopee Pilot trên Kengi: mọi kiểm tra đạt')

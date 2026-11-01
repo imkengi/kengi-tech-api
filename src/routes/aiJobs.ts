@@ -11,6 +11,7 @@ import { TOOLS } from './mcp'
 import { TOOL_NHAY_CAM } from '../services/aiAgentRunner'
 import { tinhLanChayKe, moTaLich } from '../services/aiAgentSchedule'
 import { chayMotJob } from '../cron/aiAgentCron'
+import { tienIchCuaHang } from '../lib/tienIchCuaHang'
 
 const router = Router()
 
@@ -45,10 +46,12 @@ function kiemTraTool(names: any, allowWrite: boolean): { ok: true; list: string[
 }
 
 // ─── GET /api/ai-jobs/tools — bảng chọn cho FE ───────────────────────────────
-router.get('/tools', authMiddleware, async (_req: AuthRequest, res: Response) => {
+router.get('/tools', authMiddleware, async (req: AuthRequest, res: Response) => {
+    // Tool của tiện ích chưa bật cho cửa hàng (shopee_* ⇒ shopee_pilot, lib/tienIchCuaHang) không hiện để chọn
+    const batTienIch = await tienIchCuaHang(String(req.user?.storeCode || '')).catch(() => [] as string[])
     res.json({
         success: true,
-        data: TOOLS.map(t => ({
+        data: TOOLS.filter(t => !t.tienIch || batTienIch.includes(t.tienIch)).map(t => ({
             name: t.name,
             moTa: t.description,
             ghiDuLieu: !!t.write,

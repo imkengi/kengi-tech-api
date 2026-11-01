@@ -17,7 +17,8 @@
 //     gọi add_item; danh mục cũ quá thì cảnh báo đồng bộ lại.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Tool, ToolError, canhBaoCat } from '../lib/mcpTypes'
+import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
+import { lyDoChanPilot, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
 import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, type ThamSoGia } from '../lib/giaShopee'
 import {
     chonKenhShopee, moDichVuShopee, docMauPhi, timHangKho, luuDanhMucSan, duongNganh,
@@ -35,7 +36,7 @@ const THAM_SO_GIA = {
     lam_tron: { type: 'number', description: 'Làm tròn LÊN giá đề xuất theo bước này (VND). Mặc định 1000.' },
 } as const
 
-export const SHOPEE_TOOLS: Tool[] = [
+const CAC_TOOL: Tool[] = [
     {
         name: 'shopee_shop_info',
         description: 'GỌI ĐẦU TIÊN khi quản gian Shopee: các gian Shopee của store, gian đang chọn (token, số listing, lần đồng bộ danh mục cuối), MÔ HÌNH PHÍ SÀN đo từ đơn đã đối soát (dùng để tính giá), kênh vận chuyển đang bật và giới hạn đăng của gian (độ dài tên/mô tả, số ảnh, khoảng giá).',
@@ -407,6 +408,19 @@ export const SHOPEE_TOOLS: Tool[] = [
         },
     },
 ]
+
+/** AI tự quản gian Shopee là phần của Shopee Pilot — tiện ích quản trị bật theo cửa hàng (01/11/2026,
+ *  lib/tienIchCuaHang). Chặn NGAY TRONG run nên mọi đường gọi đều qua cửa này: /api/mcp, tác vụ AI chạy
+ *  theo lịch (aiAgentCron), chạy tay ở trang AI. Cờ tienIch để tools/list ẩn tool khi chưa bật. */
+export const SHOPEE_TOOLS: Tool[] = CAC_TOOL.map(t => ({
+    ...t,
+    tienIch: TIEN_ICH_SHOPEE_PILOT,
+    run: async (args: any, ctx: ToolCtx) => {
+        const lyDo = await lyDoChanPilot(ctx.storeCode)
+        if (lyDo) throw new ToolError(lyDo.loi)
+        return t.run(args, ctx)
+    },
+}))
 
 /** Tool ghi ra Shopee — tác vụ tự động phải khai đích danh (thêm vào TOOL_NHAY_CAM). */
 export const SHOPEE_TOOL_NHAY_CAM = ['shopee_create_listing', 'shopee_update_price', 'shopee_toggle_listing'] as const

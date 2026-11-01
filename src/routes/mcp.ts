@@ -13,6 +13,7 @@ import { ACCOUNTING_TOOLS } from './mcpAccountingTools'
 import { OPS_TOOLS } from './mcpOpsTools'
 import { TAX_TOOLS } from './mcpTaxTools'
 import { SHOPEE_TOOLS } from './mcpShopeeTools'
+import { tienIchCuaHang } from '../lib/tienIchCuaHang'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -1038,11 +1039,16 @@ router.post('/', mcpAuth, async (req: AuthRequest, res: Response) => {
                 case 'ping':
                     responses.push(rpcResult(msg.id, {}))
                     break
-                case 'tools/list':
+                case 'tools/list': {
+                    /* Tool thuộc tiện ích quản trị bật theo cửa hàng (shopee_* ⇒ shopee_pilot) chỉ hiện khi đã bật —
+                     * gọi vẫn bị run chặn; ẩn ở đây để AI khỏi thử. Đọc registry hỏng ⇒ ẩn luôn. */
+                    const batTienIch = await tienIchCuaHang(storeCode).catch(() => [] as string[])
                     responses.push(rpcResult(msg.id, {
-                        tools: TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+                        tools: TOOLS.filter(t => !t.tienIch || batTienIch.includes(t.tienIch))
+                            .map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
                     }))
                     break
+                }
                 case 'tools/call': {
                     const name = msg.params?.name
                     const tool = TOOLS.find(t => t.name === name)

@@ -19,6 +19,7 @@ import { chonThiGiac } from '../lib/tarotAi'
 
 import * as xm2b from '../lib/xacMinh2BuocAdmin'
 import { SQL_TAO_BANG_PILOT } from '../lib/shopeePilot'
+import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 
 const router = Router()
 
@@ -371,6 +372,7 @@ router.put('/stores/:id/plan', async (req: Request, res: Response) => {
         if (typeof extraBranches === 'number') data.extraBranches = extraBranches
 
         const updated = await prisma.store.update({ where: { id: String(req.params.id) }, data })
+        xoaDemTienIch(store.code)   // bật/tắt tiện ích (vd Shopee Pilot) có hiệu lực ngay trên bản máy này
         console.log(`[Admin] Store ${store.code} plan updated:`, data)
         res.json({ success: true, data: updated })
     } catch (err) {
@@ -4538,10 +4540,13 @@ router.put('/upgrade-requests/:storeCode/:id/approve', async (req: Request, res:
                 where: { code: String(storeCode) },
                 data: {
                     plan: request.requestedPlan,
-                    addOns: request.addOns || '[]',
+                    /* Yêu cầu chỉ chứa tiện ích cửa hàng XIN ở Cài đặt; tiện ích chỉ-quản-trị (Shopee Pilot…) không có
+                     * ở đó ⇒ giữ lại cái đang bật, kẻo duyệt nâng cấp là tắt âm thầm (01/11/2026, lib/tienIchCuaHang). */
+                    addOns: JSON.stringify(giuTienIchQuanTri(request.addOns, store.addOns)),
                     extraBranches: request.extraBranches || 0,
                 },
             })
+            xoaDemTienIch(String(storeCode))
 
             // Auto-create extra branches if requested
             const addOns = typeof request.addOns === 'string' ? (() => { try { return JSON.parse(request.addOns) } catch { return [] } })() : (request.addOns || [])

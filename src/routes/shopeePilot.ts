@@ -1,19 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE PILOT — API cho giao diện kengi.vn/pilot-shopee/ (31/10/2026; giao diện sang FE 01/11/2026)
 //
-//  Giao diện Shopee Pilot của chủ shop (repo FE public/pilot-shopee, đăng nhập JWT kengi.vn) gọi các đường này. Toàn bộ
-//  nghiệp vụ ở lib/shopeePilot.ts; ở đây chỉ xác thực + đổi lỗi thành HTTP.
+//  Giao diện Shopee Pilot của chủ shop (route FE src/app/(dashboard)/pilot-shopee, đăng nhập JWT kengi.vn) gọi các
+//  đường này. Toàn bộ nghiệp vụ ở lib/shopeePilot.ts; ở đây chỉ xác thực + đổi lỗi thành HTTP.
 //
 //  Xác thực: authMiddleware (X-API-Key + x-store-code, hoặc JWT đăng nhập). Khoá chỉ-đọc
 //  đã bị authMiddleware chặn mọi POST; ở đây chặn thêm theo vai trò cho thao tác ghi.
+//  Tiện ích theo cửa hàng (01/11/2026): chỉ cửa hàng được quản trị bật `shopee_pilot` (lib/tienIchCuaHang) mới
+//  đọc / ghi được — chưa bật ⇒ 403 { ma: 'chua_bat_tien_ich' }, đọc registry hỏng ⇒ 503 (vẫn chặn, nói thật).
 //  Hợp đồng trả về giữ đúng như backend cũ của Pilot: GET /state → object trạng thái,
 //  POST /:action → { result } hoặc { error } kèm mã lỗi.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma } from '../lib/prisma'
 import { ToolError } from '../lib/mcpTypes'
+import { lyDoChanPilot } from '../lib/tienIchCuaHang'
 import {
     khoSql, xayTrangThai, chayChuKy, thucThi, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
     tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, HUONG_DAN_PILOT, type NgCanh,
@@ -40,12 +43,19 @@ function traLoi(res: Response, e: any, viec: string) {
     res.status(500).json({ error: `Lỗi máy chủ khi ${viec}: ${String(e?.message || e).slice(0, 300)}` })
 }
 
-router.get('/state', authMiddleware, async (req: AuthRequest, res: Response) => {
+/** Cửa hàng phải được quản trị bật tiện ích Shopee Pilot — chặn cả đọc lẫn ghi. */
+async function chanChuaBat(req: AuthRequest, res: Response, next: NextFunction) {
+    const lyDo = await lyDoChanPilot(req.user?.storeCode)
+    if (!lyDo) { next(); return }
+    res.status(lyDo.ma === 'chua_bat_tien_ich' ? 403 : 503).json({ error: lyDo.loi, ma: lyDo.ma })
+}
+
+router.get('/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     try { res.json(await xayTrangThai(ngCanh(req))) } catch (e) { traLoi(res, e, 'đọc trạng thái') }
 })
 
-router.get('/guide', authMiddleware, (_req: AuthRequest, res: Response) => {
+router.get('/guide', authMiddleware, chanChuaBat, (_req: AuthRequest, res: Response) => {
     res.json({ markdown: HUONG_DAN_PILOT })
 })
 
@@ -80,7 +90,7 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     'listing-attributes': { ghi: false, chay: (ctx, b) => thuocTinhNganh(ctx, { categoryId: Number(b?.categoryId) }) },
 }
 
-router.post('/:action', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     const viec = VIEC[String(req.params.action)]
     if (!viec) { res.status(404).json({ error: `Không có thao tác "${req.params.action}"` }); return }
