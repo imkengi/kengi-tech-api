@@ -2144,11 +2144,19 @@ export class ShopeeService extends PlatformService {
     }
 
     /** Thêm mã vào chương trình. Mã không phân loại: item_promotion_price. Trả danh sách Shopee từ chối. */
-    async addDiscountItems(discountId: number, items: { item_id: number; purchase_limit: number; item_promotion_price: number }[]): Promise<{ loi: { itemId: number; lyDo: string }[] }> {
+    async addDiscountItems(discountId: number, items: { item_id: number; purchase_limit: number; item_promotion_price?: number; model_list?: { model_id: number; model_promotion_price: number }[] }[]): Promise<{ loi: { itemId: number; lyDo: string }[] }> {
         const data = await this.httpPost(this.apiUrl('/api/v2/discount/add_discount_item'), { discount_id: discountId, item_list: items })
         if (data.error) throw new Error(`Shopee add_discount_item: ${data.error} - ${data.message}`)
         const loi = (data.response?.error_list || []).map((x: any) => ({ itemId: Number(x.item_id), lyDo: String(x.fail_message || x.fail_error || 'bị từ chối') }))
         return { loi }
+    }
+
+    /** Chương trình giảm giá của shop theo trạng thái (upcoming | ongoing | expired | all) — CHỈ ĐỌC, dùng cho nút kiểm tra API. */
+    async getDiscountList(trangThai: 'upcoming' | 'ongoing' | 'expired' | 'all' = 'ongoing', soDong = 10): Promise<any[]> {
+        const url = `${this.apiUrl('/api/v2/discount/get_discount_list')}&discount_status=${trangThai}&page_no=1&page_size=${soDong}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_discount_list: ${data.error} - ${data.message}`)
+        return data.response?.discount_list || []
     }
 
     /** Xoá chương trình CHƯA bắt đầu (dọn chương trình rỗng khi mọi mã đều bị từ chối). */

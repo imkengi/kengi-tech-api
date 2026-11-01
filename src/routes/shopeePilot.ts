@@ -12,10 +12,11 @@
 
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { registryPrisma } from '../lib/prisma'
 import { ToolError } from '../lib/mcpTypes'
 import {
     khoSql, xayTrangThai, chayChuKy, thucThi, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
-    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, HUONG_DAN_PILOT, type NgCanh,
+    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, HUONG_DAN_PILOT, type NgCanh,
 } from '../lib/shopeePilot'
 
 const router = Router()
@@ -59,7 +60,8 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
             sku: String(b?.sku || ''), title: b?.title, description: b?.description,
             categoryId: Number(b?.categoryId), weightGram: Number(b?.weightGram),
             attributes: b?.attributes, brandId: b?.brandId, brandName: b?.brandName, hidden: b?.hidden === true,
-            idempotencyKey: b?.idempotencyKey,
+            idempotencyKey: b?.idempotencyKey, saveProfile: b?.saveProfile === 'nhom' || b?.saveProfile === 'sku' ? b.saveProfile : null,
+            categoryPath: b?.categoryPath,
         }),
     },
     campaign: {
@@ -70,7 +72,10 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
         }),
     },
     config: { ghi: true, chay: (ctx, b) => luuCauHinh(ctx, b) },
-    connection: { ghi: false, chay: ctx => kiemKetNoi(ctx) },
+    connection: { ghi: false, chay: (ctx, b) => kiemKetNoi(ctx, { thuNapAnh: b?.uploadTest === true }) },
+    'profile-save': { ghi: true, chay: (ctx, b) => luuHoSo(ctx, b?.profile || b) },
+    'profile-delete': { ghi: true, chay: (ctx, b) => xoaHoSo(ctx, String(b?.id || '')) },
+    'category-search': { ghi: false, chay: (ctx, b) => timNganh(ctx, { keyword: String(b?.keyword || '') }) },
     'listing-options': { ghi: false, chay: (ctx, b) => tuyChonDang(ctx, { sku: String(b?.sku || ''), tuKhoa: b?.keyword }) },
     'listing-attributes': { ghi: false, chay: (ctx, b) => thuocTinhNganh(ctx, { categoryId: Number(b?.categoryId) }) },
 }
@@ -83,7 +88,15 @@ router.post('/:action', authMiddleware, async (req: AuthRequest, res: Response) 
         const lyDo = lyDoKhongGhi(req)
         if (lyDo) { res.status(403).json({ error: lyDo }); return }
     }
-    try { res.json({ result: await viec.chay(ngCanh(req), req.body || {}) }) } catch (e) { traLoi(res, e, String(req.params.action)) }
+    try {
+        const result = await viec.chay(ngCanh(req), req.body || {})
+        /* Bật lịch ⇒ bật cờ registry hasAiJobs để cron (aiAgentCron) quét cửa hàng này — cron chỉ chạm store có cờ. */
+        if (req.params.action === 'config' && result?.schedule?.enabled) {
+            const schema = req.user?.branchSchema || req.user?.storeSchema
+            if (schema) await (registryPrisma as any).store.updateMany({ where: { schema }, data: { hasAiJobs: true } }).catch(() => { })
+        }
+        res.json({ result })
+    } catch (e) { traLoi(res, e, String(req.params.action)) }
 })
 
 export default router

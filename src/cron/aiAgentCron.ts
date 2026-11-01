@@ -17,6 +17,7 @@ import { TOOLS } from '../routes/mcp'
 import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedule'
 import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
+import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
@@ -195,6 +196,14 @@ async function quet(): Promise<void> {
                 if (!/does not exist|AiAgentJob/i.test(e?.message || '')) {
                     console.error(`[AiAgentCron] store ${store.code}:`, e?.message)
                 }
+            }
+            /* SHOPEE PILOT chạy theo lịch (01/11/2026) — cùng nhịp, cùng cờ hasAiJobs (Pilot bật lịch thì bật cờ).
+             * Cửa hàng không dùng Pilot: một truy vấn hỏng-êm, không tạo bảng hộ. */
+            try {
+                const kq = await chayShopeePilotTheoLich(getStorePrisma(store.schema))
+                if (kq === 'da-chay' || kq === 'loi') console.log(`[ShopeePilot] lịch ${store.code}: ${kq}`)
+            } catch (e: any) {
+                console.error(`[ShopeePilot] lịch ${store.code}:`, e?.message || e)
             }
         }
     } catch (e: any) {
