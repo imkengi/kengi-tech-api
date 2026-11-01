@@ -3644,6 +3644,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "loiNhuanThapBaoLuc" TIMESTAMP(3)`)
                 // Mốc chạy tiếp của bộ dựng lại giá bán trên sàn cho đơn TikTok cũ (06/09/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "giaSanSuaLuc" TIMESTAMP(3)`)
+                // Hoa hồng affiliate của đơn (Shopee escrow order_ams_commission_fee) — NẰM TRONG platformFee,
+                // tách riêng để hiện trong lợi nhuận đơn và để Shopee Pilot định giá (01/11/2026).
+                // NULL = chưa đọc được (đơn đối soát trước khi có cột / sàn không trả), KHÁC 0.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "affiliateFee" DOUBLE PRECISION`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
