@@ -182,8 +182,9 @@ app.use(express.json({
 import path from 'path'
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')))
 // Shopee Pilot — giao diện bán hàng Shopee của chủ shop (31/10/2026), API ở /api/shopee-pilot.
-// Tệp nằm ở public/shopee-pilot (Dockerfile chép vào ảnh chạy); đổi giao diện không cần build lại backend.
-app.use('/shopee-pilot', express.static(path.join(process.cwd(), 'public', 'shopee-pilot'), { index: 'index.html', maxAge: '5m' }))
+// 01/11/2026 chủ shop: "đưa vào kengi chứ /pilot-shopee" ⇒ giao diện sang FE (kengi.vn/pilot-shopee/, đăng nhập bằng tài
+// khoản Kengi, có mục menu). Đường cũ ở đây chỉ còn chuyển hướng — giữ cho dấu trang / link đã gửi; trình duyệt giữ #mục.
+app.use('/shopee-pilot', (_req, res) => res.redirect(302, 'https://kengi.vn/pilot-shopee/'))
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 

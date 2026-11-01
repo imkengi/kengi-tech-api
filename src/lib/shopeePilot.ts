@@ -1085,8 +1085,8 @@ export const HUONG_DAN_PILOT = `SHOPEE PILOT TRÊN KENGI
 Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho của cửa hàng — không còn catalog.local.json, .env hay worker trên máy.
 
 1. Kết nối
-   - Mở https://api.kengi.vn/shopee-pilot/
-   - Nhập mã cửa hàng và một API key quyền read,write (tạo ở kengi.vn → Trợ lý AI → Nối AI ngoài (MCP)).
+   - Mở kengi.vn → Bán Hàng Online → Shopee Pilot (https://kengi.vn/pilot-shopee/), đăng nhập bằng tài khoản Kengi.
+   - Mọi người có quyền xem Sản Phẩm Trên Sàn đều xem được; lập kế hoạch, thực thi, đổi chính sách chỉ quản lý / chủ cửa hàng.
    - Gian Shopee lấy từ Kênh bán online của kengi. Cửa hàng có nhiều gian thì chọn gian ở Tự động hóa → Sửa chính sách.
 
 2. Sản phẩm

@@ -185,8 +185,8 @@ Kiểm: `npm run check:shopee-ai` (tính giá, thân add_item, chọn vận chuy
 
 Giao diện "Shopee Pilot" của chủ shop (trước chạy bằng backend riêng trên máy Windows + `catalog.local.json` + worker) nay do Kengi phục vụ, dữ liệu lấy từ kho thật.
 
-- **Trang:** `https://api.kengi.vn/shopee-pilot/` — tệp tĩnh ở `public/shopee-pilot/` (Dockerfile chép vào ảnh chạy).
-- **Kết nối:** mã cửa hàng + API key quyền `read,write` (tạo ở Trợ lý AI → Nối AI ngoài (MCP)); khoá lưu trong trình duyệt, gửi bằng `X-API-Key` + `x-store-code`. Khoá chỉ-đọc bị `authMiddleware` chặn mọi POST; route chặn thêm vai trò không phải quản lý.
+- **Trang:** `https://kengi.vn/pilot-shopee/` (menu Bán Hàng Online → Shopee Pilot, quyền `online_products.view`) — tệp tĩnh ở repo FE `public/pilot-shopee/` (01/11/2026). `api.kengi.vn/shopee-pilot/` cũ chỉ còn chuyển hướng 302 sang đó.
+- **Kết nối:** trang dùng phiên đăng nhập kengi.vn (`auth-storage` → `Authorization: Bearer`, 401 thì `/auth/refresh` một lần rồi gọi lại — cùng cách trang `/chatbot`). API vẫn nhận cả API key `X-API-Key` + `x-store-code` cho công cụ ngoài; khoá chỉ-đọc bị `authMiddleware` chặn mọi POST; route chặn thêm vai trò không phải quản lý.
 - **API:** `src/routes/shopeePilot.ts` → `/api/shopee-pilot`: `GET /state`, `GET /guide`, `POST /{cycle|execute|price|listing|campaign|config|connection|listing-options|listing-attributes}` (trả `{result}` hoặc `{error}`). Nghiệp vụ ở `src/lib/shopeePilot.ts`.
 - **Sản phẩm:** listing của gian đã chọn (≤ 100) + hàng kho còn tồn chưa đăng (≤ 30). Giá đề xuất / giá sàn tính bằng `lib/giaShopee` theo phí đo từ đơn đã đối soát.
 - **Kế hoạch → thực thi:** mọi thao tác ghi tạo kế hoạch trước (`ShopeePilotPlan`); chế độ **Xem trước** (mặc định) thực thi không gọi Shopee, **Tự động** mới ghi. Đăng hàng / đổi giá đi đúng `dangSanPhamShopee` / `doiGiaShopee` (`lib/shopeeThaoTac.ts`) — chung đường với tool MCP nên chung rào giá sàn.

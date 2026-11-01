@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SHOPEE PILOT — API cho giao diện /shopee-pilot/ (31/10/2026)
+//  SHOPEE PILOT — API cho giao diện kengi.vn/pilot-shopee/ (31/10/2026; giao diện sang FE 01/11/2026)
 //
-//  Giao diện Shopee Pilot của chủ shop (public/shopee-pilot) gọi các đường này. Toàn bộ
+//  Giao diện Shopee Pilot của chủ shop (repo FE public/pilot-shopee, đăng nhập JWT kengi.vn) gọi các đường này. Toàn bộ
 //  nghiệp vụ ở lib/shopeePilot.ts; ở đây chỉ xác thực + đổi lỗi thành HTTP.
 //
 //  Xác thực: authMiddleware (X-API-Key + x-store-code, hoặc JWT đăng nhập). Khoá chỉ-đọc
