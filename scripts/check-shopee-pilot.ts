@@ -70,7 +70,7 @@ async function main() {
         { id: 'op1', channelId: 'ch1', platformProductId: '111', name: 'Ổ cắm điện 4 lỗ', sku: 'OC4', price: 120000, stock: 12, status: 'NORMAL', localProductId: 'p1', imageUrl: null },
         { id: 'op2', channelId: 'ch1', platformProductId: '222', name: 'Bình giữ nhiệt', sku: 'BINH', price: 160000, stock: 30, status: 'NORMAL', localProductId: 'p2', imageUrl: null },
     ]
-    const donDoiSoat = Array.from({ length: 20 }, (_, i) => { const g = 60000 + i * 20000; return { giaBan: g, phi: 0.14 * g + 3000 } })
+    const donDoiSoat = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } })
     const timHang = (where: any) => Object.values(hang).find(h => JSON.stringify(where).toLowerCase().includes(`"${h.sku.toLowerCase()}"`)) || null
     const prisma: any = {
         onlineChannel: { findMany: async () => [kenh], update: async () => kenh },

@@ -13,7 +13,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, type ThamSoGia } from './giaShopee'
+import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from './giaShopee'
 import {
     chonKenhShopee, moDichVuShopee, docMauPhi, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
     listingDaCo, taiAnh, thuTuAnh, chonKenhVanChuyen, dungThanAddItem, type ThuocTinhVao,
@@ -30,18 +30,49 @@ export interface ChinhSachGia {
     bienToiThieuPct: number
     phiDongGoi: number
     phiQuangCaoPct: number
+    /** hoa hồng affiliate, % — chỉ vào giá sàn (như mọi đơn đều qua affiliate) */
+    phiAffiliatePct: number
+    /** thuế suất GTGT đầu ra, % (doanh nghiệp khấu trừ) */
+    thueGtgtPct: number
     lamTron: number
 }
 
-/** Tham số chính sách giá kiểu tool (bien_loi_nhuan…) → chuẩn. Mặc định: mục tiêu 15%, sàn 5%. */
-export function chinhSachGia(a: any): ChinhSachGia {
-    return {
-        bienLoiNhuanPct: Math.min(Math.max(num(a?.bien_loi_nhuan, 15), 0), 80),
-        bienToiThieuPct: Math.min(Math.max(num(a?.bien_toi_thieu, 5), 0), 80),
-        phiDongGoi: Math.max(0, num(a?.phi_dong_goi, 0)),
-        phiQuangCaoPct: Math.min(Math.max(num(a?.phi_quang_cao, 0), 0), 50),
-        lamTron: Math.max(1, num(a?.lam_tron, 1000)),
+const kepSo = (v: any, d: number, min: number, max: number) => Math.min(Math.max(num(v, d), min), max)
+
+/**
+ * Tham số chính sách giá kiểu tool (bien_loi_nhuan…) → chuẩn. Mặc định: mục tiêu 15%, sàn 5%.
+ * `nen` = chính sách Shopee Pilot của cửa hàng (01/11/2026): tham số bỏ trống lấy theo chính sách, tham số
+ * truyền vào chỉ được CHẶT hơn — AI truyền bien_toi_thieu=0 hay phi_dong_goi=0 thì vẫn giữ mức chủ shop đặt.
+ * Biên MỤC TIÊU không phải rào nên được chọn tự do (tinhGiaDeXuat vẫn giữ đề xuất ≥ giá sàn).
+ */
+export function chinhSachGia(a: any, nen?: ChinhSachGia | null): ChinhSachGia {
+    const cs: ChinhSachGia = {
+        bienLoiNhuanPct: kepSo(a?.bien_loi_nhuan, nen?.bienLoiNhuanPct ?? 15, 0, 80),
+        bienToiThieuPct: kepSo(a?.bien_toi_thieu, nen?.bienToiThieuPct ?? 5, 0, 80),
+        phiDongGoi: Math.max(0, num(a?.phi_dong_goi, nen?.phiDongGoi ?? 0)),
+        phiQuangCaoPct: kepSo(a?.phi_quang_cao, nen?.phiQuangCaoPct ?? 0, 0, 50),
+        phiAffiliatePct: kepSo(a?.hoa_hong_affiliate, nen?.phiAffiliatePct ?? 0, 0, 50),
+        thueGtgtPct: kepSo(a?.thue_gtgt, nen?.thueGtgtPct ?? 0, 0, 10),
+        lamTron: Math.max(1, num(a?.lam_tron, nen?.lamTron ?? 1000)),
     }
+    if (!nen) return cs
+    return {
+        ...cs,
+        bienToiThieuPct: Math.max(cs.bienToiThieuPct, nen.bienToiThieuPct),
+        phiDongGoi: Math.max(cs.phiDongGoi, nen.phiDongGoi),
+        phiQuangCaoPct: Math.max(cs.phiQuangCaoPct, nen.phiQuangCaoPct),
+        phiAffiliatePct: Math.max(cs.phiAffiliatePct, nen.phiAffiliatePct),
+        thueGtgtPct: Math.max(cs.thueGtgtPct, nen.thueGtgtPct),
+    }
+}
+
+/** Tuỳ chọn chung của các thao tác GHI giá ra Shopee. */
+export interface TuyChonGhi {
+    ch?: any
+    /** chính sách Shopee Pilot của cửa hàng — tham số chỉ được chặt hơn nó. null = chỉ theo tham số */
+    nen: ChinhSachGia | null
+    /** máy tự chạy (tool AI, chu kỳ tự động): phí sàn chưa đủ tin ⇒ TỪ CHỐI; người duyệt thì chỉ cảnh báo */
+    tuDong: boolean
 }
 
 /** Giới hạn giá của Shopee cho ngành (nếu đọc được) — không đọc được thì bỏ qua, không chặn. */
@@ -191,7 +222,7 @@ export async function timUngVien(prisma: any, channelId: string, o: { query?: st
  * Đăng MỘT mặt hàng kho lên gian (tham số theo tên của tool shopee_create_listing).
  * chay_thu=true: soát đủ mọi rào + dựng thân yêu cầu, không nạp ảnh, không gọi add_item.
  */
-export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: { ch?: any } = {}): Promise<any> {
+export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Promise<any> {
     const chayThu = a?.chay_thu === true
     const ch = tuyChon.ch || await chonKenhShopee(prisma, a?.kenh)
     const p = await timHangKho(prisma, a?.sku)
@@ -207,7 +238,7 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: { ch?: any
     if (!(canNangKg > 0) || canNangKg > 300) throw new ToolError('can_nang_gram phải là cân nặng thật (gram, > 0)')
 
     const svc = await moDichVuShopee(prisma, ch)
-    const cs = chinhSachGia(a)
+    const cs = chinhSachGia(a, tuyChon.nen)
     const [mauPhi, gh] = await Promise.all([docMauPhi(prisma, ch), gioiHanGia(svc, categoryId)])
     const ts: ThamSoGia = { giaVon: Number(p.costPrice) || 0, phi: mauPhi, ...cs, giaShopeeMin: gh.min, giaShopeeMax: gh.max }
     const kq = tinhGiaDeXuat(ts)
@@ -217,6 +248,8 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: { ch?: any
     if (chan) throw new ToolError(`${p.sku}: ${chan}`)
     if (gh.min && gia < gh.min) throw new ToolError(`Giá ${vnd(gia)} dưới mức tối thiểu Shopee cho ngành (${vnd(gh.min)})`)
     if (gh.max && gia > gh.max) throw new ToolError(`Giá ${vnd(gia)} vượt mức tối đa Shopee cho ngành (${vnd(gh.max)})`)
+    const phiChuaTin = lyDoPhiChuaDuTin(gia, mauPhi, cs.bienToiThieuPct)
+    if (phiChuaTin && tuyChon.tuDong && !chayThu) throw new ToolError(`Không tự đăng ${p.sku}: ${phiChuaTin}`)
 
     const ton = await tonBanDuoc(prisma, p)
     if (ton.ton <= 0) throw new ToolError(`${p.sku} hết hàng (${ton.nguon}) — không đăng.`)
@@ -251,7 +284,11 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: { ch?: any
         sku: p.sku,
         an: a?.an_sau_khi_dang === true,
     }
-    const phanTichGia = { gia, giaDeXuat: kq.giaDeXuat, giaSan: kq.giaSan, giaHoaVon: kq.giaHoaVon, duKien: danhGiaGia(gia, ts), mauPhi: mauPhi.ghiChu }
+    const phanTichGia = {
+        gia, giaDeXuat: kq.giaDeXuat, giaSan: kq.giaSan, giaHoaVon: kq.giaHoaVon,
+        duKien: danhGiaGia(gia, ts), duKienAffiliate: danhGiaGia(gia, ts, true), mauPhi: mauPhi.ghiChu,
+        ...(phiChuaTin ? { canhBaoPhi: phiChuaTin } : {}),
+    }
 
     if (chayThu) {
         return {
@@ -320,7 +357,7 @@ export async function timListing(prisma: any, channelId: string, a: { item_id?: 
 }
 
 /** Đổi giá MỘT listing (tham số theo tên của tool shopee_update_price). Dưới giá sàn / thiếu vốn ⇒ từ chối. */
-export async function doiGiaShopee(prisma: any, a: any, tuyChon: { ch?: any } = {}): Promise<any> {
+export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Promise<any> {
     const ch = tuyChon.ch || await chonKenhShopee(prisma, a?.kenh)
     const giaMoi = Math.round(num(a?.gia_moi, 0))
     if (!(giaMoi > 0)) throw new ToolError('gia_moi không hợp lệ')
@@ -328,14 +365,20 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: { ch?: any } = 
 
     const v = (await giaVonHangLoat(prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${l.sku || l.platformProductId} thiếu giá vốn — không đổi giá khi không biết lãi/lỗ.`)
-    const cs = chinhSachGia(a)
+    const cs = chinhSachGia(a, tuyChon.nen)
     const mauPhi = await docMauPhi(prisma, ch)
     const ts: ThamSoGia = { giaVon: v.giaVon, phi: mauPhi, ...cs }
     const kq = tinhGiaDeXuat(ts)
     const chan = chanGiaDuoiSan(giaMoi, kq)
     if (chan) throw new ToolError(`${l.sku || l.platformProductId}: ${chan}`)
-
+    const phiChuaTin = tuyChon.tuDong ? lyDoPhiChuaDuTin(giaMoi, mauPhi, cs.bienToiThieuPct) : null
     const svc = await moDichVuShopee(prisma, ch)
+    if (phiChuaTin) {
+        /* Phí chưa đủ tin: máy chỉ được TĂNG giá — lãi mỗi đơn tăng theo giá bán, tăng giá không bao giờ lỗ thêm.
+         * So với giá GỐC đọc thẳng từ Shopee (bản trong hệ thống có thể cũ); có phân loại / không đọc được ⇒ chờ người duyệt. */
+        const giaShopee = await giaGocShopee(svc, l.platformProductId)
+        if (!(giaShopee > 0 && giaMoi > giaShopee)) throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
+    }
     let modelId: number | undefined
     try {
         await svc.updatePrice(l.platformProductId, giaMoi)
@@ -352,6 +395,52 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: { ch?: any } = 
     console.log(`[ShopeeTuQuan] ĐỔI GIÁ ${l.sku} (${ch.name} item ${l.platformProductId}) ${giaCu} → ${giaMoi}${a?.ly_do ? ` — ${String(a.ly_do).slice(0, 200)}` : ''}`)
     return {
         daDoi: true, itemId: l.platformProductId, sku: l.sku, ...(modelId ? { modelId } : {}),
-        giaCu, giaMoi, truoc: danhGiaGia(giaCu, ts), sau: danhGiaGia(giaMoi, ts), giaSan: kq.giaSan,
+        giaCu, giaMoi, truoc: danhGiaGia(giaCu, ts), sau: danhGiaGia(giaMoi, ts), sauQuaAffiliate: danhGiaGia(giaMoi, ts, true), giaSan: kq.giaSan,
+        ...(phiChuaTin ? { canhBao: `Chỉ được TĂNG giá vì phí sàn chưa đủ tin — giá sàn có thể còn thấp, chủ shop nên xem lại trên Shopee Pilot. ${phiChuaTin}` } : {}),
     }
+}
+
+/** Giá GỐC đang để trên Shopee của hàng không phân loại. 0 = có phân loại / không đọc được. */
+async function giaGocShopee(svc: any, itemId: string): Promise<number> {
+    try {
+        const [it] = await svc.getItemBaseInfo([Number(itemId)])
+        if (!it || it.has_model) return 0
+        return Number(it.price_info?.[0]?.original_price) || 0
+    } catch {
+        return 0
+    }
+}
+
+// ─── Hiện lại listing đang ẩn ───────────────────────────────────────────────────
+
+/**
+ * Soát trước khi HIỆN LẠI một sản phẩm đang ẩn (01/11/2026): hàng có thể bị ẩn CHÍNH VÌ giá lỗ — hiện lại là
+ * mở bán ở giá đang để. Cùng rào với đổi giá: thiếu vốn / dưới giá sàn / (máy tự chạy) phí chưa đủ tin ⇒ không
+ * hiện. Giá đọc THẲNG từ Shopee (giá đang bán, đã gồm khuyến mãi đang chạy) — bản trong hệ thống có thể cũ.
+ * Hàng có phân loại: soát từng phân loại theo giá vốn SKU phân loại. null = được hiện.
+ */
+export async function lyDoKhongHienLai(prisma: any, ch: any, svc: any, itemId: string, cs: ChinhSachGia, tuDong: boolean): Promise<string | null> {
+    const mauPhi = await docMauPhi(prisma, ch)
+    const soat = (gia: number, giaVon: number, ten: string): string | null => {
+        if (!(gia > 0)) return `${ten}: không đọc được giá đang bán`
+        if (!(giaVon > 0)) return `${ten}: thiếu giá vốn — không biết lãi/lỗ`
+        const chan = chanGiaDuoiSan(gia, tinhGiaDeXuat({ giaVon, phi: mauPhi, ...cs }))
+        if (chan) return `${ten}: ${chan}`
+        const phiChuaTin = tuDong ? lyDoPhiChuaDuTin(gia, mauPhi, cs.bienToiThieuPct) : null
+        return phiChuaTin ? `${ten}: ${phiChuaTin}` : null
+    }
+    const [item] = await svc.getItemBaseInfo([Number(itemId)])
+    if (!item) return 'Shopee không trả thông tin sản phẩm này — không soát được giá, không hiện lại.'
+    if (item.has_model) {
+        const models: any[] = await svc.getModelList(Number(itemId))
+        if (!models.length) return 'Không đọc được phân loại — không soát được giá, không hiện lại.'
+        const von = await giaVonHangLoat(prisma, models.map(m => ({ id: String(m.model_id), sku: m.sku || null })))
+        const loi = models.map(m => soat(Number(m.giaHienTai) || 0, von.get(String(m.model_id))?.giaVon || 0, m.name || m.sku || String(m.model_id))).filter(Boolean)
+        return loi.length ? `Không hiện lại: ${loi.slice(0, 5).join('; ')}${loi.length > 5 ? ` (+${loi.length - 5} phân loại)` : ''}` : null
+    }
+    const l = await prisma.onlineProduct.findFirst({ where: { channelId: ch.id, platformProductId: itemId } }).catch(() => null)
+    const gia = Number(item.price_info?.[0]?.current_price ?? item.price_info?.[0]?.original_price) || 0
+    const von = (await giaVonHangLoat(prisma, [{ id: itemId, localProductId: l?.localProductId || null, sku: item.item_sku || l?.sku || null }])).get(itemId)
+    const r = soat(gia, von?.giaVon || 0, item.item_sku || l?.sku || itemId)
+    return r ? `Không hiện lại: ${r}` : null
 }

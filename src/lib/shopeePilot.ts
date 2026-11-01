@@ -16,17 +16,22 @@
  *    - đổi giá quá maxPriceChangeRate mỗi lần (trừ khi đang nâng lên giá sàn)
  *    - quá maxWritesPerDay lần ghi/ngày (giờ VN, tính cả lần hỏng)
  *    - khuyến mãi: giảm quá maxDiscountRate, dài quá maxCampaignDays, giá KM dưới sàn,
- *      mã vừa TĂNG giá trong promotionCooldownHoursAfterIncrease giờ
+ *      mã vừa TĂNG giá trong promotionCooldownHoursAfterIncrease giờ; lúc THỰC THI soát lại
+ *      từng dòng với giá vốn / phí / chính sách HIỆN TẠI (kế hoạch cũ không lọt giá dưới sàn)
+ *    - giá sàn tính như mọi đơn đều qua affiliate (affiliateRate) và trừ thuế GTGT đầu ra (vatRate)
+ *    - máy tự chạy (chu kỳ Tự động) KHÔNG đăng mới / hạ giá khi phí sàn chưa đủ tin (lib/giaShopee.lyDoPhiChuaDuTin):
+ *      kế hoạch để nháp chờ người duyệt. TĂNG giá thì vẫn tự làm — lãi mỗi đơn tăng theo giá, không bao giờ lỗ thêm
  *    - khoá idempotency từ giao diện: bấm hai lần không ra hai kế hoạch; thực thi giành
  *      kế hoạch nguyên tử (draft → running) nên hai tab không chạy đúp.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { moDichVuShopee, docMauPhi, timHangKho, duongNganh } from './shopeeTuQuan'
 import {
     num, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
+    chinhSachGia, type ChinhSachGia,
 } from './shopeeThaoTac'
 
 // ─── Chính sách ─────────────────────────────────────────────────────────────────
@@ -41,6 +46,10 @@ export interface ChinhSachPilot {
     priceStep: number
     packagingCost: number
     adsRate: number
+    /** hoa hồng affiliate, tỷ lệ giá bán — CHỈ vào giá sàn: sàn tính như mọi đơn đều qua affiliate (01/11/2026) */
+    affiliateRate: number
+    /** thuế suất GTGT đầu ra (doanh nghiệp khấu trừ) — 0 với hộ kinh doanh vì Shopee đã khấu trừ trong tiền về */
+    vatRate: number
     promotionCooldownHoursAfterIncrease: number
     /** chu kỳ tự đăng tối đa bao nhiêu mặt hàng (chỉ hàng có hồ sơ đăng) */
     maxPublishPerCycle: number
@@ -57,6 +66,8 @@ export const CHINH_SACH_MAC_DINH: ChinhSachPilot = {
     priceStep: 1000,
     packagingCost: 0,
     adsRate: 0,
+    affiliateRate: 0,
+    vatRate: 0,
     promotionCooldownHoursAfterIncrease: 24,
     maxPublishPerCycle: 3,
     automation: { publishNewProducts: true, reprice: true, campaign: { enabled: false }, syncStock: false },
@@ -79,6 +90,8 @@ export function chuanHoaChinhSach(x: any): ChinhSachPilot {
         priceStep: Math.floor(kep(x?.priceStep, m.priceStep, 1, 100000)),
         packagingCost: kep(x?.packagingCost, m.packagingCost, 0, 1e7),
         adsRate: kep(x?.adsRate, m.adsRate, 0, 0.5),
+        affiliateRate: kep(x?.affiliateRate, m.affiliateRate, 0, 0.5),
+        vatRate: kep(x?.vatRate, m.vatRate, 0, 0.1),
         promotionCooldownHoursAfterIncrease: kep(x?.promotionCooldownHoursAfterIncrease, m.promotionCooldownHoursAfterIncrease, 0, 24 * 30),
         maxPublishPerCycle: Math.floor(kep(x?.maxPublishPerCycle, m.maxPublishPerCycle, 0, 20)),
         automation: {
@@ -97,8 +110,32 @@ export function thamSoGia(p: ChinhSachPilot) {
         bien_toi_thieu: p.minMarginRate * 100,
         phi_dong_goi: p.packagingCost,
         phi_quang_cao: p.adsRate * 100,
+        hoa_hong_affiliate: p.affiliateRate * 100,
+        thue_gtgt: p.vatRate * 100,
         lam_tron: p.priceStep,
     }
+}
+
+/** Chính sách Pilot làm `nen` cho thao tác ghi (lib/shopeeThaoTac): tham số truyền vào chỉ được chặt hơn. */
+export function nenGia(p: ChinhSachPilot): ChinhSachGia {
+    return chinhSachGia(thamSoGia(p))
+}
+
+/**
+ * Chính sách Pilot của cửa hàng cho tool AI (routes/mcpShopeeTools) — đọc thẳng, KHÔNG tạo bảng hộ.
+ * Chưa từng dùng Pilot (chưa có bảng / chưa lưu) ⇒ mặc định (đúng mức tool vẫn dùng: mục tiêu 15%, sàn 5%).
+ * Đọc HỎNG vì lý do khác ⇒ ném lỗi: rơi về mặc định có thể LỎNG hơn mức chủ shop đặt — rào an toàn không mở khi hỏng.
+ */
+export async function docChinhSachPilot(prisma: any): Promise<ChinhSachPilot> {
+    let r: any
+    try {
+        [r] = await prisma.$queryRawUnsafe(`SELECT policy FROM "ShopeePilotConfig" WHERE id = 'default'`)
+    } catch (e: any) {
+        const loi = `${e?.message || e} ${JSON.stringify(e?.meta || {})}`
+        if (/42P01|does not exist|không tồn tại/i.test(loi)) return chuanHoaChinhSach({})
+        throw new ToolError('Không đọc được chính sách Shopee Pilot của cửa hàng — không ghi giá khi chưa biết giá sàn chủ shop đặt. Thử lại sau.')
+    }
+    return chuanHoaChinhSach(docJson(r?.policy, {}))
 }
 
 function thamSoTinh(p: ChinhSachPilot, giaVon: number, phi: MauPhi): ThamSoGia {
@@ -108,6 +145,8 @@ function thamSoTinh(p: ChinhSachPilot, giaVon: number, phi: MauPhi): ThamSoGia {
         bienToiThieuPct: p.minMarginRate * 100,
         phiDongGoi: p.packagingCost,
         phiQuangCaoPct: p.adsRate * 100,
+        phiAffiliatePct: p.affiliateRate * 100,
+        thueGtgtPct: p.vatRate * 100,
         lamTron: p.priceStep,
     }
 }
@@ -414,16 +453,50 @@ async function canGian(ctx: NgCanh) {
     return r as { cfg: CauHinhPilot; kenh: any[]; ch: any }
 }
 
-function giaUi(kq: KetQuaGia, ts: ThamSoGia) {
+function giaUi(kq: KetQuaGia, ts: ThamSoGia, mauPhi?: MauPhi) {
     const dk = kq.duKien || (kq.giaDeXuat ? danhGiaGia(kq.giaDeXuat, ts) : null)
+    const xau = kq.duKienAffiliate || (kq.giaDeXuat ? danhGiaGia(kq.giaDeXuat, ts, true) : null)
+    const chuaTin = mauPhi && kq.hopLe ? lyDoPhiChuaDuTin(kq.giaDeXuat, mauPhi, ts.bienToiThieuPct) : null
     return {
         price: kq.hopLe ? kq.giaDeXuat : null,
         floor: kq.giaSan || null,
         breakEven: kq.giaHoaVon || null,
         profit: dk ? dk.loiNhuan : null,
         marginRate: dk ? dk.bienPct / 100 : null,
+        // đơn đi qua affiliate (trọn hoa hồng) — trường hợp xấu nhất giá sàn phải giữ
+        affiliateProfit: xau && ts.phiAffiliatePct ? xau.loiNhuan : null,
+        affiliateMarginRate: xau && ts.phiAffiliatePct ? xau.bienPct / 100 : null,
         ...(kq.hopLe ? {} : { reason: kq.lyDo }),
+        ...(chuaTin ? { autoBlocked: chuaTin } : {}),
     }
+}
+
+/** Nhóm hàng trong kho kèm số mã (hàng hoá, chưa gộp, không combo) và số mã còn tồn — cho bộ chọn hồ sơ. */
+async function nhomHangKho(prisma: any): Promise<{ name: string; total: number | null; inStock: number | null }[]> {
+    const rs: any[] | null = await prisma.$queryRawUnsafe(
+        `SELECT c.name, COUNT(p.id)::int AS total, (COUNT(p.id) FILTER (WHERE p.stock > 0))::int AS "inStock"
+           FROM "Category" c
+           LEFT JOIN "Product" p ON p."categoryId" = c.id AND p."productType" = 'goods' AND p."mergedIntoId" IS NULL AND p."bundleId" IS NULL
+          GROUP BY c.name ORDER BY c.name LIMIT 500`,
+    ).catch(() => null)
+    if (rs && rs.length) return rs.filter(r => r.name).map(r => ({ name: String(r.name), total: Number(r.total) || 0, inStock: Number(r.inStock) || 0 }))
+    const ten: any[] = await prisma.category.findMany({ select: { name: true }, orderBy: { name: 'asc' }, take: 500 }).catch(() => [])
+    return [...new Set(ten.map(c => c.name).filter(Boolean))].map(name => ({ name, total: null, inStock: null }))
+}
+
+/** Lời nhắc thuế theo loại hình khai ở Cài đặt cửa hàng (StoreSettings.businessType). */
+async function nhacThue(prisma: any, pol: ChinhSachPilot): Promise<string | null> {
+    const s = await prisma.storeSettings?.findFirst?.({ select: { businessType: true } }).catch(() => null)
+    const loai = String(s?.businessType || 'company')
+    if (loai === 'company' && !(pol.vatRate > 0)) {
+        return 'Cửa hàng khai là DOANH NGHIỆP: nếu nộp thuế GTGT theo phương pháp khấu trừ, nhập "Thuế GTGT trên giá bán" ở Sửa chính sách — ' +
+            'tiền Shopee chuyển về không trừ thuế đầu ra, chưa khai thì biên lãi thật thấp hơn số Pilot tính.'
+    }
+    if (loai !== 'company' && pol.vatRate > 0) {
+        return 'Cửa hàng khai là HỘ / CÁ NHÂN KINH DOANH: Shopee đã khấu trừ thuế ngay trong tiền về (nằm trong phí đo được) — ' +
+            'thuế GTGT trong chính sách đang làm giá sàn cao hơn cần.'
+    }
+    return null
 }
 
 // ─── Trạng thái cho giao diện (GET /state) ─────────────────────────────────────
@@ -436,13 +509,15 @@ export async function xayTrangThai(ctx: NgCanh): Promise<any> {
     const pol = cfg.policy
     const [plans, audit, todayWrites] = await Promise.all([ctx.kho.dsKeHoach(60), ctx.kho.dsNhatKy(100), ctx.kho.demGhiTuLuc(dauNgayVN())])
     const channels = kenh.map(c => ({ id: c.id, name: c.name, shopId: c.shopId, authorized: !!(c.accessToken && c.shopId) }))
-    const nhomKho: any[] = await ctx.prisma.category.findMany({ select: { name: true }, orderBy: { name: 'asc' }, take: 500 }).catch(() => [])
+    const [nhomKho, thue] = await Promise.all([nhomHangKho(ctx.prisma), nhacThue(ctx.prisma, pol)])
     const status: any = {
         mode: 'live', environment: 'production', executionMode: cfg.executionMode, policy: pol,
         channels, shop: ch ? { id: ch.id, name: ch.name, shopId: ch.shopId, authorized: !!(ch.accessToken && ch.shopId) } : null,
         profiles: cfg.profiles,
         schedule: { ...cfg.schedule, nextRunAt: cfg.nextRunAt, lastRunAt: cfg.lastRunAt, lastResult: cfg.lastResult },
-        khoCategories: nhomKho.map(c => c.name).filter(Boolean),
+        khoCategories: nhomKho.map(c => c.name),
+        khoGroups: nhomKho,
+        ...(thue ? { taxNote: thue } : {}),
     }
     const goc = { csrfToken: 'kengi', now: Date.now(), todayWrites, plans, audit, status }
     if (!ch) {
@@ -461,7 +536,17 @@ export async function xayTrangThai(ctx: NgCanh): Promise<any> {
         docMauPhi(ctx.prisma, ch),
         timUngVien(ctx.prisma, ch.id, { lim: TRAN_UNG_VIEN }),
     ])
-    status.feeModel = { rate: mauPhi.tyLe, fixedPerOrder: mauPhi.coDinh, source: mauPhi.nguon, orders: mauPhi.soDon, note: mauPhi.ghiChu }
+    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !(mauPhi.soDon >= SO_DON_TU_GHI)
+    status.feeModel = {
+        rate: mauPhi.tyLe, fixedPerOrder: mauPhi.coDinh, source: mauPhi.nguon, orders: mauPhi.soDon, note: mauPhi.ghiChu,
+        minOrderPrice: mauPhi.giaBanMin ?? null,
+        trusted: !chuaTuGhi,
+        // từ giá này trở lên máy mới tự ghi (dưới đó: kế hoạch để nháp chờ người duyệt); null = máy chưa tự ghi giá nào
+        autoFromPrice: chuaTuGhi ? null : mauPhi.nguon === 'ty-le-don' ? Math.ceil(mauPhi.giaBanTB || 0) : Math.ceil(mauPhi.giaBanMin || 0),
+        ...(chuaTuGhi ? { warning: lyDoPhiChuaDuTin(0, mauPhi) }
+            : mauPhi.nguon === 'ty-le-don' && mauPhi.giaBanTB ? { warning: `Phí đo là tỷ lệ trung bình (chưa tách được phí cố định mỗi đơn) — giá dưới ${vnd(mauPhi.giaBanTB)} (giá trung bình các đơn đã đo) chu kỳ Tự động và AI không tự đăng / hạ giá về đó, chờ người duyệt.` }
+                : mauPhi.giaBanMin ? { warning: `Giá dưới ${vnd(mauPhi.giaBanMin)} (đơn rẻ nhất đã đo phí) chu kỳ Tự động và AI không tự đăng / hạ giá về đó, chờ người duyệt.` } : {}),
+    }
 
     const products: any[] = []
     for (const l of listing) {
@@ -481,7 +566,7 @@ export async function xayTrangThai(ctx: NgCanh): Promise<any> {
             sold14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
             imageUrl: l.imageUrl || null,
             listing: { item_name: l.name, description: v?.moTa || '' },
-            pricing: { ...giaUi(kq, ts), snapshot: { price: Number(l.price) || 0, stock: Number(l.stock) || 0 } },
+            pricing: { ...giaUi(kq, ts, mauPhi), snapshot: { price: Number(l.price) || 0, stock: Number(l.stock) || 0 } },
             hasModels: coPhanLoai,
             ...(coPhanLoai ? { error: 'Sản phẩm có phân loại — giá từng phân loại sửa trên Shopee (khuyến mãi theo phân loại thì làm được ở trang Khuyến mãi).' }
                 : !giaVon ? { error: 'Chưa có giá vốn trong kho — không tính được lãi, không đổi giá.' } : {}),
@@ -498,7 +583,7 @@ export async function xayTrangThai(ctx: NgCanh): Promise<any> {
             costPrice: u.giaVon || null, currentPrice: u.giaBanLe || null, stock: u.tonBanDuoc,
             imageUrl: u.anhDau, sold14: 0,
             listing: { item_name: u.ten, description: u.moTa },
-            pricing: giaUi(kq, ts),
+            pricing: giaUi(kq, ts, mauPhi),
             ...(thieu.length ? { error: `Thiếu ${thieu.join(', ')} trong kho — bổ sung trên kengi.vn rồi mới đăng được.` } : {}),
         })
     }
@@ -536,15 +621,21 @@ export async function taoKeHoachGia(ctx: NgCanh, b: { sku: string; price: number
     if (!(giaCu > 0)) throw new ToolError('Sản phẩm có phân loại — giá từng phân loại sửa trên Shopee.')
     const v = (await giaVonHangLoat(ctx.prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${b.sku} chưa có giá vốn trong kho — không đổi giá khi không biết lãi/lỗ.`)
-    const ts = thamSoTinh(cfg.policy, v.giaVon, await docMauPhi(ctx.prisma, ch))
+    const mauPhi = await docMauPhi(ctx.prisma, ch)
+    const ts = thamSoTinh(cfg.policy, v.giaVon, mauPhi)
     const kq = tinhGiaDeXuat(ts)
     const chan = chanGiaDuoiSan(gia, kq) || vuotBienDong(giaCu, gia, cfg.policy.maxPriceChangeRate, kq.giaSan)
     if (chan) throw new ToolError(chan)
-    const dk = danhGiaGia(gia, ts)
+    const dk = danhGiaGia(gia, ts), xau = danhGiaGia(gia, ts, true)
+    const phiChuaTin = lyDoPhiChuaDuTin(gia, mauPhi, cfg.policy.minMarginRate * 100)
     return ctx.kho.taoKeHoach(keHoachMoi('price', {
         sku: l.sku || b.sku, itemId: l.platformProductId, price: gia,
         snapshot: { price: giaCu, stock: Number(l.stock) || 0 },
-        economics: { marginRate: dk.bienPct / 100, profit: dk.loiNhuan, floor: kq.giaSan, suggested: kq.hopLe ? kq.giaDeXuat : null },
+        economics: {
+            marginRate: dk.bienPct / 100, profit: dk.loiNhuan, floor: kq.giaSan, suggested: kq.hopLe ? kq.giaDeXuat : null,
+            ...(cfg.policy.affiliateRate > 0 ? { affiliateProfit: xau.loiNhuan, affiliateMarginRate: xau.bienPct / 100 } : {}),
+        },
+        ...(phiChuaTin ? { feeWarning: phiChuaTin, warning: phiChuaTin } : {}),
     }, b.idempotencyKey || null, ctx.nguoi))
 }
 
@@ -566,7 +657,7 @@ export async function taoKeHoachDang(ctx: NgCanh, b: DauVaoDang): Promise<KeHoac
         an_sau_khi_dang: b.hidden === true, ...thamSoGia(cfg.policy),
     }
     // Soát đủ mọi rào bằng chính đường đăng thật (chạy thử): trùng, giá sàn, tồn, tên/mô tả, ảnh, vận chuyển
-    const thu = await dangSanPhamShopee(ctx.prisma, { ...args, chay_thu: true }, { ch })
+    const thu = await dangSanPhamShopee(ctx.prisma, { ...args, chay_thu: true }, { ch, nen: nenGia(cfg.policy), tuDong: false })
     if (b.saveProfile === 'nhom' || b.saveProfile === 'sku') {
         const p = await timHangKho(ctx.prisma, b.sku)
         const key = b.saveProfile === 'sku' ? p.sku : p.category?.name
@@ -581,8 +672,12 @@ export async function taoKeHoachDang(ctx: NgCanh, b: DauVaoDang): Promise<KeHoac
         sku: b.sku, args,
         payload: thu.thanYeuCau,
         images: thu.anhSeNap,
-        economics: { marginRate: thu.phanTichGia.duKien.bienPct / 100, profit: thu.phanTichGia.duKien.loiNhuan, floor: thu.phanTichGia.giaSan, suggested: thu.phanTichGia.giaDeXuat },
+        economics: {
+            marginRate: thu.phanTichGia.duKien.bienPct / 100, profit: thu.phanTichGia.duKien.loiNhuan, floor: thu.phanTichGia.giaSan, suggested: thu.phanTichGia.giaDeXuat,
+            ...(cfg.policy.affiliateRate > 0 ? { affiliateProfit: thu.phanTichGia.duKienAffiliate.loiNhuan, affiliateMarginRate: thu.phanTichGia.duKienAffiliate.bienPct / 100 } : {}),
+        },
         feeNote: thu.phanTichGia.mauPhi,
+        ...(thu.phanTichGia.canhBaoPhi ? { feeWarning: thu.phanTichGia.canhBaoPhi, warning: thu.phanTichGia.canhBaoPhi } : {}),
     }, b.idempotencyKey || null, ctx.nguoi))
 }
 
@@ -728,9 +823,12 @@ export async function taoKeHoachKhuyenMai(ctx: NgCanh, b: DauVaoKhuyenMai): Prom
         lines.push({ sku, itemId: l.platformProductId, originalPrice: giaCu, discountRate: 1 - km.price / giaCu, ...km })
     }
     if (!lines.length) throw new ToolError(`Không mã nào đủ điều kiện: ${tuChoi.map(t => `${t.sku} (${t.reason})`).join('; ')}`)
+    const phiChuaTin = lyDoPhiChuaDuTin(Math.min(...lines.map(l => l.price)), mauPhi, pol.minMarginRate * 100)
+    const nhac = [canhBao, phiChuaTin].filter(Boolean).join(' · ')
     return ctx.kho.taoKeHoach(keHoachMoi('campaign', {
         name: ten, startTime: batDau, endTime: ketThuc, purchaseLimit: gioiHanMua, discountRate: giam, lines, rejected: tuChoi,
-        ...(canhBao ? { warning: canhBao } : {}),
+        ...(nhac ? { warning: nhac } : {}),
+        ...(phiChuaTin ? { feeWarning: phiChuaTin } : {}),
     }, b.idempotencyKey || null, ctx.nguoi))
 }
 
@@ -741,7 +839,8 @@ async function conLuotGhi(ctx: NgCanh, pol: ChinhSachPilot): Promise<void> {
     if (dem >= pol.maxWritesPerDay) throw new ToolError(`Đã đạt giới hạn ${pol.maxWritesPerDay} thao tác ghi hôm nay theo chính sách — để mai hoặc nâng giới hạn.`)
 }
 
-export async function thucThi(ctx: NgCanh, planId: string): Promise<any> {
+/** `tuDong` = máy gọi (chu kỳ Tự động) — phí sàn chưa đủ tin thì thao tác ghi tự từ chối (lớp rào thứ hai sau chayChuKy). */
+export async function thucThi(ctx: NgCanh, planId: string, tuyChon: { tuDong?: boolean } = {}): Promise<any> {
     const plan = await ctx.kho.layKeHoach(planId)
     if (!plan) throw new ToolError('Không thấy kế hoạch — tải lại trang.')
     if (plan.status !== 'draft') return plan
@@ -754,7 +853,7 @@ export async function thucThi(ctx: NgCanh, planId: string): Promise<any> {
     let status = 'succeeded', result: any = null
     try {
         if (plan.kind === 'publish') {
-            const r = await dangSanPhamShopee(ctx.prisma, { ...d.args, gia: d.payload?.original_price, chay_thu: false }, { ch })
+            const r = await dangSanPhamShopee(ctx.prisma, { ...d.args, gia: d.payload?.original_price, chay_thu: false }, { ch, nen: nenGia(cfg.policy), tuDong: tuyChon.tuDong === true })
             result = { item_id: r.itemId, link: r.link, ...(r.anhLoi ? { message: `Một số ảnh không nạp được: ${r.anhLoi.join(' | ')}` } : {}) }
             await ctx.kho.ghiNhatKy({ action: 'publish', status, planId: plan.id, payload: { item_sku: d.sku, item_id: r.itemId }, response: r })
         } else if (plan.kind === 'price') {
@@ -764,11 +863,11 @@ export async function thucThi(ctx: NgCanh, planId: string): Promise<any> {
             const kq = tinhGiaDeXuat(thamSoTinh(cfg.policy, v?.giaVon || 0, await docMauPhi(ctx.prisma, ch)))
             const loiBien = vuotBienDong(Number(l.price) || 0, d.price, cfg.policy.maxPriceChangeRate, kq.giaSan)
             if (loiBien) throw new ToolError(`Giá trên sàn đã đổi từ lúc lập kế hoạch. ${loiBien}`)
-            const r = await doiGiaShopee(ctx.prisma, { item_id: d.itemId, gia_moi: d.price, ...thamSoGia(cfg.policy), ly_do: 'Shopee Pilot' }, { ch })
-            result = { item_id: r.itemId, old_price: r.giaCu, new_price: r.giaMoi }
+            const r = await doiGiaShopee(ctx.prisma, { item_id: d.itemId, gia_moi: d.price, ...thamSoGia(cfg.policy), ly_do: 'Shopee Pilot' }, { ch, nen: nenGia(cfg.policy), tuDong: tuyChon.tuDong === true })
+            result = { item_id: r.itemId, old_price: r.giaCu, new_price: r.giaMoi, ...(r.canhBao ? { warning: r.canhBao } : {}) }
             await ctx.kho.ghiNhatKy({ action: 'price', status, planId: plan.id, payload: { item_sku: d.sku, item_id: d.itemId, price: d.price }, response: r })
         } else if (plan.kind === 'campaign') {
-            const r = await thucThiKhuyenMai(ctx, plan, ch)
+            const r = await thucThiKhuyenMai(ctx, plan, ch, cfg.policy)
             status = r.status; result = r.result
         } else {
             throw new ToolError(`Loại kế hoạch lạ: ${plan.kind}`)
@@ -785,8 +884,50 @@ export async function thucThi(ctx: NgCanh, planId: string): Promise<any> {
     return (await ctx.kho.layKeHoach(plan.id)) || { ...plan, status, result }
 }
 
-async function thucThiKhuyenMai(ctx: NgCanh, plan: KeHoach, ch: any): Promise<{ status: string; result: any }> {
+/**
+ * Soát lại từng dòng khuyến mãi với giá vốn / phí sàn / chính sách HIỆN TẠI (01/11/2026): kế hoạch có thể lập
+ * từ hôm trước, giá vốn tăng sau lần nhập hàng mới hay chủ shop vừa nâng biên tối thiểu / affiliate ⇒ giá KM
+ * trong kế hoạch có thể đã dưới giá sàn. Dòng (phân loại) như vậy bị BỎ, không gửi lên Shopee.
+ */
+export async function soatLaiDongKhuyenMai(ctx: NgCanh, d: any, ch: any, pol: ChinhSachPilot): Promise<{ lines: any[]; boQua: string[] }> {
+    const mauPhi = await docMauPhi(ctx.prisma, ch)
+    const giaSan = (giaVon: number) => tinhGiaDeXuat(thamSoTinh(pol, giaVon, mauPhi)).giaSan
+    const dong: any[] = Array.isArray(d?.lines) ? d.lines : []
+    const ids = dong.map(l => String(l.itemId))
+    const ls: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, platformProductId: { in: ids } } })
+    const theoItem = new Map<string, any>(ls.filter(l => ids.includes(String(l.platformProductId))).map(l => [String(l.platformProductId), l]))
+    const von = await giaVonHangLoat(ctx.prisma, [...theoItem.values()])
+    const coPL = dong.filter(l => Array.isArray(l.models) && l.models.length)
+    const vonMd = await giaVonHangLoat(ctx.prisma, coPL.flatMap(l => l.models.map((m: any) => ({ id: String(m.modelId), sku: m.sku || null }))))
+    const lines: any[] = [], boQua: string[] = []
+    for (const l of dong) {
+        if (Array.isArray(l.models) && l.models.length) {
+            const con: any[] = []
+            for (const m of l.models) {
+                const v = vonMd.get(String(m.modelId))
+                const san = v && v.giaVon > 0 ? giaSan(v.giaVon) : 0
+                if (!san) boQua.push(`${l.sku} / ${m.name || m.modelId}: không còn tra ra giá vốn`)
+                else if (m.price < san) boQua.push(`${l.sku} / ${m.name || m.modelId}: giá KM ${vnd(m.price)} dưới giá sàn hiện tại ${vnd(san)}`)
+                else con.push(m)
+            }
+            if (con.length) lines.push({ ...l, models: con })
+            continue
+        }
+        const li = theoItem.get(String(l.itemId))
+        const v = li ? von.get(li.id) : undefined
+        const san = v && v.giaVon > 0 ? giaSan(v.giaVon) : 0
+        if (!san) boQua.push(`${l.sku}: không còn tra ra giá vốn`)
+        else if (l.price < san) boQua.push(`${l.sku}: giá KM ${vnd(l.price)} dưới giá sàn hiện tại ${vnd(san)}`)
+        else lines.push(l)
+    }
+    return { lines, boQua }
+}
+
+async function thucThiKhuyenMai(ctx: NgCanh, plan: KeHoach, ch: any, pol: ChinhSachPilot): Promise<{ status: string; result: any }> {
     const d = plan.data
+    const soat = await soatLaiDongKhuyenMai(ctx, d, ch, pol)
+    const boQua = soat.boQua.length ? ` Bỏ ${soat.boQua.length} dòng dưới giá sàn hiện tại (giá vốn / phí / chính sách đã đổi từ lúc lập kế hoạch): ${soat.boQua.join('; ').slice(0, 600)}.` : ''
+    if (!soat.lines.length) throw new ToolError(`Không còn mã nào giữ được giá sàn lúc thực thi — không tạo chương trình.${boQua}`)
     const svc = await moDichVuShopee(ctx.prisma, ch)
     let discountId: number
     try {
@@ -800,7 +941,7 @@ async function thucThiKhuyenMai(ctx: NgCanh, plan: KeHoach, ch: any): Promise<{ 
     }
     await ctx.kho.ghiNhatKy({ action: 'campaign', status: 'succeeded', planId: plan.id, payload: { discount_name: d.name, discount_id: discountId }, response: { discount_id: discountId } })
 
-    const items = d.lines.map((l: any) => Array.isArray(l.models) && l.models.length
+    const items = soat.lines.map((l: any) => Array.isArray(l.models) && l.models.length
         ? { item_id: Number(l.itemId), purchase_limit: d.purchaseLimit, model_list: l.models.map((m: any) => ({ model_id: Number(m.modelId), model_promotion_price: m.price })) }
         : { item_id: Number(l.itemId), purchase_limit: d.purchaseLimit, item_promotion_price: l.price })
     let loi: { itemId: number; lyDo: string }[] = []
@@ -815,12 +956,13 @@ async function thucThiKhuyenMai(ctx: NgCanh, plan: KeHoach, ch: any): Promise<{ 
         // Chương trình rỗng — dọn đi cho khỏi rác trên Seller Center (chưa bắt đầu nên xoá được)
         await svc.deleteDiscount(discountId).catch(() => { })
     }
-    const theoItem = new Map(d.lines.map((l: any) => [Number(l.itemId), l.sku]))
+    const theoItem = new Map(soat.lines.map((l: any) => [Number(l.itemId), l.sku]))
+    const tb = (loi.length ? `Shopee từ chối ${loi.length}/${items.length} mã: ${loi.map(x => `${theoItem.get(x.itemId) || x.itemId} (${x.lyDo})`).join('; ')}${st === 'failed' ? ' — đã xoá chương trình rỗng.' : ''}` : '') + boQua
     return {
-        status: st,
+        status: st === 'succeeded' && soat.boQua.length ? 'partial' : st,
         result: {
             discount_id: st === 'failed' ? undefined : discountId,
-            ...(loi.length ? { message: `Shopee từ chối ${loi.length}/${items.length} mã: ${loi.map(x => `${theoItem.get(x.itemId) || x.itemId} (${x.lyDo})`).join('; ')}${st === 'failed' ? ' — đã xoá chương trình rỗng.' : ''}` } : {}),
+            ...(tb ? { message: tb.trim() } : {}),
         },
     }
 }
@@ -838,9 +980,10 @@ export function quyetDinhGia(o: { giaCu: number; ton: number; daBan14: number; k
     else if (kq.hopLe && o.daBan14 === 0 && o.ton > 0 && o.bienHienTaiPct > mucTieuPct + 10 && kq.giaDeXuat < giaCu) { mucTieu = kq.giaDeXuat; lyDo = '14 ngày không bán được, lãi cao hơn mục tiêu trên 10 điểm' }
     if (!mucTieu) return null
     const buoc = pol.priceStep, m = pol.maxPriceChangeRate
+    // Làm tròn theo bước giá có thể vượt qua giá đang bán (bước lớn hơn biên độ) ⇒ kẹp để chiều đổi không bao giờ ngược
     let gia = mucTieu > giaCu
-        ? Math.min(mucTieu, Math.floor((giaCu * (1 + m)) / buoc) * buoc)
-        : Math.max(mucTieu, Math.ceil((giaCu * (1 - m)) / buoc) * buoc)
+        ? Math.min(mucTieu, Math.max(giaCu, Math.floor((giaCu * (1 + m)) / buoc) * buoc))
+        : Math.max(mucTieu, Math.min(giaCu, Math.ceil((giaCu * (1 - m)) / buoc) * buoc))
     if (gia < kq.giaSan) { gia = kq.giaSan; lyDo += ' (nâng thẳng lên giá sàn, vượt biên độ mỗi lần)' }
     if (Math.abs(gia - giaCu) < Math.max(1, buoc / 2)) return null
     return { gia, lyDo }
@@ -894,9 +1037,16 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
             const giaCu = Number(l.price)
             try {
                 let plan: any = await taoKeHoachGia(ctx, { sku, price: quyet.gia, idempotencyKey: `cycle:price:${sku}:${ngayVN()}:${quyet.gia}` })
-                if (tuDong && plan.status === 'draft') plan = await thucThi(ctx, plan.id)
+                // Phí sàn chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được (lãi mỗi đơn tăng
+                // theo giá — không bao giờ lỗ thêm); doiGiaShopee soát lại chiều tăng với giá đọc thẳng từ Shopee.
+                const chuaTin = plan.status === 'draft' ? lyDoPhiChuaDuTin(quyet.gia, mauPhi, pol.minMarginRate * 100) : null
+                const choDuyet = chuaTin && !(quyet.gia > giaCu) ? chuaTin : null
+                if (tuDong && plan.status === 'draft' && !choDuyet) plan = await thucThi(ctx, plan.id, { tuDong: true })
                 const p = plan.plan || plan
-                results.push({ action: 'price', status: p.status, sku, planId: p.id, message: `${vnd(giaCu)} → ${vnd(quyet.gia)}: ${quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}` })
+                results.push({
+                    action: 'price', status: p.status, sku, planId: p.id,
+                    message: `${vnd(giaCu)} → ${vnd(quyet.gia)}: ${quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
+                })
             } catch (e: any) {
                 results.push({ action: 'price', status: 'failed', sku, message: String(e?.message || e).slice(0, 300) })
             }
@@ -921,9 +1071,13 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
                     brandId: hs!.brandId, brandName: hs!.brandName, hidden: hs!.hidden === true,
                     idempotencyKey: `cycle:publish:${u.sku}:${ngayVN()}`,
                 })
-                if (tuDong && plan.status === 'draft') plan = await thucThi(ctx, plan.id)
+                const choDuyet = plan.status === 'draft' ? (plan.data?.feeWarning as string | undefined) : undefined
+                if (tuDong && plan.status === 'draft' && !choDuyet) plan = await thucThi(ctx, plan.id, { tuDong: true })
                 const kh = plan.plan || plan
-                results.push({ action: 'publish', status: kh.status, sku: u.sku, planId: kh.id, message: `Theo hồ sơ ${hs!.scope === 'sku' ? 'mã' : 'nhóm'} "${hs!.key}" · giá ${vnd(kh.data?.payload?.original_price || 0)}${kh.result?.message ? ` — ${kh.result.message}` : ''}` })
+                results.push({
+                    action: 'publish', status: kh.status, sku: u.sku, planId: kh.id,
+                    message: `Theo hồ sơ ${hs!.scope === 'sku' ? 'mã' : 'nhóm'} "${hs!.key}" · giá ${vnd(kh.data?.payload?.original_price || 0)}${kh.result?.message ? ` — ${kh.result.message}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
+                })
             } catch (e: any) {
                 results.push({ action: 'publish', status: 'failed', sku: u.sku, message: `Theo hồ sơ "${hs!.key}": ${String(e?.message || e).slice(0, 300)}` })
             }
@@ -971,7 +1125,41 @@ export async function tuyChonDang(ctx: NgCanh, b: { sku: string; tuKhoa?: string
         sku: p.sku, title: p.name, description: p.description || '',
         categories: goiY.filter(g => g.leaf !== false),
         ...(loi ? { categoryError: loi } : {}),
-        pricing: giaUi(tinhGiaDeXuat(ts), ts),
+        pricing: giaUi(tinhGiaDeXuat(ts), ts, mauPhi),
+    }
+}
+
+/**
+ * Tìm mặt hàng kho cho bộ chọn của HỒ SƠ ĐĂNG (01/11/2026, chủ shop: "chưa chọn nhóm hàng hoặc mã hàng cho AI agent
+ * xử lý") — theo tên / mã / mã vạch, chỉ hàng hoá đăng riêng được (không dịch vụ, mã đã gộp, combo). Mỗi dòng kèm
+ * nhóm, tồn, đủ giá vốn / ảnh chưa, đã có trên gian chưa, đã có hồ sơ nào áp chưa — để chọn đúng mã.
+ */
+export async function timHangChoHoSo(ctx: NgCanh, b: { keyword: string }): Promise<{ products: any[] }> {
+    const tk = String(b?.keyword || '').trim()
+    if (!tk) return { products: [] }
+    const { cfg, ch } = await docCauHinh(ctx)
+    const ds: any[] = await ctx.prisma.product.findMany({
+        where: {
+            productType: 'goods', mergedIntoId: null, bundleId: null,
+            OR: [{ name: { contains: tk, mode: 'insensitive' } }, { sku: { contains: tk, mode: 'insensitive' } }, { barcode: tk }],
+        },
+        select: { id: true, sku: true, name: true, stock: true, costPrice: true, category: { select: { name: true } }, _count: { select: { images: true } } },
+        orderBy: [{ stock: 'desc' }, { updatedAt: 'desc' }],
+        take: 30,
+    })
+    const daCo: any[] = ch ? await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id }, select: { localProductId: true, sku: true } }).catch(() => []) : []
+    const daCoId = new Set(daCo.map(l => l.localProductId).filter(Boolean))
+    const daCoSku = new Set(daCo.map(l => String(l.sku || '').trim().toLowerCase()).filter(Boolean))
+    return {
+        products: ds.map(p => {
+            const hs = timHoSo(cfg.profiles, p.sku, p.category?.name)
+            return {
+                sku: p.sku, name: p.name, category: p.category?.name || null, stock: Number(p.stock) || 0,
+                hasCost: Number(p.costPrice) > 0, hasImage: (p._count?.images || 0) > 0,
+                listed: daCoId.has(p.id) || daCoSku.has(String(p.sku || '').toLowerCase()),
+                profile: hs ? { scope: hs.scope, key: hs.key } : null,
+            }
+        }),
     }
 }
 
@@ -1095,7 +1283,13 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
 
 3. Định giá
    - Phí Shopee đo từ chính các đơn đã đối soát của gian (gian mới thì mượn số đo gian Shopee khác của cửa hàng).
-   - Giá đề xuất = đạt lãi mục tiêu sau phí sàn, đóng gói, quảng cáo. Giá sàn = lãi tối thiểu. Máy chủ từ chối mọi giá dưới giá sàn.
+   - Giá đề xuất = đạt lãi mục tiêu sau phí sàn, đóng gói, quảng cáo, thuế GTGT (nếu khai). Giá sàn = lãi tối thiểu
+     NGAY CẢ KHI đơn đi qua affiliate (cộng trọn "Hoa hồng affiliate"). Máy chủ từ chối mọi giá dưới giá sàn.
+   - Doanh nghiệp nộp GTGT khấu trừ: khai "Thuế GTGT trên giá bán" — tiền Shopee chuyển về không trừ thuế đầu ra.
+   - Máy (chu kỳ Tự động, AI) chỉ tự đăng mới / hạ giá khi phí đã đo từ ≥ 30 đơn đối soát và đủ chắc ở mức giá đó. Phí chưa đo,
+     mới đo từ ít đơn, giá thấp hơn mọi đơn đã đo, hay phí các đơn lệch nhau nhiều: kế hoạch để nháp chờ người duyệt.
+     TĂNG giá (vd hàng đang bán dưới giá sàn) thì máy vẫn tự làm — tăng giá không bao giờ làm lỗ thêm.
+   - Khuyến mãi soát lại giá sàn lúc thực thi; dòng nào giá vốn / phí đã đổi làm giá KM dưới sàn thì bị bỏ.
 
 4. Kế hoạch → thực thi
    - Mọi thao tác ghi tạo KẾ HOẠCH trước. Chế độ Xem trước: thực thi không gọi Shopee. Chế độ Tự động: thực thi ghi lên Shopee thật.
@@ -1103,7 +1297,8 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
 
 5. Hồ sơ đăng hàng
    - Kho Kengi không có ngành Shopee, cân nặng, thuộc tính. Khai một lần ở Tự động hóa → Hồ sơ đăng hàng:
-     cho cả NHÓM HÀNG (tên nhóm trong kho) hoặc cho MỘT MÃ (mã thắng nhóm). Cũng lưu được ngay trong form Đăng hàng.
+     cho cả NHÓM HÀNG (chọn trong danh sách nhóm của kho, kèm số mã) hoặc cho MỘT MÃ (tìm theo tên / mã; mã thắng nhóm).
+     Cũng lưu được ngay trong form Đăng hàng.
    - Cân nặng theo nhóm chỉ dùng khi các mã trong nhóm cùng cỡ.
 
 6. Chu kỳ

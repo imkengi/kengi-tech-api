@@ -19,7 +19,7 @@ import { ToolError } from '../lib/mcpTypes'
 import { lyDoChanPilot } from '../lib/tienIchCuaHang'
 import {
     khoSql, xayTrangThai, chayChuKy, thucThi, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
-    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, HUONG_DAN_PILOT, type NgCanh,
+    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, timHangChoHoSo, HUONG_DAN_PILOT, type NgCanh,
 } from '../lib/shopeePilot'
 
 const router = Router()
@@ -86,6 +86,7 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     'profile-save': { ghi: true, chay: (ctx, b) => luuHoSo(ctx, b?.profile || b) },
     'profile-delete': { ghi: true, chay: (ctx, b) => xoaHoSo(ctx, String(b?.id || '')) },
     'category-search': { ghi: false, chay: (ctx, b) => timNganh(ctx, { keyword: String(b?.keyword || '') }) },
+    'product-search': { ghi: false, chay: (ctx, b) => timHangChoHoSo(ctx, { keyword: String(b?.keyword || '') }) },
     'listing-options': { ghi: false, chay: (ctx, b) => tuyChonDang(ctx, { sku: String(b?.sku || ''), tuKhoa: b?.keyword }) },
     'listing-attributes': { ghi: false, chay: (ctx, b) => thuocTinhNganh(ctx, { categoryId: Number(b?.categoryId) }) },
 }

@@ -16,9 +16,16 @@
  *  là đang dùng số cấu hình (thường thấp hơn phí thật — mặc định 6%).
  *
  *  ─── CÔNG THỨC GIÁ ────────────────────────────────────────────────────────────
- *  Lãi = P − (tyLe·P + coDinh) − giáVốn − phíĐóngGói − quảngCáo%·P
- *  Muốn Lãi = biên%·P  ⇒  P = (giáVốn + coDinh + phíĐóngGói) / (1 − tyLe − biên% − quảngCáo%)
- *  Giá hoà vốn = cùng công thức với biên = 0.
+ *  Lãi = P − (tyLe·P + coDinh) − giáVốn − phíĐóngGói − quảngCáo%·P − thuếGTGT·P [− affiliate%·P]
+ *  Muốn Lãi = biên%·P  ⇒  P = (giáVốn + coDinh + phíĐóngGói) / (1 − tyLe − biên% − quảngCáo% − thuếGTGT [− affiliate%])
+ *  thuếGTGT = v/(1+v): phần thuế đầu ra nằm trong giá bán của doanh nghiệp khấu trừ — escrow
+ *  Shopee KHÔNG trừ khoản này nên phí đo từ đơn không có nó (hộ kinh doanh: Shopee khấu trừ
+ *  thuế khoán ngay trong escrow ⇒ đã nằm trong phí đo, để 0).
+ *  Giá MỤC TIÊU dùng phí đo thật (đã gồm hoa hồng affiliate TRUNG BÌNH của mọi đơn).
+ *  GIÁ SÀN (01/11/2026, chủ shop chọn) tính như MỌI đơn đều qua affiliate: phí đo + trọn
+ *  hoa hồng affiliate — dư một chút vì phí đo đã gồm phần affiliate trung bình, chủ ý thận
+ *  trọng: đơn affiliate bán đúng giá sàn vẫn đạt biên tối thiểu. Giá đề xuất ≥ giá sàn.
+ *  Giá hoà vốn = công thức sàn với biên = 0 (hoà vốn kể cả đơn qua affiliate).
  *  Tính cho đơn 1 sản phẩm (phí cố định gánh trọn) — chủ ý thận trọng.
  *
  *  ─── LUẬT AN TOÀN ─────────────────────────────────────────────────────────────
@@ -42,14 +49,24 @@ export interface MauPhi {
     nguon: 'hoi-quy-don' | 'ty-le-don' | 'cau-hinh-kenh'
     soDon: number
     ghiChu: string
+    /** khoảng giá bán và giá bán TRUNG BÌNH của các đơn đã đo (không có khi chưa đo) */
+    giaBanMin?: number
+    giaBanMax?: number
+    giaBanTB?: number
+    /** sai số của phép đo — để biết ở mức giá nào phí đo đủ chắc cho máy tự ghi (saiSoTyLePhi) */
+    saiSo?: { kieu: 'hoi-quy'; s2: number; n: number; tbX: number; sxx: number } | { kieu: 'ty-le'; se: number }
 }
 
 export const SO_DON_TOI_THIEU = 8
 const SO_DON_HOI_QUY = 15
+/** Máy (chu kỳ Tự động, tool AI) chỉ tự đăng mới / hạ giá khi phí đo từ ít nhất chừng này đơn, và sai số đo ×HE_SO_SAI_SO
+ *  không vượt biên tối thiểu — xem lyDoPhiChuaDuTin. Dưới mức đó: kế hoạch chờ người duyệt (TĂNG giá vẫn tự làm). */
+export const SO_DON_TU_GHI = 30
+const HE_SO_SAI_SO = 4
 
 /**
- * Ước lượng phí sàn từ đơn đã đối soát. Đủ đơn và giá trải rộng ⇒ hồi quy tuyến tính
- * phí = a·giá + b (tách được phí cố định/đơn). Không thì tỷ lệ tổng phí / tổng giá.
+ * Ước lượng phí sàn từ đơn đã đối soát. Đủ đơn và giá trải rộng ⇒ hồi quy phí = a·giá + b
+ * (tách được phí cố định/đơn). Không thì tỷ lệ tổng phí / tổng giá.
  * Dưới SO_DON_TOI_THIEU đơn ⇒ dùng tỷ lệ cấu hình của kênh.
  */
 export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
@@ -68,30 +85,43 @@ export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi 
     const tongGia = ds.reduce((s, d) => s + d.giaBan, 0)
     const tongPhi = ds.reduce((s, d) => s + d.phi, 0)
     const tyLeTong = tongPhi / tongGia
+    const giaBanMin = Math.min(...ds.map(d => d.giaBan)), giaBanMax = Math.max(...ds.map(d => d.giaBan))
+    const giaBanTB = tongGia / ds.length
 
     if (ds.length >= SO_DON_HOI_QUY) {
         const n = ds.length
-        const tbGia = tongGia / n
-        const tbPhi = tongPhi / n
-        let cov = 0, varGia = 0
-        for (const d of ds) {
-            cov += (d.giaBan - tbGia) * (d.phi - tbPhi)
-            varGia += (d.giaBan - tbGia) ** 2
-        }
-        const doLech = Math.sqrt(varGia / n) / tbGia   // hệ số biến thiên của giá
+        let varGia = 0
+        for (const d of ds) varGia += (d.giaBan - giaBanTB) ** 2
+        const doLech = Math.sqrt(varGia / n) / giaBanTB   // hệ số biến thiên của giá
         if (varGia > 0 && doLech >= 0.2) {
-            const a = cov / varGia
-            const b = tbPhi - a * tbGia
-            if (a > 0 && a < 0.5 && b >= 0 && b <= 50_000) {
+            /* Hồi quy TỶ LỆ phí theo 1/giá (01/11/2026): phí/giá = a + b·(1/giá) — tương đương bình phương tối thiểu
+             * trọng số 1/giá² trên phí = a·giá + b. Nhiễu phí sàn TỶ LỆ với giá (hoa hồng affiliate, voucher % chỉ có ở
+             * một số đơn): hồi quy thẳng trên phí để vài đơn đắt kéo lệch phí cố định b cả nghìn đồng, mà b quyết định
+             * giá sàn của hàng rẻ. Dữ liệu không nhiễu thì hai cách ra cùng a, b. */
+            const xs = ds.map(d => 1 / d.giaBan), ys = ds.map(d => d.phi / d.giaBan)
+            const tbX = xs.reduce((s, v) => s + v, 0) / n, tbY = ys.reduce((s, v) => s + v, 0) / n
+            let cov = 0, varX = 0
+            for (let i = 0; i < n; i++) { cov += (xs[i]! - tbX) * (ys[i]! - tbY); varX += (xs[i]! - tbX) ** 2 }
+            const b = varX > 0 ? cov / varX : NaN
+            const a = tbY - b * tbX
+            if (a > 0 && a < 0.5 && b >= -1 && b <= 50_000) {
+                const coDinh = Math.max(0, Math.round(b))
+                let rss = 0
+                for (let i = 0; i < n; i++) rss += (ys[i]! - a - b * xs[i]!) ** 2
                 return {
-                    tyLe: a, coDinh: Math.round(b), nguon: 'hoi-quy-don', soDon: n,
-                    ghiChu: `Đo từ ${n} đơn đã đối soát: phí ≈ ${round2(a * 100)}% giá bán + ${Math.round(b).toLocaleString('vi-VN')}đ/đơn.`,
+                    tyLe: a, coDinh, nguon: 'hoi-quy-don', soDon: n, giaBanMin, giaBanMax, giaBanTB,
+                    saiSo: { kieu: 'hoi-quy', s2: rss / (n - 2), n, tbX, sxx: varX },
+                    ghiChu: `Đo từ ${n} đơn đã đối soát: phí ≈ ${round2(a * 100)}% giá bán + ${coDinh.toLocaleString('vi-VN')}đ/đơn.`,
                 }
             }
         }
     }
+    // sai số chuẩn của ước lượng tỷ số Σphí/Σgiá
+    let e2 = 0
+    for (const d of ds) e2 += (d.phi - tyLeTong * d.giaBan) ** 2
+    const se = Math.sqrt(e2 / (ds.length - 1)) / (Math.sqrt(ds.length) * giaBanTB)
     return {
-        tyLe: tyLeTong, coDinh: 0, nguon: 'ty-le-don', soDon: ds.length,
+        tyLe: tyLeTong, coDinh: 0, nguon: 'ty-le-don', soDon: ds.length, giaBanMin, giaBanMax, giaBanTB, saiSo: { kieu: 'ty-le', se },
         ghiChu: `Đo từ ${ds.length} đơn đã đối soát: phí trung bình ${round2(tyLeTong * 100)}% giá bán (đã gồm phí cố định chia đều).`,
     }
 }
@@ -108,6 +138,10 @@ export interface ThamSoGia {
     phiDongGoi?: number
     /** % giá bán dành cho quảng cáo / voucher shop */
     phiQuangCaoPct?: number
+    /** hoa hồng affiliate, % giá bán — CHỈ vào giá sàn / hoà vốn (như mọi đơn đều qua affiliate) */
+    phiAffiliatePct?: number
+    /** thuế suất GTGT đầu ra, % (doanh nghiệp khấu trừ) — phần thuế trong giá = v/(1+v) */
+    thueGtgtPct?: number
     /** bước làm tròn LÊN, mặc định 1.000đ */
     lamTron?: number
     /** giới hạn giá của Shopee (get_item_limit) nếu biết */
@@ -118,6 +152,10 @@ export interface ThamSoGia {
 export interface DanhGiaGia {
     gia: number
     phiSan: number
+    /** thuế GTGT đầu ra nằm trong giá (0 nếu không khai) */
+    thueGtgt: number
+    /** hoa hồng affiliate (chỉ khi đánh giá đơn qua affiliate) */
+    hoaHongAffiliate: number
     loiNhuan: number
     bienPct: number
 }
@@ -130,29 +168,46 @@ export interface KetQuaGia {
     giaSan: number
     giaHoaVon: number
     duKien: DanhGiaGia | null
+    /** cùng giá đề xuất nhưng đơn đi qua affiliate (trường hợp xấu nhất) */
+    duKienAffiliate: DanhGiaGia | null
     canhBao: string[]
-    thamSo: { giaVon: number; tyLePhiPct: number; phiCoDinh: number; phiDongGoi: number; phiQuangCaoPct: number; bienMucTieuPct: number; bienToiThieuPct: number; lamTron: number }
+    thamSo: {
+        giaVon: number; tyLePhiPct: number; phiCoDinh: number; phiDongGoi: number; phiQuangCaoPct: number
+        phiAffiliatePct: number; thueGtgtPct: number; bienMucTieuPct: number; bienToiThieuPct: number; lamTron: number
+    }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 const lamTronLen = (n: number, buoc: number) => Math.ceil(n / buoc) * buoc
 
-/** Lãi của MỘT mức giá cụ thể (đơn 1 sản phẩm). */
-export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct'>): DanhGiaGia {
+const pctKep = (v: any, max: number) => Math.min(Math.max(Number(v) || 0, 0), max)
+/** Phần thuế GTGT đầu ra trong giá bán đã gồm thuế: v/(1+v). */
+const tyLeThue = (t: { thueGtgtPct?: number }) => { const v = pctKep(t.thueGtgtPct, 10) / 100; return v / (1 + v) }
+const tyLeAffiliate = (t: { phiAffiliatePct?: number }) => pctKep(t.phiAffiliatePct, 50) / 100
+
+/**
+ * Lãi của MỘT mức giá cụ thể (đơn 1 sản phẩm). `quaAffiliate` = đơn đi qua affiliate (trừ thêm
+ * trọn hoa hồng) — trường hợp xấu nhất, là thứ giá sàn phải giữ.
+ */
+export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct' | 'phiAffiliatePct' | 'thueGtgtPct'>, quaAffiliate = false): DanhGiaGia {
     const phiSan = t.phi.tyLe * gia + t.phi.coDinh
     const quangCao = ((t.phiQuangCaoPct || 0) / 100) * gia
-    const loiNhuan = gia - phiSan - t.giaVon - (t.phiDongGoi || 0) - quangCao
+    const thue = tyLeThue(t) * gia
+    const aff = quaAffiliate ? tyLeAffiliate(t) * gia : 0
+    const loiNhuan = gia - phiSan - t.giaVon - (t.phiDongGoi || 0) - quangCao - thue - aff
     return {
         gia: Math.round(gia),
         phiSan: Math.round(phiSan),
+        thueGtgt: Math.round(thue),
+        hoaHongAffiliate: Math.round(aff),
         loiNhuan: Math.round(loiNhuan),
         bienPct: gia > 0 ? round2((loiNhuan / gia) * 100) : 0,
     }
 }
 
 /** Giá đạt đúng biên `bienPct` (chưa làm tròn). Infinity nếu mẫu số ≤ 0. */
-function giaDatBien(t: ThamSoGia, bienPct: number): number {
-    const mau = 1 - t.phi.tyLe - bienPct / 100 - (t.phiQuangCaoPct || 0) / 100
+function giaDatBien(t: ThamSoGia, bienPct: number, quaAffiliate: boolean): number {
+    const mau = 1 - t.phi.tyLe - bienPct / 100 - (t.phiQuangCaoPct || 0) / 100 - tyLeThue(t) - (quaAffiliate ? tyLeAffiliate(t) : 0)
     if (mau <= 0.02) return Infinity
     return (t.giaVon + t.phi.coDinh + (t.phiDongGoi || 0)) / mau
 }
@@ -167,25 +222,31 @@ export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
         phiCoDinh: Math.round(t.phi.coDinh),
         phiDongGoi: Math.round(t.phiDongGoi || 0),
         phiQuangCaoPct: t.phiQuangCaoPct || 0,
+        phiAffiliatePct: round2(tyLeAffiliate(t) * 100),
+        thueGtgtPct: round2(pctKep(t.thueGtgtPct, 10)),
         bienMucTieuPct: bienMucTieu,
         bienToiThieuPct: bienToiThieu,
         lamTron,
     }
-    const hong = (lyDo: string): KetQuaGia => ({ hopLe: false, lyDo, giaDeXuat: 0, giaSan: 0, giaHoaVon: 0, duKien: null, canhBao: [], thamSo })
+    const hong = (lyDo: string): KetQuaGia => ({ hopLe: false, lyDo, giaDeXuat: 0, giaSan: 0, giaHoaVon: 0, duKien: null, duKienAffiliate: null, canhBao: [], thamSo })
 
     if (!(t.giaVon > 0)) return hong('Sản phẩm CHƯA CÓ GIÁ VỐN — không tính được lãi/lỗ nên không đề xuất giá. Cập nhật giá vốn trước.')
 
     const tp: ThamSoGia = { ...t, bienLoiNhuanPct: bienMucTieu, bienToiThieuPct: bienToiThieu }
-    const hoaVon = giaDatBien(tp, 0)
-    const san = giaDatBien(tp, bienToiThieu)
-    const mucTieu = giaDatBien(tp, bienMucTieu)
-    if (!Number.isFinite(mucTieu)) {
-        return hong(`Biên lãi ${bienMucTieu}% + phí sàn ${thamSo.tyLePhiPct}% + quảng cáo ${thamSo.phiQuangCaoPct}% đã gần/vượt 100% giá bán — không có giá nào đạt. Giảm biên hoặc quảng cáo.`)
+    const hoaVon = giaDatBien(tp, 0, true)
+    const san = giaDatBien(tp, bienToiThieu, true)
+    const mucTieu = giaDatBien(tp, bienMucTieu, false)
+    if (!Number.isFinite(mucTieu) || !Number.isFinite(san)) {
+        const tren = [`phí sàn ${thamSo.tyLePhiPct}%`, `quảng cáo ${thamSo.phiQuangCaoPct}%`,
+            thamSo.thueGtgtPct ? `thuế GTGT ${thamSo.thueGtgtPct}%` : '',
+            Number.isFinite(mucTieu) && thamSo.phiAffiliatePct ? `affiliate ${thamSo.phiAffiliatePct}%` : ''].filter(Boolean)
+        return hong(`Biên lãi ${Number.isFinite(mucTieu) ? bienToiThieu : bienMucTieu}% + ${tren.join(' + ')} đã gần/vượt 100% giá bán — không có giá nào đạt. Giảm biên, quảng cáo hoặc affiliate.`)
     }
 
     const canhBao: string[] = []
     const giaSan = lamTronLen(san, 100)
-    let giaDeXuat = lamTronLen(mucTieu, lamTron)
+    // Mục tiêu tính với phí đo trung bình; affiliate cao có thể đẩy sàn lên trên mục tiêu ⇒ đề xuất không dưới sàn
+    let giaDeXuat = lamTronLen(Math.max(mucTieu, giaSan), lamTron)
     if (t.giaShopeeMin && giaDeXuat < t.giaShopeeMin) {
         giaDeXuat = lamTronLen(t.giaShopeeMin, lamTron)
         canhBao.push(`Giá tính ra thấp hơn mức tối thiểu Shopee cho phép (${t.giaShopeeMin.toLocaleString('vi-VN')}đ) — đã nâng lên.`)
@@ -199,6 +260,7 @@ export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
         giaSan,
         giaHoaVon: Math.ceil(hoaVon),
         duKien: danhGiaGia(giaDeXuat, tp),
+        duKienAffiliate: danhGiaGia(giaDeXuat, tp, true),
         canhBao,
         thamSo,
     }
@@ -212,8 +274,62 @@ export function chanGiaDuoiSan(gia: number, kq: KetQuaGia): string | null {
     if (!kq.hopLe && kq.giaSan <= 0) return kq.lyDo || 'Không tính được giá sàn'
     if (!Number.isFinite(gia) || gia <= 0) return 'Giá không hợp lệ'
     if (gia < kq.giaSan) {
+        const aff = kq.thamSo.phiAffiliatePct ? ` kể cả đơn qua affiliate ${kq.thamSo.phiAffiliatePct}%` : ''
         return `Giá ${Math.round(gia).toLocaleString('vi-VN')}đ thấp hơn GIÁ SÀN ${kq.giaSan.toLocaleString('vi-VN')}đ ` +
-            `(biên tối thiểu ${kq.thamSo.bienToiThieuPct}%; hoà vốn ${kq.giaHoaVon.toLocaleString('vi-VN')}đ) — không ghi.`
+            `(biên tối thiểu ${kq.thamSo.bienToiThieuPct}%${aff}; hoà vốn ${kq.giaHoaVon.toLocaleString('vi-VN')}đ) — không ghi.`
     }
     return null
+}
+
+/**
+ * Phí sàn có đủ tin để MÁY tự đăng mới / hạ giá về mức này không (chu kỳ tự động, tool AI). null = được.
+ * Người duyệt từng kế hoạch thì chỉ cảnh báo — đây là rào cho lúc không ai xem. Có lý do mà máy TĂNG giá
+ * thì vẫn được (lãi mỗi đơn tăng theo giá) — doiGiaShopee soát chiều tăng với giá đọc thẳng từ Shopee.
+ *  - Chưa đo được phí (rơi về % cấu hình kênh, mặc định 6% trong khi phí Shopee thật ~20–30%)
+ *    ⇒ giá sàn tính ra thấp xa thực tế.
+ *  - Phí đo kiểu TỶ LỆ TRUNG BÌNH (không tách được phí cố định/đơn) mà giá thấp hơn giá trung bình các
+ *    đơn đã đo: tỷ lệ trung bình = a + b/giáTB, hàng rẻ hơn giáTB chịu b/giá > b/giáTB ⇒ thiếu phí.
+ *    Từ giáTB trở lên thì tỷ lệ trung bình chỉ có DƯ phí, nên an toàn.
+ *  - Mới đo phí từ ít đơn (dưới SO_DON_TU_GHI): loại phí chỉ có ở một phần đơn (affiliate, voucher, phí dịch vụ
+ *    theo chương trình) có thể chưa lọt vào mẫu — sai số tính từ mẫu không thấy được thứ mẫu chưa gặp.
+ *  - Hồi quy tách được phí cố định nhưng giá thấp hơn MỌI đơn đã đo ⇒ đang ngoại suy, không tự ghi.
+ *  - Phí các đơn lệch nhau nhiều (affiliate, voucher chỉ có ở vài đơn): sai số tỷ lệ phí ở mức giá đó
+ *    (HE_SO_SAI_SO lần sai số chuẩn) lớn hơn biên tối thiểu ⇒ sai số đo có thể ăn hết biên, không tự ghi.
+ *  Đo bằng mô phỏng (scripts/check-pilot-khong-lo.ts, phần D2 — phí biến động KHÔNG khai trong chính sách):
+ *  3σ từ 8 đơn ⇒ ~0,1% giá máy tự ghi lỗ kỳ vọng, tệ nhất −5%; 4σ + ≥ 30 đơn ⇒ 0 giá lỗ.
+ */
+export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5): string | null {
+    const d = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
+    if (phi.nguon === 'cau-hinh-kenh') {
+        return `Phí sàn CHƯA ĐO được (${phi.soDon}/${SO_DON_TOI_THIEU} đơn đã đối soát) — đang dùng ${round2(phi.tyLe * 100)}% cấu hình kênh, ` +
+            'phí Shopee thật thường 20–30%, giá sàn tính ra có thể vẫn lỗ. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Shopee Pilot.'
+    }
+    if (!(phi.soDon >= SO_DON_TU_GHI)) {
+        return `Phí sàn mới đo từ ${phi.soDon}/${SO_DON_TU_GHI} đơn đã đối soát — ít đơn thì loại phí chỉ có ở một phần đơn (affiliate, voucher, ` +
+            'phí dịch vụ theo chương trình) có thể chưa lọt vào số đo. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Shopee Pilot.'
+    }
+    if (phi.nguon === 'ty-le-don' && phi.giaBanTB && gia < phi.giaBanTB) {
+        return `Giá ${d(gia)} thấp hơn giá trung bình các đơn đã đo phí (${d(phi.giaBanTB)}) — phí đo là tỷ lệ trung bình, chưa tách được ` +
+            'phí cố định mỗi đơn nên hàng rẻ hơn mức đó có thể bị tính thiếu phí. Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.'
+    }
+    if (phi.nguon === 'hoi-quy-don' && phi.giaBanMin && gia < phi.giaBanMin) {
+        return `Giá ${d(gia)} thấp hơn mọi đơn đã đo phí (rẻ nhất ${d(phi.giaBanMin)}) — phí cố định mỗi đơn chưa được đo ở vùng giá này. ` +
+            'Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.'
+    }
+    const se = saiSoTyLePhi(gia, phi)
+    const nguong = Math.max(Number(bienToiThieuPct) || 0, 1) / 100
+    if (se != null && HE_SO_SAI_SO * se > nguong) {
+        return `Phí sàn ở mức giá ${d(gia)} đo chưa đủ chắc: phí các đơn đã đo lệch nhau nhiều, sai số ±${round2(HE_SO_SAI_SO * se * 100)} điểm % — ` +
+            `lớn hơn biên tối thiểu ${round2(nguong * 100)}%, cần thêm đơn đối soát. Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.`
+    }
+    return null
+}
+
+/** Sai số chuẩn của TỶ LỆ phí đo được ở mức giá `gia` (0..1). null = không có số đo (phí cấu hình kênh). */
+export function saiSoTyLePhi(gia: number, phi: MauPhi): number | null {
+    const s = phi.saiSo
+    if (!s) return null
+    if (s.kieu === 'ty-le') return Number.isFinite(s.se) ? s.se : null
+    if (!(gia > 0) || !(s.sxx > 0) || !Number.isFinite(s.s2)) return null
+    return Math.sqrt(s.s2 * (1 / s.n + (1 / gia - s.tbX) ** 2 / s.sxx))
 }

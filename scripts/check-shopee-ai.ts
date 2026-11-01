@@ -148,8 +148,8 @@ async function main() {
         }
         const listing: any[] = []
         const ghiListing: any[] = []
-        // 20 đơn đã đối soát: phí 14% + 3.000đ
-        const donDoiSoat = Array.from({ length: 20 }, (_, i) => { const g = 60000 + i * 20000; return { giaBan: g, phi: 0.14 * g + 3000 } })
+        // 40 đơn đã đối soát (máy chỉ tự ghi khi phí đo từ ≥ 30 đơn — SO_DON_TU_GHI): phí 14% + 3.000đ
+        const donDoiSoat = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } })
         const prisma: any = {
             onlineChannel: { findMany: async () => [kenh], update: async () => kenh },
             product: { findFirst: async ({ where }: any) => (JSON.stringify(where).toLowerCase().includes('oc4') ? hang : null), findUnique: async () => hang },
