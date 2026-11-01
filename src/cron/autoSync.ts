@@ -42,6 +42,7 @@ const FEE_INTERVAL      = 6 * 60 * 60 * 1000   // 6 tiếng
 const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
 const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
 const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh Shopee
+const AFF_BU_MS         = 120_000              // giờ RIÊNG cho lượt bù, tính từ lúc bắt đầu bù
 
 let syncTimer:    NodeJS.Timeout | null = null
 let cleanupTimer: NodeJS.Timeout | null = null
@@ -567,9 +568,9 @@ const buAffBoQua = new Map<string, number>()
  * BÙ HOA HỒNG AFFILIATE (01/11/2026): cột OnlineOrder.affiliateFee sinh sau, nên đơn đã đối soát trước đó
  * mang NULL (chưa đọc — KHÁC 0), mà vòng đối soát chính không bao giờ hỏi lại (chỉ quét platformFee = 0).
  * Hỏi lại escrow và CHỈ ghi affiliateFee — phí / thực nhận đã đối soát giữ nguyên. Hết đơn NULL thì thôi
- * gọi sàn. Trả số đơn đã ghi.
+ * gọi sàn. `han` = mốc giờ (ms) phải dừng. Trả số đơn đã ghi.
  */
-async function buHoaHongAffiliate(sp: any, ch: any, batDau: number, mapWithConcurrency: any, ShopeeService: any): Promise<number> {
+async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurrency: any, ShopeeService: any): Promise<number> {
     const now = Date.now()
     for (const [id, luc] of buAffBoQua) if (now - luc > 24 * 3600_000) buAffBoQua.delete(id)
     const boQua = [...buAffBoQua.keys()]
@@ -591,9 +592,9 @@ async function buHoaHongAffiliate(sp: any, ch: any, batDau: number, mapWithConcu
         accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
         shopId: ch.shopId || undefined,
     })
-    let ok = 0, khongRa = 0
+    let ok = 0, khongRa = 0, hetGio = 0
     await mapWithConcurrency(orders, async (o: any) => {
-        if (Date.now() - batDau > FEE_DEADLINE_MS) return
+        if (Date.now() > han) { hetGio++; return }
         const sn = String(o.externalOrderId || '').replace(/^SPE-/i, '')
         try {
             const e = sn ? await svc.getEscrowDetail(sn) : null
@@ -605,7 +606,8 @@ async function buHoaHongAffiliate(sp: any, ch: any, batDau: number, mapWithConcu
             buAffBoQua.set(o.id, Date.now())
         }
     }, 6)
-    console.log(`[FeeSync] ${ch.name}: bù hoa hồng affiliate ${ok} đơn (quét ${orders.length}, chưa đọc được ${khongRa})`)
+    console.log(`[FeeSync] ${ch.name}: bù hoa hồng affiliate ${ok} đơn (quét ${orders.length}, chưa đọc được ${khongRa}` +
+        `${hetGio ? `, hết giờ để lượt sau ${hetGio}` : ''})`)
     return ok
 }
 
@@ -726,14 +728,20 @@ async function runFeeSync() {
                 nhaClient()
             }
         }
-        /* Bù hoa hồng affiliate SAU khi mọi cửa hàng đã đối soát phí xong, bằng phần giờ còn lại — chạy
-         * xen giữa thì một cửa hàng nhiều đơn bù ăn hết giờ, cửa hàng sau mất lượt đối soát đơn mới. */
+        /* Bù hoa hồng affiliate SAU khi mọi cửa hàng đã đối soát phí xong — chạy xen giữa thì một cửa hàng
+         * nhiều đơn bù ăn hết giờ, cửa hàng sau mất lượt đối soát đơn mới. Lượt chính hay ăn gần hết 240s
+         * (đo 01/11: CPU Cloud Run chỉ cấp khi có request nên lời gọi sàn chậm; còn ~1 phút, bù được 38 đơn
+         * của MỘT kênh) ⇒ lượt bù có giờ RIÊNG AFF_BU_MS, và bắt đầu từ một kênh NGẪU NHIÊN — đi theo thứ tự
+         * cố định thì kênh đứng đầu ăn hết giờ mọi lượt, kênh sau không bao giờ tới lượt. */
         let tongBuAff = 0
-        for (const { schema, ch } of kenhBuAff) {
-            if (Date.now() - batDau > FEE_DEADLINE_MS) break
+        const hanBu = Math.max(batDau + FEE_DEADLINE_MS, Date.now() + AFF_BU_MS)
+        const dau = Math.floor(Math.random() * kenhBuAff.length)
+        for (let i = 0; i < kenhBuAff.length; i++) {
+            if (Date.now() > hanBu) break
+            const { schema, ch } = kenhBuAff[(dau + i) % kenhBuAff.length]
             const nhaClient = giuClient(schema)
             try {
-                tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, batDau, mapWithConcurrency, ShopeeService)
+                tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, hanBu, mapWithConcurrency, ShopeeService)
             } catch (e: any) {
                 console.warn(`[FeeSync] bù hoa hồng affiliate ${ch.name} hỏng:`, fmtErr(e))
             } finally {

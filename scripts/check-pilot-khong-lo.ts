@@ -791,6 +791,11 @@ async function main() {
             const src = fs.readFileSync(path.join(__dirname, '../src/cron/autoSync.ts'), 'utf8')
             dung('E13. lượt bù hoa hồng chỉ ghi cột affiliateFee và chỉ khi đọc được (không ghi 0 thay số thiếu)',
                 /e\?\.affiliateFee == null\) \{ khongRa\+\+/.test(src) && /data: \{ affiliateFee: e\.affiliateFee \}/.test(src) && /affiliateFee: null/.test(src))
+            // đo 01/11: lượt chính ăn gần hết 240s ⇒ lượt bù chỉ còn ~1 phút, bù 38 đơn của đúng kênh đứng đầu danh sách
+            dung('E13. lượt bù có giờ RIÊNG (lượt chính ăn hết 240s vẫn bù được) và bắt đầu từ kênh ngẫu nhiên (không kênh nào bị bỏ đói)',
+                /hanBu = Math\.max\(batDau \+ FEE_DEADLINE_MS, Date\.now\(\) \+ AFF_BU_MS\)/.test(src) && /if \(Date\.now\(\) > han\) \{ hetGio\+\+/.test(src) &&
+                /Math\.floor\(Math\.random\(\) \* kenhBuAff\.length\)/.test(src) && /kenhBuAff\[\(dau \+ i\) % kenhBuAff\.length\]/.test(src) &&
+                /buHoaHongAffiliate\(getStorePrisma\(schema\), ch, hanBu,/.test(src))
         }
 
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────
