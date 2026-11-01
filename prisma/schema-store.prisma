@@ -3552,6 +3552,11 @@ model ShopeePilotConfig {
   executionMode String  @default("preview") // preview | auto
   policy        String  @default("{}") // JSON ChinhSachPilot
   updatedAt     BigInt  @default(0)
+  profiles      String  @default("[]") // JSON HoSoDang[] — hồ sơ đăng hàng theo nhóm / mã (01/11/2026)
+  schedule      String  @default("{}") // JSON LichPilot — chạy chu kỳ theo lịch
+  nextRunAt     BigInt?
+  lastRunAt     BigInt?
+  lastResult    String?
 }
 
 model ShopeePilotPlan {

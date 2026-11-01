@@ -8,10 +8,15 @@
  *  4. Đăng hàng: lập kế hoạch soát đủ rào, thực thi gửi đúng giá kế hoạch; đứt mạng ⇒ 'uncertain'.
  *  5. Khuyến mãi: vượt mức giảm tối đa bị chặn, giá KM không dưới sàn, mã vừa tăng giá bị loại, Shopee từ chối một phần ⇒ 'partial'.
  *  6. Chu kỳ ở chế độ Xem trước chỉ lập kế hoạch.
+ *  7. Hồ sơ đăng hàng (01/11): mã thắng nhóm; chu kỳ tự đăng ĐÚNG hàng có hồ sơ, trong trần mỗi chu kỳ; hàng chưa có hồ sơ được báo theo nhóm.
+ *  8. Chạy theo lịch: chưa tới hẹn thì thôi; tới hẹn thì một bản giành được, chạy, ghi kết quả, hẹn lượt kế.
+ *  9. Khuyến mãi hàng có phân loại: giá KM từng phân loại theo giá vốn của SKU phân loại đó, phân loại thiếu vốn bị để ngoài.
+ * 10. Kiểm tra API: từng bước chỉ đọc, một bước hỏng không chặn các bước khác.
  */
 import {
     khoBoNho, chuanHoaChinhSach, vuotBienDong, quyetDinhGia, dauNgayVN, xayTrangThai, luuCauHinh,
     taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai, thucThi, chayChuKy, CHINH_SACH_MAC_DINH, type NgCanh,
+    chuanHoaHoSo, timHoSo, luuHoSo, xoaHoSo, chayTheoLich, kiemKetNoi,
 } from '../src/lib/shopeePilot'
 import { tinhGiaDeXuat } from '../src/lib/giaShopee'
 import { ShopeeService } from '../src/services/platforms/shopee'
@@ -20,6 +25,8 @@ import { ToolError } from '../src/lib/mcpTypes'
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
 const nem = async (f: () => Promise<any>) => { try { await f(); return null } catch (e: any) { return e } }
+
+const bd2 = () => Math.floor(Date.now() / 1000) + 3600
 
 async function main() {
     // ─── 1. Chính sách ───────────────────────────────────────────────────────────
@@ -78,6 +85,7 @@ async function main() {
         },
         skuMapping: { findMany: async () => [], findFirst: async () => null },
         storeSettings: { findFirst: async () => null },
+        category: { findMany: async () => [{ name: 'Điện' }, { name: 'Gia dụng' }] },
         $queryRawUnsafe: async (sql: string, ...v: any[]) => {
             if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donDoiSoat
             if (sql.includes('FROM "Product"')) {
@@ -102,6 +110,18 @@ async function main() {
     P.addDiscount = async (ten: string) => { goi.push(`add_discount:${ten}`); return 555 }
     P.addDiscountItems = async (_id: number, items: any[]) => { goi.push(`add_discount_item:${items.length}`); return { loi: items.length > 1 ? [{ itemId: items[1].item_id, lyDo: 'item_already_in_promotion' }] : [] } }
     P.deleteDiscount = async () => { goi.push('delete_discount') }
+    let itemsKm: any[] = []
+    const addDiscountItemsGoc = P.addDiscountItems
+    P.getModelList = async () => [
+        { model_id: 41, name: 'Đen', sku: 'OC6', price: 200000, giaHienTai: 200000, stock: 3 },
+        { model_id: 42, name: 'Trắng', sku: 'OC6-TRANG', price: 210000, giaHienTai: 210000, stock: 2 },
+    ]
+    P.testConnection = async () => ({ success: true, shopName: 'Kengi AI Shop' })
+    P.getCategories = async () => [{ id: 100, chaId: 0, ten: 'Thiết bị điện', coCon: true }, { id: 101, chaId: 100, ten: 'Ổ cắm', coCon: false }]
+    P.categoryRecommend = async () => [101]
+    P.getCategoryAttributes = async () => [{ attributeId: 7, ten: 'Chất liệu', batBuoc: true, kieuNhap: 'chon_mot', donVi: [], giaTri: [], soGiaTri: 0 }]
+    P.getBrandList = async () => ({ batBuoc: false, thuongHieu: [], conNua: false })
+    P.getDiscountList = async () => { throw new Error('Shopee get_discount_list: error_permission - no permission') }
     const fetchGoc = globalThis.fetch
     const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(1000)])
     ;(globalThis as any).fetch = async () => new Response(jpeg, { status: 200 })
@@ -185,7 +205,64 @@ async function main() {
         const ck = await chayChuKy(ctx)
         const dongGia = ck.results.find((r: any) => r.action === 'price' && r.sku === 'OC4')
         dung('chu kỳ Xem trước: lập kế hoạch nâng giá, không gọi Shopee', dongGia?.status === 'draft' && ghiShopee() === truocChuKy, JSON.stringify(ck.results))
-        dung('chu kỳ báo hàng chưa đăng (không tự đăng)', ck.results.some((r: any) => r.action === 'publish' && r.status === 'skipped'))
+        dung('chu kỳ không tự đăng khi chưa có hồ sơ', ck.results.some((r: any) => r.action === 'publish') && !ck.results.some((r: any) => r.action === 'publish' && r.planId))
+        // ─── 7. Hồ sơ đăng hàng + tự đăng trong chu kỳ ─────────────────────────────
+        const thieuCan = await nem(async () => chuanHoaHoSo({ scope: 'nhom', key: 'Điện', categoryId: 101, weightGram: 0 }))
+        dung('hồ sơ thiếu cân nặng bị chặn', thieuCan instanceof ToolError)
+        const hs = chuanHoaHoSo({ scope: 'nhom', key: 'Điện', categoryId: 101, weightGram: 300, attributes: [{ attribute_id: 7, value_id: 70 }, { attribute_id: 8 }, { attribute_id: 9, gia_tri: '  ' }] })
+        dung('hồ sơ bỏ thuộc tính rỗng', hs.attributes.length === 1 && hs.attributes[0]!.value_id === 70)
+        const hsMa = chuanHoaHoSo({ scope: 'sku', key: 'tui', categoryId: 202, weightGram: 450 })
+        dung('hồ sơ theo mã thắng hồ sơ theo nhóm (không phân biệt hoa thường)', timHoSo([hs, hsMa], 'TUI', 'Điện')?.categoryId === 202 && timHoSo([hs, hsMa], 'OC4', 'điện')?.categoryId === 101 && timHoSo([hs], 'X', 'Khác') === null)
+
+        listing.splice(listing.findIndex(l => l.platformProductId === '999'), 1)    // gỡ TUI đã đăng ⇒ thành ứng viên lại
+        hang.DEN = { id: 'p8', sku: 'DEN', name: 'Đèn LED để bàn', description: 'Đèn LED để bàn 3 chế độ sáng, cổng sạc USB-C.', productType: 'goods', costPrice: 120000, sellingPrice: 250000, stock: 4, mergedIntoId: null, bundleId: null, images: [{ url: 'https://storage.googleapis.com/kengi-tech-assets/anh-sp/x/8.jpg', isPrimary: true }] }
+        await luuCauHinh(ctx, { executionMode: 'preview', policy: { maxPublishPerCycle: 1 } })
+        const ck0 = await chayChuKy(ctx)
+        dung('chu kỳ khi chưa có hồ sơ: không lập kế hoạch đăng, báo theo nhóm', !ck0.results.some((r: any) => r.action === 'publish' && r.planId) && ck0.results.some((r: any) => r.action === 'publish' && /CHƯA CÓ HỒ SƠ ĐĂNG/.test(r.message) && /Điện/.test(r.message)), JSON.stringify(ck0.results.filter((r: any) => r.action === 'publish')))
+        await luuHoSo(ctx, { scope: 'nhom', key: 'Điện', categoryId: 101, categoryPath: 'Thiết bị điện > Ổ cắm', weightGram: 300, attributes: [{ attribute_id: 7, value_id: 70 }] })
+        await luuHoSo(ctx, { scope: 'nhom', key: 'điện', categoryId: 101, weightGram: 320 })
+        const cfgHs = (await kho.docCauHinh())!
+        dung('lưu hồ sơ trùng nhóm thì thay, không nhân đôi', cfgHs.profiles.length === 1 && cfgHs.profiles[0]!.weightGram === 320)
+        const ck1 = await chayChuKy(ctx)
+        const dangCk = ck1.results.filter((r: any) => r.action === 'publish' && r.planId)
+        dung('chu kỳ: lập kế hoạch đăng theo hồ sơ, đúng trần 1 mã / chu kỳ, không gọi add_item', dangCk.length === 1 && dangCk[0].status === 'draft' && ck1.results.some((r: any) => /mỗi chu kỳ đăng tối đa 1/.test(r.message || '')), JSON.stringify(ck1.results.filter((r: any) => r.action === 'publish')))
+        const khCk = kho._keHoach.find(k => k.id === dangCk[0]?.planId)
+        dung('kế hoạch tự đăng mang cân nặng + ngành của hồ sơ', khCk?.data?.payload?.weight === 0.32 && khCk?.data?.payload?.category_id === 101)
+        const xoa = await xoaHoSo(ctx, cfgHs.profiles[0]!.id)
+        dung('xoá hồ sơ', xoa.daXoa && (await kho.docCauHinh())!.profiles.length === 0)
+
+        // ─── 8. Chạy theo lịch ──────────────────────────────────────────────────────
+        await luuCauHinh(ctx, { schedule: { enabled: true, intervalMinutes: 60 } })
+        const c1 = (await kho.docCauHinh())!
+        dung('bật lịch ⇒ hẹn lượt kế sau đúng nhịp', c1.schedule.enabled && c1.nextRunAt !== null && Math.abs(c1.nextRunAt - Date.now() - 3600_000) < 5000)
+        dung('chưa tới hẹn ⇒ không chạy', (await chayTheoLich(prisma, kho)) === 'chua-toi')
+        await kho.luuCauHinh({ ...c1, nextRunAt: Date.now() - 1000 })
+        const denHen = (await kho.docCauHinh())!.nextRunAt!
+        const kqLich = await chayTheoLich(prisma, kho)
+        const c2 = (await kho.docCauHinh())!
+        dung('tới hẹn ⇒ chạy, ghi kết quả, hẹn lượt kế', kqLich === 'da-chay' && c2.lastRunAt !== null && c2.lastResult?.ok === true && c2.nextRunAt! > Date.now() + 3500_000, JSON.stringify({ kqLich, last: c2.lastResult?.ok }))
+        dung('hai bản máy cùng giành một lượt ⇒ chỉ một bản được', (await kho.gianhLich(c2.nextRunAt!, 1)) === true && (await kho.gianhLich(c2.nextRunAt!, 2)) === false && denHen > 0)
+        await luuCauHinh(ctx, { schedule: { enabled: false } })
+        dung('tắt lịch ⇒ bỏ hẹn', (await kho.docCauHinh())!.nextRunAt === null && (await chayTheoLich(prisma, kho)) === 'khong-dung')
+
+        // ─── 9. Khuyến mãi hàng có phân loại ────────────────────────────────────────
+        listing.push({ id: 'opM', channelId: 'ch1', platformProductId: '444', name: 'Ổ cắm 6 lỗ (2 màu)', sku: 'OC6-MAU', price: 0, stock: 5, status: 'NORMAL', localProductId: null, imageUrl: null })
+        await luuCauHinh(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 500 } })
+        P.addDiscountItems = async (_id: number, items: any[]) => { itemsKm = items; return { loi: [] } }
+        const kmPl = await taoKeHoachKhuyenMai(ctx, { name: 'Sale phân loại', skus: ['OC6-MAU'], discountRate: 0.1, startTime: bd2(), endTime: bd2() + 7200, purchaseLimit: 1, idempotencyKey: 'cm1' })
+        const dongPl = kmPl.data.lines[0]
+        dung('khuyến mãi phân loại: phân loại có vốn được giảm, phân loại thiếu vốn bị để ngoài', dongPl?.models?.length === 1 && dongPl.models[0].modelId === 41 && dongPl.models[0].price === 180000 && dongPl.skippedModels?.length === 1, JSON.stringify(dongPl))
+        const kmPlXong = await thucThi(ctx, kmPl.id)
+        dung('thực thi gửi model_list với giá từng phân loại', kmPlXong.status === 'succeeded' && itemsKm[0]?.model_list?.[0]?.model_id === 41 && itemsKm[0]?.model_list?.[0]?.model_promotion_price === 180000 && itemsKm[0]?.item_promotion_price === undefined, JSON.stringify(itemsKm))
+        P.addDiscountItems = addDiscountItemsGoc
+
+        // ─── 10. Kiểm tra API ───────────────────────────────────────────────────────
+        const kt = await kiemKetNoi(ctx)
+        const loiKm = kt.buoc.find((b: any) => /discount/.test(b.ten))
+        dung('kiểm tra API: bước hỏng không chặn bước khác, không nạp ảnh khi không yêu cầu', kt.tong === 8 && kt.dat === 7 && loiKm?.ok === false && /permission/.test(loiKm.chiTiet) && !kt.buoc.some((b: any) => /upload_image/.test(b.ten)), JSON.stringify(kt.buoc.map((b: any) => [b.ten, b.ok])))
+        const truocAnh = goi.filter(g => g === 'upload').length
+        const kt2 = await kiemKetNoi(ctx, { thuNapAnh: true })
+        dung('"thử nạp ảnh" nạp đúng một ảnh', kt2.tong === 9 && goi.filter(g => g === 'upload').length === truocAnh + 1)
     } finally {
         ;(globalThis as any).fetch = fetchGoc
     }

@@ -2946,6 +2946,12 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 /* SHOPEE PILOT (31/10/2026) — kế hoạch / nhật ký ghi / cấu hình của bảng điều khiển
                  * Shopee Pilot. lib/shopeePilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
                 for (const sql of SQL_TAO_BANG_PILOT) await (sp as any).$executeRawUnsafe(sql)
+                // 01/11/2026: hồ sơ đăng hàng + lịch chạy (SQL_TAO_BANG_PILOT cũng có — viết lại ở đây cho bộ soát migrate thấy)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "profiles" TEXT NOT NULL DEFAULT '[]'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "schedule" TEXT NOT NULL DEFAULT '{}'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "nextRunAt" BIGINT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "lastRunAt" BIGINT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "lastResult" TEXT`)
 
                 /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
                  * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán
