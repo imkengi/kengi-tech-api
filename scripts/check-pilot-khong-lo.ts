@@ -16,7 +16,8 @@
  *  E. Đầu-cuối trên prisma giả + Shopee giả: chu kỳ Tự động; phí chưa đo; phí tỷ lệ trung bình + hàng rẻ; tool AI (chính
  *     sách nền, phí chưa đo, hiện lại hàng ẩn, đọc chính sách hỏng); khuyến mãi soát lại lúc thực thi (giá vốn tăng /
  *     chính sách chặt hơn / phân loại); đăng và đổi giá sau khi giá vốn tăng; thuế GTGT và lời nhắc theo loại hình;
- *     hoa hồng affiliate đo được cao hơn mức khai (E11); cửa hàng chưa migrate cột affiliateFee (E12); đọc escrow (E13).
+ *     hoa hồng affiliate đo được cao hơn mức khai (E11); cửa hàng chưa migrate cột affiliateFee (E12); đọc escrow (E13);
+ *     phí theo NGÀNH (E14): hàng ngành phí cao không bị hạ theo phí trung bình cả gian, ngành đổi lúc thực thi ⇒ soát lại.
  *  F. Bộ chọn hồ sơ đăng: nhóm kèm số mã, tìm mã theo tên / SKU, cờ đã đăng / đã có hồ sơ.
  */
 import fs from 'fs'
@@ -33,6 +34,7 @@ import { SHOPEE_TOOLS } from '../src/routes/mcpShopeeTools'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
 import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT } from '../src/lib/tienIchCuaHang'
+import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -65,11 +67,12 @@ type Don = { giaBan: number; phi: number; aff?: number | null }
 const goi: string[] = []
 const ghiShopee = () => goi.filter(g => /^(add_item|update_price|add_discount|unlist)/.test(g))
 
-function taoCuaHang(o: { don: Don[]; loaiHinh?: string }) {
+function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { nganh: string })[] }) {
+    xoaDemPhiTheoNganh()   // mọi cửa hàng giả cùng mã gian 'ch1' — đừng để đệm phí ngành của ca trước lọt sang
     const kenh = { id: 'ch1', name: 'Gian thử', platform: 'shopee', shopId: '777', accessToken: 'tok', apiKey: '1', apiSecret: 's', commissionRate: 6, tokenExpiresAt: new Date(Date.now() + 3600_000), createdAt: new Date() }
     const hang: Record<string, any> = {}
     const listing: any[] = []
-    const st = { don: o.don, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0 }
+    const st = { don: o.don, donNganh: o.donNganh || null, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0 }
     const baseInfo: Record<string, any> = {}
     const models: Record<string, any[]> = {}
     const kho = khoBoNho()
@@ -80,8 +83,8 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string }) {
             images: [{ url: `https://storage.googleapis.com/kengi-tech-assets/anh-sp/x/${sku}.jpg`, isPrimary: true }], nhom,
         }
     }
-    const themListing = (sku: string, gia: number, itemId: string, status = 'NORMAL') => {
-        listing.push({ id: `op-${itemId}`, channelId: 'ch1', platform: 'shopee', platformProductId: itemId, name: sku, sku, price: gia, stock: 5, status, localProductId: hang[sku]?.id || null, imageUrl: null, updatedAt: new Date() })
+    const themListing = (sku: string, gia: number, itemId: string, status = 'NORMAL', categoryId: string | null = null) => {
+        listing.push({ id: `op-${itemId}`, channelId: 'ch1', platform: 'shopee', platformProductId: itemId, name: sku, sku, price: gia, stock: 5, status, localProductId: hang[sku]?.id || null, imageUrl: null, updatedAt: new Date(), categoryId })
         // bản trên Shopee (get_item_base_info) — máy đối chiếu chiều TĂNG giá với số này, không với bản trong hệ thống
         baseInfo[itemId] = { item_id: Number(itemId), item_sku: sku, has_model: !(gia > 0), price_info: gia > 0 ? [{ original_price: gia, current_price: gia }] : [] }
     }
@@ -140,6 +143,8 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string }) {
                 const c = await kho.docCauHinh()
                 return c ? [{ policy: JSON.stringify(c.policy) }] : []
             }
+            // đơn MỘT ngành (lib/shopeeTuQuan.dongPhiTheoNganh) — chỉ ca nào khai donNganh
+            if (sql.includes('AS nganh')) return (v[0] === 'ch1' && st.donNganh) ? st.donNganh : []
             if (sql.includes('"OnlineOrderItem"')) return []
             if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) {
                 if (sql.includes('affiliateFee')) {
@@ -796,6 +801,47 @@ async function main() {
                 /hanBu = Math\.max\(batDau \+ FEE_DEADLINE_MS, Date\.now\(\) \+ AFF_BU_MS\)/.test(src) && /if \(Date\.now\(\) > han\) \{ hetGio\+\+/.test(src) &&
                 /Math\.floor\(Math\.random\(\) \* kenhBuAff\.length\)/.test(src) && /kenhBuAff\[\(dau \+ i\) % kenhBuAff\.length\]/.test(src) &&
                 /buHoaHongAffiliate\(getStorePrisma\(schema\), ch, hanBu,/.test(src))
+        }
+
+        // ─── E14. Phí theo NGÀNH (02/11/2026, chủ shop: "mỗi ngành hàng lại 1 % phí khác nhau") ─────────────────
+        {
+            // ngành 101: 14% + 3.000đ; ngành 303: 30% — mỗi ngành 40 đơn đối soát; cả gian (trộn) = 22% + 1.500đ
+            const n101 = donSach().map(d => ({ ...d, nganh: '101' }))
+            const n303 = donSach().map(d => ({ giaBan: d.giaBan, phi: 0.3 * d.giaBan, nganh: '303' }))
+            HIEN = taoCuaHang({ don: [...n101, ...n303].map(({ nganh: _n, ...d }) => d), donNganh: [...n101, ...n303] })
+            const H = HIEN
+            H.themHang('N1', 60000); H.themListing('N1', 150000, '1401', 'NORMAL', '303')   // ngành phí 30%, ế, lãi cao ⇒ chu kỳ HẠ
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { targetMarginRate: 0.08, minMarginRate: 0.05, maxPriceChangeRate: 0.5, maxWritesPerDay: 1000, automation: { publishNewProducts: false, reprice: true } } })
+            const ts303: ThamSoGia = { giaVon: 60000, phi: { tyLe: 0.3, coDinh: 0 } as MauPhi, bienLoiNhuanPct: 8, bienToiThieuPct: 5, lamTron: 1000 }
+            const kq303 = tinhGiaDeXuat(ts303)
+            const kqGian = tinhGiaDeXuat({ ...ts303, phi: uocLuongPhi([...n101, ...n303], 6) })
+            dung('E14. (đối chứng) theo phí TRUNG BÌNH cả gian, giá đề xuất hàng ngành 30% nằm DƯỚI giá sàn thật của ngành — đường lỗ có thật',
+                kqGian.giaDeXuat < kq303.giaSan, `${kqGian.giaDeXuat} < ${kq303.giaSan}`)
+            const t0 = goi.length
+            const kq = await chayChuKy(H.ctx)
+            const ghi = goi.slice(t0).find(g => g.startsWith('update_price:1401:'))
+            const giaMoi = Number(ghi?.split(':')[2] || 0)
+            dung('E14. chu kỳ Tự động HẠ giá theo phí NGÀNH 30% — đúng giá đề xuất của ngành, không dưới giá sàn thật',
+                giaMoi === kq303.giaDeXuat && giaMoi >= kq303.giaSan, `${ghi} (sàn ngành ${kq303.giaSan}) ${JSON.stringify(kq.results)}`)
+            // kế hoạch lập khi hàng còn ở ngành phí thấp; ngành đổi (đồng bộ lại) trước lúc thực thi ⇒ soát theo ngành MỚI
+            H.themHang('N2', 60000); H.themListing('N2', 100000, '1402', 'NORMAL', '101')
+            const khN2 = await taoKeHoachGia(H.ctx, { sku: 'N2', price: 90000 })     // sàn ngành 101: 63.000 / 0,81 = 77.800
+            H.listing.find(l => l.sku === 'N2')!.categoryId = '303'                    // sàn ngành 303: 60.000 / 0,65 = 92.400
+            const t1 = goi.length
+            const rN2 = await thucThi(H.ctx, khN2.id)
+            dung('E14. ngành đổi sau khi lập kế hoạch ⇒ thực thi soát lại theo phí ngành MỚI, từ chối giá dưới sàn',
+                rN2.status === 'failed' && /GIÁ SÀN/.test(rN2.result?.message || '') && !goi.slice(t1).some(g => g.startsWith('update_price:1402')), rN2.result?.message)
+            // tool AI soát giá: từng listing theo phí ngành của nó — 88.000đ trên sàn cả gian (84.300) nhưng dưới sàn ngành (92.400)
+            H.themHang('N3', 60000); H.themListing('N3', 88000, '1403', 'NORMAL', '303')
+            datDemTienIch('KHONGLO', ['online', TIEN_ICH_SHOPEE_PILOT])
+            const soat = await chay('shopee_review_listings', { chi_van_de: false })
+            const n3 = soat.kq?.sanPham?.find((x: any) => x.sku === 'N3')
+            dung('E14. tool AI soát giá: listing ngành 303 báo DƯỚI GIÁ SÀN theo phí ngành (theo phí cả gian thì không)',
+                !soat.loi && n3?.giaSan === kq303.giaSan && n3?.vanDe?.includes('DƯỚI GIÁ SÀN') && Math.abs((n3?.phiSanPct ?? 0) - 30) < 0.01, soat.loi?.message || JSON.stringify(n3))
+            const goiY = await chay('shopee_suggest_price', { sku: 'N3' })
+            dung('E14. tool AI gợi ý giá: hàng đang bán ở ngành 303 ⇒ giá theo phí ngành của listing', !goiY.loi && goiY.kq?.giaDeXuat === kq303.giaDeXuat && goiY.kq?.mauPhi?.phamVi === 'ngành 303', goiY.loi?.message || JSON.stringify({ g: goiY.kq?.giaDeXuat, p: goiY.kq?.mauPhi?.phamVi }))
+            const hienN3 = await chay('shopee_toggle_listing', { item_id: '1403', an: false })
+            dung('E14. hiện lại hàng ẩn: giá 88.000đ dưới sàn NGÀNH (92.400) ⇒ từ chối, không gọi Shopee', hienN3.loi instanceof ToolError && /GIÁ SÀN/.test(hienN3.loi.message) && !goi.some(g => g.startsWith('unlist:1403')), hienN3.loi?.message)
         }
 
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────

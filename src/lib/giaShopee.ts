@@ -80,6 +80,16 @@ export interface MauPhi {
     saiSo?: { kieu: 'hoi-quy'; s2: number; n: number; tbX: number; sxx: number } | { kieu: 'ty-le'; se: number }
     /** không có khi chưa đơn nào đọc được hoa hồng */
     affiliate?: AffiliateDo
+    /** Mô hình đo RIÊNG cho ngành này (mã ngành trên sàn) — từ đơn chỉ có hàng của ngành đó. Không có = cả gian. */
+    nganh?: string
+    /** Sản phẩm thuộc ngành này nhưng ngành CHƯA đủ đơn để đo riêng ⇒ đang dùng phí cả gian (02/11/2026, chủ shop:
+     *  "mỗi ngành hàng lại 1 % phí khác nhau") — đủ để người xem, KHÔNG đủ để máy tự đăng / hạ giá (lyDoPhiChuaDuTin). */
+    thayNganh?: string
+    /** Gian đã đo ra phí từng ngành khác nhau mà sản phẩm CHƯA RÕ ngành trên sàn ⇒ đang dùng phí cả gian (cùng rào như thayNganh). */
+    chuaRoNganh?: boolean
+    /** Số đo MƯỢN của gian khác cùng sàn (gian này chưa đủ đơn) — gian Mall và gian thường, ngành hàng khác nhau thì phí
+     *  khác nhau ("mall lại phí khác á") ⇒ máy không tự đăng / hạ giá theo số mượn. */
+    muon?: boolean
 }
 
 export const SO_DON_TOI_THIEU = 8
@@ -372,25 +382,37 @@ export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5):
     const d = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
     if (phi.nguon === 'cau-hinh-kenh') {
         return `Phí sàn CHƯA ĐO được (${phi.soDon}/${SO_DON_TOI_THIEU} đơn đã đối soát) — đang dùng ${round2(phi.tyLe * 100)}% cấu hình kênh, ` +
-            'phí Shopee thật thường 20–30%, giá sàn tính ra có thể vẫn lỗ. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Shopee Pilot.'
+            'phí sàn thật thường 20–30%, giá sàn tính ra có thể vẫn lỗ. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
+    }
+    if (phi.muon) {
+        return 'Phí đang MƯỢN số đo của gian khác cùng sàn (gian này chưa đủ đơn đối soát) — gian Mall và gian thường, ngành hàng khác nhau ' +
+            'thì phí khác nhau. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
+    }
+    if (phi.thayNganh) {
+        return `Ngành của sản phẩm (${phi.thayNganh}) chưa đủ đơn đối soát để đo phí riêng — đang dùng phí trung bình cả gian, mà mỗi ngành ` +
+            'phí một khác. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
+    }
+    if (phi.chuaRoNganh) {
+        return 'Sản phẩm chưa rõ ngành trên sàn — đang dùng phí trung bình cả gian, mà mỗi ngành phí một khác. ' +
+            'Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
     }
     if (!(phi.soDon >= SO_DON_TU_GHI)) {
         return `Phí sàn mới đo từ ${phi.soDon}/${SO_DON_TU_GHI} đơn đã đối soát — ít đơn thì loại phí chỉ có ở một phần đơn (affiliate, voucher, ` +
-            'phí dịch vụ theo chương trình) có thể chưa lọt vào số đo. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Shopee Pilot.'
+            'phí dịch vụ theo chương trình) có thể chưa lọt vào số đo. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
     }
     if (phi.nguon === 'ty-le-don' && phi.giaBanTB && gia < phi.giaBanTB) {
         return `Giá ${d(gia)} thấp hơn giá trung bình các đơn đã đo phí (${d(phi.giaBanTB)}) — phí đo là tỷ lệ trung bình, chưa tách được ` +
-            'phí cố định mỗi đơn nên hàng rẻ hơn mức đó có thể bị tính thiếu phí. Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.'
+            'phí cố định mỗi đơn nên hàng rẻ hơn mức đó có thể bị tính thiếu phí. Máy không tự đăng / hạ giá về mức này: người duyệt trên Pilot.'
     }
     if (phi.nguon === 'hoi-quy-don' && phi.giaBanMin && gia < phi.giaBanMin) {
         return `Giá ${d(gia)} thấp hơn mọi đơn đã đo phí (rẻ nhất ${d(phi.giaBanMin)}) — phí cố định mỗi đơn chưa được đo ở vùng giá này. ` +
-            'Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.'
+            'Máy không tự đăng / hạ giá về mức này: người duyệt trên Pilot.'
     }
     const se = saiSoTyLePhi(gia, phi)
     const nguong = Math.max(Number(bienToiThieuPct) || 0, 1) / 100
     if (se != null && HE_SO_SAI_SO * se > nguong) {
         return `Phí sàn ở mức giá ${d(gia)} đo chưa đủ chắc: phí các đơn đã đo lệch nhau nhiều, sai số ±${round2(HE_SO_SAI_SO * se * 100)} điểm % — ` +
-            `lớn hơn biên tối thiểu ${round2(nguong * 100)}%, cần thêm đơn đối soát. Máy không tự đăng / hạ giá về mức này: người duyệt trên Shopee Pilot.`
+            `lớn hơn biên tối thiểu ${round2(nguong * 100)}%, cần thêm đơn đối soát. Máy không tự đăng / hạ giá về mức này: người duyệt trên Pilot.`
     }
     return null
 }

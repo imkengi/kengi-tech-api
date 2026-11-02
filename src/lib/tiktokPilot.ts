@@ -23,7 +23,7 @@
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
-import { docMauPhi } from './shopeeTuQuan'
+import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN } from './shopeePilot'
 import { TikTokService } from '../services/platforms/tiktok'
@@ -443,19 +443,25 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
     const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id }, orderBy: { updatedAt: 'desc' }, take: TRAN_LISTING })
     const von = await giaVonHangLoat(ctx.prisma, listing)
     const daBan = await soBan14Ngay(ctx.prisma, ch.id)
-    const mauPhi = await docMauPhi(ctx.prisma, ch)
-    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !(mauPhi.soDon >= SO_DON_TU_GHI)
+    // Phí THEO NGÀNH (02/11/2026: "mỗi ngành hàng lại 1 % phí khác nhau") — mỗi sản phẩm lấy mô hình đúng ngành của nó
+    const bang = await docMauPhiTheoNganh(ctx.prisma, ch)
+    const mauPhi = bang.toanGian
+    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !(mauPhi.soDon >= SO_DON_TU_GHI) || !!mauPhi.muon
     status.feeModel = {
         rate: mauPhi.tyLe, fixedPerOrder: mauPhi.coDinh, source: mauPhi.nguon, orders: mauPhi.soDon, note: mauPhi.ghiChu,
-        trusted: !chuaTuGhi,
+        trusted: !chuaTuGhi, borrowed: !!mauPhi.muon,
         autoFromPrice: chuaTuGhi ? null : mauPhi.nguon === 'ty-le-don' ? Math.ceil(mauPhi.giaBanTB || 0) : Math.ceil(mauPhi.giaBanMin || 0),
         ...(chuaTuGhi ? { warning: lyDoPhiChuaDuTin(0, mauPhi) } : {}),
+        byCategory: [...bang.theoNganh.values()].sort((a, b) => b.soDon - a.soDon).slice(0, 30).map(m => tomTatMauPhi(m, bang)),
+        // ngành có hàng trên gian mà chưa đủ đơn đo riêng — sản phẩm các ngành này dùng phí cả gian, máy không tự hạ giá
+        unmeasuredCategories: [...bang.viDuNganh.keys()].filter(k => !bang.theoNganh.has(k)).length,
     }
     const nhieuSku = await maNhieuSkuGanDay(ctx, now)
     const products: any[] = listing.map(l => {
         const v = von.get(l.id)
         const giaVon = v && v.giaVon > 0 ? v.giaVon : 0
-        const ts = thamSoTinh(pol, giaVon, mauPhi)
+        const mp = bang.chon(l.categoryId)
+        const ts = thamSoTinh(pol, giaVon, mp)
         const kq = tinhGiaDeXuat(ts)
         const dangBan = DANG_BAN.includes(String(l.status || '').toUpperCase())
         const soSku = nhieuSku.get(String(l.platformProductId))
@@ -464,7 +470,7 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
             imageUrl: l.imageUrl || null, costPrice: giaVon || null, currentPrice: Number(l.price) || null, stock: Number(l.stock) || 0,
             sold14: daBan.get(String(l.sku || '').toLowerCase()) || 0, mapped: !!v, localSku: v?.sku || null,
             enabled: giaVon > 0 && dangBan && !soSku,
-            pricing: { ...giaUi(kq, ts, mauPhi), snapshot: { price: Number(l.price) || 0, stock: Number(l.stock) || 0 } },
+            pricing: { ...giaUi(kq, ts, mp), fee: tomTatMauPhi(mp, bang), snapshot: { price: Number(l.price) || 0, stock: Number(l.stock) || 0 } },
             ...(soSku ? { error: `Sản phẩm có ${soSku} phân loại — Pilot chưa đổi giá hàng nhiều phân loại.` }
                 : !v ? { error: 'Chưa nối với mã trong kho (SKU trên TikTok không khớp mã kho) — nối ở Sản Phẩm Trên Sàn để có giá vốn.' }
                     : !giaVon ? { error: 'Mã kho chưa có giá vốn — không tính được lãi, không đổi giá.' }
@@ -507,7 +513,7 @@ export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: strin
     const l = await timListingTikTok(ctx.prisma, ch.id, { itemId: b.itemId, sku: b.sku })
     const v = (await giaVonHangLoat(ctx.prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${l.sku || l.platformProductId} chưa có giá vốn trong kho — không đổi giá khi không biết lãi/lỗ.`)
-    const mauPhi = await docMauPhi(ctx.prisma, ch)
+    const mauPhi = await docMauPhiSanPham(ctx.prisma, ch, l.categoryId)   // phí ĐÚNG ngành của sản phẩm
     const ts = thamSoTinh(cfg.policy, v.giaVon, mauPhi)
     const kq = tinhGiaDeXuat(ts)
     // Giá đang bán + SKU: đọc THẲNG TikTok — hàng nhiều phân loại dừng ở đây
@@ -522,6 +528,7 @@ export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: strin
         snapshot: { price: giaCu, stock: Number(l.stock) || 0 },
         economics: {
             marginRate: dk.bienPct / 100, profit: dk.loiNhuan, floor: kq.giaSan, suggested: kq.hopLe ? kq.giaDeXuat : null, cost: v.giaVon,
+            fee: tomTatMauPhi(mauPhi),
             ...(kq.thamSo.phiAffiliatePct > 0 ? { affiliateProfit: xau.loiNhuan, affiliateMarginRate: xau.bienPct / 100 } : {}),
         },
         ...(phiChuaTin ? { feeWarning: phiChuaTin } : {}),
@@ -569,7 +576,7 @@ async function doiGiaTikTok(ctx: NgCanhTikTok, ch: any, d: any, pol: ChinhSachTi
     const v = (await giaVonHangLoat(ctx.prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${l.sku || l.platformProductId} thiếu giá vốn — không đổi giá khi không biết lãi/lỗ.`)
     const gia = Math.round(Number(d.price) || 0)
-    const mauPhi = await docMauPhi(ctx.prisma, ch)
+    const mauPhi = await docMauPhiSanPham(ctx.prisma, ch, l.categoryId)
     const kq = tinhGiaDeXuat(thamSoTinh(pol, v.giaVon, mauPhi))
     const chan = chanGiaDuoiSan(gia, kq)
     if (chan) throw new ToolError(`Giá vốn / phí / chính sách đã đổi từ lúc lập kế hoạch: ${chan}`)
@@ -622,7 +629,7 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
         const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, status: { in: DANG_BAN } }, orderBy: { updatedAt: 'desc' }, take: 300 })
         const von = await giaVonHangLoat(ctx.prisma, listing)
         const daBan = await soBan14Ngay(ctx.prisma, ch.id)
-        const mauPhi = await docMauPhi(ctx.prisma, ch)
+        const bangPhi = await docMauPhiTheoNganh(ctx.prisma, ch)
         const nhieuSku = await maNhieuSkuGanDay(ctx, now)
         const polS = chuanHoaChinhSach(pol)
         let soDoi = 0, soNhieuSku = 0, soHoi = 0
@@ -631,6 +638,7 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
             if (nhieuSku.has(String(l.platformProductId))) continue
             const v = von.get(l.id)
             if (!v || !(v.giaVon > 0) || !(Number(l.price) > 0)) continue
+            const mauPhi = bangPhi.chon(l.categoryId)   // phí ĐÚNG ngành — mỗi ngành TikTok thu một khác
             const ts = thamSoTinh(pol, v.giaVon, mauPhi)
             const kq = tinhGiaDeXuat(ts)
             const giaCu = Number(l.price)

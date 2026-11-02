@@ -15,7 +15,7 @@
 import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from './giaShopee'
 import {
-    chonKenhShopee, moDichVuShopee, docMauPhi, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
+    chonKenhShopee, moDichVuShopee, docMauPhiSanPham, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
     listingDaCo, taiAnh, thuTuAnh, chonKenhVanChuyen, dungThanAddItem, type ThuocTinhVao,
 } from './shopeeTuQuan'
 
@@ -239,7 +239,8 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: TuyChonGhi
 
     const svc = await moDichVuShopee(prisma, ch)
     const cs = chinhSachGia(a, tuyChon.nen)
-    const [mauPhi, gh] = await Promise.all([docMauPhi(prisma, ch), gioiHanGia(svc, categoryId)])
+    // phí của ĐÚNG ngành sẽ đăng vào (mỗi ngành Shopee thu một khác) — ngành chưa đủ đơn đo riêng thì máy không tự đăng
+    const [mauPhi, gh] = await Promise.all([docMauPhiSanPham(prisma, ch, categoryId), gioiHanGia(svc, categoryId)])
     const ts: ThamSoGia = { giaVon: Number(p.costPrice) || 0, phi: mauPhi, ...cs, giaShopeeMin: gh.min, giaShopeeMax: gh.max }
     const kq = tinhGiaDeXuat(ts)
     if (!kq.hopLe && !a?.gia) throw new ToolError(`Không tính được giá cho ${p.sku}: ${kq.lyDo}`)
@@ -366,7 +367,7 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
     const v = (await giaVonHangLoat(prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${l.sku || l.platformProductId} thiếu giá vốn — không đổi giá khi không biết lãi/lỗ.`)
     const cs = chinhSachGia(a, tuyChon.nen)
-    const mauPhi = await docMauPhi(prisma, ch)
+    const mauPhi = await docMauPhiSanPham(prisma, ch, l.categoryId)   // phí ĐÚNG ngành của sản phẩm
     const ts: ThamSoGia = { giaVon: v.giaVon, phi: mauPhi, ...cs }
     const kq = tinhGiaDeXuat(ts)
     const chan = chanGiaDuoiSan(giaMoi, kq)
@@ -420,7 +421,11 @@ async function giaGocShopee(svc: any, itemId: string): Promise<number> {
  * Hàng có phân loại: soát từng phân loại theo giá vốn SKU phân loại. null = được hiện.
  */
 export async function lyDoKhongHienLai(prisma: any, ch: any, svc: any, itemId: string, cs: ChinhSachGia, tuDong: boolean): Promise<string | null> {
-    const mauPhi = await docMauPhi(prisma, ch)
+    const [item] = await svc.getItemBaseInfo([Number(itemId)])
+    if (!item) return 'Shopee không trả thông tin sản phẩm này — không soát được giá, không hiện lại.'
+    const l = await prisma.onlineProduct.findFirst({ where: { channelId: ch.id, platformProductId: itemId } }).catch(() => null)
+    // phí của ngành sản phẩm ĐANG nằm trên Shopee (đọc thẳng), không có thì ngành đã lưu trong hệ thống
+    const mauPhi = await docMauPhiSanPham(prisma, ch, item.category_id || l?.categoryId)
     const soat = (gia: number, giaVon: number, ten: string): string | null => {
         if (!(gia > 0)) return `${ten}: không đọc được giá đang bán`
         if (!(giaVon > 0)) return `${ten}: thiếu giá vốn — không biết lãi/lỗ`
@@ -429,8 +434,6 @@ export async function lyDoKhongHienLai(prisma: any, ch: any, svc: any, itemId: s
         const phiChuaTin = tuDong ? lyDoPhiChuaDuTin(gia, mauPhi, cs.bienToiThieuPct) : null
         return phiChuaTin ? `${ten}: ${phiChuaTin}` : null
     }
-    const [item] = await svc.getItemBaseInfo([Number(itemId)])
-    if (!item) return 'Shopee không trả thông tin sản phẩm này — không soát được giá, không hiện lại.'
     if (item.has_model) {
         const models: any[] = await svc.getModelList(Number(itemId))
         if (!models.length) return 'Không đọc được phân loại — không soát được giá, không hiện lại.'
@@ -438,7 +441,6 @@ export async function lyDoKhongHienLai(prisma: any, ch: any, svc: any, itemId: s
         const loi = models.map(m => soat(Number(m.giaHienTai) || 0, von.get(String(m.model_id))?.giaVon || 0, m.name || m.sku || String(m.model_id))).filter(Boolean)
         return loi.length ? `Không hiện lại: ${loi.slice(0, 5).join('; ')}${loi.length > 5 ? ` (+${loi.length - 5} phân loại)` : ''}` : null
     }
-    const l = await prisma.onlineProduct.findFirst({ where: { channelId: ch.id, platformProductId: itemId } }).catch(() => null)
     const gia = Number(item.price_info?.[0]?.current_price ?? item.price_info?.[0]?.original_price) || 0
     const von = (await giaVonHangLoat(prisma, [{ id: itemId, localProductId: l?.localProductId || null, sku: item.item_sku || l?.sku || null }])).get(itemId)
     const r = soat(gia, von?.giaVon || 0, item.item_sku || l?.sku || itemId)

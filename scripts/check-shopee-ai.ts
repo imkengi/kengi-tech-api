@@ -166,6 +166,8 @@ async function main() {
             skuMapping: { findMany: async () => [], findFirst: async () => null },
             storeSettings: { findFirst: async () => null },   // không kho mẹ
             $queryRawUnsafe: async (sql: string) => {
+                // đơn MỘT ngành (phí theo ngành, 02/11/2026) — mọi đơn thuộc ngành 101 như hàng thử
+                if (sql.includes('AS nganh')) return donDoiSoat.map(d => ({ ...d, nganh: '101' }))
                 if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donDoiSoat
                 if (sql.includes('FROM "Product"')) return [{ id: 'p1', sku: 'OC4', name: hang.name, costPrice: hang.costPrice, mergedIntoId: null, mergedRate: 1 }]
                 return []

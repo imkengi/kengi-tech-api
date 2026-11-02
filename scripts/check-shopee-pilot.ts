@@ -14,12 +14,15 @@
  * 10. Kiểm tra API: từng bước chỉ đọc, một bước hỏng không chặn các bước khác.
  * 11. Tiện ích theo cửa hàng (lib/tienIchCuaHang): chưa bật ⇒ chặn; đọc hỏng ⇒ chặn nhưng không bảo "chưa bật";
  *     duyệt nâng cấp giữ Shopee Pilot đang bật và không để yêu cầu tự bật nó.
+ * 12. Phí theo NGÀNH (02/11/2026): giá đề xuất / sàn / khuyến mãi / hộp thoại đăng theo phí ngành của sản phẩm; ngành
+ *     chưa đủ đơn hoặc listing chưa rõ ngành ⇒ phí cả gian, KHÔNG đủ tin cho máy tự ghi.
  */
 import {
     khoBoNho, chuanHoaChinhSach, vuotBienDong, quyetDinhGia, dauNgayVN, xayTrangThai, luuCauHinh,
     taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai, thucThi, chayChuKy, CHINH_SACH_MAC_DINH, type NgCanh,
-    chuanHoaHoSo, timHoSo, luuHoSo, xoaHoSo, chayTheoLich, kiemKetNoi,
+    chuanHoaHoSo, timHoSo, luuHoSo, xoaHoSo, chayTheoLich, kiemKetNoi, tuyChonDang,
 } from '../src/lib/shopeePilot'
+import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { tinhGiaDeXuat } from '../src/lib/giaShopee'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
@@ -67,10 +70,13 @@ async function main() {
         TUI: { id: 'p3', sku: 'TUI', name: 'Túi tote canvas', description: 'Túi vải canvas dày, quai dài 60cm, may viền chắc chắn.', productType: 'goods', costPrice: 45000, sellingPrice: 99000, stock: 60, mergedIntoId: null, bundleId: null, images: [{ url: 'https://storage.googleapis.com/kengi-tech-assets/anh-sp/x/2.jpg', isPrimary: true }] },
     }
     const listing: any[] = [
-        { id: 'op1', channelId: 'ch1', platformProductId: '111', name: 'Ổ cắm điện 4 lỗ', sku: 'OC4', price: 120000, stock: 12, status: 'NORMAL', localProductId: 'p1', imageUrl: null },
-        { id: 'op2', channelId: 'ch1', platformProductId: '222', name: 'Bình giữ nhiệt', sku: 'BINH', price: 160000, stock: 30, status: 'NORMAL', localProductId: 'p2', imageUrl: null },
+        { id: 'op1', channelId: 'ch1', platformProductId: '111', name: 'Ổ cắm điện 4 lỗ', sku: 'OC4', price: 120000, stock: 12, status: 'NORMAL', localProductId: 'p1', imageUrl: null, categoryId: '101' },
+        { id: 'op2', channelId: 'ch1', platformProductId: '222', name: 'Bình giữ nhiệt', sku: 'BINH', price: 160000, stock: 30, status: 'NORMAL', localProductId: 'p2', imageUrl: null, categoryId: '101' },
     ]
     const donDoiSoat = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } })
+    // đơn của cả gian / đơn MỘT ngành (truy vấn phí theo ngành) — mặc định mọi đơn thuộc ngành 101 như các listing
+    let donGian: any[] = donDoiSoat
+    let donNganh: any[] = donDoiSoat.map(d => ({ ...d, nganh: '101' }))
     const timHang = (where: any) => Object.values(hang).find(h => JSON.stringify(where).toLowerCase().includes(`"${h.sku.toLowerCase()}"`)) || null
     const prisma: any = {
         onlineChannel: { findMany: async () => [kenh], update: async () => kenh },
@@ -92,7 +98,8 @@ async function main() {
         storeSettings: { findFirst: async () => null },
         category: { findMany: async () => [{ name: 'Điện' }, { name: 'Gia dụng' }] },
         $queryRawUnsafe: async (sql: string, ...v: any[]) => {
-            if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donDoiSoat
+            if (sql.includes('AS nganh')) return donNganh
+            if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donGian
             if (sql.includes('FROM "Product"')) {
                 const ids: string[] = v[0] || [], skus: string[] = v[1] || []
                 return Object.values(hang).filter(h => ids.includes(h.id) || skus.includes(h.sku.toLowerCase()))
@@ -189,7 +196,7 @@ async function main() {
         const kmXong = await thucThi(ctx, km.id)
         dung('thực thi khuyến mãi: tạo chương trình + thêm mã', kmXong.status === 'succeeded' && kmXong.result?.discount_id === 555 && goi.includes('add_discount:Sale cuối tuần'), JSON.stringify(kmXong.result))
 
-        listing.push({ id: 'op9', channelId: 'ch1', platformProductId: '333', name: 'Ổ cắm 6 lỗ', sku: 'OC6', price: 200000, stock: 5, status: 'NORMAL', localProductId: 'p9', imageUrl: null })
+        listing.push({ id: 'op9', channelId: 'ch1', platformProductId: '333', name: 'Ổ cắm 6 lỗ', sku: 'OC6', price: 200000, stock: 5, status: 'NORMAL', localProductId: 'p9', imageUrl: null, categoryId: '101' })
         hang.OC6 = { id: 'p9', sku: 'OC6', name: 'Ổ cắm 6 lỗ', description: '', productType: 'goods', costPrice: 90000, sellingPrice: 200000, stock: 5, mergedIntoId: null, bundleId: null, images: [] }
         const km2 = await taoKeHoachKhuyenMai(ctx, { name: 'Sale 2', skus: ['BINH', 'OC6'], discountRate: 0.1, startTime: bd, endTime: bd + 86400, purchaseLimit: 1, idempotencyKey: 'c2' })
         const kmMotPhan = await thucThi(ctx, km2.id)
@@ -251,7 +258,7 @@ async function main() {
         dung('tắt lịch ⇒ bỏ hẹn', (await kho.docCauHinh())!.nextRunAt === null && (await chayTheoLich(prisma, kho)) === 'khong-dung')
 
         // ─── 9. Khuyến mãi hàng có phân loại ────────────────────────────────────────
-        listing.push({ id: 'opM', channelId: 'ch1', platformProductId: '444', name: 'Ổ cắm 6 lỗ (2 màu)', sku: 'OC6-MAU', price: 0, stock: 5, status: 'NORMAL', localProductId: null, imageUrl: null })
+        listing.push({ id: 'opM', channelId: 'ch1', platformProductId: '444', name: 'Ổ cắm 6 lỗ (2 màu)', sku: 'OC6-MAU', price: 0, stock: 5, status: 'NORMAL', localProductId: null, imageUrl: null, categoryId: '101' })
         await luuCauHinh(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 500 } })
         P.addDiscountItems = async (_id: number, items: any[]) => { itemsKm = items; return { loi: [] } }
         const kmPl = await taoKeHoachKhuyenMai(ctx, { name: 'Sale phân loại', skus: ['OC6-MAU'], discountRate: 0.1, startTime: bd2(), endTime: bd2() + 7200, purchaseLimit: 1, idempotencyKey: 'cm1' })
@@ -268,6 +275,65 @@ async function main() {
         const truocAnh = goi.filter(g => g === 'upload').length
         const kt2 = await kiemKetNoi(ctx, { thuNapAnh: true })
         dung('"thử nạp ảnh" nạp đúng một ảnh', kt2.tong === 9 && goi.filter(g => g === 'upload').length === truocAnh + 1)
+        // ─── 12. Phí theo NGÀNH (02/11/2026, chủ shop: "mỗi ngành hàng lại 1 % phí khác nhau") ──────────────
+        {
+            // ngành 101 (ổ cắm) 14% + 3.000đ, ngành 303 (bình) 30% — mỗi ngành 40 đơn; cả gian = trộn hai ngành
+            const n303 = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.3 * g } })
+            donNganh = [...donDoiSoat.map(d => ({ ...d, nganh: '101' })), ...n303.map(d => ({ ...d, nganh: '303' }))]
+            donGian = [...donDoiSoat, ...n303]
+            const binhL = listing.find(l => l.sku === 'BINH')!
+            binhL.categoryId = '303'
+            const s12 = await xayTrangThai(ctx)
+            const o = s12.products.find((p: any) => p.sku === 'OC4'), b = s12.products.find((p: any) => p.sku === 'BINH')
+            const kq303 = tinhGiaDeXuat({ giaVon: 50000, phi: { tyLe: 0.3, coDinh: 0 } as any, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 })
+            dung('12a. OC4 (ngành 101) giữ giá theo phí NGÀNH 14% + 3.000đ dù cả gian phí cao hơn', o?.pricing.price === 146000 && o?.pricing.floor === 127200
+                && o?.pricing.fee?.scope === 'nganh' && o?.pricing.fee?.categoryId === '101' && s12.status.feeModel.rate > 0.16, JSON.stringify({ p: o?.pricing, gian: s12.status.feeModel.rate }))
+            dung('12b. BINH (ngành 303) tính theo phí NGÀNH 30% — giá sàn cao hơn số cả gian', b?.pricing.floor === kq303.giaSan && b?.pricing.price === kq303.giaDeXuat
+                && Math.abs((b?.pricing.fee?.rate ?? 0) - 0.3) < 0.002, JSON.stringify({ p: b?.pricing, kq: [kq303.giaSan, kq303.giaDeXuat] }))
+            dung('12c. bảng phí theo ngành gửi giao diện đủ hai ngành', s12.status.feeModel.byCategory?.length === 2 && s12.status.feeModel.byCategory.every((c: any) => c.scope === 'nganh' && c.orders === 40), JSON.stringify(s12.status.feeModel.byCategory))
+            const kmN = await taoKeHoachKhuyenMai(ctx, { name: 'Sale ngành', skus: ['BINH'], discountRate: 0.1, startTime: bd2(), endTime: bd2() + 7200, purchaseLimit: 1, idempotencyKey: 'nganh-km' })
+            const dN = kmN.data.lines[0]
+            dung('12d. khuyến mãi: giá sàn từng dòng theo phí NGÀNH của mã', dN?.floor === kq303.giaSan && Math.abs((dN?.feeRate ?? 0) - 0.3) < 0.002 && !kmN.data.feeWarning, JSON.stringify(dN))
+            const tc = await tuyChonDang(ctx, { sku: 'TUI' })
+            const c101 = tc.categories.find((c: any) => c.id === 101)
+            const kqTui = tinhGiaDeXuat({ giaVon: 45000, phi: { tyLe: 0.14, coDinh: 3000 } as any, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 })
+            dung('12e. hộp thoại đăng: ngành gợi ý kèm giá theo phí của ngành đó', c101?.pricing?.fee?.scope === 'nganh' && c101.pricing.price === kqTui.giaDeXuat && c101.pricing.floor === kqTui.giaSan, JSON.stringify(c101))
+            // hàng chưa đăng: ngành sẽ đăng vào là ngành của HỒ SƠ — chưa có hồ sơ thì chưa rõ ngành
+            const tuiUv = s12.products.find((p: any) => p.sku === 'TUI' && p.itemId === null)
+            dung('12e2. hàng chưa đăng, chưa có hồ sơ ⇒ chưa rõ ngành, không đủ tin cho máy', tuiUv?.pricing?.fee?.scope === 'thay-nganh' && /chưa rõ ngành/.test(tuiUv?.pricing?.autoBlocked || ''), JSON.stringify(tuiUv?.pricing))
+            const hsTui = await luuHoSo(ctx, { scope: 'sku', key: 'TUI', categoryId: 101, weightGram: 350 })
+            const tuiHs = (await xayTrangThai(ctx)).products.find((p: any) => p.sku === 'TUI' && p.itemId === null)
+            await xoaHoSo(ctx, hsTui.id)
+            dung('12e3. hàng chưa đăng CÓ hồ sơ ngành 101 ⇒ giá theo phí ngành 101', tuiHs?.pricing?.fee?.scope === 'nganh' && tuiHs?.pricing?.price === kqTui.giaDeXuat, JSON.stringify(tuiHs?.pricing))
+            // khuyến mãi soát lại lúc thực thi theo phí NGÀNH: vốn tăng lên 98.000đ ⇒ sàn ngành 303 = 150.800 > giá KM 144.000
+            // (theo phí cả gian thì sàn chỉ 136.400 — vẫn lọt)
+            hang.BINH.costPrice = 98000
+            const kmLai = await thucThi(ctx, kmN.id)
+            hang.BINH.costPrice = 50000
+            dung('12d2. thực thi khuyến mãi soát lại giá sàn theo phí NGÀNH ⇒ bỏ dòng dưới sàn, không tạo chương trình', kmLai.status === 'failed' && /Không còn mã nào giữ được giá sàn/.test(kmLai.result?.message || '') && !goi.includes('add_discount:Sale ngành'), JSON.stringify(kmLai.result))
+
+            // ngành chưa đủ đơn ⇒ phí cả gian gắn cờ: người xem được, máy không tự hạ / đăng
+            binhL.categoryId = '909'
+            const b2 = (await xayTrangThai(ctx)).products.find((p: any) => p.sku === 'BINH')
+            dung('12f. ngành chưa đủ đơn: phí cả gian, KHÔNG đủ tin cho máy tự ghi', b2?.pricing.fee?.scope === 'thay-nganh' && b2.pricing.fee.trusted === false
+                && /chưa đủ đơn/.test(b2.pricing.autoBlocked || '') && Math.abs(b2.pricing.fee.rate - s12.status.feeModel.rate) < 1e-9, JSON.stringify(b2?.pricing))
+            const khThay = await taoKeHoachGia(ctx, { sku: 'BINH', price: 150000, idempotencyKey: 'nganh-1' })
+            const kmThay = await taoKeHoachKhuyenMai(ctx, { name: 'Sale ngành chưa đo', skus: ['BINH'], discountRate: 0.1, startTime: bd2(), endTime: bd2() + 7200, purchaseLimit: 1, idempotencyKey: 'nganh-km2' })
+            dung('12f2. khuyến mãi có dòng thuộc ngành chưa đo ⇒ kế hoạch mang cảnh báo phí', /chưa đủ đơn/.test(kmThay.data.feeWarning || ''), JSON.stringify(kmThay.data.feeWarning))
+            dung('12g. kế hoạch giá hàng ngành chưa đo mang cảnh báo phí (chu kỳ / AI không tự hạ)', /chưa đủ đơn/.test(khThay.data.feeWarning || '') && khThay.data.economics.fee?.scope === 'thay-nganh', JSON.stringify(khThay.data))
+            const truocGhi = ghiShopee()
+            const haMay = await thucThi(ctx, khThay.id, { tuDong: true })
+            dung('12h. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo ⇒ từ chối HẠ giá', haMay.status === 'failed' && /chưa đủ đơn/.test(haMay.result?.message || '') && ghiShopee() === truocGhi, JSON.stringify(haMay.result))
+            const khDangN = await taoKeHoachDang(ctx, { sku: 'TUI', categoryId: 909, weightGram: 350, idempotencyKey: 'nganh-dang' })
+            dung('12i. đăng vào ngành chưa đủ đơn: kế hoạch mang cảnh báo phí (chu kỳ không tự đăng)', /chưa đủ đơn/.test(khDangN.data.feeWarning || ''), JSON.stringify(khDangN.data.feeWarning))
+
+            // listing chưa rõ ngành khi gian đã đo được phí từng ngành
+            binhL.categoryId = null
+            const b3 = (await xayTrangThai(ctx)).products.find((p: any) => p.sku === 'BINH')
+            dung('12j. listing chưa rõ ngành (gian đã đo phí từng ngành): không đủ tin cho máy tự ghi', b3?.pricing.fee?.trusted === false && /chưa rõ ngành/.test(b3?.pricing.autoBlocked || ''), JSON.stringify(b3?.pricing))
+
+            binhL.categoryId = '101'; donGian = donDoiSoat; donNganh = donDoiSoat.map(d => ({ ...d, nganh: '101' })); xoaDemPhiTheoNganh()
+        }
     } finally {
         ;(globalThis as any).fetch = fetchGoc
     }

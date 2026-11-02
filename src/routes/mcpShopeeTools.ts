@@ -26,7 +26,7 @@ import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { lyDoChanPilot, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
 import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia, type MauPhi } from '../lib/giaShopee'
 import {
-    chonKenhShopee, moDichVuShopee, docMauPhi, timHangKho, luuDanhMucSan, duongNganh,
+    chonKenhShopee, moDichVuShopee, docMauPhiTheoNganh, timHangKho, luuDanhMucSan, duongNganh,
 } from '../lib/shopeeTuQuan'
 import {
     num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, lyDoKhongHienLai,
@@ -46,6 +46,13 @@ const tomTatAffiliate = (m: MauPhi) => m.affiliate ? {
     soDonBiet: m.affiliate.soDonBiet,
     soDonQuaAffiliate: m.affiliate.soDonCo,
 } : null
+
+/** Mô hình phí cho AI đọc — kèm PHẠM VI đo: ngành riêng / cả gian thay ngành chưa đủ đơn / mượn gian khác. */
+const tomTatPhi = (m: MauPhi) => ({
+    tyLePct: Math.round(m.tyLe * 10000) / 100, coDinhMoiDon: m.coDinh, nguon: m.nguon, soDon: m.soDon,
+    phamVi: m.nganh ? `ngành ${m.nganh}` : m.muon ? 'MƯỢN số đo gian khác cùng sàn' : m.thayNganh ? `cả gian (ngành ${m.thayNganh} chưa đủ đơn)` : m.chuaRoNganh ? 'cả gian (chưa rõ ngành)' : 'cả gian',
+    ghiChu: m.ghiChu, hoaHongAffiliate: tomTatAffiliate(m),
+})
 
 /** Tham số chính sách giá dùng chung cho mọi tool có tính giá. */
 const THAM_SO_GIA = {
@@ -78,11 +85,12 @@ const CAC_TOOL: Tool[] = [
             }
             const ch = await chonKenhShopee(prisma, a?.kenh)
             const svc = await moDichVuShopee(prisma, ch)
-            const [soListing, moiNhat, mauPhi] = await Promise.all([
+            const [soListing, moiNhat, bang] = await Promise.all([
                 prisma.onlineProduct.count({ where: { channelId: ch.id } }),
                 prisma.onlineProduct.findFirst({ where: { channelId: ch.id }, orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
-                docMauPhi(prisma, ch),
+                docMauPhiTheoNganh(prisma, ch),
             ])
+            const mauPhi = bang.toanGian
             let vanChuyen: any = null, gioiHan: any = null
             try {
                 vanChuyen = (await svc.getLogisticsChannels())
@@ -107,7 +115,12 @@ const CAC_TOOL: Tool[] = [
                 ...(soListing === 0 || tuoiDanhMuc === null || tuoiDanhMuc > 2
                     ? { canhBaoDanhMuc: 'Danh mục listing của gian chưa đồng bộ gần đây — gọi shopee_sync_listings TRƯỚC khi đăng, nếu không có thể đăng TRÙNG sản phẩm đã có.' }
                     : {}),
-                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, soDon: mauPhi.soDon, ghiChu: mauPhi.ghiChu, hoaHongAffiliate: tomTatAffiliate(mauPhi) },
+                mauPhi: tomTatPhi(mauPhi),
+                // mỗi ngành Shopee thu một % khác — tool tính giá tự dùng phí ĐÚNG ngành của sản phẩm
+                phiTheoNganh: [...bang.theoNganh.values()].sort((x, y) => y.soDon - x.soDon).slice(0, 20).map(m => ({
+                    nganh: m.nganh, tenNganh: bang.tenNganh.get(m.nganh!) || null,
+                    tyLePct: Math.round(m.tyLe * 10000) / 100, coDinhMoiDon: m.coDinh, soDon: m.soDon,
+                })),
                 vanChuyen,
                 gioiHanDang: gioiHan,
                 cacGian,
@@ -175,16 +188,18 @@ const CAC_TOOL: Tool[] = [
             const ch = await chonKenhShopee(prisma, a?.kenh)
             const p = await timHangKho(prisma, a.sku)
             const cs = chinhSachGia(a, await nenPilot(prisma))
-            const mauPhi = await docMauPhi(prisma, ch)
+            const khac: any[] = await prisma.onlineProduct.findMany({
+                where: { OR: [{ localProductId: p.id }, { sku: { equals: p.sku, mode: 'insensitive' } }] },
+                select: { platform: true, price: true, status: true, channel: { select: { name: true } }, channelId: true, categoryId: true },
+                take: 20,
+            })
+            // phí ĐÚNG ngành: ngành truyền vào, không có thì ngành của listing đang bán trên chính gian này
+            const nganh = a?.category_id || khac.find(k => k.channelId === ch.id && k.categoryId)?.categoryId || null
+            const mauPhi = (await docMauPhiTheoNganh(prisma, ch)).chon(nganh)
             let gh: { min?: number; max?: number } = {}
             if (a?.category_id) gh = await gioiHanGia(await moDichVuShopee(prisma, ch), num(a.category_id, 0))
             const ts: ThamSoGia = { giaVon: Number(p.costPrice) || 0, phi: mauPhi, ...cs, giaShopeeMin: gh.min, giaShopeeMax: gh.max }
             const kq = tinhGiaDeXuat(ts)
-            const khac: any[] = await prisma.onlineProduct.findMany({
-                where: { OR: [{ localProductId: p.id }, { sku: { equals: p.sku, mode: 'insensitive' } }] },
-                select: { platform: true, price: true, status: true, channel: { select: { name: true } }, channelId: true },
-                take: 20,
-            })
             const tuDong = kq.hopLe ? lyDoPhiChuaDuTin(kq.giaDeXuat, mauPhi, cs.bienToiThieuPct) : null
             return {
                 sanPham: { sku: p.sku, ten: p.name, giaVon: p.costPrice, giaBanLe: p.sellingPrice },
@@ -195,7 +210,7 @@ const CAC_TOOL: Tool[] = [
                     biChan: chanGiaDuoiSan(num(a.gia_thu, 0), kq) || lyDoPhiChuaDuTin(num(a.gia_thu, 0), mauPhi, cs.bienToiThieuPct),
                 } : undefined,
                 chinhSach: cs,
-                mauPhi: { tyLePct: Math.round(mauPhi.tyLe * 10000) / 100, coDinhMoiDon: mauPhi.coDinh, nguon: mauPhi.nguon, ghiChu: mauPhi.ghiChu, hoaHongAffiliate: tomTatAffiliate(mauPhi) },
+                mauPhi: tomTatPhi(mauPhi),
                 giaDangBanNoiKhac: khac.map(k => ({ gian: k.channel?.name, san: k.platform, gia: k.price, trangThai: k.status, laGianNay: k.channelId === ch.id })),
                 ghiChu: 'Lãi tính cho đơn 1 sản phẩm (phí cố định/đơn gánh trọn) — đơn nhiều món lãi cao hơn. Không gồm phí vận chuyển người mua trả.',
             }
@@ -340,7 +355,8 @@ const CAC_TOOL: Tool[] = [
             const lim = Math.min(Math.max(num(a?.limit, 30), 1), 100)
             const chiVanDe = a?.chi_van_de !== false
             const cs = chinhSachGia(a, await nenPilot(prisma))
-            const mauPhi = await docMauPhi(prisma, ch)
+            const bang = await docMauPhiTheoNganh(prisma, ch)   // từng listing soát theo phí NGÀNH của nó
+            const mauPhi = bang.toanGian
             const TRAN = 300
             const ds: any[] = await prisma.onlineProduct.findMany({
                 where: { channelId: ch.id, status: 'NORMAL' },
@@ -364,7 +380,8 @@ const CAC_TOOL: Tool[] = [
                     if (ra.length < lim) ra.push({ itemId: l.platformProductId, sku: l.sku, ten: l.name, gia: l.price, tonSan: l.stock, daBan14, vanDe: ['thiếu giá vốn — không biết lãi/lỗ'] })
                     continue
                 }
-                const ts: ThamSoGia = { giaVon: v.giaVon, phi: mauPhi, ...cs }
+                const mp = bang.chon(l.categoryId)
+                const ts: ThamSoGia = { giaVon: v.giaVon, phi: mp, ...cs }
                 const kq = tinhGiaDeXuat(ts)
                 const hien = danhGiaGia(l.price, ts)
                 const vanDe: string[] = []
@@ -376,6 +393,7 @@ const CAC_TOOL: Tool[] = [
                     itemId: l.platformProductId, sku: l.sku, ten: l.name, gia: l.price, tonSan: l.stock, daBan14,
                     giaVon: Math.round(v.giaVon), laiMoiDon: hien.loiNhuan, bienPct: hien.bienPct,
                     giaSan: kq.giaSan, giaDeXuat: kq.hopLe ? kq.giaDeXuat : null, vanDe,
+                    phiSanPct: Math.round(mp.tyLe * 10000) / 100, ...(mp.nganh ? { nganh: mp.nganh } : {}),
                 })
             }
             return {

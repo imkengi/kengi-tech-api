@@ -4,7 +4,8 @@
  *  1. Chính sách: phần chung kẹp như Shopee Pilot, mặc định đổi giá BẬT / đẩy tồn TẮT.
  *  2. Trạng thái: tự chọn gian TikTok duy nhất, Xem trước; giá đề xuất / giá sàn theo PHÍ TIKTOK đo từ đơn (cùng công thức
  *     Shopee Pilot); listing chưa nối mã kho / không đang bán / nhiều SKU thì không đổi giá; hàng kho chưa có trên gian.
- *  3. Phí: gian TikTok mới MƯỢN số đo của gian TikTok khác (không mượn Shopee).
+ *  3. Phí: gian TikTok mới MƯỢN số đo của gian TikTok khác (không mượn Shopee) — số mượn KHÔNG đủ tin cho máy tự hạ.
+ *     Phí theo NGÀNH (02/11/2026): mỗi sản phẩm tính theo phí ngành của nó; ngành chưa đủ đơn ⇒ phí cả gian, máy không tự hạ.
  *  4. Kế hoạch giá: dưới sàn / vượt biên độ so với giá ĐỌC THẲNG TikTok bị chặn; hàng nhiều SKU bị chặn; khoá idempotency.
  *  5. Thực thi: Xem trước KHÔNG gọi TikTok; Tự động gọi đúng một lần (cả khi hai tab bấm cùng lúc), đúng SKU;
  *     giá TikTok đổi / SKU đổi / mất giá vốn lúc thực thi ⇒ không ghi; mất mạng ⇒ 'uncertain'; trần ghi / ngày.
@@ -20,7 +21,8 @@ import {
     khoBoNhoTikTok, chuanHoaChinhSachTikTok, xayTrangThaiTikTok, taoKeHoachGiaTikTok, thucThiTikTok, chayChuKyTikTok,
     luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
 } from '../src/lib/tiktokPilot'
-import { docMauPhi } from '../src/lib/shopeeTuQuan'
+import { docMauPhi, xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
+import { tinhGiaDeXuat, lyDoPhiChuaDuTin } from '../src/lib/giaShopee'
 import { dauNgayVN } from '../src/lib/shopeePilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_TIKTOK_PILOT } from '../src/lib/tienIchCuaHang'
@@ -50,6 +52,8 @@ let kenh: any[] = []
 let listing: any[] = []
 let hang: any[] = []
 let donPhi: Record<string, { giaBan: number; phi: number }[]> = {}
+/** đơn MỘT ngành theo gian (truy vấn phí theo ngành); null = mọi đơn của gian thuộc ngành 601 như listing */
+let donNganh: Record<string, (any & { nganh: string })[]> | null = null
 let daBan: { sku: string; sl: number }[] = []
 function datLai(soDon = 40) {
     kenh = [
@@ -57,11 +61,11 @@ function datLai(soDon = 40) {
         { id: 'sp1', name: 'Kengi Shopee', platform: 'shopee', shopId: '8001', accessToken: 'tok', commissionRate: 6, createdAt: new Date(0) },
     ]
     listing = [
-        { id: 'op1', channelId: 'tt1', platformProductId: '111', name: 'Ổ cắm điện 4 lỗ', sku: 'OC4', price: 120000, stock: 12, status: 'ACTIVATE', localProductId: 'p1', imageUrl: null, updatedAt: new Date(5) },
-        { id: 'op2', channelId: 'tt1', platformProductId: '222', name: 'Bình giữ nhiệt', sku: 'BINH', price: 160000, stock: 30, status: 'ACTIVATE', localProductId: 'p2', imageUrl: null, updatedAt: new Date(4) },
-        { id: 'op3', channelId: 'tt1', platformProductId: '333', name: 'Áo thun nhiều size', sku: 'AO', price: 90000, stock: 50, status: 'ACTIVATE', localProductId: 'p3', imageUrl: null, updatedAt: new Date(3) },
-        { id: 'op4', channelId: 'tt1', platformProductId: '444', name: 'Hàng chưa nối', sku: 'XYZ', price: 50000, stock: 5, status: 'ACTIVATE', localProductId: null, imageUrl: null, updatedAt: new Date(2) },
-        { id: 'op5', channelId: 'tt1', platformProductId: '555', name: 'Hàng đang ẩn', sku: 'OC4B', price: 100000, stock: 5, status: 'SELLER_DEACTIVATED', localProductId: 'p5', imageUrl: null, updatedAt: new Date(1) },
+        { id: 'op1', channelId: 'tt1', categoryId: '601', platformProductId: '111', name: 'Ổ cắm điện 4 lỗ', sku: 'OC4', price: 120000, stock: 12, status: 'ACTIVATE', localProductId: 'p1', imageUrl: null, updatedAt: new Date(5) },
+        { id: 'op2', channelId: 'tt1', categoryId: '601', platformProductId: '222', name: 'Bình giữ nhiệt', sku: 'BINH', price: 160000, stock: 30, status: 'ACTIVATE', localProductId: 'p2', imageUrl: null, updatedAt: new Date(4) },
+        { id: 'op3', channelId: 'tt1', categoryId: '601', platformProductId: '333', name: 'Áo thun nhiều size', sku: 'AO', price: 90000, stock: 50, status: 'ACTIVATE', localProductId: 'p3', imageUrl: null, updatedAt: new Date(3) },
+        { id: 'op4', channelId: 'tt1', categoryId: '601', platformProductId: '444', name: 'Hàng chưa nối', sku: 'XYZ', price: 50000, stock: 5, status: 'ACTIVATE', localProductId: null, imageUrl: null, updatedAt: new Date(2) },
+        { id: 'op5', channelId: 'tt1', categoryId: '601', platformProductId: '555', name: 'Hàng đang ẩn', sku: 'OC4B', price: 100000, stock: 5, status: 'SELLER_DEACTIVATED', localProductId: 'p5', imageUrl: null, updatedAt: new Date(1) },
     ]
     hang = [
         { id: 'p1', sku: 'OC4', name: 'Ổ cắm điện 4 lỗ', description: 'x', costPrice: 100000, sellingPrice: 189000, stock: 12, productType: 'goods', mergedIntoId: null, bundleId: null, category: { name: 'Điện' }, _count: { images: 1 }, images: [{ url: 'https://a/1.jpg' }] },
@@ -73,6 +77,8 @@ function datLai(soDon = 40) {
     // phí 14% + 3.000đ mỗi đơn — cùng số liệu bộ kiểm Shopee Pilot ⇒ cùng giá đề xuất / giá sàn
     donPhi = { tt1: Array.from({ length: soDon }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } }) }
     daBan = [{ sku: 'oc4', sl: 5 }]
+    donNganh = null
+    xoaDemPhiTheoNganh()
 }
 
 const prisma: any = {
@@ -99,6 +105,7 @@ const prisma: any = {
     skuMapping: { findMany: async () => [] },
     storeSettings: { findFirst: async ({ select }: any = {}) => chon({ businessType: 'household', khoMeMa: null }, select) },
     $queryRawUnsafe: async (sql: string, ...v: any[]) => {
+        if (sql.includes('AS nganh')) return donNganh ? (donNganh[v[0]] || []) : (donPhi[v[0]] || []).map(d => ({ ...d, nganh: '601' }))
         if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return (v[0] as string[]).flatMap(id => donPhi[id] || [])
         if (sql.includes('"OnlineOrderItem"')) return daBan.map(d => ({ sku: d.sku, sl: d.sl }))
         if (sql.includes('FROM "Product"')) {
@@ -167,6 +174,47 @@ async function main() {
         dung('3a. gian TikTok chưa có đơn ⇒ mượn gian TIKTOK khác (10%), không mượn Shopee (30%)', Math.abs(m.tyLe - 0.1) < 0.005 && /gian TikTok khác/.test(m.ghiChu), `${m.tyLe} ${m.ghiChu}`)
         const s = await docMauPhi(prisma, { ...kenh[1], id: 'spMoi', platform: 'shopee' })
         dung('3b. gian Shopee vẫn mượn gian Shopee (câu chữ cũ giữ nguyên)', Math.abs(s.tyLe - 0.3) < 0.01 && /gian Shopee khác/.test(s.ghiChu), `${s.tyLe} ${s.ghiChu}`)
+        // gian Mall / gian thường, ngành khác nhau thì phí khác ⇒ số MƯỢN chỉ để người xem, máy không tự hạ / đăng theo nó
+        dung('3c. số MƯỢN gắn cờ ⇒ chưa đủ tin cho máy tự ghi (kể cả giá cao)', m.muon === true && /MƯỢN/.test(lyDoPhiChuaDuTin(5_000_000, m) || ''), JSON.stringify({ muon: m.muon }))
+        const ctxM = ngCanh()
+        await luuCauHinhTikTok(ctxM, { channelId: 'tt1' })   // cửa hàng có hai gian TikTok ⇒ chọn gian mới
+        const stM = await xayTrangThaiTikTok(ctxM)
+        const oc4M = stM.products.find((p: any) => p.itemId === '111')
+        dung('3d. trạng thái: phí mượn ⇒ không đủ tin, sản phẩm bị chặn tự ghi', stM.status.feeModel.borrowed === true && stM.status.feeModel.trusted === false && /MƯỢN/.test(oc4M?.pricing.autoBlocked || ''), JSON.stringify({ fm: stM.status.feeModel, p: oc4M?.pricing }))
+        datLai()
+    }
+
+    // ─── 3b. Phí theo NGÀNH (02/11/2026, chủ shop: "mỗi ngành hàng lại 1 % phí khác nhau") ─────────────
+    {
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        // ngành 601 (ổ cắm) 14% + 3.000đ, ngành 602 (bình) 30% — mỗi ngành 40 đơn; cả gian = trộn hai ngành
+        const n602 = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.3 * g } })
+        // + 10 dòng không nối được ngành (truy vấn thật đã loại; bộ đọc vẫn phải bỏ nếu lọt) — không được thành "ngành null"
+        donNganh = { tt1: [...donPhi.tt1!.map(d => ({ ...d, nganh: '601' })), ...n602.map(d => ({ ...d, nganh: '602' })), ...n602.slice(0, 10).map(d => ({ ...d, nganh: null }))] }
+        donPhi.tt1 = [...donPhi.tt1!, ...n602]
+        listing[1].categoryId = '602'   // BINH
+        const st = await xayTrangThaiTikTok(ngCanh())
+        const sp = (id: string) => st.products.find((p: any) => p.itemId === id)
+        const kq602 = tinhGiaDeXuat({ giaVon: 50000, phi: { tyLe: 0.3, coDinh: 0 } as any, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 })
+        dung('3e. OC4 (ngành 601) giữ giá theo phí NGÀNH 14% + 3.000đ dù cả gian phí cao hơn', sp('111')?.pricing.price === 146000 && sp('111')?.pricing.floor === 127200
+            && sp('111')?.pricing.fee?.scope === 'nganh' && sp('111')?.pricing.fee?.categoryId === '601' && st.status.feeModel.rate > 0.16, JSON.stringify({ p: sp('111')?.pricing, gian: st.status.feeModel.rate }))
+        dung('3f. BINH (ngành 602) tính theo phí NGÀNH 30% — giá sàn cao hơn số cả gian', sp('222')?.pricing.floor === kq602.giaSan && sp('222')?.pricing.price === kq602.giaDeXuat
+            && Math.abs((sp('222')?.pricing.fee?.rate ?? 0) - 0.3) < 0.002, JSON.stringify({ p: sp('222')?.pricing, kq: [kq602.giaSan, kq602.giaDeXuat] }))
+        dung('3g. bảng phí theo ngành gửi giao diện đủ hai ngành', st.status.feeModel.byCategory?.length === 2 && st.status.feeModel.byCategory.every((c: any) => c.scope === 'nganh' && c.orders === 40), JSON.stringify(st.status.feeModel.byCategory))
+        const kh = await taoKeHoachGiaTikTok(ngCanh(), { itemId: '222', price: 150000 })
+        dung('3h. kế hoạch giá mang phí NGÀNH của sản phẩm', kh.data.economics.floor === kq602.giaSan && kh.data.economics.fee?.scope === 'nganh' && !kh.data.feeWarning, JSON.stringify(kh.data.economics))
+
+        // ngành chưa đủ đơn ⇒ phí cả gian gắn cờ: máy KHÔNG tự hạ, ngành đã đo vẫn tự tăng
+        listing[1].categoryId = '699'
+        const ctx = ngCanh()
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
+        const kq = await chayChuKyTikTok(ctx)
+        const gia = Object.fromEntries(ghiTT().map(g => [g[1], g[2]]))
+        dung('3i. ngành chưa đủ đơn: HẠ giá KHÔNG tự làm (BINH nháp chờ duyệt); ngành đã đo vẫn tự TĂNG (OC4)', !gia['222'] && gia['111'] === 132000
+            && kq.results.some((r: any) => r.sku === 'BINH' && /CHỜ NGƯỜI DUYỆT/.test(r.message || '') && /chưa đủ đơn/.test(r.message || '')), JSON.stringify({ gia, r: kq.results }))
+        const kh2 = ctx.kho._keHoach.find(k => k.data?.itemId === '222' && k.status === 'draft')
+        const ha = kh2 ? await thucThiTikTok(ctx, kh2.id, { tuDong: true }) : null
+        dung('3j. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo ⇒ từ chối HẠ giá', ha?.status === 'failed' && /chưa đủ đơn/.test(ha?.result?.message || '') && !ghiTT().some(g => g[1] === '222'), JSON.stringify(ha?.result))
         datLai()
     }
 

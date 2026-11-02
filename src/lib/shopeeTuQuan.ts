@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, ghiChuAffiliate, type MauPhi, type DongPhiDon } from './giaShopee'
+import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -114,8 +114,160 @@ export async function docMauPhi(prisma: any, ch: any): Promise<MauPhi> {
     return {
         ...muon,
         ...(rieng.affiliate ? { affiliate: rieng.affiliate } : {}),
+        // số MƯỢN: Mall / thường, ngành hàng của gian kia có thể khác ⇒ máy không tự ghi theo số này (lyDoPhiChuaDuTin)
+        muon: true,
         ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian ${tenSan} khác cùng cửa hàng. ${muon.ghiChu}` +
             (rieng.affiliate ? ` ${ghiChuAffiliate(rieng.affiliate)}` : ''),
+    }
+}
+
+/* ─── Phí theo NGÀNH (02/11/2026) ─────────────────────────────────────────────────
+ * Chủ shop: "shopee với tiktok thì mỗi ngành hàng lại 1 % phí khác nhau nha, mall lại phí khác á". Đo prod cùng ngày
+ * (chỉ đọc): Shopee Kengi Store cả gian 23,6% nhưng ngành 22,5%…30,2%; Kengi Tools 28,8% nhưng ngành tới 36,2%;
+ * TikTok bàn là 18,7% / máy sấy tóc 29,4%. Một tỷ lệ cả gian ⇒ ngành phí cao bị giá sàn THẤP (lỗ), ngành phí thấp
+ * bị đề xuất giá cao.
+ * Cách đo: đơn đã đối soát 90 ngày mà MỌI dòng hàng nối được về CÙNG MỘT ngành (dòng → listing của gian: Shopee
+ * externalItemId = item_id; TikTok externalItemId là mã DÒNG ĐƠN nên nối thêm qua SKU / mã kho) — đơn trộn nhiều ngành
+ * không chia được phí cho từng ngành nên bỏ ra. Ngành đủ SO_DON_TOI_THIEU đơn ⇒ mô hình riêng (cùng uocLuongPhi, cùng
+ * rào đủ tin); ngành chưa đủ ⇒ phí cả gian gắn `thayNganh` (người xem được, máy không tự đăng / hạ giá). */
+
+/** Một dòng phí của đơn chỉ có hàng MỘT ngành, kèm mã ngành. */
+export async function dongPhiTheoNganh(prisma: any, channelId: string): Promise<(DongPhiDon & { nganh: string })[]> {
+    const cau = (coAff: boolean) => `
+        WITH don AS (
+            SELECT o.id, (o."netRevenue" + o."platformFee")::float8 AS "giaBan", o."platformFee"::float8 AS phi
+                   ${coAff ? `, o."affiliateFee"::float8 AS aff` : ''}
+              FROM "OnlineOrder" o
+             WHERE o."channelId" = $1 AND o."netRevenue" > 0 AND o."platformFee" > 0
+               AND ${daQuyetToanSql('o')}
+               AND o."createdAt" >= NOW() - INTERVAL '90 days'
+             ORDER BY o."createdAt" DESC
+             LIMIT 2000
+        ), dong AS (
+            SELECT d.id, (SELECT p."categoryId" FROM "OnlineProduct" p
+                           WHERE p."channelId" = $1 AND p."categoryId" IS NOT NULL
+                             AND (p."platformProductId" = i."externalItemId"
+                                  OR (i.sku IS NOT NULL AND i.sku <> '' AND LOWER(p.sku) = LOWER(i.sku))
+                                  OR (i."productId" IS NOT NULL AND p."localProductId" = i."productId"))
+                           ORDER BY (p."platformProductId" = i."externalItemId") DESC
+                           LIMIT 1) AS nganh
+              FROM don d JOIN "OnlineOrderItem" i ON i."onlineOrderId" = d.id
+        )
+        SELECT d."giaBan", d.phi${coAff ? ', d.aff' : ''}, MIN(x.nganh) AS nganh
+          FROM don d JOIN dong x ON x.id = d.id
+         GROUP BY d.id, d."giaBan", d.phi${coAff ? ', d.aff' : ''}
+        HAVING COUNT(DISTINCT x.nganh) = 1 AND COUNT(x.nganh) = COUNT(*)`
+    const rows: any[] = await prisma.$queryRawUnsafe(cau(true), channelId).catch((e: any) =>
+        /affiliateFee/.test(String(e?.message || '')) ? prisma.$queryRawUnsafe(cau(false), channelId) : Promise.reject(e))
+    return (rows || []).filter(r => r?.nganh != null && String(r.nganh).trim() !== '')
+        .map(r => ({ giaBan: Number(r.giaBan) || 0, phi: Number(r.phi) || 0, aff: r.aff == null ? null : Number(r.aff), nganh: String(r.nganh).trim() }))
+}
+
+export interface BangPhiNganh {
+    /** phí cả gian (có thể là số MƯỢN gian khác — muon) */
+    toanGian: MauPhi
+    /** ngành đủ đơn để đo riêng ⇒ mô hình riêng */
+    theoNganh: Map<string, MauPhi>
+    /** tên ngành (TikTok có chuỗi ngành; Shopee chưa lưu tên) */
+    tenNganh: Map<string, string>
+    /** mỗi ngành có listing trên gian: một tên sản phẩm làm ví dụ + số listing — Shopee không lưu tên ngành, chủ shop
+     *  nhận ngành qua sản phẩm của mình */
+    viDuNganh: Map<string, { viDu: string; so: number }>
+    /** mô hình cho một sản phẩm thuộc ngành `nganh` — ngành chưa đủ đơn / chưa rõ ngành ⇒ cả gian, gắn cờ chưa đủ tin */
+    chon(nganh?: string | number | null): MauPhi
+}
+
+/** Phí cho MỘT sản phẩm thuộc ngành `nganh` của gian (null = chưa rõ ngành) — xem docMauPhiTheoNganh. */
+export async function docMauPhiSanPham(prisma: any, ch: any, nganh: string | number | null | undefined): Promise<MauPhi> {
+    return (await docMauPhiTheoNganh(prisma, ch)).chon(nganh)
+}
+
+/** Tóm tắt một mô hình phí cho giao diện Pilot — tỷ lệ, phí cố định, số đơn, phạm vi đo (ngành / cả gian / mượn). */
+export function tomTatMauPhi(m: MauPhi, bang?: Pick<BangPhiNganh, 'tenNganh' | 'viDuNganh'>) {
+    const vd = m.nganh ? bang?.viDuNganh.get(m.nganh) : undefined
+    return {
+        rate: m.tyLe, fixedPerOrder: m.coDinh, orders: m.soDon, source: m.nguon, note: m.ghiChu,
+        scope: (m.nganh ? 'nganh' : m.muon ? 'muon' : m.thayNganh || m.chuaRoNganh ? 'thay-nganh' : 'gian') as 'nganh' | 'muon' | 'thay-nganh' | 'gian',
+        category: m.nganh ? (bang?.tenNganh.get(m.nganh) || m.nganh) : m.thayNganh || null,
+        categoryId: m.nganh || null,
+        ...(vd ? { example: vd.viDu, products: vd.so } : {}),
+        trusted: m.nguon !== 'cau-hinh-kenh' && m.soDon >= SO_DON_TU_GHI && !m.muon && !m.thayNganh && !m.chuaRoNganh,
+    }
+}
+
+const TTL_PHI_NGANH = 5 * 60_000
+/** Đệm phần THEO NGÀNH (truy vấn nặng hơn) theo gian. `dau` = dấu số đo cả gian lúc đo: cả gian đổi (có đơn mới đối
+ *  soát) thì đo ngành lại ngay — không ghép phí ngành cũ với phí cả gian mới. */
+const demPhiNganh = new Map<string, { het: number; dau: string } & Pick<BangPhiNganh, 'theoNganh' | 'tenNganh' | 'viDuNganh'>>()
+/** Bỏ đệm phí theo ngành (bộ kiểm đổi ngành của dữ liệu giữa các ca; prod tự hết hạn sau 5 phút). */
+export function xoaDemPhiTheoNganh(): void { demPhiNganh.clear() }
+
+/** Đo phí từng ngành của gian: ngành đủ SO_DON_TOI_THIEU đơn MỘT ngành ⇒ mô hình riêng. Lỗi đọc ⇒ không ngành nào. */
+async function doPhiTungNganh(prisma: any, ch: any): Promise<Pick<BangPhiNganh, 'theoNganh' | 'tenNganh' | 'viDuNganh'> & { loi: boolean }> {
+    const theoNganh = new Map<string, MauPhi>()
+    const tenNganh = new Map<string, string>()
+    const viDuNganh = new Map<string, { viDu: string; so: number }>()
+    let dong: (DongPhiDon & { nganh: string })[] = []
+    try {
+        dong = await dongPhiTheoNganh(prisma, String(ch.id))
+        const ten: any[] = await prisma.$queryRawUnsafe(
+            `SELECT "categoryId", MAX("categoryName") AS "categoryName", MIN(name) AS "viDu", COUNT(*)::int AS so
+               FROM "OnlineProduct" WHERE "channelId" = $1 AND "categoryId" IS NOT NULL
+              GROUP BY "categoryId" LIMIT 2000`, String(ch.id)).catch(() => [])
+        for (const t of ten || []) {
+            const k = String(t.categoryId)
+            if (t.categoryName) tenNganh.set(k, String(t.categoryName))
+            if (t.viDu) viDuNganh.set(k, { viDu: String(t.viDu).slice(0, 120), so: Number(t.so) || 0 })
+        }
+    } catch (e: any) {
+        // không đo được theo ngành ⇒ mọi sản phẩm dùng cả gian và bị gắn "ngành chưa đo" (máy không tự hạ giá) — NÓI RA
+        console.error(`[PhiNganh] ${ch.name || ch.id}: không đọc được phí theo ngành —`, e?.message || e)
+        return { theoNganh, tenNganh, viDuNganh, loi: true }
+    }
+    const nhom = new Map<string, DongPhiDon[]>()
+    for (const d of dong) { const a = nhom.get(d.nganh) || []; a.push({ giaBan: d.giaBan, phi: d.phi, aff: d.aff }); nhom.set(d.nganh, a) }
+    for (const [ng, ds] of nhom) {
+        const m = uocLuongPhi(ds, ch.commissionRate)
+        if (m.nguon === 'cau-hinh-kenh') continue
+        const ten = tenNganh.get(ng)
+        theoNganh.set(ng, { ...m, nganh: ng, ghiChu: `Ngành ${ten ? `${ten} (${ng})` : ng}: ${m.ghiChu}` })
+    }
+    return { theoNganh, tenNganh, viDuNganh, loi: false }
+}
+
+export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiNganh> {
+    // cả gian đọc MỖI lần như docMauPhi trước giờ; phần theo ngành lấy từ đệm nếu số đo cả gian chưa đổi
+    const toanGian = await docMauPhi(prisma, ch)
+    const dau = [toanGian.nguon, toanGian.soDon, toanGian.tyLe, toanGian.coDinh, !!toanGian.muon, toanGian.affiliate?.soDonBiet ?? -1].join('|')
+    const khoa = String(ch.id)
+    let co = demPhiNganh.get(khoa)
+    if (!co || co.het <= Date.now() || co.dau !== dau) {
+        const r = await doPhiTungNganh(prisma, ch)
+        // đọc lỗi thì chỉ đệm 1 phút — lỗi thoáng qua đừng khoá cả gian ở "ngành chưa đo" suốt 5 phút
+        co = { het: Date.now() + (r.loi ? 60_000 : TTL_PHI_NGANH), dau, theoNganh: r.theoNganh, tenNganh: r.tenNganh, viDuNganh: r.viDuNganh }
+        demPhiNganh.delete(khoa)
+        demPhiNganh.set(khoa, co)
+        if (demPhiNganh.size > 200) { const cu = demPhiNganh.keys().next().value; if (cu !== undefined) demPhiNganh.delete(cu) }
+    }
+    const { theoNganh, tenNganh, viDuNganh } = co
+    return {
+        toanGian, theoNganh, tenNganh, viDuNganh,
+        chon(nganh) {
+            const k = nganh == null ? '' : String(nganh).trim()
+            if (!k) {
+                // Gian đã đo ra phí từng ngành khác nhau mà sản phẩm chưa rõ ngành ⇒ số cả gian có thể sai ngành:
+                // người xem được, máy không tự đăng / hạ giá. Gian không đo được ngành nào ⇒ như trước.
+                if (!theoNganh.size) return toanGian
+                return { ...toanGian, chuaRoNganh: true, ghiChu: `Sản phẩm chưa rõ ngành trên sàn — dùng phí cả gian. ${toanGian.ghiChu}` }
+            }
+            const m = theoNganh.get(k)
+            if (m) return m
+            const ten = tenNganh.get(k)
+            return {
+                ...toanGian, thayNganh: ten ? `${ten} (${k})` : k,
+                ghiChu: `Ngành ${ten ? `${ten} (${k})` : k} chưa đủ đơn đối soát để đo riêng — dùng phí cả gian. ${toanGian.ghiChu}`,
+            }
+        },
     }
 }
 
