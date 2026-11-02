@@ -844,6 +844,45 @@ async function main() {
             dung('E14. hiện lại hàng ẩn: giá 88.000đ dưới sàn NGÀNH (92.400) ⇒ từ chối, không gọi Shopee', hienN3.loi instanceof ToolError && /GIÁ SÀN/.test(hienN3.loi.message) && !goi.some(g => g.startsWith('unlist:1403')), hienN3.loi?.message)
         }
 
+        // ─── E15. Hoa hồng affiliate là chuyện CẢ SHOP (02/11/2026, phiên soát chéo chỉ ra lỗ hở của E14) ───────────
+        // Chiến dịch affiliate Shopee áp mọi sản phẩm ⇒ ngành CHƯA thấy đơn affiliate vẫn có thể ra đơn affiliate: giá sàn
+        // của nó phải tính theo mức cao nhất đo được ở CẢ gian, không chỉ trong ngành.
+        {
+            // ngành 101: 40 đơn, cứ 5 đơn có 1 đơn affiliate 12% (hoa hồng đọc từ escrow); ngành 303: 40 đơn phí 30%, KHÔNG đơn affiliate
+            const n101 = donSach().map((d, i) => { const r = i % 5 === 0 ? 0.12 : 0; return { giaBan: d.giaBan, phi: d.phi + r * d.giaBan, aff: r * d.giaBan, nganh: '101' } })
+            const n303 = donSach().map(d => ({ giaBan: d.giaBan, phi: 0.3 * d.giaBan, aff: 0, nganh: '303' }))
+            HIEN = taoCuaHang({ don: [...n101, ...n303].map(({ nganh: _n, ...d }) => d), donNganh: [...n101, ...n303] })
+            const H = HIEN
+            H.themHang('B1', 60000); H.themListing('B1', 150000, '1501', 'NORMAL', '303')
+            await luuCauHinh(H.ctx, { policy: { targetMarginRate: 0.15, minMarginRate: 0.05, affiliateRate: 0 } })   // chủ shop KHÔNG khai affiliate
+            const st = await xayTrangThai(H.ctx)
+            const b1 = st.products.find((p: any) => p.sku === 'B1')
+            // phí ngành 303 đo tách affiliate (40 đơn biết hoa hồng, đều 0) = 30%; đơn affiliate 12% bán ĐÚNG giá sàn
+            const ts303: ThamSoGia = { giaVon: 60000, phi: { tyLe: 0.3, coDinh: 0 } as MauPhi, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 }
+            const quaAff = danhGiaGia(Number(b1?.pricing?.floor) || 0, { ...ts303, phiAffiliatePct: 12 }, true)
+            dung('E15. ngành CHƯA thấy đơn affiliate: giá sàn vẫn chịu được đơn affiliate 12% đo ở ngành khác (lãi ≥ biên tối thiểu)',
+                (b1?.pricing?.floor ?? 0) > 0 && quaAff.bienPct >= 5 - 1e-9, JSON.stringify({ san: b1?.pricing?.floor, quaAff }))
+            const san0 = tinhGiaDeXuat(ts303).giaSan
+            const lo = danhGiaGia(san0, { ...ts303, phiAffiliatePct: 12 }, true)
+            dung('E15. (đối chứng) sàn chỉ theo affiliate CỦA NGÀNH (0%) ⇒ đơn affiliate đầu tiên của ngành bán ở giá sàn bị LỖ — đường lỗ có thật',
+                lo.loiNhuan < 0, JSON.stringify({ san0, lo }))
+            dung('E15. lời nhắc affiliate của trạng thái khớp giá sàn đang dùng (12%)', Math.abs((st.status.feeModel?.floorAffiliateRate ?? 0) - 0.12) < 1e-9, JSON.stringify(st.status.feeModel?.floorAffiliateRate))
+
+            // E15b. số đo cả gian (600 đơn mới nhất) KHÔNG thấy đơn affiliate nào — chỉ đơn cũ hơn của ngành 101 có 12% (truy
+            // vấn ngành đọc tới 2.000 đơn) ⇒ hàng ngành chưa đo riêng (dùng phí cả gian) vẫn phải tính sàn theo 12%
+            HIEN = taoCuaHang({ don: [...n101.filter(d => !d.aff), ...n303].map(({ nganh: _n, ...d }) => d), donNganh: [...n101, ...n303] })
+            const H2 = HIEN
+            H2.themHang('C1', 60000); H2.themListing('C1', 150000, '1502', 'NORMAL', '909')   // ngành chưa đủ đơn ⇒ phí cả gian
+            await luuCauHinh(H2.ctx, { policy: { targetMarginRate: 0.15, minMarginRate: 0.05, affiliateRate: 0 } })
+            const st2 = await xayTrangThai(H2.ctx)
+            const c1 = st2.products.find((p: any) => p.sku === 'C1')
+            const phiC1 = { tyLe: Number(c1?.pricing?.fee?.rate) || 0, coDinh: Number(c1?.pricing?.fee?.fixedPerOrder) || 0 } as MauPhi
+            const quaAff2 = danhGiaGia(Number(c1?.pricing?.floor) || 0, { giaVon: 60000, phi: phiC1, phiAffiliatePct: 12 }, true)
+            dung('E15b. cả gian chưa thấy affiliate, đơn cũ của một ngành thấy 12% ⇒ hàng dùng phí cả gian vẫn tính sàn theo 12%',
+                c1?.pricing?.fee?.scope === 'thay-nganh' && quaAff2.bienPct >= 5 - 1e-9 && Math.abs((st2.status.feeModel?.floorAffiliateRate ?? 0) - 0.12) < 1e-9,
+                JSON.stringify({ san: c1?.pricing?.floor, phi: c1?.pricing?.fee?.rate, quaAff2, fa: st2.status.feeModel?.floorAffiliateRate }))
+        }
+
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────
         {
             HIEN = taoCuaHang({ don: donSach() })

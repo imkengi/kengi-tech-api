@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon } from './giaShopee'
+import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -237,8 +237,8 @@ async function doPhiTungNganh(prisma: any, ch: any): Promise<Pick<BangPhiNganh, 
 
 export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiNganh> {
     // cả gian đọc MỖI lần như docMauPhi trước giờ; phần theo ngành lấy từ đệm nếu số đo cả gian chưa đổi
-    const toanGian = await docMauPhi(prisma, ch)
-    const dau = [toanGian.nguon, toanGian.soDon, toanGian.tyLe, toanGian.coDinh, !!toanGian.muon, toanGian.affiliate?.soDonBiet ?? -1].join('|')
+    const goc = await docMauPhi(prisma, ch)
+    const dau = [goc.nguon, goc.soDon, goc.tyLe, goc.coDinh, !!goc.muon, goc.affiliate?.soDonBiet ?? -1].join('|')
     const khoa = String(ch.id)
     let co = demPhiNganh.get(khoa)
     if (!co || co.het <= Date.now() || co.dau !== dau) {
@@ -249,7 +249,22 @@ export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiN
         demPhiNganh.set(khoa, co)
         if (demPhiNganh.size > 200) { const cu = demPhiNganh.keys().next().value; if (cu !== undefined) demPhiNganh.delete(cu) }
     }
-    const { theoNganh, tenNganh, viDuNganh } = co
+    const { tenNganh, viDuNganh } = co
+    /* Hoa hồng affiliate Shopee đặt ở cấp SHOP (chiến dịch mở áp mọi sản phẩm) — ngành chưa thấy đơn affiliate nào vẫn có thể
+     * ra đơn affiliate bất cứ lúc nào. Giá sàn (tyLeAffiliate = max(mức khai, affiliate.tyLeMax)) của MỌI sản phẩm phải tính
+     * theo mức cao nhất đo được ở CẢ gian, mọi ngành — trước phí theo ngành sàn đã dùng tyLeMax cả gian (02/11/2026, phiên soát
+     * chéo chỉ ra). GIỮ tyLeTB / tachRieng của ngành: phí ngành có tách affiliate hay không là theo đơn của chính ngành. */
+    const affMax = Math.max(goc.affiliate?.tyLeMax ?? 0, ...[...co.theoNganh.values()].map(m => m.affiliate?.tyLeMax ?? 0))
+    const nangAff = (m: MauPhi): MauPhi => {
+        if (!(affMax > (m.affiliate?.tyLeMax ?? 0))) return m
+        const a: AffiliateDo = m.affiliate ? { ...m.affiliate, tyLeMax: affMax } : { tachRieng: false, tyLeTB: 0, tyLeMax: affMax, soDonBiet: 0, soDonCo: 0 }
+        return {
+            ...m, affiliate: a,
+            ghiChu: `${m.ghiChu} Giá sàn tính hoa hồng affiliate ít nhất ${Math.round(affMax * 1000) / 10}% — mức cao nhất một đơn đo được ở cả gian (chiến dịch affiliate áp cả shop).`,
+        }
+    }
+    const toanGian = nangAff(goc)
+    const theoNganh = new Map([...co.theoNganh].map(([k, m]) => [k, nangAff(m)] as const))
     return {
         toanGian, theoNganh, tenNganh, viDuNganh,
         chon(nganh) {
