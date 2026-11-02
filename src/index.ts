@@ -54,6 +54,7 @@ import mcpRoutes from './routes/mcp'
 import mcpAgentRoutes from './routes/mcpAgent'
 import shopeePilotRoutes from './routes/shopeePilot'
 import facebookPilotRoutes from './routes/facebookPilot'
+import tiktokPilotRoutes from './routes/tiktokPilot'
 import flashSaleRoutes from './routes/flashSales'
 import importDataRoutes from './routes/importData'
 import uploadRoutes from './routes/uploads'
@@ -339,6 +340,7 @@ app.use('/api/mcp', mcpRoutes) // MCP server cho AI agent (Streamable HTTP, X-AP
 app.use('/api/mcp-agent', mcpAgentRoutes) // Trợ lý AI dashboard (Gemini + MCP tools)
 app.use('/api/shopee-pilot', shopeePilotRoutes) // Shopee Pilot: bảng điều khiển bán hàng Shopee (giao diện ở /shopee-pilot/)
 app.use('/api/facebook-pilot', facebookPilotRoutes) // Facebook Pilot: lên bài sản phẩm + bình luận fanpage (giao diện kengi.vn/pilot-facebook/)
+app.use('/api/tiktok-pilot', tiktokPilotRoutes) // TikTok Pilot: định giá theo phí TikTok đo được + đẩy tồn (giao diện kengi.vn/pilot-tiktok/)
 app.use('/api/flash-sales', flashSaleRoutes) // Flash sale hàng loạt Shopee (hàng đợi tuần tự)
 app.use('/api/internal', syncRoutes)
 app.use('/api/announcements', announcementRoutes)

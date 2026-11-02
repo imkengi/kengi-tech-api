@@ -389,7 +389,8 @@ async function main() {
         dung('10d. route chặn theo tiện ích facebook_pilot', /lyDoChanPilot\(req\.user\?\.storeCode, TIEN_ICH_FACEBOOK_PILOT\)/.test(rt))
         const ghi = ['cycle', 'execute', 'post', 'reply', 'hide', 'cancel', 'config'].every(v => new RegExp(`(^|\\s|')${v}'?: \\{\\s*ghi: true`, 'm').test(rt))
         dung('10e. mọi thao tác ghi đánh dấu ghi: true (quản lý mới được)', ghi)
-        dung('10f. tiện ích chỉ-quản-trị có facebook_pilot', /TIEN_ICH_CHI_QUAN_TRI: readonly string\[\] = \[TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT\]/.test(doc('lib/tienIchCuaHang.ts')))
+        // chỉ cần có mặt trong danh sách — thêm tiện ích khác (TikTok Pilot 02/11) không được làm đỏ ca này
+        dung('10f. tiện ích chỉ-quản-trị có facebook_pilot', /TIEN_ICH_CHI_QUAN_TRI: readonly string\[\] = \[[^\]\n]*\bTIEN_ICH_FACEBOOK_PILOT\b[^\]\n]*\]/.test(doc('lib/tienIchCuaHang.ts')))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

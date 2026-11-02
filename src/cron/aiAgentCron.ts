@@ -19,7 +19,8 @@ import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
 import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
 import { chayTheoLichFb } from '../lib/facebookPilot'
-import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
+import { chayTheoLichTikTok } from '../lib/tiktokPilot'
+import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT } from '../lib/tienIchCuaHang'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
@@ -218,6 +219,15 @@ async function quet(): Promise<void> {
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[FacebookPilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[FacebookPilot] lịch ${store.code}:`, e?.message || e)
+                }
+            }
+            /* TIKTOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật tiktok_pilot. */
+            if (docTienIch(store.addOns).includes(TIEN_ICH_TIKTOK_PILOT)) {
+                try {
+                    const kq = await chayTheoLichTikTok(getStorePrisma(store.schema))
+                    if (kq === 'da-chay' || kq === 'loi') console.log(`[TikTokPilot] lịch ${store.code}: ${kq}`)
+                } catch (e: any) {
+                    console.error(`[TikTokPilot] lịch ${store.code}:`, e?.message || e)
                 }
             }
         }

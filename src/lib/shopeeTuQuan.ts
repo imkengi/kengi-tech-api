@@ -94,14 +94,18 @@ async function dongPhi(prisma: any, channelIds: string[]): Promise<DongPhiDon[]>
 
 /**
  * Mô hình phí của gian: đo từ đơn ĐÃ ĐỐI SOÁT 90 ngày của chính gian; gian mới chưa
- * đủ đơn thì mượn số đo của các gian Shopee khác cùng store (cùng biểu phí Shopee VN,
+ * đủ đơn thì mượn số đo của các gian CÙNG SÀN khác cùng store (cùng biểu phí của sàn,
  * sát hơn nhiều so với tỷ lệ cấu hình mặc định 6%); vẫn không có mới dùng cấu hình.
+ * 02/11/2026: dùng chung cho TikTok Pilot — đơn TikTok cũng ghi netRevenue/platformFee từ đối soát tài chính,
+ * nên chỉ phần mượn gian khác cần theo sàn của gian (trước cứng 'shopee').
  */
 export async function docMauPhi(prisma: any, ch: any): Promise<MauPhi> {
     const rieng = uocLuongPhi(await dongPhi(prisma, [ch.id]), ch.commissionRate)
     if (rieng.nguon !== 'cau-hinh-kenh') return rieng
+    const san = String(ch.platform || 'shopee')
+    const tenSan = san === 'tiktok' ? 'TikTok' : san === 'shopee' ? 'Shopee' : san
     const khac: any[] = await prisma.onlineChannel.findMany({
-        where: { platform: 'shopee', id: { not: ch.id } }, select: { id: true },
+        where: { platform: san, id: { not: ch.id } }, select: { id: true },
     }).catch(() => [])
     if (!khac.length) return rieng
     // Mượn PHÍ, không mượn hoa hồng affiliate: mức hoa hồng do từng gian tự đặt — giữ số đo của chính gian (nếu có)
@@ -110,7 +114,7 @@ export async function docMauPhi(prisma: any, ch: any): Promise<MauPhi> {
     return {
         ...muon,
         ...(rieng.affiliate ? { affiliate: rieng.affiliate } : {}),
-        ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian Shopee khác cùng cửa hàng. ${muon.ghiChu}` +
+        ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian ${tenSan} khác cùng cửa hàng. ${muon.ghiChu}` +
             (rieng.affiliate ? ` ${ghiChuAffiliate(rieng.affiliate)}` : ''),
     }
 }
