@@ -36,6 +36,9 @@ const DUOC_DUYET: Array<{ duong: string; ai: string }> = [
     // 01/11/2026: mục 'Shopee Pilot' nhóm 'Bán Hàng Online' (layout.tsx) — route Next /pilot-shopee (FE 2d2b980), không companyOnly/hkdOnly;
     // menu ẩn khi cửa hàng chưa được quản trị bật tiện ích shopee_pilot (moduleStore ADD_ON_MODULES, lib/tienIchCuaHang)
     { duong: 'Bán Hàng Online → Shopee Pilot', ai: 'CHỈ cửa hàng được quản trị bật tiện ích Shopee Pilot (permission online_products.view; ghi chỉ quản lý / chủ)' },
+    // 02/11/2026: mục 'Facebook Pilot' nhóm 'Bán Hàng Online' (layout.tsx, ngay dưới Shopee Pilot) — route Next /pilot-facebook;
+    // menu ẩn khi cửa hàng chưa được quản trị bật tiện ích facebook_pilot (moduleStore ADD_ON_MODULES, lib/tienIchCuaHang)
+    { duong: 'Bán Hàng Online → Facebook Pilot', ai: 'CHỈ cửa hàng được quản trị bật tiện ích Facebook Pilot (permission online_products.view; ghi chỉ quản lý / chủ)' },
     // 17/10/2026: nhóm 'Hệ Thống' › mục 'Cài Đặt' (layout.tsx), tab id 'ai' nhãn 'Trợ lý AI' (dashboard-settings/page.tsx) — lưu key chỉ admin
     { duong: 'Hệ Thống → Cài Đặt', ai: 'mọi loại hình (permission settings.view; tab Trợ lý AI: chỉ admin lưu key)' },
 ]

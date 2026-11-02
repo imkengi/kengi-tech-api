@@ -19,6 +19,7 @@ import { chonThiGiac } from '../lib/tarotAi'
 
 import * as xm2b from '../lib/xacMinh2BuocAdmin'
 import { SQL_TAO_BANG_PILOT } from '../lib/shopeePilot'
+import { SQL_TAO_BANG_FB_PILOT } from '../lib/facebookPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 
 const router = Router()
@@ -2954,6 +2955,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "nextRunAt" BIGINT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "lastRunAt" BIGINT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ShopeePilotConfig" ADD COLUMN IF NOT EXISTS "lastResult" TEXT`)
+
+                /* FACEBOOK PILOT (02/11/2026) — cấu hình / kế hoạch / nhật ký ghi của trang Facebook Pilot.
+                 * lib/facebookPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
+                for (const sql of SQL_TAO_BANG_FB_PILOT) await (sp as any).$executeRawUnsafe(sql)
 
                 /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
                  * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán

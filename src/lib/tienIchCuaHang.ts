@@ -14,21 +14,26 @@
 //                                mọi đường gọi (/api/mcp, tác vụ AI theo lịch, chạy tay) đều qua
 //    - routes/mcp.ts             tools/list ẩn tool của tiện ích chưa bật
 //    - routes/admin.ts           duyệt yêu cầu nâng cấp KHÔNG làm rơi tiện ích chỉ-quản-trị
+//  02/11/2026 — Facebook Pilot (`facebook_pilot`) cùng luật: routes/facebookPilot.ts + lượt theo lịch ở aiAgentCron.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { registryPrisma } from './prisma'
 
 export const TIEN_ICH_SHOPEE_PILOT = 'shopee_pilot'
+export const TIEN_ICH_FACEBOOK_PILOT = 'facebook_pilot'
 
 /** Tiện ích CHỈ quản trị bật. Duyệt yêu cầu nâng cấp GHI ĐÈ addOns bằng danh sách cửa hàng xin — mà
  *  trang Cài đặt không hiện các tiện ích này nên danh sách xin không bao giờ có ⇒ phải giữ lại khi duyệt,
  *  kẻo duyệt xong Pilot tắt âm thầm. Thêm tiện ích kiểu này thì thêm id vào đây (và adminOnly ở FE moduleStore). */
-export const TIEN_ICH_CHI_QUAN_TRI: readonly string[] = [TIEN_ICH_SHOPEE_PILOT]
+export const TIEN_ICH_CHI_QUAN_TRI: readonly string[] = [TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT]
 
 export const LOI_CHUA_BAT_PILOT =
     'Cửa hàng chưa được bật Shopee Pilot. Đây là tiện ích Kengi bật riêng cho từng cửa hàng — liên hệ Kengi để được bật.'
 export const LOI_KHONG_KIEM_DUOC_PILOT =
     'Chưa kiểm tra được cửa hàng có được dùng Shopee Pilot hay không — thử lại sau ít phút.'
+
+/** Tên hiển thị của tiện ích chỉ-quản-trị — cho câu báo chặn. */
+const TEN_TIEN_ICH: Record<string, string> = { [TIEN_ICH_SHOPEE_PILOT]: 'Shopee Pilot', [TIEN_ICH_FACEBOOK_PILOT]: 'Facebook Pilot' }
 
 /** Store.addOns (chuỗi JSON hoặc mảng) → mảng id. Rỗng / hỏng ⇒ []. */
 export function docTienIch(addOns: unknown): string[] {
@@ -89,14 +94,23 @@ export function xoaDemTienIch(storeCode?: string): void {
 
 export type LyDoChan = { ma: 'chua_bat_tien_ich' | 'khong_kiem_duoc_tien_ich'; loi: string }
 
-/** Lý do không cho dùng Shopee Pilot, hoặc null nếu được dùng. Đọc registry hỏng ⇒ vẫn CHẶN nhưng nói thật
- *  là chưa kiểm được — không bảo chủ shop "chưa được bật" khi thật ra chỉ là đọc lỗi. */
-export async function lyDoChanPilot(storeCode: string | null | undefined): Promise<LyDoChan | null> {
+/** Lý do không cho dùng một tiện ích Pilot (mặc định Shopee Pilot), hoặc null nếu được dùng. Đọc registry hỏng ⇒
+ *  vẫn CHẶN nhưng nói thật là chưa kiểm được — không bảo chủ shop "chưa được bật" khi thật ra chỉ là đọc lỗi. */
+export async function lyDoChanPilot(storeCode: string | null | undefined, tienIch: string = TIEN_ICH_SHOPEE_PILOT): Promise<LyDoChan | null> {
+    const shopee = tienIch === TIEN_ICH_SHOPEE_PILOT
+    const ten = TEN_TIEN_ICH[tienIch] || tienIch
     try {
         const ds = await tienIchCuaHang(String(storeCode || ''))
-        return ds.includes(TIEN_ICH_SHOPEE_PILOT) ? null : { ma: 'chua_bat_tien_ich', loi: LOI_CHUA_BAT_PILOT }
+        if (ds.includes(tienIch)) return null
+        return {
+            ma: 'chua_bat_tien_ich',
+            loi: shopee ? LOI_CHUA_BAT_PILOT : `Cửa hàng chưa được bật ${ten}. Đây là tiện ích Kengi bật riêng cho từng cửa hàng — liên hệ Kengi để được bật.`,
+        }
     } catch (e: any) {
         console.error(`[TienIch] không đọc được tiện ích của cửa hàng "${storeCode || ''}":`, e?.message || e)
-        return { ma: 'khong_kiem_duoc_tien_ich', loi: LOI_KHONG_KIEM_DUOC_PILOT }
+        return {
+            ma: 'khong_kiem_duoc_tien_ich',
+            loi: shopee ? LOI_KHONG_KIEM_DUOC_PILOT : `Chưa kiểm tra được cửa hàng có được dùng ${ten} hay không — thử lại sau ít phút.`,
+        }
     }
 }

@@ -18,7 +18,8 @@ import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedul
 import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
 import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
-import { docTienIch, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
+import { chayTheoLichFb } from '../lib/facebookPilot'
+import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
@@ -208,6 +209,15 @@ async function quet(): Promise<void> {
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[ShopeePilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[ShopeePilot] lịch ${store.code}:`, e?.message || e)
+                }
+            }
+            /* FACEBOOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật facebook_pilot. */
+            if (docTienIch(store.addOns).includes(TIEN_ICH_FACEBOOK_PILOT)) {
+                try {
+                    const kq = await chayTheoLichFb(getStorePrisma(store.schema))
+                    if (kq === 'da-chay' || kq === 'loi') console.log(`[FacebookPilot] lịch ${store.code}: ${kq}`)
+                } catch (e: any) {
+                    console.error(`[FacebookPilot] lịch ${store.code}:`, e?.message || e)
                 }
             }
         }
