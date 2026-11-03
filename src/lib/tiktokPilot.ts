@@ -715,7 +715,6 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
             if (soGhi >= tran || soHoi >= tran * 3 + TRAN_NHAP_MOI_CHU_KY) break
             const id = String(u.l.platformProductId)
             // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
-            // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
             const duKien = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
             if (duKien && !(u.quyet.gia > u.giaCu) && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
             soHoi++
