@@ -417,42 +417,6 @@ export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5):
     return null
 }
 
-/** Đệm cộng vào tỷ lệ phí CAO NHẤT đã đo của gian khi soát hạ giá với phí chưa đủ tin (phiXauNhat). */
-export const DEM_PHI_XAU = 0.03
-
-/**
- * Phí XẤU NHẤT đã đo được của gian (03/11/2026): trong các mô hình ĐỦ TIN (đo từ ≥ SO_DON_TU_GHI đơn, không mượn,
- * không phải cấu hình kênh) lấy tỷ lệ cao nhất + DEM_PHI_XAU, phí cố định cao nhất, hoa hồng affiliate cao nhất.
- * null = gian chưa có mô hình đủ tin nào — không có mốc thì không suy ra gì.
- */
-export function phiXauNhat(cacMau: (MauPhi | null | undefined)[]): MauPhi | null {
-    const tin = cacMau.filter((m): m is MauPhi => !!m && m.nguon !== 'cau-hinh-kenh' && !m.muon && !m.thayNganh && !m.chuaRoNganh && m.soDon >= SO_DON_TU_GHI)
-    if (!tin.length) return null
-    const affMax = Math.max(0, ...tin.map(m => m.affiliate?.tyLeMax ?? 0))
-    const coAff = tin.find(m => m.affiliate)?.affiliate
-    return {
-        tyLe: Math.max(...tin.map(m => m.tyLe)) + DEM_PHI_XAU,
-        coDinh: Math.max(...tin.map(m => m.coDinh)),
-        nguon: 'ty-le-don', soDon: Math.min(...tin.map(m => m.soDon)),
-        ghiChu: `Phí xấu nhất đã đo của gian (${tin.length} mô hình đủ tin) + đệm ${DEM_PHI_XAU * 100} điểm`,
-        ...(coAff ? { affiliate: { ...coAff, tyLeMax: Math.max(coAff.tyLeMax, affMax) } } : {}),
-    }
-}
-
-/**
- * Hạ giá về `gia` khi phí của mã chưa đủ tin CHỈ VÌ NGÀNH (ngành chưa đủ đơn đo riêng / chưa rõ ngành) — 03/11/2026.
- * Được khi: mô hình cả gian đủ tin ở đúng mức giá này (đủ đơn, giá nằm trong vùng đã đo, sai số nhỏ — lyDoPhiChuaDuTin bỏ cờ
- * ngành ra null) VÀ vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (ngành đắt nhất + đệm) kể cả đơn qua affiliate.
- * Lý do khác (phí chưa đo, mượn gian khác, ít đơn, giá ngoài vùng đo — phí cố định của hàng rẻ chưa đo được) ⇒ vẫn chờ người.
- * Bài thử KENGISTORE: 57 mã TikTok lãi > 25%, 14 ngày không bán, chờ người duyệt chỉ vì ngành chưa đủ 30 đơn.
- */
-export function haGiaAnToan(gia: number, t: ThamSoGia, phi: MauPhi, xau: MauPhi | null): boolean {
-    if (!xau || !(gia > 0) || !(t.giaVon > 0) || !(phi.thayNganh || phi.chuaRoNganh)) return false
-    const bien = Math.max(Number(t.bienToiThieuPct ?? 5) || 0, 0)
-    if (lyDoPhiChuaDuTin(gia, { ...phi, thayNganh: undefined, chuaRoNganh: undefined }, bien) !== null) return false
-    return danhGiaGia(gia, { ...t, phi: xau }, true).bienPct >= bien
-}
-
 /** Sai số chuẩn của TỶ LỆ phí đo được ở mức giá `gia` (0..1). null = không có số đo (phí cấu hình kênh). */
 export function saiSoTyLePhi(gia: number, phi: MauPhi): number | null {
     const s = phi.saiSo

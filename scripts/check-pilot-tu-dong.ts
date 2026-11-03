@@ -14,12 +14,13 @@
  *    G. nhiều gian Shopee: lịch chạy mọi gian, kế hoạch mang gian, thực thi đúng gian
  *    H. lịch Tự động báo chủ shop đúng một lần; Xem trước không báo; Facebook gãy báo ngay
  *    I. TikTok: nháp không ăn trần, không trùng, người huỷ, cầu dao
+ *    J. ĐỐI CHỨNG: ngành chưa đo ⇒ không tự hạ dù ngành đắt nhất đã đo vẫn lãi (ngành chưa đo có thể đắt hơn)
+ *    K. chạm trần thao tác ghi / ngày khi đẩy tồn ⇒ bỏ qua, không phải hỏng
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { chayChuKy, chayTheoLich, khoBoNho, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, type NgCanh } from '../src/lib/shopeePilot'
-import { uocLuongPhi, phiXauNhat, haGiaAnToan, DEM_PHI_XAU } from '../src/lib/giaShopee'
 import { viecCanNguoi, baoChuShop, GIAN_CACH_BAO_MS } from '../src/lib/pilotBaoChuShop'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
@@ -192,24 +193,6 @@ async function main() {
         dung('B5. mã đã 0 trên sàn / bảng rỗng không tính', cauDaoTon([{ sku: 'Z', tonDangTrenSan: 0, seDay: 0 }]) === null && cauDaoTon(undefined as any) === null)
     }
 
-    // ─── J. Hạ giá theo phí XẤU NHẤT của gian (khi phí của mã chưa đủ tin CHỈ vì ngành) ─────────────────
-    {
-        const don = (n: number, tyLe: number, coDinh = 0) => Array.from({ length: n }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: tyLe * g + coDinh } })
-        const goc = uocLuongPhi(don(40, 0.14, 3000), 6)
-        const dat = uocLuongPhi(don(40, 0.30), 6)
-        const it = uocLuongPhi(don(12, 0.50), 6)          // ngành đo từ ít đơn — KHÔNG làm mốc
-        const xau = phiXauNhat([goc, dat, it, { ...goc, muon: true, tyLe: 0.9 }])!
-        dung('J1. phí xấu nhất = ngành đắt nhất ĐỦ TIN + 3 điểm đệm, phí cố định cao nhất; bỏ mô hình ít đơn / mượn', Math.abs(xau.tyLe - (dat.tyLe + DEM_PHI_XAU)) < 1e-9 && xau.coDinh === Math.max(goc.coDinh, dat.coDinh), JSON.stringify({ xau, goc: [goc.tyLe, goc.coDinh], dat: [dat.tyLe, dat.coDinh] }))
-        dung('J2. gian chỉ có số mượn / chưa đo ⇒ không có mốc (null)', phiXauNhat([{ ...goc, muon: true }]) === null && phiXauNhat([uocLuongPhi([], 6)]) === null)
-        const ts = (giaVon: number, phi: any) => ({ giaVon, phi, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 })
-        const thay = { ...goc, thayNganh: 'Ngành 909' }
-        dung('J3. chưa đủ tin VÌ NGÀNH + vẫn lãi với phí xấu nhất ⇒ được hạ', haGiaAnToan(144000, ts(50000, thay) as any, thay, xau) === true)
-        dung('J4. chưa đủ tin vì ngành nhưng phí xấu nhất ăn hết biên ⇒ không', haGiaAnToan(144000, ts(95000, thay) as any, thay, xau) === false)
-        const reNgoai = { ...thay }
-        dung('J5. giá thấp hơn mọi đơn đã đo (phí cố định hàng rẻ chưa đo) ⇒ không, dù chỉ vì ngành', haGiaAnToan(40000, ts(5000, reNgoai) as any, reNgoai, xau) === false)
-        dung('J6. lý do KHÔNG phải ngành (phí chưa đo / mượn / ít đơn) ⇒ không bao giờ', haGiaAnToan(144000, ts(50000, goc) as any, { ...goc, muon: true }, xau) === false && haGiaAnToan(144000, ts(50000, it) as any, it, xau) === false)
-    }
-
     // ─── K. Chạm trần thao tác ghi / ngày khi đẩy tồn ⇒ 'skipped', không phải hỏng (khỏi báo chủ shop như lỗi) ──
     {
         const r = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'A', day: async (o: any) => o.dryRun ? { ok: true, data: { bang: [] } } : { ok: true, data: { pushed: 1 } },
@@ -311,25 +294,23 @@ async function main() {
         phiTin(true)
     }
 
-    // ─── J'. Chu kỳ: hạ giá hàng ngành CHƯA đo (cả gian đủ tin) ⇒ tự làm khi phí xấu nhất vẫn giữ biên ───────────
+    // ─── J. ĐỐI CHỨNG: ngành CHƯA đo ⇒ máy KHÔNG tự hạ, kể cả khi hạ vẫn lãi với ngành đắt nhất ĐÃ đo ─────────────
+    // (thử nới 03/11/2026 rồi gỡ: ngành chưa đo có thể phí cao hơn mọi ngành đã đo — biểu phí cố định theo nhóm ngành)
     {
         xoaHet(); kho._keHoach.length = 0; phiTin(true)
-        // gian đo được hai ngành: 101 (14% + 3.000đ) và 303 (30%) ⇒ phí xấu nhất = 33% + 3.000đ
+        // gian đo được hai ngành: 101 (14% + 3.000đ) và 303 (30%)
         donNganh = [...donDoiSoat.map(d => ({ ...d, nganh: '101' })), ...Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.3 * g, nganh: '303' } })]
         xoaDemPhiTheoNganh()
-        themListing('chA', '8001', 'N1', 160000, 50000, { categoryId: '909' })    // ế, lãi cao, ngành 909 chưa đủ đơn
-        themListing('chA', '8002', 'N2', 160000, 90000, { categoryId: '909' })    // ế, lãi 28% theo phí cả gian — hạ về 144k thì phí xấu nhất lỗ
-        hang.N2.stock = 10
+        themListing('chA', '8001', 'N1', 160000, 50000, { categoryId: '909' })    // ế, lãi cao, ngành 909 chưa đủ đơn — hạ về 144k vẫn lãi ~30% với ngành 303
         const ck = await chayChuKy(ctx)
-        const n1 = ck.results.find((r: any) => r.sku === 'N1'), n2 = ck.results.find((r: any) => r.sku === 'N2')
-        dung("J7. Shopee: ngành chưa đo nhưng phí xấu nhất vẫn lãi ⇒ máy TỰ hạ (không nháp); phí xấu nhất lỗ ⇒ nháp chờ duyệt",
-            goi.includes('gia:1:8001:144000') && n1?.status === 'succeeded' && !goi.some(g => g.startsWith('gia:1:8002:')) && (!n2 || /CHỜ NGƯỜI DUYỆT/.test(n2.message)), JSON.stringify({ goi, n1, n2 }))
+        const n1 = ck.results.find((r: any) => r.sku === 'N1')
+        dung('J1. Shopee: ngành chưa đo ⇒ hạ giá là NHÁP chờ duyệt, không ghi — dù ngành đắt nhất đã đo vẫn lãi', !goi.some(g => g.startsWith('gia:1:8001:')) && n1?.status === 'draft' && /CHỜ NGƯỜI DUYỆT/.test(n1?.message || ''), JSON.stringify({ goi, n1 }))
         const khoT = khoBoNhoTikTok()
         const ctxT: any = { prisma, kho: khoT, nguoi: 'chu@shop', taoTikTok: ttGia, dayTon: dayTonGia }
         themListing('chT', '8101', 'TN1', 160000, 50000, { categoryId: '909' })
         await luuCauHinhTikTok(ctxT, { channelId: 'chT', executionMode: 'auto', policy: { maxWritesPerDay: 500, automation: { reprice: true, syncStock: false } } })
-        await chayChuKyTikTok(ctxT)
-        dung('J8. TikTok: ngành chưa đo nhưng phí xấu nhất vẫn lãi ⇒ máy TỰ hạ', goiTT.includes('gia:8101:144000'), JSON.stringify(goiTT))
+        const ckT = await chayChuKyTikTok(ctxT)
+        dung('J2. TikTok: ngành chưa đo ⇒ hạ giá là NHÁP chờ duyệt, không ghi', !goiTT.some(g => g.startsWith('gia:8101:')) && ckT.results.some((r: any) => r.sku === 'TN1' && r.status === 'draft' && /CHỜ NGƯỜI DUYỆT/.test(r.message || '')), JSON.stringify({ goiTT, r: ckT.results }))
         phiTin(true)
     }
 

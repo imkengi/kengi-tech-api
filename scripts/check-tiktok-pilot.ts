@@ -210,16 +210,12 @@ async function main() {
         await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
         const kq = await chayChuKyTikTok(ctx)
         const gia = Object.fromEntries(ghiTT().map(g => [g[1], g[2]]))
-        // 03/11/2026: ngành chưa đủ đơn nhưng hạ 160k → 144k vẫn lãi ~30% với phí ngành XẤU NHẤT đã đo (30% + 3 điểm đệm) ⇒ máy tự hạ
-        dung('3i. ngành chưa đủ đơn: HẠ giá tự làm khi vẫn giữ biên với phí XẤU NHẤT của gian (BINH 144k); ngành đã đo vẫn tự TĂNG (OC4)', gia['222'] === 144000 && gia['111'] === 132000
-            && kq.results.some((r: any) => r.sku === 'BINH' && /phí XẤU NHẤT/.test(r.message || '')), JSON.stringify({ gia, r: kq.results }))
-        // giá vốn 95.000đ: 144k vẫn trên giá sàn theo phí cả gian, nhưng với phí xấu nhất (33% + 3.000đ) thì lỗ ⇒ chặn ở bước ghi
-        hang[1].costPrice = 95000
-        const kh2 = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 144000, idempotencyKey: 'xau-3j' })
-        const truoc3j = ghiTT().length
-        const ha = await thucThiTikTok(ctx, kh2.id, { tuDong: true })
-        hang[1].costPrice = 50000
-        dung('3j. lớp rào ở bước ghi: ngành chưa đo + phí XẤU NHẤT ăn hết biên ⇒ từ chối HẠ giá', ha?.status === 'failed' && /chưa đủ đơn/.test(ha?.result?.message || '') && ghiTT().length === truoc3j, JSON.stringify(ha?.result))
+        // ĐỐI CHỨNG: hạ 160k → 144k vẫn lãi ~30% kể cả với ngành đắt nhất ĐÃ ĐO (602: 30%) — ngành 699 chưa đo có thể đắt hơn ⇒ KHÔNG tự hạ
+        dung('3i. ngành chưa đủ đơn: HẠ giá KHÔNG tự làm (BINH nháp chờ duyệt); ngành đã đo vẫn tự TĂNG (OC4)', !gia['222'] && gia['111'] === 132000
+            && kq.results.some((r: any) => r.sku === 'BINH' && /CHỜ NGƯỜI DUYỆT/.test(r.message || '') && /chưa đủ đơn/.test(r.message || '')), JSON.stringify({ gia, r: kq.results }))
+        const kh2 = ctx.kho._keHoach.find(k => k.data?.itemId === '222' && k.status === 'draft')
+        const ha = kh2 ? await thucThiTikTok(ctx, kh2.id, { tuDong: true }) : null
+        dung('3j. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo ⇒ từ chối HẠ giá', ha?.status === 'failed' && /chưa đủ đơn/.test(ha?.result?.message || '') && !ghiTT().some(g => g[1] === '222'), JSON.stringify(ha?.result))
         datLai()
     }
 

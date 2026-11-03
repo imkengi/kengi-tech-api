@@ -350,16 +350,11 @@ async function main() {
             const kmThay = await taoKeHoachKhuyenMai(ctx, { name: 'Sale ngành chưa đo', skus: ['BINH'], discountRate: 0.1, startTime: bd2(), endTime: bd2() + 7200, purchaseLimit: 1, idempotencyKey: 'nganh-km2' })
             dung('12f2. khuyến mãi có dòng thuộc ngành chưa đo ⇒ kế hoạch mang cảnh báo phí', /chưa đủ đơn/.test(kmThay.data.feeWarning || ''), JSON.stringify(kmThay.data.feeWarning))
             dung('12g. kế hoạch giá hàng ngành chưa đo mang cảnh báo phí (chu kỳ / AI không tự hạ)', /chưa đủ đơn/.test(khThay.data.feeWarning || '') && khThay.data.economics.fee?.scope === 'thay-nganh', JSON.stringify(khThay.data))
-            // hạ giá khi phí chưa đủ tin CHỈ VÌ NGÀNH (03/11/2026): được nếu vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian
-            // (ngành 303: 30% + 3 điểm đệm, phí cố định 3.000đ). Giá vốn 106.000đ: trên giá sàn theo phí cả gian, nhưng phí xấu nhất thì lỗ ⇒ chặn
-            hang.BINH.costPrice = 106000
+            // ĐỐI CHỨNG (03/11/2026): hạ 160k → 150k vẫn lãi ~30% kể cả với ngành đắt nhất ĐÃ ĐO (303: 30%) — nhưng ngành 909
+            // CHƯA đo có thể đắt hơn mọi ngành đã đo (biểu phí cố định theo nhóm ngành) ⇒ máy vẫn KHÔNG tự hạ
             const truocGhi = ghiShopee()
             const haMay = await thucThi(ctx, khThay.id, { tuDong: true })
-            dung('12h. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo + phí XẤU NHẤT của gian ăn hết biên ⇒ từ chối HẠ giá', haMay.status === 'failed' && /chưa đủ đơn/.test(haMay.result?.message || '') && ghiShopee() === truocGhi, JSON.stringify(haMay.result))
-            hang.BINH.costPrice = 50000
-            const khAnToan = await taoKeHoachGia(ctx, { sku: 'BINH', price: 150000, idempotencyKey: 'nganh-1b' })
-            const haAnToan = await thucThi(ctx, khAnToan.id, { tuDong: true })
-            dung('12h2. ngành chưa đo nhưng vẫn lãi ≥ 5% với phí XẤU NHẤT của gian (giá vốn 50.000đ) ⇒ máy được tự HẠ, kèm lời giải thích', haAnToan.status === 'succeeded' && goi.includes('update_price:222:150000') && /phí XẤU NHẤT/.test(haAnToan.result?.warning || ''), JSON.stringify(haAnToan.result))
+            dung('12h. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo ⇒ từ chối HẠ giá (kể cả khi ngành đắt nhất đã đo vẫn lãi)', haMay.status === 'failed' && /chưa đủ đơn/.test(haMay.result?.message || '') && ghiShopee() === truocGhi, JSON.stringify(haMay.result))
             const khDangN = await taoKeHoachDang(ctx, { sku: 'TUI', categoryId: 909, weightGram: 350, idempotencyKey: 'nganh-dang' })
             dung('12i. đăng vào ngành chưa đủ đơn: kế hoạch mang cảnh báo phí (chu kỳ không tự đăng)', /chưa đủ đơn/.test(khDangN.data.feeWarning || ''), JSON.stringify(khDangN.data.feeWarning))
 

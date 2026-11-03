@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, ghiChuAffiliate, phiXauNhat, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
+import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -178,12 +178,6 @@ export interface BangPhiNganh {
     viDuNganh: Map<string, { viDu: string; so: number }>
     /** mô hình cho một sản phẩm thuộc ngành `nganh` — ngành chưa đủ đơn / chưa rõ ngành ⇒ cả gian, gắn cờ chưa đủ tin */
     chon(nganh?: string | number | null): MauPhi
-}
-
-/** Phí xấu nhất đã đo của gian (cả gian + mọi ngành đủ tin) — mốc để máy tự hạ giá khi phí của chính mã chưa đủ tin
- *  (giaShopee.haGiaAnToan). Gian chỉ có số mượn / chưa đo ⇒ null. */
-export function phiXauCuaBang(bang: BangPhiNganh): MauPhi | null {
-    return phiXauNhat([bang.toanGian, ...bang.theoNganh.values()])
 }
 
 /** Phí cho MỘT sản phẩm thuộc ngành `nganh` của gian (null = chưa rõ ngành) — xem docMauPhiTheoNganh. */

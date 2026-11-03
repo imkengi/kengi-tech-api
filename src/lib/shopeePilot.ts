@@ -27,8 +27,8 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, haGiaAnToan, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
-import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, tomTatMauPhi, timHangKho, duongNganh, luuDanhMucSan } from './shopeeTuQuan'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, timHangKho, duongNganh, luuDanhMucSan } from './shopeeTuQuan'
 import {
     num, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
     chinhSachGia, giaSongShopee, maDangKhuyenMai, type ChinhSachGia, type GiaSongShopee,
@@ -1282,7 +1282,6 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
                     results.push({ action: 'price', status: 'skipped', message: `Chưa kiểm được chương trình sắp chạy trên các mã (${String(e?.message || e).slice(0, 120)}) — chỉ né được chương trình đang chạy.` })
                 }
             }
-            const phiXau = phiXauCuaBang(bangPhi)
             let soGhi = 0, soNhap = 0
             for (const u of xet) {
                 if (soGhi >= tranGhi) break
@@ -1292,10 +1291,7 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
                 // Phí sàn chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được (lãi mỗi đơn tăng
                 // theo giá — không bao giờ lỗ thêm); doiGiaShopee soát lại chiều tăng với giá đọc thẳng từ Shopee.
                 const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
-                const giam = !(u.quyet.gia > u.s.giaGoc)
-                // hạ mà phí của mã chưa đủ tin: vẫn tự làm khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm, qua affiliate)
-                const theoPhiXau = !!chuaTin && giam && haGiaAnToan(u.quyet.gia, thamSoTinh(pol, u.v.giaVon, u.mauPhi), u.mauPhi, phiXau)
-                const choDuyet = chuaTin && giam && !theoPhiXau ? chuaTin : null
+                const choDuyet = chuaTin && !(u.quyet.gia > u.s.giaGoc) ? chuaTin : null
                 if (choDuyet && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
                 try {
                     let plan: any = await taoKeHoachGia(ctx, { sku, itemId: id, price: u.quyet.gia, giaSong: u.s, idempotencyKey: `${tienTo}:price:${id}:${ngayVN()}:${u.quyet.gia}` })
@@ -1588,8 +1584,6 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
    - Máy (chu kỳ Tự động, AI) chỉ tự đăng mới / hạ giá khi phí đã đo từ ≥ 30 đơn đối soát và đủ chắc ở mức giá đó. Phí chưa đo,
      mới đo từ ít đơn, giá thấp hơn mọi đơn đã đo, hay phí các đơn lệch nhau nhiều: kế hoạch để nháp chờ người duyệt.
      TĂNG giá (vd hàng đang bán dưới giá sàn) thì máy vẫn tự làm — tăng giá không bao giờ làm lỗ thêm.
-     Ngành của mã chưa đủ đơn nhưng phí cả gian đủ tin: máy vẫn tự HẠ khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo
-     của gian (ngành đắt nhất + 3 điểm, kể cả đơn qua affiliate).
    - Khuyến mãi soát lại giá sàn lúc thực thi; dòng nào giá vốn / phí đã đổi làm giá KM dưới sàn thì bị bỏ.
 
 4. Kế hoạch → thực thi

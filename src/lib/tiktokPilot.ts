@@ -22,8 +22,8 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, haGiaAnToan, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
-import { docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
 import { baoChuShop } from './pilotBaoChuShop'
@@ -590,16 +590,13 @@ async function doiGiaTikTok(ctx: NgCanhTikTok, ch: any, d: any, pol: ChinhSachTi
     if (loiBien) throw new ToolError(`Giá trên TikTok đã đổi từ lúc lập kế hoạch. ${loiBien}`)
     // Máy tự chạy + phí chưa đủ tin ⇒ chỉ được TĂNG giá (lãi mỗi đơn tăng theo giá, không bao giờ lỗ thêm)
     const phiChuaTin = tuDong ? lyDoPhiChuaDuTin(gia, mauPhi, pol.minMarginRate * 100) : null
-    // HẠ giá khi phí chưa đủ tin: chỉ khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm, qua affiliate) — 03/11/2026
-    const theoPhiXau = !!phiChuaTin && !(gia > song.gia) && haGiaAnToan(gia, thamSoTinh(pol, v.giaVon, mauPhi), mauPhi, phiXauCuaBang(await docMauPhiTheoNganh(ctx.prisma, ch)))
-    if (phiChuaTin && !(gia > song.gia) && !theoPhiXau) throw new ToolError(`Không tự hạ giá: ${phiChuaTin}`)
+    if (phiChuaTin && !(gia > song.gia)) throw new ToolError(`Không tự hạ giá: ${phiChuaTin}`)
     await fb.updatePrice(String(l.platformProductId), gia, song.skuId)
     await ctx.prisma.onlineProduct.update({ where: { id: l.id }, data: { price: gia } }).catch(() => { })
     console.log(`[TikTokPilot] ĐỔI GIÁ ${l.sku || l.platformProductId} (${ch.name}) ${song.gia} → ${gia}`)
     return {
         item_id: String(l.platformProductId), sku_id: song.skuId, old_price: song.gia, new_price: gia,
-        ...(theoPhiXau ? { warning: `Hạ giá dù phí của sản phẩm chưa đủ tin: vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) kể cả đơn qua affiliate. ${phiChuaTin}` }
-            : phiChuaTin ? { warning: `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}` } : {}),
+        ...(phiChuaTin ? { warning: `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}` } : {}),
     }
 }
 
@@ -713,23 +710,20 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
         // đang dưới giá sàn (lỗ / sát lỗ qua affiliate) trước, rồi tăng, hạ giá sau cùng
         uv.sort((a, b) => a.uu - b.uu)
         const tran = pol.maxRepricePerCycle
-        const phiXau = phiXauCuaBang(bangPhi)
         let soGhi = 0, soNhap = 0, soNhieuSku = 0, soHoi = 0
         for (const u of uv) {
             if (soGhi >= tran || soHoi >= tran * 3 + TRAN_NHAP_MOI_CHU_KY) break
             const id = String(u.l.platformProductId)
             // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
-            // hạ mà phí chưa đủ tin: tự làm khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) — không thì chờ người
-            const xauOk = (gia: number) => haGiaAnToan(gia, thamSoTinh(pol, Number(von.get(u.l.id)?.giaVon) || 0, u.mauPhi), u.mauPhi, phiXau)
+            // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
             const duKien = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
-            if (duKien && !(u.quyet.gia > u.giaCu) && !xauOk(u.quyet.gia) && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
+            if (duKien && !(u.quyet.gia > u.giaCu) && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
             soHoi++
             try {
                 let plan: any = await taoKeHoachGiaTikTok(ctx, { itemId: id, price: u.quyet.gia, idempotencyKey: `${tuDong ? 'cycle' : 'cycle:xem'}:price:${id}:${ngayVN(now)}:${u.quyet.gia}` })
                 if (plan.status !== 'draft') continue   // cùng khoá trong ngày đã thực thi / hỏng — đã báo ở lượt đó
                 const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
-                const giam = !(u.quyet.gia > (Number(plan.data?.snapshot?.price) || u.giaCu))
-                const choDuyet = chuaTin && giam && !xauOk(u.quyet.gia) ? chuaTin : null
+                const choDuyet = chuaTin && !(u.quyet.gia > (Number(plan.data?.snapshot?.price) || u.giaCu)) ? chuaTin : null
                 if (tuDong && !choDuyet) { plan = await thucThiTikTok(ctx, plan.id, { tuDong: true }); soGhi++ }
                 else if (choDuyet) soNhap++
                 else soGhi++   // Xem trước: nháp thay cho lần ghi
@@ -882,7 +876,6 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
    - Chạy theo lịch: bật ở Sửa chính sách (mỗi 30–1440 phút), máy chủ tự chạy, không cần mở trang.
    - Mỗi sản phẩm máy đổi giá tối đa 1 lần / 24 giờ (trừ hàng đang dưới giá sàn); hàng đang lỗ được xét trước.
    - Danh mục trong hệ thống cũ hơn 2 giờ thì chu kỳ tự đồng bộ lại. Đẩy tồn có cầu dao: nhiều mã đang có hàng sẽ về 0 ⇒ không đẩy.
-   - Ngành chưa đủ đơn: máy vẫn tự HẠ khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+3 điểm, qua affiliate).
    - Nháp chờ duyệt không chiếm lượt đổi giá; máy lập tự huỷ sau 3 ngày; Huỷ = 14 ngày không đề xuất lại.
      Có việc cần người: chuông + app báo một lần mỗi khi danh sách đổi.
 

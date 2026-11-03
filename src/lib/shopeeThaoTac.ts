@@ -13,9 +13,9 @@
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, haGiaAnToan, type ThamSoGia } from './giaShopee'
+import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from './giaShopee'
 import {
-    chonKenhShopee, moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
+    chonKenhShopee, moDichVuShopee, docMauPhiSanPham, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
     listingDaCo, taiAnh, thuTuAnh, chonKenhVanChuyen, dungThanAddItem, type ThuocTinhVao,
 } from './shopeeTuQuan'
 
@@ -376,18 +376,13 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
     if (chan) throw new ToolError(`${l.sku || l.platformProductId}: ${chan}`)
     const phiChuaTin = tuyChon.tuDong ? lyDoPhiChuaDuTin(giaMoi, mauPhi, cs.bienToiThieuPct) : null
     const svc: Awaited<ReturnType<typeof moDichVuShopee>> = tuyChon.svc || await moDichVuShopee(prisma, ch)
-    let haTheoPhiXau = false
     if (phiChuaTin) {
-        /* Phí chưa đủ tin: máy được TĂNG giá — lãi mỗi đơn tăng theo giá bán, tăng giá không bao giờ lỗ thêm. HẠ giá thì chỉ
-         * khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) và đơn qua affiliate (03/11/2026, haGiaAnToan).
-         * So với giá GỐC đọc thẳng từ Shopee (bản trong hệ thống có thể cũ); có phân loại / không đọc được ⇒ chờ người duyệt. */
+        /* Phí chưa đủ tin: máy chỉ được TĂNG giá — lãi mỗi đơn tăng theo giá bán, tăng giá không bao giờ lỗ thêm.
+         * So với giá GỐC đọc thẳng từ Shopee (bản trong hệ thống có thể cũ); có phân loại / không đọc được ⇒ chờ người duyệt.
+         * KHÔNG nới "hạ theo phí xấu nhất đã đo của gian" (thử 03/11/2026 rồi gỡ): ngành chưa đo có thể phí cao hơn MỌI ngành
+         * đã đo — biểu phí cố định Shopee / TikTok khác nhau theo nhóm ngành, gian chỉ đo được vài ngành bán nhiều. */
         const giaShopee = await giaGocShopee(svc, l.platformProductId)
-        if (!(giaShopee > 0 && giaMoi > giaShopee)) {
-            if (!(giaShopee > 0) || !haGiaAnToan(giaMoi, ts, mauPhi, phiXauCuaBang(await docMauPhiTheoNganh(prisma, ch)))) {
-                throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
-            }
-            haTheoPhiXau = true
-        }
+        if (!(giaShopee > 0 && giaMoi > giaShopee)) throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
     }
     let modelId: number | undefined
     try {
@@ -406,8 +401,7 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
     return {
         daDoi: true, itemId: l.platformProductId, sku: l.sku, ...(modelId ? { modelId } : {}),
         giaCu, giaMoi, truoc: danhGiaGia(giaCu, ts), sau: danhGiaGia(giaMoi, ts), sauQuaAffiliate: danhGiaGia(giaMoi, ts, true), giaSan: kq.giaSan,
-        ...(haTheoPhiXau ? { canhBao: `Hạ giá dù phí của mã chưa đủ tin: vẫn giữ biên tối thiểu ${cs.bienToiThieuPct}% với phí XẤU NHẤT đã đo của gian (+ đệm) kể cả đơn qua affiliate. ${phiChuaTin}` }
-            : phiChuaTin ? { canhBao: `Chỉ được TĂNG giá vì phí sàn chưa đủ tin — giá sàn có thể còn thấp, chủ shop nên xem lại trên Shopee Pilot. ${phiChuaTin}` } : {}),
+        ...(phiChuaTin ? { canhBao: `Chỉ được TĂNG giá vì phí sàn chưa đủ tin — giá sàn có thể còn thấp, chủ shop nên xem lại trên Shopee Pilot. ${phiChuaTin}` } : {}),
     }
 }
 
