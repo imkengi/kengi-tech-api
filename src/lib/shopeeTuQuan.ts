@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
+import { uocLuongPhi, ghiChuAffiliate, phiXauNhat, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -61,10 +61,13 @@ export async function moDichVuShopee(prisma: any, ch: any): Promise<ShopeeServic
             const t = await svc.refreshAccessToken()
             ;(svc as any).credentials.accessToken = t.accessToken
             ;(svc as any).credentials.refreshToken = t.refreshToken
+            const het = new Date(Date.now() + t.expiresIn * 1000)
             await prisma.onlineChannel.update({
                 where: { id: ch.id },
-                data: { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: new Date(Date.now() + t.expiresIn * 1000) },
+                data: { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: het },
             })
+            // cùng lượt mở lại dịch vụ (chu kỳ Pilot) thì khỏi làm mới lần hai bằng refresh token vừa bị thay
+            Object.assign(ch, { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: het })
         } catch (e: any) {
             console.warn(`[ShopeeTuQuan] làm mới token ${ch.name} hỏng:`, e?.message || e)
         }
@@ -175,6 +178,12 @@ export interface BangPhiNganh {
     viDuNganh: Map<string, { viDu: string; so: number }>
     /** mô hình cho một sản phẩm thuộc ngành `nganh` — ngành chưa đủ đơn / chưa rõ ngành ⇒ cả gian, gắn cờ chưa đủ tin */
     chon(nganh?: string | number | null): MauPhi
+}
+
+/** Phí xấu nhất đã đo của gian (cả gian + mọi ngành đủ tin) — mốc để máy tự hạ giá khi phí của chính mã chưa đủ tin
+ *  (giaShopee.haGiaAnToan). Gian chỉ có số mượn / chưa đo ⇒ null. */
+export function phiXauCuaBang(bang: BangPhiNganh): MauPhi | null {
+    return phiXauNhat([bang.toanGian, ...bang.theoNganh.values()])
 }
 
 /** Phí cho MỘT sản phẩm thuộc ngành `nganh` của gian (null = chưa rõ ngành) — xem docMauPhiTheoNganh. */

@@ -18,7 +18,7 @@ import { registryPrisma } from '../lib/prisma'
 import { ToolError } from '../lib/mcpTypes'
 import { lyDoChanPilot } from '../lib/tienIchCuaHang'
 import {
-    khoSql, xayTrangThai, chayChuKy, thucThi, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
+    khoSql, xayTrangThai, chayChuKy, thucThi, huyKeHoach, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
     tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, timHangChoHoSo, HUONG_DAN_PILOT, type NgCanh,
 } from '../lib/shopeePilot'
 
@@ -63,6 +63,7 @@ type Viec = (ctx: NgCanh, body: any) => Promise<any>
 const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     cycle: { ghi: true, chay: ctx => chayChuKy(ctx) },
     execute: { ghi: true, chay: (ctx, b) => thucThi(ctx, String(b?.planId || '')) },
+    cancel: { ghi: true, chay: (ctx, b) => huyKeHoach(ctx, String(b?.planId || '')) },
     price: { ghi: true, chay: (ctx, b) => taoKeHoachGia(ctx, { sku: String(b?.sku || ''), price: Number(b?.price), idempotencyKey: b?.idempotencyKey }) },
     listing: {
         ghi: true,

@@ -10,7 +10,7 @@
 //  trong allowedTools — xem TOOL_NHAY_CAM ở services/aiAgentRunner.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { chayAgent, LoiGeminiHetTien } from '../services/aiAgentRunner'
 import { TOOLS } from '../routes/mcp'
@@ -205,11 +205,15 @@ async function quet(): Promise<void> {
              * chạy, cấu hình lịch vẫn giữ nguyên để bật lại là chạy tiếp. addOns có sẵn trên dòng registry vừa đọc.
              * Cửa hàng không dùng Pilot: một truy vấn hỏng-êm, không tạo bảng hộ. */
             if (docTienIch(store.addOns).includes(TIEN_ICH_SHOPEE_PILOT)) {
+                // giữ client suốt lượt (03/11/2026: chu kỳ giờ tự đồng bộ danh mục + chạy mọi gian — có thể vài phút; lý do xem giuClient)
+                const nha = giuClient(store.schema)
                 try {
                     const kq = await chayShopeePilotTheoLich(getStorePrisma(store.schema))
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[ShopeePilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[ShopeePilot] lịch ${store.code}:`, e?.message || e)
+                } finally {
+                    nha()
                 }
             }
             /* FACEBOOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật facebook_pilot. */
@@ -223,11 +227,14 @@ async function quet(): Promise<void> {
             }
             /* TIKTOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật tiktok_pilot. */
             if (docTienIch(store.addOns).includes(TIEN_ICH_TIKTOK_PILOT)) {
+                const nha = giuClient(store.schema)
                 try {
                     const kq = await chayTheoLichTikTok(getStorePrisma(store.schema))
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[TikTokPilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[TikTokPilot] lịch ${store.code}:`, e?.message || e)
+                } finally {
+                    nha()
                 }
             }
         }

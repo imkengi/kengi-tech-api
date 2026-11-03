@@ -27,12 +27,13 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
-import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, timHangKho, duongNganh } from './shopeeTuQuan'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, haGiaAnToan, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, tomTatMauPhi, timHangKho, duongNganh, luuDanhMucSan } from './shopeeTuQuan'
 import {
     num, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
-    chinhSachGia, type ChinhSachGia,
+    chinhSachGia, giaSongShopee, maDangKhuyenMai, type ChinhSachGia, type GiaSongShopee,
 } from './shopeeThaoTac'
+import { baoChuShop } from './pilotBaoChuShop'
 
 // ─── Chính sách ─────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,9 @@ export interface HoSoDang {
     updatedAt?: number
 }
 
-export interface LichPilot { enabled: boolean; intervalMinutes: number }
+/** `allChannels` (03/11/2026): lượt theo lịch chạy chu kỳ cho MỌI gian Shopee của cửa hàng (cùng chính sách) —
+ *  trước chỉ chạy được gian đang chọn, cửa hàng ba gian thì hai gian không bao giờ tự động. */
+export interface LichPilot { enabled: boolean; intervalMinutes: number; allChannels?: boolean }
 
 export interface CauHinhPilot {
     channelId: string | null
@@ -187,7 +190,10 @@ export interface CauHinhPilot {
 export const LICH_MAC_DINH: LichPilot = { enabled: false, intervalMinutes: 180 }
 
 export function chuanHoaLich(x: any): LichPilot {
-    return { enabled: x?.enabled === true, intervalMinutes: Math.floor(kep(x?.intervalMinutes, LICH_MAC_DINH.intervalMinutes, 30, 24 * 60)) }
+    return {
+        enabled: x?.enabled === true, intervalMinutes: Math.floor(kep(x?.intervalMinutes, LICH_MAC_DINH.intervalMinutes, 30, 24 * 60)),
+        ...(x?.allChannels === true ? { allChannels: true } : {}),
+    }
 }
 
 /** Chuẩn hoá một hồ sơ người gửi lên. Ném ToolError nếu thiếu thứ bắt buộc. */
@@ -255,6 +261,11 @@ export interface KhoPilot {
     gianhKeHoach(id: string): Promise<boolean>
     capNhatKeHoach(id: string, status: string, result: any): Promise<void>
     dsKeHoach(lim: number): Promise<KeHoach[]>
+    /** kế hoạch còn MỞ (nháp chờ duyệt / đang chạy) + kế hoạch huỷ từ mốc `huyTuLuc` — chu kỳ né mã đang chờ duyệt / người
+     *  vừa huỷ, huỷ nháp quá hạn, bắt lượt kẹt */
+    dsKeHoachMo(huyTuLuc: number): Promise<KeHoach[]>
+    /** draft → cancelled (kèm result), nguyên tử. false = không còn là nháp. */
+    huyKeHoach(id: string, result: any): Promise<boolean>
     ghiNhatKy(w: Omit<NhatKy, 'id' | 'createdAt'>): Promise<void>
     dsNhatKy(lim: number): Promise<NhatKy[]>
     demGhiTuLuc(ms: number): Promise<number>
@@ -369,6 +380,14 @@ export function khoSql(prisma: any): KhoPilot {
         async dsKeHoach(lim) {
             return (await q(`SELECT ${COT_KH} FROM "ShopeePilotPlan" ORDER BY "createdAt" DESC LIMIT $1`, lim)).map(hangKeHoach)
         },
+        async dsKeHoachMo(huyTuLuc) {
+            return (await q(`SELECT ${COT_KH} FROM "ShopeePilotPlan" WHERE status IN ('draft', 'running') OR (status = 'cancelled' AND "updatedAt" >= $1)
+                             ORDER BY "createdAt" DESC LIMIT 2000`, huyTuLuc)).map(hangKeHoach)
+        },
+        async huyKeHoach(id, result) {
+            return (await x(`UPDATE "ShopeePilotPlan" SET status = 'cancelled', result = $2, "updatedAt" = $3 WHERE id = $1 AND status = 'draft'`,
+                id, result == null ? null : JSON.stringify(result), Date.now())) === 1
+        },
         async ghiNhatKy(w) {
             await x(`INSERT INTO "ShopeePilotWrite" (id, action, status, "planId", payload, response, "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 crypto.randomUUID(), w.action, w.status, w.planId, JSON.stringify(w.payload ?? {}), w.response == null ? null : JSON.stringify(w.response).slice(0, 20000), Date.now())
@@ -412,6 +431,14 @@ export function khoBoNho(): KhoPilot & { _keHoach: KeHoach[]; _nhatKy: NhatKy[] 
         async gianhKeHoach(id) { const k = keHoach.find(x => x.id === id); if (!k || k.status !== 'draft') return false; k.status = 'running'; return true },
         async capNhatKeHoach(id, status, result) { const k = keHoach.find(x => x.id === id); if (k) { k.status = status; k.result = sao(result); k.updatedAt = Date.now() } },
         async dsKeHoach(lim) { return sao([...keHoach].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
+        async dsKeHoachMo(huyTuLuc) {
+            return sao(keHoach.filter(k => k.status === 'draft' || k.status === 'running' || (k.status === 'cancelled' && k.updatedAt >= huyTuLuc)).sort((a, b) => b.createdAt - a.createdAt))
+        },
+        async huyKeHoach(id, result) {
+            const k = keHoach.find(x => x.id === id)
+            if (!k || k.status !== 'draft') return false
+            k.status = 'cancelled'; k.result = result == null ? null : sao(result); k.updatedAt = Date.now(); return true
+        },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: Date.now() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
         async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
@@ -424,7 +451,13 @@ export function khoBoNho(): KhoPilot & { _keHoach: KeHoach[]; _nhatKy: NhatKy[] 
 
 // ─── Ngữ cảnh ───────────────────────────────────────────────────────────────────
 
-export interface NgCanh { prisma: any; kho: KhoPilot; nguoi?: string | null }
+export interface NgCanh {
+    prisma: any; kho: KhoPilot; nguoi?: string | null
+    /** gian làm việc của lượt này, thắng gian chọn trong cấu hình — lịch chạy mọi gian, thực thi theo gian của kế hoạch */
+    kenhId?: string | null
+    /** đẩy tồn giả cho bộ kiểm; bỏ trống ⇒ lib/dayTonLenSan */
+    dayTon?: (prisma: any, channelId: string, o: { dryRun?: boolean }) => Promise<any>
+}
 
 /** 0h hôm nay giờ VN, epoch ms. */
 export function dauNgayVN(now = Date.now()): number {
@@ -438,13 +471,15 @@ const pct = (r: number) => `${(Math.round(r * 1000) / 10).toLocaleString('vi-VN'
 export async function docCauHinh(ctx: NgCanh): Promise<{ cfg: CauHinhPilot; kenh: any[]; ch: any | null }> {
     const cfg = (await ctx.kho.docCauHinh()) || cauHinhMacDinh()
     const kenh: any[] = await ctx.prisma.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { createdAt: 'asc' } })
-    const ch = (cfg.channelId && kenh.find(c => c.id === cfg.channelId)) || (kenh.length === 1 ? kenh[0] : null)
+    const id = ctx.kenhId || cfg.channelId
+    const ch = (id && kenh.find(c => c.id === id)) || (!ctx.kenhId && kenh.length === 1 ? kenh[0] : null)
     return { cfg, kenh, ch }
 }
 
 async function canGian(ctx: NgCanh) {
     const r = await docCauHinh(ctx)
     if (!r.ch) {
+        if (ctx.kenhId) throw new ToolError('Gian Shopee của kế hoạch này không còn trong cửa hàng (đã ngắt kết nối?).')
         throw new ToolError(r.kenh.length
             ? `Cửa hàng có ${r.kenh.length} gian Shopee — chọn gian cho Pilot ở Tự động hóa → Sửa chính sách.`
             : 'Cửa hàng chưa kết nối gian Shopee nào — kết nối ở Kênh bán online trên kengi.vn trước.')
@@ -630,13 +665,31 @@ export function vuotBienDong(giaCu: number, giaMoi: number, maxRate: number, gia
         `Lần này chỉ được trong khoảng ${vnd(Math.ceil(giaCu * (1 - maxRate)))}–${vnd(Math.floor(giaCu * (1 + maxRate)))}.`
 }
 
-export async function taoKeHoachGia(ctx: NgCanh, b: { sku: string; price: number; idempotencyKey?: string }): Promise<KeHoach> {
+/** ShopeeService của gian, mở MỘT lần mỗi lượt (chu kỳ / thực thi) — mỗi lần mở có thể làm mới token. */
+async function dichVuCuaLuot(ctx: NgCanh, ch: any): Promise<any> {
+    const bo: Map<string, Promise<any>> = ((ctx as any)._dichVu ||= new Map())
+    if (!bo.has(ch.id)) bo.set(ch.id, moDichVuShopee(ctx.prisma, ch))
+    return bo.get(ch.id)
+}
+
+/** Hàng đang chạy KM: giá đang bán < giá gốc. update_price đổi giá GỐC ⇒ đổi luôn mức giảm của chương trình. */
+const dangGiamGia = (s: GiaSongShopee | null | undefined) => !!s && s.giaBan > 0 && s.giaBan < s.giaGoc
+
+export async function taoKeHoachGia(ctx: NgCanh, b: { sku?: string; itemId?: string; price: number; idempotencyKey?: string; giaSong?: GiaSongShopee }): Promise<KeHoach> {
     if (b.idempotencyKey) { const cu = await ctx.kho.timKeHoachTheoKhoa(b.idempotencyKey); if (cu) return cu }
     const { cfg, ch } = await canGian(ctx)
     const gia = Math.round(num(b.price, 0))
     if (!(gia > 0)) throw new ToolError('Giá mới không hợp lệ')
-    const l = await timListing(ctx.prisma, ch.id, { sku: b.sku })
-    const giaCu = Number(l.price) || 0
+    // theo item_id khi có (chu kỳ biết đúng listing đã soát) — SKU có thể trùng giữa hai listing hoặc trống
+    const l = await timListing(ctx.prisma, ch.id, b.itemId ? { item_id: b.itemId } : { sku: b.sku })
+    // Giá GỐC đang để trên Shopee: chu kỳ đọc sẵn cả lô; người / AI lập lẻ thì đọc ở đây, đọc hỏng mới dùng bản lưu
+    let song: GiaSongShopee | null = b.giaSong || null
+    if (!song) {
+        try { song = (await giaSongShopee(await dichVuCuaLuot(ctx, ch), [l.platformProductId])).get(String(l.platformProductId)) || null } catch { song = null }
+    }
+    if (song?.coPhanLoai) throw new ToolError('Sản phẩm có phân loại — giá từng phân loại sửa trên Shopee.')
+    if (dangGiamGia(song)) throw new ToolError(`Sản phẩm đang chạy khuyến mãi (giá gốc ${vnd(song!.giaGoc)}, đang bán ${vnd(song!.giaBan)}) — đổi giá gốc lúc này là đổi luôn mức giảm; đợi chương trình kết thúc.`)
+    const giaCu = song?.giaGoc || Number(l.price) || 0
     if (!(giaCu > 0)) throw new ToolError('Sản phẩm có phân loại — giá từng phân loại sửa trên Shopee.')
     const v = (await giaVonHangLoat(ctx.prisma, [l])).get(l.id)
     if (!v || !(v.giaVon > 0)) throw new ToolError(`${b.sku} chưa có giá vốn trong kho — không đổi giá khi không biết lãi/lỗ.`)
@@ -648,8 +701,8 @@ export async function taoKeHoachGia(ctx: NgCanh, b: { sku: string; price: number
     const dk = danhGiaGia(gia, ts), xau = danhGiaGia(gia, ts, true)
     const phiChuaTin = lyDoPhiChuaDuTin(gia, mauPhi, cfg.policy.minMarginRate * 100)
     return ctx.kho.taoKeHoach(keHoachMoi('price', {
-        sku: l.sku || b.sku, itemId: l.platformProductId, price: gia,
-        snapshot: { price: giaCu, stock: Number(l.stock) || 0 },
+        sku: l.sku || b.sku || null, itemId: l.platformProductId, price: gia, channelId: ch.id, channelName: ch.name,
+        snapshot: { price: giaCu, stock: Number(l.stock) || 0, source: song ? 'shopee' : 'kengi' },
         economics: {
             marginRate: dk.bienPct / 100, profit: dk.loiNhuan, floor: kq.giaSan, suggested: kq.hopLe ? kq.giaDeXuat : null,
             fee: tomTatMauPhi(mauPhi),
@@ -690,7 +743,7 @@ export async function taoKeHoachDang(ctx: NgCanh, b: DauVaoDang): Promise<KeHoac
         }
     }
     return ctx.kho.taoKeHoach(keHoachMoi('publish', {
-        sku: b.sku, args,
+        sku: b.sku, args, channelId: ch.id, channelName: ch.name,
         payload: thu.thanYeuCau,
         images: thu.anhSeNap,
         economics: {
@@ -854,6 +907,7 @@ export async function taoKeHoachKhuyenMai(ctx: NgCanh, b: DauVaoKhuyenMai): Prom
     const nhac = [canhBao, phiChuaTin].filter(Boolean).join(' · ')
     return ctx.kho.taoKeHoach(keHoachMoi('campaign', {
         name: ten, startTime: batDau, endTime: ketThuc, purchaseLimit: gioiHanMua, discountRate: giam, lines, rejected: tuChoi,
+        channelId: ch.id, channelName: ch.name,
         ...(nhac ? { warning: nhac } : {}),
         ...(phiChuaTin ? { feeWarning: phiChuaTin } : {}),
     }, b.idempotencyKey || null, ctx.nguoi))
@@ -866,31 +920,51 @@ async function conLuotGhi(ctx: NgCanh, pol: ChinhSachPilot): Promise<void> {
     if (dem >= pol.maxWritesPerDay) throw new ToolError(`Đã đạt giới hạn ${pol.maxWritesPerDay} thao tác ghi hôm nay theo chính sách — để mai hoặc nâng giới hạn.`)
 }
 
+/** Người huỷ một kế hoạch còn nháp (03/11/2026) — chu kỳ nhớ 14 ngày, không đề xuất lại mã đó (huỷ = "đừng làm"). */
+export async function huyKeHoach(ctx: NgCanh, id: string): Promise<KeHoach> {
+    const message = `Người huỷ${ctx.nguoi ? ` (${String(ctx.nguoi).slice(0, 80)})` : ''} — chu kỳ không đề xuất lại mã này trong 14 ngày.`
+    if (!(await ctx.kho.huyKeHoach(String(id || ''), { message }))) throw new ToolError('Kế hoạch không còn là bản nháp — không huỷ được.')
+    return (await ctx.kho.layKeHoach(String(id)))!
+}
+
 /** `tuDong` = máy gọi (chu kỳ Tự động) — phí sàn chưa đủ tin thì thao tác ghi tự từ chối (lớp rào thứ hai sau chayChuKy). */
 export async function thucThi(ctx: NgCanh, planId: string, tuyChon: { tuDong?: boolean } = {}): Promise<any> {
     const plan = await ctx.kho.layKeHoach(planId)
     if (!plan) throw new ToolError('Không thấy kế hoạch — tải lại trang.')
     if (plan.status !== 'draft') return plan
-    const { cfg, ch } = await canGian(ctx)
+    // kế hoạch ghi lên ĐÚNG gian nó được lập (lịch chạy mọi gian) — kế hoạch cũ chưa mang gian thì theo gian đang chọn
+    const { cfg, ch } = await canGian(plan.data?.channelId ? { ...ctx, kenhId: String(plan.data.channelId) } : ctx)
     if (cfg.executionMode !== 'auto') return { executed: false, plan }
     await conLuotGhi(ctx, cfg.policy)
     if (!(await ctx.kho.gianhKeHoach(plan.id))) return (await ctx.kho.layKeHoach(plan.id)) || plan
 
     const d = plan.data || {}
+    const tuDong = tuyChon.tuDong === true
     let status = 'succeeded', result: any = null
     try {
         if (plan.kind === 'publish') {
-            const r = await dangSanPhamShopee(ctx.prisma, { ...d.args, gia: d.payload?.original_price, chay_thu: false }, { ch, nen: nenGia(cfg.policy), tuDong: tuyChon.tuDong === true })
+            const r = await dangSanPhamShopee(ctx.prisma, { ...d.args, gia: d.payload?.original_price, chay_thu: false }, { ch, nen: nenGia(cfg.policy), tuDong, svc: await dichVuCuaLuot(ctx, ch) })
             result = { item_id: r.itemId, link: r.link, ...(r.anhLoi ? { message: `Một số ảnh không nạp được: ${r.anhLoi.join(' | ')}` } : {}) }
             await ctx.kho.ghiNhatKy({ action: 'publish', status, planId: plan.id, payload: { item_sku: d.sku, item_id: r.itemId }, response: r })
         } else if (plan.kind === 'price') {
-            // Giá trên sàn có thể đã đổi từ lúc lập kế hoạch — soát lại biên độ với giá HIỆN TẠI
+            // Giá trên sàn có thể đã đổi từ lúc lập kế hoạch — soát lại biên độ với giá GỐC đang để trên Shopee
+            const svc = await dichVuCuaLuot(ctx, ch)
             const l = await timListing(ctx.prisma, ch.id, { item_id: d.itemId })
+            let song: GiaSongShopee | null = null
+            try {
+                song = (await giaSongShopee(svc, [d.itemId])).get(String(d.itemId)) || null
+            } catch (e: any) {
+                if (tuDong) throw new ToolError(`Không đọc được giá đang để trên Shopee (${String(e?.message || e).slice(0, 160)}) — máy không đổi giá khi không thấy giá hiện tại.`)
+            }
+            if (tuDong && !song) throw new ToolError('Shopee không trả thông tin sản phẩm này (đã xoá / bị khoá?) — máy không đổi giá.')
+            if (song?.coPhanLoai) throw new ToolError('Sản phẩm giờ đã có phân loại — giá từng phân loại sửa trên Shopee.')
+            if (dangGiamGia(song)) throw new ToolError(`Sản phẩm đang chạy khuyến mãi (giá gốc ${vnd(song!.giaGoc)}, đang bán ${vnd(song!.giaBan)}) — không đổi giá gốc giữa chương trình.`)
+            if (tuDong && song?.trangThai && song.trangThai !== 'NORMAL') throw new ToolError(`Sản phẩm đang ở trạng thái ${song.trangThai} trên Shopee — máy không đổi giá.`)
             const v = (await giaVonHangLoat(ctx.prisma, [l])).get(l.id)
-            const kq = tinhGiaDeXuat(thamSoTinh(cfg.policy, v?.giaVon || 0, await docMauPhiSanPham(ctx.prisma, ch, l.categoryId)))
-            const loiBien = vuotBienDong(Number(l.price) || 0, d.price, cfg.policy.maxPriceChangeRate, kq.giaSan)
+            const kq = tinhGiaDeXuat(thamSoTinh(cfg.policy, v?.giaVon || 0, await docMauPhiSanPham(ctx.prisma, ch, song?.nganh || l.categoryId)))
+            const loiBien = vuotBienDong(song?.giaGoc || Number(l.price) || 0, d.price, cfg.policy.maxPriceChangeRate, kq.giaSan)
             if (loiBien) throw new ToolError(`Giá trên sàn đã đổi từ lúc lập kế hoạch. ${loiBien}`)
-            const r = await doiGiaShopee(ctx.prisma, { item_id: d.itemId, gia_moi: d.price, ...thamSoGia(cfg.policy), ly_do: 'Shopee Pilot' }, { ch, nen: nenGia(cfg.policy), tuDong: tuyChon.tuDong === true })
+            const r = await doiGiaShopee(ctx.prisma, { item_id: d.itemId, gia_moi: d.price, ...thamSoGia(cfg.policy), ly_do: 'Shopee Pilot' }, { ch, nen: nenGia(cfg.policy), tuDong, svc })
             result = { item_id: r.itemId, old_price: r.giaCu, new_price: r.giaMoi, ...(r.canhBao ? { warning: r.canhBao } : {}) }
             await ctx.kho.ghiNhatKy({ action: 'price', status, planId: plan.id, payload: { item_sku: d.sku, item_id: d.itemId, price: d.price }, response: r })
         } else if (plan.kind === 'campaign') {
@@ -956,7 +1030,7 @@ async function thucThiKhuyenMai(ctx: NgCanh, plan: KeHoach, ch: any, pol: ChinhS
     const soat = await soatLaiDongKhuyenMai(ctx, d, ch, pol)
     const boQua = soat.boQua.length ? ` Bỏ ${soat.boQua.length} dòng dưới giá sàn hiện tại (giá vốn / phí / chính sách đã đổi từ lúc lập kế hoạch): ${soat.boQua.join('; ').slice(0, 600)}.` : ''
     if (!soat.lines.length) throw new ToolError(`Không còn mã nào giữ được giá sàn lúc thực thi — không tạo chương trình.${boQua}`)
-    const svc = await moDichVuShopee(ctx.prisma, ch)
+    const svc = await dichVuCuaLuot(ctx, ch)
     let discountId: number
     try {
         discountId = await svc.addDiscount(d.name, d.startTime, d.endTime)
@@ -1018,96 +1092,265 @@ export function quyetDinhGia(o: { giaCu: number; ton: number; daBan14: number; k
 }
 
 const TRAN_DOI_GIA_MOI_CHU_KY = 10
+/** Mỗi chu kỳ lập tối đa chừng này nháp CHỜ NGƯỜI DUYỆT mới. Nháp không ăn trần đổi giá: trước 03/11/2026 mười nháp lặp
+ *  lại mỗi lượt chiếm trọn 10 chỗ ⇒ các mã sau không bao giờ tới lượt (đo TikTok KENGISTORE). Danh sách duyệt cũng không phình. */
+const TRAN_NHAP_MOI_CHU_KY = 20
+/** Nháp do MÁY lập quá hạn này chưa ai duyệt thì chu kỳ huỷ — giá vốn / phí / giá đang bán đã khác; lượt sau lập lại nếu vẫn cần. */
+const HAN_NHAP_MS = 3 * 86400_000
+/** Lượt thực thi 'running' lâu chừng này = máy chết giữa chừng — không ai biết đã ghi lên sàn chưa. */
+const KET_THUC_THI_MS = 3600_000
+/** Danh mục trong hệ thống cũ hơn chừng này thì chu kỳ tự đồng bộ lại (như bấm "Đồng bộ" ở trang Đơn online). */
+const TUOI_DANH_MUC_MS = 2 * 3600_000
+/** Máy đổi giá cùng một mã cách nhau ít nhất chừng này (03/11/2026) — đủ để thấy đơn phản ứng với mức giá mới. Bài thử trên
+ *  KENGISTORE: không có khoảng nghỉ thì một mã bị nâng 2–3 nấc liền (+10% mỗi chu kỳ 30 phút). Mã đang DƯỚI giá sàn (lỗ) thì
+ *  vẫn nâng ngay — dừng lỗ trước. */
+export const NGHI_DOI_GIA_MS = 24 * 3600_000
+const gioVN = (ms: number) => new Date(ms + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ')
+
+/** Nháp máy lập mà CẦN người duyệt (phí chưa đủ tin ⇒ máy không tự hạ giá / tự đăng). Nháp khác của máy là của lượt Xem trước. */
+function laNhapChoDuyet(k: KeHoach): boolean {
+    if (!k.data?.feeWarning) return false
+    return k.kind !== 'price' || !(Number(k.data.price) > Number(k.data?.snapshot?.price))
+}
+
+/** Người huỷ kế hoạch máy đề xuất ⇒ chu kỳ không đề xuất lại mã đó trong chừng này (khỏi ngày nào cũng hỏi lại). */
+const NHO_NGUOI_HUY_MS = 14 * 86400_000
+
+/**
+ * Kế hoạch còn mở của gian (03/11/2026) — trước đây nằm im mãi, không ai biết:
+ *   - 'running' quá 1 giờ ⇒ 'uncertain' (máy chết giữa lượt ghi; báo chủ shop kiểm Seller Center)
+ *   - nháp máy lập quá 3 ngày ⇒ huỷ; chế độ Tự động mà còn nháp của lượt Xem trước ⇒ huỷ để lập lại theo giá hiện tại
+ * Trả các mã đang có nháp chờ duyệt hoặc NGƯỜI vừa huỷ (14 ngày) — chu kỳ né: khỏi nháp trùng mỗi ngày, khỏi để nháp ăn trần.
+ */
+async function donKeHoachMo(ctx: NgCanh, cuaGian: (k: KeHoach) => boolean, tuDong: boolean, results: any[], now = Date.now()): Promise<Set<string>> {
+    const choDuyet = new Set<string>()
+    const ne = (k: KeHoach) => {
+        if (k.kind === 'price' && k.data?.itemId) choDuyet.add(String(k.data.itemId))
+        if (k.kind === 'publish' && k.data?.sku) choDuyet.add(`sku:${String(k.data.sku).toLowerCase()}`)
+    }
+    let soHuy = 0
+    for (const k of await ctx.kho.dsKeHoachMo(now - NHO_NGUOI_HUY_MS)) {
+        if (!cuaGian(k)) continue
+        if (k.status === 'cancelled') {
+            if (!k.result?.tuHuy) ne(k)   // người huỷ — máy tự huỷ (quá hạn / Xem trước) thì lượt sau được lập lại
+            continue
+        }
+        if (k.status === 'running') {
+            if (now - k.updatedAt > KET_THUC_THI_MS) {
+                const message = 'Lượt thực thi dừng giữa chừng (máy chủ khởi động lại?) — không rõ Shopee đã nhận chưa. Kiểm trên Seller Center rồi lập lại nếu cần.'
+                await ctx.kho.capNhatKeHoach(k.id, 'uncertain', { message })
+                results.push({ action: k.kind, status: 'uncertain', sku: k.data?.sku, planId: k.id, message })
+            }
+            continue
+        }
+        if (String(k.idempotencyKey || '').startsWith('cycle:')) {
+            const quaHan = now - k.createdAt > HAN_NHAP_MS
+            if (quaHan || (tuDong && !laNhapChoDuyet(k))) {
+                const message = quaHan ? 'Nháp máy lập quá 3 ngày chưa duyệt — tự huỷ; chu kỳ lập lại theo giá vốn / phí hiện tại nếu vẫn cần.'
+                    : 'Nháp của lượt Xem trước — chế độ Tự động lập lại theo giá hiện tại.'
+                if (await ctx.kho.huyKeHoach(k.id, { message, tuHuy: true })) soHuy++
+                continue
+            }
+        }
+        ne(k)
+    }
+    if (soHuy) results.push({ action: 'plan', status: 'skipped', message: `Huỷ ${soHuy} nháp cũ của máy (quá 3 ngày chưa duyệt / còn từ lượt Xem trước).` })
+    return choDuyet
+}
+
+/** Danh mục cũ hơn 2 giờ ⇒ đồng bộ lại (cùng đường ghi với nút "Đồng bộ": lib/shopeeTuQuan.luuDanhMucSan — chỉ thêm / sửa,
+ *  không đánh dấu ngừng bán). Hỏng thì báo, chu kỳ vẫn chạy: quyết giá đọc giá sống từ Shopee. null = còn tươi. */
+async function lamMoiDanhMuc(ctx: NgCanh, ch: any): Promise<any | null> {
+    const moi = await ctx.prisma.onlineProduct.findFirst({ where: { channelId: ch.id, syncedAt: { not: null } }, orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }).catch(() => null)
+    const t = moi?.syncedAt ? new Date(moi.syncedAt).getTime() : 0
+    if (Date.now() - t < TUOI_DANH_MUC_MS) return null
+    try {
+        const { products } = await (await dichVuCuaLuot(ctx, ch)).fetchProducts()
+        if (!products?.length) return { action: 'catalog', status: 'failed', message: 'Shopee trả danh mục rỗng — giữ bản cũ (kiểm token / quyền API của gian).' }
+        const n = await luuDanhMucSan(ctx.prisma, ch, products)
+        return { action: 'catalog', status: 'succeeded', message: `Đồng bộ lại ${n} sản phẩm đang bán từ Shopee (bản trước: ${t ? gioVN(t) : 'chưa có'}).` }
+    } catch (e: any) {
+        return { action: 'catalog', status: 'failed', message: `Không đồng bộ được danh mục từ Shopee: ${String(e?.message || e).slice(0, 200)}` }
+    }
+}
+
+/**
+ * Cầu dao đẩy tồn (03/11/2026): lượt đẩy làm NHIỀU mã đang có hàng trên sàn về 0 thì gần như chắc là tồn kho sai chỗ chứ
+ * không phải bán hết — đo KENGISTORE: TikTok 117 mã sẽ về 0 vì hàng nằm ở kho HUTI mà kho mẹ đang tắt.
+ * Ngưỡng ≥ max(5, 15%) số mã đang có hàng trên sàn; bán hết lẻ tẻ vẫn đẩy bình thường. null = cho đẩy.
+ */
+export function cauDaoTon(bang: any[]): string | null {
+    const ds = Array.isArray(bang) ? bang : []
+    const coHang = ds.filter(x => Number(x?.tonDangTrenSan) > 0).length
+    const veKhong = ds.filter(x => !x?.boQua && Number(x?.seDay) === 0 && Number(x?.tonDangTrenSan) > 0)
+    if (veKhong.length < Math.max(5, Math.ceil(coHang * 0.15))) return null
+    return `${veKhong.length}/${coHang} mã đang có hàng trên sàn sẽ về 0 (vd ${veKhong.slice(0, 4).map(x => `${x.sku} ${x.tonDangTrenSan}→0`).join(', ')}) — ` +
+        'thường là tồn kho sai chỗ (hàng nằm ở kho khác / kho mẹ đang tắt). Kiểm rồi đẩy tay ở Kênh bán online.'
+}
+
+/** Đẩy tồn trong chu kỳ — chạy thử trước, cầu dao nhảy thì KHÔNG đẩy. Dùng chung Shopee / TikTok Pilot. */
+export async function dayTonChuKy(o: {
+    tuDong: boolean; san: string; gian: string
+    day: (op: { dryRun?: boolean }) => Promise<any>; conLuot: () => Promise<void>; ghi: (w: any) => Promise<void>
+}): Promise<any> {
+    const thu: any = await o.day({ dryRun: true }).catch((e: any) => ({ ok: false, loi: String(e?.message || e) }))
+    if (!o.tuDong) {
+        return { action: 'stock', status: 'preview', message: thu.ok ? `Xem trước: sẽ đẩy ${thu.data?.seDay ?? '?'} mã, giữ nguyên ${thu.data?.seBoQua ?? '?'}. Chưa gọi ${o.san}.` : String(thu.loi || 'không rõ') }
+    }
+    if (!thu.ok) return { action: 'stock', status: 'failed', message: `Không tính được tồn cần đẩy: ${String(thu.loi || 'không rõ').slice(0, 200)}` }
+    const cauDao = cauDaoTon(thu.data?.bang)
+    if (cauDao) return { action: 'stock', status: 'skipped', message: `CẦU DAO — không đẩy tồn: ${cauDao} CHỜ NGƯỜI DUYỆT.` }
+    // chạm trần thao tác ghi / ngày theo chính sách — không phải hỏng, khỏi báo chủ shop như lỗi (nâng trần ở chính sách nếu cần)
+    try { await o.conLuot() } catch (e: any) { return { action: 'stock', status: 'skipped', message: String(e?.message || e).slice(0, 300) } }
+    try {
+        const r = await o.day({})
+        const d = r.data || {}
+        const st = !r.ok ? 'failed' : d.failed ? 'partial' : 'succeeded'
+        const message = r.ok ? `Đẩy ${d.pushed ?? 0} mã, giữ nguyên ${d.skipped ?? 0}, lỗi ${d.failed ?? 0}${d.errors?.length ? `: ${d.errors.slice(0, 3).join('; ')}` : ''}` : String(r.loi || 'không rõ')
+        await o.ghi({ action: 'stock', status: st, planId: null, payload: { channel: o.gian }, response: { message } })
+        return { action: 'stock', status: st, message }
+    } catch (e: any) {
+        return { action: 'stock', status: 'failed', message: String(e?.message || e).slice(0, 300) }
+    }
+}
 
 export async function chayChuKy(ctx: NgCanh): Promise<any> {
     const { cfg, ch } = await canGian(ctx)
     const pol = cfg.policy
     const tuDong = cfg.executionMode === 'auto'
+    // khoá riêng cho lượt Xem trước — sang Tự động, nháp xem trước bị huỷ mà khoá không chặn lập lại trong ngày
+    const tienTo = tuDong ? 'cycle' : 'cycle:xem'
     const results: any[] = []
+    // kế hoạch lập trước khi kế hoạch mang gian (03/11/2026) thuộc gian đang chọn
+    const moNhap = await donKeHoachMo(ctx, k => String(k.data?.channelId || cfg.channelId || ch.id) === ch.id, tuDong, results)
+    const danhMuc = await lamMoiDanhMuc(ctx, ch)
+    if (danhMuc) results.push(danhMuc)
 
     if (pol.automation.syncStock) {
-        const { dayTonLenSan } = await import('./dayTonLenSan')
-        if (tuDong) {
-            try {
-                await conLuotGhi(ctx, pol)
-                const r = await dayTonLenSan(ctx.prisma, ch.id, {})
-                const d = r.data || {}
-                const st = !r.ok ? 'failed' : d.failed ? 'partial' : 'succeeded'
-                const message = r.ok ? `Đẩy ${d.pushed} mã, giữ nguyên ${d.skipped}, lỗi ${d.failed}${d.errors?.length ? `: ${d.errors.slice(0, 3).join('; ')}` : ''}` : r.loi
-                await ctx.kho.ghiNhatKy({ action: 'stock', status: st, planId: null, payload: { channel: ch.name }, response: { message } })
-                results.push({ action: 'stock', status: st, message })
-            } catch (e: any) {
-                results.push({ action: 'stock', status: 'failed', message: String(e?.message || e).slice(0, 300) })
-            }
-        } else {
-            const r = await dayTonLenSan(ctx.prisma, ch.id, { dryRun: true }).catch((e: any) => ({ ok: false, loi: String(e?.message || e) } as any))
-            results.push({ action: 'stock', status: 'preview', message: r.ok ? `Xem trước: sẽ đẩy ${r.data?.seDay} mã, giữ nguyên ${r.data?.seBoQua}. Chưa gọi Shopee.` : r.loi })
-        }
+        const day = (o: { dryRun?: boolean }) => ctx.dayTon ? ctx.dayTon(ctx.prisma, ch.id, o) : import('./dayTonLenSan').then(m => m.dayTonLenSan(ctx.prisma, ch.id, o))
+        results.push(await dayTonChuKy({ tuDong, san: 'Shopee', gian: ch.name, day, conLuot: () => conLuotGhi(ctx, pol), ghi: w => ctx.kho.ghiNhatKy(w) }))
     }
 
     if (pol.automation.reprice) {
+        const tranGhi = tuDong ? Math.min(TRAN_DOI_GIA_MOI_CHU_KY, pol.maxWritesPerDay - await ctx.kho.demGhiTuLuc(dauNgayVN())) : TRAN_DOI_GIA_MOI_CHU_KY
         const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, status: 'NORMAL' }, orderBy: { updatedAt: 'desc' }, take: 300 })
         const [von, daBan, bangPhi] = await Promise.all([giaVonHangLoat(ctx.prisma, listing), soBan14Ngay(ctx.prisma, ch.id), docMauPhiTheoNganh(ctx.prisma, ch)])
-        let soDoi = 0
-        for (const l of listing) {
-            if (soDoi >= TRAN_DOI_GIA_MOI_CHU_KY) break
-            const v = von.get(l.id)
-            if (!v || !(v.giaVon > 0) || !(Number(l.price) > 0)) continue
-            const mauPhi = bangPhi.chon(l.categoryId)   // phí ĐÚNG ngành — mỗi ngành Shopee thu một khác
-            const ts = thamSoTinh(pol, v.giaVon, mauPhi)
-            const kq = tinhGiaDeXuat(ts)
-            const quyet = quyetDinhGia({
-                giaCu: Number(l.price), ton: Number(l.stock) || 0, daBan14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
-                kq, bienHienTaiPct: danhGiaGia(Number(l.price), ts).bienPct, pol,
-            })
-            if (!quyet) continue
-            soDoi++
-            const sku = l.sku || v.sku
-            const giaCu = Number(l.price)
-            try {
-                let plan: any = await taoKeHoachGia(ctx, { sku, price: quyet.gia, idempotencyKey: `cycle:price:${sku}:${ngayVN()}:${quyet.gia}` })
-                // Phí sàn chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được (lãi mỗi đơn tăng
-                // theo giá — không bao giờ lỗ thêm); doiGiaShopee soát lại chiều tăng với giá đọc thẳng từ Shopee.
-                const chuaTin = plan.status === 'draft' ? lyDoPhiChuaDuTin(quyet.gia, mauPhi, pol.minMarginRate * 100) : null
-                const choDuyet = chuaTin && !(quyet.gia > giaCu) ? chuaTin : null
-                if (tuDong && plan.status === 'draft' && !choDuyet) plan = await thucThi(ctx, plan.id, { tuDong: true })
-                const p = plan.plan || plan
-                results.push({
-                    action: 'price', status: p.status, sku, planId: p.id,
-                    message: `${vnd(giaCu)} → ${vnd(quyet.gia)}: ${quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
-                })
-            } catch (e: any) {
-                results.push({ action: 'price', status: 'failed', sku, message: String(e?.message || e).slice(0, 300) })
+        const coVon = listing.filter(l => (von.get(l.id)?.giaVon || 0) > 0)
+        const vuaDoi = new Set((await ctx.kho.dsKeHoach(500)).filter(k => k.kind === 'price' && k.status === 'succeeded' && Date.now() - k.updatedAt < NGHI_DOI_GIA_MS)
+            .map(k => String(k.data?.itemId)))
+        /* GIÁ SỐNG (03/11/2026): quyết theo giá GỐC đang để trên Shopee, không theo bản lưu — bản lưu chỉ mới bằng lần Đồng bộ
+         * cuối và là giá ĐANG BÁN (đã trừ KM). Hàng phân loại / đang KM / không còn bán: bỏ qua. Đọc hỏng ⇒ chu kỳ không đổi giá. */
+        let song: Map<string, GiaSongShopee> | null = null
+        if (tranGhi <= 0) {
+            results.push({ action: 'price', status: 'skipped', message: `Đã đủ ${pol.maxWritesPerDay} lần ghi hôm nay theo chính sách — đổi giá để mai.` })
+        } else if (coVon.length) {
+            try { song = await giaSongShopee(await dichVuCuaLuot(ctx, ch), coVon.map(l => l.platformProductId)) } catch (e: any) {
+                results.push({ action: 'price', status: 'failed', message: `Không đọc được giá đang để trên Shopee — chu kỳ không đổi giá (${String(e?.message || e).slice(0, 200)})` })
             }
         }
-        if (!soDoi) results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào cần đổi giá.` })
-        else if (soDoi >= TRAN_DOI_GIA_MOI_CHU_KY) results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${TRAN_DOI_GIA_MOI_CHU_KY} mã — chạy chu kỳ tiếp để soát phần còn lại.` })
+        if (song) {
+            const bo = { phanLoai: 0, khuyenMai: 0, khongBan: 0, khongThay: 0, choDuyet: 0, vuaDoi: 0 }
+            const uv: { l: any; v: any; s: GiaSongShopee; mauPhi: MauPhi; quyet: { gia: number; lyDo: string }; uu: number }[] = []
+            for (const l of coVon) {
+                const s = song.get(String(l.platformProductId))
+                if (!s) { bo.khongThay++; continue }
+                if (s.coPhanLoai) { bo.phanLoai++; continue }
+                if (s.trangThai && s.trangThai !== 'NORMAL') { bo.khongBan++; continue }
+                if (!(s.giaGoc > 0)) { bo.khongThay++; continue }
+                if (dangGiamGia(s)) { bo.khuyenMai++; continue }
+                if (moNhap.has(String(l.platformProductId))) { bo.choDuyet++; continue }
+                const v = von.get(l.id)!
+                const mauPhi = bangPhi.chon(s.nganh || l.categoryId)   // phí ĐÚNG ngành — mỗi ngành Shopee thu một khác
+                const ts = thamSoTinh(pol, v.giaVon, mauPhi)
+                const kq = tinhGiaDeXuat(ts)
+                const quyet = quyetDinhGia({
+                    giaCu: s.giaGoc, ton: Number(l.stock) || 0, daBan14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
+                    kq, bienHienTaiPct: danhGiaGia(s.giaGoc, ts).bienPct, pol,
+                })
+                if (!quyet) continue
+                const uu = s.giaGoc < kq.giaSan ? 0 : quyet.gia > s.giaGoc ? 1 : 2
+                if (uu > 0 && vuaDoi.has(String(l.platformProductId))) { bo.vuaDoi++; continue }
+                uv.push({ l, v, s, mauPhi, quyet, uu })
+            }
+            // đang dưới giá sàn (lỗ / sát lỗ qua affiliate) trước, rồi tăng, hạ giá sau cùng
+            uv.sort((a, b) => a.uu - b.uu)
+            const xet = uv.slice(0, tranGhi * 3 + TRAN_NHAP_MOI_CHU_KY)
+            // chương trình đang / SẮP chạy: đổi giá gốc là đổi luôn mức giảm (tăng ngay trước đợt giảm còn dính luật "tăng giá ảo")
+            let km = new Map<string, string>()
+            if (xet.length) {
+                try { km = await maDangKhuyenMai(await dichVuCuaLuot(ctx, ch), xet.map(u => u.l.platformProductId)) } catch (e: any) {
+                    results.push({ action: 'price', status: 'skipped', message: `Chưa kiểm được chương trình sắp chạy trên các mã (${String(e?.message || e).slice(0, 120)}) — chỉ né được chương trình đang chạy.` })
+                }
+            }
+            const phiXau = phiXauCuaBang(bangPhi)
+            let soGhi = 0, soNhap = 0
+            for (const u of xet) {
+                if (soGhi >= tranGhi) break
+                const id = String(u.l.platformProductId)
+                if (km.has(id)) { bo.khuyenMai++; continue }
+                const sku = u.l.sku || u.v.sku
+                // Phí sàn chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được (lãi mỗi đơn tăng
+                // theo giá — không bao giờ lỗ thêm); doiGiaShopee soát lại chiều tăng với giá đọc thẳng từ Shopee.
+                const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
+                const giam = !(u.quyet.gia > u.s.giaGoc)
+                // hạ mà phí của mã chưa đủ tin: vẫn tự làm khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm, qua affiliate)
+                const theoPhiXau = !!chuaTin && giam && haGiaAnToan(u.quyet.gia, thamSoTinh(pol, u.v.giaVon, u.mauPhi), u.mauPhi, phiXau)
+                const choDuyet = chuaTin && giam && !theoPhiXau ? chuaTin : null
+                if (choDuyet && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
+                try {
+                    let plan: any = await taoKeHoachGia(ctx, { sku, itemId: id, price: u.quyet.gia, giaSong: u.s, idempotencyKey: `${tienTo}:price:${id}:${ngayVN()}:${u.quyet.gia}` })
+                    // cùng khoá trong ngày đã thực thi / hỏng (đã báo ở lượt đó) — không ăn trần, không báo lặp
+                    if (plan.status !== 'draft') continue
+                    if (tuDong && !choDuyet) { plan = await thucThi(ctx, plan.id, { tuDong: true }); soGhi++ }
+                    else if (choDuyet) soNhap++
+                    else soGhi++   // Xem trước: nháp thay cho lần ghi
+                    const p = plan.plan || plan
+                    results.push({
+                        action: 'price', status: p.status, sku, planId: p.id,
+                        message: `${vnd(u.s.giaGoc)} → ${vnd(u.quyet.gia)}: ${u.quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
+                    })
+                } catch (e: any) {
+                    soGhi++   // lỗi lập kế hoạch cũng tính một lượt — chu kỳ không quay mãi trên mã hỏng
+                    results.push({ action: 'price', status: 'failed', sku, message: String(e?.message || e).slice(0, 300) })
+                }
+            }
+            const boQua = [bo.choDuyet && `${bo.choDuyet} đang chờ duyệt / người vừa huỷ`, bo.vuaDoi && `${bo.vuaDoi} vừa đổi giá trong 24 giờ (chờ xem đơn)`, bo.khuyenMai && `${bo.khuyenMai} đang / sắp chạy khuyến mãi`,
+                bo.phanLoai && `${bo.phanLoai} có phân loại (sửa giá từng phân loại trên Shopee)`, bo.khongBan && `${bo.khongBan} không còn bán trên Shopee`,
+                bo.khongThay && `${bo.khongThay} Shopee không trả giá`].filter(Boolean).join(', ')
+            if (!soGhi && !soNhap) results.push({ action: 'price', status: 'unchanged', message: `Soát ${coVon.length} sản phẩm có giá vốn: không mã nào cần đổi giá.${boQua ? ` Bỏ qua: ${boQua}.` : ''}` })
+            else if (boQua) results.push({ action: 'price', status: 'skipped', message: `Bỏ qua: ${boQua}.` })
+            if (soGhi >= tranGhi && uv.length > soGhi + soNhap) results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${tranGhi} mã — còn ${uv.length - soGhi - soNhap} mã chờ chu kỳ sau.` })
+        } else if (!coVon.length) {
+            results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào có giá vốn để tính giá.` })
+        }
     }
 
     if (pol.automation.publishNewProducts) {
         /* TỰ ĐĂNG (01/11/2026): chỉ hàng có HỒ SƠ ĐĂNG (ngành + cân nặng + thuộc tính do chủ shop khai theo nhóm/mã).
          * Hàng chưa có hồ sơ thì báo theo nhóm để chủ shop khai — không đoán ngành, không đoán cân nặng. */
         const uv = await timUngVien(ctx.prisma, ch.id, { lim: 100, chiDuDieuKien: true })
-        const coHoSo = uv.ungVien.map(u => ({ u, hs: timHoSo(cfg.profiles, u.sku, u.nhomHang) })).filter(x => x.hs)
+        const coHoSo = uv.ungVien.map(u => ({ u, hs: timHoSo(cfg.profiles, u.sku, u.nhomHang) })).filter(x => x.hs && !moNhap.has(`sku:${String(x.u.sku).toLowerCase()}`))
         const chuaHoSo = uv.ungVien.filter(u => !timHoSo(cfg.profiles, u.sku, u.nhomHang))
-        let daDang = 0
+        let daDang = 0, soNhapDang = 0
         for (const { u, hs } of coHoSo) {
             if (daDang >= pol.maxPublishPerCycle) break
-            daDang++
             try {
                 let plan: any = await taoKeHoachDang(ctx, {
                     sku: u.sku, categoryId: hs!.categoryId, weightGram: hs!.weightGram, attributes: hs!.attributes,
                     brandId: hs!.brandId, brandName: hs!.brandName, hidden: hs!.hidden === true,
-                    idempotencyKey: `cycle:publish:${u.sku}:${ngayVN()}`,
+                    idempotencyKey: `${tienTo}:publish:${ch.id}:${u.sku}:${ngayVN()}`,
                 })
-                const choDuyet = plan.status === 'draft' ? (plan.data?.feeWarning as string | undefined) : undefined
-                if (tuDong && plan.status === 'draft' && !choDuyet) plan = await thucThi(ctx, plan.id, { tuDong: true })
+                if (plan.status !== 'draft') continue   // đã đăng / hỏng hôm nay — đã báo ở lượt đó
+                const choDuyet = tuDong ? (plan.data?.feeWarning as string | undefined) : undefined
+                if (choDuyet) { if (soNhapDang >= TRAN_NHAP_MOI_CHU_KY) continue; soNhapDang++ } else daDang++
+                if (tuDong && !choDuyet) plan = await thucThi(ctx, plan.id, { tuDong: true })
                 const kh = plan.plan || plan
                 results.push({
                     action: 'publish', status: kh.status, sku: u.sku, planId: kh.id,
-                    message: `Theo hồ sơ ${hs!.scope === 'sku' ? 'mã' : 'nhóm'} "${hs!.key}" · giá ${vnd(kh.data?.payload?.original_price || 0)}${kh.result?.message ? ` — ${kh.result.message}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
+                    message: `Theo hồ sơ ${hs!.scope === 'sku' ? 'mã' : 'nhóm'} "${hs!.key}" · giá ${vnd(kh.data?.payload?.original_price || 0)}${kh.result?.message ? ` — ${kh.result.message}` : ''}${choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
                 })
             } catch (e: any) {
+                daDang++
                 results.push({ action: 'publish', status: 'failed', sku: u.sku, message: `Theo hồ sơ "${hs!.key}": ${String(e?.message || e).slice(0, 300)}` })
             }
         }
@@ -1291,14 +1534,37 @@ export async function chayTheoLich(prisma: any, kho?: KhoPilot): Promise<'khong-
     const k = kho || khoSql(prisma)
     if (!(await k.gianhLich(den, Date.now() + lich.intervalMinutes * 60_000))) return 'bi-gianh'
     const luc = Date.now()
+    const truoc = (await k.docCauHinh().catch(() => null))?.lastResult?.baoChuShop
+    let ketQua: any
     try {
-        const kq = await chayChuKy({ prisma, kho: k, nguoi: 'lich' })
-        await k.ghiKetQuaLich(luc, { ok: true, executionMode: kq.executionMode, results: kq.results })
-        return 'da-chay'
+        ketQua = { ok: true, ...(await chuKyTheoLich(prisma, k, lich)) }
     } catch (e: any) {
-        await k.ghiKetQuaLich(luc, { ok: false, message: String(e?.message || e).slice(0, 500) }).catch(() => { })
-        return 'loi'
+        ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
+    // Xem trước thì chưa ghi gì lên sàn — chỉ chu kỳ gãy mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
+    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'Shopee Pilot', ketQua, truoc).catch(() => truoc)
+    await k.ghiKetQuaLich(luc, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
+    return ketQua.ok ? 'da-chay' : 'loi'
+}
+
+/** Một lượt theo lịch: gian đang chọn, hoặc MỌI gian Shopee đã uỷ quyền khi bật "Chạy cho tất cả gian" (lich.allChannels). */
+async function chuKyTheoLich(prisma: any, k: KhoPilot, lich: LichPilot): Promise<{ executionMode: string; results: any[] }> {
+    if (!lich.allChannels) return chayChuKy({ prisma, kho: k, nguoi: 'lich' })
+    const kenh: any[] = ((await prisma.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { createdAt: 'asc' } })) || [])
+        .filter((c: any) => c.accessToken && c.shopId)
+    if (!kenh.length) return chayChuKy({ prisma, kho: k, nguoi: 'lich' })   // ném đúng lỗi "chưa kết nối / chưa uỷ quyền"
+    const results: any[] = []
+    let executionMode = 'preview'
+    for (const c of kenh) {
+        try {
+            const kq = await chayChuKy({ prisma, kho: k, nguoi: 'lich', kenhId: c.id })
+            executionMode = kq.executionMode
+            for (const r of kq.results || []) results.push({ ...r, channel: c.name, message: `[${c.name}] ${r.message ?? ''}` })
+        } catch (e: any) {
+            results.push({ action: 'cycle', status: 'failed', channel: c.name, message: `[${c.name}] ${String(e?.message || e).slice(0, 300)}` })
+        }
+    }
+    return { executionMode, results }
 }
 
 export const HUONG_DAN_PILOT = `SHOPEE PILOT TRÊN KENGI
@@ -1322,6 +1588,8 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
    - Máy (chu kỳ Tự động, AI) chỉ tự đăng mới / hạ giá khi phí đã đo từ ≥ 30 đơn đối soát và đủ chắc ở mức giá đó. Phí chưa đo,
      mới đo từ ít đơn, giá thấp hơn mọi đơn đã đo, hay phí các đơn lệch nhau nhiều: kế hoạch để nháp chờ người duyệt.
      TĂNG giá (vd hàng đang bán dưới giá sàn) thì máy vẫn tự làm — tăng giá không bao giờ làm lỗ thêm.
+     Ngành của mã chưa đủ đơn nhưng phí cả gian đủ tin: máy vẫn tự HẠ khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo
+     của gian (ngành đắt nhất + 3 điểm, kể cả đơn qua affiliate).
    - Khuyến mãi soát lại giá sàn lúc thực thi; dòng nào giá vốn / phí đã đổi làm giá KM dưới sàn thì bị bỏ.
 
 4. Kế hoạch → thực thi
@@ -1338,6 +1606,13 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
    - Đồng bộ tồn (nếu bật), soát và đổi giá tối đa 10 mã mỗi chu kỳ.
    - Tự đăng tối đa N mã có hồ sơ (chính sách "Tự đăng tối đa mỗi chu kỳ"); mã chưa có hồ sơ được báo theo nhóm.
    - Chạy theo lịch: bật ở Sửa chính sách (mỗi 30–1440 phút), máy chủ tự chạy, không cần mở trang.
+     Cửa hàng nhiều gian: bật "Lịch chạy cho cả N gian" — mỗi kế hoạch ghi đúng gian của nó.
+   - Giá quyết theo giá GỐC đọc thẳng từ Shopee; bỏ qua hàng đang / sắp chạy khuyến mãi, hàng có phân loại.
+     Mỗi mã máy đổi giá tối đa 1 lần / 24 giờ (trừ mã đang dưới giá sàn); mã đang lỗ được xét trước.
+   - Danh mục trong hệ thống cũ hơn 2 giờ thì chu kỳ tự đồng bộ lại (như bấm Đồng bộ).
+   - Đẩy tồn có cầu dao: lượt đẩy làm nhiều mã đang có hàng về 0 thì KHÔNG đẩy, báo người kiểm tồn kho / kho mẹ.
+   - Nháp chờ duyệt: máy lập thì tự huỷ sau 3 ngày; bấm Huỷ = máy không đề xuất lại mã đó trong 14 ngày.
+   - Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chu kỳ lỗi): chuông + app báo một lần mỗi khi danh sách đổi.
 
 7. Kiểm tra API Shopee
    - Trang Kết nối Shopee → Kiểm tra API Shopee: gọi chỉ đọc từng nhóm API (ngành, thuộc tính, thương hiệu, vận chuyển, khuyến mãi).

@@ -13,9 +13,9 @@
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from './giaShopee'
+import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, haGiaAnToan, type ThamSoGia } from './giaShopee'
 import {
-    chonKenhShopee, moDichVuShopee, docMauPhiSanPham, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
+    chonKenhShopee, moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
     listingDaCo, taiAnh, thuTuAnh, chonKenhVanChuyen, dungThanAddItem, type ThuocTinhVao,
 } from './shopeeTuQuan'
 
@@ -73,6 +73,8 @@ export interface TuyChonGhi {
     nen: ChinhSachGia | null
     /** máy tự chạy (tool AI, chu kỳ tự động): phí sàn chưa đủ tin ⇒ TỪ CHỐI; người duyệt thì chỉ cảnh báo */
     tuDong: boolean
+    /** ShopeeService đã mở trong cùng lượt — dùng lại, khỏi làm mới token hai lần bằng refresh token đã cũ */
+    svc?: any
 }
 
 /** Giới hạn giá của Shopee cho ngành (nếu đọc được) — không đọc được thì bỏ qua, không chặn. */
@@ -237,7 +239,7 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: TuyChonGhi
     const canNangKg = num(a?.can_nang_gram, 0) / 1000
     if (!(canNangKg > 0) || canNangKg > 300) throw new ToolError('can_nang_gram phải là cân nặng thật (gram, > 0)')
 
-    const svc = await moDichVuShopee(prisma, ch)
+    const svc: Awaited<ReturnType<typeof moDichVuShopee>> = tuyChon.svc || await moDichVuShopee(prisma, ch)
     const cs = chinhSachGia(a, tuyChon.nen)
     // phí của ĐÚNG ngành sẽ đăng vào (mỗi ngành Shopee thu một khác) — ngành chưa đủ đơn đo riêng thì máy không tự đăng
     const [mauPhi, gh] = await Promise.all([docMauPhiSanPham(prisma, ch, categoryId), gioiHanGia(svc, categoryId)])
@@ -373,12 +375,19 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
     const chan = chanGiaDuoiSan(giaMoi, kq)
     if (chan) throw new ToolError(`${l.sku || l.platformProductId}: ${chan}`)
     const phiChuaTin = tuyChon.tuDong ? lyDoPhiChuaDuTin(giaMoi, mauPhi, cs.bienToiThieuPct) : null
-    const svc = await moDichVuShopee(prisma, ch)
+    const svc: Awaited<ReturnType<typeof moDichVuShopee>> = tuyChon.svc || await moDichVuShopee(prisma, ch)
+    let haTheoPhiXau = false
     if (phiChuaTin) {
-        /* Phí chưa đủ tin: máy chỉ được TĂNG giá — lãi mỗi đơn tăng theo giá bán, tăng giá không bao giờ lỗ thêm.
+        /* Phí chưa đủ tin: máy được TĂNG giá — lãi mỗi đơn tăng theo giá bán, tăng giá không bao giờ lỗ thêm. HẠ giá thì chỉ
+         * khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) và đơn qua affiliate (03/11/2026, haGiaAnToan).
          * So với giá GỐC đọc thẳng từ Shopee (bản trong hệ thống có thể cũ); có phân loại / không đọc được ⇒ chờ người duyệt. */
         const giaShopee = await giaGocShopee(svc, l.platformProductId)
-        if (!(giaShopee > 0 && giaMoi > giaShopee)) throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
+        if (!(giaShopee > 0 && giaMoi > giaShopee)) {
+            if (!(giaShopee > 0) || !haGiaAnToan(giaMoi, ts, mauPhi, phiXauCuaBang(await docMauPhiTheoNganh(prisma, ch)))) {
+                throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
+            }
+            haTheoPhiXau = true
+        }
     }
     let modelId: number | undefined
     try {
@@ -397,8 +406,46 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
     return {
         daDoi: true, itemId: l.platformProductId, sku: l.sku, ...(modelId ? { modelId } : {}),
         giaCu, giaMoi, truoc: danhGiaGia(giaCu, ts), sau: danhGiaGia(giaMoi, ts), sauQuaAffiliate: danhGiaGia(giaMoi, ts, true), giaSan: kq.giaSan,
-        ...(phiChuaTin ? { canhBao: `Chỉ được TĂNG giá vì phí sàn chưa đủ tin — giá sàn có thể còn thấp, chủ shop nên xem lại trên Shopee Pilot. ${phiChuaTin}` } : {}),
+        ...(haTheoPhiXau ? { canhBao: `Hạ giá dù phí của mã chưa đủ tin: vẫn giữ biên tối thiểu ${cs.bienToiThieuPct}% với phí XẤU NHẤT đã đo của gian (+ đệm) kể cả đơn qua affiliate. ${phiChuaTin}` }
+            : phiChuaTin ? { canhBao: `Chỉ được TĂNG giá vì phí sàn chưa đủ tin — giá sàn có thể còn thấp, chủ shop nên xem lại trên Shopee Pilot. ${phiChuaTin}` } : {}),
     }
+}
+
+/**
+ * Giá / trạng thái ĐANG ĐỂ trên Shopee (get_item_base_info, 50 mã một lần) — 03/11/2026. Bản trong hệ thống chỉ mới
+ * bằng lần bấm Đồng bộ cuối, và lưu giá ĐANG BÁN (current_price, đã trừ khuyến mãi) — còn update_price đổi giá GỐC.
+ * Quyết giá trên bản lưu là ghi đè giá chủ shop vừa sửa trên Seller Center, và hàng đang KM bị so bằng giá KM.
+ * Lỗi đọc (token, mạng) ⇒ NÉM: người gọi tự quyết bỏ qua hay dùng bản lưu.
+ */
+export interface GiaSongShopee { giaGoc: number; giaBan: number; coPhanLoai: boolean; trangThai: string; nganh: string | null }
+export async function giaSongShopee(svc: any, itemIds: (string | number)[]): Promise<Map<string, GiaSongShopee>> {
+    const ra = new Map<string, GiaSongShopee>()
+    const ids = [...new Set(itemIds.map(x => String(x)))].filter(x => Number(x) > 0)
+    for (let i = 0; i < ids.length; i += 50) {
+        for (const it of (await svc.getItemBaseInfo(ids.slice(i, i + 50).map(Number))) || []) {
+            const p = Array.isArray(it?.price_info) ? it.price_info[0] : null
+            const goc = Number(p?.original_price) || 0
+            ra.set(String(it.item_id), {
+                giaGoc: goc, giaBan: Number(p?.current_price) || goc, coPhanLoai: !!it.has_model,
+                trangThai: String(it.item_status || ''), nganh: it.category_id ? String(it.category_id) : null,
+            })
+        }
+    }
+    return ra
+}
+
+/** Mã đang / sắp chạy chương trình (get_item_promotion) → loại chương trình. Đổi giá GỐC lúc này là đổi luôn mức giảm
+ *  của chương trình (tăng giá ngay trước đợt giảm còn dính luật "tăng giá ảo" của Shopee) ⇒ máy không đụng. Lỗi đọc ⇒ NÉM. */
+export async function maDangKhuyenMai(svc: any, itemIds: (string | number)[]): Promise<Map<string, string>> {
+    const ra = new Map<string, string>()
+    const ids = [...new Set(itemIds.map(x => Number(x)))].filter(n => n > 0)
+    for (let i = 0; i < ids.length; i += 50) {
+        for (const x of (await svc.getItemPromotion(ids.slice(i, i + 50))) || []) {
+            const p = (x?.promotion || []).find((p: any) => /ongoing|upcoming/i.test(String(p?.promotion_staging || '')))
+            if (p) ra.set(String(x.item_id), `${p.promotion_type || 'chương trình'} ${/ongoing/i.test(String(p.promotion_staging)) ? 'đang chạy' : 'sắp chạy'}`)
+        }
+    }
+    return ra
 }
 
 /** Giá GỐC đang để trên Shopee của hàng không phân loại. 0 = có phân loại / không đọc được. */

@@ -30,6 +30,7 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, type SchedulePostInput } from '../services/platforms/facebook'
+import { baoChuShop } from './pilotBaoChuShop'
 
 // ─── Tiện ích nhỏ ───────────────────────────────────────────────────────────────
 
@@ -1267,14 +1268,18 @@ export async function chayTheoLichFb(prisma: any, kho?: KhoFbPilot, ngoai: Parti
     if (den > now) return 'chua-toi'
     const k = kho || khoSqlFb(prisma)
     if (!(await k.gianhLich(den, now + lich.intervalMinutes * 60_000))) return 'bi-gianh'
+    const truoc = (await k.docCauHinh().catch(() => null))?.lastResult?.baoChuShop
+    let ketQua: any
     try {
         const kq = await chayChuKyFb({ ...ngoai, prisma, kho: k, nguoi: 'lich' })
-        await k.ghiKetQuaLich(now, { ok: true, executionMode: kq.executionMode, results: kq.results })
-        return 'da-chay'
+        ketQua = { ok: true, executionMode: kq.executionMode, results: kq.results }
     } catch (e: any) {
-        await k.ghiKetQuaLich(now, { ok: false, message: String(e?.message || e).slice(0, 500) }).catch(() => { })
-        return 'loi'
+        ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
+    // Xem trước chưa đăng gì — chỉ chu kỳ gãy (token hết hạn…) mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
+    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'Facebook Pilot', ketQua, truoc, now).catch(() => truoc)
+    await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
+    return ketQua.ok ? 'da-chay' : 'loi'
 }
 
 export const HUONG_DAN_FB_PILOT = `FACEBOOK PILOT TRÊN KENGI

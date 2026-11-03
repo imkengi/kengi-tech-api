@@ -22,10 +22,11 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
-import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi } from './shopeeTuQuan'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, haGiaAnToan, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { docMauPhiSanPham, docMauPhiTheoNganh, phiXauCuaBang, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
-import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN } from './shopeePilot'
+import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
+import { baoChuShop } from './pilotBaoChuShop'
 import { TikTokService } from '../services/platforms/tiktok'
 
 const docJson = (s: any, d: any = null) => { try { return s ? JSON.parse(s) : d } catch { return d } }
@@ -285,6 +286,8 @@ export interface DichVuTikTok {
     getProductDetail(productId: string): Promise<any>
     updatePrice(productId: string, price: number, skuId?: string, sellerSku?: string): Promise<void>
     getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number } | null>
+    /** danh mục gian (cùng đường nút "Đồng bộ") — chu kỳ tự làm mới khi bản lưu cũ; bộ kiểm không giả thì chu kỳ bỏ bước này */
+    fetchProducts?(): Promise<{ products: any[]; total?: number }>
 }
 
 export interface KetQuaDayTonGon { ok: boolean; loi?: string; data?: any }
@@ -587,17 +590,80 @@ async function doiGiaTikTok(ctx: NgCanhTikTok, ch: any, d: any, pol: ChinhSachTi
     if (loiBien) throw new ToolError(`Giá trên TikTok đã đổi từ lúc lập kế hoạch. ${loiBien}`)
     // Máy tự chạy + phí chưa đủ tin ⇒ chỉ được TĂNG giá (lãi mỗi đơn tăng theo giá, không bao giờ lỗ thêm)
     const phiChuaTin = tuDong ? lyDoPhiChuaDuTin(gia, mauPhi, pol.minMarginRate * 100) : null
-    if (phiChuaTin && !(gia > song.gia)) throw new ToolError(`Không tự hạ giá: ${phiChuaTin}`)
+    // HẠ giá khi phí chưa đủ tin: chỉ khi vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm, qua affiliate) — 03/11/2026
+    const theoPhiXau = !!phiChuaTin && !(gia > song.gia) && haGiaAnToan(gia, thamSoTinh(pol, v.giaVon, mauPhi), mauPhi, phiXauCuaBang(await docMauPhiTheoNganh(ctx.prisma, ch)))
+    if (phiChuaTin && !(gia > song.gia) && !theoPhiXau) throw new ToolError(`Không tự hạ giá: ${phiChuaTin}`)
     await fb.updatePrice(String(l.platformProductId), gia, song.skuId)
     await ctx.prisma.onlineProduct.update({ where: { id: l.id }, data: { price: gia } }).catch(() => { })
     console.log(`[TikTokPilot] ĐỔI GIÁ ${l.sku || l.platformProductId} (${ch.name}) ${song.gia} → ${gia}`)
     return {
         item_id: String(l.platformProductId), sku_id: song.skuId, old_price: song.gia, new_price: gia,
-        ...(phiChuaTin ? { warning: `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}` } : {}),
+        ...(theoPhiXau ? { warning: `Hạ giá dù phí của sản phẩm chưa đủ tin: vẫn giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) kể cả đơn qua affiliate. ${phiChuaTin}` }
+            : phiChuaTin ? { warning: `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}` } : {}),
     }
 }
 
 // ─── Chu kỳ ─────────────────────────────────────────────────────────────────────
+
+/** Nháp CHỜ NGƯỜI DUYỆT mới tối đa mỗi chu kỳ — nháp không ăn trần đổi giá (03/11/2026: mười nháp hạ giá lặp lại mỗi lượt
+ *  chiếm trọn 10 chỗ ⇒ 57 mã lãi cao 14 ngày không bán của KENGISTORE không bao giờ được xét). */
+const TRAN_NHAP_MOI_CHU_KY = 20
+const HAN_NHAP_MS = 3 * 86400_000
+const KET_THUC_THI_MS = 3600_000
+const TUOI_DANH_MUC_MS = 2 * 3600_000
+
+/**
+ * Kế hoạch còn mở (03/11/2026): 'running' quá 1 giờ ⇒ 'uncertain' (máy chết giữa lượt ghi — báo chủ shop kiểm Seller Center);
+ * nháp máy lập quá 3 ngày, hoặc nháp của lượt Xem trước khi đã sang Tự động ⇒ huỷ. Trả mã sản phẩm đang có nháp chờ duyệt.
+ */
+async function donKeHoachMoTikTok(ctx: NgCanhTikTok, tuDong: boolean, results: any[], now: number): Promise<Set<string>> {
+    const choDuyet = new Set<string>()
+    let soHuy = 0
+    for (const k of await ctx.kho.dsKeHoachTu(now - 30 * 86400_000)) {
+        // người huỷ (14 ngày) ⇒ né; máy tự huỷ (quá hạn / Xem trước) thì lượt sau được lập lại
+        if (k.status === 'cancelled') { if (!k.result?.tuHuy && now - k.updatedAt < 14 * 86400_000 && k.data?.itemId) choDuyet.add(String(k.data.itemId)); continue }
+        if (k.status === 'running') {
+            if (now - k.updatedAt > KET_THUC_THI_MS) {
+                const message = 'Lượt thực thi dừng giữa chừng (máy chủ khởi động lại?) — không rõ TikTok đã nhận giá mới chưa. Kiểm trên Seller Center rồi lập lại nếu cần.'
+                await ctx.kho.capNhatKeHoach(k.id, 'uncertain', { message })
+                results.push({ action: 'price', status: 'uncertain', sku: k.data?.sku || k.data?.itemId, planId: k.id, message })
+            }
+            continue
+        }
+        if (k.status !== 'draft') continue
+        if (String(k.idempotencyKey || '').startsWith('cycle:')) {
+            const quaHan = now - k.createdAt > HAN_NHAP_MS
+            const canDuyet = !!k.data?.feeWarning && !(Number(k.data?.price) > Number(k.data?.snapshot?.price))
+            if (quaHan || (tuDong && !canDuyet)) {
+                if (await ctx.kho.huyKeHoach(k.id)) {
+                    await ctx.kho.capNhatKeHoach(k.id, 'cancelled', { tuHuy: true, message: quaHan ? 'Nháp máy lập quá 3 ngày chưa duyệt — tự huỷ.' : 'Nháp của lượt Xem trước — chế độ Tự động lập lại theo giá hiện tại.' })
+                    soHuy++
+                }
+                continue
+            }
+        }
+        if (k.data?.itemId) choDuyet.add(String(k.data.itemId))
+    }
+    if (soHuy) results.push({ action: 'plan', status: 'skipped', message: `Huỷ ${soHuy} nháp cũ của máy (quá 3 ngày chưa duyệt / còn từ lượt Xem trước).` })
+    return choDuyet
+}
+
+/** Danh mục cũ hơn 2 giờ ⇒ đồng bộ lại (cùng đường ghi với nút "Đồng bộ"). Dịch vụ không có fetchProducts (bộ kiểm) ⇒ bỏ qua. */
+async function lamMoiDanhMucTikTok(ctx: NgCanhTikTok, ch: any, now: number): Promise<any | null> {
+    const moi = await ctx.prisma.onlineProduct.findFirst({ where: { channelId: ch.id, syncedAt: { not: null } }, orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }).catch(() => null)
+    const t = moi?.syncedAt ? new Date(moi.syncedAt).getTime() : 0
+    if (now - t < TUOI_DANH_MUC_MS) return null
+    try {
+        const fb = await dichVu(ctx, ch)
+        if (typeof fb.fetchProducts !== 'function') return null
+        const { products } = await fb.fetchProducts()
+        if (!products?.length) return { action: 'catalog', status: 'failed', message: 'TikTok trả danh mục rỗng — giữ bản cũ (kiểm uỷ quyền API của gian).' }
+        const n = await luuDanhMucSan(ctx.prisma, ch, products)
+        return { action: 'catalog', status: 'succeeded', message: `Đồng bộ lại ${n} sản phẩm từ TikTok (bản trước: ${t ? new Date(t + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ') : 'chưa có'}).` }
+    } catch (e: any) {
+        return { action: 'catalog', status: 'failed', message: `Không đồng bộ được danh mục từ TikTok: ${String(e?.message || e).slice(0, 200)}` }
+    }
+}
 
 export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
     const now = luc(ctx)
@@ -605,24 +671,13 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
     const pol = cfg.policy
     const tuDong = cfg.executionMode === 'auto'
     const results: any[] = []
+    const moNhap = await donKeHoachMoTikTok(ctx, tuDong, results, now)
+    const danhMuc = await lamMoiDanhMucTikTok(ctx, ch, now)
+    if (danhMuc) results.push(danhMuc)
 
     if (pol.automation.syncStock) {
-        if (tuDong) {
-            try {
-                await conLuotGhi(ctx, pol)
-                const r = await dayTon(ctx, ch.id, {})
-                const d = r.data || {}
-                const st = !r.ok ? 'failed' : d.failed ? 'partial' : 'succeeded'
-                const message = r.ok ? `Đẩy ${d.pushed ?? 0} mã, giữ nguyên ${d.skipped ?? 0}, lỗi ${d.failed ?? 0}${d.errors?.length ? `: ${d.errors.slice(0, 3).join('; ')}` : ''}` : String(r.loi || 'không rõ')
-                await ctx.kho.ghiNhatKy({ action: 'stock', status: st, planId: null, payload: { channel: ch.name }, response: { message } })
-                results.push({ action: 'stock', status: st, message })
-            } catch (e: any) {
-                results.push({ action: 'stock', status: 'failed', message: String(e?.message || e).slice(0, 300) })
-            }
-        } else {
-            const r = await dayTon(ctx, ch.id, { dryRun: true }).catch((e: any) => ({ ok: false, loi: String(e?.message || e) }) as KetQuaDayTonGon)
-            results.push({ action: 'stock', status: 'preview', message: r.ok ? `Xem trước: sẽ đẩy ${r.data?.seDay ?? '?'} mã, giữ nguyên ${r.data?.seBoQua ?? '?'}. Chưa gọi TikTok.` : String(r.loi || 'không rõ') })
-        }
+        // chạy thử trước — cầu dao (lib/shopeePilot.cauDaoTon) nhảy thì không đẩy
+        results.push(await dayTonChuKy({ tuDong, san: 'TikTok', gian: ch.name, day: o => dayTon(ctx, ch.id, o), conLuot: () => conLuotGhi(ctx, pol), ghi: w => ctx.kho.ghiNhatKy(w) }))
     }
 
     if (pol.automation.reprice && pol.maxRepricePerCycle > 0) {
@@ -632,10 +687,14 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
         const bangPhi = await docMauPhiTheoNganh(ctx.prisma, ch)
         const nhieuSku = await maNhieuSkuGanDay(ctx, now)
         const polS = chuanHoaChinhSach(pol)
-        let soDoi = 0, soNhieuSku = 0, soHoi = 0
+        let soChoDuyet = 0, soVuaDoi = 0
+        // máy đổi giá cùng mã cách nhau ≥ 24 giờ (lib/shopeePilot.NGHI_DOI_GIA_MS) — trừ mã đang dưới giá sàn
+        const vuaDoi = new Set((await ctx.kho.dsKeHoachTu(now - NGHI_DOI_GIA_MS)).filter(k => k.status === 'succeeded' && now - k.updatedAt < NGHI_DOI_GIA_MS).map(k => String(k.data?.itemId)))
+        const uv: { l: any; mauPhi: MauPhi; giaCu: number; quyet: { gia: number; lyDo: string }; uu: number }[] = []
         for (const l of listing) {
-            if (soDoi >= pol.maxRepricePerCycle || soHoi >= pol.maxRepricePerCycle * 3) break
-            if (nhieuSku.has(String(l.platformProductId))) continue
+            const id = String(l.platformProductId)
+            if (nhieuSku.has(id)) continue
+            if (moNhap.has(id)) { soChoDuyet++; continue }
             const v = von.get(l.id)
             if (!v || !(v.giaVon > 0) || !(Number(l.price) > 0)) continue
             const mauPhi = bangPhi.chon(l.categoryId)   // phí ĐÚNG ngành — mỗi ngành TikTok thu một khác
@@ -647,33 +706,55 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
                 kq, bienHienTaiPct: danhGiaGia(giaCu, ts).bienPct, pol: polS,
             })
             if (!quyet) continue
+            const uu = giaCu < kq.giaSan ? 0 : quyet.gia > giaCu ? 1 : 2
+            if (uu > 0 && vuaDoi.has(id)) { soVuaDoi++; continue }
+            uv.push({ l, mauPhi, giaCu, quyet, uu })
+        }
+        // đang dưới giá sàn (lỗ / sát lỗ qua affiliate) trước, rồi tăng, hạ giá sau cùng
+        uv.sort((a, b) => a.uu - b.uu)
+        const tran = pol.maxRepricePerCycle
+        const phiXau = phiXauCuaBang(bangPhi)
+        let soGhi = 0, soNhap = 0, soNhieuSku = 0, soHoi = 0
+        for (const u of uv) {
+            if (soGhi >= tran || soHoi >= tran * 3 + TRAN_NHAP_MOI_CHU_KY) break
+            const id = String(u.l.platformProductId)
+            // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
+            // hạ mà phí chưa đủ tin: tự làm khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+ đệm) — không thì chờ người
+            const xauOk = (gia: number) => haGiaAnToan(gia, thamSoTinh(pol, Number(von.get(u.l.id)?.giaVon) || 0, u.mauPhi), u.mauPhi, phiXau)
+            const duKien = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
+            if (duKien && !(u.quyet.gia > u.giaCu) && !xauOk(u.quyet.gia) && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
             soHoi++
             try {
-                let plan: any = await taoKeHoachGiaTikTok(ctx, { itemId: l.platformProductId, price: quyet.gia, idempotencyKey: `cycle:price:${l.platformProductId}:${ngayVN(now)}:${quyet.gia}` })
-                soDoi++
-                // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
-                const chuaTin = plan.status === 'draft' ? lyDoPhiChuaDuTin(quyet.gia, mauPhi, pol.minMarginRate * 100) : null
-                const choDuyet = chuaTin && !(quyet.gia > (Number(plan.data?.snapshot?.price) || giaCu)) ? chuaTin : null
-                if (tuDong && plan.status === 'draft' && !choDuyet) plan = await thucThiTikTok(ctx, plan.id, { tuDong: true })
+                let plan: any = await taoKeHoachGiaTikTok(ctx, { itemId: id, price: u.quyet.gia, idempotencyKey: `${tuDong ? 'cycle' : 'cycle:xem'}:price:${id}:${ngayVN(now)}:${u.quyet.gia}` })
+                if (plan.status !== 'draft') continue   // cùng khoá trong ngày đã thực thi / hỏng — đã báo ở lượt đó
+                const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
+                const giam = !(u.quyet.gia > (Number(plan.data?.snapshot?.price) || u.giaCu))
+                const choDuyet = chuaTin && giam && !xauOk(u.quyet.gia) ? chuaTin : null
+                if (tuDong && !choDuyet) { plan = await thucThiTikTok(ctx, plan.id, { tuDong: true }); soGhi++ }
+                else if (choDuyet) soNhap++
+                else soGhi++   // Xem trước: nháp thay cho lần ghi
                 const p = plan.plan || plan
                 results.push({
-                    action: 'price', status: p.status, sku: l.sku || l.platformProductId, planId: p.id,
-                    message: `${vnd(Number(p.data?.snapshot?.price) || giaCu)} → ${vnd(quyet.gia)}: ${quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
+                    action: 'price', status: p.status, sku: u.l.sku || u.l.platformProductId, planId: p.id,
+                    message: `${vnd(Number(p.data?.snapshot?.price) || u.giaCu)} → ${vnd(u.quyet.gia)}: ${u.quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
                 })
             } catch (e: any) {
                 if (e instanceof LoiNhieuSku) {
                     soNhieuSku++
                     // nhớ 24 giờ để các lượt sau khỏi hỏi lại TikTok sản phẩm này
-                    await ctx.kho.taoKeHoach(keHoachMoi({ itemId: String(l.platformProductId), sku: l.sku || null, name: l.name, nhieuSku: e.soSku },
-                        `skip:nhieu-sku:${l.platformProductId}:${ngayVN(now)}`, ctx.nguoi, now, 'skipped')).catch(() => { })
+                    await ctx.kho.taoKeHoach(keHoachMoi({ itemId: id, sku: u.l.sku || null, name: u.l.name, nhieuSku: e.soSku },
+                        `skip:nhieu-sku:${id}:${ngayVN(now)}`, ctx.nguoi, now, 'skipped')).catch(() => { })
                     continue
                 }
-                results.push({ action: 'price', status: 'failed', sku: l.sku || l.platformProductId, message: String(e?.message || e).slice(0, 300) })
+                soGhi++   // lỗi lập kế hoạch cũng tính một lượt — chu kỳ không quay mãi trên mã hỏng
+                results.push({ action: 'price', status: 'failed', sku: u.l.sku || u.l.platformProductId, message: String(e?.message || e).slice(0, 300) })
             }
         }
         if (soNhieuSku) results.push({ action: 'price', status: 'skipped', message: `${soNhieuSku} sản phẩm nhiều phân loại — Pilot chưa đổi giá hàng nhiều phân loại, sửa trên TikTok Seller Center.` })
-        if (!soDoi && !soNhieuSku) results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào cần đổi giá.` })
-        else if (soDoi >= pol.maxRepricePerCycle) results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${pol.maxRepricePerCycle} sản phẩm — chạy chu kỳ tiếp để soát phần còn lại.` })
+        if (soVuaDoi) results.push({ action: 'price', status: 'skipped', message: `${soVuaDoi} sản phẩm vừa đổi giá trong 24 giờ — chờ xem đơn rồi mới đổi tiếp.` })
+        if (soChoDuyet) results.push({ action: 'price', status: 'skipped', message: `${soChoDuyet} sản phẩm đang có nháp chờ duyệt / người vừa huỷ — duyệt hoặc huỷ trên TikTok Pilot (nháp máy lập tự huỷ sau 3 ngày, mã người huỷ thì 14 ngày không đề xuất lại).` })
+        if (!soGhi && !soNhap && !soNhieuSku) results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào cần đổi giá.` })
+        else if (soGhi >= tran && uv.length > soGhi + soNhap + soNhieuSku) results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${tran} sản phẩm — còn ${uv.length - soGhi - soNhap - soNhieuSku} sản phẩm chờ chu kỳ sau.` })
     }
     if (!results.length) results.push({ action: 'cycle', status: 'unchanged', message: 'Chính sách đang tắt cả đổi giá lẫn đẩy tồn.' })
     return { executionMode: cfg.executionMode, results }
@@ -757,14 +838,18 @@ export async function chayTheoLichTikTok(prisma: any, kho?: KhoTikTokPilot, ngoa
     if (den > now) return 'chua-toi'
     const k = kho || khoSqlTikTok(prisma)
     if (!(await k.gianhLich(den, now + lich.intervalMinutes * 60_000))) return 'bi-gianh'
+    const truoc = (await k.docCauHinh().catch(() => null))?.lastResult?.baoChuShop
+    let ketQua: any
     try {
         const kq = await chayChuKyTikTok({ ...ngoai, prisma, kho: k, nguoi: 'lich' })
-        await k.ghiKetQuaLich(now, { ok: true, executionMode: kq.executionMode, results: kq.results })
-        return 'da-chay'
+        ketQua = { ok: true, executionMode: kq.executionMode, results: kq.results }
     } catch (e: any) {
-        await k.ghiKetQuaLich(now, { ok: false, message: String(e?.message || e).slice(0, 500) }).catch(() => { })
-        return 'loi'
+        ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
+    // Xem trước chưa ghi gì lên sàn — chỉ chu kỳ gãy mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
+    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'TikTok Pilot', ketQua, truoc, now).catch(() => truoc)
+    await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
+    return ketQua.ok ? 'da-chay' : 'loi'
 }
 
 export const HUONG_DAN_TIKTOK_PILOT = `TIKTOK PILOT TRÊN KENGI
@@ -795,6 +880,11 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
 5. Chu kỳ
    - Đẩy tồn từ kho Kengi lên gian (nếu bật — cùng đường nút "Đẩy tồn"), soát và đổi giá tối đa N sản phẩm.
    - Chạy theo lịch: bật ở Sửa chính sách (mỗi 30–1440 phút), máy chủ tự chạy, không cần mở trang.
+   - Mỗi sản phẩm máy đổi giá tối đa 1 lần / 24 giờ (trừ hàng đang dưới giá sàn); hàng đang lỗ được xét trước.
+   - Danh mục trong hệ thống cũ hơn 2 giờ thì chu kỳ tự đồng bộ lại. Đẩy tồn có cầu dao: nhiều mã đang có hàng sẽ về 0 ⇒ không đẩy.
+   - Ngành chưa đủ đơn: máy vẫn tự HẠ khi giữ biên tối thiểu với phí XẤU NHẤT đã đo của gian (+3 điểm, qua affiliate).
+   - Nháp chờ duyệt không chiếm lượt đổi giá; máy lập tự huỷ sau 3 ngày; Huỷ = 14 ngày không đề xuất lại.
+     Có việc cần người: chuông + app báo một lần mỗi khi danh sách đổi.
 
 6. Chưa làm
    - Đăng sản phẩm mới lên TikTok và tạo khuyến mãi — cần thử trên gian thật trước (ngành hàng, thuộc tính, kho của TikTok).
