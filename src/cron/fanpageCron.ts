@@ -8,6 +8,7 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { FacebookService, isRateLimitError } from '../services/platforms/facebook'
+import { tokenChuaDuocPage } from '../lib/facebookAdsPilot'
 import { pollAndAutoReply } from '../services/fanpageAutoReply'
 
 // DÃN 5' → 10' + chỉ một bản chạy (19/08/2026): đối soát fanpage là lưới vét
@@ -81,7 +82,10 @@ async function healPageTokens(storePrisma: any, storeKey: string): Promise<void>
     })
     if (!needsHeal) return
 
-    const userTok = await storePrisma.fbUserToken.findFirst({ orderBy: { updatedAt: 'desc' } })
+    // Chỉ user token có QUYỀN TRANG mới được "chữa" page token: token dán cho quảng cáo (Ads Pilot, 05/11/2026) có thể
+    // thiếu pages_manage_posts — page token sinh từ nó đọc được mà KHÔNG đăng bài được, ghi đè là gãy Facebook Pilot.
+    const dsTok = await storePrisma.fbUserToken.findMany({ orderBy: { updatedAt: 'desc' }, take: 10 })
+    const userTok = dsTok.find((t: any) => tokenChuaDuocPage(t.scopes)) || null
     if (!userTok) {
         // Page kết nối bằng token DÁN TAY (POST /connect-page-token) không có user
         // token đi kèm → KHÔNG tự gia hạn được. Trước đây hàm này lặng lẽ return,
@@ -97,7 +101,8 @@ async function healPageTokens(storePrisma: any, storeKey: string): Promise<void>
             const conLai = Math.floor((new Date(p.tokenExpiresAt).getTime() - Date.now()) / 86400_000)
             console.warn(
                 `[FanpageCron] ⚠️ ${storeKey}/${p.name || p.pageId}: token còn ${conLai} ngày và KHÔNG tự gia hạn được `
-                + '(kết nối bằng page token dán tay). Chủ shop cần dán token mới ở kengi.vn/fanpage-manager.',
+                + (dsTok.length ? '(chỉ có user token quảng cáo, thiếu quyền trang)' : '(kết nối bằng page token dán tay)')
+                + '. Chủ shop cần dán token mới ở kengi.vn/fanpage-manager.',
             )
         }
         // Vẫn giữ cooldown để không spam log mỗi 5 phút

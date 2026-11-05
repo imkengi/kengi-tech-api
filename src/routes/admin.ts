@@ -20,6 +20,7 @@ import { chonThiGiac } from '../lib/tarotAi'
 import * as xm2b from '../lib/xacMinh2BuocAdmin'
 import { SQL_TAO_BANG_PILOT } from '../lib/shopeePilot'
 import { SQL_TAO_BANG_FB_PILOT } from '../lib/facebookPilot'
+import { SQL_TAO_BANG_ADS_PILOT } from '../lib/facebookAdsPilot'
 import { SQL_TAO_BANG_TIKTOK_PILOT } from '../lib/tiktokPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 
@@ -2960,6 +2961,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 /* FACEBOOK PILOT (02/11/2026) — cấu hình / kế hoạch / nhật ký ghi của trang Facebook Pilot.
                  * lib/facebookPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
                 for (const sql of SQL_TAO_BANG_FB_PILOT) await (sp as any).$executeRawUnsafe(sql)
+
+                /* ADS PILOT (05/11/2026) — cấu hình / kế hoạch / nhật ký ghi quảng cáo trong Facebook Pilot.
+                 * lib/facebookAdsPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
+                for (const sql of SQL_TAO_BANG_ADS_PILOT) await (sp as any).$executeRawUnsafe(sql)
 
                 /* TIKTOK PILOT (02/11/2026) — cấu hình / kế hoạch / nhật ký ghi của trang TikTok Pilot.
                  * lib/tiktokPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */

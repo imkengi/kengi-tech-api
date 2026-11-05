@@ -15,6 +15,39 @@
 const GRAPH_VERSION = process.env.FB_GRAPH_VERSION || 'v21.0'
 const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`
 const GRAPH_VIDEO = `https://graph-video.facebook.com/${GRAPH_VERSION}`
+/* Marketing API (quảng cáo) có vòng đời RIÊNG, ngắn hơn Graph API: mỗi bản chỉ sống ~1 năm (changelog Marketing API:
+ * v24 hết 10/11/2026, v25 hết 23/02/2027, v26 ra 29/07/2026). Gọi quảng cáo bằng v21 là gọi bản đã khai tử ⇒ đi bản riêng,
+ * đổi bằng FB_ADS_GRAPH_VERSION khi Facebook ra bản mới. */
+const ADS_GRAPH_VERSION = process.env.FB_ADS_GRAPH_VERSION || 'v26.0'
+const GRAPH_ADS = `https://graph.facebook.com/${ADS_GRAPH_VERSION}`
+
+/**
+ * Công thức Marketing API cho "đẩy bài có sẵn" (boost) — MỘT chỗ, dùng chung boostPost (Fanpage Manager / MCP) và Ads Pilot.
+ * Chiến dịch tạo ở PAUSED: chưa bật chiến dịch thì nhóm quảng cáo / quảng cáo bên trong chưa tiêu đồng nào.
+ *  - v24+: không dùng ngân sách chiến dịch thì PHẢI khai is_adset_budget_sharing_enabled (thiếu ⇒ lỗi subcode 4834011).
+ */
+export function thamSoChienDichDayBai(ten: string, objective = 'OUTCOME_ENGAGEMENT'): Record<string, any> {
+    return { name: String(ten).slice(0, 400), objective, status: 'PAUSED', special_ad_categories: [], is_adset_budget_sharing_enabled: false }
+}
+
+/**
+ * Nhóm quảng cáo đẩy một bài: tối ưu tương tác bài, trả tiền theo lượt hiển thị, giá thầu thấp nhất, nhắm bài của page
+ * (promoted_object.page_id — bắt buộc khi đẩy bài). Ngân sách NGÀY bằng VND (tiền tệ không phần lẻ ⇒ truyền nguyên số);
+ * Facebook chỉ nhận ngân sách ngày cho nhóm chạy > 24 giờ. LUÔN có giờ kết thúc ⇒ không chạy mãi.
+ *  - v23+: đối tượng khác mặc định PHẢI khai targeting_automation.advantage_audience 0|1 — 0 = giữ đúng đối tượng đã chọn.
+ *  - status ACTIVE nằm trong chiến dịch PAUSED ⇒ chiến dịch là công tắc duy nhất (bật / tạm dừng một chỗ).
+ */
+export function thamSoNhomDayBai(o: {
+    ten: string; campaignId: string; pageId: string; dailyBudgetVnd: number; batDauGiay: number; ketThucGiay: number; targeting?: any
+}): Record<string, any> {
+    const targeting = { ...(o.targeting || { geo_locations: { countries: ['VN'] }, age_min: 18, age_max: 65 }) }
+    if (!targeting.targeting_automation) targeting.targeting_automation = { advantage_audience: 0 }
+    return {
+        name: String(o.ten).slice(0, 400), campaign_id: o.campaignId, daily_budget: Math.round(o.dailyBudgetVnd),
+        billing_event: 'IMPRESSIONS', optimization_goal: 'POST_ENGAGEMENT', bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+        promoted_object: { page_id: o.pageId }, start_time: o.batDauGiay, end_time: o.ketThucGiay, targeting, status: 'ACTIVE',
+    }
+}
 
 export interface FbGraphError extends Error {
     code?: number
@@ -93,14 +126,14 @@ export class FacebookService {
         return json
     }
 
-    /** GET Graph: fields là object query params (access_token tự thêm) */
-    async get(path: string, params: Record<string, any> = {}): Promise<any> {
+    /** GET Graph: fields là object query params (access_token tự thêm). `base` = GRAPH_ADS cho lời gọi quảng cáo. */
+    async get(path: string, params: Record<string, any> = {}, base = GRAPH): Promise<any> {
         const qs = new URLSearchParams({ access_token: this.token })
         for (const [k, v] of Object.entries(params)) {
             if (v === undefined || v === null) continue
             qs.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
         }
-        const res = await fetch(`${GRAPH}/${path}?${qs.toString()}`, { method: 'GET' })
+        const res = await fetch(`${base}/${path}?${qs.toString()}`, { method: 'GET' })
         return this.parse(res)
     }
 
@@ -433,7 +466,7 @@ export class FacebookService {
         const data = await this.get('me/adaccounts', {
             fields: 'id,account_id,name,account_status,currency,amount_spent,balance,spend_cap',
             limit: 100,
-        })
+        }, GRAPH_ADS)
         return data.data || []
     }
 
@@ -443,7 +476,7 @@ export class FacebookService {
         const data = await this.get(`${acct}/campaigns`, {
             fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time',
             limit: 100,
-        })
+        }, GRAPH_ADS)
         return data.data || []
     }
 
@@ -452,19 +485,21 @@ export class FacebookService {
         const data = await this.get(`${objectId}/insights`, {
             fields: 'impressions,reach,spend,clicks,ctr,cpc,cpm,actions,action_values',
             date_preset: datePreset,
-        })
+        }, GRAPH_ADS)
         return data.data?.[0] || null
     }
 
+    /** Bật / tạm dừng CHIẾN DỊCH — chiến dịch là công tắc: boostPost tạo nhóm QC + quảng cáo ACTIVE bên trong. */
     async setCampaignStatus(campaignId: string, status: 'ACTIVE' | 'PAUSED'): Promise<{ success: boolean }> {
-        await this.post(campaignId, { status })
+        await this.post(campaignId, { status }, GRAPH_ADS)
         return { success: true }
     }
 
     /**
-     * Boost 1 bài đã có: tạo campaign → adset → adcreative (object_story_id) → ad.
-     * budgetVnd tính theo ngày; FB nhận minor units (VND không có phần lẻ nên nhân 1).
-     * Trả về id các đối tượng đã tạo (PAUSED để user review trước khi bật).
+     * Boost 1 bài đã có: tạo campaign → adset → adcreative (object_story_id) → ad, theo thamSoChienDichDayBai /
+     * thamSoNhomDayBai. budgetVnd tính theo ngày; VND không có phần lẻ nên truyền nguyên số.
+     * Chiến dịch PAUSED (chưa tiêu tiền); nhóm QC + quảng cáo ACTIVE bên trong ⇒ setCampaignStatus(ACTIVE) là chạy thật.
+     * (Trước 05/11/2026 cả ba PAUSED nên bật chiến dịch xong quảng cáo vẫn đứng — và gọi bằng v21 đã khai tử.)
      */
     async boostPost(input: {
         adAccountId: string
@@ -476,47 +511,32 @@ export class FacebookService {
         objective?: string
     }): Promise<{ campaignId: string; adsetId: string; adId: string }> {
         const acct = input.adAccountId.startsWith('act_') ? input.adAccountId : `act_${input.adAccountId}`
-        const objective = input.objective || 'OUTCOME_ENGAGEMENT'
-        // VND là zero-decimal currency ở Marketing API → truyền nguyên số.
-        const dailyBudget = Math.round(input.dailyBudgetVnd)
         const now = Math.floor(Date.now() / 1000)
-        const stop = now + input.days * 86400
+        // Facebook chỉ nhận ngân sách NGÀY cho nhóm chạy > 24 giờ ⇒ tối thiểu 2 ngày
+        const stop = now + Math.max(2, Math.floor(Number(input.days) || 0)) * 86400
 
-        const campaign = await this.post(`${acct}/campaigns`, {
-            name: `Boost ${input.postId} · ${new Date(now * 1000).toISOString().slice(0, 10)}`,
-            objective,
-            status: 'PAUSED',
-            special_ad_categories: [],
-        })
+        const campaign = await this.post(`${acct}/campaigns`,
+            thamSoChienDichDayBai(`Boost ${input.postId} · ${new Date(now * 1000).toISOString().slice(0, 10)}`, input.objective || 'OUTCOME_ENGAGEMENT'), GRAPH_ADS)
 
-        const targeting = input.targeting || { geo_locations: { countries: ['VN'] }, age_min: 18, age_max: 65 }
-        const adset = await this.post(`${acct}/adsets`, {
-            name: `AdSet ${input.postId}`,
-            campaign_id: campaign.id,
-            daily_budget: dailyBudget,
-            billing_event: 'IMPRESSIONS',
-            optimization_goal: 'POST_ENGAGEMENT',
-            bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-            start_time: now,
-            end_time: stop,
-            targeting,
-            status: 'PAUSED',
-        })
+        const adset = await this.post(`${acct}/adsets`, thamSoNhomDayBai({
+            ten: `AdSet ${input.postId}`, campaignId: campaign.id, pageId: input.pageId, dailyBudgetVnd: input.dailyBudgetVnd,
+            batDauGiay: now, ketThucGiay: stop, targeting: input.targeting,
+        }), GRAPH_ADS)
 
         const creative = await this.post(`${acct}/adcreatives`, {
             name: `Creative ${input.postId}`,
             object_story_id: input.postId,
-        })
+        }, GRAPH_ADS)
 
         const ad = await this.post(`${acct}/ads`, {
             name: `Ad ${input.postId}`,
             adset_id: adset.id,
             creative: { creative_id: creative.id },
-            status: 'PAUSED',
-        })
+            status: 'ACTIVE',
+        }, GRAPH_ADS)
 
         return { campaignId: campaign.id, adsetId: adset.id, adId: ad.id }
     }
 }
 
-export { GRAPH_VERSION, GRAPH }
+export { GRAPH_VERSION, GRAPH, ADS_GRAPH_VERSION, GRAPH_ADS }

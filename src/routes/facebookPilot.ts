@@ -6,6 +6,8 @@
 //  hợp đồng với routes/shopeePilot.ts: GET /state → object trạng thái, POST /:action → { result } | { error }.
 //
 //  Nối fanpage (dán page token) KHÔNG đi đường này: trang gọi thẳng /api/fanpage/connect-page-token có sẵn.
+//  ADS PILOT (05/11/2026): GET /ads/state, GET /ads/guide, POST /ads/:action — quảng cáo trong Facebook Pilot,
+//  nghiệp vụ ở lib/facebookAdsPilot.ts, cùng tiện ích facebook_pilot, cùng luật quyền ghi.
 //  Tiện ích theo cửa hàng: chỉ cửa hàng được quản trị bật `facebook_pilot` (lib/tienIchCuaHang) mới đọc / ghi
 //  được — chưa bật ⇒ 403 { ma: 'chua_bat_tien_ich' }, đọc registry hỏng ⇒ 503 (vẫn chặn, nói thật).
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -19,12 +21,30 @@ import {
     khoSqlFb, xayTrangThaiFb, chayChuKyFb, thucThiFb, taoKeHoachBai, taoKeHoachTraLoi, taoKeHoachAn, huyKeHoachFb,
     docBinhLuan, kiemKetNoiFb, luuCauHinhFb, timHangFb, xemTruocBai, HUONG_DAN_FB_PILOT, type NgCanhFb,
 } from '../lib/facebookPilot'
+import {
+    khoSqlAds, xayTrangThaiAds, chayChuKyAds, thucThiAds, taoKeHoachDay, taoKeHoachDung, taoKeHoachChayLai, taoKeHoachNganSach,
+    huyKeHoachAds, noiTokenAds, kiemKetNoiAds, luuCauHinhAds, HUONG_DAN_ADS_PILOT, type NgCanhAds,
+} from '../lib/facebookAdsPilot'
 
 const router = Router()
 const QUAN_LY = ['admin', 'manager', 'owner', 'superadmin']
 
 function ngCanh(req: AuthRequest): NgCanhFb {
     return { prisma: req.storePrisma as any, kho: khoSqlFb(req.storePrisma as any), nguoi: (req.user as any)?.email || req.user?.userId || null }
+}
+
+function ngCanhAds(req: AuthRequest): NgCanhAds {
+    const prisma = req.storePrisma as any
+    return { prisma, kho: khoSqlAds(prisma), khoFb: khoSqlFb(prisma), nguoi: (req.user as any)?.email || req.user?.userId || null }
+}
+
+/** Khoá chống trùng từ trình duyệt — 'cycle:' là của máy (luật "người bật lại thì máy không tắt lại" dựa vào nó) ⇒ không cho mượn. */
+const khoaWeb = (v: any): string | undefined => (v ? (String(v).startsWith('cycle:') ? `web:${v}` : String(v)).slice(0, 200) : undefined)
+
+/** Bật lịch ⇒ bật cờ registry hasAiJobs để cron (aiAgentCron) quét cửa hàng này — cron chỉ chạm store có cờ. */
+async function batCoLich(req: AuthRequest) {
+    const schema = req.user?.branchSchema || req.user?.storeSchema
+    if (schema) await (registryPrisma as any).store.updateMany({ where: { schema }, data: { hasAiJobs: true } }).catch(() => { })
 }
 
 /** Thao tác ghi (lập kế hoạch, thực thi, chu kỳ, đổi cấu hình): khoá phải có quyền ghi và người phải là quản lý. */
@@ -102,13 +122,56 @@ router.post('/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, re
     }
     try {
         const result = await viec.chay(ngCanh(req), req.body || {})
-        /* Bật lịch ⇒ bật cờ registry hasAiJobs để cron (aiAgentCron) quét cửa hàng này — cron chỉ chạm store có cờ. */
-        if (req.params.action === 'config' && result?.schedule?.enabled) {
-            const schema = req.user?.branchSchema || req.user?.storeSchema
-            if (schema) await (registryPrisma as any).store.updateMany({ where: { schema }, data: { hasAiJobs: true } }).catch(() => { })
-        }
+        if (req.params.action === 'config' && result?.schedule?.enabled) await batCoLich(req)
         res.json({ result })
     } catch (e) { traLoi(res, e, String(req.params.action)) }
+})
+
+// ─── ADS PILOT ──────────────────────────────────────────────────────────────────
+
+router.get('/ads/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+    if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
+    try { res.json(await xayTrangThaiAds(ngCanhAds(req))) } catch (e) { traLoi(res, e, 'đọc trạng thái quảng cáo') }
+})
+
+router.get('/ads/guide', authMiddleware, chanChuaBat, (_req: AuthRequest, res: Response) => {
+    res.json({ markdown: HUONG_DAN_ADS_PILOT })
+})
+
+type ViecAds = (ctx: NgCanhAds, body: any) => Promise<any>
+const VIEC_ADS: Record<string, { ghi: boolean; chay: ViecAds }> = {
+    cycle: { ghi: true, chay: ctx => chayChuKyAds(ctx) },
+    execute: { ghi: true, chay: (ctx, b) => thucThiAds(ctx, String(b?.planId || '')) },
+    boost: {
+        ghi: true,
+        chay: (ctx, b) => taoKeHoachDay(ctx, { postId: String(b?.postId || ''), dailyBudget: b?.dailyBudget, days: b?.days, idempotencyKey: khoaWeb(b?.idempotencyKey) }),
+    },
+    pause: { ghi: true, chay: (ctx, b) => taoKeHoachDung(ctx, { campaignId: String(b?.campaignId || ''), reason: 'thu_cong', idempotencyKey: khoaWeb(b?.idempotencyKey) }) },
+    resume: { ghi: true, chay: (ctx, b) => taoKeHoachChayLai(ctx, { campaignId: String(b?.campaignId || ''), idempotencyKey: khoaWeb(b?.idempotencyKey) }) },
+    budget: {
+        ghi: true,
+        chay: (ctx, b) => taoKeHoachNganSach(ctx, { campaignId: String(b?.campaignId || ''), dailyBudget: b?.dailyBudget, idempotencyKey: khoaWeb(b?.idempotencyKey) }),
+    },
+    cancel: { ghi: true, chay: (ctx, b) => huyKeHoachAds(ctx, String(b?.planId || '')) },
+    config: { ghi: true, chay: (ctx, b) => luuCauHinhAds(ctx, b) },
+    // token chỉ đi vào, không bao giờ ra: kết quả là tokenAnToan (tên, quyền, hạn) + danh sách tài khoản quảng cáo
+    token: { ghi: true, chay: (ctx, b) => noiTokenAds(ctx, { accessToken: String(b?.accessToken || '') }) },
+    connection: { ghi: false, chay: ctx => kiemKetNoiAds(ctx) },
+}
+
+router.post('/ads/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+    if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
+    const viec = VIEC_ADS[String(req.params.action)]
+    if (!viec) { res.status(404).json({ error: `Không có thao tác quảng cáo "${req.params.action}"` }); return }
+    if (viec.ghi) {
+        const lyDo = lyDoKhongGhi(req)
+        if (lyDo) { res.status(403).json({ error: lyDo }); return }
+    }
+    try {
+        const result = await viec.chay(ngCanhAds(req), req.body || {})
+        if (req.params.action === 'config' && result?.schedule?.enabled) await batCoLich(req)
+        res.json({ result })
+    } catch (e) { traLoi(res, e, `quảng cáo ${req.params.action}`) }
 })
 
 export default router

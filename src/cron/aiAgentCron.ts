@@ -19,6 +19,7 @@ import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
 import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
 import { chayTheoLichFb } from '../lib/facebookPilot'
+import { chayTheoLichAds } from '../lib/facebookAdsPilot'
 import { chayTheoLichTikTok } from '../lib/tiktokPilot'
 import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT } from '../lib/tienIchCuaHang'
 
@@ -223,6 +224,19 @@ async function quet(): Promise<void> {
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[FacebookPilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[FacebookPilot] lịch ${store.code}:`, e?.message || e)
+                }
+            }
+            /* ADS PILOT theo lịch (05/11/2026) — quảng cáo trong Facebook Pilot, cùng tiện ích facebook_pilot; lịch TẮT mặc định.
+             * Giữ client suốt lượt: chu kỳ đọc Facebook (chiến dịch, số liệu, bài) xen truy vấn kho — có thể vài chục giây. */
+            if (docTienIch(store.addOns).includes(TIEN_ICH_FACEBOOK_PILOT)) {
+                const nha = giuClient(store.schema)
+                try {
+                    const kq = await chayTheoLichAds(getStorePrisma(store.schema))
+                    if (kq === 'da-chay' || kq === 'loi') console.log(`[AdsPilot] lịch ${store.code}: ${kq}`)
+                } catch (e: any) {
+                    console.error(`[AdsPilot] lịch ${store.code}:`, e?.message || e)
+                } finally {
+                    nha()
                 }
             }
             /* TIKTOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật tiktok_pilot. */
