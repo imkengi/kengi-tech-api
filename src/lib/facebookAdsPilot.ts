@@ -400,8 +400,8 @@ export interface NgCanhAds {
     bayGio?: () => number
 }
 
-const luc = (ctx: NgCanhAds) => (ctx.bayGio ? ctx.bayGio() : Date.now())
-function dichVuAds(ctx: NgCanhAds, token: string): DichVuAds {
+export const luc = (ctx: NgCanhAds) => (ctx.bayGio ? ctx.bayGio() : Date.now())
+export function dichVuAds(ctx: NgCanhAds, token: string): DichVuAds {
     if (ctx.taoFb) return ctx.taoFb(token)
     const s = new FacebookService(token)
     return { get: (p, q) => s.get(p, q || {}, GRAPH_ADS), post: (p, q) => s.post(p, q || {}, GRAPH_ADS) }
@@ -481,7 +481,7 @@ function tokenAnToan(t: TokenAds | null, now: number) {
 }
 
 const CHUA_NOI_TOKEN = 'Chưa nối token quảng cáo — dán USER token có quyền ads_management ở Facebook Pilot → Quảng cáo → Kết nối quảng cáo.'
-async function canTokenAds(ctx: NgCanhAds, cfg: CauHinhAds): Promise<TokenAds> {
+export async function canTokenAds(ctx: NgCanhAds, cfg: CauHinhAds): Promise<TokenAds> {
     const t = await docTokenAds(ctx.prisma, cfg.fbUserId)
     if (!t) throw new ToolError(CHUA_NOI_TOKEN)
     return t
@@ -492,10 +492,10 @@ async function canTokenAds(ctx: NgCanhAds, cfg: CauHinhAds): Promise<TokenAds> {
 export const laLoiToken = (e: any) => e?.code === 190 || e?.code === 102
 export const laLoiQuyen = (e: any) => { const c = Number(e?.code); return c === 10 || c === 294 || (c >= 200 && c < 300) }
 /** #100 subcode 33: đối tượng không tồn tại (chiến dịch đã bị xoá hẳn). */
-const laKhongTonTai = (e: any) => Number(e?.code) === 100 && Number(e?.subcode) === 33
+export const laKhongTonTai = (e: any) => Number(e?.code) === 100 && Number(e?.subcode) === 33
 
 /** Lỗi Facebook → câu cho người vận hành (token hỏng / thiếu quyền nói rõ phải làm gì). */
-function moTaLoi(e: any): string {
+export function moTaLoi(e: any): string {
     const m = String(e?.message || e).slice(0, 300)
     if (laLoiToken(e)) return `Facebook từ chối token (hết hạn / bị thu hồi / đổi mật khẩu) — dán token mới. (${m})`
     if (laLoiQuyen(e)) return `Token thiếu quyền cho thao tác này — cần ads_management và quyền quản trị tài khoản quảng cáo / fanpage. (${m})`
@@ -510,7 +510,7 @@ async function ghiFb<T>(f: () => Promise<T>): Promise<T> {
 
 // ─── Tài khoản quảng cáo ────────────────────────────────────────────────────────
 
-const TRANG_THAI_TK: Record<number, string> = {
+export const TRANG_THAI_TK: Record<number, string> = {
     1: 'đang hoạt động', 2: 'bị vô hiệu hoá', 3: 'chưa thanh toán', 7: 'đang xét duyệt rủi ro', 8: 'chờ thanh toán',
     9: 'trong thời gian ân hạn', 100: 'chờ đóng', 101: 'đã đóng', 201: 'đang hoạt động', 202: 'đã đóng',
 }

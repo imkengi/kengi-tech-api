@@ -8,6 +8,7 @@
 //  Nối fanpage (dán page token) KHÔNG đi đường này: trang gọi thẳng /api/fanpage/connect-page-token có sẵn.
 //  ADS PILOT (05/11/2026): GET /ads/state, GET /ads/guide, POST /ads/:action — quảng cáo trong Facebook Pilot,
 //  nghiệp vụ ở lib/facebookAdsPilot.ts, cùng tiện ích facebook_pilot, cùng luật quyền ghi.
+//  PHÂN TÍCH SÂU (05/11/2026): GET /ads/drill — chỉ đọc Insights, nghiệp vụ ở lib/facebookAdsDrill.ts.
 //  Tiện ích theo cửa hàng: chỉ cửa hàng được quản trị bật `facebook_pilot` (lib/tienIchCuaHang) mới đọc / ghi
 //  được — chưa bật ⇒ 403 { ma: 'chua_bat_tien_ich' }, đọc registry hỏng ⇒ 503 (vẫn chặn, nói thật).
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -25,6 +26,7 @@ import {
     khoSqlAds, xayTrangThaiAds, chayChuKyAds, thucThiAds, taoKeHoachDay, taoKeHoachDung, taoKeHoachChayLai, taoKeHoachNganSach,
     huyKeHoachAds, noiTokenAds, kiemKetNoiAds, luuCauHinhAds, HUONG_DAN_ADS_PILOT, type NgCanhAds,
 } from '../lib/facebookAdsPilot'
+import { docDrillAds } from '../lib/facebookAdsDrill'
 
 const router = Router()
 const QUAN_LY = ['admin', 'manager', 'owner', 'superadmin']
@@ -132,6 +134,19 @@ router.post('/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, re
 router.get('/ads/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     try { res.json(await xayTrangThaiAds(ngCanhAds(req))) } catch (e) { traLoi(res, e, 'đọc trạng thái quảng cáo') }
+})
+
+/** Phân tích sâu quảng cáo — CHỈ ĐỌC Insights (tài khoản → chiến dịch → nhóm → quảng cáo, chia theo tỉnh / tuổi / giờ…). */
+router.get('/ads/drill', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+    if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
+    const q = req.query as Record<string, any>
+    const mot = (v: any) => (Array.isArray(v) ? v[0] : v)
+    try {
+        res.json(await docDrillAds(ngCanhAds(req), {
+            level: mot(q.level), id: mot(q.id), account: mot(q.account), preset: mot(q.preset), since: mot(q.since), until: mot(q.until),
+            compare: mot(q.compare), breakdown: mot(q.breakdown), result: mot(q.result), group: mot(q.group), fresh: mot(q.fresh),
+        }))
+    } catch (e) { traLoi(res, e, 'đọc phân tích quảng cáo') }
 })
 
 router.get('/ads/guide', authMiddleware, chanChuaBat, (_req: AuthRequest, res: Response) => {
