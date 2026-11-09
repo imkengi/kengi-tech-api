@@ -1807,5 +1807,6 @@ không có khách hỏi — trong trần ngân sách bạn đặt. Số liệu l
    - Mọi thao tác (đẩy bài, tạm dừng, chạy lại, đổi ngân sách) tạo KẾ HOẠCH trước; lúc thực thi máy chủ soát lại kho, tài khoản,
      trần. Chiến dịch dựng ở trạng thái tạm dừng rồi mới bật — dựng hỏng giữa chừng thì xoá chiến dịch rỗng, không tiêu tiền.
    - Pilot chỉ đụng quảng cáo do Pilot tạo; chiến dịch bạn tự chạy chỉ hiện số tổng 7 ngày.
-   - Chạy theo lịch: bật trong chính sách (mỗi 30–1440 phút), máy chủ tự chạy; nháp chờ duyệt / lần hỏng được báo qua chuông + app.
+   - Chạy theo lịch: bật trong chính sách (mỗi 30–1440 phút), máy chủ tự chạy; nháp chờ duyệt / lần hỏng được báo trên chuông web
+     + app Android (nhóm «Pilot tự động», có tiếng từ app 1.0.47; bấm vào mở tab Quảng cáo trên trình duyệt).
 `

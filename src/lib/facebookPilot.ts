@@ -33,7 +33,7 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, isRateLimitError, loaiLoiFb, quyenThieuFb, type SchedulePostInput } from '../services/platforms/facebook'
-import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao, NHOM_PILOT, duongPilotCuaTieuDe } from './pilotBaoChuShop'
 import { ghiDoiCauHinh, NHAN_FACEBOOK } from './pilotDoiCauHinh'
 
 // ─── Tiện ích nhỏ ───────────────────────────────────────────────────────────────
@@ -1772,7 +1772,8 @@ export async function soatBaiHenSapLen(prisma: any, kho?: KhoFbPilot, ngoai: Par
             const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
             ra.daBao = true
             const { sendPushToStore } = await import('../routes/notifications')
-            sendPushToStore(prisma, title, message, { id: tin?.id, type: 'warning' }).catch(() => { })
+            // X-06: nhóm 'pilot' (kênh có chuông trên app) + đường trang Facebook Pilot — tin KHẨN mà rơi kênh "Hệ thống" im là vô nghĩa
+            sendPushToStore(prisma, title, message, { id: tin?.id, type: 'warning', nhom: NHOM_PILOT, web: duongPilotCuaTieuDe('Facebook Pilot') }).catch(() => { })
         } catch (e: any) {
             console.error('[FacebookPilot] rút bài hẹn — ghi thông báo chủ shop lỗi:', e?.message || e)
         }
@@ -1831,7 +1832,9 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
 5. Chu kỳ
    - Lập bài cho các khung giờ trống trong 3 ngày tới (tối đa 6 bài mỗi chu kỳ), soát bình luận 10 bài gần nhất (nếu bật).
    - Máy tự trả lời chỉ khi: biết chắc người viết là khách, bình luận chưa có ai trả lời, hàng tồn dương. Còn lại để nháp chờ người duyệt.
-   - Chạy theo lịch: bật ở Sửa chính sách (mỗi 60–1440 phút), máy chủ tự chạy, không cần mở trang.
+   - Chạy theo lịch: bật ở Sửa chính sách (mỗi 60–1440 phút), máy chủ tự chạy, không cần mở trang. Có việc cần người (nháp chờ
+     duyệt, đăng hỏng, token fanpage sắp hết, bài hẹn giờ phải xử lý tay) ⇒ báo trên chuông web + app Android (nhóm «Pilot tự
+     động», có tiếng từ app 1.0.47; bấm vào mở trang này trên trình duyệt).
    - Dọn kế hoạch mỗi chu kỳ: nháp MÁY lập quá giờ hẹn hoặc quá 3 ngày thì tự huỷ (nháp người lập giữ nguyên); thực thi kẹt quá 1 giờ
      ⇒ "không rõ kết quả" để người kiểm. Chuyển Xem trước → Tự động: nháp của lượt Xem trước bị huỷ, chu kỳ lập lại theo số hiện tại.
    - Người huỷ nháp máy đề xuất ⇒ máy không đề xuất lại mã / bình luận đó trong 14 ngày. Chỉ bài ĐÃ gửi Facebook mới tính vào

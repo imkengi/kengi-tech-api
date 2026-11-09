@@ -4,7 +4,9 @@
  *  Bài chạy thử chu kỳ THẬT trên dữ liệu KENGISTORE (chỉ đọc, sàn giả) cho thấy những chỗ máy phải chờ người hoặc
  *  làm sai mà không ai biết. Mỗi mục dưới đây canh một chỗ đã vá:
  *    A. báo chủ shop (lib/pilotBaoChuShop): việc cần người, chống lặp theo dấu, giãn 3 giờ, chu kỳ gãy báo ngay; (X-09) việc y hệt
- *       vẫn còn ⇒ nhắc lại sau 24 giờ; Xem trước chỉ báo chỗ làm Pilot mù (token, gian hỏng); cả 4 Pilot đi qua ketQuaDeBao
+ *       vẫn còn ⇒ nhắc lại sau 24 giờ; Xem trước chỉ báo chỗ làm Pilot mù (token, gian hỏng); cả 4 Pilot đi qua ketQuaDeBao;
+ *       (X-06, 10/11/2026) trên điện thoại: tin Pilot mang nhóm 'pilot' (kênh có chuông) + đường trang Pilot (app mở trình duyệt),
+ *       push hỏng không làm báo trùng, danh sách GET /notifications xếp cùng nhóm, tin khác giữ nhóm cũ
  *    B. cầu dao đẩy tồn: nhiều mã đang có hàng về 0 ⇒ không đẩy (TikTok 117 mã về 0 vì hàng ở kho HUTI, kho mẹ tắt)
  *    C. Shopee giá SỐNG: quyết theo giá GỐC trên Shopee (bản lưu cũ / là giá KM), né KM đang / sắp chạy, phân loại;
  *       đọc hỏng ⇒ không đổi; thực thi tự động đọc hỏng ⇒ không ghi mù
@@ -47,7 +49,8 @@ import { ShopeeService } from '../src/services/platforms/shopee'
 import { chayChuKy, chayTheoLich, khoBoNho, khoSql, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, xayTrangThai, soThuTuMa, type NgCanh, type KhoPilot } from '../src/lib/shopeePilot'
 import * as fs from 'fs'
 import * as path from 'path'
-import { viecCanNguoi, baoChuShop, ketQuaDeBao, GIAN_CACH_BAO_MS, NHAC_LAI_MS } from '../src/lib/pilotBaoChuShop'
+import { viecCanNguoi, baoChuShop, ketQuaDeBao, GIAN_CACH_BAO_MS, NHAC_LAI_MS, DUONG_PILOT_WEB, duongPilotCuaTieuDe } from '../src/lib/pilotBaoChuShop'
+import { phanNhomThongBao, duLieuPush } from '../src/routes/notifications'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
 import { chayTheoLichFb, khoBoNhoFb, luuCauHinhFb } from '../src/lib/facebookPilot'
@@ -392,6 +395,58 @@ async function main() {
             return s.split(canCo[f]!).length !== 2 || /ketQua\.ok && ketQua\.(executionMode|mode)[^\n]*\? truoc :/.test(s)
         })
         dung('A15. cả 4 Pilot (Shopee / TikTok / Facebook / Ads) báo qua ketQuaDeBao — không còn nhánh "Xem trước ⇒ khỏi gọi báo"', !thieuNoi.length, thieuNoi.join(', '))
+
+        // ── X-06 (10/11/2026): trên điện thoại tin Pilot từng IM (rơi nhóm "Hệ thống", kênh Android im lặng) và bấm chỉ mở màn
+        //    Thông báo (app không có màn Pilot). Giờ: nhóm riêng 'pilot' (kênh có chuông) + đường trang Pilot để app mở trình duyệt ──
+        const day: any[] = []
+        const guiGia = async (_p: any, title: string, message: string, extra: any) => { day.push({ title, message, ...extra }); return 1 }
+        thongBao.length = 0
+        const viecX6 = { ok: true, results: [{ action: 'price', status: 'failed', sku: 'Y1', message: 'Shopee lỗi' }] }
+        for (const ten of ['Shopee Pilot', 'TikTok Pilot', 'Facebook Pilot', 'Ads Pilot']) await baoChuShop(prisma, ten, viecX6, null, t0, guiGia)
+        dung('A16. push tin Pilot mang nhom "pilot" + web đúng trang từng Pilot (Ads ⇒ tab Quảng cáo); type vẫn warning (chuông web); id = bản ghi vừa tạo',
+            JSON.stringify(day.map(d => [d.type, d.nhom, d.web])) === JSON.stringify([['warning', 'pilot', '/pilot-shopee'], ['warning', 'pilot', '/pilot-tiktok'], ['warning', 'pilot', '/pilot-facebook'], ['warning', 'pilot', '/pilot-facebook#ads']])
+            && thongBao.length === 4 && day.every((d, i) => d.id === thongBao[i]?.id && d.title === thongBao[i]?.title) && thongBao.every(t => t.type === 'warning') && !day.some(d => 'route' in d),
+            JSON.stringify(day))
+        thongBao.length = 0
+        const nemNgay = ((() => { throw new Error('fcm hỏng') }) as any)
+        const f1 = await baoChuShop(prisma, 'Shopee Pilot', viecX6, null, t0, nemNgay)
+        const f2 = await baoChuShop(prisma, 'Shopee Pilot', viecX6, f1, t0 + 60_000, nemNgay)
+        const nemSau = (async () => { throw new Error('fcm 500') }) as any
+        const f3 = await baoChuShop(prisma, 'TikTok Pilot', viecX6, null, t0, nemSau)
+        dung('A17. push hỏng (ném ngay hoặc từ chối sau) ⇒ thông báo đã ghi vẫn LƯU DẤU, lượt sau không báo trùng',
+            thongBao.length === 2 && !!f1.khoa && f2.khoa === f1.khoa && f2.luc === f1.luc && !!f3.khoa, JSON.stringify({ n: thongBao.length, f1, f2, f3 }))
+
+        // danh sách GET /notifications (app poll 15 phút + màn Thông báo) xếp CÙNG nhóm với push
+        const pn = (type: string, title: string) => JSON.stringify(phanNhomThongBao(type, title))
+        dung('A18. phanNhomThongBao: tiêu đề tin Pilot (cần xem / vẫn còn / chu kỳ lỗi / KHẨN) ⇒ nhóm pilot + web, route null (app cũ không mở màn lạ)',
+            pn('warning', 'Shopee Pilot cần anh/chị xem 2 việc') === JSON.stringify({ nhom: 'pilot', route: null, web: '/pilot-shopee' })
+            && pn('warning', 'TikTok Pilot vẫn còn 1 việc cần anh/chị xem') === JSON.stringify({ nhom: 'pilot', route: null, web: '/pilot-tiktok' })
+            && pn('warning', 'Ads Pilot: chu kỳ tự động bị lỗi') === JSON.stringify({ nhom: 'pilot', route: null, web: '/pilot-facebook#ads' })
+            && pn('warning', 'Facebook Pilot KHẨN: 2 bài hẹn giờ cần xử lý tay trên fanpage') === JSON.stringify({ nhom: 'pilot', route: null, web: '/pilot-facebook' }),
+            [pn('warning', 'Shopee Pilot cần anh/chị xem 2 việc'), pn('warning', 'Ads Pilot: chu kỳ tự động bị lỗi')].join(' '))
+        dung('A19. tin KHÁC giữ nhóm cũ: warning không phải Pilot (duyệt chi nhánh, Zalo) ⇒ he_thong; tiêu đề Pilot mà type khác ⇒ không nhận; "Shopee Pilots" ⇒ không khớp; loại có sẵn không đổi',
+            pn('warning', 'Yêu cầu mở chi nhánh đã được duyệt') === JSON.stringify({ nhom: 'he_thong', route: null })
+            && pn('info', 'Shopee Pilot cần anh/chị xem 2 việc') === JSON.stringify({ nhom: 'he_thong', route: null })
+            && pn('warning', 'Shopee Pilots mới') === JSON.stringify({ nhom: 'he_thong', route: null })
+            && pn('new_order', 'Shopee Pilot') === JSON.stringify({ nhom: 'don_hang', route: 'online-orders' })
+            && pn('warning', 'Đã nhận 3 hoá đơn XML từ email') === JSON.stringify({ nhom: 'hoa_don', route: null }),
+            pn('warning', 'Shopee Pilots mới'))
+        const dl = duLieuPush('T', 'M', { id: 'a', type: 'warning', nhom: 'pilot', web: '/pilot-shopee' })
+        const dlCu = duLieuPush('T', 'M', { id: 'b', type: 'new_order', route: 'online-orders' })
+        // sendPushToStore không chạy được ở đây (cần FCM) ⇒ soi nguồn: tin gửi đi PHẢI dựng bằng duLieuPush với nguyên `extra`
+        const srcTb = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'notifications.ts'), 'utf8')
+        dung('A20. dữ liệu FCM mang khoá nhom + web (app ≥ 1.0.47 đọc); tin không có thì không sinh khoá rỗng; sendPushToStore gửi đúng phần này',
+            JSON.stringify(dl) === JSON.stringify({ title: 'T', message: 'M', id: 'a', type: 'warning', nhom: 'pilot', web: '/pilot-shopee' })
+            && JSON.stringify(dlCu) === JSON.stringify({ title: 'T', message: 'M', id: 'b', type: 'new_order', route: 'online-orders' })
+            && srcTb.split('data: duLieuPush(title, body, extra),').length === 2, JSON.stringify({ dl, dlCu }))
+        // bảng tên Pilot ⇒ trang PHẢI khớp chuông web (FE useNotifications DUONG_PILOT) và app (Android NotificationWorker.DUONG_PILOT);
+        // hai bảng đó nằm ở repo FE, bộ soát check:thongbao bên FE ghim CÙNG danh sách này.
+        dung('A21. bảng DUONG_PILOT_WEB ghim đúng 4 Pilot ⇒ 4 trang', JSON.stringify(DUONG_PILOT_WEB) === JSON.stringify([['Shopee Pilot', '/pilot-shopee'], ['TikTok Pilot', '/pilot-tiktok'], ['Facebook Pilot', '/pilot-facebook'], ['Ads Pilot', '/pilot-facebook#ads']])
+            && duongPilotCuaTieuDe(null) === undefined && duongPilotCuaTieuDe('Ads Pilot') === '/pilot-facebook#ads')
+        // tin KHẨN rút bài hẹn giờ của Facebook Pilot đi đường riêng (không qua baoChuShop) — cũng phải mang nhóm + trang
+        const srcFb = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'facebookPilot.ts'), 'utf8')
+        dung('A22. tin KHẨN / rút bài hẹn giờ của Facebook Pilot push kèm nhom pilot + trang Facebook Pilot',
+            /sendPushToStore\(prisma, title, message, \{ id: tin\?\.id, type: 'warning', nhom: NHOM_PILOT, web: duongPilotCuaTieuDe\('Facebook Pilot'\) \}\)/.test(srcFb))
     }
 
     // ─── B. Cầu dao đẩy tồn ──────────────────────────────────────────────────────

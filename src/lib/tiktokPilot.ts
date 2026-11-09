@@ -1344,7 +1344,9 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
    - Hết lượt ghi trong ngày (Thao tác ghi mỗi ngày): chu kỳ dừng ghi, báo MỘT dòng — không phải lỗi; mai làm tiếp.
    - Danh mục trong hệ thống cũ hơn 2 giờ thì chu kỳ tự đồng bộ lại. Đẩy tồn có cầu dao: nhiều mã đang có hàng sẽ về 0 ⇒ không đẩy.
    - Nháp chờ duyệt không chiếm lượt đổi giá; máy lập tự huỷ sau 3 ngày; Huỷ = 14 ngày không đề xuất lại.
-     Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chưa biết phí, token hỏng): chuông + app báo một lần mỗi khi danh sách đổi.
+     Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chưa biết phí, token hỏng): báo trên chuông web + app Android (nhóm
+     «Pilot tự động», có tiếng từ app 1.0.47; bấm vào mở trang Pilot này trên trình duyệt) khi danh sách đổi (cách nhau ≥ 3 giờ);
+     chu kỳ lỗi báo ngay; việc còn nguyên sau 24 giờ thì nhắc lại.
    - Token TikTok hỏng (làm mới không được, TikTok báo token hết hạn / bị thu hồi): Pilot DỪNG ghi lên TikTok lượt đó, báo
      "Cần uỷ quyền lại gian TikTok" — Đơn Hàng Online → nút «Kênh bán hàng» → nút «Cấp lại quyền» ở dòng của gian.
 

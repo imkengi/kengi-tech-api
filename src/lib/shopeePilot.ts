@@ -2268,7 +2268,9 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
    - Đẩy tồn có cầu dao: lượt đẩy làm nhiều mã đang có hàng về 0 thì KHÔNG đẩy, báo người kiểm tồn kho / kho mẹ.
    - Nháp chờ duyệt: máy / trợ lý AI lập thì tự huỷ sau 3 ngày; bấm Huỷ = máy không đề xuất lại mã đó trong 14 ngày.
    - Gian chưa biết phí sàn: chu kỳ không đổi giá, không đăng mới (vẫn đẩy tồn, đồng bộ danh mục), báo MỘT dòng kèm đường khai phí.
-   - Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chưa biết phí, chu kỳ lỗi): chuông + app báo một lần mỗi khi danh sách đổi.
+   - Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chưa biết phí, chu kỳ lỗi): báo trên chuông web + app Android (nhóm
+     «Pilot tự động», có tiếng từ app 1.0.47; bấm vào mở trang Pilot này trên trình duyệt) khi danh sách đổi (cách nhau ≥ 3 giờ);
+     chu kỳ lỗi báo ngay; việc còn nguyên sau 24 giờ thì nhắc lại.
 
 7. Kiểm tra API Shopee
    - Trang Kết nối Shopee → Kiểm tra API Shopee: gọi chỉ đọc từng nhóm API (ngành, thuộc tính, thương hiệu, vận chuyển, khuyến mãi).

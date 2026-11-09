@@ -8,6 +8,12 @@
  *  chu kỳ gãy thì báo ngay. Danh sách y như lượt trước ⇒ im (chu kỳ 30 phút không spam).
  *  Kiểu 'warning' — kiểu sẵn có ở chuông web và kênh Android, khỏi khai kiểu mới ở ba nơi.
  *
+ *  X-06 (10/11/2026) — trên điện thoại tin này IM và bấm không mở đúng chỗ: 'warning' rơi vào nhóm "Hệ thống" (kênh Android
+ *  IMPORTANCE_LOW, setSilent), bấm vào chỉ mở màn Thông báo — trong khi hướng dẫn hứa "chuông + app báo". Giờ tin Pilot mang
+ *  NHÓM riêng 'pilot' (kênh «Pilot tự động» có chuông, app ≥ 1.0.47) và ĐƯỜNG WEB của trang Pilot đó (app chưa có màn Pilot ⇒
+ *  bấm vào mở trình duyệt). Vẫn giữ type 'warning' ⇒ chuông web khỏi đổi; nhóm nhận theo TIÊU ĐỀ (DUONG_PILOT_WEB) ở cả
+ *  push (nhom/web nói thẳng) lẫn danh sách GET /notifications (routes/notifications.phanNhomThongBao).
+ *
  *  X-09 (09/11/2026) — Pilot hỏng mà không báo:
  *   - việc y như lần đã báo mà VẪN còn ⇒ trước im mãi (chủ shop lỡ tin đầu là token hỏng nằm im tới khi tự mở trang);
  *     nay nhắc lại sau NHAC_LAI_MS, câu nói "chưa xử lý từ …";
@@ -22,6 +28,25 @@ export interface DauBao { khoa: string; luc: number; n: number; tu?: number }
 export const GIAN_CACH_BAO_MS = 3 * 3600_000
 /** Việc y như lần đã báo mà vẫn còn sau chừng này ⇒ nhắc lại (mỗi ngày một lần, không spam chu kỳ 30 phút). */
 export const NHAC_LAI_MS = 24 * 3600_000
+
+/** Nhóm thông báo của tin Pilot — app Android ≥ 1.0.47 có kênh riêng «Pilot tự động» (có chuông). */
+export const NHOM_PILOT = 'pilot'
+
+/** Tên Pilot (đầu tiêu đề tin) ⇒ trang Pilot trên kengi.vn. PHẢI khớp bảng DUONG_PILOT của chuông web
+ *  (FE src/features/notifications/hooks/useNotifications.ts) và của app (Android NotificationWorker.DUONG_PILOT). */
+export const DUONG_PILOT_WEB: ReadonlyArray<readonly [string, string]> = [
+    ['Shopee Pilot', '/pilot-shopee'],
+    ['TikTok Pilot', '/pilot-tiktok'],
+    ['Facebook Pilot', '/pilot-facebook'],
+    ['Ads Pilot', '/pilot-facebook#ads'],
+]
+
+/** Tiêu đề tin ("<tên Pilot> cần…", "<tên Pilot>: chu kỳ…", "<tên Pilot> vẫn còn…") hoặc chính tên Pilot ⇒ đường trang Pilot đó;
+ *  tin khác ⇒ undefined. So khớp ĐẦU chuỗi + ranh giới (hết chuỗi / dấu cách / dấu hai chấm) — "Shopee Pilots…" không khớp. */
+export function duongPilotCuaTieuDe(title: string | null | undefined): string | undefined {
+    const t = String(title || '')
+    return DUONG_PILOT_WEB.find(([ten]) => t.startsWith(ten) && /^($|[\s:])/.test(t.slice(ten.length)))?.[1]
+}
 
 /** Dòng làm Pilot MÙ — phải báo kể cả ở Xem trước: token hỏng / sắp hết hạn, một gian hỏng cả lượt ("tất cả gian"). */
 export function hongCanBao(r: any): boolean {
@@ -56,11 +81,14 @@ export function viecCanNguoi(results: any[]): { khoa: string; dong: string[] } {
     return { khoa, dong }
 }
 
+/** Hàm bắn push — mặc định routes/notifications.sendPushToStore; bộ kiểm bơm bản giả để soi khoá gửi đi. */
+export type GuiDayPilot = (prisma: any, title: string, message: string, extra: { id?: string; type?: string; nhom?: string; web?: string }) => Promise<unknown>
+
 /**
- * Báo nếu cần, trả dấu mới để lưu. `ten` = "Shopee Pilot" / "TikTok Pilot" / "Facebook Pilot".
+ * Báo nếu cần, trả dấu mới để lưu. `ten` = "Shopee Pilot" / "TikTok Pilot" / "Facebook Pilot" / "Ads Pilot".
  * Ghi thông báo hỏng ⇒ giữ dấu cũ (lượt sau thử lại), không làm gãy lượt chạy.
  */
-export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; message?: string; results?: any[] }, truoc: DauBao | null | undefined, now = Date.now()): Promise<DauBao> {
+export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; message?: string; results?: any[] }, truoc: DauBao | null | undefined, now = Date.now(), guiDay?: GuiDayPilot): Promise<DauBao> {
     const cu: DauBao = truoc && typeof truoc.khoa === 'string'
         ? { khoa: truoc.khoa, luc: Number(truoc.luc) || 0, n: Number(truoc.n) || 0, ...(Number(truoc.tu) > 0 ? { tu: Number(truoc.tu) } : {}) }
         : { khoa: '', luc: 0, n: 0 }
@@ -79,8 +107,10 @@ export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; me
         + (gay ? `${dong[0]} — mở ${ten} kiểm kết nối.` : dong.slice(0, 4).join(' · ') + (dong.length > 4 ? ` · … và ${dong.length - 4} việc nữa trên ${ten}.` : ''))).slice(0, 500)
     try {
         const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
-        const { sendPushToStore } = await import('../routes/notifications')
-        sendPushToStore(prisma, title, message, { id: tin?.id, type: 'warning' }).catch(() => { })
+        const gui: GuiDayPilot = guiDay || (await import('../routes/notifications')).sendPushToStore
+        const web = duongPilotCuaTieuDe(ten)
+        // push là phụ: bắn rồi thôi; hỏng (kể cả ném đồng bộ) không được làm mất dấu — thông báo đã ghi rồi
+        void (async () => gui(prisma, title, message, { id: tin?.id, type: 'warning', nhom: NHOM_PILOT, ...(web ? { web } : {}) }))().catch(() => { })
     } catch (e: any) {
         console.warn(`[${ten}] ghi thông báo hỏng:`, e?.message || e)
         return cu

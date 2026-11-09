@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { duongPilotCuaTieuDe, NHOM_PILOT } from '../lib/pilotBaoChuShop'
 
 const router = Router()
 
@@ -49,8 +50,24 @@ export async function ensureDeviceTokenTable(prisma: any): Promise<void> {
  *    push không mang id nên mỗi sự kiện hiện HAI lần trên khay);
  *  - `type`: chọn KÊNH thông báo theo nhóm (khiếu nại/đơn mới có chuông, hoá đơn im);
  *  - `route`: bấm vào mở thẳng màn liên quan ('returns', 'online-orders', …).
+ *  - `nhom` (10/11/2026, X-06): nhóm/kênh nói THẲNG — tin cùng `type` mà khác nhóm (tin "Pilot cần người" là 'warning' như
+ *    tin duyệt chi nhánh) không suy được nhóm từ type. App ≥ 1.0.47 đọc; app cũ bỏ qua, tự suy từ type như trước.
+ *  - `web` (X-06): đường trang WEB ('/pilot-shopee'…) cho tin mà app chưa có màn — app ≥ 1.0.47 bấm vào mở trình duyệt
+ *    https://kengi.vn<web>. KHÔNG nhét vào `route`: app cũ gặp route lạ thì navigate hỏng, bấm không mở gì.
  *  App cũ chỉ đọc title/message — khoá thêm vô hại. */
-export interface PushExtra { id?: string; type?: string; route?: string }
+export interface PushExtra { id?: string; type?: string; route?: string; nhom?: string; web?: string }
+
+/** Phần `data` của tin FCM (data-only — xem chú thích trong sendPushToStore). Tách riêng để bộ kiểm soi đủ khoá. */
+export function duLieuPush(title: string, body: string, extra: PushExtra = {}): Record<string, string> {
+    return {
+        title, message: body,
+        ...(extra.id ? { id: String(extra.id) } : {}),
+        ...(extra.type ? { type: String(extra.type) } : {}),
+        ...(extra.route ? { route: String(extra.route) } : {}),
+        ...(extra.nhom ? { nhom: String(extra.nhom) } : {}),
+        ...(extra.web ? { web: String(extra.web) } : {}),
+    }
+}
 
 /** Bắn push FCM tới mọi thiết bị đã đăng ký của store. Token chết (404/400
  * UNREGISTERED) bị xoá luôn. Mọi lỗi nuốt êm — push là phụ, không được làm
@@ -77,12 +94,7 @@ export async function sendPushToStore(prisma: any, title: string, body: string, 
                             // "phải vào app mới xem được". Data-only thì onMessageReceived
                             // chạy CẢ KHI NỀN, app tự vẽ từng thông báo + nhóm xoè được.
                             // App cũ vẫn hiện bình thường (đã có fallback đọc data.title/message).
-                            data: {
-                                title, message: body,
-                                ...(extra.id ? { id: String(extra.id) } : {}),
-                                ...(extra.type ? { type: String(extra.type) } : {}),
-                                ...(extra.route ? { route: String(extra.route) } : {}),
-                            },
+                            data: duLieuPush(title, body, extra),
                             android: { priority: 'HIGH' },
                         },
                     }),
@@ -149,7 +161,7 @@ router.get('/stream', (_req: Request, res: Response) => {
 /** NHÓM + MÀN ĐÍCH của một thông báo (06/10/2026) — app Android lọc theo nhóm, chọn kênh
  *  thông báo, bấm vào mở đúng màn. Trước đây app chỉ biết low_stock/payment_due, mọi loại
  *  khác (hoá đơn, đơn mới…) hiện chung nhãn "HỆ THỐNG". Thêm trường, KHÔNG đổi trường cũ. */
-export function phanNhomThongBao(type: string, title = ''): { nhom: string; route: string | null } {
+export function phanNhomThongBao(type: string, title = ''): { nhom: string; route: string | null; web?: string } {
     switch (type) {
         case 'return_request':
         case 'dispute_result': return { nhom: 'khieu_nai', route: 'returns' }
@@ -165,6 +177,13 @@ export function phanNhomThongBao(type: string, title = ''): { nhom: string; rout
         case 'tax-reconcile': return { nhom: 'thue', route: 'tax' }
         // Kengi Vault (20/10/2026): giấy tờ sắp hết hạn — app chưa có màn kho tài liệu ⇒ không route
         case 'tai_lieu_het_han': return { nhom: 'he_thong', route: null }
+    }
+    // X-06 (10/11/2026): tin "Pilot cần người" (lib/pilotBaoChuShop) — type 'warning' như tin duyệt chi nhánh nên nhận theo TIÊU ĐỀ
+    // (cùng bảng chuông web dùng). Nhóm riêng 'pilot' = kênh có chuông trên app; app chưa có màn Pilot ⇒ `web` = trang Pilot trên
+    // kengi.vn (app ≥ 1.0.47 mở trình duyệt). route để null: app cũ gặp route lạ thì bấm không mở gì, null thì còn mở màn Thông báo.
+    if (type === 'warning') {
+        const web = duongPilotCuaTieuDe(title)
+        if (web) return { nhom: NHOM_PILOT, route: null, web }
     }
     if (/hoá đơn XML|hóa đơn XML/i.test(title)) return { nhom: 'hoa_don', route: null }
     return { nhom: 'he_thong', route: null }
