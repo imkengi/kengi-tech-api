@@ -32,7 +32,7 @@ import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, timHangKho, duongNganh, luuDanhMucSan } from './shopeeTuQuan'
 import {
-    num, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
+    num, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
     chinhSachGia, giaSongShopee, maDangKhuyenMai, lyDoKhongHienLai, type ChinhSachGia, type GiaSongShopee, type UngVien,
 } from './shopeeThaoTac'
 import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
@@ -684,7 +684,8 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
     const listing = khop.slice(offset, offset + lim)
     const [von, daBan, bang, uv] = await Promise.all([
         giaVonHangLoat(ctx.prisma, listing),
-        soBan14Ngay(ctx.prisma, ch.id),
+        // đọc hỏng ⇒ null: cột "đã bán 14 ngày" hiện "—", KHÔNG hiện 0 (TT-18, 10/11/2026)
+        soBan14Ngay(ctx.prisma, ch.id, { theoMaSan: true }).catch((e: any) => { console.error('[ShopeePilot] đọc số bán 14 ngày hỏng:', e?.message || e); return null }),
         docMauPhiTheoNganh(ctx.prisma, ch),
         // hàng kho chưa đăng chỉ ở trang đầu (Tải thêm chỉ nối thêm listing); có từ khoá thì tìm cả trong kho
         offset === 0 ? timUngVien(ctx.prisma, ch.id, { lim: TRAN_UNG_VIEN, ...(q ? { query: q } : {}) }) : Promise.resolve({ ungVien: [] as UngVien[] }),
@@ -739,7 +740,7 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
             costPrice: giaVon || null,
             currentPrice: Number(l.price) || null,
             stock: Number(l.stock) || 0,
-            sold14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
+            sold14: daBan ? daBanCuaListing(daBan, l) : null,
             imageUrl: l.imageUrl || null,
             listing: { item_name: l.name, description: v?.moTa || '' },
             pricing: { ...giaUi(kq, ts, mp), fee: tomTatMauPhi(mp, bang), snapshot: { price: Number(l.price) || 0, stock: Number(l.stock) || 0 } },
@@ -1523,16 +1524,17 @@ export async function doiGiaQuaPilot(ctx: NgCanh, a: any): Promise<any> {
     throw new ToolError(`Không đổi giá ${ten}: ${p.result?.message || p.status}`)
 }
 
-/** Số đã bán 14 ngày của MỘT listing — theo mã dòng hàng của sàn (externalItemId = item_id Shopee) hoặc SKU; đơn huỷ / chưa thanh
- *  toán không tính. Đọc hỏng ⇒ NÉM: rào ẩn hàng không mở khi không kiểm được. */
-async function soBan14NgayMa(prisma: any, channelId: string, itemId: string, sku: string | null): Promise<number> {
+/** Số đã bán 14 ngày của MỘT listing — theo mã dòng hàng của sàn (externalItemId = item_id Shopee), SKU, hoặc hàng kho đã nối
+ *  (productId — dòng không SKU được nối theo tên listing; TT-18, 10/11/2026); đơn huỷ / chưa thanh toán không tính. Đếm rộng là
+ *  chiều an toàn của rào ẩn hàng (có bán ⇒ cần chủ shop duyệt). Đọc hỏng ⇒ NÉM: rào ẩn hàng không mở khi không kiểm được. */
+async function soBan14NgayMa(prisma: any, channelId: string, itemId: string, sku: string | null, hangKho: string | null): Promise<number> {
     const [r] = await prisma.$queryRawUnsafe(
         `SELECT COALESCE(SUM(i.quantity), 0)::int AS sl
            FROM "OnlineOrderItem" i JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
           WHERE o."channelId" = $1 AND o."createdAt" >= NOW() - INTERVAL '14 days'
             AND o.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID','cancelled','cancelling')
-            AND (i."externalItemId" = $2 OR ($3 <> '' AND LOWER(i.sku) = $3))`,
-        channelId, itemId, String(sku || '').trim().toLowerCase())
+            AND (i."externalItemId" = $2 OR ($3 <> '' AND LOWER(i.sku) = $3) OR ($4 <> '' AND i."productId" = $4))`,
+        channelId, itemId, String(sku || '').trim().toLowerCase(), String(hangKho || ''))
     return Number(r?.sl) || 0
 }
 
@@ -1563,7 +1565,7 @@ export async function anHienQuaPilot(ctx: NgCanh, a: any): Promise<any> {
         const ton = Math.max(Number(l.stock) || 0, Number(sp?.stock) || 0)
         if (ton > 0) {
             let ban: number
-            try { ban = await soBan14NgayMa(ctx.prisma, ch.id, itemId, l.sku || null) } catch (e: any) {
+            try { ban = await soBan14NgayMa(ctx.prisma, ch.id, itemId, l.sku || null, l.localProductId || null) } catch (e: any) {
                 console.error('[ShopeePilot] rào ẩn hàng: đọc số bán 14 ngày hỏng:', e?.message || e)
                 throw new ToolError(`Không đọc được số đã bán 14 ngày của ${ten} — không ẩn khi chưa kiểm được hàng còn bán được hay không. Thử lại sau hoặc báo chủ shop.`)
             }
@@ -1642,8 +1644,8 @@ export async function dangQuaPilot(ctx: NgCanh, a: any): Promise<any> {
 
 // ─── Chu kỳ ─────────────────────────────────────────────────────────────────────
 
-/** Quyết giá mới cho một listing đang bán. null = giữ nguyên. */
-export function quyetDinhGia(o: { giaCu: number; ton: number; daBan14: number; kq: KetQuaGia; bienHienTaiPct: number; pol: ChinhSachPilot }): { gia: number; lyDo: string } | null {
+/** Quyết giá mới cho một listing đang bán. null = giữ nguyên. `daBan14` null = KHÔNG đọc được số bán ⇒ không xét luật bán chậm. */
+export function quyetDinhGia(o: { giaCu: number; ton: number; daBan14: number | null; kq: KetQuaGia; bienHienTaiPct: number; pol: ChinhSachPilot }): { gia: number; lyDo: string } | null {
     const { giaCu, kq, pol } = o
     if (!(giaCu > 0) || !(kq.giaSan > 0)) return null
     const mucTieuPct = pol.targetMarginRate * 100
@@ -1850,7 +1852,13 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
         const tatCa: any[] = [...((await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, status: 'NORMAL' } })) || [])]
             .sort((a, b) => soThuTuMa(String(a.platformProductId), String(b.platformProductId)))
         const { lo, thu, soLo } = chonLoSoat(tatCa, await ctx.kho.docConTro(ch.id))
-        const [von, daBan] = await Promise.all([giaVonHangLoat(ctx.prisma, tatCa), soBan14Ngay(ctx.prisma, ch.id)])
+        // TT-18 (10/11/2026): đọc hỏng số bán ⇒ null ⇒ luật "14 ngày không bán ⇒ hạ giá" KHÔNG chạy lượt này (trước: Map rỗng ⇒
+        // mọi mã "không bán" ⇒ hạ giá cả hàng bán chạy). Các lý do khác (dưới sàn, lãi dưới mục tiêu) không cần số bán, vẫn xét.
+        const [von, daBan] = await Promise.all([giaVonHangLoat(ctx.prisma, tatCa), soBan14Ngay(ctx.prisma, ch.id, { theoMaSan: true }).catch((e: any) => {
+            console.error('[ShopeePilot] chu kỳ: đọc số bán 14 ngày hỏng:', e?.message || e)
+            return null
+        })])
+        if (!daBan) results.push({ action: 'price', status: 'skipped', message: 'Không đọc được số đã bán 14 ngày — lượt này KHÔNG hạ giá hàng "bán chậm"; mã dưới giá sàn / lãi dưới mục tiêu vẫn xét như thường.' })
         /* NGHI dưới giá sàn NGOÀI lô: giá LƯU (lần đồng bộ cuối) dưới giá sàn tính từ giá vốn + phí NGÀNH — chỉ dữ liệu CSDL, không
          * gọi Shopee. Chỉ là sàng lọc: giá sống vẫn đọc lại trước khi quyết, và mã ngoài lô CHỈ được đổi khi giá sống dưới sàn
          * thật (các lý do đổi khác chờ tới lô của mã). Chưa biết phí ngành ⇒ không đoán được sàn ⇒ không nghi. */
@@ -1912,7 +1920,7 @@ export async function chayChuKy(ctx: NgCanh): Promise<any> {
                 // mã nghi NGOÀI lô: chỉ dưới sàn THẬT (theo giá sống) mới tính — giá lưu cũ đã khác thì chờ tới lô của mã
                 if (ngoaiLo.has(l.id) && !(s.giaGoc < kq.giaSan)) { bo.ngoaiLoKhongDuoi++; continue }
                 const quyet = quyetDinhGia({
-                    giaCu: s.giaGoc, ton: Number(l.stock) || 0, daBan14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
+                    giaCu: s.giaGoc, ton: Number(l.stock) || 0, daBan14: daBan ? daBanCuaListing(daBan, l) : null,
                     kq, bienHienTaiPct: danhGiaGia(s.giaGoc, ts).bienPct, pol,
                 })
                 if (!quyet) continue

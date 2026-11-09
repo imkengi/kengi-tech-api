@@ -35,7 +35,7 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
-import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA, soatSkuTrung } from './shopeeThaoTac'
+import { num, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien, THIEU_MO_TA, soatSkuTrung } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
 import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
 import { ghiDoiCauHinh, NHAN_TIKTOK } from './pilotDoiCauHinh'
@@ -616,7 +616,8 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
     }
     const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id }, orderBy: { updatedAt: 'desc' }, take: TRAN_LISTING })
     const von = await giaVonHangLoat(ctx.prisma, listing)
-    const daBan = await soBan14Ngay(ctx.prisma, ch.id)
+    // đọc hỏng ⇒ null: cột "đã bán 14 ngày" hiện "—", không hiện 0 (TT-18, 10/11/2026)
+    const daBan = await soBan14Ngay(ctx.prisma, ch.id).catch((e: any) => { console.error('[TikTokPilot] đọc số bán 14 ngày hỏng:', e?.message || e); return null })
     // Phí THEO NGÀNH (02/11/2026: "mỗi ngành hàng lại 1 % phí khác nhau") — mỗi sản phẩm lấy mô hình đúng ngành của nó
     const bang = await docMauPhiTheoNganh(ctx.prisma, ch)
     const mauPhi = bang.toanGian
@@ -651,7 +652,7 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
         return {
             sku: l.sku || null, itemId: l.platformProductId, name: l.name, status: l.status, active: dangBan,
             imageUrl: l.imageUrl || null, costPrice: giaVon || null, currentPrice: Number(l.price) || null, stock: Number(l.stock) || 0,
-            sold14: daBan.get(String(l.sku || '').toLowerCase()) || 0, mapped: !!v, localSku: v?.sku || null,
+            sold14: daBan ? daBanCuaListing(daBan, l) : null, mapped: !!v, localSku: v?.sku || null,
             enabled: giaVon > 0 && dangBan && !soSku,
             // máy đang để yên mã này (chủ shop vừa sửa giá tay / TikTok khoá giá vì khuyến mãi) — người vẫn lập kế hoạch được
             ...(hold ? { hold } : {}),
@@ -1029,7 +1030,13 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
     } else if (bangPhiGian && !chuaBietPhi) {
         const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, status: { in: DANG_BAN } }, orderBy: { updatedAt: 'desc' }, take: 300 })
         const von = await giaVonHangLoat(ctx.prisma, listing)
-        const daBan = await soBan14Ngay(ctx.prisma, ch.id)
+        // TT-18 (10/11/2026): đếm theo SKU + hàng kho đã nối (listing nối tay không SKU); đọc hỏng ⇒ null ⇒ luật bán chậm nghỉ lượt
+        // này (trước: Map rỗng ⇒ mọi mã "14 ngày không bán" ⇒ hạ giá cả hàng bán chạy)
+        const daBan = await soBan14Ngay(ctx.prisma, ch.id).catch((e: any) => {
+            console.error('[TikTokPilot] chu kỳ: đọc số bán 14 ngày hỏng:', e?.message || e)
+            return null
+        })
+        if (!daBan) results.push({ action: 'price', status: 'skipped', message: 'Không đọc được số đã bán 14 ngày — lượt này KHÔNG hạ giá hàng "bán chậm"; mã dưới giá sàn / lãi dưới mục tiêu vẫn xét như thường.' })
         const bangPhi = bangPhiGian
         const nhieuSku = await maNhieuSkuGanDay(ctx, now)
         const polS = chuanHoaChinhSach(pol)
@@ -1094,7 +1101,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                 const ts = thamSoTinh(pol, v.giaVon, mauPhi)
                 const kq = tinhGiaDeXuat(ts)
                 const quyet = quyetDinhGia({
-                    giaCu, ton: Number(l.stock) || 0, daBan14: daBan.get(String(l.sku || '').toLowerCase()) || 0,
+                    giaCu, ton: Number(l.stock) || 0, daBan14: daBan ? daBanCuaListing(daBan, l) : null,
                     kq, bienHienTaiPct: danhGiaGia(giaCu, ts).bienPct, pol: polS,
                 })
                 /* GIÁ NGƯỜI VỪA SỬA (09/11/2026, TT-14): giá đang bán ≠ giá Pilot ghi lần cuối ⇒ người vừa sửa (Seller Center, nút đẩy

@@ -148,6 +148,8 @@ async function main() {
             images: [{ url: 'https://storage.googleapis.com/kengi-tech-assets/anh-sp/x/1.jpg', isPrimary: true }], category: { name: 'Điện' },
         }
         const listing: any[] = []
+        /** câu đếm số bán 14 ngày ném lỗi (TT-18, 10/11/2026) */
+        let loiDaBanAi = false
         const ghiListing: any[] = []
         // 40 đơn đã đối soát (máy chỉ tự ghi khi phí đo từ ≥ 30 đơn — SO_DON_TU_GHI): phí 14% + 3.000đ
         const donDoiSoat = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } })
@@ -167,6 +169,7 @@ async function main() {
             skuMapping: { findMany: async () => [], findFirst: async () => null },
             storeSettings: { findFirst: async () => null },   // không kho mẹ
             $queryRawUnsafe: async (sql: string) => {
+                if (sql.includes('"OnlineOrderItem"') && loiDaBanAi) throw new Error('Connection terminated unexpectedly')
                 // đơn MỘT ngành (phí theo ngành, 02/11/2026) — mọi đơn thuộc ngành 101 như hàng thử
                 if (sql.includes('AS nganh')) return donDoiSoat.map(d => ({ ...d, nganh: '101' }))
                 if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donDoiSoat
@@ -240,6 +243,16 @@ async function main() {
             const soat = await chay('shopee_review_listings', { bien_loi_nhuan: 15, phi_dong_goi: 2000 })
             dung('soát giá: listing dưới sàn bị gắn cờ kèm giá đề xuất', !soat.loi && soat.kq.duoiGiaSan === 1
                 && soat.kq.sanPham[0]?.vanDe?.includes('DƯỚI GIÁ SÀN') && soat.kq.sanPham[0]?.giaDeXuat === 148000, soat.loi?.message || JSON.stringify(soat.kq?.sanPham))
+            dung('soát giá: đọc được số bán ⇒ daBan14 là SỐ, không có cảnh báo đọc hỏng', !soat.loi && !soat.kq.canhBaoDaBan
+                && soat.kq.sanPham.length > 0 && soat.kq.sanPham.every((p: any) => typeof p.daBan14 === 'number'), JSON.stringify(soat.kq?.sanPham))
+            // TT-18 (10/11/2026): đọc số bán HỎNG ⇒ daBan14 trống + cảnh báo — không gắn "14 ngày không bán được" cho AI hạ giá theo
+            loiDaBanAi = true
+            let soatHong: any
+            try { soatHong = await chay('shopee_review_listings', { bien_loi_nhuan: 15, phi_dong_goi: 2000, chi_van_de: false }) } finally { loiDaBanAi = false }
+            dung('soát giá: đọc số bán hỏng ⇒ daBan14 = null, KHÔNG gắn "14 ngày không bán được", có cảnh báo cho AI',
+                !soatHong.loi && /KHÔNG đọc được số đã bán 14 ngày/.test(soatHong.kq.canhBaoDaBan || '') && soatHong.kq.sanPham.length > 0
+                && soatHong.kq.sanPham.every((p: any) => p.daBan14 === null && !(p.vanDe || []).includes('14 ngày không bán được')),
+                soatHong.loi?.message || JSON.stringify(soatHong.kq?.sanPham))
 
             hang.costPrice = 0
             listing.length = 0

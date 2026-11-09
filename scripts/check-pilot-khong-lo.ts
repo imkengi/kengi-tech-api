@@ -159,7 +159,8 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { ngan
             // đơn MỘT ngành (lib/shopeeTuQuan.dongPhiTheoNganh) — chỉ ca nào khai donNganh
             if (sql.includes('AS nganh')) return (v[0] === 'ch1' && st.donNganh) ? st.donNganh : []
             // số đã bán 14 ngày của MỘT listing (lib/shopeePilot.soBan14NgayMa)
-            if (sql.includes('"externalItemId"')) {
+            // (câu đếm CẢ gian — shopeeThaoTac.soBan14Ngay, 'WITH d AS' — cũng nhắc tới externalItemId: để nó rơi xuống nhánh dưới)
+            if (sql.includes('"externalItemId"') && !sql.includes('WITH d AS')) {
                 if (st.loiBan14) throw new Error('Connection terminated unexpectedly')
                 return [{ sl: v[0] === 'ch1' ? (st.ban14[String(v[1])] || 0) : 0 }]
             }

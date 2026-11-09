@@ -72,8 +72,12 @@ let donPhi: Record<string, { giaBan: number; phi: number }[]> = {}
 const hoiPhi: string[][] = []
 /** đơn MỘT ngành theo gian (truy vấn phí theo ngành); null = mọi đơn của gian thuộc ngành 601 như listing */
 let donNganh: Record<string, (any & { nganh: string })[]> | null = null
-let daBan: { sku: string; sl: number }[] = []
+/** dòng số bán 14 ngày: kiểu cũ { sku, sl } hoặc { loai: 'sku' | 'hang' | 'ma', khoa, sl } (lib/shopeeThaoTac.soBan14Ngay, TT-18) */
+let daBan: any[] = []
+/** đọc số bán 14 ngày hỏng (TT-18, 10/11/2026) */
+let loiDaBan = false
 function datLai(soDon = 40) {
+    loiDaBan = false
     kenh = [
         { id: 'tt1', name: 'Kengi TikTok', platform: 'tiktok', shopId: '7001', accessToken: 'tok', refreshToken: 'r', apiKey: 'k', apiSecret: 's', commissionRate: 6, tokenExpiresAt: new Date(NOW + 3 * 86400_000), createdAt: new Date(1) },
         { id: 'sp1', name: 'Kengi Shopee', platform: 'shopee', shopId: '8001', accessToken: 'tok', commissionRate: 6, createdAt: new Date(0) },
@@ -136,7 +140,10 @@ const prisma: any = {
     $queryRawUnsafe: async (sql: string, ...v: any[]) => {
         if (sql.includes('AS nganh')) return donNganh ? (donNganh[v[0]] || []) : (donPhi[v[0]] || []).map(d => ({ ...d, nganh: '601' }))
         if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) { hoiPhi.push([...(v[0] as string[])]); return (v[0] as string[]).flatMap(id => donPhi[id] || []) }
-        if (sql.includes('"OnlineOrderItem"')) return daBan.map(d => ({ sku: d.sku, sl: d.sl }))
+        if (sql.includes('"OnlineOrderItem"')) {
+            if (loiDaBan) throw new Error('Connection terminated unexpectedly')
+            return daBan.map(d => ({ ...d }))
+        }
         if (sql.includes('FROM "Product"')) {
             const ids: string[] = v[0] || [], skus: string[] = v[1] || []
             return hang.filter(h => ids.includes(h.id) || skus.includes(h.sku.toLowerCase()))
@@ -434,6 +441,36 @@ async function main() {
         dung('6d. Tự động: OC4 dưới sàn ⇒ tăng 10% (120.000 → 132.000)', gia['111'] === 132000, JSON.stringify(gia))
         dung('6e. Tự động: BINH ế + lãi quá cao, phí đủ tin ⇒ hạ 10% (160.000 → 144.000)', gia['222'] === 144000, JSON.stringify(gia))
         dung('6f. Tự động: chạy thử trước (cầu dao) rồi đẩy tồn thật', daySo.length === 2 && daySo[0].dryRun === true && !daySo[1].dryRun, JSON.stringify(daySo))
+
+        // TT-18 (10/11/2026): BINH nối tay KHÔNG SKU, đơn 14 ngày nối về hàng kho p2 ⇒ đang bán ⇒ KHÔNG hạ (trước: theo SKU ⇒ "ế")
+        datLai(); datTikTok(); goi.length = 0; daySo.length = 0
+        listing.find(l => l.id === 'op2').sku = null
+        daBan = [{ loai: 'sku', khoa: 'oc4', sl: 5 }, { loai: 'hang', khoa: 'p2', sl: 3 }]
+        const ctxN = ngCanh()
+        await luuCauHinhTikTok(ctxN, { executionMode: 'auto', policy: { automation: { reprice: true } } })
+        await chayChuKyTikTok(ctxN)
+        const giaN = Object.fromEntries(ghiTT().map(g => [g[1], g[2]]))
+        dung('6e2. listing không SKU nhưng đơn nối về hàng kho ⇒ có bán ⇒ KHÔNG hạ giá "ế"; OC4 dưới sàn vẫn tăng',
+            !giaN['222'] && giaN['111'] === 132000, JSON.stringify(giaN))
+        const stN = await xayTrangThaiTikTok(ngCanh())
+        dung('6e3. trạng thái: listing không SKU hiện số bán theo hàng kho (3), không phải "—"',
+            stN.products.find((p: any) => p.itemId === '222')?.sold14 === 3, JSON.stringify(stN.products.map((p: any) => [p.itemId, p.sold14])))
+
+        // đọc số bán HỎNG ⇒ không hạ giá theo lý do bán chậm; mã dưới sàn vẫn tăng; nói rõ một dòng; trang hiện "—" (null), không 0
+        datLai(); datTikTok(); goi.length = 0; daySo.length = 0
+        loiDaBan = true
+        const ctxH = ngCanh()
+        await luuCauHinhTikTok(ctxH, { executionMode: 'auto', policy: { automation: { reprice: true } } })
+        const kqH = await chayChuKyTikTok(ctxH)
+        const giaH = Object.fromEntries(ghiTT().map(g => [g[1], g[2]]))
+        dung('6e4. đọc số bán hỏng ⇒ BINH KHÔNG bị hạ (trước: rỗng ⇒ "14 ngày không bán"); OC4 dưới sàn vẫn tăng',
+            !giaH['222'] && giaH['111'] === 132000, JSON.stringify(giaH))
+        dung('6e5. đọc số bán hỏng ⇒ một dòng "Không đọc được số đã bán 14 ngày", không tính là hỏng cần báo',
+            kqH.results.some((r: any) => r.status === 'skipped' && /Không đọc được số đã bán 14 ngày/.test(r.message || '')), JSON.stringify(kqH.results))
+        const stH = await xayTrangThaiTikTok(ngCanh())
+        dung('6e6. trạng thái khi đọc hỏng: sold14 = null ("—"), không phải 0; trang vẫn mở',
+            stH.products.length > 0 && stH.products.every((p: any) => p.sold14 === null), JSON.stringify(stH.products.map((p: any) => [p.itemId, p.sold14])))
+        loiDaBan = false
 
         // Phí CHƯA đủ tin (10 đơn): tăng vẫn tự làm, hạ thì để nháp chờ duyệt
         datLai(10); datTikTok(); goi.length = 0

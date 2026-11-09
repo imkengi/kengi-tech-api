@@ -140,16 +140,49 @@ export async function giaVonHangLoat(prisma: any, ds: { id: string; localProduct
 }
 
 /** Số đã bán 14 ngày qua của gian, theo SKU (chữ thường). Đơn hoàn tất cũ bị dọn sau ~18 ngày nên chỉ tin 14 ngày. */
-export async function soBan14Ngay(prisma: any, channelId: string): Promise<Map<string, number>> {
-    const ban: any[] = await prisma.$queryRawUnsafe(
-        `SELECT LOWER(i.sku) AS sku, SUM(i.quantity)::int AS sl
-           FROM "OnlineOrderItem" i JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
-          WHERE o."channelId" = $1 AND o."createdAt" >= NOW() - INTERVAL '14 days'
-            AND o.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID','cancelled','cancelling')
-            AND i.sku IS NOT NULL
-          GROUP BY 1`, channelId,
-    ).catch(() => [])
-    return new Map<string, number>(ban.map(b => [String(b.sku), Number(b.sl) || 0]))
+/** Số đã bán 14 ngày của một gian, ba cách khớp — xem `daBanCuaListing`. */
+export interface DaBan14 { theoSku: Map<string, number>; theoMaSan: Map<string, number>; theoHang: Map<string, number> }
+
+/**
+ * Số đã bán 14 ngày (đơn huỷ / chưa thanh toán không tính) — nuôi luật "14 ngày không bán ⇒ hạ giá" của chu kỳ Pilot.
+ * TT-18 (10/11/2026): trước chỉ đếm theo SKU và nuốt lỗi đọc thành Map RỖNG ⇒ (1) listing không SKU (nối tay) luôn "không bán",
+ * (2) CSDL chập chờn một lượt là MỌI mã thành "14 ngày không bán" ⇒ máy hạ giá cả hàng đang bán chạy. Giờ đếm ba cách:
+ *   - theo SKU dòng đơn (bỏ SKU rỗng — trước đây `get('')` cộng dồn mọi dòng SKU rỗng vào listing không SKU);
+ *   - theo mã sản phẩm sàn (`externalItemId`) — CHỈ khi `theoMaSan` (Shopee: = item_id; TikTok: là mã DÒNG đơn, không dùng được);
+ *   - theo hàng kho đã nối (`productId`, do lienKetHangDon nối cả dòng không SKU theo tên listing).
+ * Đọc hỏng ⇒ NÉM: "không đọc được" ≠ "không bán" — người gọi tự quyết (chu kỳ bỏ luật bán chậm, trang hiện "—").
+ */
+export async function soBan14Ngay(prisma: any, channelId: string, o: { theoMaSan?: boolean } = {}): Promise<DaBan14> {
+    const rows: any[] = await prisma.$queryRawUnsafe(
+        `WITH d AS (
+            SELECT LOWER(NULLIF(TRIM(i.sku), '')) AS sku, NULLIF(i."externalItemId", '') AS ma, i."productId" AS hang, i.quantity AS sl
+              FROM "OnlineOrderItem" i JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
+             WHERE o."channelId" = $1 AND o."createdAt" >= NOW() - INTERVAL '14 days'
+               AND o.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID','cancelled','cancelling'))
+         SELECT 'sku' AS loai, sku AS khoa, SUM(sl)::int AS sl FROM d WHERE sku IS NOT NULL GROUP BY sku
+         UNION ALL SELECT 'hang' AS loai, hang AS khoa, SUM(sl)::int AS sl FROM d WHERE hang IS NOT NULL GROUP BY hang
+         UNION ALL SELECT 'ma' AS loai, ma AS khoa, SUM(sl)::int AS sl FROM d WHERE ma IS NOT NULL AND $2::boolean GROUP BY ma`,
+        channelId, o.theoMaSan === true,
+    )
+    const kq: DaBan14 = { theoSku: new Map(), theoMaSan: new Map(), theoHang: new Map() }
+    for (const r of rows || []) {
+        const sl = Number(r?.sl) || 0
+        if (r?.loai === 'hang') kq.theoHang.set(String(r.khoa), sl)
+        else if (r?.loai === 'ma') kq.theoMaSan.set(String(r.khoa), sl)
+        else if (r?.khoa ?? r?.sku) kq.theoSku.set(String(r.khoa ?? r.sku).toLowerCase(), sl)   // r.sku: dòng kiểu cũ (prisma giả)
+    }
+    return kq
+}
+
+/** Đã bán 14 ngày của MỘT listing = số LỚN NHẤT trong ba cách khớp. Đếm dư (hai listing chung SKU / chung hàng kho) chỉ làm máy
+ *  bớt hạ giá — chiều an toàn; đếm thiếu mới làm hạ giá oan. */
+export function daBanCuaListing(b: DaBan14, l: { sku?: any; platformProductId?: any; localProductId?: any }): number {
+    const sku = String(l?.sku ?? '').trim().toLowerCase()
+    return Math.max(
+        sku ? b.theoSku.get(sku) || 0 : 0,
+        l?.platformProductId ? b.theoMaSan.get(String(l.platformProductId)) || 0 : 0,
+        l?.localProductId ? b.theoHang.get(String(l.localProductId)) || 0 : 0,
+    )
 }
 
 export const THIEU_MO_TA = 'mô tả (AI có thể tự viết từ thông tin thật)'

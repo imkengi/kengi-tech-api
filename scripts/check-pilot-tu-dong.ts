@@ -64,7 +64,7 @@ import { soCauHinh, tomTatDoiCauHinh, NHAN_SHOPEE, NHAN_ADS } from '../src/lib/p
 import { dayTonLenSan } from '../src/lib/dayTonLenSan'
 import { dayGiaLenSan } from '../src/lib/dayGiaLenSan'
 import { lyDoKhongXemPilot, chanXemPilot } from '../src/lib/quyenXemPilot'
-import { timListing } from '../src/lib/shopeeThaoTac'
+import { timListing, soBan14Ngay, daBanCuaListing } from '../src/lib/shopeeThaoTac'
 import { timListingTikTok } from '../src/lib/tiktokPilot'
 
 let loi = 0, dat = 0
@@ -98,6 +98,8 @@ const phiTin = (tin: boolean, phiKhai = 20) => {
 }
 const thongBao: any[] = []
 let thongBaoHong = false
+/** câu đếm số bán 14 ngày của cả gian ném lỗi (TT-18) */
+let loiDaBanGian = false
 let fbPages: any[] = []
 /** gian đọc hỏng cả lượt (ca H4: "tất cả gian" ở Xem trước, một gian hỏng) — mọi lần đọc listing của gian này ném lỗi */
 let gianHong: string | null = null
@@ -135,6 +137,8 @@ const prisma: any = {
     notification: { create: async ({ data }: any) => { if (thongBaoHong) throw new Error('db hỏng'); const t = { id: `tb${thongBao.length + 1}`, ...data }; thongBao.push(t); return t } },
     $executeRawUnsafe: async () => 0,
     $queryRawUnsafe: async (sql: string, ...v: any[]) => {
+        // số đã bán 14 ngày của cả gian (lib/shopeeThaoTac.soBan14Ngay) — ca đọc hỏng (TT-18, 10/11/2026)
+        if (sql.includes('"OnlineOrderItem"') && loiDaBanGian) throw new Error('Connection terminated unexpectedly')
         if (sql.includes('AS nganh')) return donNganh
         if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return donGian
         if (sql.includes('FROM "Product"')) {
@@ -565,6 +569,31 @@ async function main() {
         goi.length = 0
         await chayChuKy(ctx)
         dung('D7. vừa đổi giá trong 24 giờ nhưng giờ DƯỚI giá sàn (giá vốn tăng) ⇒ vẫn nâng ngay', goi.some(g => g.startsWith('gia:1:2000:')), JSON.stringify(goi))
+        phiTin(true)
+    }
+
+    // ─── D8. (10/11/2026, TT-18) chu kỳ Shopee: đọc số bán 14 ngày HỎNG ⇒ không lập nháp hạ "ế", mã dưới sàn vẫn tăng ─────────
+    {
+        xoaHet(); phiTin(false)
+        kho._keHoach.length = 0
+        for (let i = 1; i <= 3; i++) themListing('chA', String(2100 + i), `H${i}`, 160000, 50000)   // ế + lãi cao — nếu "không bán"
+        themListing('chA', '2100', 'LOH', 100000, 100000)      // dưới sàn ⇒ TĂNG (lý do không cần số bán)
+        loiDaBanGian = true
+        let ckH: any
+        try { ckH = await chayChuKy(ctx) } finally { loiDaBanGian = false }
+        const haH = ckH.results.filter((r: any) => r.action === 'price' && /^H\d$/.test(String(r.sku || '')))
+        dung('D8. đọc số bán hỏng ⇒ KHÔNG nháp hạ giá "ế" nào (trước: rỗng ⇒ cả 3 "14 ngày không bán"); mã dưới sàn vẫn TĂNG; nói rõ một dòng',
+            !haH.length && goi.some(g => g.startsWith('gia:1:2100:'))
+            && ckH.results.some((r: any) => r.status === 'skipped' && /Không đọc được số đã bán 14 ngày/.test(r.message || '')), JSON.stringify(ckH.results))
+        loiDaBanGian = true
+        let stH: any
+        try { stH = await xayTrangThai(ctx) } finally { loiDaBanGian = false }
+        dung('D9. trạng thái khi đọc hỏng: sold14 = null (không phải 0), trang vẫn mở', stH.products.length > 0 && stH.products.every((p: any) => p.sold14 === null),
+            JSON.stringify(stH.products.map((p: any) => [p.itemId, p.sold14])))
+        // ĐỐI CHỨNG: đọc được (0 đơn) ⇒ cả 3 mã "ế + lãi cao" đúng là được đề xuất hạ (nháp chờ duyệt vì phí chưa đo)
+        const ckT = await chayChuKy(ctx)
+        const haT = ckT.results.filter((r: any) => r.action === 'price' && r.status === 'draft' && /^H\d$/.test(String(r.sku || '')))
+        dung('D8b. đối chứng: đọc được số bán (0 đơn 14 ngày) ⇒ 3 nháp hạ giá "ế" như cũ', haT.length === 3, JSON.stringify(ckT.results))
         phiTin(true)
     }
 
@@ -1464,6 +1493,46 @@ async function main() {
         if (!/campaign:[\s\S]{0,200}taoKeHoachKhuyenMai\(ctx, \{[\s\S]{0,160}itemIds: Array\.isArray\(b\?\.itemIds\) \? b\.itemIds : undefined/.test(spR)) thieuR.push('shopee campaign itemIds')
         if (!/itemId: b\?\.itemId \? String\(b\.itemId\) : undefined/.test(ttR)) thieuR.push('tiktok price itemId')
         dung('T7. route Shopee / TikTok chuyển itemId (giá) + itemIds (khuyến mãi) của trang xuống lõi', !thieuR.length, JSON.stringify(thieuR))
+    }
+
+    // ─── U. (10/11/2026, TT-18) Số đã bán 14 ngày: ba cách khớp, đọc hỏng ⇒ NÉM ─────────────────────────────────────────
+    {
+        let thamSo: any[] = []
+        const pzBan = (rows: any[] | Error): any => ({
+            $queryRawUnsafe: async (sql: string, ...v: any[]) => {
+                if (!sql.includes('"OnlineOrderItem"')) return []
+                thamSo = v
+                if (rows instanceof Error) throw rows
+                return rows
+            },
+        })
+        const b = await soBan14Ngay(pzBan([
+            { loai: 'sku', khoa: 'den', sl: 2 },
+            { loai: 'hang', khoa: 'p9', sl: 4 },
+            { loai: 'ma', khoa: '701', sl: 7 },
+            { sku: 'QUAT', sl: 1 },                    // dòng kiểu cũ (prisma giả) ⇒ vẫn là theo SKU, chữ thường
+        ]), 'g1', { theoMaSan: true })
+        dung('U1. đọc ba cách khớp: SKU / mã sàn / hàng kho; dòng kiểu cũ { sku, sl } vẫn hiểu',
+            b.theoSku.get('den') === 2 && b.theoSku.get('quat') === 1 && b.theoHang.get('p9') === 4 && b.theoMaSan.get('701') === 7,
+            JSON.stringify({ sku: [...b.theoSku], hang: [...b.theoHang], ma: [...b.theoMaSan] }))
+        dung('U2. truyền đúng gian + cờ theo mã sàn (Shopee bật, TikTok mặc định tắt — mã dòng đơn TikTok không phải mã sản phẩm)',
+            thamSo[0] === 'g1' && thamSo[1] === true && !!(await soBan14Ngay(pzBan([]), 'g2')) && thamSo[1] === false, JSON.stringify(thamSo))
+        let nem: any = null
+        try { await soBan14Ngay(pzBan(new Error('Connection terminated unexpectedly')), 'g1') } catch (e) { nem = e }
+        dung('U3. đọc hỏng ⇒ NÉM (trước: nuốt thành rỗng ⇒ mọi mã "14 ngày không bán" ⇒ hạ giá oan)', !!nem && /Connection terminated/.test(nem.message))
+        dung('U4. listing nối tay KHÔNG SKU ⇒ đếm theo hàng kho đã nối', daBanCuaListing(b, { sku: null, platformProductId: '999', localProductId: 'p9' }) === 4)
+        dung('U5. listing có SKU (hoa / khoảng trắng) ⇒ đếm theo SKU', daBanCuaListing(b, { sku: ' DEN ', platformProductId: '999', localProductId: null }) === 2)
+        dung('U6. ba cách cùng khớp ⇒ lấy số LỚN NHẤT (đếm dư chỉ làm bớt hạ giá)', daBanCuaListing(b, { sku: 'den', platformProductId: '701', localProductId: 'p9' }) === 7)
+        const rongSku = await soBan14Ngay(pzBan([{ loai: 'sku', khoa: '', sl: 9 }]), 'g1')
+        dung('U7. listing không SKU KHÔNG ăn số của các dòng SKU rỗng (trước: get("") cộng dồn)', daBanCuaListing(rongSku, { sku: '', platformProductId: null, localProductId: null }) === 0)
+        const nguonSql = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'shopeeThaoTac.ts'), 'utf8')
+        dung('U8. câu SQL bỏ SKU rỗng, chỉ đếm mã sàn khi được bật, bỏ đơn huỷ / chưa thanh toán',
+            /LOWER\(NULLIF\(TRIM\(i\.sku\), ''\)\)/.test(nguonSql) && /AND \$2::boolean GROUP BY ma/.test(nguonSql)
+            && /o\.status NOT IN \('CANCELLED','IN_CANCEL','UNPAID','cancelled','cancelling'\)\)/.test(nguonSql))
+        // rào ẩn hàng của tool AI (soBan14NgayMa) cũng đếm theo hàng kho đã nối — đếm rộng = chiều an toàn (có bán ⇒ cần chủ shop duyệt)
+        const nguonSp = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'shopeePilot.ts'), 'utf8')
+        dung('U9. rào ẩn hàng đếm số bán theo mã sàn + SKU + hàng kho đã nối',
+            /OR \(\$4 <> '' AND i\."productId" = \$4\)/.test(nguonSp) && /soBan14NgayMa\(ctx\.prisma, ch\.id, itemId, l\.sku \|\| null, l\.localProductId \|\| null\)/.test(nguonSp))
     }
 
     console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)

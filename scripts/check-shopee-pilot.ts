@@ -58,6 +58,10 @@ async function main() {
         dung('chu kỳ: dưới mục tiêu ⇒ tăng về đề xuất (trong biên độ)', duoiMucTieu?.gia === kq.giaDeXuat && kq.giaDeXuat <= 135000 * 1.1, JSON.stringify(duoiMucTieu))
         const e = quyetDinhGia({ giaCu: 250000, ton: 9, daBan14: 0, kq, bienHienTaiPct: 45, pol })
         dung('chu kỳ: ế + lãi quá cao ⇒ giảm tối đa 10% mỗi lần', e?.gia === 225000, JSON.stringify(e))
+        // TT-18 (10/11/2026): KHÔNG đọc được số bán (null) ≠ "14 ngày không bán" ⇒ không hạ giá theo lý do bán chậm
+        dung('chu kỳ: số bán đọc hỏng (null) ⇒ KHÔNG hạ giá "bán chậm"', quyetDinhGia({ giaCu: 250000, ton: 9, daBan14: null, kq, bienHienTaiPct: 45, pol }) === null)
+        const duoiSanKhongSo = quyetDinhGia({ giaCu: 100000, ton: 5, daBan14: null, kq, bienHienTaiPct: -5, pol })
+        dung('chu kỳ: số bán đọc hỏng vẫn NÂNG mã dưới giá sàn (lý do không cần số bán)', duoiSanKhongSo?.gia === kq.giaSan, JSON.stringify(duoiSanKhongSo))
         dung('chu kỳ: bán được, lãi ổn ⇒ giữ nguyên', quyetDinhGia({ giaCu: 160000, ton: 9, daBan14: 4, kq, bienHienTaiPct: 20, pol }) === null)
 
         const t = Date.UTC(2026, 9, 31, 20, 0)       // 03:00 sáng 01/11 giờ VN

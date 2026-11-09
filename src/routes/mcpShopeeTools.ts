@@ -36,7 +36,7 @@ import {
     chonKenhShopee, moDichVuShopee, docMauPhiTheoNganh, timHangKho, luuDanhMucSan, duongNganh,
 } from '../lib/shopeeTuQuan'
 import {
-    num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, timUngVien,
+    num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien,
 } from '../lib/shopeeThaoTac'
 import { docChinhSachPilot, nenGia, khoSql, doiGiaQuaPilot, anHienQuaPilot, dangQuaPilot, TRAN_AN_AI_MOI_NGAY, type NgCanh } from '../lib/shopeePilot'
 
@@ -390,13 +390,17 @@ const CAC_TOOL: Tool[] = [
                 orderBy: { updatedAt: 'desc' },
                 take: TRAN,
             })
-            const daBan = await soBan14Ngay(prisma, ch.id)
+            // đọc hỏng ⇒ null: daBan14 để trống, KHÔNG gắn "14 ngày không bán được" cho AI hạ giá theo (TT-18, 10/11/2026)
+            const daBan = await soBan14Ngay(prisma, ch.id, { theoMaSan: true }).catch((e: any) => {
+                console.error('[mcp shopee] đọc số bán 14 ngày hỏng:', e?.message || e)
+                return null
+            })
 
             const von = await giaVonHangLoat(prisma, ds)
             const ra: any[] = []
             let duoiSan = 0, thieuVon = 0, chuaBietPhi = 0
             for (const l of ds) {
-                const daBan14 = daBan.get(String(l.sku || '').toLowerCase()) || 0
+                const daBan14 = daBan ? daBanCuaListing(daBan, l) : null
                 if (!(l.price > 0)) {
                     if (!chiVanDe && ra.length < lim) ra.push({ itemId: l.platformProductId, sku: l.sku, ten: l.name, ghiChu: 'Có phân loại / chưa đọc được giá — soát ở trang Shopee' })
                     continue
@@ -433,6 +437,7 @@ const CAC_TOOL: Tool[] = [
                 ...canhBaoCat(ds.length, TRAN, 'listing'),
                 gian: ch.name, soListingDangBan: ds.length, duoiGiaSan: duoiSan, thieuGiaVon: thieuVon,
                 ...(chuaBietPhi ? { chuaBietPhi, canhBaoPhi: lyDoChuaBietPhi(mauPhi.soDon, ch.name) } : {}),
+                ...(!daBan ? { canhBaoDaBan: 'KHÔNG đọc được số đã bán 14 ngày (lỗi đọc dữ liệu) — daBan14 để trống; đừng coi là "không bán được", đừng hạ giá theo lý do bán chậm.' } : {}),
                 ...(ra.length >= lim ? { ghiChuDanhSach: `Chỉ liệt kê ${lim} dòng đầu; các con số duoiGiaSan / thieuGiaVon${chuaBietPhi ? ' / chuaBietPhi' : ''} tính trên toàn bộ ${ds.length} listing đã đọc.` } : {}),
                 mauPhi: mauPhi.ghiChu, chinhSach: cs,
                 ghiChu: 'Số bán 14 ngày đếm từ đơn còn trong hệ thống (đơn hoàn tất cũ bị dọn sau ~18 ngày). Giảm giá chỉ khi còn trên giá sàn; tăng giá hàng bán chạy dưới mục tiêu trước.',
