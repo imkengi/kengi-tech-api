@@ -622,6 +622,22 @@ if (!process.env.PASSENGER_BASE_URI) {
             }
             }
 
+            // Thống nhất 2FA (09/11/2026): mã email + số lần thử cũng nằm ở Pending2FA (thay Map trong RAM của
+            // lib/otp + lib/trustedDevice, vốn hỏng khi request rơi vào bản Cloud Run khác hoặc sau deploy).
+            if (!(await isMigrationApplied('pending_2fa_v2'))) {
+            try {
+                await registryPrisma.$executeRawUnsafe(`ALTER TABLE "public"."Pending2FA" ADD COLUMN IF NOT EXISTS "method" TEXT`)
+                await registryPrisma.$executeRawUnsafe(`ALTER TABLE "public"."Pending2FA" ADD COLUMN IF NOT EXISTS "codeHash" TEXT`)
+                await registryPrisma.$executeRawUnsafe(`ALTER TABLE "public"."Pending2FA" ADD COLUMN IF NOT EXISTS "attempts" INTEGER NOT NULL DEFAULT 0`)
+                await registryPrisma.$executeRawUnsafe(`ALTER TABLE "public"."Pending2FA" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP`)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Pending2FA_userId_idx" ON "public"."Pending2FA"("userId")`)
+                await markMigrationApplied('pending_2fa_v2')
+                console.log('✅ Pending2FA v2 (method / codeHash / attempts / sentAt) ready')
+            } catch (err: any) {
+                console.error('⚠️ Pending2FA v2 migration failed:', err.message)
+            }
+            }
+
             // Auto-create StorageFile table for all vault metadata across all dynamic schemas
             try {
                 const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`

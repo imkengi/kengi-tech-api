@@ -8,10 +8,11 @@ import { registryPrisma, getStorePrisma, branchIdToSchema, createBranchSchema, d
 import { authMiddleware, AuthRequest, AuthPayload, registerSseRefresh } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
-import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
+import {
+    layTokenThietBi, timThietBi, chamThietBi, themThietBi, boThietBi, thietBiCongKhai, THIET_BI_TIN_CAY,
+} from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
-import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
-import { khoaDoiDuocToken, lyDoChanDucPhien, lyDoChanDoiThongTinDangNhap } from '../lib/phamViKhoaApi'
+import { khoaDoiDuocToken, lyDoChanDucPhien, lyDoChanDoiThongTinDangNhap, diBangKhoaApi } from '../lib/phamViKhoaApi'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -90,12 +91,23 @@ setInterval(() => {
     registryPrisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } }).catch(() => {})
 }, 60 * 60 * 1000)
 
-// ─── Pending 2FA login store (registry DB is source of truth) ────────────────
-// Holds the partial login state between /login (password OK, 2FA required) and
-// /verify-2fa. Backed by the public.Pending2FA table (see prisma/schema.prisma)
-// rather than an in-memory Map, so on Cloud Run the verify request can be served
-// by any instance. Rows carry a short TTL (5 min) and are deleted on success.
+// ─── Xác minh 2FA đang chờ — bảng public.Pending2FA (registry) ────────────────
+/* Thống nhất 2FA 09/11/2026 (chủ shop chọn "phương án B"). MỌI lần xác minh 2FA đang dở nằm ở bảng này, không ở
+ * RAM: prod chạy tới 3 bản Cloud Run, không có Redis ⇒ request xác minh có thể rơi vào bản khác bản đã cấp mã, và
+ * mọi thứ trong RAM mất khi deploy (trước đây mã OTP email + bộ đếm sai TOTP nằm trong RAM).
+ *   - 'totp'      đăng nhập đã đúng mật khẩu, chờ mã app (POST /verify-2fa) — 5 phút;
+ *   - 'email'     đăng nhập đã đúng mật khẩu, chờ mã email (POST /verify-otp purpose login_2fa) — 10 phút;
+ *   - 'bat_email' người đã đăng nhập đang bật 2FA qua email (POST /confirm-2fa method email) — 10 phút.
+ * Mã email chỉ lưu băm; mỗi dòng cho thử tối đa 5 lần, đếm trên CSDL TRƯỚC khi so mã; xác minh đạt thì xoá dòng và
+ * chỉ request xoá được (đếm = 1) mới được cấp phiên — hai request cùng mã thì một cái qua. Dòng cũ (method null) = 'totp'. */
 const PENDING_2FA_TTL_MS = 5 * 60 * 1000
+const MA_EMAIL_TTL_MS = OTP_CONFIG.OTP_TTL_MIN * 60 * 1000
+const SO_LAN_THU_TOI_DA = 5
+const GIAN_CACH_GUI_LAI_MS = OTP_CONFIG.RESEND_COOLDOWN_SEC * 1000
+/** Gửi lại mã email gia hạn thêm 10 phút, nhưng một lần đăng nhập không treo quá 30 phút. */
+const PHIEN_EMAIL_TOI_DA_MS = 30 * 60 * 1000
+
+type CachXacMinh = 'totp' | 'email' | 'bat_email'
 
 type Pending2FAPayload = {
     userId: string; email: string; role: string;
@@ -103,6 +115,20 @@ type Pending2FAPayload = {
     branchId: string | null; branchSchema: string;
     isMainBranch: boolean; deviceId?: string;
     user: any; store: any; branch: any;
+    method?: CachXacMinh; codeHash?: string | null; sentAt?: Date | null;
+}
+type Pending2FA = Pending2FAPayload & {
+    loginToken: string; method: CachXacMinh; codeHash: string | null; sentAt: Date | null;
+    attempts: number; expiresAt: Date; createdAt: Date;
+}
+
+/** Băm mã email GẮN với lần chờ: cùng mã 6 số ở hai lần chờ khác nhau ra băm khác nhau. */
+const bamMaEmail = (loginToken: string, code: string) => crypto.createHash('sha256').update(`${loginToken}:${code}`).digest('hex')
+function maEmailKhop(p: { loginToken: string; codeHash: string | null }, code: unknown): boolean {
+    if (!p.codeHash || (typeof code !== 'string' && typeof code !== 'number')) return false
+    const a = Buffer.from(p.codeHash, 'hex')
+    const b = Buffer.from(bamMaEmail(p.loginToken, String(code).trim()), 'hex')
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
 async function savePending2FA(loginToken: string, p: Pending2FAPayload, expiresAt: Date): Promise<void> {
@@ -121,15 +147,17 @@ async function savePending2FA(loginToken: string, p: Pending2FAPayload, expiresA
             userData: JSON.stringify(p.user ?? null),
             storeData: JSON.stringify(p.store ?? null),
             branchData: p.branch != null ? JSON.stringify(p.branch) : null,
+            method: p.method ?? 'totp',
+            codeHash: p.codeHash ?? null,
+            sentAt: p.sentAt ?? null,
             expiresAt,
         },
     })
 }
 
-async function loadPending2FA(loginToken: string): Promise<(Pending2FAPayload & { expiresAt: Date }) | null> {
-    const row = await registryPrisma.pending2FA.findUnique({ where: { loginToken } })
-    if (!row) return null
+function dongThanhPending(row: any): Pending2FA {
     return {
+        loginToken: row.loginToken,
         userId: row.userId, email: row.email, role: row.role,
         storeId: row.storeId, storeCode: row.storeCode,
         branchId: row.branchId, branchSchema: row.branchSchema,
@@ -137,12 +165,106 @@ async function loadPending2FA(loginToken: string): Promise<(Pending2FAPayload & 
         user: row.userData ? JSON.parse(row.userData) : null,
         store: row.storeData ? JSON.parse(row.storeData) : null,
         branch: row.branchData ? JSON.parse(row.branchData) : null,
+        method: (row.method as CachXacMinh | null) || 'totp',
+        codeHash: row.codeHash ?? null,
+        sentAt: row.sentAt ?? null,
+        attempts: row.attempts ?? 0,
         expiresAt: row.expiresAt,
+        createdAt: row.createdAt,
     }
+}
+
+async function loadPending2FA(loginToken: unknown): Promise<Pending2FA | null> {
+    if (typeof loginToken !== 'string' || !loginToken) return null
+    const row = await registryPrisma.pending2FA.findUnique({ where: { loginToken } })
+    return row ? dongThanhPending(row) : null
+}
+
+/** Lần chờ mã email MỚI NHẤT của (cửa hàng, email) — cho client cũ gọi verify-otp không kèm loginToken
+ *  (web bản cũ còn trong trình duyệt, app Android ≤ 1.0.46). Dòng chỉ có khi ai đó vừa qua MẬT KHẨU ở /login. */
+async function timChoEmailMoiNhat(storeCode: string, email: string): Promise<Pending2FA | null> {
+    const row = await registryPrisma.pending2FA.findFirst({
+        where: {
+            method: 'email',
+            email: { equals: email.trim(), mode: 'insensitive' },
+            storeCode: { equals: storeCode.trim(), mode: 'insensitive' },
+        },
+        orderBy: { createdAt: 'desc' },
+    })
+    return row ? dongThanhPending(row) : null
+}
+
+/** Tính MỘT lần thử trước khi so mã (nguyên tử trên CSDL). false = đã hết lượt hoặc hết hạn ⇒ dòng bị xoá. */
+async function tinhMotLanThu(loginToken: string): Promise<boolean> {
+    const r = await registryPrisma.pending2FA.updateMany({
+        where: { loginToken, attempts: { lt: SO_LAN_THU_TOI_DA }, expiresAt: { gt: new Date() } },
+        data: { attempts: { increment: 1 } },
+    })
+    if (r.count === 1) return true
+    await deletePending2FA(loginToken)
+    return false
+}
+
+/** Dùng hết lần chờ: chỉ request xoá được dòng (đếm = 1) mới được đi tiếp. */
+async function tieuThuPending2FA(loginToken: string): Promise<boolean> {
+    const r = await registryPrisma.pending2FA.deleteMany({ where: { loginToken } })
+    return r.count === 1
 }
 
 async function deletePending2FA(loginToken: string): Promise<void> {
     await registryPrisma.pending2FA.deleteMany({ where: { loginToken } }).catch(() => {})
+}
+
+/** Cách xác minh 2FA của một người: có hạt TOTP ⇒ CHỈ mã app; cờ bật mà không có hạt ⇒ mã email; cờ tắt ⇒ null.
+ *  setup-2fa ghi hạt khi cờ còn TẮT (chưa xác nhận) ⇒ không tính; bật qua email thì confirm-2fa xoá hạt dở dang. */
+function cach2FA(u: { twoFactorEnabled?: boolean | null; twoFactorSecret?: string | null }): 'totp' | 'email' | null {
+    if (!u.twoFactorEnabled) return null
+    return u.twoFactorSecret ? 'totp' : 'email'
+}
+
+/** Mã app (TOTP) khớp hạt không. otplib 13 NÉM lỗi khi mã không đúng 6 chữ số ("abc", "12345", có dấu cách…) — trước
+ *  đây lỗi đó rơi xuống 500 "Internal server error"; nay tính là một lần nhập sai bình thường. */
+async function maTotpKhop(secret: string, code: unknown): Promise<boolean> {
+    const token = typeof code === 'number' ? String(code).padStart(6, '0') : typeof code === 'string' ? code.replace(/\s+/g, '') : ''
+    if (!/^\d{6}$/.test(token)) return false
+    try {
+        const otplib = await import('otplib')
+        const r = await otplib.verify({ secret, token })
+        return !!r?.valid
+    } catch {
+        return false
+    }
+}
+
+/** Gửi được mã qua email không. Máy dev thiếu SMTP thì sendEmail in mã ra console (cố ý, để thử); trên PROD thiếu SMTP
+ *  mà vẫn "gửi" là in mã đăng nhập vào log máy chủ ⇒ từ chối thẳng, không lặng lẽ bỏ qua 2FA. */
+const guiDuocMaEmail = () => !!process.env.SMTP_USER || process.env.NODE_ENV !== 'production'
+const LOI_KHONG_GUI_DUOC_EMAIL = 'Máy chủ chưa cấu hình gửi email nên không gửi được mã xác minh — liên hệ quản trị viên'
+
+/** Ghi nhớ thiết bị sau khi qua 2FA — CHỈ khi client xin `rememberDevice: true` (tức là sẽ lưu token và gửi lại lúc
+ *  /login). Client cũ chỉ gửi `trustDevice` mà không lưu gì ⇒ không tạo mục rác trong danh sách thiết bị tin cậy. */
+async function nhoThietBiNeuXin(
+    req: Request,
+    branchPrisma: ReturnType<typeof getStorePrisma>,
+    userId: string,
+    trustedDevicesHienTai: string | null | undefined,
+): Promise<{ deviceToken: string; deviceTokenExpiresInDays: number } | null> {
+    if (req.body?.rememberDevice !== true) return null
+    const deviceName = typeof req.body?.deviceName === 'string' ? req.body.deviceName : ''
+    const { token, json } = themThietBi(trustedDevicesHienTai, {
+        name: deviceName,
+        browser: req.headers['user-agent']?.split('/')[0],
+        os: deviceName,
+        ip: req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip,
+    })
+    try {
+        await branchPrisma.user.update({ where: { id: userId }, data: { trustedDevices: json } })
+    } catch (e: any) {
+        // ghi không được thì KHÔNG trả token (client sẽ cầm một token không khớp gì) — đăng nhập vẫn qua
+        console.error('Ghi thiết bị tin cậy lỗi:', e?.message || e)
+        return null
+    }
+    return { deviceToken: token, deviceTokenExpiresInDays: THIET_BI_TIN_CAY.SO_NGAY }
 }
 
 // Cleanup expired pending 2FA rows every 5 minutes
@@ -485,42 +607,6 @@ router.post('/login', async (req: Request, res: Response) => {
             if (!valid) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
         }
 
-        // 3.5 — 2FA gate: if enabled, send OTP and stop here. Client must call
-        //      /api/auth/verify-otp with purpose=login_2fa to complete login.
-        //      Skip when SMTP isn't configured — emailService falls back to
-        //      console.log, which would silently lock users out.
-        // KENGIONLINE is a demo store and skips 2FA entirely.
-        const isKengiOnline = store.code.toUpperCase() === 'KENGIONLINE'
-        // Accept either deviceToken (legacy) or deviceId (sent by current frontend)
-        // as the trusted-device identifier.
-        const incomingDeviceToken: string =
-            (req.body && (req.body.deviceToken || req.body.deviceId)) ||
-            (req.headers['x-device-token'] as string) || ''
-        const trustedDevice = !isKengiOnline && incomingDeviceToken && isDeviceTrusted(user.id, incomingDeviceToken)
-        if (user.twoFactorEnabled && process.env.SMTP_USER && !isKengiOnline && !trustedDevice) {
-            const code = generateOtpCode()
-            saveOtp('login_2fa', store.code, user.email, code)
-            const { subject, html, text } = buildOtpEmail(code, 'login')
-            try {
-                await sendEmail(user.email, subject, html, text)
-            } catch (e: any) {
-                console.error('2FA OTP email failed:', e?.message || e)
-                res.status(500).json({ success: false, error: 'Không thể gửi mã xác minh. Vui lòng thử lại.' })
-                return
-            }
-            res.json({
-                success: true,
-                data: {
-                    requiresOtp: true,
-                    email: user.email,
-                    storeCode: store.code,
-                    branchId: targetBranchId,
-                    expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN,
-                },
-            })
-            return
-        }
-
         // 4. Get branch info
         const effectiveBranchId = targetBranchId || user.branchId
         let branch = null
@@ -547,36 +633,76 @@ router.post('/login', async (req: Request, res: Response) => {
             logo: settings?.logo || null,
         }
 
-        // ── 2FA Gate: if user has 2FA enabled, check trusted devices first ──
-        // KENGIONLINE demo store skips 2FA entirely.
-        if (user.twoFactorEnabled && user.twoFactorSecret && !isKengiOnline) {
-            const { deviceId } = req.body
-            // Check if device is trusted
-            const trustedDevices: any[] = JSON.parse(user.trustedDevices || '[]')
-            const isTrusted = deviceId && trustedDevices.some((d: any) => d.id === deviceId)
-
-            if (!isTrusted) {
-                // Require 2FA — return a temporary loginToken
+        /* ── CỔNG 2FA — MỘT cổng cho cả hai cách (09/11/2026, chủ shop chọn "phương án B") ───────────────────────
+         * Trước đây có HAI cổng dùng chung cờ twoFactorEnabled: cổng OTP email (chạy TRƯỚC, khi có SMTP_USER) và cổng
+         * TOTP. Prod có SMTP ⇒ ai bật 2FA cũng chỉ bị hỏi mã email, ô "Google Authenticator" không bao giờ hiện, dù
+         * giao diện báo tài khoản được Google Authenticator bảo vệ. Nay:
+         *   - có hạt TOTP (đã xác nhận qua confirm-2fa) ⇒ CHỈ hỏi mã app; không còn đường email nào lách qua;
+         *   - cờ bật mà không có hạt (bật qua email) ⇒ mã gửi email, gắn với loginToken của CHÍNH lần đăng nhập này;
+         *   - token thiết bị tin cậy còn hạn (máy chủ cấp, lib/trustedDevice) ⇒ bỏ qua bước nhập mã, cả hai cách.
+         * Lần chờ nằm ở bảng Pending2FA, không ở RAM. Cửa hàng demo KENGIONLINE bỏ qua 2FA như cũ. */
+        const isKengiOnline = store.code.toUpperCase() === 'KENGIONLINE'
+        const cach = isKengiOnline ? null : cach2FA(user)
+        if (cach) {
+            const tokenThietBi = layTokenThietBi(req.body, req.headers['x-device-token'])
+            const thietBi = tokenThietBi ? timThietBi(user.trustedDevices, tokenThietBi) : null
+            if (thietBi) {
+                await branchPrisma.user.update({
+                    where: { id: user.id },
+                    data: { trustedDevices: chamThietBi(user.trustedDevices, thietBi.id) },
+                }).catch(() => {})
+            } else {
+                if (cach === 'email' && !guiDuocMaEmail()) {
+                    res.status(503).json({ success: false, error: LOI_KHONG_GUI_DUOC_EMAIL })
+                    return
+                }
+                // Mỗi người một lần chờ đăng nhập: lần mới thay lần cũ — không để nhiều mã cùng sống song song
+                await registryPrisma.pending2FA.deleteMany({
+                    where: { userId: user.id, storeId: store.id, OR: [{ method: null }, { method: { in: ['totp', 'email'] } }] },
+                })
                 const loginToken = crypto.randomBytes(32).toString('hex')
+                const code = cach === 'email' ? generateOtpCode() : null
+                const now = new Date()
                 await savePending2FA(loginToken, {
                     userId: user.id, email: user.email, role: user.role,
                     storeId: store.id, storeCode: store.code,
                     branchId: effectiveBranchId, branchSchema,
                     isMainBranch: branch?.isMainBranch || false,
-                    deviceId, user: userData, store: storeData, branch,
-                }, new Date(Date.now() + PENDING_2FA_TTL_MS))
-                return res.json({
+                    deviceId: typeof req.body?.deviceId === 'string' ? req.body.deviceId.slice(0, 120) : undefined,
+                    user: userData, store: storeData, branch,
+                    method: cach,
+                    codeHash: code ? bamMaEmail(loginToken, code) : null,
+                    sentAt: code ? now : null,
+                }, new Date(now.getTime() + (cach === 'email' ? MA_EMAIL_TTL_MS : PENDING_2FA_TTL_MS)))
+
+                if (cach === 'totp') {
+                    res.json({ success: true, data: { requireTwoFactor: true, method: 'totp', loginToken, user: userData } })
+                    return
+                }
+                const { subject, html, text } = buildOtpEmail(code!, 'login')
+                try {
+                    await sendEmail(user.email, subject, html, text)
+                } catch (e: any) {
+                    console.error('2FA OTP email failed:', e?.message || e)
+                    await deletePending2FA(loginToken)
+                    res.status(500).json({ success: false, error: 'Không thể gửi mã xác minh. Vui lòng thử lại.' })
+                    return
+                }
+                res.json({
                     success: true,
                     data: {
-                        requireTwoFactor: true,
+                        requiresOtp: true,
+                        method: 'email',
                         loginToken,
+                        email: user.email,
+                        storeCode: store.code,
+                        branchId: targetBranchId,
+                        expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN,
                         user: userData,
                     },
                 })
+                return
             }
-            // Device is trusted — update lastUsed
-            const updated = trustedDevices.map((d: any) => d.id === deviceId ? { ...d, lastUsed: new Date().toISOString() } : d)
-            await branchPrisma.user.update({ where: { id: user.id }, data: { trustedDevices: JSON.stringify(updated) } }).catch(() => {})
         }
 
         // 6. Sign JWT + refresh token (bypassed 2FA or 2FA not enabled)
@@ -604,10 +730,58 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 })
 
-// ─── POST /api/auth/verify-2fa — Complete login after 2FA verification ───────
+type DaQua2FA = { pending: Pending2FA; nho: { deviceToken: string; deviceTokenExpiresInDays: number } | null }
+
+/** Bước cuối của cả hai cách xác minh khi đăng nhập (verify-2fa / verify-otp login_2fa): mã đã khớp ⇒ tiêu lần chờ
+ *  (chỉ MỘT request thắng), rồi nhớ thiết bị nếu client xin. null = lần chờ đã bị request khác dùng mất. Việc ĐÚC phiên
+ *  (createTokenPair) để ngay trong handler: scripts/check-pham-vi-khoa.ts soát chỗ đúc phiên theo TỪNG tuyến. */
+async function tieuThuLanCho(
+    req: Request,
+    pending: Pending2FA,
+    branchPrisma: ReturnType<typeof getStorePrisma>,
+    trustedDevicesHienTai: string | null | undefined,
+): Promise<DaQua2FA | null> {
+    if (!(await tieuThuPending2FA(pending.loginToken))) return null
+    return { pending, nho: await nhoThietBiNeuXin(req, branchPrisma, pending.userId, trustedDevicesHienTai) }
+}
+
+/** Nội dung JWT của phiên cấp sau 2FA — y hệt /login (lần chờ chép lại từ lúc qua mật khẩu). */
+const payloadPhien2FA = (p: Pending2FA) => ({
+    userId: p.userId, email: p.email, role: p.role,
+    storeId: p.storeId, storeCode: p.storeCode,
+    branchId: p.branchId, branchSchema: p.branchSchema,
+    storeSchema: p.branchSchema, isMainBranch: p.isMainBranch,
+})
+const deviceIdPhien2FA = (req: Request, p: Pending2FA) =>
+    typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId.slice(0, 120) : p.deviceId
+
+/** data trả client sau 2FA — cùng hình dạng /login, kèm deviceToken khi vừa nhớ thiết bị. */
+const dataPhien2FA = (q: DaQua2FA, t: { accessToken: string; refreshToken: string }) => ({
+    token: t.accessToken,
+    refreshToken: t.refreshToken,
+    user: q.pending.user,
+    store: q.pending.store,
+    branch: q.pending.branch,
+    ...(q.nho || {}),
+})
+
+/** Kiểm lại người dùng lúc nhập mã (khoá tài khoản / đổi cách 2FA giữa chừng). Trả câu lỗi + mã HTTP, hoặc null = ổn. */
+function chanLucXacMinh(
+    user: { isLocked?: boolean | null; twoFactorEnabled?: boolean | null; twoFactorSecret?: string | null } | null,
+    canCach: 'totp' | 'email',
+): { ma: number; loi: string } | null {
+    if (!user) return { ma: 401, loi: 'Tài khoản không còn tồn tại' }
+    if (user.isLocked) return { ma: 403, loi: 'Tài khoản đã bị khóa. Liên hệ quản trị viên.' }
+    if (cach2FA(user) !== canCach) return { ma: 401, loi: 'Cài đặt xác thực 2 lớp của tài khoản vừa thay đổi — vui lòng đăng nhập lại' }
+    return null
+}
+
+// ─── POST /api/auth/verify-2fa — hoàn tất đăng nhập bằng mã app (TOTP) ────────
+// Body: { loginToken, totpCode, rememberDevice?, deviceName?, deviceId? }. rememberDevice: true ⇒ trả thêm deviceToken
+// (client lưu lại, gửi kèm /login lần sau để bỏ qua bước nhập mã trong 30 ngày). `trustDevice` của client cũ bị bỏ qua.
 router.post('/verify-2fa', async (req: Request, res: Response) => {
     try {
-        const { loginToken, totpCode, deviceId, trustDevice, deviceName } = req.body
+        const { loginToken, totpCode } = req.body || {}
         if (!loginToken || !totpCode) {
             return res.status(400).json({ success: false, error: 'loginToken và totpCode là bắt buộc' })
         }
@@ -616,81 +790,46 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
         if (!pending) {
             return res.status(401).json({ success: false, error: 'Phiên đăng nhập 2FA đã hết hạn, vui lòng đăng nhập lại' })
         }
+        if (pending.method !== 'totp') {
+            return res.status(400).json({ success: false, error: 'Lần đăng nhập này cần mã gửi qua email, không phải mã app' })
+        }
         if (pending.expiresAt < new Date()) {
-            await deletePending2FA(loginToken)
+            await deletePending2FA(pending.loginToken)
             return res.status(401).json({ success: false, error: 'Phiên đăng nhập 2FA đã hết hạn' })
         }
-
-        // Verify TOTP code
-        const otplib = await import('otplib')
-        const branchPrisma = getStorePrisma(pending.branchSchema)
-        const user = await branchPrisma.user.findUnique({ where: { id: pending.userId }, select: { twoFactorSecret: true, trustedDevices: true } })
-        if (!user?.twoFactorSecret) {
-            await deletePending2FA(loginToken)
-            return res.status(400).json({ success: false, error: '2FA chưa được thiết lập' })
+        // Đếm lượt TRÊN CSDL trước khi so mã: 5 lần cho mỗi lần đăng nhập, đúng với mọi bản Cloud Run
+        if (!(await tinhMotLanThu(pending.loginToken))) {
+            return res.status(429).json({ success: false, error: 'Sai mã 2FA quá nhiều lần. Vui lòng đăng nhập lại.' })
         }
 
-        const result = await otplib.verify({ secret: user.twoFactorSecret, token: totpCode })
-        if (!result.valid) {
-            // Chống brute-force TOTP: đếm số lần sai theo loginToken (cache, TTL = TTL pending).
-            // Quá 5 lần → hủy phiên 2FA, buộc đăng nhập lại.
-            const failKey = `2fa:fail:${loginToken}`
-            const fails = ((await cacheGet<number>(failKey)) || 0) + 1
-            await cacheSet(failKey, fails, Math.ceil(PENDING_2FA_TTL_MS / 1000))
-            if (fails >= 5) {
-                await deletePending2FA(loginToken)
-                await cacheDel(failKey)
+        const branchPrisma = getStorePrisma(pending.branchSchema)
+        const user = await branchPrisma.user.findUnique({
+            where: { id: pending.userId },
+            select: { isLocked: true, twoFactorEnabled: true, twoFactorSecret: true, trustedDevices: true },
+        })
+        const chan = chanLucXacMinh(user, 'totp')
+        if (chan) {
+            await deletePending2FA(pending.loginToken)
+            return res.status(chan.ma).json({ success: false, error: chan.loi })
+        }
+
+        if (!(await maTotpKhop(user!.twoFactorSecret!, totpCode))) {
+            const conLai = SO_LAN_THU_TOI_DA - (pending.attempts + 1)
+            if (conLai <= 0) {
+                await deletePending2FA(pending.loginToken)
                 return res.status(429).json({ success: false, error: 'Sai mã 2FA quá nhiều lần. Vui lòng đăng nhập lại.' })
             }
-            return res.status(401).json({ success: false, error: `Mã xác thực không đúng (còn ${5 - fails} lần thử)` })
+            return res.status(401).json({ success: false, error: `Mã xác thực không đúng (còn ${conLai} lần thử)` })
         }
 
-        // 2FA valid — consume the pending token + xóa bộ đếm sai
-        await cacheDel(`2fa:fail:${loginToken}`)
-        await deletePending2FA(loginToken)
-
-        // Optionally trust device
-        if (trustDevice && deviceId) {
-            const trustedDevices: any[] = JSON.parse(user.trustedDevices || '[]')
-            const existing = trustedDevices.find((d: any) => d.id === deviceId)
-            if (!existing) {
-                trustedDevices.push({
-                    id: deviceId,
-                    name: deviceName || 'Unknown Device',
-                    browser: req.headers['user-agent']?.split('/')[0] || 'Unknown',
-                    os: deviceName || 'Unknown',
-                    ip: req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'Unknown',
-                    lastUsed: new Date().toISOString(),
-                    createdAt: new Date().toISOString(),
-                })
-                await branchPrisma.user.update({
-                    where: { id: pending.userId },
-                    data: { trustedDevices: JSON.stringify(trustedDevices) },
-                }).catch(() => {})
-            }
+        const qua = await tieuThuLanCho(req, pending, branchPrisma, user!.trustedDevices)
+        if (!qua) {
+            return res.status(401).json({ success: false, error: 'Phiên đăng nhập 2FA đã được dùng — vui lòng đăng nhập lại' })
         }
-
-        // Issue full JWT
-        const tokenPayload = {
-            userId: pending.userId, email: pending.email, role: pending.role,
-            storeId: pending.storeId, storeCode: pending.storeCode,
-            branchId: pending.branchId, branchSchema: pending.branchSchema,
-            storeSchema: pending.branchSchema, isMainBranch: pending.isMainBranch,
-        }
-        const { accessToken, refreshToken } = await createTokenPair(tokenPayload, deviceId || pending.deviceId)
-
-        res.json({
-            success: true,
-            data: {
-                token: accessToken,
-                refreshToken,
-                user: pending.user,
-                store: pending.store,
-                branch: pending.branch,
-            },
-        })
+        const phien = await createTokenPair(payloadPhien2FA(pending), deviceIdPhien2FA(req, pending))
+        res.json({ success: true, data: dataPhien2FA(qua, phien) })
     } catch (err: any) {
-        console.error('Verify 2FA error:', err)
+        console.error('Verify 2FA error:', err?.message || err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
@@ -900,10 +1039,18 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         const settings = await storePrisma.storeSettings.findUnique({ where: { id: 'default' } })
 
+        // Cách 2FA đang dùng (09/11/2026): Cài đặt → Bảo mật hiện đúng "Google Authenticator" hay "mã qua email".
+        // Chỉ trả TÊN cách — hạt TOTP không bao giờ ra ngoài.
+        const hat2FA = user.twoFactorEnabled
+            ? await storePrisma.user.findUnique({ where: { id: user.id }, select: { twoFactorEnabled: true, twoFactorSecret: true } })
+            : null
+        const twoFactorMethod = hat2FA ? cach2FA(hat2FA) : null
+
         res.json({
             success: true,
             data: {
                 ...user,
+                twoFactorMethod,
                 permissions: JSON.parse((user as any).permissions || '[]'),
                 storeId: req.user?.storeId,
                 storeCode: req.user?.storeCode,
@@ -1103,9 +1250,80 @@ router.put('/update-email', authMiddleware, async (req: AuthRequest, res: Respon
     }
 })
 
-// ─── POST /api/auth/setup-2fa — Generate TOTP secret + otpauth URL + ảnh QR ───
+/** Bật 2FA qua email là việc của NGƯỜI đăng nhập — khoá API (X-API-Key hoặc JWT đổi từ khoá) không làm được. */
+function lyDoChanBat2FAQuaKhoa(req: AuthRequest): string | null {
+    if (!diBangKhoaApi((req as any).viaApiKey, req.user)) return null
+    return 'Bật xác thực 2 lớp phải đăng nhập kengi.vn bằng tài khoản — khoá API không làm được việc này'
+}
+
+/** Lần chờ "bật 2FA qua email" mới nhất của người đang đăng nhập. */
+async function timChoBatEmail(userId: string, storeId: string): Promise<Pending2FA | null> {
+    const row = await registryPrisma.pending2FA.findFirst({
+        where: { userId, storeId, method: 'bat_email' },
+        orderBy: { createdAt: 'desc' },
+    })
+    return row ? dongThanhPending(row) : null
+}
+
+// ─── POST /api/auth/setup-2fa — bắt đầu bật 2FA ──────────────────────────────
+// Body { method?: 'totp' | 'email' }. Mặc định 'totp' (hình dạng cũ): sinh hạt TOTP + otpauth URL + ảnh QR (qrDataUrl),
+// cờ chưa bật. 'email' (09/11/2026, phương án B): gửi mã 6 số tới email của tài khoản — confirm-2fa { method: 'email',
+// code } bật 2FA KHÔNG hạt ⇒ từ đó /login hỏi mã email. Bước này không ghi gì vào User; gọi lại sau 60 giây = gửi lại mã.
 router.post('/setup-2fa', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const method = req.body?.method ?? 'totp'
+        if (method !== 'totp' && method !== 'email') {
+            res.status(400).json({ success: false, error: "method phải là 'totp' hoặc 'email'" })
+            return
+        }
+        if (method === 'email') {
+            const chanKhoa = lyDoChanBat2FAQuaKhoa(req)
+            if (chanKhoa) { res.status(403).json({ success: false, error: chanKhoa }); return }
+            const nguoi = req.user!
+            const u = await req.storePrisma!.user.findUnique({ where: { id: nguoi.userId }, select: { email: true, twoFactorEnabled: true, isLocked: true } })
+            if (!u) { res.status(404).json({ success: false, error: 'User not found' }); return }
+            if (u.isLocked) { res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa' }); return }
+            if (u.twoFactorEnabled) { res.status(400).json({ success: false, error: '2FA đã được bật' }); return }
+            if (!guiDuocMaEmail()) { res.status(503).json({ success: false, error: LOI_KHONG_GUI_DUOC_EMAIL }); return }
+            if (!nguoi.storeId || !(nguoi.branchSchema || nguoi.storeSchema)) {
+                res.status(400).json({ success: false, error: 'Phiên đăng nhập cũ thiếu thông tin cửa hàng — đăng xuất rồi đăng nhập lại' })
+                return
+            }
+
+            const now = new Date()
+            const cu = await timChoBatEmail(nguoi.userId, nguoi.storeId)
+            if (cu?.sentAt && now.getTime() - cu.sentAt.getTime() < GIAN_CACH_GUI_LAI_MS) {
+                const doi = Math.ceil((GIAN_CACH_GUI_LAI_MS - (now.getTime() - cu.sentAt.getTime())) / 1000)
+                res.status(429).json({ success: false, error: `Vui lòng đợi ${doi}s trước khi gửi lại mã`, retryAfter: doi })
+                return
+            }
+            await registryPrisma.pending2FA.deleteMany({ where: { userId: nguoi.userId, storeId: nguoi.storeId, method: 'bat_email' } })
+            const token = crypto.randomBytes(32).toString('hex')
+            const code = generateOtpCode()
+            await savePending2FA(token, {
+                userId: nguoi.userId, email: u.email, role: nguoi.role,
+                storeId: nguoi.storeId, storeCode: nguoi.storeCode || '',
+                branchId: nguoi.branchId ?? null, branchSchema: (nguoi.branchSchema || nguoi.storeSchema)!,
+                isMainBranch: !!nguoi.isMainBranch,
+                user: null, store: null, branch: null,
+                method: 'bat_email', codeHash: bamMaEmail(token, code), sentAt: now,
+            }, new Date(now.getTime() + MA_EMAIL_TTL_MS))
+            const { subject, html, text } = buildOtpEmail(code, 'bat2fa')
+            try {
+                await sendEmail(u.email, subject, html, text)
+            } catch (e: any) {
+                console.error('Gửi mã bật 2FA qua email lỗi:', e?.message || e)
+                await deletePending2FA(token)
+                res.status(500).json({ success: false, error: 'Không thể gửi email. Vui lòng thử lại.' })
+                return
+            }
+            res.json({
+                success: true,
+                data: { method: 'email', email: u.email, expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN, resendAfterSeconds: OTP_CONFIG.RESEND_COOLDOWN_SEC },
+            })
+            return
+        }
+
         const otplib = await import('otplib')
         const storePrisma = req.storePrisma!
         const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true, twoFactorEnabled: true } })
@@ -1134,23 +1352,49 @@ router.post('/setup-2fa', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
-// ─── POST /api/auth/confirm-2fa — Verify TOTP code and enable 2FA ────────────
+// ─── POST /api/auth/confirm-2fa — nhập mã xác nhận ⇒ bật 2FA ─────────────────
+// Body { totpCode } (mặc định — mã app theo hạt setup-2fa vừa sinh) hoặc { method: 'email', code } (mã setup-2fa
+// method 'email' vừa gửi; nhận cả `totpCode` thay `code`).
 router.post('/confirm-2fa', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const otplib = await import('otplib')
         const storePrisma = req.storePrisma!
-        const { totpCode } = req.body
-        if (!totpCode) { res.status(400).json({ success: false, error: 'Mã xác thực là bắt buộc' }); return }
+        const laEmail = req.body?.method === 'email'
+        const ma = laEmail ? (req.body?.code ?? req.body?.totpCode) : req.body?.totpCode
+        if (!ma) { res.status(400).json({ success: false, error: 'Mã xác thực là bắt buộc' }); return }
 
         const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId }, select: { twoFactorSecret: true, twoFactorEnabled: true } })
         if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
-        if (!user.twoFactorSecret) { res.status(400).json({ success: false, error: 'Chưa thiết lập 2FA, vui lòng gọi setup-2fa trước' }); return }
 
-        const result = await otplib.verify({ secret: user.twoFactorSecret, token: totpCode })
-        if (!result.valid) { res.status(400).json({ success: false, error: 'Mã xác thực không đúng' }); return }
+        if (laEmail) {
+            const chanKhoa = lyDoChanBat2FAQuaKhoa(req)
+            if (chanKhoa) { res.status(403).json({ success: false, error: chanKhoa }); return }
+            if (user.twoFactorEnabled) { res.status(400).json({ success: false, error: '2FA đã được bật' }); return }
+            const HET = 'Mã xác nhận đã hết hạn hoặc chưa được gửi — bấm "Gửi mã" để nhận mã mới'
+            const cho = req.user!.storeId ? await timChoBatEmail(req.user!.userId, req.user!.storeId) : null
+            if (!cho) { res.status(400).json({ success: false, error: HET }); return }
+            if (cho.expiresAt < new Date()) { await deletePending2FA(cho.loginToken); res.status(400).json({ success: false, error: HET }); return }
+            const QUA_LUOT = 'Sai mã quá nhiều lần — bấm "Gửi mã" để nhận mã mới'
+            if (!(await tinhMotLanThu(cho.loginToken))) { res.status(400).json({ success: false, error: QUA_LUOT }); return }
+            if (!maEmailKhop(cho, ma)) {
+                const conLai = SO_LAN_THU_TOI_DA - (cho.attempts + 1)
+                if (conLai <= 0) { await deletePending2FA(cho.loginToken); res.status(400).json({ success: false, error: QUA_LUOT }); return }
+                res.status(400).json({ success: false, error: `Mã xác nhận không đúng (còn ${conLai} lần thử)` })
+                return
+            }
+            if (!(await tieuThuPending2FA(cho.loginToken))) { res.status(400).json({ success: false, error: HET }); return }
+        } else {
+            if (!user.twoFactorSecret) { res.status(400).json({ success: false, error: 'Chưa thiết lập 2FA, vui lòng gọi setup-2fa trước' }); return }
+            if (!(await maTotpKhop(user.twoFactorSecret, ma))) { res.status(400).json({ success: false, error: 'Mã xác thực không đúng' }); return }
+        }
 
-        await storePrisma.user.update({ where: { id: req.user!.userId }, data: { twoFactorEnabled: true } })
-        res.json({ success: true, message: 'Bật 2FA thành công' })
+        /* Chỗ BẬT cờ DUY NHẤT của cả hệ thống (scripts/check-tat-2fa.ts canh). TOTP: giữ hạt vừa xác nhận. Email: xoá hạt
+         * dở dang (người từng bấm "Thiết Lập 2FA" bằng app rồi bỏ ngang) — giữ lại thì cach2FA ra 'totp' và /login sẽ
+         * hỏi mã app theo một hạt chưa ai xác nhận. */
+        await storePrisma.user.update({
+            where: { id: req.user!.userId },
+            data: { twoFactorEnabled: true, ...(laEmail ? { twoFactorSecret: null } : {}) },
+        })
+        res.json({ success: true, message: 'Bật 2FA thành công', data: { twoFactorMethod: laEmail ? 'email' : 'totp' } })
     } catch (err: any) {
         console.error('Confirm 2FA error:', err)
         res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
@@ -1196,12 +1440,14 @@ router.delete('/disable-2fa', authMiddleware, async (req: AuthRequest, res: Resp
 })
 
 // ─── GET /api/auth/trusted-devices — List trusted devices ────────────────────
+// Chỉ thiết bị còn hạn, KHÔNG kèm tokenHash (lib/trustedDevice › thietBiCongKhai). Trước 09/11/2026 tuyến này trả
+// nguyên `id` — mà `id` chính là chuỗi gửi kèm /login để bỏ qua bước TOTP.
 router.get('/trusted-devices', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const storePrisma = req.storePrisma!
         const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId }, select: { trustedDevices: true } })
         if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
-        const devices = JSON.parse(user.trustedDevices || '[]')
+        const devices = thietBiCongKhai(user.trustedDevices)
         res.json({ success: true, data: devices })
     } catch (err: any) {
         console.error('Get trusted devices error:', err)
@@ -1216,8 +1462,9 @@ router.delete('/trusted-devices/:id', authMiddleware, async (req: AuthRequest, r
         const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId }, select: { trustedDevices: true } })
         if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
 
-        const devices = JSON.parse(user.trustedDevices || '[]').filter((d: any) => d.id !== req.params.id)
-        await storePrisma.user.update({ where: { id: req.user!.userId }, data: { trustedDevices: JSON.stringify(devices) } })
+        const conLai = boThietBi(user.trustedDevices, String(req.params.id))
+        await storePrisma.user.update({ where: { id: req.user!.userId }, data: { trustedDevices: conLai } })
+        const devices = thietBiCongKhai(conLai)
         res.json({ success: true, data: devices })
     } catch (err: any) {
         console.error('Remove trusted device error:', err)
@@ -1352,19 +1599,140 @@ router.post('/logout', async (req: Request, res: Response) => {
     res.json({ success: true })
 })
 
+/** GỬI LẠI mã email của MỘT lần đăng nhập đã qua mật khẩu (send-otp purpose login_2fa). Mỗi lần gửi: mã mới (mã cũ
+ *  hết hiệu lực), 5 lượt thử mới, hạn thêm 10 phút — nhưng không quá 30 phút kể từ lúc qua mật khẩu. */
+async function guiLaiMaDangNhap(loginToken: unknown, res: Response): Promise<void> {
+    if (typeof loginToken !== 'string' || !loginToken) {
+        res.status(400).json({ success: false, error: 'Thiếu loginToken — vui lòng đăng nhập lại để nhận mã mới' })
+        return
+    }
+    const HET = 'Lần đăng nhập đã hết hạn — vui lòng đăng nhập lại để nhận mã mới'
+    const pending = await loadPending2FA(loginToken)
+    if (!pending || pending.method !== 'email') { res.status(400).json({ success: false, error: HET }); return }
+    const now = new Date()
+    const hanCuoi = pending.createdAt.getTime() + PHIEN_EMAIL_TOI_DA_MS
+    if (pending.expiresAt <= now || hanCuoi <= now.getTime()) {
+        await deletePending2FA(pending.loginToken)
+        res.status(400).json({ success: false, error: HET })
+        return
+    }
+    if (!guiDuocMaEmail()) { res.status(503).json({ success: false, error: LOI_KHONG_GUI_DUOC_EMAIL }); return }
+    const user = await getStorePrisma(pending.branchSchema).user.findUnique({
+        where: { id: pending.userId },
+        select: { isLocked: true, twoFactorEnabled: true, twoFactorSecret: true },
+    })
+    const chan = chanLucXacMinh(user, 'email')
+    if (chan) {
+        await deletePending2FA(pending.loginToken)
+        res.status(chan.ma).json({ success: false, error: chan.loi })
+        return
+    }
+
+    // Giãn cách 60 giây NGUYÊN TỬ trên CSDL: chỉ request đổi được dòng mới được gửi (đúng với mọi bản Cloud Run)
+    const code = generateOtpCode()
+    const r = await registryPrisma.pending2FA.updateMany({
+        where: {
+            loginToken: pending.loginToken, method: 'email',
+            OR: [{ sentAt: null }, { sentAt: { lte: new Date(now.getTime() - GIAN_CACH_GUI_LAI_MS) } }],
+        },
+        data: {
+            codeHash: bamMaEmail(pending.loginToken, code), sentAt: now, attempts: 0,
+            expiresAt: new Date(Math.min(now.getTime() + MA_EMAIL_TTL_MS, hanCuoi)),
+        },
+    })
+    if (r.count !== 1) {
+        const doi = pending.sentAt
+            ? Math.max(1, Math.ceil((pending.sentAt.getTime() + GIAN_CACH_GUI_LAI_MS - now.getTime()) / 1000))
+            : OTP_CONFIG.RESEND_COOLDOWN_SEC
+        res.status(429).json({ success: false, error: `Vui lòng đợi ${doi}s trước khi gửi lại mã`, retryAfter: doi })
+        return
+    }
+    const { subject, html, text } = buildOtpEmail(code, 'login')
+    try {
+        await sendEmail(pending.email, subject, html, text)
+    } catch (e: any) {
+        console.error('Gửi lại mã đăng nhập lỗi:', e?.message || e)
+        // mã vừa sinh chưa tới tay ai ⇒ trả dòng về như trước: mã trong thư trước vẫn dùng được (giữ nguyên số lần
+        // đã thử + hạn của nó), và mở lại giãn cách để người dùng bấm gửi lại ngay
+        await registryPrisma.pending2FA.updateMany({
+            where: { loginToken: pending.loginToken },
+            data: { codeHash: pending.codeHash, attempts: pending.attempts, expiresAt: pending.expiresAt, sentAt: pending.sentAt },
+        }).catch(() => {})
+        res.status(500).json({ success: false, error: 'Không thể gửi email. Vui lòng thử lại.' })
+        return
+    }
+    res.json({ success: true, data: { sent: true, expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN, resendAfterSeconds: OTP_CONFIG.RESEND_COOLDOWN_SEC } })
+}
+
+/** Nhập mã email để hoàn tất đăng nhập (verify-otp purpose login_2fa). Lần chờ tìm theo loginToken; client cũ không gửi
+ *  loginToken (web bản cũ, Android ≤ 1.0.46) thì lấy lần chờ mã email MỚI NHẤT của (cửa hàng, email) — dòng ấy chỉ có
+ *  khi ai đó vừa qua MẬT KHẨU ở /login. Người có hạt TOTP không bao giờ có dòng 'email' ⇒ mã email không vượt được TOTP.
+ *  Không qua ⇒ tự trả lỗi và trả null; qua ⇒ lần chờ đã tiêu, handler đúc phiên. */
+async function xacMinhMaDangNhap(req: Request, res: Response): Promise<DaQua2FA | null> {
+    const { email, storeCode, code, loginToken } = req.body || {}
+    const THIEU = 'Thiếu thông tin xác minh'
+    if (!code) { res.status(400).json({ success: false, error: THIEU }); return null }
+    let pending: Pending2FA | null
+    if (typeof loginToken === 'string' && loginToken) pending = await loadPending2FA(loginToken)
+    else if (typeof email === 'string' && email.trim() && typeof storeCode === 'string' && storeCode.trim()) pending = await timChoEmailMoiNhat(storeCode, email)
+    else { res.status(400).json({ success: false, error: THIEU }); return null }
+
+    const KHONG_CO = 'Mã không tồn tại hoặc đã hết hạn'
+    if (!pending) { res.status(400).json({ success: false, error: KHONG_CO }); return null }
+    if (pending.method !== 'email') {
+        res.status(400).json({ success: false, error: 'Lần đăng nhập này cần mã từ ứng dụng xác thực (Google Authenticator), không phải mã email' })
+        return null
+    }
+    if (pending.expiresAt < new Date()) {
+        await deletePending2FA(pending.loginToken)
+        res.status(400).json({ success: false, error: 'Mã đã hết hạn' })
+        return null
+    }
+    const QUA_LUOT = 'Quá nhiều lần thử. Vui lòng đăng nhập lại.'
+    if (!(await tinhMotLanThu(pending.loginToken))) { res.status(400).json({ success: false, error: QUA_LUOT }); return null }
+
+    const branchPrisma = getStorePrisma(pending.branchSchema)
+    const user = await branchPrisma.user.findUnique({
+        where: { id: pending.userId },
+        select: { isLocked: true, twoFactorEnabled: true, twoFactorSecret: true, trustedDevices: true },
+    })
+    const chan = chanLucXacMinh(user, 'email')
+    if (chan) {
+        await deletePending2FA(pending.loginToken)
+        res.status(chan.ma).json({ success: false, error: chan.loi })
+        return null
+    }
+    if (!maEmailKhop(pending, code)) {
+        const conLai = SO_LAN_THU_TOI_DA - (pending.attempts + 1)
+        if (conLai <= 0) {
+            await deletePending2FA(pending.loginToken)
+            res.status(400).json({ success: false, error: QUA_LUOT })
+            return null
+        }
+        res.status(400).json({ success: false, error: `Mã không đúng (còn ${conLai} lần thử)` })
+        return null
+    }
+
+    const qua = await tieuThuLanCho(req, pending, branchPrisma, user!.trustedDevices)
+    if (!qua) { res.status(400).json({ success: false, error: KHONG_CO }); return null }
+    return qua
+}
+
 // ─── POST /api/auth/send-otp ─────────────────────────────────────────────────
-// Body: { email, storeCode, purpose: 'login_2fa' | 'password_reset' }
-//   - login_2fa: resend OTP (requires the user to have already completed /login).
-//                We re-check that 2FA is enabled before issuing.
+// Body: { purpose: 'login_2fa', loginToken } | { purpose: 'password_reset', email, storeCode }
+//   - login_2fa: GỬI LẠI mã email của một lần đăng nhập đã qua mật khẩu — loginToken do POST /login trả về (09/11/2026).
+//                Trước đó chỉ cần email + mã cửa hàng: ai biết email người bật 2FA là xin được mã, rồi verify-otp cấp
+//                phiên KHÔNG cần mật khẩu. Không client nào gọi đường cũ (web chưa có nút gửi lại, Android không có tuyến).
 //   - password_reset: anyone may request. We always respond success to avoid
 //                     leaking which emails exist.
 router.post('/send-otp', async (req: Request, res: Response) => {
     try {
         const { email, storeCode, purpose } = req.body || {}
+        if (purpose === 'login_2fa') { await guiLaiMaDangNhap(req.body?.loginToken, res); return }
         if (!email?.trim() || !storeCode?.trim()) {
             return res.status(400).json({ success: false, error: 'Email và mã cửa hàng là bắt buộc' })
         }
-        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+        if (purpose !== 'password_reset') {
             return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
         }
 
@@ -1382,27 +1750,17 @@ router.post('/send-otp', async (req: Request, res: Response) => {
             )
             if (stores.length > 0) store = stores[0]
         }
-        if (!store || store.status !== 'active') {
-            // password_reset: silent success to prevent enumeration
-            if (purpose === 'password_reset') return res.json({ success: true, data: { sent: true } })
-            return res.status(404).json({ success: false, error: 'Mã cửa hàng không tồn tại' })
-        }
+        // password_reset: silent success to prevent enumeration
+        if (!store || store.status !== 'active') return res.json({ success: true, data: { sent: true } })
 
         const storePrisma = getStorePrisma(store.schema)
         const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
-
-        if (purpose === 'login_2fa') {
-            if (!user || !user.twoFactorEnabled) {
-                return res.status(400).json({ success: false, error: 'Không đủ điều kiện để gửi mã 2FA' })
-            }
-        } else if (purpose === 'password_reset') {
-            // Silent success if user not found
-            if (!user) return res.json({ success: true, data: { sent: true } })
-        }
+        // Silent success if user not found
+        if (!user) return res.json({ success: true, data: { sent: true } })
 
         const code = generateOtpCode()
         saveOtp(purpose, store.code, email, code)
-        const { subject, html, text } = buildOtpEmail(code, purpose === 'login_2fa' ? 'login' : 'reset')
+        const { subject, html, text } = buildOtpEmail(code, 'reset')
         try {
             await sendEmail(email.trim().toLowerCase(), subject, html, text)
         } catch (e: any) {
@@ -1418,17 +1776,25 @@ router.post('/send-otp', async (req: Request, res: Response) => {
 })
 
 // ─── POST /api/auth/verify-otp ───────────────────────────────────────────────
-// Body: { email, storeCode, code, purpose, branchId? }
-//   - login_2fa: completes login. Returns full token pair + user/store/branch.
+// Body: { purpose: 'login_2fa', code, loginToken? (hoặc email + storeCode — client cũ), rememberDevice?, deviceName? }
+//     | { purpose: 'password_reset', email, storeCode, code }
+//   - login_2fa: hoàn tất đăng nhập bằng mã email (xacMinhMaDangNhap) — trả cặp token + user/store/branch như /login;
+//                rememberDevice: true ⇒ kèm deviceToken. Chi nhánh lấy theo lần đăng nhập, bỏ qua branchId trong body.
 //   - password_reset: returns a short-lived reset token (10m JWT) to be passed
 //                     to /reset-password. The OTP is consumed here.
 router.post('/verify-otp', async (req: Request, res: Response) => {
     try {
-        const { email, storeCode, code, purpose, branchId } = req.body || {}
+        const { email, storeCode, code, purpose } = req.body || {}
+        if (purpose === 'login_2fa') {
+            const qua = await xacMinhMaDangNhap(req, res)   // không qua thì đã tự trả lỗi
+            if (!qua) return
+            const phien = await createTokenPair(payloadPhien2FA(qua.pending), deviceIdPhien2FA(req, qua.pending))
+            return res.json({ success: true, data: dataPhien2FA(qua, phien) })
+        }
         if (!email?.trim() || !storeCode?.trim() || !code || !purpose) {
             return res.status(400).json({ success: false, error: 'Thiếu thông tin xác minh' })
         }
-        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+        if (purpose !== 'password_reset') {
             return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
         }
 
@@ -1458,56 +1824,6 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         const storePrisma = getStorePrisma(store.schema)
         const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
         if (!user) return res.status(404).json({ success: false, error: 'Người dùng không tồn tại' })
-
-        if (purpose === 'login_2fa') {
-            if (user.isLocked) return res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa' })
-            consumeOtp('login_2fa', store.code, email)
-
-            const effectiveBranchId = branchId || user.branchId
-            let branch = null
-            if (effectiveBranchId) {
-                branch = await storePrisma.branch.findUnique({
-                    where: { id: effectiveBranchId },
-                    select: { id: true, name: true, code: true, address: true, isMainBranch: true },
-                })
-            }
-            const settings = await storePrisma.storeSettings.findUnique({ where: { id: 'default' } })
-
-            const tokenPayload = {
-                userId: user.id, email: user.email, role: user.role,
-                storeId: store.id, storeCode: store.code,
-                branchId: effectiveBranchId, branchSchema: store.schema,
-                storeSchema: store.schema, isMainBranch: branch?.isMainBranch || false,
-            }
-            const { accessToken, refreshToken } = await createTokenPair(tokenPayload, req.body?.deviceId)
-
-            // Issue a trusted-device token so this device can skip 2FA for the next 30 days.
-            const deviceToken = generateDeviceToken()
-            saveTrustedDevice(user.id, deviceToken, String(req.headers['user-agent'] || ''))
-
-            return res.json({
-                success: true,
-                data: {
-                    token: accessToken,
-                    refreshToken,
-                    deviceToken,
-                    deviceTokenExpiresInDays: TRUSTED_DEVICE_CONFIG.TRUSTED_DEVICE_TTL_DAYS,
-                    user: {
-                        id: user.id, email: user.email, name: user.name,
-                        role: user.role, phone: user.phone,
-                        avatar: user.avatar, twoFactorEnabled: user.twoFactorEnabled,
-                        permissions: JSON.parse((user as any).permissions || '[]'),
-                    },
-                    store: {
-                        id: store.id, code: store.code, name: store.name,
-                        address: settings?.address || store.address,
-                        phone: settings?.phone || store.phone,
-                        logo: settings?.logo || null,
-                    },
-                    branch,
-                },
-            })
-        }
 
         // password_reset: issue a short-lived reset token; OTP is consumed.
         consumeOtp('password_reset', store.code, email)

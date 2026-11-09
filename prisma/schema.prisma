@@ -231,7 +231,14 @@ model Pending2FA {
   branchData   String?  // JSON-encoded branch payload (nullable)
   expiresAt    DateTime
   createdAt    DateTime @default(now())
+  // Thống nhất 2FA 09/11/2026 — một bảng cho mọi lần xác minh 2FA đang chờ (thay Map trong RAM, đúng với nhiều bản Cloud Run):
+  // 'totp' = đăng nhập chờ mã app; 'email' = đăng nhập chờ mã email; 'bat_email' = đang bật 2FA qua email. null = dòng cũ (totp).
+  method       String?
+  codeHash     String?  // sha256(loginToken + ':' + mã 6 số) — chỉ cho 'email' / 'bat_email'
+  attempts     Int      @default(0) // số lần đã thử mã (tối đa 5)
+  sentAt       DateTime? // lần gửi email gần nhất (giãn cách gửi lại 60 giây)
 
   @@index([loginToken])
   @@index([expiresAt])
+  @@index([userId])
 }

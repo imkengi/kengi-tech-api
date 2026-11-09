@@ -91,16 +91,22 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     return info
 }
 
-export function buildOtpEmail(code: string, purpose: 'login' | 'reset'): { subject: string; html: string; text: string } {
+/** purpose 'bat2fa' (09/11/2026): mã xác nhận BẬT 2FA qua email — Cài đặt → Bảo mật → "Nhận mã qua email". */
+export function buildOtpEmail(code: string, purpose: 'login' | 'reset' | 'bat2fa'): { subject: string; html: string; text: string } {
     const isReset = purpose === 'reset'
-    const title = isReset ? 'Quên mật khẩu rồi hả? 🤔' : 'Chào mừng quay lại! 👋'
+    const isBat = purpose === 'bat2fa'
+    const title = isReset ? 'Quên mật khẩu rồi hả? 🤔' : isBat ? 'Bật xác thực 2 lớp nè! 🛡️' : 'Chào mừng quay lại! 👋'
     const headerSubtitle = isReset ? 'Đặt lại mật khẩu cho khoẻ 🔑' : 'Xác thực 2 lớp cho an toàn 🛡️'
     const intro = isReset
         ? 'Có vẻ như bạn quên mất mật khẩu rồi 😅 Đừng lo, dùng mã bí mật bên dưới để đặt lại nha!'
-        : 'Để chắc chắn là bạn chứ không phải ai khác 👀 nhập giúp mình mã bí mật bên dưới nha!'
+        : isBat
+            ? 'Bạn vừa yêu cầu nhận mã đăng nhập qua email này 📬 Nhập mã bí mật bên dưới để bật xác thực 2 lớp nha! Không phải bạn? Đổi mật khẩu ngay nha.'
+            : 'Để chắc chắn là bạn chứ không phải ai khác 👀 nhập giúp mình mã bí mật bên dưới nha!'
     const subject = isReset
         ? `🔑 Đặt lại mật khẩu Kengi Tech: ${code}`
-        : `🔐 Mã đăng nhập Kengi Tech: ${code}`
+        : isBat
+            ? `🛡️ Mã bật xác thực 2 lớp Kengi Tech: ${code}`
+            : `🔐 Mã đăng nhập Kengi Tech: ${code}`
     const text = `${title} - Kengi Tech\n\nĐây là mã bí mật của bạn nè: ${code}\n\nMã này chỉ sống được 10 phút thôi nha ⏰ Nhanh tay lên!\nĐừng chia sẻ mã cho ai hết nha, kể cả nhân viên Kengi Tech 🤫\nNếu bạn không yêu cầu mã này thì cứ bỏ qua email này nha — không sao đâu 😉`
     const year = new Date().getFullYear()
     const spacedCode = code.split('').join(' ')

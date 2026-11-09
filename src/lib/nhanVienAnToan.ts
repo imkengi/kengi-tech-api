@@ -4,8 +4,9 @@
  * Trước 09/11/2026 `GET /api/employees` (cả `/:id`, `POST /`, `PUT /:id`, `PUT /:id/toggle-status`) trả
  * NGUYÊN dòng User, chỉ bỏ mỗi `password` (`const { password, ...rest } = u`). Mọi cột còn lại lọt ra, trong đó:
  *   · `twoFactorSecret` — hạt TOTP. Cầm nó là tự sinh được mã Google Authenticator hợp lệ của người đó.
- *   · `trustedDevices`  — mỗi phần tử có `id` = deviceId; gửi deviceId đó lúc đăng nhập là BỎ QUA hẳn bước 2FA
- *                         (routes/auth.ts, nhánh `isTrusted` của POST /login).
+ *   · `trustedDevices`  — hồi đó mỗi phần tử có `id` = deviceId; gửi deviceId đó lúc đăng nhập là BỎ QUA hẳn bước 2FA
+ *                         (routes/auth.ts, nhánh `isTrusted` của POST /login). Từ 09/11/2026 cột chỉ giữ BĂM của token
+ *                         máy chủ cấp (lib/trustedDevice) — vẫn là cột bí mật, không đưa ra ngoài.
  * Ai có quyền `employees.view` (quản lý; có cửa hàng cấp cả nhân viên) mở DevTools là vượt được 2FA của chủ shop.
  * Danh sách còn nằm trong cache 300 giây. `GET /api/admin/users` còn nặng hơn: rải `...u` — kèm cả HASH MẬT
  * KHẨU của mọi nhân viên mọi cửa hàng (mật khẩu mặc định khi tạo nhân viên là '123456' ⇒ hash dò ra ngay).
