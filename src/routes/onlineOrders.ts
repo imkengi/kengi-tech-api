@@ -4506,7 +4506,9 @@ router.post('/channels/:id/test-connection', authMiddleware, async (req: AuthReq
 })
 
 // PUT /api/online-orders/channels/:id/fee-config
-router.put('/channels/:id/fee-config', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Quyền như các route ghi kênh hàng xóm (09/11/2026): từ khi có "phí KHAI" (lib/giaShopee MauPhi.khai) ô này là số Pilot và
+// nút "Đẩy giá lên sàn" dùng để tính GIÁ SÀN — trước chỉ cần đăng nhập là ai cũng hạ được phí khai để mở rào giá sàn.
+router.put('/channels/:id/fee-config', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { commissionRate } = req.body
@@ -6274,9 +6276,11 @@ router.post('/channels/:id/sync-products', authMiddleware, async (req: AuthReque
 // POST /api/online-orders/channels/:id/push-stock
 // Đẩy tồn kho local LÊN sàn (TikTok inventory/update, Shopee update_stock).
 // Map qua OnlineProduct: ưu tiên localProductId (gán tay), fallback khớp SKU.
-// Body: { onlineProductIds?: string[], force?: boolean } — mặc định bỏ qua
-// sản phẩm có tồn sàn đã bằng tồn local (tránh đốt rate limit).
-router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Body: { onlineProductIds?: string[], force?: boolean, dryRun?: boolean, chapNhanVeKhong?: boolean, veKhongDaXem?: number }
+// — mặc định bỏ qua sản phẩm có tồn sàn đã bằng tồn local (tránh đốt rate limit).
+// Quyền (09/11/2026): cặp của route ghi hàng xóm + quyền lẻ online_products.edit_stock — danh mục quyền ở Cài đặt
+// không có online_orders.manage, chỉ cặp kia thì nhân viên được giao "đẩy tồn" bị khoá oan.
+router.post('/channels/:id/push-stock', authMiddleware, requirePermission('online_products.edit_stock', 'online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         /* Lõi nằm ở `lib/dayTonLenSan.ts` — dùng CHUNG với bộ đo
          * `POST /admin/day-ton-thu`, để nút trên web và đường admin không bao giờ
@@ -6286,8 +6290,13 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
             dryRun: req.body?.dryRun === true || String(req.query.dryRun || '') === '1',
             onlineProductIds: Array.isArray(req.body?.onlineProductIds) ? req.body.onlineProductIds : undefined,
             force: req.body?.force === true,
+            // CHỈ đúng true (không "true", không 1): người bấm đã xem chạy thử và tích "vẫn đẩy các mã về 0"
+            chapNhanVeKhong: req.body?.chapNhanVeKhong === true,
+            // số mã về 0 người bấm đã thấy ở chạy thử — đồng ý chỉ có hiệu lực khi con số hiện tại không lớn hơn
+            veKhongDaXem: typeof req.body?.veKhongDaXem === 'number' ? req.body.veKhongDaXem : undefined,
         })
-        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi }); return }
+        // 409 cầu dao kèm `data` (veKhong, coHangTrenSan, viDuVeKhong) — giao diện hiện lại chi tiết, không chỉ một câu
+        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi, ...(kq.data ? { data: kq.data } : {}) }); return }
         res.json({ success: true, data: kq.data })
     } catch (err: any) {
         console.error('Push stock error:', err)
@@ -6297,100 +6306,21 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
 
 // POST /api/online-orders/channels/:id/push-price
 // Đẩy GIÁ BÁN local LÊN sàn (TikTok prices/update, Shopee update_price).
-// Map qua OnlineProduct giống push-stock. Body: { onlineProductIds?: string[], force?: boolean }
-router.post('/channels/:id/push-price', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Map qua OnlineProduct giống push-stock. Body: { onlineProductIds?: string[], force?: boolean, dryRun?: boolean }
+// Quyền (09/11/2026): cặp của route ghi hàng xóm + quyền lẻ online_products.edit_price (xem push-stock).
+router.post('/channels/:id/push-price', authMiddleware, requirePermission('online_products.edit_price', 'online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
-        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
-        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
-        if (!['shopee', 'tiktok'].includes(channel.platform)) {
-            res.status(400).json({ success: false, error: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy giá` })
-            return
-        }
-        if (!channel.accessToken) {
-            res.status(400).json({ success: false, error: 'Kênh chưa kết nối API (thiếu access token)' })
-            return
-        }
-
-        const service = getPlatformService(channel.platform, {
-            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
-            accessToken: channel.accessToken || undefined,
-            refreshToken: channel.refreshToken || undefined,
-            shopId: channel.shopId || undefined,
-        }) as any
-        if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
-
-        // Auto-refresh token if expiring (5 min buffer)
-        const tokenExpiresAt = (channel as any).tokenExpiresAt
-        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
-            try {
-                const tokens = await service.refreshAccessToken();
-                service.credentials.accessToken = tokens.accessToken;
-                service.credentials.refreshToken = tokens.refreshToken;
-                await prisma.onlineChannel.update({
-                    where: { id: channel.id },
-                    data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
-                })
-            } catch (e: any) { console.warn('[push-price] Token refresh failed:', e.message) }
-        }
-
-        const { onlineProductIds, force } = req.body || {}
-        const where: any = { channelId: channel.id }
-        if (Array.isArray(onlineProductIds) && onlineProductIds.length > 0) where.id = { in: onlineProductIds.map(String) }
-
-        const onlineProducts = await prisma.onlineProduct.findMany({
-            where,
-            include: { localProduct: { select: { id: true, sku: true, sellingPrice: true } } },
+        /* Lõi nằm ở `lib/dayGiaLenSan.ts` (09/11/2026) — MỖI listing soát GIÁ SÀN (phí theo ngành + giá vốn + chính sách
+         * Pilot cùng sàn) trước khi ghi; dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do. Bộ kiểm gọi đúng lõi này. */
+        const { dayGiaLenSan } = await import('../lib/dayGiaLenSan')
+        const kq = await dayGiaLenSan(req.storePrisma!, String(req.params.id), {
+            dryRun: req.body?.dryRun === true || String(req.query.dryRun || '') === '1',
+            onlineProductIds: Array.isArray(req.body?.onlineProductIds) ? req.body.onlineProductIds : undefined,
+            // giữ đúng nghĩa cũ của route (truthy) — force chỉ bỏ bước "giá đã bằng", KHÔNG bỏ rào giá sàn
+            force: !!req.body?.force,
         })
-
-        let pushed = 0, skipped = 0, failed = 0
-        const errors: string[] = []
-
-        for (const p of onlineProducts) {
-            let local = p.localProduct
-            if (!local && p.sku) {
-                local = await prisma.product.findFirst({
-                    where: { sku: p.sku },
-                    select: { id: true, sku: true, sellingPrice: true },
-                })
-            }
-            if (!local || !(local.sellingPrice > 0)) { skipped++; continue }
-
-            const targetPrice = local.sellingPrice
-            if (!force && p.price === targetPrice) { skipped++; continue }
-
-            try {
-                if (channel.platform === 'shopee') {
-                    await service.updatePrice(p.platformProductId, targetPrice)
-                } else {
-                    await service.updatePrice(p.platformProductId, targetPrice, undefined, p.sku || undefined)
-                }
-                await prisma.onlineProduct.update({
-                    where: { id: p.id },
-                    data: { price: targetPrice, syncedAt: new Date() },
-                })
-                pushed++
-            } catch (e: any) {
-                failed++
-                errors.push(`${p.sku || p.platformProductId}: ${e.message}`)
-                console.error(`[push-price] ${channel.name} ${p.platformProductId}:`, e.message)
-            }
-
-            // Soft throttle between platform calls to stay under rate limits
-            await new Promise(r => setTimeout(r, 300))
-        }
-
-        await prisma.syncLog.create({
-            data: {
-                channelId: channel.id,
-                action: 'push_price',
-                status: failed > 0 ? 'partial' : 'success',
-                details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}${errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''}`,
-                ordersCount: pushed,
-            },
-        }).catch(() => { })
-
-        res.json({ success: true, data: { pushed, skipped, failed, errors } })
+        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi, ...(kq.data ? { data: kq.data } : {}) }); return }
+        res.json({ success: true, data: kq.data })
     } catch (err: any) {
         console.error('Push price error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })

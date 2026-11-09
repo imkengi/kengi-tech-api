@@ -72,6 +72,24 @@ export function chuanHoaChinhSachTikTok(x: any): ChinhSachTikTok {
 }
 export const CHINH_SACH_TIKTOK_MAC_DINH: ChinhSachTikTok = chuanHoaChinhSachTikTok({})
 
+/**
+ * Chính sách TikTok Pilot của cửa hàng — đọc thẳng, KHÔNG tạo bảng hộ (cùng luật shopeePilot.docChinhSachPilot). Cho nút tay
+ * "Đẩy giá lên sàn" (lib/dayGiaLenSan, 09/11/2026): giá sàn ở đó theo đúng biên chủ shop đã đặt cho Pilot.
+ * Chưa từng dùng Pilot (chưa có bảng / chưa lưu) ⇒ mặc định. Đọc HỎNG vì lý do khác ⇒ ném lỗi: rơi về mặc định có thể LỎNG
+ * hơn mức chủ shop đặt — rào an toàn không mở khi hỏng.
+ */
+export async function docChinhSachTikTok(prisma: any): Promise<ChinhSachTikTok> {
+    let r: any
+    try {
+        [r] = await prisma.$queryRawUnsafe(`SELECT policy FROM "TikTokPilotConfig" WHERE id = 'default'`)
+    } catch (e: any) {
+        const loi = `${e?.message || e} ${JSON.stringify(e?.meta || {})}`
+        if (/42P01|does not exist|không tồn tại/i.test(loi)) return chuanHoaChinhSachTikTok({})
+        throw new ToolError('Không đọc được chính sách TikTok Pilot của cửa hàng — không ghi giá khi chưa biết giá sàn chủ shop đặt. Thử lại sau.')
+    }
+    return chuanHoaChinhSachTikTok(docJson(r?.policy, {}))
+}
+
 function thamSoTinh(p: ChinhSachTikTok, giaVon: number, phi: MauPhi): ThamSoGia {
     return {
         giaVon, phi,
@@ -682,7 +700,7 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
     if (danhMuc) results.push(danhMuc)
 
     if (pol.automation.syncStock) {
-        // chạy thử trước — cầu dao (lib/shopeePilot.cauDaoTon) nhảy thì không đẩy
+        // chạy thử trước — cầu dao (lib/dayTonLenSan.cauDaoTon, đếm trên toàn bộ listing) nhảy thì không đẩy
         results.push(await dayTonChuKy({ tuDong, san: 'TikTok', gian: ch.name, day: o => dayTon(ctx, ch.id, o), conLuot: () => conLuotGhi(ctx, pol), ghi: w => ctx.kho.ghiNhatKy(w) }))
     }
 

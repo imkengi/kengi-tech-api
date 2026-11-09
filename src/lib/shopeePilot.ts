@@ -36,6 +36,7 @@ import {
     chinhSachGia, giaSongShopee, maDangKhuyenMai, type ChinhSachGia, type GiaSongShopee,
 } from './shopeeThaoTac'
 import { baoChuShop } from './pilotBaoChuShop'
+import { cauDaoTon } from './dayTonLenSan'
 
 // ─── Chính sách ─────────────────────────────────────────────────────────────────
 
@@ -141,7 +142,9 @@ export async function docChinhSachPilot(prisma: any): Promise<ChinhSachPilot> {
     return chuanHoaChinhSach(docJson(r?.policy, {}))
 }
 
-function thamSoTinh(p: ChinhSachPilot, giaVon: number, phi: MauPhi): ThamSoGia {
+/** Chính sách → tham số tính giá (lib/giaShopee). Chỉ đọc các trường giá — chính sách TikTok Pilot cùng tên trường; nút tay
+ *  "Đẩy giá lên sàn" (lib/dayGiaLenSan, 09/11/2026) dùng chung để giá sàn ở đó đúng bằng giá sàn Pilot tính. */
+export function thamSoTinh(p: Pick<ChinhSachPilot, 'targetMarginRate' | 'minMarginRate' | 'packagingCost' | 'adsRate' | 'affiliateRate' | 'vatRate' | 'priceStep'>, giaVon: number, phi: MauPhi): ThamSoGia {
     return {
         giaVon, phi,
         bienLoiNhuanPct: p.targetMarginRate * 100,
@@ -1197,21 +1200,12 @@ async function lamMoiDanhMuc(ctx: NgCanh, ch: any): Promise<any | null> {
     }
 }
 
-/**
- * Cầu dao đẩy tồn (03/11/2026): lượt đẩy làm NHIỀU mã đang có hàng trên sàn về 0 thì gần như chắc là tồn kho sai chỗ chứ
- * không phải bán hết — đo KENGISTORE: TikTok 117 mã sẽ về 0 vì hàng nằm ở kho HUTI mà kho mẹ đang tắt.
- * Ngưỡng ≥ max(5, 15%) số mã đang có hàng trên sàn; bán hết lẻ tẻ vẫn đẩy bình thường. null = cho đẩy.
- */
-export function cauDaoTon(bang: any[]): string | null {
-    const ds = Array.isArray(bang) ? bang : []
-    const coHang = ds.filter(x => Number(x?.tonDangTrenSan) > 0).length
-    const veKhong = ds.filter(x => !x?.boQua && Number(x?.seDay) === 0 && Number(x?.tonDangTrenSan) > 0)
-    if (veKhong.length < Math.max(5, Math.ceil(coHang * 0.15))) return null
-    return `${veKhong.length}/${coHang} mã đang có hàng trên sàn sẽ về 0 (vd ${veKhong.slice(0, 4).map(x => `${x.sku} ${x.tonDangTrenSan}→0`).join(', ')}) — ` +
-        'thường là tồn kho sai chỗ (hàng nằm ở kho khác / kho mẹ đang tắt). Kiểm rồi đẩy tay ở Kênh bán online.'
-}
+/* Cầu dao đẩy tồn (03/11/2026) chuyển về lõi lib/dayTonLenSan (09/11/2026): lõi soát trên TOÀN BỘ listing trước khi gọi sàn,
+ * nút tay "Đẩy tồn kho lên sàn" cũng qua đó. Re-export cho người gọi cũ (bộ kiểm check-pilot-tu-dong B1–B5). */
+export { cauDaoTon }
 
-/** Đẩy tồn trong chu kỳ — chạy thử trước, cầu dao nhảy thì KHÔNG đẩy. Dùng chung Shopee / TikTok Pilot. */
+/** Đẩy tồn trong chu kỳ — chạy thử trước, cầu dao nhảy thì KHÔNG đẩy. Dùng chung Shopee / TikTok Pilot.
+ *  KHÔNG BAO GIỜ truyền chapNhanVeKhong cho lõi: chỉ người bấm nút tay được nhận rủi ro đưa mã đang có hàng về 0. */
 export async function dayTonChuKy(o: {
     tuDong: boolean; san: string; gian: string
     day: (op: { dryRun?: boolean }) => Promise<any>; conLuot: () => Promise<void>; ghi: (w: any) => Promise<void>
@@ -1221,12 +1215,18 @@ export async function dayTonChuKy(o: {
         return { action: 'stock', status: 'preview', message: thu.ok ? `Xem trước: sẽ đẩy ${thu.data?.seDay ?? '?'} mã, giữ nguyên ${thu.data?.seBoQua ?? '?'}. Chưa gọi ${o.san}.` : String(thu.loi || 'không rõ') }
     }
     if (!thu.ok) return { action: 'stock', status: 'failed', message: `Không tính được tồn cần đẩy: ${String(thu.loi || 'không rõ').slice(0, 200)}` }
-    const cauDao = cauDaoTon(thu.data?.bang)
+    // Lõi (09/11/2026) trả `cauDao` đếm trên TOÀN BỘ listing — `bang` chỉ có 300 dòng đầu. Lõi cũ / đẩy giả không có trường đó ⇒ như trước.
+    const cauDao = thu.data && thu.data.cauDao !== undefined ? thu.data.cauDao : cauDaoTon(thu.data?.bang)
     if (cauDao) return { action: 'stock', status: 'skipped', message: `CẦU DAO — không đẩy tồn: ${cauDao} CHỜ NGƯỜI DUYỆT.` }
     // chạm trần thao tác ghi / ngày theo chính sách — không phải hỏng, khỏi báo chủ shop như lỗi (nâng trần ở chính sách nếu cần)
     try { await o.conLuot() } catch (e: any) { return { action: 'stock', status: 'skipped', message: String(e?.message || e).slice(0, 300) } }
     try {
         const r = await o.day({})
+        /* Tồn đổi giữa lượt chạy thử và lượt thật ⇒ lõi tự chặn (409, chưa gọi sàn lần nào): đó là cầu dao, không phải hỏng —
+         * 'skipped' + chữ CẦU DAO để chủ shop được báo đúng việc cần duyệt; không ghi nhật ký ghi (không có gì lên sàn). */
+        if (!r?.ok && (r?.http === 409 || r?.data?.cauDao)) {
+            return { action: 'stock', status: 'skipped', message: `CẦU DAO — không đẩy tồn: ${r.data?.cauDao || String(r.loi || '').replace(/^CẦU DAO — không đẩy tồn:\s*/, '')} CHỜ NGƯỜI DUYỆT.` }
+        }
         const d = r.data || {}
         const st = !r.ok ? 'failed' : d.failed ? 'partial' : 'succeeded'
         const message = r.ok ? `Đẩy ${d.pushed ?? 0} mã, giữ nguyên ${d.skipped ?? 0}, lỗi ${d.failed ?? 0}${d.errors?.length ? `: ${d.errors.slice(0, 3).join('; ')}` : ''}` : String(r.loi || 'không rõ')

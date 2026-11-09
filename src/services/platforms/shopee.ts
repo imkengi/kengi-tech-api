@@ -2,6 +2,8 @@ import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem,
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
 import { guiJsonKemBase64, CHO_BASE64 } from '../../lib/khoiVideo'
+// flashSaleKiemGia không import gì ⇒ không vòng import
+import { tonSanPham } from '../../lib/flashSaleKiemGia'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE OPEN PLATFORM v2.0
@@ -606,11 +608,13 @@ export class ShopeeService extends PlatformService {
                 if (d.price_info) {
                     price = d.price_info[0]?.current_price || d.price_info[0]?.original_price || 0
                 }
-                // Get total stock from all models
-                let stock = 0
-                if (d.stock_info_v2) {
-                    stock = d.stock_info_v2.current_stock || d.stock_info_v2.normal_stock || 0
-                }
+                /* Tồn bán được — đọc như flashSaleKiemGia.tonSanPham (09/11/2026): summary_info.total_available_stock →
+                 * Σ seller_stock → current/normal_stock. Trước chỉ đọc current_stock / normal_stock — trường của bản API CŨ,
+                 * get_item_base_info giờ không trả ⇒ OnlineProduct.stock = 0 ở MỌI listing Shopee (đo prod 15/10, 20/10):
+                 * bảng chạy thử "Đẩy tồn" thấy sàn đang 0 nên cầu dao (mã đang có hàng sẽ về 0) không bao giờ nhảy.
+                 * Hàng CÓ PHÂN LOẠI (has_model): base_info không mang tồn từng phân loại ⇒ vẫn ra 0 như cũ. KHÔNG gọi
+                 * get_model_list cho cả danh mục để lấy số đó: 709 listing là 709 lời gọi thừa, chạm trần tần suất Shopee. */
+                const stock = tonSanPham(d)
 
                 const imageUrl = d.image?.image_url_list?.[0] || ''
                 const sku = d.item_sku || ''

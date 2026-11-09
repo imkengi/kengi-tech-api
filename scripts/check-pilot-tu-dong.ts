@@ -19,6 +19,14 @@
  *    L. CHƯA BIẾT PHÍ sàn (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): gian chưa đủ đơn đối soát, ô phí
  *       còn 6% mặc định ⇒ chu kỳ Shopee / TikTok không ghi gì, MỘT dòng lý do kèm đường khai phí, lịch báo chủ shop đúng một
  *       lần; khai phí xong thì chạy lại. (D, H, I: "phí chưa đủ tin" giờ là gian ĐÃ khai phí 20% mà chưa đủ đơn để đo.)
+ *    M. (09/11/2026) tồn Shopee đọc ĐÚNG: fetchProducts đọc summary_info / seller_stock — trước đọc trường của bản API cũ nên
+ *       lưu 0 ở MỌI listing ⇒ bảng đẩy tồn thấy sàn đang 0, cầu dao không bao giờ nhảy
+ *    N. cầu dao CHUNG trong lõi đẩy tồn (lib/dayTonLenSan — nút tay, /admin/day-ton-thu, Pilot): đếm trên TOÀN BỘ listing (không
+ *       chỉ 300 dòng bảng chạy thử); chạy thật mà nhảy ⇒ 409, 0 lời gọi sàn; chỉ người bấm nút tay vượt được (chapNhanVeKhong
+ *       + veKhongDaXem: đồng ý gắn với con số đã xem — thiếu số hoặc số mã về 0 tăng lên ⇒ vẫn 409);
+ *       Pilot dùng cauDao của lõi, tồn đổi giữa chạy thử và chạy thật ⇒ 'skipped'
+ *    P. nút "Đẩy giá lên sàn" (lib/dayGiaLenSan): mỗi listing soát GIÁ SÀN như Pilot (phí theo ngành, giá vốn, chính sách Pilot
+ *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
@@ -28,6 +36,8 @@ import { viecCanNguoi, baoChuShop, GIAN_CACH_BAO_MS } from '../src/lib/pilotBaoC
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
 import { chayTheoLichFb, khoBoNhoFb, luuCauHinhFb } from '../src/lib/facebookPilot'
+import { dayTonLenSan } from '../src/lib/dayTonLenSan'
+import { dayGiaLenSan } from '../src/lib/dayGiaLenSan'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (ok) dat++; else loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${!ok && chiTiet ? ' — ' + chiTiet.slice(0, 900) : ''}`) }
@@ -129,6 +139,8 @@ P.updatePrice = async function (this: any, id: any, gia: number) {
     const l = listing.find(x => x.platformProductId === String(id) && x.platform === 'shopee')
     if (l) songGia[String(id)] = { ...(songGia[String(id)] || {}), goc: gia, ban: undefined }
 }
+/** bản THẬT của fetchProducts — mục M gọi nó với httpGet giả (bản giả ngay dưới chỉ phục vụ chu kỳ Pilot) */
+const fetchProductsGoc = P.fetchProducts
 P.fetchProducts = async function (this: any) {
     soLanDongBo++
     const ch = kenh.find(c => c.shopId === this.credentials?.shopId)
@@ -152,6 +164,57 @@ let bangTon: any[] = []
 const dayTonGia = async (_p: any, channelId: string, o: { dryRun?: boolean }) => {
     daySo.push({ channelId, dryRun: !!o.dryRun })
     return o.dryRun ? { ok: true, data: { seDay: bangTon.filter(x => !x.boQua).length, seBoQua: bangTon.filter(x => x.boQua).length, bang: bangTon } } : { ok: true, data: { pushed: 3, skipped: 1, failed: 0 } }
+}
+
+// ─── Đẩy tay (mục N, P — 09/11/2026): cửa hàng giả MỘT gian + sàn giả, gọi THẲNG lõi lib/dayTonLenSan / lib/dayGiaLenSan ───
+/** `ghi` = mọi lần ghi CSDL (listing, sổ đồng bộ, kênh) — chạy thử / bị chặn thì phải rỗng. Listing mang sẵn `localProduct`
+ *  (như include của lõi); `hang` là bảng Product cho giá vốn; `chinhSach` theo tên bảng Pilot ("ShopeePilotConfig"…). */
+function cuaHangDayTay(o: { kenh: any; listing: any[]; hang?: any[]; don?: any[]; donNganh?: any[]; chinhSach?: Record<string, any>; docChinhSach?: 'hong' | 'chuaCoBang' }) {
+    const ghi: string[] = []
+    const pz: any = {
+        onlineChannel: {
+            findUnique: async ({ where }: any) => (where.id === o.kenh.id ? o.kenh : null),
+            update: async () => { ghi.push('kenh'); return {} },
+        },
+        onlineProduct: {
+            findMany: async ({ where }: any) => o.listing.filter(l => l.channelId === where.channelId && (!where.id?.in || where.id.in.includes(l.id))),
+            update: async ({ where, data }: any) => { ghi.push(`sp:${where.id}`); const l = o.listing.find(x => x.id === where.id); if (l) Object.assign(l, data); return l },
+        },
+        product: { findFirst: async () => null, findUnique: async () => null },
+        skuMapping: { findFirst: async () => null },
+        syncLog: { create: async ({ data }: any) => { ghi.push(`so:${data.details}`); return data } },
+        $queryRawUnsafe: async (sql: string, ...v: any[]) => {
+            const bang = /"(ShopeePilotConfig|TikTokPilotConfig)"/.exec(sql)?.[1]
+            if (bang) {
+                if (o.docChinhSach === 'hong') throw new Error('Connection terminated unexpectedly')
+                if (o.docChinhSach === 'chuaCoBang') throw new Error(`relation "${bang}" does not exist (42P01)`)
+                const pol = o.chinhSach?.[bang]
+                return pol ? [{ policy: JSON.stringify(pol) }] : []
+            }
+            if (sql.includes('AS nganh')) return o.donNganh || []
+            if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return o.don || []
+            if (sql.includes('FROM "Product"')) {
+                const ids: string[] = v[0] || [], skus: string[] = v[1] || []
+                return (o.hang || []).filter(h => ids.includes(h.id) || skus.includes(String(h.sku).toLowerCase())).map(h => ({ ...h, mergedIntoId: null, mergedRate: 1 }))
+            }
+            return []
+        },
+    }
+    return { prisma: pz, ghi }
+}
+/** Sàn giả cho lõi đẩy tay: ghi lại MỌI lời gọi ghi lên sàn (tồn, giá, hỏi phân loại). */
+const sanDayTay = () => {
+    const goi: string[] = []
+    return {
+        goi,
+        dichVu: {
+            credentials: {},
+            updateStock: async (id: string, n: number, modelId?: number) => { goi.push(`ton:${id}:${n}${modelId ? `:${modelId}` : ''}`) },
+            getModelList: async () => { goi.push('model'); return [] },
+            updatePrice: async (id: string, gia: number, _m?: any, sku?: string) => { goi.push(`gia:${id}:${gia}${sku ? `:${sku}` : ''}`) },
+            refreshAccessToken: async () => { throw new Error('bộ kiểm không cho làm mới token') },
+        },
+    }
 }
 
 const nem = async (f: () => Promise<any>) => { try { await f(); return null } catch (e: any) { return e } }
@@ -534,7 +597,186 @@ async function main() {
         dung('H4. Facebook theo lịch gãy (mất fanpage) ⇒ báo ngay', kq === 'loi' && thongBao.length === 1 && /Facebook Pilot: chu kỳ tự động bị lỗi/.test(thongBao[0].title), JSON.stringify({ kq, thongBao }))
     }
 
-    console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian`)
+    // ─── M. Tồn Shopee đọc ĐÚNG (09/11/2026) ─────────────────────────────────────
+    // fetchProducts đọc stock_info_v2.current_stock / normal_stock — trường của bản API cũ, get_item_base_info giờ không trả ⇒
+    // OnlineProduct.stock = 0 ở mọi listing Shopee. Gọi bản THẬT của fetchProducts với httpGet giả (không ra mạng).
+    {
+        const svc: any = new ShopeeService({ apiKey: '1', apiSecret: 's', accessToken: 'tM', shopId: '7' } as any)
+        const goiHttp: string[] = []
+        const sp = (id: number, them: any) => ({ item_id: id, item_name: `SP ${id}`, item_sku: `M${id}`, item_status: 'NORMAL', category_id: 101, price_info: [{ original_price: 100000, current_price: 100000 }], ...them })
+        const ds = [
+            sp(1, { stock_info_v2: { summary_info: { total_available_stock: 7 }, seller_stock: [{ stock: 99 }] } }),
+            sp(2, { stock_info_v2: { seller_stock: [{ location_id: 'VNZ', stock: 3 }, { stock: 4 }] } }),
+            sp(3, { has_model: true }),                                    // có phân loại: base_info không mang tồn từng phân loại
+            sp(4, { stock_info_v2: {} }),
+            sp(5, { stock_info_v2: { current_stock: 5 } }),                // phản hồi kiểu cũ vẫn đọc được
+        ]
+        svc.httpGet = async (url: string) => {
+            if (url.includes('/product/get_item_list')) { goiHttp.push('list'); return { response: { item: ds.map(d => ({ item_id: d.item_id })), has_next_page: false } } }
+            if (url.includes('/product/get_item_base_info')) { goiHttp.push('base'); return { response: { item_list: ds } } }
+            goiHttp.push(url.split('?')[0]!)
+            throw new Error('bộ kiểm: lời gọi Shopee ngoài dự kiến')
+        }
+        const r = await fetchProductsGoc.call(svc)
+        const ton: Record<string, number> = Object.fromEntries(r.products.map((x: any) => [x.platformProductId, x.stock]))
+        dung('M1. fetchProducts: summary_info.total_available_stock ⇒ đúng tồn (7), thắng seller_stock', ton['1'] === 7, JSON.stringify(ton))
+        dung('M2. fetchProducts: chỉ có seller_stock ⇒ cộng các kho (3 + 4 = 7)', ton['2'] === 7, JSON.stringify(ton))
+        dung('M3. fetchProducts: có phân loại / không có gì ⇒ 0 như cũ (không bịa tồn), KHÔNG hỏi get_model_list (đúng 2 lời gọi); current_stock kiểu cũ vẫn đọc',
+            ton['3'] === 0 && ton['4'] === 0 && ton['5'] === 5 && goiHttp.join() === 'list,base', JSON.stringify({ ton, goiHttp }))
+    }
+
+    // ─── N. Cầu dao CHUNG trong lõi đẩy tồn (09/11/2026) ─────────────────────────
+    // Trước: lõi vừa tính vừa đẩy (không có chỗ dừng trước lần ghi đầu), cầu dao chỉ ở Pilot và chỉ thấy 300 dòng đầu của bảng
+    // chạy thử, nút tay "Đẩy tồn kho lên sàn" không soát gì. Gian giả: mọi listing đang 5 trên sàn; mã "về 0" hết hàng trong kho.
+    {
+        const gianTon = (n: number, veKhong: (i: number) => boolean) => {
+            const kenhN = { id: 'chN', name: 'Gian N', platform: 'shopee', shopId: '5', accessToken: 'tN', apiKey: '1', apiSecret: 's', commissionRate: 20 }
+            const ds = Array.from({ length: n }, (_, i) => ({ id: `n${i}`, channelId: 'chN', platformProductId: String(50000 + i), sku: `N${i}`, name: `Hàng N${i}`, stock: 5,
+                localProduct: { id: `pn${i}`, sku: `N${i}`, stock: veKhong(i) ? 0 : 6 } }))
+            return { ...cuaHangDayTay({ kenh: kenhN, listing: ds }), ds }
+        }
+        const san = sanDayTay()
+        const g = gianTon(400, i => i >= 280)      // 120 mã về 0 ở dòng 280–399: 100 mã nằm NGOÀI 300 dòng bảng chạy thử
+        const thu = await dayTonLenSan(g.prisma, 'chN', { dryRun: true, giaLap: { dichVu: san.dichVu } })
+        const d = thu.data || {}
+        dung('N1. chạy thử 400 listing, 120 mã về 0 nằm cuối ⇒ cauDao 120/400 đếm trên TOÀN BỘ (bảng 300 dòng một mình KHÔNG nhảy); ví dụ ≤ 20; 0 lời gọi sàn, không ghi',
+            thu.ok && /^120\/400 mã/.test(d.cauDao || '') && d.veKhong === 120 && d.coHangTrenSan === 400 && d.viDuVeKhong?.length === 20
+            && d.viDuVeKhong.every((x: any) => x.sku && x.tenSan && x.tonDangTrenSan === 5) && d.bang?.length === 300 && cauDaoTon(d.bang) === null
+            && san.goi.length === 0 && g.ghi.length === 0, JSON.stringify({ ...d, bang: d.bang?.length, goi: san.goi.length, ghi: g.ghi.length }))
+        const that = await dayTonLenSan(g.prisma, 'chN', { giaLap: { dichVu: san.dichVu } })
+        dung('N2. chạy thật KHÔNG cờ ⇒ 409 "CẦU DAO — không đẩy tồn" kèm chi tiết (veKhong, coHangTrenSan, viDuVeKhong); 0 lời gọi sàn, không ghi CSDL',
+            that.http === 409 && !that.ok && /^CẦU DAO — không đẩy tồn: 120\/400/.test(that.loi || '') && that.data?.cauDao === d.cauDao && that.data?.veKhong === 120
+            && that.data?.coHangTrenSan === 400 && that.data?.viDuVeKhong?.length === 20 && san.goi.length === 0 && g.ghi.length === 0,
+            JSON.stringify({ http: that.http, loi: that.loi, goi: san.goi.length, ghi: g.ghi.slice(0, 3) }))
+        const chuoi = await dayTonLenSan(g.prisma, 'chN', { chapNhanVeKhong: 'true' as any, giaLap: { dichVu: san.dichVu } })
+        dung('N3. cờ phải ĐÚNG true — chuỗi "true" vẫn 409, 0 lời gọi sàn', chuoi.http === 409 && san.goi.length === 0 && g.ghi.length === 0, JSON.stringify({ http: chuoi.http, goi: san.goi.length }))
+        const vuot = await dayTonLenSan(g.prisma, 'chN', { chapNhanVeKhong: true, veKhongDaXem: 120, giaLap: { dichVu: san.dichVu } })
+        dung('N4. người bấm tích "vẫn đẩy các mã về 0" (chapNhanVeKhong, đã xem 120) ⇒ đẩy đủ 400 (120 mã về 0), sổ đồng bộ ghi VƯỢT CẦU DAO',
+            vuot.ok && vuot.data?.pushed === 400 && vuot.data?.failed === 0 && vuot.data?.veKhong === 120 && !!vuot.data?.cauDao
+            && san.goi.length === 400 && san.goi.filter(x => x.endsWith(':0')).length === 120 && g.ghi.some(x => /VƯỢT CẦU DAO.*120\/400/.test(x)),
+            JSON.stringify({ data: { ...vuot.data, errors: vuot.data?.errors?.slice(0, 3) }, goi: san.goi.length }))
+
+        const san2 = sanDayTay()
+        const g2 = gianTon(100, i => i < 3)        // ĐỐI CHỨNG: 3/100 mã về 0 — bán hết lẻ tẻ
+        const thu2 = await dayTonLenSan(g2.prisma, 'chN', { dryRun: true, giaLap: { dichVu: san2.dichVu } })
+        const that2 = await dayTonLenSan(g2.prisma, 'chN', { giaLap: { dichVu: san2.dichVu } })
+        dung('N5. ĐỐI CHỨNG 3/100 mã về 0 ⇒ chạy thử cauDao null; chạy thật KHÔNG cờ vẫn đẩy đủ 100',
+            thu2.ok && thu2.data?.cauDao === null && thu2.data?.veKhong === 3 && that2.ok && that2.data?.pushed === 100 && that2.data?.veKhong === 3 && san2.goi.length === 100,
+            JSON.stringify({ thu: { ...thu2.data, bang: undefined }, that: that2.data, goi: san2.goi.length }))
+
+        // Pilot qua lõi THẬT (không phải đẩy giả của mục B/I)
+        const ghiPilot: any[] = []
+        const san3 = sanDayTay()
+        const g3 = gianTon(400, i => i >= 280)
+        const op3: any[] = []
+        const r3 = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'Gian N', conLuot: async () => { }, ghi: async (w: any) => { ghiPilot.push(w) },
+            day: (op: any) => { op3.push(op); return dayTonLenSan(g3.prisma, 'chN', { ...op, giaLap: { dichVu: san3.dichVu } }) } })
+        dung('N6. Pilot dùng cauDao của lõi (đếm 400 dòng, không phải bảng 300) ⇒ bỏ qua, CHỜ NGƯỜI DUYỆT, 0 lời gọi sàn',
+            r3.status === 'skipped' && /CẦU DAO — không đẩy tồn: 120\/400/.test(r3.message) && /CHỜ NGƯỜI DUYỆT/.test(r3.message) && san3.goi.length === 0 && op3.length === 1 && ghiPilot.length === 0,
+            JSON.stringify({ r3, op3 }))
+        const san4 = sanDayTay()
+        const g4 = gianTon(100, i => i < 3)
+        const op4: any[] = []
+        const r4 = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'Gian N', conLuot: async () => { }, ghi: async (w: any) => { ghiPilot.push(w) },
+            day: async (op: any) => {
+                op4.push(op)
+                // giữa lượt chạy thử và lượt thật: 60 mã nữa hết hàng trong kho (vd vừa chuyển kho)
+                if (!op.dryRun) for (const l of g4.ds.slice(3, 63)) l.localProduct.stock = 0
+                return dayTonLenSan(g4.prisma, 'chN', { ...op, giaLap: { dichVu: san4.dichVu } })
+            } })
+        dung('N7. tồn đổi giữa chạy thử và chạy thật ⇒ lõi 409 ⇒ Pilot "skipped" + CẦU DAO (không phải "failed"), 0 lời gọi sàn; Pilot không bao giờ gửi chapNhanVeKhong',
+            r4.status === 'skipped' && /CẦU DAO — không đẩy tồn: 63\/100/.test(r4.message) && san4.goi.length === 0 && ghiPilot.length === 0
+            && op4.length === 2 && op4.every(x => !('chapNhanVeKhong' in x)), JSON.stringify({ r4, op4 }))
+
+        // Đồng ý gắn với CON SỐ đã xem: người bấm xem 100 mã về 0, tích ô, lúc bấm tồn đã đổi thành 120 ⇒ không phải điều họ đồng ý
+        const san8 = sanDayTay()
+        const g8 = gianTon(400, i => i >= 280)
+        const thieuSo = await dayTonLenSan(g8.prisma, 'chN', { chapNhanVeKhong: true, giaLap: { dichVu: san8.dichVu } })
+        const soLa = await dayTonLenSan(g8.prisma, 'chN', { chapNhanVeKhong: true, veKhongDaXem: NaN, giaLap: { dichVu: san8.dichVu } })
+        const tang = await dayTonLenSan(g8.prisma, 'chN', { chapNhanVeKhong: true, veKhongDaXem: 100, giaLap: { dichVu: san8.dichVu } })
+        dung('N8. tích "vẫn đẩy" mà thiếu số đã xem (hoặc NaN) ⇒ 409 "thiếu số mã về 0 đã xem"; đã xem 100 mà nay 120 ⇒ 409 "tăng từ 100 lên 120"; 0 lời gọi sàn, không ghi',
+            thieuSo.http === 409 && /thiếu số mã về 0 đã xem/.test(thieuSo.loi || '') && soLa.http === 409 && /thiếu số mã về 0 đã xem/.test(soLa.loi || '')
+            && tang.http === 409 && /tăng từ 100 lên 120/.test(tang.loi || '') && tang.data?.veKhong === 120
+            && san8.goi.length === 0 && g8.ghi.length === 0,
+            JSON.stringify({ thieuSo: thieuSo.loi, soLa: soLa.loi, tang: tang.loi, goi: san8.goi.length, ghi: g8.ghi.length }))
+        const itHon = await dayTonLenSan(g8.prisma, 'chN', { chapNhanVeKhong: true, veKhongDaXem: 125, giaLap: { dichVu: san8.dichVu } })
+        dung('N9. đã xem 125 mã về 0, lúc bấm chỉ còn 120 (ÍT hơn) ⇒ đồng ý vẫn hiệu lực, đẩy đủ 400',
+            itHon.ok && itHon.data?.pushed === 400 && itHon.data?.veKhong === 120 && san8.goi.length === 400,
+            JSON.stringify({ ok: itHon.ok, loi: itHon.loi, pushed: itHon.data?.pushed, goi: san8.goi.length }))
+    }
+
+    // ─── P. Nút "Đẩy giá lên sàn": rào GIÁ SÀN từng listing (09/11/2026) ─────────
+    // Nút cũ đẩy giá bán lẻ POS lên MỌI listing, không soát gì. Phí đo 40 đơn = 14% + 3.000đ ⇒ mã vốn 100k: giá sàn 127.200đ
+    // (biên tối thiểu 5% mặc định). Sàn đang để 140k.
+    {
+        const kenhP = (them: any = {}) => ({ id: 'chP', name: 'Gian P', platform: 'shopee', shopId: '6', accessToken: 'tP', apiKey: '1', apiSecret: 's', commissionRate: 20, ...them })
+        const mp = (sku: string, item: string, giaBanLe: number, giaVon: number, giaSan = 140000) => ({
+            l: { id: `lp-${sku}`, channelId: 'chP', platformProductId: item, sku, name: `Hàng ${sku}`, price: giaSan, categoryId: '101', localProductId: `pp-${sku}`, localProduct: { id: `pp-${sku}`, sku, sellingPrice: giaBanLe } },
+            h: { id: `pp-${sku}`, sku, name: `Hàng ${sku}`, description: '', costPrice: giaVon },
+        })
+        const gianP = (ds: ReturnType<typeof mp>[], o: { kenh?: any; daDo?: boolean; chinhSach?: Record<string, any>; docChinhSach?: 'hong' | 'chuaCoBang' } = {}) => {
+            xoaDemPhiTheoNganh()
+            const daDo = o.daDo !== false
+            return cuaHangDayTay({ kenh: o.kenh || kenhP(), listing: ds.map(x => x.l), hang: ds.map(x => x.h), chinhSach: o.chinhSach, docChinhSach: o.docChinhSach,
+                don: daDo ? donDoiSoat : [], donNganh: daDo ? donDoiSoat.map(x => ({ ...x, nganh: '101' })) : [] })
+        }
+        // dưới sàn / thiếu giá vốn / trên sàn / giá sàn đã bằng giá bán lẻ
+        const bonMa = () => [mp('PD', '8001', 110000, 100000), mp('PV', '8002', 150000, 0), mp('PT', '8003', 150000, 100000), mp('PB', '8004', 150000, 100000, 150000)]
+
+        const s1 = sanDayTay(), g1 = gianP(bonMa())
+        const thu = await dayGiaLenSan(g1.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s1.dichVu } })
+        const d = thu.data || {}
+        const vd = (sku: string) => (d.viDuBoQua || []).find((x: any) => x.sku === sku)
+        dung('P1. chạy thử: dưới giá sàn (110k < 127.200đ) và thiếu giá vốn ⇒ BỎ QUA có lý do; mã trên sàn ⇒ sẽ đổi; 0 lời gọi sàn, không ghi',
+            thu.ok && d.chayThu === true && d.seDay === 1 && d.seBoQua === 3 && d.boQuaDuoiSan === 2 && d.demBoQua?.duoiSan === 1 && d.demBoQua?.thieuVon === 1
+            && vd('PD')?.gia === 110000 && /thấp hơn GIÁ SÀN 127\.200đ/.test(vd('PD')?.lyDo || '') && /CHƯA CÓ GIÁ VỐN/.test(vd('PV')?.lyDo || '')
+            && d.viDuDoi?.length === 1 && d.viDuDoi[0].sku === 'PT' && d.viDuDoi[0].giaCu === 140000 && d.viDuDoi[0].giaMoi === 150000
+            && s1.goi.length === 0 && g1.ghi.length === 0, JSON.stringify({ d, goi: s1.goi, ghi: g1.ghi }))
+        const that = await dayGiaLenSan(g1.prisma, 'chP', { giaLap: { dichVu: s1.dichVu } })
+        dung('P2. chạy thật: CHỈ mã trên sàn được ghi (1 lời gọi updatePrice); dưới sàn / thiếu vốn không gọi sàn; sổ đồng bộ ghi số bỏ qua',
+            that.ok && that.data?.pushed === 1 && that.data?.skipped === 3 && that.data?.failed === 0 && that.data?.boQuaDuoiSan === 2 && that.data?.viDuBoQua?.length === 2
+            && s1.goi.join() === 'gia:8003:150000' && g1.ghi.filter(x => x.startsWith('sp:')).join() === 'sp:lp-PT' && g1.ghi.some(x => /rào giá sàn bỏ qua 2 mã/.test(x)),
+            JSON.stringify({ data: that.data, goi: s1.goi, ghi: g1.ghi }))
+
+        const s3 = sanDayTay(), g3 = gianP([mp('PT', '8003', 150000, 100000), mp('PH', '8005', 200000, 100000)], { daDo: false, kenh: kenhP({ commissionRate: 6 }) })
+        const r3 = await dayGiaLenSan(g3.prisma, 'chP', { giaLap: { dichVu: s3.dichVu } })
+        dung('P3. gian CHƯA BIẾT PHÍ (0 đơn đối soát, ô phí còn 6% mặc định) ⇒ không mã nào ghi, lý do kèm đường khai «Phí sàn (%)»; 0 lời gọi sàn',
+            r3.ok && r3.data?.pushed === 0 && r3.data?.boQuaDuoiSan === 2 && r3.data?.demBoQua?.chuaBietPhi === 2 && /Chưa biết phí sàn của gian "Gian P"/.test(r3.data?.chuaBietPhi || '')
+            && /«Phí sàn \(%\)»/.test(r3.data?.chuaBietPhi || '') && r3.data.viDuBoQua.every((x: any) => /Chưa biết phí sàn/.test(x.lyDo)) && s3.goi.length === 0
+            && !g3.ghi.some(x => x.startsWith('sp:')), JSON.stringify({ data: r3.data, goi: s3.goi }))
+        const s4 = sanDayTay(), g4 = gianP([mp('PT', '8003', 150000, 100000), mp('PK', '8006', 130000, 100000)], { daDo: false, kenh: kenhP({ commissionRate: 20 }) })
+        const r4 = await dayGiaLenSan(g4.prisma, 'chP', { giaLap: { dichVu: s4.dichVu } })
+        dung('P4. chủ shop đã KHAI phí 20% ⇒ giá sàn theo phí khai (133.400đ): 150k ghi, 130k bỏ qua',
+            r4.ok && r4.data?.pushed === 1 && s4.goi.join() === 'gia:8003:150000' && r4.data?.viDuBoQua?.length === 1 && r4.data.viDuBoQua[0].sku === 'PK'
+            && /thấp hơn GIÁ SÀN 133\.400đ/.test(r4.data.viDuBoQua[0].lyDo) && !r4.data?.chuaBietPhi, JSON.stringify({ data: r4.data, goi: s4.goi }))
+
+        // chính sách đã lưu của Pilot CÙNG SÀN: biên tối thiểu 25% ⇒ giá sàn 168.900đ — 150k qua được mặc định 5% (P2) giờ bị chặn
+        const pol = (shopee: number, tiktok: number) => ({ ShopeePilotConfig: { minMarginRate: shopee }, TikTokPilotConfig: { minMarginRate: tiktok } })
+        const s5 = sanDayTay(), g5 = gianP([mp('PT', '8003', 150000, 100000), mp('PH', '8005', 180000, 100000)], { chinhSach: pol(0.25, 0.4) })
+        const r5 = await dayGiaLenSan(g5.prisma, 'chP', { giaLap: { dichVu: s5.dichVu } })
+        dung('P5. Shopee: chính sách Shopee Pilot đã lưu (biên tối thiểu 25%) ⇒ giá sàn 168.900đ: 150k bị chặn, 180k ghi',
+            r5.ok && r5.data?.pushed === 1 && s5.goi.join() === 'gia:8005:180000' && /GIÁ SÀN 168\.900đ \(biên tối thiểu 25%/.test(r5.data?.viDuBoQua?.[0]?.lyDo || ''),
+            JSON.stringify({ data: r5.data, goi: s5.goi }))
+        const s6 = sanDayTay(), g6 = gianP([mp('PT', '8003', 150000, 100000), mp('PH', '8005', 180000, 100000)], { kenh: kenhP({ platform: 'tiktok' }), chinhSach: pol(0.05, 0.25) })
+        const r6 = await dayGiaLenSan(g6.prisma, 'chP', { giaLap: { dichVu: s6.dichVu } })
+        dung('P6. TikTok: đọc chính sách TikTok Pilot (không phải của Shopee) ⇒ 150k bị chặn, 180k ghi kèm seller SKU',
+            r6.ok && r6.data?.pushed === 1 && s6.goi.join() === 'gia:8005:180000:PH' && /GIÁ SÀN 168\.900đ/.test(r6.data?.viDuBoQua?.[0]?.lyDo || ''),
+            JSON.stringify({ data: r6.data, goi: s6.goi }))
+
+        const s7 = sanDayTay(), g7 = gianP([mp('PT', '8003', 150000, 100000)], { docChinhSach: 'hong' })
+        const r7 = await dayGiaLenSan(g7.prisma, 'chP', { giaLap: { dichVu: s7.dichVu } })
+        const s7b = sanDayTay(), g7b = gianP([mp('PT', '8003', 150000, 100000)], { docChinhSach: 'chuaCoBang' })
+        const r7b = await dayGiaLenSan(g7b.prisma, 'chP', { giaLap: { dichVu: s7b.dichVu } })
+        dung('P7. đọc chính sách HỎNG ⇒ dừng cả lượt (503), không rơi về mặc định lỏng hơn; chưa có bảng Pilot (chưa dùng Pilot) ⇒ mặc định, vẫn ghi',
+            r7.http === 503 && !r7.ok && s7.goi.length === 0 && g7.ghi.length === 0 && r7b.ok && r7b.data?.pushed === 1 && s7b.goi.join() === 'gia:8003:150000',
+            JSON.stringify({ r7, r7b: r7b.data, goi: s7.goi }))
+        const s8 = sanDayTay(), g8 = gianP(bonMa())
+        const r8 = await dayGiaLenSan(g8.prisma, 'chP', { force: true, giaLap: { dichVu: s8.dichVu } })
+        dung('P8. force chỉ bỏ bước "giá đã bằng" (PB ghi lại) — KHÔNG vượt rào giá sàn (PD, PV vẫn bỏ qua)',
+            r8.ok && r8.data?.pushed === 2 && s8.goi.join() === 'gia:8003:150000,gia:8004:150000' && r8.data?.boQuaDuoiSan === 2, JSON.stringify({ data: r8.data, goi: s8.goi }))
+    }
+
+    console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)
     process.exit(loi ? 1 : 0)
 }
 
