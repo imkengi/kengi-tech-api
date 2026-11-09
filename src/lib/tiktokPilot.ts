@@ -342,7 +342,8 @@ export interface DichVuTikTok {
     loiLamMoiToken?: string | null
 }
 
-export interface KetQuaDayTonGon { ok: boolean; loi?: string; data?: any }
+/** banDocSan: bản đọc sàn của lượt chạy thử — shopeePilot.dayTonChuKy đưa lại cho lượt thật (lib/dayTonLenSan, 10/11/2026) */
+export interface KetQuaDayTonGon { ok: boolean; loi?: string; data?: any; banDocSan?: any }
 
 export interface NgCanhTikTok {
     prisma: any
@@ -351,7 +352,7 @@ export interface NgCanhTikTok {
     /** TikTok giả cho bộ kiểm; bỏ trống ⇒ TikTokService thật bằng token của gian (tự làm mới khi sắp hết hạn) */
     taoTikTok?: (ch: any) => Promise<DichVuTikTok>
     /** đẩy tồn giả cho bộ kiểm; bỏ trống ⇒ lib/dayTonLenSan */
-    dayTon?: (prisma: any, channelId: string, o: { dryRun?: boolean }) => Promise<KetQuaDayTonGon>
+    dayTon?: (prisma: any, channelId: string, o: { dryRun?: boolean; docSanTruoc?: any }) => Promise<KetQuaDayTonGon>
     bayGio?: () => number
     /** dịch vụ đã mở trong lượt này (theo gian) — mở MỘT lần mỗi lượt: mỗi lần mở có thể làm mới token */
     _dichVu?: Map<string, Promise<DichVuTikTok>>
@@ -423,7 +424,7 @@ export function laLoiKhoaGiaKhuyenMai(e: any): boolean {
     return /\b(12052038|12019045)\b/.test(m) || /price\s+(is\s+)?locked|locked\s+due\s+to\s+(an?\s+)?(ongoing\s+)?promotion/i.test(m)
 }
 
-async function dayTon(ctx: NgCanhTikTok, channelId: string, o: { dryRun?: boolean }): Promise<KetQuaDayTonGon> {
+async function dayTon(ctx: NgCanhTikTok, channelId: string, o: { dryRun?: boolean; docSanTruoc?: any }): Promise<KetQuaDayTonGon> {
     if (ctx.dayTon) return ctx.dayTon(ctx.prisma, channelId, o)
     const { dayTonLenSan } = await import('./dayTonLenSan')
     return dayTonLenSan(ctx.prisma, channelId, o as any) as any

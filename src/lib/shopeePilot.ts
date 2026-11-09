@@ -547,7 +547,7 @@ export interface NgCanh {
     /** gian làm việc của lượt này, thắng gian chọn trong cấu hình — lịch chạy mọi gian, thực thi theo gian của kế hoạch */
     kenhId?: string | null
     /** đẩy tồn giả cho bộ kiểm; bỏ trống ⇒ lib/dayTonLenSan */
-    dayTon?: (prisma: any, channelId: string, o: { dryRun?: boolean }) => Promise<any>
+    dayTon?: (prisma: any, channelId: string, o: { dryRun?: boolean; docSanTruoc?: any }) => Promise<any>
 }
 
 /** 0h hôm nay giờ VN, epoch ms. */
@@ -1772,7 +1772,7 @@ export { cauDaoTon }
  *  KHÔNG BAO GIỜ truyền chapNhanVeKhong cho lõi: chỉ người bấm nút tay được nhận rủi ro đưa mã đang có hàng về 0. */
 export async function dayTonChuKy(o: {
     tuDong: boolean; san: string; gian: string
-    day: (op: { dryRun?: boolean }) => Promise<any>; conLuot: () => Promise<void>; ghi: (w: any) => Promise<void>
+    day: (op: { dryRun?: boolean; docSanTruoc?: any }) => Promise<any>; conLuot: () => Promise<void>; ghi: (w: any) => Promise<void>
 }): Promise<any> {
     const thu: any = await o.day({ dryRun: true }).catch((e: any) => ({ ok: false, loi: String(e?.message || e) }))
     if (!o.tuDong) {
@@ -1785,7 +1785,8 @@ export async function dayTonChuKy(o: {
     // chạm trần thao tác ghi / ngày theo chính sách — không phải hỏng, khỏi báo chủ shop như lỗi (nâng trần ở chính sách nếu cần)
     try { await o.conLuot() } catch (e: any) { return { action: 'stock', status: 'skipped', message: String(e?.message || e).slice(0, 300) } }
     try {
-        const r = await o.day({})
+        // lượt thật dùng lại bản đọc sàn của lượt chạy thử vừa xong (10/11/2026) — khỏi đọc phân loại / tồn sàn lần hai
+        const r = await o.day(thu?.banDocSan ? { docSanTruoc: thu.banDocSan } : {})
         /* Tồn đổi giữa lượt chạy thử và lượt thật ⇒ lõi tự chặn (409, chưa gọi sàn lần nào): đó là cầu dao, không phải hỏng —
          * 'skipped' + chữ CẦU DAO để chủ shop được báo đúng việc cần duyệt; không ghi nhật ký ghi (không có gì lên sàn). */
         if (!r?.ok && (r?.http === 409 || r?.data?.cauDao)) {

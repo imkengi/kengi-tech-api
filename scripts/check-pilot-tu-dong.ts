@@ -27,8 +27,14 @@
  *       chỉ 300 dòng bảng chạy thử); chạy thật mà nhảy ⇒ 409, 0 lời gọi sàn; chỉ người bấm nút tay vượt được (chapNhanVeKhong
  *       + veKhongDaXem: đồng ý gắn với con số đã xem — thiếu số hoặc số mã về 0 tăng lên ⇒ vẫn 409);
  *       Pilot dùng cauDao của lõi, tồn đổi giữa chạy thử và chạy thật ⇒ 'skipped'
+ *       N10–N18 (10/11/2026, SP-06 / TT-08) TỪNG PHÂN LOẠI: lượt 0 chỉ ĐỌC sàn; Shopee has_model ⇒ mỗi model một dòng, đẩy
+ *       đúng model_id (trước chỉ phân loại mang SKU listing, phân loại mã kho khác không bao giờ được đẩy); TikTok nhiều SKU
+ *       ⇒ mỗi SKU một dòng, đẩy đúng sku_id, tồn TỔNG listing = Σ (trước đè tồn SKU đầu lên tổng); phân loại không ra mã kho
+ *       ⇒ bỏ qua có tên, không đẩy 0; phân loại sắp về 0 vào cầu dao; đọc hỏng ⇒ cách cũ + ghi chú; tồn sàn đọc SỐNG;
+ *       chu kỳ Pilot đọc sàn MỘT lần (lượt thật dùng lại bản đọc của lượt chạy thử), nút tay đọc lại mỗi lượt
  *    P. nút "Đẩy giá lên sàn" (lib/dayGiaLenSan): mỗi listing soát GIÁ SÀN như Pilot (phí theo ngành, giá vốn, chính sách Pilot
  *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice
+ *    R. (10/11/2026, X-14) sổ ĐỔI CẤU HÌNH 4 Pilot: ai đổi, đổi gì (cũ → mới), dòng 'config' không ăn trần ghi / ngày
  *    Q. (09/11/2026, SP-07) gian LỚN (709 listing): trước chu kỳ chỉ xét 300 mã `updatedAt` mới nhất ⇒ ~400 mã không bao giờ
  *       được định giá. Giờ: con trỏ xoay vòng theo mã Shopee — 3 chu kỳ phủ đủ 709 mã, không trùng không sót; đồng bộ lại (đổi
  *       hết updatedAt) / chủ shop lưu chính sách không làm con trỏ quay về; chạm trần / đọc hỏng ⇒ con trỏ đứng yên; mã nghi
@@ -190,7 +196,13 @@ const dayTonGia = async (_p: any, channelId: string, o: { dryRun?: boolean }) =>
 // ─── Đẩy tay (mục N, P — 09/11/2026): cửa hàng giả MỘT gian + sàn giả, gọi THẲNG lõi lib/dayTonLenSan / lib/dayGiaLenSan ───
 /** `ghi` = mọi lần ghi CSDL (listing, sổ đồng bộ, kênh) — chạy thử / bị chặn thì phải rỗng. Listing mang sẵn `localProduct`
  *  (như include của lõi); `hang` là bảng Product cho giá vốn; `chinhSach` theo tên bảng Pilot ("ShopeePilotConfig"…). */
-function cuaHangDayTay(o: { kenh: any; listing: any[]; hang?: any[]; don?: any[]; donNganh?: any[]; chinhSach?: Record<string, any>; docChinhSach?: 'hong' | 'chuaCoBang' }) {
+function cuaHangDayTay(o: {
+    kenh: any; listing: any[]; hang?: any[]; don?: any[]; donNganh?: any[]; chinhSach?: Record<string, any>; docChinhSach?: 'hong' | 'chuaCoBang'
+    /** (10/11/2026) bảng Product cho lõi đẩy tồn tra theo SKU / id (prisma.product.findFirst / findUnique) — bỏ trống = không có */
+    khoSku?: any[]
+    /** bảng SkuMapping { platformSku, productId, conversionRate } */
+    anhXa?: any[]
+}) {
     const ghi: string[] = []
     const pz: any = {
         onlineChannel: {
@@ -201,8 +213,13 @@ function cuaHangDayTay(o: { kenh: any; listing: any[]; hang?: any[]; don?: any[]
             findMany: async ({ where }: any) => o.listing.filter(l => l.channelId === where.channelId && (!where.id?.in || where.id.in.includes(l.id))),
             update: async ({ where, data }: any) => { ghi.push(`sp:${where.id}`); const l = o.listing.find(x => x.id === where.id); if (l) Object.assign(l, data); return l },
         },
-        product: { findFirst: async () => null, findUnique: async () => null },
-        skuMapping: { findFirst: async () => null },
+        product: {
+            findFirst: async ({ where }: any) => (o.khoSku || []).find(h => where?.sku != null && h.sku === where.sku) || null,
+            findUnique: async ({ where }: any) => (o.khoSku || []).find(h => h.id === where?.id) || null,
+        },
+        skuMapping: {
+            findFirst: async ({ where }: any) => (o.anhXa || []).find(m => String(m.platformSku).toLowerCase() === String(where?.platformSku?.equals ?? '').toLowerCase()) || null,
+        },
         syncLog: { create: async ({ data }: any) => { ghi.push(`so:${data.details}`); return data } },
         $queryRawUnsafe: async (sql: string, ...v: any[]) => {
             const bang = /"(ShopeePilotConfig|TikTokPilotConfig)"/.exec(sql)?.[1]
@@ -233,6 +250,59 @@ const sanDayTay = () => {
             updateStock: async (id: string, n: number, modelId?: number) => { goi.push(`ton:${id}:${n}${modelId ? `:${modelId}` : ''}`) },
             getModelList: async () => { goi.push('model'); return [] },
             updatePrice: async (id: string, gia: number, _m?: any, sku?: string) => { goi.push(`gia:${id}:${gia}${sku ? `:${sku}` : ''}`) },
+            refreshAccessToken: async () => { throw new Error('bộ kiểm không cho làm mới token') },
+        },
+    }
+}
+
+/** Sàn giả CÓ PHÂN LOẠI cho lõi đẩy tồn (10/11/2026, SP-06 / TT-08): `doc` = lời gọi ĐỌC, `goi` = lời gọi GHI (như sanDayTay).
+ *  `mat`: mã sàn → hàng. Shopee: coModel ⇒ get_item_base_info báo has_model và đẩy trơn (thiếu model_id) bị từ chối y như thật;
+ *  `ton` = tồn đang bán của hàng không phân loại. TikTok: `pl` ≥ 2 ⇒ nhiều SKU; không có `pl` ⇒ một SKU id `<mã>-1`. */
+const sanPhanLoai = (o: {
+    nen: 'shopee' | 'tiktok'
+    mat: Record<string, { coModel?: boolean; ton?: number; pl?: { id: string; sku: string; ten?: string; ton: number }[] }>
+    hongDoc?: boolean
+    /** get_model_list của các mã này hỏng ở LẦN ĐẦU (lỗi thoáng qua), lần sau đọc được */
+    hongModel?: string[]
+}) => {
+    const goi: string[] = [], doc: string[] = []
+    const daHong = new Set<string>()
+    return {
+        goi, doc,
+        dichVu: {
+            credentials: {},
+            getItemBaseInfo: async (ids: number[]) => {
+                doc.push(`base:${ids.length}`)
+                if (o.hongDoc) throw new Error('Proxy chuyển tiếp đang mất kết nối (5 lần hỏng liên tiếp)')
+                return ids.filter(id => o.mat[String(id)]).map(id => {
+                    const m = o.mat[String(id)]!
+                    return { item_id: id, has_model: !!m.coModel, stock_info_v2: { summary_info: { total_available_stock: m.ton ?? 0 } } }
+                })
+            },
+            getModelList: async (id: number) => {
+                doc.push(`model:${id}`)
+                if (o.hongModel?.includes(String(id)) && !daHong.has(String(id))) {
+                    daHong.add(String(id))
+                    throw new Error('Shopee get_model_list: error_server - system busy')
+                }
+                return (o.mat[String(id)]?.pl || []).map(p => ({ model_id: Number(p.id), sku: p.sku, name: p.ten || '', stock: p.ton, price: 0, giaHienTai: 0 }))
+            },
+            timSanPhamTho: async () => {
+                doc.push('tim')
+                if (o.hongDoc) throw new Error('TikTok products/search: [105005] Access token is expired')
+                return Object.entries(o.mat).map(([id, m]) => ({
+                    id,
+                    skus: (m.pl || [{ id: `${id}-1`, sku: '', ton: m.ton ?? 0 }]).map(p => ({
+                        id: p.id, seller_sku: p.sku, sales_attributes: p.ten ? [{ name: 'Màu', value_name: p.ten }] : [], inventory: [{ warehouse_id: 'w1', quantity: p.ton }],
+                    })),
+                }))
+            },
+            updateStock: async (id: string, n: number, a?: any, b?: any) => {
+                if (o.nen === 'shopee' && o.mat[String(id)]?.coModel && a == null) {
+                    throw new Error('Shopee update_stock: error_param - model_id is mandatory if item is under model level')
+                }
+                goi.push(`ton:${id}:${n}${a != null ? `:${a}` : ''}${b ? `:${b}` : ''}`)
+            },
             refreshAccessToken: async () => { throw new Error('bộ kiểm không cho làm mới token') },
         },
     }
@@ -790,6 +860,160 @@ async function main() {
         dung('N9. đã xem 125 mã về 0, lúc bấm chỉ còn 120 (ÍT hơn) ⇒ đồng ý vẫn hiệu lực, đẩy đủ 400',
             itHon.ok && itHon.data?.pushed === 400 && itHon.data?.veKhong === 120 && san8.goi.length === 400,
             JSON.stringify({ ok: itHon.ok, loi: itHon.loi, pushed: itHon.data?.pushed, goi: san8.goi.length }))
+    }
+
+    // ─── N10–N17. Đẩy tồn TỪNG PHÂN LOẠI (10/11/2026, SP-06 / TT-08) ─────────────
+    // Ca thật đo 11/09/2026: listing SHD1072 có HAI phân loại mang HAI mã kho — "Hồng" SHD1072 và "Tím" SHD2011. Cách cũ chỉ đẩy
+    // phân loại mang SKU listing ⇒ "Tím" không bao giờ được đẩy: kho hết mà Shopee vẫn bán. TikTok: lưu seller_sku SKU ĐẦU +
+    // tồn TỔNG, đẩy SKU đầu rồi đè số đó lên tổng.
+    {
+        const kenhV = { id: 'chV', name: 'Gian V', platform: 'shopee', shopId: '7', accessToken: 'tV', apiKey: '1', apiSecret: 's', commissionRate: 20 }
+        const gianV = () => {
+            const ds: any[] = [
+                // DB lưu 0 cho hàng có phân loại (get_item_base_info không mang tồn từng phân loại)
+                { id: 'v1', channelId: 'chV', platformProductId: '700', sku: 'SHD1072', name: 'Đèn ngủ cảm ứng', stock: 0, localProduct: { id: 'pA', sku: 'SHD1072', stock: 7 } },
+                // DB lưu 2 (cũ), sàn đang bán 5 = đúng tồn kho ⇒ đọc SỐNG thì khỏi đẩy
+                { id: 'v2', channelId: 'chV', platformProductId: '701', sku: 'X1', name: 'Hàng X1', stock: 2, localProduct: { id: 'pX', sku: 'X1', stock: 5 } },
+            ]
+            const khoSku = [
+                { id: 'pB', sku: 'SHD2011', stock: 4, mergedIntoId: null, mergedRate: 1 },
+                { id: 'pV', sku: 'VI-GOC', stock: 25, mergedIntoId: null, mergedRate: 1 },
+            ]
+            const anhXa = [{ platformSku: 'VI10', productId: 'pV', conversionRate: 10 }]
+            return { ...cuaHangDayTay({ kenh: kenhV, listing: ds, khoSku, anhXa }), ds }
+        }
+        const plV = [
+            { id: '11', sku: 'SHD1072', ten: 'Hồng', ton: 3 },
+            { id: '12', sku: 'SHD2011', ten: 'Tím', ton: 9 },
+        ]
+        const sanV = () => sanPhanLoai({ nen: 'shopee', mat: { '700': { coModel: true, pl: plV.map(x => ({ ...x })) }, '701': { ton: 5 } } })
+
+        const s10 = sanV(), g10 = gianV()
+        const thu10 = await dayTonLenSan(g10.prisma, 'chV', { dryRun: true, giaLap: { dichVu: s10.dichVu } })
+        const b10 = thu10.data?.bang || []
+        const hong = b10.find((x: any) => x.phanLoai === 'Hồng'), tim = b10.find((x: any) => x.phanLoai === 'Tím'), x1 = b10.find((x: any) => x.sku === 'X1')
+        dung('N10. chạy thử Shopee có phân loại: MỖI phân loại một dòng (Hồng 3→7 theo link listing, Tím 9→4 theo mã kho SHD2011), tên phân loại đứng đầu tenSan; hàng thường đọc tồn SỐNG 5 = kho ⇒ giữ nguyên; chỉ ĐỌC sàn (base 1 lô + model 1 mã), 0 ghi',
+            thu10.ok && b10.length === 3 && hong?.tonDangTrenSan === 3 && hong?.seDay === 7 && tim?.tonDangTrenSan === 9 && tim?.seDay === 4 && tim?.sku === 'SHD2011'
+            && /^Tím · Đèn ngủ/.test(tim?.tenSan || '') && x1?.tonDangTrenSan === 5 && x1?.boQua === true
+            && thu10.data?.seDay === 2 && thu10.data?.seBoQua === 1 && thu10.data?.phanLoai?.soListing === 1 && thu10.data?.phanLoai?.soDong === 2
+            && thu10.data?.phanLoai?.boQua === 0 && !thu10.data?.docSan && /chỉ ĐỌC sàn/.test(thu10.data?.ghiChu || '')
+            && s10.goi.length === 0 && s10.doc.join(',') === 'base:2,model:700' && g10.ghi.length === 0,
+            JSON.stringify({ data: { ...thu10.data, bang: b10 }, doc: s10.doc, goi: s10.goi, ghi: g10.ghi }))
+
+        const that10 = await dayTonLenSan(g10.prisma, 'chV', { giaLap: { dichVu: s10.dichVu } })
+        dung('N11. chạy thật: ghi ĐÚNG model_id từng phân loại (700:7:11 Hồng, 700:4:12 Tím — trước Tím không bao giờ được đẩy); tồn listing = Σ phân loại 11 (trước để 0); hàng thường không ghi; sổ đồng bộ nói số dòng phân loại',
+            that10.ok && that10.data?.pushed === 2 && that10.data?.failed === 0 && s10.goi.join(',') === 'ton:700:7:11,ton:700:4:12'
+            && g10.ds[0].stock === 11 && g10.ds[1].stock === 2 && g10.ghi.filter(x => x.startsWith('sp:')).join(',') === 'sp:v1'
+            && g10.ghi.some(x => /phân loại: 2 dòng cần đẩy \/ 1 listing, bỏ qua 0/.test(x)),
+            JSON.stringify({ data: that10.data, goi: s10.goi, ghi: g10.ghi, ton: g10.ds.map(l => l.stock) }))
+
+        // Phân loại không ra mã kho / chưa khai SKU ⇒ BỎ QUA có tên (không đẩy 0); phân loại qua BẢNG ÁNH XẠ có hệ số (1 vỉ = 10)
+        const s12 = sanPhanLoai({ nen: 'shopee', mat: { '700': { coModel: true, pl: [
+            ...plV.map(x => ({ ...x })),
+            { id: '13', sku: 'SHD9999', ten: 'Xanh', ton: 6 },
+            { id: '14', sku: '', ten: 'Vàng', ton: 2 },
+            { id: '15', sku: 'vi10', ten: 'Vỉ 10', ton: 0 },
+        ] }, '701': { ton: 5 } } })
+        const g12 = gianV()
+        const thu12 = await dayTonLenSan(g12.prisma, 'chV', { dryRun: true, giaLap: { dichVu: s12.dichVu } })
+        const that12 = await dayTonLenSan(g12.prisma, 'chV', { giaLap: { dichVu: s12.dichVu } })
+        const vd = thu12.data?.phanLoai?.viDuBoQua || []
+        const vi = (thu12.data?.bang || []).find((x: any) => x.phanLoai === 'Vỉ 10')
+        dung('N12. phân loại mã "SHD9999" không có trong kho + phân loại chưa khai SKU ⇒ bỏ qua, liệt kê đích danh, KHÔNG ghi; phân loại "vi10" qua bảng ánh xạ hệ số 10 ⇒ 25 cái = 2 vỉ; tồn listing = 7 + 4 + 6 + 2 + 2 = 21',
+            thu12.ok && thu12.data?.phanLoai?.boQua === 2 && vd.some((x: string) => /SHD1072 \/ Xanh: mã "SHD9999" không có trong kho/.test(x))
+            && vd.some((x: string) => /SHD1072 \/ Vàng: phân loại chưa khai SKU trên sàn/.test(x)) && vi?.seDay === 2 && vi?.heSo === 10
+            && that12.ok && s12.goi.join(',') === 'ton:700:7:11,ton:700:4:12,ton:700:2:15' && !s12.goi.some(x => /:13$|:14$/.test(x))
+            && g12.ds[0].stock === 21,
+            JSON.stringify({ phanLoai: thu12.data?.phanLoai, vi, goi: s12.goi, ton: g12.ds[0].stock }))
+
+        // Cầu dao thấy phân loại: 6 phân loại đang có hàng mà kho hết ⇒ trước (DB lưu 0) cầu dao không bao giờ thấy
+        const s13 = sanPhanLoai({ nen: 'shopee', mat: { '800': { coModel: true, pl: Array.from({ length: 6 }, (_, i) => ({ id: String(20 + i), sku: `M${i}`, ten: `Cỡ ${i}`, ton: 5 })) } } })
+        const g13 = cuaHangDayTay({
+            kenh: kenhV, listing: [{ id: 'v8', channelId: 'chV', platformProductId: '800', sku: 'M0', name: 'Áo', stock: 0, localProduct: null }],
+            khoSku: Array.from({ length: 6 }, (_, i) => ({ id: `pm${i}`, sku: `M${i}`, stock: 0, mergedIntoId: null, mergedRate: 1 })),
+        })
+        const thu13 = await dayTonLenSan(g13.prisma, 'chV', { dryRun: true, giaLap: { dichVu: s13.dichVu } })
+        const that13 = await dayTonLenSan(g13.prisma, 'chV', { giaLap: { dichVu: s13.dichVu } })
+        dung('N13. 6 phân loại đang có hàng sẽ về 0 ⇒ cầu dao đếm TỪNG phân loại (6/6) ⇒ chạy thật 409, 0 lời gọi ghi (cách cũ: DB lưu 0 ⇒ cầu dao không thấy gì)',
+            thu13.ok && /^6\/6 mã/.test(thu13.data?.cauDao || '') && thu13.data?.viDuVeKhong?.every((x: any) => /^Cỡ \d · Áo/.test(x.tenSan))
+            && that13.http === 409 && that13.data?.phanLoai?.soDong === 6 && s13.goi.length === 0 && g13.ghi.length === 0,
+            JSON.stringify({ cauDao: thu13.data?.cauDao, http: that13.http, goi: s13.goi }))
+
+        // Đọc sàn hỏng ⇒ rơi về cách cũ (không chặn cả lượt) + ghi chú
+        const s14 = sanPhanLoai({ nen: 'shopee', hongDoc: true, mat: { '700': { coModel: true, pl: plV.map(x => ({ ...x })) }, '701': { ton: 5 } } })
+        const g14 = gianV()
+        const thu14 = await dayTonLenSan(g14.prisma, 'chV', { dryRun: true, giaLap: { dichVu: s14.dichVu } })
+        const that14 = await dayTonLenSan(g14.prisma, 'chV', { giaLap: { dichVu: s14.dichVu } })
+        dung('N14. đọc Shopee hỏng (proxy) ⇒ cách cũ: phân loại khớp SKU listing (700:7:11), hàng thường theo tồn đã lưu (2→5); docSan nói "Không đọc được 2/2 mã"',
+            thu14.ok && /Không đọc được 2\/2 mã trên Shopee \(Proxy chuyển tiếp/.test((thu14.data?.docSan || []).join(' ')) && !thu14.data?.phanLoai
+            && that14.ok && s14.goi.join(',') === 'ton:700:7:11,ton:701:5' && /Không đọc được 2\/2/.test((that14.data?.docSan || []).join(' ')),
+            JSON.stringify({ thu: thu14.data?.docSan, goi: s14.goi, that: that14.data }))
+        const s14b = sanPhanLoai({ nen: 'shopee', hongModel: ['700'], mat: { '700': { coModel: true, pl: plV.map(x => ({ ...x })) }, '701': { ton: 5 } } })
+        const g14b = gianV()
+        const that14b = await dayTonLenSan(g14b.prisma, 'chV', { giaLap: { dichVu: s14b.dichVu } })
+        dung('N14b. đọc phân loại MỘT mã hỏng ⇒ chỉ mã đó đi cách cũ (700:7:11), ghi chú "Không đọc được phân loại của 1 mã"; hàng thường vẫn đọc sống (5 = kho, không ghi)',
+            that14b.ok && s14b.goi.join(',') === 'ton:700:7:11' && /Không đọc được phân loại của 1 mã \(Shopee get_model_list: error_server/.test((that14b.data?.docSan || []).join(' ')),
+            JSON.stringify({ goi: s14b.goi, docSan: that14b.data?.docSan }))
+
+        // Chỉ đẩy vài listing (nút tay chọn mã) ⇒ chỉ đọc đúng mấy mã đó
+        const s14c = sanV(), g14c = gianV()
+        await dayTonLenSan(g14c.prisma, 'chV', { dryRun: true, onlineProductIds: ['v2'], giaLap: { dichVu: s14c.dichVu } })
+        dung('N14c. chọn một listing (onlineProductIds) ⇒ get_item_base_info đúng 1 mã, không hỏi phân loại mã khác',
+            s14c.doc.join(',') === 'base:1', JSON.stringify(s14c.doc))
+
+        // TikTok: nhiều SKU — trước lưu seller_sku SKU ĐẦU + tồn TỔNG, đẩy SKU đầu rồi ĐÈ tổng
+        const kenhT = { id: 'chT', name: 'Gian T', platform: 'tiktok', shopId: '8', accessToken: 'tT', apiKey: '1', apiSecret: 's', commissionRate: 20 }
+        const gianT = () => {
+            const ds: any[] = [
+                { id: 't1', channelId: 'chT', platformProductId: '900', sku: 'TA', name: 'Ốp lưng', stock: 12, localProduct: { id: 'tA', sku: 'TA', stock: 3 } },
+                { id: 't2', channelId: 'chT', platformProductId: '901', sku: 'TC', name: 'Cáp sạc', stock: 1, localProduct: { id: 'tC', sku: 'TC', stock: 4 } },
+                { id: 't3', channelId: 'chT', platformProductId: '902', sku: 'TD', name: 'Củ sạc', stock: 0, localProduct: { id: 'tD', sku: 'TD', stock: 6 } },
+            ]
+            return { ...cuaHangDayTay({ kenh: kenhT, listing: ds, khoSku: [{ id: 'tB', sku: 'TB', stock: 2, mergedIntoId: null, mergedRate: 1 }] }), ds }
+        }
+        const matT = () => ({
+            '900': { pl: [{ id: 's1', sku: 'TA', ten: 'Đỏ', ton: 5 }, { id: 's2', sku: 'TB', ten: 'Xanh', ton: 7 }] },
+            '901': { ton: 4 },
+            '902': { ton: 0 },
+        })
+        const s15 = sanPhanLoai({ nen: 'tiktok', mat: matT() }), g15 = gianT()
+        const thu15 = await dayTonLenSan(g15.prisma, 'chT', { dryRun: true, giaLap: { dichVu: s15.dichVu } })
+        const b15 = thu15.data?.bang || []
+        const that15 = await dayTonLenSan(g15.prisma, 'chT', { giaLap: { dichVu: s15.dichVu } })
+        dung('N15. TikTok nhiều SKU: mỗi SKU một dòng (Đỏ 5→3, Xanh 7→2 theo mã kho TB), ghi đúng sku_id; tồn listing = Σ 5 (trước đè 3 của SKU đầu lên tổng); một SKU: đọc sống 4 = kho ⇒ giữ, 0→6 ghi kèm sku_id (khỏi hỏi product detail); chỉ ĐỌC 1 lần search mỗi lượt',
+            thu15.ok && b15.find((x: any) => x.phanLoai === 'Đỏ')?.seDay === 3 && b15.find((x: any) => x.phanLoai === 'Xanh')?.seDay === 2
+            && b15.find((x: any) => x.sku === 'TC')?.boQua === true && thu15.data?.phanLoai?.soDong === 2
+            && that15.ok && that15.data?.pushed === 3 && s15.goi.join(',') === 'ton:900:3:s1,ton:900:2:s2,ton:902:6:902-1:TD'
+            && g15.ds[0].stock === 5 && g15.ds[1].stock === 1 && g15.ds[2].stock === 6 && s15.doc.join(',') === 'tim,tim',
+            JSON.stringify({ bang: b15, goi: s15.goi, ton: g15.ds.map(l => l.stock), doc: s15.doc }))
+
+        const s16 = sanPhanLoai({ nen: 'tiktok', hongDoc: true, mat: matT() }), g16 = gianT()
+        const that16 = await dayTonLenSan(g16.prisma, 'chT', { giaLap: { dichVu: s16.dichVu } })
+        dung('N16. đọc TikTok hỏng (token) ⇒ cách cũ theo seller_sku đã lưu (900:3:TA, 901:4:TC, 902:6:TD) + ghi chú "Không đọc được danh mục TikTok ([105005]"',
+            that16.ok && s16.goi.join(',') === 'ton:900:3:TA,ton:901:4:TC,ton:902:6:TD'
+            && /Không đọc được danh mục TikTok \(TikTok products\/search: \[105005\]/.test((that16.data?.docSan || []).join(' ')),
+            JSON.stringify({ goi: s16.goi, docSan: that16.data?.docSan }))
+
+        // TikTok hàng nhiều SKU: phân loại sắp về 0 vào cầu dao từng SKU; SKU không có mã kho bỏ qua có tên
+        const s17 = sanPhanLoai({ nen: 'tiktok', mat: { '900': { pl: [{ id: 's1', sku: 'TA', ten: 'Đỏ', ton: 5 }, { id: 's9', sku: 'TZ', ten: 'Tím', ton: 4 }] } } })
+        const g17 = cuaHangDayTay({ kenh: kenhT, listing: [{ id: 't1', channelId: 'chT', platformProductId: '900', sku: 'TA', name: 'Ốp lưng', stock: 9, localProduct: { id: 'tA', sku: 'TA', stock: 0 } }] })
+        const thu17 = await dayTonLenSan(g17.prisma, 'chT', { dryRun: true, giaLap: { dichVu: s17.dichVu } })
+        dung('N17. TikTok: SKU "TZ" không có mã kho ⇒ bỏ qua có tên; SKU Đỏ 5→0 tính vào cầu dao (1 mã về 0 < ngưỡng 5 ⇒ không nhảy) — so TỪNG SKU, không so tổng 9 với SKU đầu',
+            thu17.ok && thu17.data?.veKhong === 1 && thu17.data?.coHangTrenSan === 1 && thu17.data?.cauDao === null
+            && (thu17.data?.phanLoai?.viDuBoQua || []).some((x: string) => /TA \/ Tím: mã "TZ" không có trong kho/.test(x)),
+            JSON.stringify(thu17.data))
+
+        // Chu kỳ Pilot chạy thử rồi chạy thật cách nhau vài giây ⇒ lượt thật dùng lại bản đọc của lượt chạy thử (docSanTruoc).
+        // Nút tay (N10 → N11: hai lần gọi riêng, không truyền bản đọc) thì đọc lại — người bấm có thể xem trước từ mấy phút trước.
+        const s18 = sanV(), g18 = gianV(), ghi18: any[] = []
+        const r18 = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'Gian V', conLuot: async () => { }, ghi: async (w: any) => { ghi18.push(w) },
+            day: (o: any) => dayTonLenSan(g18.prisma, 'chV', { ...o, giaLap: { dichVu: s18.dichVu } }) })
+        dung('N18. chu kỳ Pilot (chạy thử ⇒ chạy thật): đọc sàn MỘT lần (base:2,model:700), lượt thật dùng lại bản đọc mà vẫn ghi đúng model_id hai phân loại; nút tay đọc lại mỗi lượt; bản đọc nằm ngoài data (không ra trình duyệt)',
+            r18.status === 'succeeded' && s18.doc.join(',') === 'base:2,model:700' && s18.goi.join(',') === 'ton:700:7:11,ton:700:4:12'
+            && g18.ds[0].stock === 11 && ghi18.length === 1
+            && s10.doc.join(',') === 'base:2,model:700,base:2,model:700'
+            && !!thu10.banDocSan && thu10.data?.banDocSan === undefined && !('banDocSan' in (that10 as any)),
+            JSON.stringify({ r18, doc: s18.doc, goi: s18.goi, docTay: s10.doc }))
     }
 
     // ─── P. Nút "Đẩy giá lên sàn": rào GIÁ SÀN từng listing (09/11/2026) ─────────
