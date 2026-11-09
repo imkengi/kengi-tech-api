@@ -1008,6 +1008,7 @@ router.post('/', mcpAuth, async (req: AuthRequest, res: Response) => {
         userId: req.user?.userId,
         userName: (req.user as any)?.name,
         branchId: req.user?.branchId ?? null,
+        nguon: `MCP${(req.user as any)?.name ? ` (${String((req.user as any).name).slice(0, 60)})` : ''}`,
     }
 
     const isBatch = Array.isArray(req.body)

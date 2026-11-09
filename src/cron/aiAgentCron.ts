@@ -78,6 +78,8 @@ export async function chayMotJob(
             userId: actor.id,
             userName: actor.name || 'Trợ lý AI (tự động)',
             branchId: actor.branchId ?? null,
+            // actor là admin đầu tiên (cho FK createdBy) — sổ ghi Shopee Pilot cần biết TÁC VỤ nào làm, không phải admin đó
+            nguon: `tác vụ "${String(job.name || job.id).slice(0, 80)}"${trigger === 'manual' ? ' (chạy tay)' : ''}`,
         }
 
         let allowed: string[] = []

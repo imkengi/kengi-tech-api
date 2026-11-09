@@ -52,7 +52,10 @@ async function chanChuaBat(req: AuthRequest, res: Response, next: NextFunction) 
 
 router.get('/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
-    try { res.json(await xayTrangThai(ngCanh(req))) } catch (e) { traLoi(res, e, 'đọc trạng thái') }
+    // ?q= (mã / tên / item_id) &offset= &lim= — phân trang + tìm phía máy chủ (SP-07, 09/11/2026); không truyền ⇒ trang đầu như cũ
+    const mot = (v: any) => (Array.isArray(v) ? v[0] : v)
+    const o = { q: typeof mot(req.query.q) === 'string' ? mot(req.query.q) : undefined, offset: mot(req.query.offset), lim: mot(req.query.lim) }
+    try { res.json(await xayTrangThai(ngCanh(req), o)) } catch (e) { traLoi(res, e, 'đọc trạng thái') }
 })
 
 router.get('/guide', authMiddleware, chanChuaBat, (_req: AuthRequest, res: Response) => {

@@ -27,11 +27,16 @@
  *       Pilot dùng cauDao của lõi, tồn đổi giữa chạy thử và chạy thật ⇒ 'skipped'
  *    P. nút "Đẩy giá lên sàn" (lib/dayGiaLenSan): mỗi listing soát GIÁ SÀN như Pilot (phí theo ngành, giá vốn, chính sách Pilot
  *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice
+ *    Q. (09/11/2026, SP-07) gian LỚN (709 listing): trước chu kỳ chỉ xét 300 mã `updatedAt` mới nhất ⇒ ~400 mã không bao giờ
+ *       được định giá. Giờ: con trỏ xoay vòng theo mã Shopee — 3 chu kỳ phủ đủ 709 mã, không trùng không sót; đồng bộ lại (đổi
+ *       hết updatedAt) / chủ shop lưu chính sách không làm con trỏ quay về; chạm trần / đọc hỏng ⇒ con trỏ đứng yên; mã nghi
+ *       dưới sàn ở lô khác được xử lý ngay chu kỳ đầu (chỉ khi giá SỐNG dưới sàn thật); câu kết quả nói "x/709 (lô k/3)";
+ *       GET /state phân trang + tìm phía máy chủ (tong, offset, mã / tên không dấu / item_id)
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ShopeeService } from '../src/services/platforms/shopee'
-import { chayChuKy, chayTheoLich, khoBoNho, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, type NgCanh } from '../src/lib/shopeePilot'
+import { chayChuKy, chayTheoLich, khoBoNho, khoSql, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, xayTrangThai, soThuTuMa, type NgCanh, type KhoPilot } from '../src/lib/shopeePilot'
 import { viecCanNguoi, baoChuShop, GIAN_CACH_BAO_MS } from '../src/lib/pilotBaoChuShop'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
@@ -88,12 +93,14 @@ const prisma: any = {
         upsert: async (q: any) => {
             const w = q.where.channelId_platformProductId
             const cu = listing.find(l => l.channelId === w.channelId && l.platformProductId === w.platformProductId)
-            if (cu) { Object.assign(cu, q.update); return cu }
-            listing.push({ ...q.create, id: `l-moi-${listing.length}` }); return q.create
+            // updatedAt là @updatedAt của Prisma: mỗi lần upsert tự đổi — gốc lỗi SP-07 (chu kỳ chọn theo updatedAt)
+            if (cu) { Object.assign(cu, q.update, { updatedAt: new Date() }); return cu }
+            listing.push({ ...q.create, id: `l-moi-${listing.length}`, updatedAt: new Date() }); return q.create
         },
         count: async () => listing.length,
     },
     product: { findFirst: async () => null, findMany: async () => [] },
+    category: { findMany: async () => [] },
     skuMapping: { findMany: async () => [], findFirst: async () => null },
     storeSettings: { findFirst: async () => null },
     fbPage: { findMany: async () => fbPages, update: async () => ({}) },
@@ -116,10 +123,13 @@ const goi: string[] = []
 const songGia: Record<string, any> = {}      // item_id → { goc, ban, phanLoai, trangThai }
 const kmSap: Record<string, string> = {}     // item_id → 'ongoing' | 'upcoming'
 let docSongHong = false, kmHong = false, soLanDongBo = 0, soLanDocSong = 0
+/** mọi item_id đã đọc giá sống — mục Q đếm chu kỳ soát những mã nào */
+const docSongIds: string[] = []
 const P = ShopeeService.prototype as any
 P.refreshAccessToken = async () => { throw new Error('bộ kiểm không cho làm mới token') }
 P.getItemBaseInfo = async function (ids: number[]) {
     soLanDocSong++
+    docSongIds.push(...ids.map(String))
     if (docSongHong) throw new Error('Shopee get_item_base_info: error_auth - invalid access_token')
     return ids.map(id => {
         const l = listing.find(x => x.platformProductId === String(id) && x.platform === 'shopee')
@@ -774,6 +784,115 @@ async function main() {
         const r8 = await dayGiaLenSan(g8.prisma, 'chP', { force: true, giaLap: { dichVu: s8.dichVu } })
         dung('P8. force chỉ bỏ bước "giá đã bằng" (PB ghi lại) — KHÔNG vượt rào giá sàn (PD, PV vẫn bỏ qua)',
             r8.ok && r8.data?.pushed === 2 && s8.goi.join() === 'gia:8003:150000,gia:8004:150000' && r8.data?.boQuaDuoiSan === 2, JSON.stringify({ data: r8.data, goi: s8.goi }))
+    }
+
+    // ─── Q. SP-07 (09/11/2026): gian LỚN — soát xoay vòng, không mã nào bị bỏ mãi ────────────────────────────────
+    {
+        const N = 709
+        // mã Shopee khác độ dài ('9993' rồi '10000'…): thứ tự SỐ — theo thứ tự chữ thì '9993' đứng cuối
+        const ma = (i: number) => String(9993 + i * 7)
+        const tu = (a: number, b: number) => Array.from({ length: b - a }, (_, k) => ma(a + k))
+        const cungTap = (x: string[], y: string[]) => { const s = new Set(x); return x.length === y.length && s.size === x.length && y.every(v => s.has(v)) }
+        const giong = (x: string[], y: string[]) => x.length === y.length && x.every((v, k) => v === y[k])
+        const dongTom = (ck: any) => ck.results.find((r: any) => r.action === 'price' && /^Soát /.test(r.message || ''))?.message || ''
+        const docLuot = async (c: NgCanh) => { docSongIds.length = 0; const ck = await chayChuKy(c); return { ck, ids: [...docSongIds], tom: dongTom(ck) } }
+        const gianLon = () => { xoaHet(); phiTin(true); for (let i = 0; i < N; i++) themListing('chA', ma(i), `Q${i}`, 146000, 100000) }   // 146k / vốn 100k = đúng mục tiêu ⇒ không cần đổi
+
+        gianLon()
+        const khoQ = khoBoNho()
+        const ctxQ: NgCanh = { prisma, kho: khoQ, nguoi: 'chu@shop', dayTon: dayTonGia }
+        await luuCauHinh(ctxQ, { channelId: 'chA', executionMode: 'auto', policy: tatHet })
+        const l1 = await docLuot(ctxQ)
+        dung('Q1. chu kỳ 1 soát đúng 300 mã ĐẦU theo mã Shopee (thứ tự số); câu kết quả "Soát 300/709 mã (lô 1/3; vòng đủ sau 3 chu kỳ)"',
+            cungTap(l1.ids, tu(0, 300)) && /Soát 300\/709 mã \(lô 1\/3; vòng đủ sau 3 chu kỳ\)/.test(l1.tom) && goi.length === 0,
+            JSON.stringify({ n: l1.ids.length, dau: l1.ids.slice(0, 3), tom: l1.tom, goi }))
+        // đồng bộ lại: danh mục cũ > 2 giờ ⇒ chu kỳ tự đồng bộ — upsert TUẦN TỰ đổi HẾT updatedAt, Shopee trả thứ tự khác
+        for (const l of listing) { l.syncedAt = tg(3); l.updatedAt = tg(3) }
+        listing.reverse()
+        const l2 = await docLuot(ctxQ)
+        const dongBo = l2.ck.results.find((r: any) => r.action === 'catalog')
+        dung('Q2. đồng bộ lại (updatedAt đổi hết) KHÔNG đưa con trỏ về lô cũ: chu kỳ 2 soát 300 mã KẾ TIẾP, "lô 2/3"',
+            dongBo?.status === 'succeeded' && cungTap(l2.ids, tu(300, 600)) && /Soát 300\/709 mã \(lô 2\/3;/.test(l2.tom),
+            JSON.stringify({ dongBo, n: l2.ids.length, dau: l2.ids.slice(0, 3), tom: l2.tom }))
+        await luuCauHinh(ctxQ, { policy: tatHet })   // chủ shop lưu chính sách giữa hai chu kỳ
+        const l3 = await docLuot(ctxQ)
+        const ca = [...l1.ids, ...l2.ids, ...l3.ids]
+        dung('Q3. chu kỳ 3 soát 109 mã còn lại ("109/709", lô 3/3) — 3 chu kỳ phủ ĐỦ 709 mã, không trùng, không sót (lưu chính sách giữa chừng không reset)',
+            cungTap(l3.ids, tu(600, N)) && ca.length === N && new Set(ca).size === N && /Soát 109\/709 mã \(lô 3\/3;/.test(l3.tom),
+            JSON.stringify({ n: l3.ids.length, ca: ca.length, khac: new Set(ca).size, tom: l3.tom }))
+        const l4 = await docLuot(ctxQ)
+        dung('Q4. hết danh sách ⇒ quay về đầu (lô 1/3, đúng 300 mã đầu)', cungTap(l4.ids, tu(0, 300)) && /\(lô 1\/3;/.test(l4.tom), JSON.stringify({ n: l4.ids.length, tom: l4.tom }))
+        // chạm trần ghi trong ngày ⇒ không soát gì ⇒ con trỏ ĐỨNG YÊN; đọc giá sống hỏng ⇒ cũng đứng yên
+        await luuCauHinh(ctxQ, { policy: { ...tatHet, maxWritesPerDay: 1 } })
+        await khoQ.ghiNhatKy({ action: 'stock', status: 'succeeded', planId: null, payload: {}, response: null })
+        const l5 = await docLuot(ctxQ)
+        await luuCauHinh(ctxQ, { policy: tatHet })
+        docSongHong = true
+        const l6 = await docLuot(ctxQ)
+        docSongHong = false
+        const l7 = await docLuot(ctxQ)
+        dung('Q5. chạm trần ngày / đọc giá sống hỏng ⇒ con trỏ ĐỨNG YÊN, nói rõ lô soát lại; lượt sau soát đúng lô 2 (không nhảy qua lô nào)',
+            l5.ids.length === 0 && l5.ck.results.some((r: any) => /Đã đủ 1 lần ghi hôm nay/.test(r.message || '') && /lô 2\/3 soát lại/.test(r.message || ''))
+            && l6.ck.results.some((r: any) => r.status === 'failed' && /Không đọc được giá đang để trên Shopee/.test(r.message || '')) && cungTap(l7.ids, tu(300, 600)),
+            JSON.stringify({ l5: l5.ck.results, l6: l6.ck.results.filter((r: any) => r.action === 'price'), n7: l7.ids.length, tom7: l7.tom }))
+        // ghi con trỏ hỏng ⇒ KHÔNG im lặng (gian lớn kẹt mãi ở một lô = đúng lỗi cũ) — thành việc cần người
+        const khoHong: KhoPilot = { ...khoQ, luuConTro: async () => { throw new Error('mất kết nối CSDL') } }
+        const l8 = await docLuot({ ...ctxQ, kho: khoHong })
+        const hong = l8.ck.results.find((r: any) => /Không lưu được vị trí soát giá/.test(r.message || ''))
+        dung('Q6. lưu con trỏ hỏng ⇒ dòng "failed" (việc cần người), không im lặng; con trỏ cũ giữ nguyên ⇒ lượt sau soát lại lô đó',
+            hong?.status === 'failed' && viecCanNguoi([hong]).dong.length === 1 && (await khoQ.docConTro('chA'))?.sau === ma(599),
+            JSON.stringify({ hong, conTro: await khoQ.docConTro('chA') }))
+
+        // mã DƯỚI SÀN ở lô khác: chu kỳ đầu đã xử lý (nghi bằng CSDL, giá sống xác nhận)
+        gianLon()
+        listing.find(l => l.platformProductId === ma(650))!.price = 100000                     // lô 3: giá lưu 100k, Shopee cũng 100k — dưới sàn ~127k (lỗ)
+        listing.find(l => l.platformProductId === ma(400))!.price = 100000; songGia[ma(400)] = { goc: 140000 }
+        // ↑ lô 2: giá lưu cũ 100k nhưng Shopee đang để 140k (trên sàn) — trong lô của nó máy sẽ nâng lên mục tiêu, NGOÀI lô thì không được đụng
+        const khoN = khoBoNho()
+        const ctxN: NgCanh = { prisma, kho: khoN, nguoi: 'chu@shop', dayTon: dayTonGia }
+        await luuCauHinh(ctxN, { channelId: 'chA', executionMode: 'auto', policy: tatHet })
+        const n1 = await docLuot(ctxN)
+        dung('Q7. mã dưới sàn nằm ở LÔ 3 được nâng ngay chu kỳ đầu; câu kết quả "Soát 300/709 mã (lô 1/3; …) + 2 mã nghi dưới sàn ngoài lô"',
+            goi.some(g => g.startsWith(`gia:1:${ma(650)}:`)) && n1.ids.includes(ma(650)) && /Soát 300\/709 mã \(lô 1\/3; vòng đủ sau 3 chu kỳ\) \+ 2 mã nghi dưới sàn ngoài lô/.test(n1.tom),
+            JSON.stringify({ goi, tom: n1.tom }))
+        dung('Q8. mã nghi ngoài lô mà giá SỐNG không dưới sàn ⇒ không đụng (chờ tới lô của mã), nói trong "Bỏ qua"',
+            n1.ids.includes(ma(400)) && !goi.some(g => g.startsWith(`gia:1:${ma(400)}:`)) && goi.length === 1 && /1 mã nghi ngoài lô không còn dưới sàn/.test(n1.tom),
+            JSON.stringify({ goi, tom: n1.tom }))
+
+        // GET /state: phân trang + tìm phía máy chủ
+        listing.find(l => l.platformProductId === ma(5))!.name = 'Bình giữ nhiệt Đỏ 500ml'
+        const maCuaTrang = (x: any) => x.products.filter((p: any) => p.itemId).map((p: any) => String(p.itemId))
+        const giam = tu(0, N).sort((a, b) => soThuTuMa(b, a))
+        const st = await xayTrangThai(ctxN)
+        dung('Q9. GET /state không tham số: trang đầu 100 listing, cùng hình dữ liệu cũ (+ tong 709), câu "709 sản phẩm trên gian (đang hiện 100)"',
+            st.products.length === 100 && st.tong === N && giong(maCuaTrang(st), giam.slice(0, 100)) && /709 sản phẩm trên gian \(đang hiện 100\)/.test(st.catalogNote || '')
+            && !!st.status?.feeModel && Array.isArray(st.plans) && st.products.every((p: any) => p.pricing && 'currentPrice' in p),
+            JSON.stringify({ n: st.products.length, tong: st.tong, note: st.catalogNote }))
+        let tai = maCuaTrang(st), vong = 0
+        while (tai.length < st.tong && vong++ < 10) tai = tai.concat(maCuaTrang(await xayTrangThai(ctxN, { offset: tai.length, lim: 200 })))
+        dung('Q10. "Tải thêm" (offset / lim) tới hết: đủ 709 mã, không trùng, thứ tự ổn định', tai.length === N && new Set(tai).size === N && giong(tai, giam), JSON.stringify({ n: tai.length, khac: new Set(tai).size }))
+        const t1 = await xayTrangThai(ctxN, { q: ma(123) }), t2 = await xayTrangThai(ctxN, { q: 'q12' }), t3 = await xayTrangThai(ctxN, { q: 'binh giu nhiet do' })
+        dung('Q11. tìm phía máy chủ: item_id / mã (không phân biệt hoa thường) / tên KHÔNG DẤU — tong theo kết quả tìm',
+            t1.tong === 1 && maCuaTrang(t1)[0] === ma(123) && t2.tong === 11 && t3.tong === 1 && maCuaTrang(t3)[0] === ma(5) && /khớp "binh giu nhiet do"/.test(t3.catalogNote || ''),
+            JSON.stringify({ t1: [t1.tong, maCuaTrang(t1)], t2: t2.tong, t3: [t3.tong, t3.catalogNote] }))
+
+        // khoSql (bản chạy thật): lưu cấu hình phải GIỮ con trỏ trong cột schedule; ghi con trỏ chỉ đụng schedule.conTro[gian]
+        const cau: { sql: string; v: any[] }[] = []
+        let lich = JSON.stringify({ enabled: true, intervalMinutes: 60, conTro: { chA: { sau: '10500', luc: 1 } } })
+        const pz: any = {
+            $executeRawUnsafe: async (sql: string, ...v: any[]) => { cau.push({ sql, v }); if (/INSERT INTO "ShopeePilotConfig" \(id, "channelId"/.test(sql)) lich = v[4]; return 1 },
+            $queryRawUnsafe: async (sql: string) => (/SELECT schedule FROM "ShopeePilotConfig"/.test(sql) ? [{ schedule: lich }] : []),
+        }
+        const kSql = khoSql(pz)
+        await kSql.luuCauHinh({ channelId: 'chA', executionMode: 'auto', policy: {} as any, profiles: [], schedule: { enabled: false, intervalMinutes: 180 }, nextRunAt: null, updatedAt: 0, lastRunAt: null, lastResult: null })
+        const sauLuu = JSON.parse(lich)
+        const ctSql = await kSql.docConTro('chA')
+        await kSql.luuConTro('chB', { sau: '777', luc: 2 })
+        const ghiCt = cau.find(c => /jsonb_set/.test(c.sql))
+        dung('Q12. khoSql: lưu cấu hình GIỮ con trỏ (lịch theo người sửa, con trỏ còn nguyên); ghi con trỏ MỘT gian bằng jsonb_set, không đụng chế độ / chính sách',
+            sauLuu.enabled === false && sauLuu.intervalMinutes === 180 && sauLuu.conTro?.chA?.sau === '10500' && ctSql?.sau === '10500'
+            && !!ghiCt && ghiCt.v[0] === 'chB' && JSON.parse(ghiCt.v[1]).sau === '777' && !/"executionMode"|policy/.test(ghiCt.sql),
+            JSON.stringify({ sauLuu, ctSql, ghiCt }))
     }
 
     console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)

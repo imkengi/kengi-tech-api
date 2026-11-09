@@ -18,6 +18,7 @@ import { TOOL_NHAY_CAM } from '../src/services/aiAgentRunner'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
 import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT, LOI_CHUA_BAT_PILOT, LOI_KHONG_KIEM_DUOC_PILOT } from '../src/lib/tienIchCuaHang'
+import { khoBoNho, luuCauHinh } from '../src/lib/shopeePilot'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -180,8 +181,14 @@ async function main() {
         P.getItemLimit = async () => { goiShopee.push('limit'); return { price_limit: { min_limit: 1000, max_limit: 120000000 }, item_name_length_limit: { min_limit: 10, max_limit: 120 }, item_description_length_limit: { min_limit: 20, max_limit: 3000 } } }
         P.getLogisticsChannels = async () => { goiShopee.push('logistics'); return [{ logistics_channel_id: 50021, logistics_channel_name: 'Nhanh', enabled: true, mask_channel_id: 0 }] }
         P.uploadImage = async (buf: Buffer, kieu: string) => { goiShopee.push(`upload:${kieu}:${buf.length}`); return { imageId: 'img-1' } }
-        P.addItem = async (body: any) => { goiShopee.push('add_item'); thanGui = body; return { itemId: '123456' } }
-        P.updatePrice = async (id: any, gia: number) => { goiShopee.push(`update_price:${id}:${gia}`) }
+        // giá đang để trên Shopee (get_item_base_info) — tool AI ghi đi qua Pilot (09/11/2026), máy BẮT BUỘC đọc giá sống trước khi đổi
+        const giaSong: Record<string, number> = {}
+        P.addItem = async (body: any) => { goiShopee.push('add_item'); thanGui = body; giaSong['123456'] = body.original_price; return { itemId: '123456' } }
+        P.updatePrice = async (id: any, gia: number) => { goiShopee.push(`update_price:${id}:${gia}`); giaSong[String(id)] = gia }
+        P.getItemBaseInfo = async (ids: number[]) => ids.filter(id => giaSong[String(id)]).map(id => ({
+            item_id: id, item_sku: 'OC4', has_model: false, item_status: 'NORMAL', price_info: [{ original_price: giaSong[String(id)], current_price: giaSong[String(id)] }],
+        }))
+        P.getItemPromotion = async () => []
         const fetchGoc = globalThis.fetch
         const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2000)])
         ;(globalThis as any).fetch = async (url: string) => {
@@ -189,7 +196,10 @@ async function main() {
             throw new Error(`fetch ngoài dự kiến: ${url}`)
         }
         datDemTienIch('TEST', ['online', TIEN_ICH_SHOPEE_PILOT])   // cửa hàng thử đã được bật Shopee Pilot
-        const ctx: any = { prisma, scopes: 'read,write', storeCode: 'TEST' }
+        // tool AI ghi chỉ ghi thật khi Pilot Tự động (Xem trước ⇒ nháp — bộ check-pilot-khong-lo E17); kho kế hoạch / sổ trong bộ nhớ
+        const kho = khoBoNho()
+        await luuCauHinh({ prisma, kho }, { executionMode: 'auto', policy: { maxWritesPerDay: 1000 } })
+        const ctx: any = { prisma, scopes: 'read,write', storeCode: 'TEST', khoPilot: kho, nguon: 'tác vụ "Thử đăng"' }
         const tool = (n: string) => SHOPEE_TOOLS.find(t => t.name === n)!
         const chay = async (n: string, a: any) => { try { return { kq: await tool(n).run(a, ctx) as any } } catch (e: any) { return { loi: e } } }
 
@@ -222,6 +232,9 @@ async function main() {
             dung('đổi giá dưới sàn bị từ chối, không gọi Shopee', doiLo.loi instanceof ToolError && goiShopee.length === truocDoi, doiLo.loi?.message)
             const doiDuoc = await chay('shopee_update_price', { item_id: '123456', gia_moi: 159000 })
             dung('đổi giá hợp lệ', !doiDuoc.loi && goiShopee.includes('update_price:123456:159000') && doiDuoc.kq.sau.loiNhuan > 0, doiDuoc.loi?.message)
+            dung('đăng + đổi giá ghi sổ ShopeePilotWrite, người làm là trợ lý AI',
+                kho._nhatKy.filter(w => (w.action === 'publish' || w.action === 'price') && w.status === 'succeeded' && w.payload?.actor === 'ai:tác vụ "Thử đăng"').length === 2,
+                JSON.stringify(kho._nhatKy.map(w => [w.action, w.status, w.payload?.actor])))
 
             listing[0].price = 110000
             const soat = await chay('shopee_review_listings', { bien_loi_nhuan: 15, phi_dong_goi: 2000 })

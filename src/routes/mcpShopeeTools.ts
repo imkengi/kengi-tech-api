@@ -21,6 +21,10 @@
 //     gian khác) ⇒ không tool nào tính / ghi được giá nào, cả tăng lẫn hạ; tool đọc không đưa lãi / biên tính
 //     theo số cấu hình 6% (số bịa) mà báo "chưa biết phí" kèm đường khai phí.
 //   - Ba tool ghi ra Shopee nằm trong TOOL_NHAY_CAM — tác vụ tự động phải khai đích danh.
+//   - Ba tool ghi đi qua CỬA của Shopee Pilot (09/11/2026, X-03/SP-02 — lib/shopeePilot doiGiaQuaPilot / anHienQuaPilot /
+//     dangQuaPilot): Pilot Xem trước ⇒ chỉ lập nháp cho chủ shop duyệt (ẩn / hiện: từ chối); Tự động ⇒ kế hoạch + thucThi
+//     (giá sống, khuyến mãi, biên độ, trần ghi ngày CHUNG, nghỉ 24 giờ/mã, sổ ShopeePilotWrite người 'ai:<nguồn>'). Ẩn hàng:
+//     tối đa 5 mã / gian / ngày, hàng còn tồn + có đơn 14 ngày cần chủ shop duyệt. Trước đó tool gọi thẳng và đi vòng mọi rào đó.
 //   - Đăng trùng: kiểm listing của gian (localProductId / SKU / ánh xạ SKU) trước khi
 //     gọi add_item; danh mục cũ quá thì cảnh báo đồng bộ lại.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -32,14 +36,26 @@ import {
     chonKenhShopee, moDichVuShopee, docMauPhiTheoNganh, timHangKho, luuDanhMucSan, duongNganh,
 } from '../lib/shopeeTuQuan'
 import {
-    num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, lyDoKhongHienLai,
+    num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, timUngVien,
 } from '../lib/shopeeThaoTac'
-import { docChinhSachPilot, nenGia } from '../lib/shopeePilot'
+import { docChinhSachPilot, nenGia, khoSql, doiGiaQuaPilot, anHienQuaPilot, dangQuaPilot, TRAN_AN_AI_MOI_NGAY, type NgCanh } from '../lib/shopeePilot'
 
 const NGAY = 86400_000
 
 /** Chính sách Shopee Pilot của cửa hàng làm nền giá cho tool — tham số AI chỉ được chặt hơn. */
 const nenPilot = async (prisma: any) => nenGia(await docChinhSachPilot(prisma))
+
+/** Ngữ cảnh Shopee Pilot cho tool GHI (09/11/2026): cùng kho kế hoạch / sổ ghi / chính sách / chế độ với bảng điều khiển; người
+ *  = 'ai:<nguồn>' để sổ ShopeePilotWrite và danh sách kế hoạch tách AI khỏi chủ shop; gian = gian AI chọn (tham số kenh). */
+async function ngCanhPilot(ctx: ToolCtx, a: any): Promise<NgCanh> {
+    const ch = await chonKenhShopee(ctx.prisma, a?.kenh)
+    return {
+        prisma: ctx.prisma, kho: ctx.khoPilot || khoSql(ctx.prisma), kenhId: ch.id,
+        nguoi: `ai:${String(ctx.nguon || ctx.userName || 'không rõ nguồn').slice(0, 120)}`,
+    }
+}
+const CUA_PILOT = 'Đi qua Shopee Pilot: Pilot đang XEM TRƯỚC thì chỉ lập NHÁP cho chủ shop duyệt ở Shopee Pilot (chưa ghi gì lên Shopee — đừng báo là đã làm); ' +
+    'Pilot TỰ ĐỘNG thì ghi thật nhưng tính vào trần thao tác ghi / ngày của Pilot và được ghi vào Nhật ký Pilot.'
 
 /** Hoa hồng affiliate đo từ từng đơn cho AI đọc — null = chưa đơn nào đọc được hoa hồng. */
 const tomTatAffiliate = (m: MauPhi) => m.affiliate ? {
@@ -308,7 +324,8 @@ const CAC_TOOL: Tool[] = [
         name: 'shopee_create_listing',
         description: 'ĐĂNG SẢN PHẨM MỚI lên gian Shopee từ một mặt hàng trong kho: tự nạp ảnh sản phẩm, khai tồn bán được, SKU kho (đơn về tự khớp kho), kênh vận chuyển đang bật. ' +
             'Bỏ trống gia = dùng giá đề xuất; giá dưới GIÁ SÀN bị từ chối. Hàng thiếu giá vốn / ảnh / hết hàng / đã có trên gian bị từ chối. ' +
-            'can_nang_gram BẮT BUỘC và phải là cân nặng thật (đã đóng gói) — không biết thì KHÔNG đăng, ghi vào báo cáo. chay_thu=true để xem trước thân yêu cầu mà không đăng.',
+            'can_nang_gram BẮT BUỘC và phải là cân nặng thật (đã đóng gói) — không biết thì KHÔNG đăng, ghi vào báo cáo. chay_thu=true để xem trước thân yêu cầu mà không đăng. ' +
+            `${CUA_PILOT} Phí sàn chưa đủ tin thì không tự đăng — để nháp chờ chủ shop duyệt.`,
         write: true,
         inputSchema: {
             type: 'object',
@@ -345,8 +362,8 @@ const CAC_TOOL: Tool[] = [
             },
             required: ['sku', 'category_id', 'can_nang_gram'],
         },
-        // Một đường với bảng điều khiển Shopee Pilot — xem lib/shopeeThaoTac.ts. AI = máy tự chạy ⇒ tuDong
-        run: async (a, { prisma }) => dangSanPhamShopee(prisma, a, { nen: await nenPilot(prisma), tuDong: true }),
+        // Cửa Shopee Pilot (09/11/2026): Xem trước ⇒ nháp; Tự động ⇒ kế hoạch + thucThi như chu kỳ tự đăng — lib/shopeePilot.dangQuaPilot
+        run: async (a, ctx) => dangQuaPilot(await ngCanhPilot(ctx, a), a),
     },
     {
         name: 'shopee_review_listings',
@@ -425,7 +442,8 @@ const CAC_TOOL: Tool[] = [
     },
     {
         name: 'shopee_update_price',
-        description: 'ĐỔI GIÁ một sản phẩm đang bán trên gian Shopee (theo item_id hoặc sku). Giá mới dưới GIÁ SÀN (biên tối thiểu sau phí sàn) hoặc sản phẩm thiếu giá vốn sẽ bị TỪ CHỐI. Hàng có phân loại chỉ đổi được khi đúng MỘT phân loại mang SKU đó. Phí sàn của gian chưa đủ tin (phí khai chưa đo, đo từ dưới 30 đơn đối soát, hoặc giá thấp hơn mọi đơn đã đo) thì chỉ TĂNG giá được, HẠ giá bị từ chối — báo chủ shop duyệt trên Shopee Pilot. Gian CHƯA BIẾT PHÍ (chưa đủ đơn để đo, chưa khai phí) thì không giá nào ghi được, cả tăng lẫn hạ — báo chủ shop khai phí sàn của gian ở Kênh bán online.',
+        description: 'ĐỔI GIÁ một sản phẩm đang bán trên gian Shopee (theo item_id hoặc sku). Giá mới dưới GIÁ SÀN (biên tối thiểu sau phí sàn) hoặc sản phẩm thiếu giá vốn sẽ bị TỪ CHỐI. Hàng có phân loại không đổi được (sửa giá từng phân loại trên Shopee). Phí sàn của gian chưa đủ tin (phí khai chưa đo, đo từ dưới 30 đơn đối soát, hoặc giá thấp hơn mọi đơn đã đo) thì chỉ TĂNG giá được, HẠ giá thành nháp chờ chủ shop duyệt trên Shopee Pilot. Gian CHƯA BIẾT PHÍ (chưa đủ đơn để đo, chưa khai phí) thì không giá nào ghi được, cả tăng lẫn hạ — báo chủ shop khai phí sàn của gian ở Kênh bán online. ' +
+            `${CUA_PILOT} Rào của Pilot: mỗi lần đổi tối đa X% so với giá GỐC đang để trên Shopee (vượt thì bị từ chối kèm khoảng được phép — chia nhiều bước), mỗi mã đổi tối đa 1 lần / 24 giờ (trừ mã đang dưới giá sàn được nâng lên), mã đang / sắp chạy khuyến mãi không đổi.`,
         write: true,
         inputSchema: {
             type: 'object',
@@ -442,12 +460,15 @@ const CAC_TOOL: Tool[] = [
             },
             required: ['gia_moi'],
         },
-        run: async (a, { prisma }) => doiGiaShopee(prisma, a, { nen: await nenPilot(prisma), tuDong: true }),
+        // Cửa Shopee Pilot (09/11/2026): kế hoạch + thucThi của Pilot, không gọi thẳng doiGiaShopee nữa — lib/shopeePilot.doiGiaQuaPilot
+        run: async (a, ctx) => doiGiaQuaPilot(await ngCanhPilot(ctx, a), a),
     },
     {
         name: 'shopee_toggle_listing',
         description: 'ẨN (an=true) hoặc HIỆN LẠI (an=false) một sản phẩm trên gian Shopee — vd hết hàng lâu, hoặc giá đang lỗ chờ chủ shop xem. ' +
-            'HIỆN LẠI bị từ chối nếu giá đang bán (từng phân loại) dưới GIÁ SÀN, thiếu giá vốn hoặc phí sàn chưa đủ tin — đổi giá trước rồi mới hiện.',
+            'HIỆN LẠI bị từ chối nếu giá đang bán (từng phân loại) dưới GIÁ SÀN, thiếu giá vốn hoặc phí sàn chưa đủ tin — đổi giá trước rồi mới hiện. ' +
+            `Đi qua Shopee Pilot: Pilot đang Xem trước thì KHÔNG ẩn / hiện được (chỉ chủ shop) — báo chủ shop mã và lý do. Tự động: tính vào trần ghi / ngày của Pilot; ẨN tối đa ${TRAN_AN_AI_MOI_NGAY} mã / gian / ngày, ` +
+            'hàng còn tồn và có đơn trong 14 ngày thì không tự ẩn (cần chủ shop duyệt).',
         write: true,
         inputSchema: {
             type: 'object',
@@ -459,22 +480,8 @@ const CAC_TOOL: Tool[] = [
             },
             required: ['item_id', 'an'],
         },
-        run: async (a, { prisma }) => {
-            const ch = await chonKenhShopee(prisma, a?.kenh)
-            const itemId = String(a?.item_id || '').trim()
-            if (!/^\d+$/.test(itemId)) throw new ToolError('item_id không hợp lệ')
-            const an = a?.an === true
-            const svc = await moDichVuShopee(prisma, ch)
-            if (!an) {
-                // Hàng có thể bị ẩn CHÍNH VÌ giá lỗ — hiện lại là mở bán ở giá đang để
-                const lyDo = await lyDoKhongHienLai(prisma, ch, svc, itemId, chinhSachGia(a, await nenPilot(prisma)), true)
-                if (lyDo) throw new ToolError(lyDo)
-            }
-            await svc.unlistItem(itemId, an)
-            await prisma.onlineProduct.updateMany({ where: { channelId: ch.id, platformProductId: itemId }, data: { status: an ? 'UNLIST' : 'NORMAL' } }).catch(() => { })
-            console.log(`[ShopeeTuQuan] ${an ? 'ẨN' : 'HIỆN'} ${ch.name} item ${itemId}${a?.ly_do ? ` — ${String(a.ly_do).slice(0, 200)}` : ''}`)
-            return { daDoi: true, itemId, trangThai: an ? 'ĐÃ ẨN' : 'ĐANG BÁN' }
-        },
+        // Cửa Shopee Pilot (09/11/2026): trước đó ẩn hàng KHÔNG có rào nào — lib/shopeePilot.anHienQuaPilot
+        run: async (a, ctx) => anHienQuaPilot(await ngCanhPilot(ctx, a), a),
     },
 ]
 

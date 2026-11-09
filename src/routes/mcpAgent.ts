@@ -101,6 +101,7 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
         userId: req.user?.userId,
         userName: (req.user as any)?.name,
         branchId: req.user?.branchId ?? null,
+        nguon: `trợ lý chat${(req.user as any)?.name ? ` (${String((req.user as any).name).slice(0, 60)})` : ''}`,
     }
 
     // Lịch sử hội thoại từ FE: [{role:'user'|'model', text}] → contents Gemini

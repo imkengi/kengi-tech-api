@@ -2154,12 +2154,49 @@ export class ShopeeService extends PlatformService {
         return id
     }
 
-    /** Thêm mã vào chương trình. Mã không phân loại: item_promotion_price. Trả danh sách Shopee từ chối. */
+    /**
+     * Thêm mã vào chương trình. Mã không phân loại: item_promotion_price. Trả danh sách Shopee từ chối.
+     * MỘT lần gửi (SP-04, 09/11/2026): trước đây đi httpPost = tự gửi lại tới 3 lần — Shopee đã nhận mà đứt mạng lúc trả về thì lần
+     * gửi lại thấy mã "đã có trong chương trình", bị coi là từ chối, rồi Pilot xoá luôn chương trình vừa thêm hàng.
+     * Lỗi KHÔNG RÕ Shopee đã nhận chưa (mạng / quá hạn / HTTP 5xx / phản hồi không phải JSON / lỗi phía máy chủ Shopee) ⇒ ném lỗi
+     * mang `khongRo: true` — bên gọi đọc lại chương trình (getDiscount) để đối soát. Chỉ lỗi Shopee trả rõ mới ném
+     * "Shopee add_discount_item: …" (= bị từ chối, chưa áp gì).
+     */
     async addDiscountItems(discountId: number, items: { item_id: number; purchase_limit: number; item_promotion_price?: number; model_list?: { model_id: number; model_promotion_price: number }[] }[]): Promise<{ loi: { itemId: number; lyDo: string }[] }> {
-        const data = await this.httpPost(this.apiUrl('/api/v2/discount/add_discount_item'), { discount_id: discountId, item_list: items })
-        if (data.error) throw new Error(`Shopee add_discount_item: ${data.error} - ${data.message}`)
+        const khongRo = (lyDo: string) => Object.assign(new Error(`KHÔNG RÕ Shopee đã nhận add_discount_item chưa: ${lyDo.slice(0, 300)}`), { khongRo: true })
+        const url = this.apiUrl('/api/v2/discount/add_discount_item')
+        let res: Response
+        try { res = await this.shopeeFetch(url, 'POST', { discount_id: discountId, item_list: items }, 1) } catch (e: any) { throw khongRo(String(e?.message || e)) }
+        let data: any
+        try { data = await this.parseResponse(res) } catch (e: any) { throw khongRo(String(e?.message || e)) }
+        if (res.status >= 500) throw khongRo(`HTTP ${res.status}${data?.error ? ` ${data.error} - ${data.message}` : ''}`)
+        if (data.error) {
+            // lỗi nội bộ / quá tải phía Shopee không nói được lệnh đã áp hay chưa
+            if (/inner|server|system|busy|timeout|time_out/i.test(String(data.error))) throw khongRo(`${data.error} - ${data.message}`)
+            throw new Error(`Shopee add_discount_item: ${data.error} - ${data.message}`)
+        }
         const loi = (data.response?.error_list || []).map((x: any) => ({ itemId: Number(x.item_id), lyDo: String(x.fail_message || x.fail_error || 'bị từ chối') }))
         return { loi }
+    }
+
+    /**
+     * MỘT chương trình + các mã đã có trong đó — v2.discount.get_discount, lật trang tới hết (CHỈ ĐỌC). Đối soát sau lần
+     * add_discount_item không rõ kết quả (SP-04, 09/11/2026). Viết theo tài liệu Shopee v2, CHƯA đo trên gian thật.
+     */
+    async getDiscount(discountId: number): Promise<{ trangThai: string; items: { itemId: number; modelIds: number[] }[] }> {
+        const items: { itemId: number; modelIds: number[] }[] = []
+        let trangThai = ''
+        for (let trang = 1; trang <= 50; trang++) {
+            const data = await this.httpGet(`${this.apiUrl('/api/v2/discount/get_discount')}&discount_id=${discountId}&page_no=${trang}&page_size=100`)
+            if (data.error) throw new Error(`Shopee get_discount: ${data.error} - ${data.message}`)
+            const r = data.response || {}
+            if (r.status) trangThai = String(r.status)
+            for (const it of r.item_list || []) {
+                items.push({ itemId: Number(it.item_id), modelIds: (it.model_list || []).map((m: any) => Number(m.model_id)).filter((n: number) => n > 0) })
+            }
+            if (!r.more) return { trangThai, items }
+        }
+        throw new Error('Shopee get_discount: quá 50 trang — chưa đọc hết danh sách mã của chương trình')
     }
 
     /** Chương trình giảm giá của shop theo trạng thái (upcoming | ongoing | expired | all) — CHỈ ĐỌC, dùng cho nút kiểm tra API. */

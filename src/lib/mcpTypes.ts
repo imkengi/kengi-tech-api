@@ -14,6 +14,11 @@ export type ToolCtx = {
     userId?: string
     userName?: string
     branchId?: string | null
+    /** Nguồn gọi tool, để sổ ghi biết AI NÀO làm (09/11/2026): 'tác vụ "<tên>"' (AI chạy theo lịch), 'trợ lý chat (<người>)',
+     *  'MCP (<người>)'. Tool Shopee ghi lấy làm người lập kế hoạch Shopee Pilot: 'ai:<nguồn>'. */
+    nguon?: string
+    /** Kho kế hoạch / sổ ghi Shopee Pilot — CHỈ bộ kiểm truyền (kho bộ nhớ); bỏ trống ⇒ khoSql(prisma) của cửa hàng. */
+    khoPilot?: any
 }
 
 export type Tool = {

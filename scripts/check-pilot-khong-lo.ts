@@ -20,6 +20,10 @@
  *     phí theo NGÀNH (E14): hàng ngành phí cao không bị hạ theo phí trung bình cả gian, ngành đổi lúc thực thi ⇒ soát lại;
  *     CHƯA BIẾT PHÍ sàn (E16, 09/11/2026): gian chưa đủ đơn, ô phí còn 6% mặc định ⇒ không giá nào tính / ghi được — người,
  *     máy, tool AI, đăng mới, khuyến mãi; khai phí xong thì chạy lại như phí khai.
+ *     Tool AI đi qua cửa Pilot (E17, X-03/SP-02, 09/11/2026): Xem trước chỉ nháp; Tự động qua đủ rào (trần ngày, biên độ,
+ *     khuyến mãi, nghỉ 24 giờ, sổ ghi 'ai:…'); ẩn hàng trần 5 / gian / ngày, không ẩn hàng còn tồn + có đơn 14 ngày.
+ *     Khuyến mãi (E18, SP-04, 09/11/2026): add_discount_item gửi MỘT lần; lỗi không rõ ⇒ đối soát get_discount, không xoá
+ *     khi chưa đối soát; xoá hỏng không nuốt; giá KM từ giá gốc ĐỌC SỐNG lúc lập lẫn lúc thực thi.
  *  F. Bộ chọn hồ sơ đăng: nhóm kèm số mã, tìm mã theo tên / SKU, cờ đã đăng / đã có hồ sơ.
  *  G. Nguồn phí GHI RÕ (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): tomTatMauPhi.scope + detail
  *     cho đủ 6 ca (ngành / cả gian / ngành chưa đủ đơn / chưa rõ ngành / phí khai / chưa biết phí), không còn "muon".
@@ -28,7 +32,7 @@ import fs from 'fs'
 import path from 'path'
 import {
     khoBoNho, chuanHoaChinhSach, quyetDinhGia, xayTrangThai, luuCauHinh, luuHoSo, taoKeHoachGia, taoKeHoachDang,
-    taoKeHoachKhuyenMai, thucThi, chayChuKy, timHangChoHoSo, type NgCanh, type ChinhSachPilot,
+    taoKeHoachKhuyenMai, thucThi, chayChuKy, timHangChoHoSo, huyKeHoach, type NgCanh, type ChinhSachPilot,
 } from '../src/lib/shopeePilot'
 import {
     tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, uocLuongPhi, lyDoPhiChuaDuTin, saiSoTyLePhi, SO_DON_TU_GHI, type ThamSoGia, type MauPhi,
@@ -77,7 +81,8 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { ngan
     const kenh = { id: 'ch1', name: 'Gian thử', platform: 'shopee', shopId: '777', accessToken: 'tok', apiKey: '1', apiSecret: 's', commissionRate: o.phiKhai ?? 6, tokenExpiresAt: new Date(Date.now() + 3600_000), createdAt: new Date() }
     const hang: Record<string, any> = {}
     const listing: any[] = []
-    const st = { don: o.don, donNganh: o.donNganh || null, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0 }
+    // ban14: số đã bán 14 ngày theo item_id (rào ẩn hàng của tool AI, 09/11/2026); loiBan14 = đọc hỏng
+    const st = { don: o.don, donNganh: o.donNganh || null, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0, ban14: {} as Record<string, number>, loiBan14: false }
     const baseInfo: Record<string, any> = {}
     const models: Record<string, any[]> = {}
     const kho = khoBoNho()
@@ -150,6 +155,11 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { ngan
             }
             // đơn MỘT ngành (lib/shopeeTuQuan.dongPhiTheoNganh) — chỉ ca nào khai donNganh
             if (sql.includes('AS nganh')) return (v[0] === 'ch1' && st.donNganh) ? st.donNganh : []
+            // số đã bán 14 ngày của MỘT listing (lib/shopeePilot.soBan14NgayMa)
+            if (sql.includes('"externalItemId"')) {
+                if (st.loiBan14) throw new Error('Connection terminated unexpectedly')
+                return [{ sl: v[0] === 'ch1' ? (st.ban14[String(v[1])] || 0) : 0 }]
+            }
             if (sql.includes('"OnlineOrderItem"')) return []
             if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) {
                 if (sql.includes('affiliateFee')) {
@@ -177,13 +187,16 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { ngan
         },
     }
     const ctx: NgCanh = { prisma, kho, nguoi: 'chu@shop.vn' }
-    const mcp: any = { prisma, scopes: 'read,write', storeCode: 'KHONGLO' }
+    // tool AI ghi đi qua Pilot (09/11/2026): cùng kho kế hoạch / sổ ghi với bảng điều khiển; nguồn = tác vụ AI chạy theo lịch
+    const mcp: any = { prisma, scopes: 'read,write', storeCode: 'KHONGLO', khoPilot: kho, nguon: 'tác vụ "Chăm giá thử"' }
     return { kenh, hang, listing, st, baseInfo, models, kho, prisma, ctx, mcp, themHang, themListing }
 }
 let HIEN: ReturnType<typeof taoCuaHang>
 
 const P = ShopeeService.prototype as any
-P.getItemLimit = async () => ({ price_limit: { min_limit: 1000, max_limit: 1e8 }, item_name_length_limit: { min_limit: 5, max_limit: 120 }, item_description_length_limit: { min_limit: 10, max_limit: 3000 } })
+/** bản THẬT của hai lệnh khuyến mãi (SP-04) — ca E18 gọi thẳng với fetch giả để đếm số lần gửi / đọc */
+const KM_THAT = { addDiscountItems: P.addDiscountItems, getDiscount: P.getDiscount }
+P.getItemLimit =async () => ({ price_limit: { min_limit: 1000, max_limit: 1e8 }, item_name_length_limit: { min_limit: 5, max_limit: 120 }, item_description_length_limit: { min_limit: 10, max_limit: 3000 } })
 P.getLogisticsChannels = async () => [{ logistics_channel_id: 50021, logistics_channel_name: 'Nhanh', enabled: true, mask_channel_id: 0 }]
 P.uploadImage = async () => ({ imageId: 'img-1' })
 P.addItem = async (body: any) => { goi.push(`add_item:${body.item_sku}:${body.original_price}`); return { itemId: String(9000 + goi.length) } }
@@ -192,10 +205,36 @@ P.updatePrice = async (id: any, gia: number, modelId?: any) => {
     const b = HIEN.baseInfo[String(id)]
     if (b && !modelId) b.price_info = [{ original_price: gia, current_price: gia }]
 }
-P.getItemPromotion = async () => []
-P.addDiscount = async (ten: string) => { goi.push(`add_discount:${ten}`); return 555 }
-P.addDiscountItems = async (_id: number, items: any[]) => { goi.push(`add_discount_item:${JSON.stringify(items)}`); return { loi: [] } }
-P.deleteDiscount = async () => { goi.push('delete_discount') }
+/** chương trình khuyến mãi ĐANG / SẮP chạy theo item_id (get_item_promotion) — 'hong' = đọc hỏng */
+let kmShopee: Record<string, string> | 'hong' = {}
+P.getItemPromotion = async (ids: number[]) => {
+    if (kmShopee === 'hong') throw new Error('Shopee get_item_promotion: error_auth - no permission')
+    const km = kmShopee
+    return ids.filter(id => km[String(id)]).map(id => ({ item_id: id, promotion: [{ promotion_type: 'Flash Sale', promotion_staging: km[String(id)] }] }))
+}
+let soChuongTrinh = 554
+P.addDiscount = async (ten: string) => { goi.push(`add_discount:${ten}`); return ++soChuongTrinh }
+/* add_discount_item giả (SP-04, 09/11/2026): kmNhan = mã Shopee đã nhận theo chương trình (get_discount đọc lại). kmGui = lần gửi
+ * kết thúc thế nào: null = nhận hết; 'tu-choi' = Shopee từ chối RÕ; 'khong-ro…' = lỗi KHÔNG RÕ như dịch vụ thật khi đứt mạng, mà
+ * Shopee chưa nhận gì / đã nhận hết / mới nhận mã đầu. kmDocHong = get_discount hỏng; kmXoaHong = delete_discount hỏng. */
+let kmGui: null | 'tu-choi' | 'khong-ro' | 'khong-ro-da-nhan' | 'khong-ro-mot-phan' = null
+const kmNhan: Record<number, any[]> = {}
+let kmDocHong = false, kmXoaHong = false
+P.addDiscountItems = async (id: number, items: any[]) => {
+    goi.push(`add_discount_item:${JSON.stringify(items)}`)
+    if (kmGui === 'tu-choi') throw new Error('Shopee add_discount_item: error_param - discount_id không hợp lệ')
+    const nhan = kmGui === 'khong-ro' ? [] : kmGui === 'khong-ro-mot-phan' ? items.slice(0, 1) : items
+    kmNhan[id] = [...(kmNhan[id] || []), ...nhan]
+    if (kmGui) throw Object.assign(new Error('KHÔNG RÕ Shopee đã nhận add_discount_item chưa: Gọi Shopee trực tiếp thất bại sau 1 lần (quá 30s): aborted'), { khongRo: true })
+    return { loi: [] }
+}
+const addDiscountItemsGia = P.addDiscountItems
+P.getDiscount = async (id: number) => {
+    goi.push(`get_discount:${id}`)
+    if (kmDocHong) throw new Error('Shopee get_discount: error_server - system busy')
+    return { trangThai: 'upcoming', items: (kmNhan[id] || []).map((it: any) => ({ itemId: it.item_id, modelIds: (it.model_list || []).map((m: any) => m.model_id) })) }
+}
+P.deleteDiscount = async () => { goi.push('delete_discount'); if (kmXoaHong) throw new Error('Shopee delete_discount: error_server - Internal error') }
 P.getModelList = async (itemId: number) => HIEN.models[String(itemId)] || []
 /** số lần đọc giá đang để trên Shopee — ca CHƯA BIẾT PHÍ (E16) canh "khỏi đọc Shopee cho kế hoạch chắc chắn không lập được" */
 let docGiaShopee = 0
@@ -591,21 +630,47 @@ async function main() {
             const truoc = ghiShopee().length
             const lo = await chay('shopee_update_price', { item_id: '501', gia_moi: 150000, bien_toi_thieu: 0, phi_dong_goi: 0 })
             dung('E4. update_price 150.000đ (trên sàn mặc định cũ, dưới sàn Pilot) bị từ chối, không gọi Shopee', lo.loi instanceof ToolError && /GIÁ SÀN/.test(lo.loi.message) && ghiShopee().length === truoc, lo.loi?.message)
-            const duoc = await chay('shopee_update_price', { item_id: '501', gia_moi: 170000 })
-            dung('E4. update_price 170.000đ (trên sàn Pilot) được ghi', !duoc.loi && goi.includes('update_price:501:170000'), duoc.loi?.message)
+            // 09/11/2026 (X-03/SP-02): tool AI ghi đi qua cửa Pilot — chính sách trên chưa đổi chế độ ⇒ Pilot Xem trước ⇒ chỉ nháp
+            const nhap = await chay('shopee_update_price', { item_id: '501', gia_moi: 180000 })
+            dung('E4. Pilot Xem trước: update_price 180.000đ (trên sàn Pilot, đúng biên độ 10%) chỉ lập nháp, không gọi Shopee',
+                !nhap.loi && nhap.kq.nhap === true && nhap.kq.daDoi === false && ghiShopee().length === truoc, nhap.loi?.message || JSON.stringify(nhap.kq))
+            await luuCauHinh(H.ctx, { executionMode: 'auto' })
+            const duoc = await chay('shopee_update_price', { item_id: '501', gia_moi: 180000 })
+            dung('E4. Pilot Tự động: cùng lệnh thực thi đúng nháp đó (không lập nháp thứ hai), ghi 180.000đ',
+                !duoc.loi && duoc.kq.daDoi === true && duoc.kq.planId === nhap.kq?.planId && goi.includes('update_price:501:180000')
+                && H.kho._keHoach.filter(k => k.kind === 'price' && k.data?.itemId === '501').length === 1, duoc.loi?.message || JSON.stringify(duoc.kq))
             const dang = await chay('shopee_create_listing', { sku: 'OC2', category_id: 101, can_nang_gram: 300, gia: 150000, bien_toi_thieu: 0 })
             dung('E4. create_listing giá dưới sàn Pilot bị từ chối, không add_item', dang.loi instanceof ToolError && /GIÁ SÀN/.test(dang.loi.message) && !goi.some(g => g.startsWith('add_item:OC2')), dang.loi?.message)
             const soat = await chay('shopee_review_listings', { bien_toi_thieu: 0, chi_van_de: false })
             dung('E4. review_listings: chính sách hiệu lực là chính sách Pilot', !soat.loi && soat.kq.chinhSach?.bienToiThieuPct === 12 && soat.kq.chinhSach?.phiAffiliatePct === 8, soat.loi?.message || JSON.stringify(soat.kq?.chinhSach))
 
-            // ─── E7. Đọc chính sách Pilot hỏng ⇒ tool ghi không chạy ───
+            // ─── E7. Đọc cấu hình Pilot hỏng ⇒ tool ghi không chạy ───
+            // tool ghi đọc chính sách + chế độ qua kho của Pilot (09/11/2026) — hỏng thì không đoán chế độ, không rơi về mặc định lỏng hơn
+            const khoThat = H.mcp.khoPilot
+            H.mcp.khoPilot = { ...khoThat, docCauHinh: async () => { throw new Error('Connection terminated unexpectedly') } }
+            const t2 = ghiShopee().length, k2 = H.kho._keHoach.length
+            const hong = [
+                await chay('shopee_update_price', { item_id: '501', gia_moi: 190000 }),
+                await chay('shopee_toggle_listing', { item_id: '501', an: true }),
+                await chay('shopee_create_listing', { sku: 'OC2', category_id: 101, can_nang_gram: 300 }),
+            ]
+            dung('E7. đọc cấu hình Pilot HỎNG ⇒ cả ba tool ghi từ chối (không mặc định lỏng hơn, không đoán chế độ), không ghi, không lập kế hoạch',
+                hong.every(x => x.loi instanceof ToolError && /chính sách \/ chế độ Shopee Pilot/.test(x.loi.message)) && ghiShopee().length === t2 && H.kho._keHoach.length === k2,
+                hong.map(x => x.loi?.message || 'KHÔNG CHẶN').join(' | '))
+            const khoMoi = khoBoNho()
+            H.mcp.khoPilot = khoMoi
+            const chuaDung = await chay('shopee_update_price', { item_id: '501', gia_moi: 190000 })
+            dung('E7. cửa hàng chưa từng lưu cấu hình Pilot ⇒ mặc định Xem trước: chỉ lập nháp, không ghi',
+                !chuaDung.loi && chuaDung.kq.nhap === true && ghiShopee().length === t2 && khoMoi._keHoach.length === 1, chuaDung.loi?.message || JSON.stringify(chuaDung.kq))
+            H.mcp.khoPilot = khoThat
+            // tool ĐỌC vẫn đọc chính sách thẳng (docChinhSachPilot): hỏng ⇒ báo lỗi; chưa có bảng ⇒ mặc định
             H.st.loiChinhSach = 'hong'
-            const t2 = ghiShopee().length
-            const hong = await chay('shopee_update_price', { item_id: '501', gia_moi: 300000 })
-            dung('E7. đọc chính sách Pilot HỎNG ⇒ tool ghi giá từ chối (không rơi về mức mặc định lỏng hơn)', hong.loi instanceof ToolError && /chính sách Shopee Pilot/.test(hong.loi.message) && ghiShopee().length === t2, hong.loi?.message)
+            const docHong = await chay('shopee_suggest_price', { sku: 'OC' })
             H.st.loiChinhSach = 'khong-bang'
-            const chuaDung = await chay('shopee_update_price', { item_id: '501', gia_moi: 180000 })
-            dung('E7. cửa hàng chưa từng dùng Pilot (chưa có bảng) ⇒ dùng mặc định, ghi được', !chuaDung.loi && goi.includes('update_price:501:180000'), chuaDung.loi?.message)
+            const docMacDinh = await chay('shopee_suggest_price', { sku: 'OC' })
+            dung('E7. tool đọc: đọc chính sách HỎNG ⇒ từ chối; chưa có bảng Pilot ⇒ tính theo mặc định (sàn 5%)',
+                docHong.loi instanceof ToolError && /chính sách Shopee Pilot/.test(docHong.loi.message) && !docMacDinh.loi && docMacDinh.kq.chinhSach?.bienToiThieuPct === 5,
+                `${docHong.loi?.message} | ${docMacDinh.loi?.message || JSON.stringify(docMacDinh.kq?.chinhSach)}`)
             H.st.loiChinhSach = null
         }
 
@@ -616,20 +681,28 @@ async function main() {
             H.themHang('X1', 100000); H.themListing('X1', 200000, '701')
             H.themHang('X2', 100000)
             H.themHang('X3', 100000); H.themListing('X3', 300000, '702', 'UNLIST')
+            H.themHang('X4', 100000); H.themListing('X4', 260000, '703')
+            // tool AI chỉ ghi khi Pilot Tự động (09/11/2026); biên độ 30% để mọi ca dưới đây tới đúng rào PHÍ, không vướng biên độ
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxPriceChangeRate: 0.3, maxWritesPerDay: 1000 } })
             const truoc = ghiShopee().length
             const ha = await chay('shopee_update_price', { item_id: '701', gia_moi: 150000 })
-            dung('E5. phí khai chưa đo: AI HẠ giá (dù vẫn trên sàn tính được 133.400) bị từ chối, không gọi Shopee', ha.loi instanceof ToolError && /CHƯA ĐO/.test(ha.loi.message) && ghiShopee().length === truoc, ha.loi?.message)
+            dung('E5. phí khai chưa đo: AI HẠ giá (dù vẫn trên sàn tính được 133.400) không tự ghi — để nháp chờ chủ shop duyệt, không gọi Shopee',
+                ha.loi instanceof ToolError && /CHƯA ĐO/.test(ha.loi.message) && /nháp chờ/.test(ha.loi.message) && ghiShopee().length === truoc
+                && H.kho._keHoach.some(k => k.kind === 'price' && k.data?.itemId === '701' && k.data?.price === 150000 && k.status === 'draft'), ha.loi?.message)
             const tang = await chay('shopee_update_price', { item_id: '701', gia_moi: 260000 })
             dung('E5. phí khai chưa đo: AI TĂNG giá vẫn được, kèm cảnh báo giá sàn có thể còn thấp', !tang.loi && goi.includes('update_price:701:260000') && /chưa đủ tin/.test(tang.kq?.canhBao || ''), tang.loi?.message)
-            H.listing.find(l => l.platformProductId === '701')!.price = 100000      // bản trong hệ thống cũ — Shopee thật đang 260.000
-            const cu = await chay('shopee_update_price', { item_id: '701', gia_moi: 200000 })
-            dung('E5. bản trong hệ thống cũ (100.000đ) còn Shopee đang 260.000đ: "tăng" lên 200.000đ thực ra là HẠ ⇒ từ chối', cu.loi instanceof ToolError && !goi.includes('update_price:701:200000'), cu.loi?.message)
+            H.listing.find(l => l.platformProductId === '703')!.price = 100000      // bản trong hệ thống cũ — Shopee thật đang 260.000
+            const cu = await chay('shopee_update_price', { item_id: '703', gia_moi: 200000 })
+            // theo bản lưu thì là TĂNG 100% (vượt biên độ); theo Shopee thật là HẠ 23% ⇒ phải vướng rào phí, không phải rào biên độ
+            dung('E5. bản trong hệ thống cũ (100.000đ) còn Shopee đang 260.000đ: "tăng" lên 200.000đ thực ra là HẠ ⇒ không tự ghi (phí chưa đo)', cu.loi instanceof ToolError && /CHƯA ĐO/.test(cu.loi.message) && !goi.includes('update_price:703:200000'), cu.loi?.message)
             const hien = await chay('shopee_toggle_listing', { item_id: '702', an: false })
             dung('E5. phí khai chưa đo: AI hiện lại hàng đang ẩn bị từ chối (mở bán lại = ghi giá đang để)', hien.loi instanceof ToolError && /CHƯA ĐO/.test(hien.loi.message) && !goi.includes('unlist:702:false'), hien.loi?.message)
             const thu = await chay('shopee_create_listing', { sku: 'X2', category_id: 101, can_nang_gram: 300, chay_thu: true })
             dung('E5. chạy thử đăng: vẫn ra thân yêu cầu nhưng báo trước sẽ bị từ chối', !thu.loi && /CHƯA ĐO/.test(thu.kq.phanTichGia?.canhBaoPhi || ''), thu.loi?.message)
             const that = await chay('shopee_create_listing', { sku: 'X2', category_id: 101, can_nang_gram: 300 })
-            dung('E5. đăng thật bị từ chối, không nạp ảnh / add_item', that.loi instanceof ToolError && /CHƯA ĐO/.test(that.loi.message) && !goi.some(g => g.startsWith('add_item:X2')), that.loi?.message)
+            dung('E5. đăng thật không tự làm — để nháp chờ chủ shop duyệt, không nạp ảnh / add_item',
+                that.loi instanceof ToolError && /CHƯA ĐO/.test(that.loi.message) && !goi.some(g => g.startsWith('add_item:X2'))
+                && H.kho._keHoach.some(k => k.kind === 'publish' && k.data?.sku === 'X2' && k.status === 'draft'), that.loi?.message)
             const gy = await chay('shopee_suggest_price', { sku: 'X1' })
             dung('E5. suggest_price có canhBaoTuDong để AI biết báo chủ shop', !gy.loi && /CHƯA ĐO/.test(gy.kq.canhBaoTuDong || ''), gy.loi?.message)
         }
@@ -641,6 +714,7 @@ async function main() {
             H.themHang('AN1', 100000); H.themHang('AN2', 200000)
             H.themListing('AN1', 120000, '601', 'UNLIST')
             H.baseInfo['601'] = { item_id: 601, item_sku: 'AN1', has_model: false, price_info: [{ current_price: 120000, original_price: 120000 }] }
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 1000 } })   // Xem trước thì AI không ẩn / hiện gì (E17)
             const truoc = ghiShopee().length
             const lo = await chay('shopee_toggle_listing', { item_id: '601', an: false })
             dung('E6. hiện lại hàng đang để giá dưới sàn (120.000 < 127.200) bị từ chối, không gọi Shopee', lo.loi instanceof ToolError && /Không hiện lại/.test(lo.loi.message) && /GIÁ SÀN/.test(lo.loi.message) && ghiShopee().length === truoc, lo.loi?.message)
@@ -657,8 +731,11 @@ async function main() {
             H.models['602'][1] = { model_id: 2, name: 'Loại 2', sku: 'KHONG-CO', price: 300000, giaHienTai: 300000, stock: 2 }
             const thieu = await chay('shopee_toggle_listing', { item_id: '602', an: false })
             dung('E6. phân loại không tra ra giá vốn ⇒ không hiện lại', thieu.loi instanceof ToolError && /thiếu giá vốn/.test(thieu.loi.message), thieu.loi?.message)
-            const an = await chay('shopee_toggle_listing', { item_id: '602', an: true })
-            dung('E6. ẩn thì không bao giờ bị chặn', !an.loi && goi.includes('unlist:602:true'), an.loi?.message)
+            // ẩn = ngừng bán, không bao giờ lỗ thêm ⇒ không vướng rào giá; rào riêng của ẩn (trần ngày, còn tồn + có đơn) ở E17
+            const an = await chay('shopee_toggle_listing', { item_id: '601', an: true })
+            dung('E6. ẩn hàng không có đơn 14 ngày: không vướng rào giá', !an.loi && goi.includes('unlist:601:true'), an.loi?.message)
+            const anLa = await chay('shopee_toggle_listing', { item_id: '602', an: true })
+            dung('E6. ẩn mã chưa có trong danh mục đã đồng bộ ⇒ từ chối (không kiểm được tồn / đơn)', anLa.loi instanceof ToolError && /danh mục đã đồng bộ/.test(anLa.loi.message) && !goi.includes('unlist:602:true'), anLa.loi?.message)
         }
 
         // ─── E8. Khuyến mãi soát lại lúc thực thi ─────────────────────────────────────
@@ -971,6 +1048,296 @@ async function main() {
                 goi.slice(t0).filter(g => /^(add_item|update_price|add_discount|unlist)/.test(g)).join() === 'update_price:1601:133400'
                 && kq2.results.some((r: any) => r.sku === 'U2' && r.status === 'draft') && kq2.results.some((r: any) => r.sku === 'U3' && r.status === 'draft')
                 && !kq2.results.some((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || '')), JSON.stringify({ ghi: goi.slice(t0), r: kq2.results }))
+        }
+
+        // ─── E17. Tool AI đi qua cửa Pilot (X-03/SP-02, 09/11/2026) ───────────────────────────
+        // Trước: shopee_update_price / shopee_toggle_listing / shopee_create_listing ghi THẲNG — Pilot Xem trước vẫn ghi thật, không
+        // trần ngày, không biên độ, không né khuyến mãi, không nghỉ 24 giờ, không sổ ShopeePilotWrite; ẩn hàng không có rào nào.
+        {
+            // mọi mã cùng ngành 101 đo đủ 40 đơn (14% + 3.000đ) — máy được tự hạ giá / tự đăng (ngành chưa đo thì đăng mới chờ duyệt)
+            HIEN = taoCuaHang({ don: donSach(), donNganh: donSach().map(d => ({ ...d, nganh: '101' })) })
+            const H = HIEN
+            const AI = 'ai:tác vụ "Chăm giá thử"'
+            const tE = goi.length, moi = () => goi.slice(tE)     // lời gọi Shopee của RIÊNG ca này
+            // giá sàn mặc định (biên 5%): vốn 100.000đ ⇒ 103.000 / 0,81 = 127.200đ; đang bán 200.000đ
+            for (let i = 1; i <= 8; i++) { H.themHang(`G${i}`, 100000); H.themListing(`G${i}`, 200000, `170${i}`, 'NORMAL', '101') }
+            for (let i = 1; i <= 6; i++) { H.themHang(`AN${i}`, 100000); H.themListing(`AN${i}`, 200000, `175${i}`, 'NORMAL', '101') }
+            H.themHang('MOI', 100000)
+            // lưu chính sách, KHÔNG đổi chế độ ⇒ Pilot Xem trước (mặc định)
+            await luuCauHinh(H.ctx, { policy: { maxWritesPerDay: 1000, automation: { publishNewProducts: false, reprice: true } } })
+            const t0 = ghiShopee().length
+
+            const n1 = await chay('shopee_update_price', { item_id: '1701', gia_moi: 190000, ly_do: 'Bán chậm' })
+            const n2 = await chay('shopee_update_price', { item_id: '1701', gia_moi: 190000 })
+            const kh1 = H.kho._keHoach.filter(k => k.data?.itemId === '1701')
+            dung('E17. Xem trước: update_price chỉ lập nháp — người lập ai:…, khoá ai:… (không cycle:), gọi lại cùng việc ra đúng nháp đó; 0 lần gọi Shopee, 0 dòng sổ',
+                !n1.loi && n1.kq.nhap === true && n1.kq.daDoi === false && /đã lập nháp/.test(n1.kq.thongBao) && /đừng báo là đã đổi giá/.test(n1.kq.thongBao)
+                && n2.kq?.planId === n1.kq.planId && kh1.length === 1 && kh1[0].status === 'draft' && kh1[0].createdBy === AI
+                && /^ai:price:/.test(kh1[0].idempotencyKey || '') && kh1[0].data?.lyDo === 'Bán chậm' && ghiShopee().length === t0 && H.kho._nhatKy.length === 0,
+                n1.loi?.message || JSON.stringify({ kq: n1.kq, kh: kh1.map(k => [k.status, k.createdBy, k.idempotencyKey]) }))
+            // chủ shop HUỶ nháp AI ⇒ AI không lập lại đúng việc đó trong ngày (chu kỳ thì vẫn soát mã — ca chu kỳ cuối E17)
+            const n8 = await chay('shopee_update_price', { item_id: '1708', gia_moi: 190000 })
+            await nem(() => huyKeHoach({ ...H.ctx, nguoi: 'chu@shop.vn' }, n8.kq?.planId))   // nem: đột biến làm hỏng ca này thì các ca sau vẫn chạy
+            const n8lai = await chay('shopee_update_price', { item_id: '1708', gia_moi: 190000 })
+            dung('E17. chủ shop huỷ nháp AI ⇒ AI gọi lại đúng việc đó trong ngày bị từ chối "chủ shop đã huỷ", không lập nháp mới',
+                n8lai.loi instanceof ToolError && /chủ shop đã huỷ/.test(n8lai.loi.message) && H.kho._keHoach.filter(k => k.data?.itemId === '1708').length === 1,
+                n8lai.loi?.message || JSON.stringify(n8lai.kq))
+            const anXT = await chay('shopee_toggle_listing', { item_id: '1751', an: true })
+            const hienXT = await chay('shopee_toggle_listing', { item_id: '1752', an: false })
+            dung('E17. Xem trước: AI ẩn / hiện lại bị từ chối ("chỉ chủ shop ẩn được khi Pilot đang Xem trước"), không gọi Shopee',
+                anXT.loi instanceof ToolError && /chỉ chủ shop ẩn được khi Pilot đang Xem trước/.test(anXT.loi.message)
+                && hienXT.loi instanceof ToolError && /Xem trước/.test(hienXT.loi.message) && !moi().some(g => g.startsWith('unlist:')), `${anXT.loi?.message} | ${hienXT.loi?.message}`)
+            const dangXT = await chay('shopee_create_listing', { sku: 'MOI', category_id: 101, can_nang_gram: 300 })
+            const khDang = H.kho._keHoach.filter(k => k.kind === 'publish')
+            dung('E17. Xem trước: create_listing không đăng — trả bản nháp đã soạn (thân yêu cầu, ảnh) + đường duyệt; kế hoạch đăng nháp người lập ai:…',
+                !dangXT.loi && dangXT.kq.daDang === false && dangXT.kq.nhap === true && dangXT.kq.banNhap?.thanYeuCau?.item_sku === 'MOI'
+                && Array.isArray(dangXT.kq.banNhap?.anhSeNap) && /CHƯA đăng/.test(dangXT.kq.thongBao)
+                && khDang.length === 1 && khDang[0].status === 'draft' && khDang[0].createdBy === AI && !moi().some(g => g.startsWith('add_item:')),
+                dangXT.loi?.message || JSON.stringify(dangXT.kq).slice(0, 400))
+
+            // ── Tự động ──
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 2 } })
+            for (let i = 0; i < 2; i++) await H.kho.ghiNhatKy({ action: 'price', status: 'failed', planId: null, payload: { channelId: 'ch1' }, response: { message: 'lượt ghi trước' } })
+            const k0 = H.kho._keHoach.length, g0 = ghiShopee().length
+            const tran = [
+                await chay('shopee_update_price', { item_id: '1702', gia_moi: 190000 }),
+                await chay('shopee_toggle_listing', { item_id: '1751', an: true }),
+                await chay('shopee_create_listing', { sku: 'MOI', category_id: 101, can_nang_gram: 300 }),
+            ]
+            dung('E17. Tự động mà trần ghi ngày CHUNG đã chạm (tính cả lần hỏng) ⇒ cả ba tool từ chối TRƯỚC khi lập kế hoạch, 0 lần gọi Shopee',
+                tran.every(x => x.loi instanceof ToolError && /giới hạn 2 thao tác ghi/.test(x.loi.message)) && H.kho._keHoach.length === k0 && ghiShopee().length === g0,
+                tran.map(x => x.loi?.message || 'KHÔNG CHẶN').join(' | '))
+            await luuCauHinh(H.ctx, { policy: { maxWritesPerDay: 1000 } })
+
+            H.baseInfo['1703'].price_info = [{ original_price: 200000, current_price: 170000 }]   // đang chạy giảm giá
+            kmShopee = { '1704': 'upcoming' }                                                       // sắp vào Flash Sale
+            const kmDang = await chay('shopee_update_price', { item_id: '1703', gia_moi: 190000 })
+            const kmSap = await chay('shopee_update_price', { item_id: '1704', gia_moi: 190000 })
+            kmShopee = {}
+            dung('E17. mã ĐANG / SẮP chạy khuyến mãi ⇒ từ chối (đổi giá gốc = đổi luôn mức giảm), không lập kế hoạch, 0 lần gọi Shopee',
+                [kmDang, kmSap].every(x => x.loi instanceof ToolError && /đợi chương trình kết thúc/.test(x.loi.message)) && /sắp chạy/.test(kmSap.loi?.message || '')
+                && H.kho._keHoach.length === k0 && ghiShopee().length === g0, `${kmDang.loi?.message} | ${kmSap.loi?.message}`)
+            const xa = await chay('shopee_update_price', { item_id: '1702', gia_moi: 150000 })
+            dung('E17. vượt biên độ 10% ⇒ từ chối, nói khoảng được phép một lần (KHÔNG tự kẹp), không lập kế hoạch, 0 lần gọi Shopee',
+                xa.loi instanceof ToolError && /chỉ được trong khoảng 180\.000đ–220\.000đ/.test(xa.loi.message) && /chia nhiều bước/.test(xa.loi.message)
+                && H.kho._keHoach.length === k0 && ghiShopee().length === g0, xa.loi?.message)
+            const chat = await chay('shopee_update_price', { item_id: '1706', gia_moi: 190000, bien_toi_thieu: 40 })
+            dung('E17. AI truyền biên tối thiểu 40% (CHẶT hơn chính sách) ⇒ giá sàn theo 40% (224.000đ), 190.000đ bị từ chối',
+                chat.loi instanceof ToolError && /GIÁ SÀN/.test(chat.loi.message) && !goi.includes('update_price:1706:190000'), chat.loi?.message)
+
+            const ok = await chay('shopee_update_price', { item_id: '1702', gia_moi: 185000, ly_do: 'Bán chậm 14 ngày' })
+            const dongGia = H.kho._nhatKy.filter(w => w.action === 'price' && w.payload?.item_id === '1702')
+            dung('E17. Tự động, qua đủ rào ⇒ ghi Shopee MỘT lần; dòng sổ ShopeePilotWrite mang người ai:…; kế hoạch người lập ai:…',
+                !ok.loi && ok.kq.daDoi === true && moi().filter(g => g.startsWith('update_price:1702:')).join() === 'update_price:1702:185000'
+                && dongGia.length === 1 && dongGia[0].status === 'succeeded' && dongGia[0].payload.actor === AI
+                && H.kho._keHoach.find(k => k.id === ok.kq.planId)?.createdBy === AI, ok.loi?.message || JSON.stringify({ kq: ok.kq, dong: dongGia }))
+            const lai = await chay('shopee_update_price', { item_id: '1702', gia_moi: 195000 })
+            dung('E17. mã vừa đổi giá < 24 giờ ⇒ AI đổi tiếp bị từ chối, 0 lần gọi Shopee',
+                lai.loi instanceof ToolError && /1 lần \/ 24 giờ/.test(lai.loi.message) && !goi.includes('update_price:1702:195000'), lai.loi?.message)
+            const g5 = await chay('shopee_update_price', { item_id: '1705', gia_moi: 190000 })
+            H.hang['G5'].costPrice = 160000                                       // vốn tăng ⇒ sàn mới 163.000 / 0,81 ≈ 201.300 > 190.000
+            const sanG5 = (await chay('shopee_suggest_price', { sku: 'G5' })).kq?.giaSan
+            const nang = await chay('shopee_update_price', { item_id: '1705', gia_moi: sanG5 })
+            dung(`E17. mã vừa đổi < 24 giờ nhưng giờ DƯỚI giá sàn (vốn tăng) ⇒ vẫn được nâng lên sàn ${sanG5}đ ngay — dừng lỗ trước`,
+                !g5.loi && sanG5 > 190000 && !nang.loi && goi.includes(`update_price:1705:${sanG5}`), `${g5.loi?.message} | ${nang.loi?.message}`)
+            kmShopee = 'hong'
+            const kmHong = await chay('shopee_update_price', { item_id: '1707', gia_moi: 190000 })
+            kmShopee = {}
+            dung('E17. đọc lịch khuyến mãi HỎNG ⇒ như chu kỳ: vẫn đổi (giá sống đã loại chương trình ĐANG chạy) nhưng nói rõ chưa kiểm được chương trình sắp chạy',
+                !kmHong.loi && goi.includes('update_price:1707:190000') && /Chưa kiểm được chương trình sắp chạy/.test(kmHong.kq?.canhBao || ''), kmHong.loi?.message || JSON.stringify(kmHong.kq))
+
+            // ── ẩn / hiện ──
+            H.st.ban14['1751'] = 3
+            const anBan = await chay('shopee_toggle_listing', { item_id: '1751', an: true })
+            H.st.ban14['1751'] = 0
+            dung('E17. ẩn hàng CÒN TỒN + có đơn 14 ngày ⇒ từ chối "cần chủ shop duyệt", không gọi Shopee',
+                anBan.loi instanceof ToolError && /cần chủ shop duyệt/.test(anBan.loi.message) && !moi().some(g => g.startsWith('unlist:')), anBan.loi?.message)
+            H.st.loiBan14 = true
+            const anHong = await chay('shopee_toggle_listing', { item_id: '1751', an: true })
+            H.st.loiBan14 = false
+            dung('E17. đọc số bán 14 ngày HỎNG ⇒ không ẩn (rào không mở khi không kiểm được)',
+                anHong.loi instanceof ToolError && /không ẩn khi chưa kiểm được/.test(anHong.loi.message) && !moi().some(g => g.startsWith('unlist:')), anHong.loi?.message)
+            const an6: any[] = []
+            for (let i = 1; i <= 6; i++) an6.push(await chay('shopee_toggle_listing', { item_id: `175${i}`, an: true, ly_do: 'Hết hàng nhà cung cấp' }))
+            const dongAn = H.kho._nhatKy.filter(w => w.action === 'unlist')
+            dung('E17. ẩn: 5 mã đầu được (mỗi mã MỘT dòng sổ "unlist" mang người ai:…); mã thứ 6 trong ngày bị từ chối — đúng 5 lần gọi Shopee',
+                an6.slice(0, 5).every(x => !x.loi && x.kq.daDoi === true) && an6[5].loi instanceof ToolError && /tối đa 5 mã \/ gian \/ ngày/.test(an6[5].loi.message)
+                && moi().filter(g => g.startsWith('unlist:')).length === 5 && !goi.includes('unlist:1756:true')
+                && dongAn.length === 5 && dongAn.every(w => w.status === 'succeeded' && w.payload.actor === AI && w.payload.channelId === 'ch1' && w.payload.ly_do === 'Hết hàng nhà cung cấp'),
+                an6.map(x => x.loi?.message || 'được').join(' | '))
+            const dem0 = await H.kho.demGhiTuLuc(0)
+            const hien = await chay('shopee_toggle_listing', { item_id: '1751', an: false })
+            const dongHien = H.kho._nhatKy.filter(w => w.action === 'relist')
+            dung('E17. hiện lại: ghi Shopee + MỘT dòng sổ "relist" mang người ai:… (tính vào trần ghi ngày chung)',
+                !hien.loi && goi.includes('unlist:1751:false') && dongHien.length === 1 && dongHien[0].payload.actor === AI && (await H.kho.demGhiTuLuc(0)) === dem0 + 1,
+                hien.loi?.message || JSON.stringify(dongHien))
+
+            // ── đăng ──
+            const dangTD = await chay('shopee_create_listing', { sku: 'MOI', category_id: 101, can_nang_gram: 300 })
+            const dangLai = await chay('shopee_create_listing', { sku: 'MOI', category_id: 101, can_nang_gram: 300 })
+            const dongDang = H.kho._nhatKy.filter(w => w.action === 'publish')
+            dung('E17. Tự động: create_listing thực thi đúng nháp đã lập lúc Xem trước (không nháp thứ hai) — MỘT add_item, MỘT dòng sổ "publish" mang người ai:…; gọi lại không đăng lần hai',
+                !dangTD.loi && dangTD.kq.daDang === true && dangTD.kq.planId === dangXT.kq?.planId && H.kho._keHoach.filter(k => k.kind === 'publish').length === 1
+                && moi().filter(g => g.startsWith('add_item:MOI')).length === 1 && dongDang.length === 1 && dongDang[0].payload.actor === AI && !!dangLai,
+                dangTD.loi?.message || JSON.stringify(dangTD.kq).slice(0, 300))
+
+            // ── chu kỳ ──
+            const nhapAi = H.kho._keHoach.find(k => k.id === n1.kq?.planId)
+            if (nhapAi) nhapAi.createdAt -= 4 * 86400_000                         // nháp AI lập 4 ngày trước, chưa ai duyệt
+            const truocCK = goi.length
+            await chayChuKy(H.ctx)
+            const ckGhi = goi.slice(truocCK)
+            dung('E17. nháp AI quá 3 ngày chưa duyệt ⇒ chu kỳ tự huỷ (tuHuy — không tính là người huỷ, mã không bị né 14 ngày)',
+                !!nhapAi && H.kho._keHoach.find(k => k.id === nhapAi.id)?.status === 'cancelled' && H.kho._keHoach.find(k => k.id === nhapAi.id)?.result?.tuHuy === true
+                && /trợ lý AI/.test(H.kho._keHoach.find(k => k.id === nhapAi.id)?.result?.message || ''), JSON.stringify(H.kho._keHoach.find(k => k.id === nhapAi?.id)?.result))
+            dung('E17. chu kỳ không đổi giá mã AI vừa đổi < 24 giờ (1702 lãi cao, không bán — lẽ ra bị hạ), vẫn hạ mã khác (1704)',
+                !ckGhi.some(g => g.startsWith('update_price:1702:')) && ckGhi.some(g => g.startsWith('update_price:1704:')), ckGhi.join(', '))
+            dung('E17. chủ shop huỷ nháp AI KHÔNG làm chu kỳ né mã đó 14 ngày (huỷ = bác đề xuất của AI) — chu kỳ vẫn soát / đổi 1708',
+                ckGhi.some(g => g.startsWith('update_price:1708:')), ckGhi.join(', '))
+        }
+
+        // ─── E18. Khuyến mãi: gửi mã MỘT lần, lỗi không rõ ⇒ đối soát, xoá hỏng không nuốt, giá KM từ giá gốc SỐNG (SP-04, 09/11/2026) ───
+        {
+            HIEN = taoCuaHang({ don: donSach() })
+            const H = HIEN
+            kmShopee = {}
+            // vốn 100.000đ ⇒ sàn 127.200đ; giá 200.000đ giảm 20% ⇒ 160.000đ
+            for (const [s, id] of [['KA', '1801'], ['KB', '1802'], ['KC', '1803']]) { H.themHang(s!, 100000); H.themListing(s!, 200000, id!) }
+            H.themHang('GS', 50000); H.themListing('GS', 100000, '1804')
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxDiscountRate: 0.3, maxWritesPerDay: 1000 } })
+            const bd = Math.floor(Date.now() / 1000) + 3600
+            const km = (ten: string, skus: string[]) => taoKeHoachKhuyenMai(H.ctx, { name: ten, skus, discountRate: 0.2, startTime: bd, endTime: bd + 7200, purchaseLimit: 2 })
+            const dongSo = (planId: string) => H.kho._nhatKy.filter(w => w.planId === planId && w.action === 'campaignItems')
+            const fetchGoc = globalThis.fetch, proxyGoc = process.env.SHOPEE_FORWARD_PROXY, docGiaGoc = P.getItemBaseInfo
+            let soFetch = 0
+            const giaFetch = (f: (url: string) => Response) => { soFetch = 0; (globalThis as any).fetch = async (url: any) => { soFetch++; return f(String(url)) } }
+            delete process.env.SHOPEE_FORWARD_PROXY   // đi thẳng (fetch giả), khỏi đụng ngắt mạch proxy
+            try {
+                // ── dịch vụ thật (services/platforms/shopee.ts), fetch giả — không gọi mạng ──
+                const svcThat = new ShopeeService({ apiKey: '1', apiSecret: 's', accessToken: 'tok', shopId: '777' } as any)
+                const mot = [{ item_id: 1801, purchase_limit: 1, item_promotion_price: 160000 }]
+                giaFetch(() => { throw new TypeError('fetch failed') })
+                const e1 = await nem(() => KM_THAT.addDiscountItems.call(svcThat, 901, mot))
+                dung('E18. dịch vụ thật: add_discount_item đứt mạng ⇒ gửi ĐÚNG 1 lần (không tự gửi lại 3 lần), lỗi KHÔNG RÕ (khongRo)',
+                    soFetch === 1 && e1?.khongRo === true && /^KHÔNG RÕ/.test(e1?.message || ''), `${soFetch} lần · ${e1?.message}`)
+                giaFetch(() => new Response('<html>502 Bad Gateway</html>', { status: 502 }))
+                const e2 = await nem(() => KM_THAT.addDiscountItems.call(svcThat, 901, mot))
+                const lan2 = soFetch
+                giaFetch(() => new Response(JSON.stringify({ message: 'upstream unavailable' }), { status: 503 }))   // JSON mà không có "error"
+                const e3 = await nem(() => KM_THAT.addDiscountItems.call(svcThat, 901, mot))
+                const lan3 = soFetch
+                giaFetch(() => new Response(JSON.stringify({ error: 'error_inner', message: 'Inner error, please try later' }), { status: 200 }))
+                const e3b = await nem(() => KM_THAT.addDiscountItems.call(svcThat, 901, mot))
+                dung('E18. dịch vụ thật: phản hồi không phải JSON (502) / HTTP 503 / lỗi nội bộ Shopee (error_inner) ⇒ KHÔNG RÕ (không coi là bị từ chối hay đã nhận), mỗi lần 1 lần gửi',
+                    e2?.khongRo === true && e3?.khongRo === true && e3b?.khongRo === true && lan2 === 1 && lan3 === 1 && soFetch === 1, `${e2?.message} | ${e3?.message} | ${e3b?.message}`)
+                giaFetch(() => new Response(JSON.stringify({ error: 'error_param', message: 'discount_id không hợp lệ' }), { status: 200 }))
+                const e4 = await nem(() => KM_THAT.addDiscountItems.call(svcThat, 901, mot))
+                giaFetch(() => new Response(JSON.stringify({ response: { discount_id: 901, error_list: [{ item_id: 1802, fail_message: 'item_already_in_promotion' }] } }), { status: 200 }))
+                const r5 = await KM_THAT.addDiscountItems.call(svcThat, 901, [...mot, { item_id: 1802, purchase_limit: 1, item_promotion_price: 160000 }])
+                dung('E18. dịch vụ thật: Shopee trả lỗi RÕ ⇒ "Shopee add_discount_item: …" (bị từ chối, không khongRo); error_list ⇒ đúng mã bị từ chối',
+                    !!e4 && !e4.khongRo && /^Shopee add_discount_item: error_param/.test(e4.message) && r5.loi.length === 1 && r5.loi[0].itemId === 1802 && r5.loi[0].lyDo === 'item_already_in_promotion',
+                    `${e4?.message} | ${JSON.stringify(r5)}`)
+                const urls: string[] = []
+                giaFetch(url => {
+                    urls.push(url)
+                    return new Response(JSON.stringify(/page_no=1&/.test(url)
+                        ? { response: { status: 'upcoming', item_list: [{ item_id: 1801, model_list: [] }, { item_id: 1802, model_list: [{ model_id: 5 }] }], more: true } }
+                        : { response: { status: 'upcoming', item_list: [{ item_id: 1803 }], more: false } }), { status: 200 })
+                })
+                const ds = await KM_THAT.getDiscount.call(svcThat, 901)
+                dung('E18. dịch vụ thật: get_discount lật trang tới hết (more) — đủ mã của mọi trang, kèm phân loại',
+                    JSON.stringify(ds.items.map((x: any) => x.itemId)) === '[1801,1802,1803]' && JSON.stringify(ds.items[1].modelIds) === '[5]' && ds.trangThai === 'upcoming'
+                    && urls.length === 2 && urls.every(u => u.includes('/api/v2/discount/get_discount') && u.includes('discount_id=901')) && /page_no=2&/.test(urls[1]!),
+                    JSON.stringify({ ds, urls: urls.length }))
+
+                // ── giá KM từ giá gốc ĐỌC SỐNG ──
+                H.baseInfo['1804'].price_info = [{ original_price: 120000, current_price: 120000 }]   // chủ shop vừa sửa giá trên Seller Center: lưu 100.000đ, sống 120.000đ
+                const khGS = await km('KM giá sống', ['GS'])
+                const dGS = khGS.data.lines[0]
+                dung('E18. lập KM: giá lưu 100.000đ mà giá gốc trên Shopee 120.000đ ⇒ giá KM tính từ 120.000đ (96.000đ), kế hoạch nói rõ lệch giá lưu',
+                    dGS?.originalPrice === 120000 && dGS?.price === 96000 && /khác giá lưu/.test(khGS.data.warning || ''), JSON.stringify({ dGS, w: khGS.data.warning }))
+                H.baseInfo['1804'].price_info = [{ original_price: 150000, current_price: 150000 }]   // lại sửa sau lúc lập
+                const tGS = goi.length
+                const rGS = await thucThi(H.ctx, khGS.id)
+                const guiGS = JSON.parse(goi.slice(tGS).find(g => g.startsWith('add_discount_item:'))?.slice('add_discount_item:'.length) || '[]')
+                dung('E18. thực thi KM: giá gốc đổi 120.000đ → 150.000đ sau lúc lập ⇒ giá KM tính lại đúng mức giảm đã duyệt (120.000đ), kết quả nói rõ',
+                    rGS.status === 'succeeded' && guiGS[0]?.item_promotion_price === 120000 && /Giá gốc trên Shopee đã đổi/.test(rGS.result?.warning || '') && /120\.000đ/.test(rGS.result?.warning || ''),
+                    JSON.stringify({ st: rGS.status, guiGS, r: rGS.result }))
+                const khDocHong = await km('KM đọc hỏng lúc chạy', ['KC'])
+                P.getItemBaseInfo = async () => { throw new Error('Shopee get_item_base_info: error_auth - invalid access_token') }
+                const soKh = H.kho._keHoach.length
+                const lapHong = await nem(() => km('KM đọc hỏng lúc lập', ['KB']))
+                const tDH = goi.length
+                const rDH = await thucThi(H.ctx, khDocHong.id)
+                P.getItemBaseInfo = docGiaGoc
+                dung('E18. đọc giá gốc trên Shopee hỏng ⇒ lúc lập: từ chối, không lưu kế hoạch theo giá lưu; lúc thực thi: không tạo chương trình',
+                    lapHong instanceof ToolError && /Không đọc được giá gốc/.test(lapHong.message) && H.kho._keHoach.length === soKh
+                    && rDH.status === 'failed' && /Không đọc được giá gốc/.test(rDH.result?.message || '') && !goi.slice(tDH).some(g => g.startsWith('add_discount')),
+                    `${lapHong?.message} | ${JSON.stringify(rDH.result)}`)
+
+                // ── gửi mã vào chương trình ──
+                // (a) dịch vụ THẬT đứt mạng, Shopee chưa nhận mã nào
+                const khA = await km('KM đứt mạng', ['KA', 'KB'])
+                P.addDiscountItems = KM_THAT.addDiscountItems
+                giaFetch(() => { throw new TypeError('fetch failed') })
+                const tA = goi.length
+                const rA = await thucThi(H.ctx, khA.id)
+                const fetchA = soFetch
+                P.addDiscountItems = addDiscountItemsGia
+                dung('E18. add_discount_item đứt mạng (dịch vụ thật) ⇒ đúng 1 lần gửi, "uncertain", đối soát get_discount, KHÔNG gọi delete_discount, giữ mã chương trình',
+                    fetchA === 1 && rA.status === 'uncertain' && goi.slice(tA).some(g => g.startsWith('get_discount:')) && !goi.slice(tA).includes('delete_discount')
+                    && !!rA.result?.discount_id && /KHÔNG RÕ/.test(rA.result?.message || '') && /KHÔNG tự xoá/.test(rA.result?.message || '') && dongSo(khA.id)[0]?.status === 'uncertain',
+                    `${fetchA} lần · ${JSON.stringify(rA.result)}`)
+                // (b) lỗi không rõ mà đọc lại chương trình cũng hỏng
+                kmGui = 'khong-ro'; kmDocHong = true
+                const khB = await km('KM đối soát hỏng', ['KA'])
+                const tB = goi.length
+                const rB = await thucThi(H.ctx, khB.id)
+                kmDocHong = false
+                dung('E18. lỗi KHÔNG RÕ mà đọc lại chương trình cũng hỏng ⇒ "uncertain", KHÔNG xoá chương trình, dặn kiểm Seller Center',
+                    rB.status === 'uncertain' && !goi.slice(tB).includes('delete_discount') && /đối soát cũng hỏng/.test(rB.result?.message || '')
+                    && /KHÔNG xoá chương trình/.test(rB.result?.message || '') && !!rB.result?.discount_id && dongSo(khB.id)[0]?.status === 'uncertain', JSON.stringify(rB.result))
+                // (c) Shopee đã nhận hết rồi mới đứt
+                kmGui = 'khong-ro-da-nhan'
+                const khC = await km('KM đã nhận', ['KA', 'KB'])
+                const tC = goi.length
+                const rC = await thucThi(H.ctx, khC.id)
+                dung('E18. lỗi KHÔNG RÕ nhưng đối soát thấy đủ mã đã vào ⇒ thành công (không xoá, không gửi lại); sổ ghi mang người làm',
+                    rC.status === 'succeeded' && !!rC.result?.discount_id && /đối soát trên Shopee: đủ 2\/2 mã/.test(rC.result?.warning || '') && !goi.slice(tC).includes('delete_discount')
+                    && goi.slice(tC).filter(g => g.startsWith('add_discount_item:')).length === 1 && dongSo(khC.id)[0]?.status === 'succeeded'
+                    && H.kho._nhatKy.filter(w => w.planId === khC.id).every(w => w.payload?.actor === 'chu@shop.vn'), JSON.stringify(rC.result))
+                // (d) Shopee mới nhận mã đầu
+                kmGui = 'khong-ro-mot-phan'
+                const khD = await km('KM vào một phần', ['KA', 'KB'])
+                const tD = goi.length
+                const rD = await thucThi(H.ctx, khD.id)
+                dung('E18. đối soát thấy 1/2 mã đã vào ⇒ "partial", nói rõ mã chưa vào, không xoá',
+                    rD.status === 'partial' && /1\/2 mã đã vào/.test(rD.result?.message || '') && /chưa vào: KB/.test(rD.result?.message || '') && !goi.slice(tD).includes('delete_discount'),
+                    JSON.stringify(rD.result))
+                // (e) Shopee từ chối rõ
+                kmGui = 'tu-choi'
+                const khE = await km('KM bị từ chối', ['KA'])
+                const tE = goi.length
+                const rE = await thucThi(H.ctx, khE.id)
+                dung('E18. Shopee từ chối RÕ ⇒ "failed", không đối soát, xoá chương trình rỗng và nói "đã xoá"',
+                    rE.status === 'failed' && goi.slice(tE).includes('delete_discount') && !goi.slice(tE).some(g => g.startsWith('get_discount:'))
+                    && /đã xoá chương trình rỗng/.test(rE.result?.message || '') && !rE.result?.discount_id, JSON.stringify(rE.result))
+                // (f) xoá chương trình rỗng hỏng
+                kmXoaHong = true
+                const khF = await km('KM xoá hỏng', ['KA'])
+                const rF = await thucThi(H.ctx, khF.id)
+                const soF = dongSo(khF.id)[0]
+                dung('E18. xoá chương trình rỗng HỎNG ⇒ kết quả nói hỏng (không "đã xoá"), việc cần người xoá tay, giữ mã chương trình, sổ ghi lỗi xoá',
+                    rF.status === 'failed' && /KHÔNG xoá được chương trình rỗng/.test(rF.result?.message || '') && !/đã xoá/.test(rF.result?.message || '')
+                    && /CẦN NGƯỜI: xoá tay/.test(rF.result?.warning || '') && !!rF.result?.discount_id && /^hỏng/.test(soF?.response?.xoaChuongTrinh || ''),
+                    JSON.stringify({ r: rF.result, so: soF?.response }))
+            } finally {
+                (globalThis as any).fetch = fetchGoc
+                if (proxyGoc !== undefined) process.env.SHOPEE_FORWARD_PROXY = proxyGoc
+                P.addDiscountItems = addDiscountItemsGia
+                P.getItemBaseInfo = docGiaGoc
+                kmGui = null; kmDocHong = false; kmXoaHong = false
+            }
         }
 
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────
