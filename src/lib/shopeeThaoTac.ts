@@ -349,13 +349,29 @@ export async function dangSanPhamShopee(prisma: any, a: any, tuyChon: TuyChonGhi
 
 // ─── Đổi giá ────────────────────────────────────────────────────────────────────
 
-/** Tìm listing của gian theo item_id hoặc sku. */
+/**
+ * SKU của gian theo đúng MỘT listing (SP-11, 10/11/2026): hai listing cùng SKU (đăng lại, bản sao, hàng phân loại mang mã cha…)
+ * thì `findFirst` theo SKU lấy BỪA một cái ⇒ đổi giá / đưa vào khuyến mãi nhầm sản phẩm. Thấy listing thứ hai cùng SKU ⇒ ném lỗi
+ * nêu các item_id để người / AI chọn đúng theo mã sản phẩm. Lỗi mang `skuTrung = true` (người gọi lô — khuyến mãi — nói đúng lý do).
+ * Tìm "listing KHÁC" bằng NOT id thay vì đếm: bản giả trong bộ kiểm bỏ qua NOT trả lại chính listing đó ⇒ không tính là trùng.
+ */
+export async function soatSkuTrung(prisma: any, channelId: string, sku: string, l: any): Promise<void> {
+    const khac = await prisma.onlineProduct.findFirst({ where: { channelId, sku: { equals: String(sku), mode: 'insensitive' }, NOT: { id: l.id } } })
+    if (!khac || khac.id === l.id) return
+    const e: any = new ToolError(`Mã "${sku}" đang gắn với từ 2 sản phẩm trở lên trên gian (mã sản phẩm sàn ${l.platformProductId}, ${khac.platformProductId}…) — `
+        + 'chọn đúng sản phẩm theo mã sản phẩm sàn (item_id), kẻo đổi nhầm.')
+    e.skuTrung = true
+    throw e
+}
+
+/** Tìm listing của gian theo item_id hoặc sku. SKU trùng giữa nhiều listing ⇒ từ chối (soatSkuTrung) — không chọn bừa. */
 export async function timListing(prisma: any, channelId: string, a: { item_id?: any; sku?: any }): Promise<any> {
     let l: any = null
     if (a?.item_id) l = await prisma.onlineProduct.findFirst({ where: { channelId, platformProductId: String(a.item_id) } })
     else if (a?.sku) l = await prisma.onlineProduct.findFirst({ where: { channelId, sku: { equals: String(a.sku), mode: 'insensitive' } } })
     else throw new ToolError('Truyền item_id hoặc sku')
     if (!l) throw new ToolError('Không thấy sản phẩm này trên gian (đồng bộ danh sách sản phẩm nếu vừa đăng ngoài hệ thống)')
+    if (!a?.item_id) await soatSkuTrung(prisma, channelId, String(a.sku), l)
     return l
 }
 

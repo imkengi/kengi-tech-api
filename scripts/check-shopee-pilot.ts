@@ -16,11 +16,13 @@
  *     duyệt nâng cấp giữ Shopee Pilot đang bật và không để yêu cầu tự bật nó.
  * 12. Phí theo NGÀNH (02/11/2026): giá đề xuất / sàn / khuyến mãi / hộp thoại đăng theo phí ngành của sản phẩm; ngành
  *     chưa đủ đơn hoặc listing chưa rõ ngành ⇒ phí cả gian, KHÔNG đủ tin cho máy tự ghi.
+ * 13. SKU TRÙNG giữa hai listing (SP-11, 10/11/2026): lập giá / khuyến mãi theo SKU ⇒ từ chối, nêu cả hai mã; trang gửi kèm
+ *     itemId / itemIds ⇒ đúng listing đã chọn.
  */
 import {
     khoBoNho, chuanHoaChinhSach, vuotBienDong, quyetDinhGia, dauNgayVN, xayTrangThai, luuCauHinh,
     taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai, thucThi, chayChuKy, CHINH_SACH_MAC_DINH, type NgCanh,
-    chuanHoaHoSo, timHoSo, luuHoSo, xoaHoSo, chayTheoLich, kiemKetNoi, tuyChonDang,
+    chuanHoaHoSo, timHoSo, luuHoSo, xoaHoSo, chayTheoLich, kiemKetNoi, tuyChonDang, huyKeHoach,
 } from '../src/lib/shopeePilot'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { tinhGiaDeXuat } from '../src/lib/giaShopee'
@@ -88,7 +90,8 @@ async function main() {
             findMany: async ({ where }: any) => listing.filter(l => l.channelId === where.channelId && (!where.status || (typeof where.status === 'string' ? l.status === where.status : where.status.in.includes(l.status)))),
             findFirst: async ({ where }: any) => where.syncedAt
                 ? listing.filter(l => l.channelId === where.channelId && l.syncedAt).sort((a, b) => +b.syncedAt - +a.syncedAt)[0] || null
-                : listing.find(l => l.channelId === where.channelId && (
+                // NOT id như Prisma thật — soát SKU trùng (SP-11) tìm "listing KHÁC cùng SKU"
+                : listing.find(l => l.channelId === where.channelId && !(where.NOT?.id && l.id === where.NOT.id) && (
                 (where.platformProductId && l.platformProductId === where.platformProductId)
                 || (where.sku && String(l.sku).toLowerCase() === String(where.sku.equals).toLowerCase())
                 || (where.OR && where.OR.some((o: any) => (o.localProductId && o.localProductId === l.localProductId) || (o.sku && String(l.sku).toLowerCase() === String(o.sku.equals).toLowerCase()))))) || null,
@@ -364,6 +367,43 @@ async function main() {
             dung('12j. listing chưa rõ ngành (gian đã đo phí từng ngành): không đủ tin cho máy tự ghi', b3?.pricing.fee?.trusted === false && /chưa rõ ngành/.test(b3?.pricing.autoBlocked || ''), JSON.stringify(b3?.pricing))
 
             binhL.categoryId = '101'; donGian = donDoiSoat; donNganh = donDoiSoat.map(d => ({ ...d, nganh: '101' })); xoaDemPhiTheoNganh()
+        }
+
+        // ─── 13. SP-11 (10/11/2026): SKU TRÙNG giữa hai listing — trước đây lấy bừa một cái ⇒ đổi giá / khuyến mãi nhầm ─────
+        {
+            hang.DEN = { id: 'p8', sku: 'DEN', name: 'Đèn bàn LED', description: '', productType: 'goods', costPrice: 60000, sellingPrice: 150000, stock: 8, mergedIntoId: null, bundleId: null, images: [] }
+            const denA = { id: 'op7', channelId: 'ch1', platformProductId: '701', name: 'Đèn bàn LED (bản cũ)', sku: 'DEN', price: 150000, stock: 8, status: 'NORMAL', localProductId: 'p8', imageUrl: null, categoryId: '101', syncedAt: new Date() }
+            const denB = { ...denA, id: 'op8', platformProductId: '702', name: 'Đèn bàn LED (bản mới)', sku: 'den' }
+            listing.push(denA, denB)
+            try {
+                const giaTrung = await nem(() => taoKeHoachGia(ctx, { sku: 'DEN', price: 152000 }))
+                dung('13a. lập giá theo SKU trùng giữa 2 listing ⇒ từ chối, nêu cả hai mã sản phẩm sàn',
+                    giaTrung instanceof ToolError && /701/.test(giaTrung.message) && /702/.test(giaTrung.message), giaTrung?.message)
+                const giaDung = await taoKeHoachGia(ctx, { sku: 'DEN', itemId: '702', price: 152000, idempotencyKey: 'sp11-gia' })
+                dung('13b. trang gửi kèm mã sản phẩm (itemId) ⇒ kế hoạch đúng listing đó', giaDung.data.itemId === '702', JSON.stringify(giaDung.data))
+                await huyKeHoach(ctx, giaDung.id)
+                const bdT = Math.floor(Date.now() / 1000) + 3600
+                const kmTrung = await nem(() => taoKeHoachKhuyenMai(ctx, { name: 'Sale đèn', skus: ['DEN'], discountRate: 0.1, startTime: bdT, endTime: bdT + 7200, purchaseLimit: 1 }))
+                dung('13c. khuyến mãi theo SKU trùng ⇒ dòng đó bị loại với lý do "trùng", không lấy bừa',
+                    kmTrung instanceof ToolError && /DEN/.test(kmTrung.message) && /701/.test(kmTrung.message) && /702/.test(kmTrung.message), kmTrung?.message)
+                // ' 702 ' lặp lại (bấm hai lần / khoảng trắng) ⇒ vẫn MỘT dòng, không đưa cùng sản phẩm vào chương trình hai lần
+                const kmDung = await taoKeHoachKhuyenMai(ctx, { name: 'Sale đèn', skus: ['DEN'], itemIds: ['702', ' 702 '], discountRate: 0.1, startTime: bdT, endTime: bdT + 7200, purchaseLimit: 1, idempotencyKey: 'sp11-km' })
+                dung('13d. khuyến mãi gửi kèm itemIds ⇒ đúng một dòng của listing đã chọn', kmDung.data.lines.length === 1 && kmDung.data.lines[0].itemId === '702'
+                    && !kmDung.data.rejected.length, JSON.stringify({ lines: kmDung.data.lines.map((l: any) => l.itemId), rejected: kmDung.data.rejected }))
+                await huyKeHoach(ctx, kmDung.id)
+                const kmLa = await nem(() => taoKeHoachKhuyenMai(ctx, { name: 'Sale lạ', skus: [], itemIds: ['999999'], discountRate: 0.1, startTime: bdT, endTime: bdT + 7200, purchaseLimit: 1 }))
+                dung('13e. itemIds không có trên gian ⇒ "Không có trên gian"', kmLa instanceof ToolError && /999999 \(Không có trên gian\)/.test(kmLa.message), kmLa?.message)
+                // đọc listing HỎNG (mất kết nối CSDL) ⇒ báo lỗi thật; trước đây mọi lỗi đều thành "Không có trên gian"
+                const ffGoc = prisma.onlineProduct.findFirst
+                prisma.onlineProduct.findFirst = async (q: any) => { if (q?.where?.platformProductId === '702') throw new Error('mất kết nối CSDL (giả)'); return ffGoc(q) }
+                let kmHong: any
+                try { kmHong = await nem(() => taoKeHoachKhuyenMai(ctx, { name: 'Sale đèn', skus: [], itemIds: ['702'], discountRate: 0.1, startTime: bdT, endTime: bdT + 7200, purchaseLimit: 1 })) }
+                finally { prisma.onlineProduct.findFirst = ffGoc }
+                dung('13f. đọc listing hỏng ⇒ ném lỗi thật, KHÔNG nói "Không có trên gian"',
+                    !!kmHong && !(kmHong instanceof ToolError) && /mất kết nối/.test(kmHong.message), kmHong?.message)
+            } finally {
+                listing.splice(listing.indexOf(denA), 1); listing.splice(listing.indexOf(denB), 1); delete hang.DEN
+            }
         }
     } finally {
         ;(globalThis as any).fetch = fetchGoc

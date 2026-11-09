@@ -988,6 +988,9 @@ export async function timNganh(ctx: NgCanh, b: { keyword: string }): Promise<{ c
 
 export interface DauVaoKhuyenMai {
     name: string; skus: string[]; discountRate: number; startTime: number; endTime: number; purchaseLimit: number; idempotencyKey?: string
+    /** SP-11 (10/11/2026): mã sản phẩm Shopee của từng dòng đã chọn — có thì chọn THEO ĐÂY (SKU có thể trùng giữa hai listing),
+     *  `skus` chỉ còn để trang cũ / máy chủ cũ hiểu nhau. */
+    itemIds?: string[]
 }
 
 export async function taoKeHoachKhuyenMai(ctx: NgCanh, b: DauVaoKhuyenMai): Promise<KeHoach> {
@@ -1006,7 +1009,8 @@ export async function taoKeHoachKhuyenMai(ctx: NgCanh, b: DauVaoKhuyenMai): Prom
     const gioiHanMua = Math.floor(num(b.purchaseLimit, 0))
     if (!(gioiHanMua >= 1)) throw new ToolError('Giới hạn mua mỗi sản phẩm phải ≥ 1')
     const skus = [...new Set((b.skus || []).map(s => String(s).trim()).filter(Boolean))]
-    if (!skus.length) throw new ToolError('Chọn ít nhất một sản phẩm')
+    const itemIds = [...new Set((Array.isArray(b.itemIds) ? b.itemIds : []).map(s => String(s).trim()).filter(Boolean))]
+    if (!skus.length && !itemIds.length) throw new ToolError('Chọn ít nhất một sản phẩm')
 
     const bang = await docMauPhiTheoNganh(ctx.prisma, ch)   // giá sàn KM theo phí NGÀNH của từng mã
     // Cả gian chưa biết phí ⇒ không mã nào có giá sàn: nói MỘT lần, không lặp lý do theo từng mã, khỏi gọi Shopee (09/11/2026)
@@ -1014,8 +1018,17 @@ export async function taoKeHoachKhuyenMai(ctx: NgCanh, b: DauVaoKhuyenMai): Prom
     const phiDong = new Map<any, MauPhi>()
     const lines: any[] = [], tuChoi: { sku: string; reason: string }[] = []
     const listings: any[] = []
-    for (const sku of skus) {
-        try { listings.push(await timListing(ctx.prisma, ch.id, { sku })) } catch { tuChoi.push({ sku, reason: 'Không có trên gian' }) }
+    // SP-11: chọn theo mã sản phẩm Shopee khi trang gửi kèm; theo SKU thì SKU trùng giữa hai listing bị từ chối (nói rõ), không lấy bừa.
+    // Chỉ lỗi nghiệp vụ (ToolError) mới thành một dòng bị loại; đọc CSDL hỏng thì ném tiếp — "không đọc được" ≠ "không có trên gian".
+    const lyDoLoai = (e: any): string => { if (!(e instanceof ToolError)) throw e; return (e as any).skuTrung ? e.message : 'Không có trên gian' }
+    if (itemIds.length) {
+        for (const id of itemIds) {
+            try { listings.push(await timListing(ctx.prisma, ch.id, { item_id: id })) } catch (e: any) { tuChoi.push({ sku: id, reason: lyDoLoai(e) }) }
+        }
+    } else {
+        for (const sku of skus) {
+            try { listings.push(await timListing(ctx.prisma, ch.id, { sku })) } catch (e: any) { tuChoi.push({ sku, reason: lyDoLoai(e) }) }
+        }
     }
     const von = await giaVonHangLoat(ctx.prisma, listings)
     // Chương trình khác đang chạy / sắp chạy trên mã (Shopee từ chối mã đã trong chương trình khác)

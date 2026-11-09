@@ -42,6 +42,11 @@
  *       hết updatedAt) / chủ shop lưu chính sách không làm con trỏ quay về; chạm trần / đọc hỏng ⇒ con trỏ đứng yên; mã nghi
  *       dưới sàn ở lô khác được xử lý ngay chu kỳ đầu (chỉ khi giá SỐNG dưới sàn thật); câu kết quả nói "x/709 (lô k/3)";
  *       GET /state phân trang + tìm phía máy chủ (tong, offset, mã / tên không dấu / item_id)
+ *    S. (10/11/2026, TT-15) quyền XEM Pilot (lib/quyenXemPilot): trước GET /state chỉ soát đăng nhập ⇒ thu ngân / nhân viên cầm
+ *       JWT đọc được giá vốn, lãi, phí, chi tiêu quảng cáo. Giờ cần «SP trên sàn» (= quyền menu web) + «Giá vốn» hoặc «Lợi
+ *       nhuận» cho Pilot có số tiền; quyền gán chi tiết ưu tiên vai trò; đọc quyền hỏng ⇒ 503 (vẫn chặn); cả 4 route đều gắn
+ *    T. (10/11/2026, SP-11) SKU TRÙNG giữa hai listing: tra theo SKU trước đây findFirst lấy BỪA một cái ⇒ đổi giá / khuyến mãi nhầm
+ *       sản phẩm. Giờ Shopee + TikTok từ chối, nêu các mã sản phẩm sàn; tra theo item_id không bị ảnh hưởng
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
@@ -58,6 +63,9 @@ import { khoBoNhoAds, luuCauHinhAds } from '../src/lib/facebookAdsPilot'
 import { soCauHinh, tomTatDoiCauHinh, NHAN_SHOPEE, NHAN_ADS } from '../src/lib/pilotDoiCauHinh'
 import { dayTonLenSan } from '../src/lib/dayTonLenSan'
 import { dayGiaLenSan } from '../src/lib/dayGiaLenSan'
+import { lyDoKhongXemPilot, chanXemPilot } from '../src/lib/quyenXemPilot'
+import { timListing } from '../src/lib/shopeeThaoTac'
+import { timListingTikTok } from '../src/lib/tiktokPilot'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (ok) dat++; else loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${!ok && chiTiet ? ' — ' + chiTiet.slice(0, 900) : ''}`) }
@@ -1320,6 +1328,142 @@ async function main() {
             return !s.includes(`SELECT COUNT(*)::int AS n FROM "${bang}" WHERE "createdAt" >= $1 AND action <> 'config'`)
         })
         dung('R10. cả 4 kho SQL: đếm trần ghi / ngày loại dòng "config"', !thieuLoai.length, thieuLoai.join(', '))
+    }
+
+    // ─── S. (10/11/2026, TT-15) quyền XEM Pilot ────────────────────────────────────────────────────────────────────────
+    {
+        const nguoiDung = (role: string, perms: any, nem = false) => ({
+            user: { userId: 'u1', role },
+            storePrisma: {
+                user: {
+                    findUnique: async () => {
+                        if (nem) throw new Error('mất kết nối')
+                        return perms === undefined ? null : { permissions: typeof perms === 'string' ? perms : JSON.stringify(perms) }
+                    },
+                },
+            },
+        }) as any
+        const dem = { goi: 0 }
+        const chuShop = { user: { userId: 'u0', role: 'owner' }, storePrisma: { user: { findUnique: async () => { dem.goi++; return null } } } } as any
+        dung('S1. chủ cửa hàng / admin xem mọi Pilot, không cần đọc quyền',
+            (await lyDoKhongXemPilot(chuShop, 'Shopee Pilot', true)) === null
+            && (await lyDoKhongXemPilot({ ...chuShop, user: { userId: 'u0', role: 'admin' } }, 'Ads Pilot', true)) === null && dem.goi === 0)
+
+        const thuNgan = await lyDoKhongXemPilot(nguoiDung('cashier', []), 'TikTok Pilot', true)
+        dung('S2. thu ngân (quyền mặc định) ⇒ 403, câu nói thiếu quyền «SP trên sàn» + chỗ cấp quyền',
+            thuNgan?.status === 403 && thuNgan.ma === 'thieu_quyen_xem_pilot' && /«SP trên sàn»/.test(thuNgan.loi) && /Phân Quyền Chi Tiết/.test(thuNgan.loi),
+            JSON.stringify(thuNgan))
+        const moOan: string[] = []
+        for (const role of ['cashier', 'staff', 'warranty', 'driver', 'vai-tro-la', '']) {
+            for (const [ten, so] of [['Shopee Pilot', true], ['TikTok Pilot', true], ['Facebook Pilot', false], ['Ads Pilot', true]] as const) {
+                if ((await lyDoKhongXemPilot(nguoiDung(role, []), ten, so))?.status !== 403) moOan.push(`${role || '(trống)'}→${ten}`)
+            }
+        }
+        dung('S2b. mọi vai trò không phải quản lý (thu ngân, nhân viên, bảo hành, tài xế, vai trò lạ) ⇒ chặn cả 4 Pilot', !moOan.length, moOan.join(', '))
+
+        const chiSan = nguoiDung('staff', ['online_products.view'])
+        const s3a = await lyDoKhongXemPilot(chiSan, 'Shopee Pilot', true)
+        const s3b = await lyDoKhongXemPilot(chiSan, 'Facebook Pilot', false)
+        dung('S3. được xem «SP trên sàn» mà không có «Giá vốn» / «Lợi nhuận» ⇒ Pilot có số tiền chặn (nói rõ thiếu quyền nào), Facebook Pilot mở',
+            s3a?.status === 403 && /«Giá vốn» hoặc «Lợi nhuận»/.test(s3a.loi) && s3b === null, JSON.stringify({ s3a, s3b }))
+        dung('S4. «SP trên sàn» + «Giá vốn» / «Lợi nhuận» / cả module sản phẩm ⇒ xem được Pilot có số tiền',
+            (await lyDoKhongXemPilot(nguoiDung('staff', ['online_products.view', 'products.view_cost']), 'Shopee Pilot', true)) === null
+            && (await lyDoKhongXemPilot(nguoiDung('staff', ['online_products', 'transactions.view_profit']), 'Ads Pilot', true)) === null
+            && (await lyDoKhongXemPilot(nguoiDung('cashier', ['online_products', 'products']), 'TikTok Pilot', true)) === null)
+        dung('S5. quản lý chưa gán quyền chi tiết ⇒ theo quyền mặc định của vai trò ⇒ xem được',
+            (await lyDoKhongXemPilot(nguoiDung('manager', []), 'Shopee Pilot', true)) === null
+            && (await lyDoKhongXemPilot(nguoiDung('manager', undefined), 'TikTok Pilot', true)) === null)
+        const qlBot = await lyDoKhongXemPilot(nguoiDung('manager', ['online_products', 'pos']), 'Shopee Pilot', true)
+        dung('S6. quản lý bị gán quyền chi tiết KHÔNG có giá vốn / lợi nhuận ⇒ chặn (quyền gán ưu tiên hơn vai trò, như requirePermission)',
+            qlBot?.status === 403, JSON.stringify(qlBot))
+        const hong = await lyDoKhongXemPilot(nguoiDung('staff', [], true), 'TikTok Pilot', true)
+        dung('S7. đọc quyền hỏng ⇒ 503 "chưa đọc được quyền" — vẫn chặn, không giả là thiếu quyền', hong?.status === 503 && hong.ma === 'doc_quyen_hong', JSON.stringify(hong))
+        const rac = await lyDoKhongXemPilot(nguoiDung('staff', '{không phải json'), 'Shopee Pilot', true)
+        const racQl = await lyDoKhongXemPilot(nguoiDung('manager', '"chuoi"'), 'Shopee Pilot', true)
+        dung('S8. ô quyền hỏng JSON / không phải mảng ⇒ coi như chưa gán ⇒ theo vai trò (nhân viên chặn, quản lý mở)',
+            rac?.status === 403 && racQl === null, JSON.stringify({ rac, racQl }))
+        const khongUser = await lyDoKhongXemPilot({ storePrisma: {} } as any, 'Shopee Pilot', true)
+        dung('S8b. chưa có người dùng trên yêu cầu ⇒ chặn', khongUser?.status === 403, JSON.stringify(khongUser))
+
+        const goi = async (req: any, mw: any) => {
+            const r: any = { code: 0, body: null, next: false }
+            const res = { status(c: number) { r.code = c; return this }, json(b: any) { r.body = b; return this } }
+            await mw(req, res, () => { r.next = true })
+            return r
+        }
+        const m1 = await goi(chuShop, chanXemPilot('Shopee Pilot', true))
+        const m2 = await goi(nguoiDung('cashier', []), chanXemPilot('Shopee Pilot', true))
+        const m3 = await goi(nguoiDung('staff', [], true), chanXemPilot('Ads Pilot', true))
+        dung('S9. middleware chanXemPilot: được xem ⇒ next(); không ⇒ 403/503 { error, ma } và KHÔNG chạy tiếp',
+            m1.next && m1.code === 0 && !m2.next && m2.code === 403 && m2.body?.ma === 'thieu_quyen_xem_pilot' && typeof m2.body?.error === 'string'
+            && !m3.next && m3.code === 503, JSON.stringify({ m1, m2, m3 }))
+
+        const nguon = (f: string) => fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', `${f}.ts`), 'utf8')
+        const sp = nguon('shopeePilot'), tt = nguon('tiktokPilot'), fb = nguon('facebookPilot')
+        const thieu: string[] = []
+        const can = (s: string, ten: string, mau: RegExp) => { if (!mau.test(s)) thieu.push(ten) }
+        can(sp, 'shopee khai', /const chanXem = chanXemPilot\('Shopee Pilot', true\)/)
+        can(sp, 'shopee GET /state', /router\.get\('\/state', authMiddleware, chanChuaBat, chanXem,/)
+        can(sp, 'shopee POST', /router\.post\('\/:action', authMiddleware, chanChuaBat, chanXem,/)
+        can(tt, 'tiktok khai', /const chanXem = chanXemPilot\('TikTok Pilot', true\)/)
+        can(tt, 'tiktok GET /state', /router\.get\('\/state', authMiddleware, chanChuaBat, chanXem,/)
+        can(tt, 'tiktok POST', /router\.post\('\/:action', authMiddleware, chanChuaBat, chanXem,/)
+        can(fb, 'fb khai', /const chanXemFb = chanXemPilot\('Facebook Pilot', false\)/)
+        can(fb, 'ads khai', /const chanXemAds = chanXemPilot\('Ads Pilot', true\)/)
+        can(fb, 'fb GET /state', /router\.get\('\/state', authMiddleware, chanChuaBat, chanXemFb,/)
+        can(fb, 'fb POST', /router\.post\('\/:action', authMiddleware, chanChuaBat, chanXemFb,/)
+        can(fb, 'ads GET /ads/state', /router\.get\('\/ads\/state', authMiddleware, chanChuaBat, chanXemAds,/)
+        can(fb, 'ads GET /ads/drill', /router\.get\('\/ads\/drill', authMiddleware, chanChuaBat, chanXemAds,/)
+        can(fb, 'ads POST', /router\.post\('\/ads\/:action', authMiddleware, chanChuaBat, chanXemAds,/)
+        // đường nào của 3 file route KHÔNG gắn rào xem (trừ /guide — chữ hướng dẫn tĩnh) ⇒ hỏng
+        const loDuong = [...[sp, tt, fb].join('\n').matchAll(/router\.(get|post|put|patch|delete)\('([^']+)',(?![^\n]*chanXem)/g)]
+            .map(m => m[2]).filter(d => !/(^|\/)guide$/.test(d))
+        dung('S10. cả 4 Pilot: GET trạng thái / phân tích + POST thao tác đều qua rào xem, đúng cờ "có số tiền"; chỉ /guide (chữ tĩnh) để ngoài',
+            !thieu.length && !loDuong.length, JSON.stringify({ thieu, loDuong }))
+    }
+
+    // ─── T. (10/11/2026, SP-11) SKU trùng giữa hai listing ─────────────────────────────────────────────────────────────
+    {
+        const ds = [
+            { id: 'a', channelId: 'g1', platformProductId: '701', sku: 'DEN' },
+            { id: 'b', channelId: 'g1', platformProductId: '702', sku: 'den' },     // cùng mã, khác hoa / thường
+            { id: 'c', channelId: 'g1', platformProductId: '703', sku: 'QUAT' },
+            { id: 'd', channelId: 'g2', platformProductId: '801', sku: 'QUAT' },    // gian khác — không tính trùng
+        ]
+        // bản giả HIỂU NOT (như Prisma thật)
+        // channelId thiếu ⇒ không lọc theo gian (như Prisma: trường undefined = bỏ điều kiện) — để bắt lỗi soát trùng xuyên gian
+        const khop = (l: any, w: any) => (w.channelId === undefined || l.channelId === w.channelId)
+            && (!w.platformProductId || l.platformProductId === w.platformProductId)
+            && (!w.sku || String(l.sku).toLowerCase() === String(w.sku.equals).toLowerCase())
+            && (!w.NOT?.id || l.id !== w.NOT.id)
+        const pz: any = { onlineProduct: { findFirst: async ({ where }: any) => ds.find(l => khop(l, where)) || null } }
+        // bản giả KHÔNG hiểu NOT (như prisma giả của các bộ kiểm khác) — trả lại chính listing đó ⇒ không được báo trùng oan
+        const pzCu: any = { onlineProduct: { findFirst: async ({ where }: any) => ds.find(l => khop(l, { ...where, NOT: undefined })) || null } }
+        const nemT = async (f: () => Promise<any>) => { try { await f(); return null } catch (e) { return e as any } }
+
+        const t1 = await nemT(() => timListing(pz, 'g1', { sku: 'DEN' }))
+        dung('T1. Shopee: SKU trùng giữa 2 listing ⇒ từ chối, nêu CẢ HAI mã sản phẩm sàn, đánh dấu skuTrung (trước: lấy bừa một cái)',
+            !!t1?.skuTrung && /701/.test(t1.message) && /702/.test(t1.message) && /item_id/.test(t1.message), t1?.message)
+        const t2 = await timListing(pz, 'g1', { item_id: '702' })
+        dung('T2. tra theo item_id ⇒ đúng listing đó, không soát trùng', t2?.id === 'b')
+        const t3 = await timListing(pz, 'g1', { sku: 'quat' })
+        dung('T3. SKU chỉ một listing trong gian (gian khác có cùng mã) ⇒ trả listing đó', t3?.id === 'c')
+        const t4 = await timListing(pzCu, 'g1', { sku: 'QUAT' })
+        dung('T4. prisma không hiểu NOT trả lại chính listing ⇒ không báo trùng oan', t4?.id === 'c')
+        const t5 = await nemT(() => timListingTikTok(pz, 'g1', { sku: 'den' }))
+        const t6 = await timListingTikTok(pz, 'g1', { itemId: '701', sku: 'DEN' })
+        dung('T5. TikTok: SKU trùng ⇒ từ chối như Shopee; có mã sản phẩm TikTok ⇒ đúng listing', !!t5?.skuTrung && t6?.id === 'a', t5?.message)
+        const t7 = await nemT(() => timListing(pz, 'g1', { sku: 'KHONG-CO' }))
+        dung('T6. không có SKU ⇒ lỗi "không thấy" như cũ, KHÔNG gắn skuTrung', !!t7 && !t7.skuTrung && /Không thấy/.test(t7.message), t7?.message)
+
+        // route phải CHUYỂN mã sản phẩm trang gửi xuống lõi — rơi mất thì chủ shop không lập giá / khuyến mãi được cho hàng SKU trùng
+        const nguonR = (f: string) => fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', `${f}.ts`), 'utf8')
+        const spR = nguonR('shopeePilot'), ttR = nguonR('tiktokPilot')
+        const thieuR: string[] = []
+        if (!/price:[\s\S]{0,200}taoKeHoachGia\(ctx, \{[\s\S]{0,120}itemId: b\?\.itemId \? String\(b\.itemId\) : undefined/.test(spR)) thieuR.push('shopee price itemId')
+        if (!/campaign:[\s\S]{0,200}taoKeHoachKhuyenMai\(ctx, \{[\s\S]{0,160}itemIds: Array\.isArray\(b\?\.itemIds\) \? b\.itemIds : undefined/.test(spR)) thieuR.push('shopee campaign itemIds')
+        if (!/itemId: b\?\.itemId \? String\(b\.itemId\) : undefined/.test(ttR)) thieuR.push('tiktok price itemId')
+        dung('T7. route Shopee / TikTok chuyển itemId (giá) + itemIds (khuyến mãi) của trang xuống lõi', !thieuR.length, JSON.stringify(thieuR))
     }
 
     console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)

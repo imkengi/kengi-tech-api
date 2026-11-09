@@ -17,6 +17,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma } from '../lib/prisma'
 import { ToolError } from '../lib/mcpTypes'
 import { lyDoChanPilot } from '../lib/tienIchCuaHang'
+import { chanXemPilot } from '../lib/quyenXemPilot'
 import {
     khoSql, xayTrangThai, chayChuKy, thucThi, huyKeHoach, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
     tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, timHangChoHoSo, HUONG_DAN_PILOT, type NgCanh,
@@ -50,7 +51,11 @@ async function chanChuaBat(req: AuthRequest, res: Response, next: NextFunction) 
     res.status(lyDo.ma === 'chua_bat_tien_ich' ? 403 : 503).json({ error: lyDo.loi, ma: lyDo.ma })
 }
 
-router.get('/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+/** TT-15 (10/11/2026): trạng thái / kết quả mang giá vốn, lãi, phí từng mã ⇒ cần quyền xem «SP trên sàn» + «Giá vốn» hoặc
+ *  «Lợi nhuận» (lib/quyenXemPilot) — trước đây thu ngân / nhân viên cầm JWT gọi thẳng là đọc được. */
+const chanXem = chanXemPilot('Shopee Pilot', true)
+
+router.get('/state', authMiddleware, chanChuaBat, chanXem, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     // ?q= (mã / tên / item_id) &offset= &lim= — phân trang + tìm phía máy chủ (SP-07, 09/11/2026); không truyền ⇒ trang đầu như cũ
     const mot = (v: any) => (Array.isArray(v) ? v[0] : v)
@@ -67,7 +72,13 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     cycle: { ghi: true, chay: ctx => chayChuKy(ctx) },
     execute: { ghi: true, chay: (ctx, b) => thucThi(ctx, String(b?.planId || '')) },
     cancel: { ghi: true, chay: (ctx, b) => huyKeHoach(ctx, String(b?.planId || '')) },
-    price: { ghi: true, chay: (ctx, b) => taoKeHoachGia(ctx, { sku: String(b?.sku || ''), price: Number(b?.price), idempotencyKey: b?.idempotencyKey }) },
+    // itemId (SP-11, 10/11/2026): trang gửi kèm mã sản phẩm Shopee của dòng đang sửa — SKU có thể trùng giữa hai listing
+    price: {
+        ghi: true,
+        chay: (ctx, b) => taoKeHoachGia(ctx, {
+            sku: String(b?.sku || ''), itemId: b?.itemId ? String(b.itemId) : undefined, price: Number(b?.price), idempotencyKey: b?.idempotencyKey,
+        }),
+    },
     listing: {
         ghi: true,
         chay: (ctx, b) => taoKeHoachDang(ctx, {
@@ -81,7 +92,8 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     campaign: {
         ghi: true,
         chay: (ctx, b) => taoKeHoachKhuyenMai(ctx, {
-            name: b?.name, skus: Array.isArray(b?.skus) ? b.skus : [], discountRate: Number(b?.discountRate),
+            name: b?.name, skus: Array.isArray(b?.skus) ? b.skus : [], itemIds: Array.isArray(b?.itemIds) ? b.itemIds : undefined,
+            discountRate: Number(b?.discountRate),
             startTime: Number(b?.startTime), endTime: Number(b?.endTime), purchaseLimit: Number(b?.purchaseLimit), idempotencyKey: b?.idempotencyKey,
         }),
     },
@@ -95,7 +107,7 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     'listing-attributes': { ghi: false, chay: (ctx, b) => thuocTinhNganh(ctx, { categoryId: Number(b?.categoryId) }) },
 }
 
-router.post('/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+router.post('/:action', authMiddleware, chanChuaBat, chanXem, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     const viec = VIEC[String(req.params.action)]
     if (!viec) { res.status(404).json({ error: `Không có thao tác "${req.params.action}"` }); return }

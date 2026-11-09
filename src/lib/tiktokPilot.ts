@@ -35,7 +35,7 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
-import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
+import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA, soatSkuTrung } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
 import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
 import { ghiDoiCauHinh, NHAN_TIKTOK } from './pilotDoiCauHinh'
@@ -544,12 +544,14 @@ export async function giaSongLoTikTok(fb: DichVuTikTok, ids: string[]): Promise<
     return ra
 }
 
-async function timListingTikTok(prisma: any, channelId: string, a: { itemId?: any; sku?: any }): Promise<any> {
+/** SKU trùng giữa nhiều listing ⇒ từ chối, bắt chọn theo mã sản phẩm TikTok (SP-11 / shopeeThaoTac.soatSkuTrung) — không chọn bừa. */
+export async function timListingTikTok(prisma: any, channelId: string, a: { itemId?: any; sku?: any }): Promise<any> {
     let l: any = null
     if (a?.itemId) l = await prisma.onlineProduct.findFirst({ where: { channelId, platformProductId: String(a.itemId) } })
     else if (a?.sku) l = await prisma.onlineProduct.findFirst({ where: { channelId, sku: { equals: String(a.sku), mode: 'insensitive' } } })
     else throw new ToolError('Cần mã sản phẩm TikTok hoặc SKU')
     if (!l) throw new ToolError('Không thấy sản phẩm này trên gian (bấm Đồng bộ sản phẩm ở Kênh bán online nếu vừa đăng ngoài hệ thống).')
+    if (!a?.itemId) await soatSkuTrung(prisma, channelId, String(a.sku), l)
     return l
 }
 

@@ -13,6 +13,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma } from '../lib/prisma'
 import { ToolError } from '../lib/mcpTypes'
 import { lyDoChanPilot, TIEN_ICH_TIKTOK_PILOT } from '../lib/tienIchCuaHang'
+import { chanXemPilot } from '../lib/quyenXemPilot'
 import {
     khoSqlTikTok, xayTrangThaiTikTok, chayChuKyTikTok, thucThiTikTok, taoKeHoachGiaTikTok, huyKeHoachTikTok,
     kiemKetNoiTikTok, luuCauHinhTikTok, HUONG_DAN_TIKTOK_PILOT, type NgCanhTikTok,
@@ -46,7 +47,11 @@ async function chanChuaBat(req: AuthRequest, res: Response, next: NextFunction) 
     res.status(lyDo.ma === 'chua_bat_tien_ich' ? 403 : 503).json({ error: lyDo.loi, ma: lyDo.ma })
 }
 
-router.get('/state', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+/** TT-15 (10/11/2026): trạng thái / kết quả mang giá vốn, lãi, phí từng mã ⇒ cần quyền xem «SP trên sàn» + «Giá vốn» hoặc
+ *  «Lợi nhuận» (lib/quyenXemPilot) — trước đây thu ngân / nhân viên cầm JWT gọi thẳng là đọc được. */
+const chanXem = chanXemPilot('TikTok Pilot', true)
+
+router.get('/state', authMiddleware, chanChuaBat, chanXem, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     try { res.json(await xayTrangThaiTikTok(ngCanh(req))) } catch (e) { traLoi(res, e, 'đọc trạng thái') }
 })
@@ -71,7 +76,7 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     connection: { ghi: false, chay: ctx => kiemKetNoiTikTok(ctx) },
 }
 
-router.post('/:action', authMiddleware, chanChuaBat, async (req: AuthRequest, res: Response) => {
+router.post('/:action', authMiddleware, chanChuaBat, chanXem, async (req: AuthRequest, res: Response) => {
     if (!req.storePrisma) { res.status(401).json({ error: 'Chưa xác thực cửa hàng' }); return }
     const viec = VIEC[String(req.params.action)]
     if (!viec) { res.status(404).json({ error: `Không có thao tác "${req.params.action}"` }); return }
