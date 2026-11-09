@@ -1086,13 +1086,99 @@ export function coSoDienThoai(chu: string): boolean {
     return false
 }
 
-const HOI_GIA_CO_DAU = /giá|bao nhiêu|bao tiền|nhiêu tiền|mấy tiền|còn hàng|còn không|còn ko\b|còn k\b/i
-const HOI_GIA_KHONG_DAU = /\b(gia bao|gia sao|gia nhieu|gia the nao|gia ntn|xin gia|cho gia|check gia|bao nhieu|bao tien|nhieu tien|may tien|bn|ib|inb|inbox|con hang|con khong|con ko)\b/
+/* ── Nhận "hỏi giá" (FB-07, 10/11/2026) ──
+ * Máy TỰ trả lời giá CÔNG KHAI dưới bài ⇒ thà bỏ sót (người trả lời) còn hơn trả lời giá cho một lời chê hay một lời khen.
+ * Trước đây bắt chữ "giá" ở bất kỳ đâu và "còn không" ở bất kỳ đâu: "Đánh giá 5 sao", "giá trị", "hàng tốt giá hợp lý",
+ * "mua về còn không biết dùng", "pin dùng được bao nhiêu lâu", "mua cho gia đình" đều bị coi là hỏi giá. Giờ:
+ *   1. lời chê / phàn nàn / khiếu nại (laPhanNan) ⇒ KHÔNG BAO GIỜ là hỏi giá — để người trả lời
+ *   2. gỡ cụm có chữ "giá" mà không phải giá: đánh giá, đáng giá, giá trị, giá đỡ / treo / kệ / phơi / sách / vẽ
+ *   3. "giá" chỉ tính khi: cả bình luận chỉ là "giá"; hoặc 2 chữ kế tiếp có từ hỏi (sao, bao, bn, nhiêu, thế, ạ, shop, vậy, ?…);
+ *      hoặc chữ ngay trước là xin / cho / báo / check / hỏi / ib / gửi / biết / xem / đăng / ghi
+ *   4. "bao nhiêu" sau tính từ đo (nặng, dài, pin, công suất…) hoặc trước đơn vị (lâu, tháng, W, kg, cái, màu…) ⇒ hỏi thông số
+ *   5. "còn không / ko / k / hông" chỉ tính ở cuối câu hoặc trước tiểu từ (ạ, shop, vậy, bạn, ?…)
+ *   6. "bn" chỉ tính khi đứng một mình, sau "giá", hoặc trước tiểu từ / "tiền" — "bn ơi", "cảm ơn bn" là "bạn"
+ * Không dấu: "gia" trùng "gia đình / gia dụng / gia công" ⇒ chỉ nhận cụm chắc chắn (gia bao, gia sao, xin gia…).
+ */
+const CHU = '\\p{L}\\p{N}'
+/** Biểu thức có ranh giới chữ TIẾNG VIỆT — \b của JS chỉ hiểu chữ ASCII ("tệ" kết thúc bằng ệ). Chạy trên chữ thường NFC. */
+const tuRieng = (...mau: string[]) => new RegExp(`(?<![${CHU}])(?:${mau.join('|')})(?![${CHU}])`, 'u')
+const chuThuong = (s: string) => String(s || '').normalize('NFC').toLowerCase()
 
-/** Bình luận hỏi giá / hỏi còn hàng / xin inbox. "giá" phải có dấu (không dấu "gia" trùng "gia đình"). */
+/** Lời chê / khiếu nại. "đắt hàng / đắt khách" là lời CHÚC, không phải chê. */
+const PHAN_NAN_CO_DAU = tuRieng('đắt(?! (?:hàng|khách))', 'chát', 'cắt cổ', 'lừa', 'dỏm', 'dởm', 'lởm', 'hàng giả', 'đồ giả', 'hàng nhái',
+    'fake', 'scam', 'thất vọng', 'tệ', 'kém chất lượng', 'chất lượng kém', 'bị (?:hỏng|hư|lỗi|vỡ|bể|rách|móp)', 'móp',
+    'không giống (?:hình|ảnh)', 'khác (?:hình|ảnh)', '(?:chưa|không) nhận được', 'giao chậm', 'hoàn tiền', 'trả (?:lại )?hàng', 'bóc phốt', 'phốt')
+/** Bản không dấu — CHỈ cụm không trùng nghĩa khác: "cat co" cũng là "cắt cỏ" (máy cắt cỏ), "dat qua" cũng là "đặt qua", "hang gia"
+ *  cũng là "hàng giá…" ⇒ không có ở đây. */
+const PHAN_NAN_KHONG_DAU = tuRieng('lua dao', 'bi lua', 'hang nhai', 'hang fake', 'that vong', 'kem chat luong', 'chat luong kem',
+    'bi (?:hong|loi|vo|be|rach|mop)', 'khong giong (?:hinh|anh)', 'chua nhan duoc', 'giao cham', 'hoan tien', 'tra (?:lai )?hang', 'boc phot')
+
+/** Bình luận chê / phàn nàn / khiếu nại — máy không tự trả lời giá, giao diện gắn nhãn để người trả lời. */
+export function laPhanNan(chu: string): boolean {
+    const s = chuThuong(chu)
+    return PHAN_NAN_CO_DAU.test(s) || PHAN_NAN_KHONG_DAU.test(boDau(s))
+}
+
+const KHONG_PHAI_GIA = new RegExp(`(?<![${CHU}])(?:đánh giá|đáng giá|giá trị|giá (?:đỡ|treo|kệ|phơi|sách|vẽ))(?![${CHU}])`, 'gu')
+/** Bản không dấu — "dang gia" để yên (cũng là "đăng giá" = xin đăng giá). */
+const KHONG_PHAI_GIA_KHONG_DAU = new RegExp(`(?<![${CHU}])(?:danh gia|gia tri)(?![${CHU}])`, 'gu')
+const HOI_SAU_GIA = new Set(['?', 'sao', 'bao', 'bn', 'nhiêu', 'nhiu', 'thế', 'ntn', 'mấy', 'ạ', 'shop', 'sốp', 'shp', 'ad', 'admin', 'vậy', 'nhỉ',
+    'hả', 'ib', 'inb', 'inbox', 'với', 'sỉ', 'lẻ', 'bán', 'buôn', 'cái', 'bộ', 'chiếc', 'combo', 'set'])
+const TRUOC_GIA = new Set(['xin', 'cho', 'báo', 'check', 'hỏi', 'ib', 'inb', 'inbox', 'gửi', 'biết', 'xem', 'đăng', 'ghi'])
+/** Từ HỎI mạnh ở 2 chữ cuối câu có "giá" ("giá bên mình sao ạ", "giá bên shop thế nào") — không gồm tiểu từ ạ / vậy / nhé:
+ *  "giá rẻ vậy", "giá tốt, cảm ơn shop ạ" là khen. */
+const HOI_CUOI_CAU = new Set(['?', 'sao', 'nào', 'ntn', 'bn', 'nhiêu', 'nhiu'])
+/** Cụm chắc chắn hỏi giá / hỏi hàng — có dấu và không dấu ("con hang" cũng là "còn hàng").
+ *  "nhiêu" đứng một mình (miền Nam: "nhiêu vậy shop", "bán nhiêu") — có dấu mới chắc ("nhieu" cũng là "nhiều"). */
+const GIA_RO_CO_DAU = tuRieng('bao tiền', 'nhiêu tiền', 'mấy tiền', 'mấy (?:k|nghìn|ngàn)',
+    `(?<!bao )nhiêu(?=\\s*(?:$|[?!.,…]|(?:vậy|vay|z|v|shop|sốp|ạ|ad|bạn|b|em|chị|anh|ơi|hả|nhỉ|thế)(?![${CHU}])))`)
+const GIA_RO_KHONG_DAU = tuRieng('gia (?:bao|sao|nhieu|nhiu|the nao|ntn|bn|si)', '(?:xin|check|hoi|ib|inb|inbox) gia', 'bao gia(?! dinh)',
+    'gia\\s*\\?', 'bnhiu', 'bnhieu', 'con hang', 'ib', 'inb', 'inbox')
+/** Chữ không dấu hoàn toàn: "nhieu tien" / "may tien" mới chắc là "nhiêu tiền" / "mấy tiền" (có dấu thì "nhiều tiền" là than tốn tiền). */
+const GIA_RO_CHI_KHONG_DAU = tuRieng('bao tien', 'nhieu tien', 'may tien')
+/* "bao nhiêu" xét trên chữ CÓ dấu (mỗi từ có cả dạng không dấu): bỏ dấu thì "ship về Đà Nẵng bao nhiêu" thành "…nang bao nhieu" = "nặng". */
+const BAO_NHIEU = new RegExp(`(?<![${CHU}])bao (?:nhiêu|nhieu|nhiu)(?![${CHU}])`, 'gu')
+const DO_TRUOC_BAO_NHIEU = new RegExp(`(?<![${CHU}])(?:nặng|nang|dài|dai|rộng|rong|cao|mạnh|manh|tải|tai|pin|size|công suất|cong suat|dung lượng|dung luong|kích thước|kich thuoc|trọng lượng|trong luong|đường kính|duong kinh|bảo hành|bao hanh)(?:\\s+(?:được|duoc))?\\s*$`, 'u')
+const DON_VI_SAU_BAO_NHIEU = new RegExp(`^\\s*(?:%|(?:lâu|lau|ngày|ngay|tuần|tuan|tháng|thang|năm|nam|giờ|gio|tiếng|tieng|phút|phut|giây|giay|tuổi|tuoi|cân|can|ký|ky|kg|gram|cm|mm|mét|met|m|lít|lit|ml|w|kw|vol|volt|mah|gb|tb|inch|size|màu|mau|mẫu|loại|loai|người|nguoi|lần|lan|km|phần trăm|phan tram|cái|cai|chiếc|chiec|viên|vien|hộp|hop|cuốn|cuon|tấm|tam|bộ|bo)(?![${CHU}]))`, 'u')
+const TIEU_TU = '(?:a|ad|admin|shop|sop|shp|vay|z|v|nhi|ban|b|em|chi|anh|oi|ha|nha|nhe|ak|ah|ta)'
+const CON_KHONG = new RegExp(`(?<![${CHU}])con (?:khong|ko|k|hong|hok|hem)(?=\\s*(?:$|[?!.,…]|${TIEU_TU}(?![${CHU}])))`, 'u')
+const BN = new RegExp(`^\\s*bn\\s*[?!.]*\\s*$|(?<![${CHU}])gia\\s+bn(?![${CHU}])|(?<![${CHU}])bn(?=\\s*(?:\\?|(?:vay|z|v|a|ad|shop|sop|shp|tien|1|mot|cai)(?![${CHU}])))`, 'u')
+
+/** "giá" có dấu đứng cạnh từ hỏi (xem khối chú thích trên). `s` đã gỡ KHONG_PHAI_GIA. */
+function coGiaKemTuHoi(s: string): boolean {
+    const tu = s.replace(/\?/g, ' ? ').split(/[^\p{L}\p{N}?]+/u).filter(Boolean)
+    const cuoiHoi = tu.length <= 12 && tu.slice(-2).some(t => HOI_CUOI_CAU.has(t))
+    for (let i = 0; i < tu.length; i++) {
+        if (tu[i] !== 'giá' && tu[i] !== 'gía') continue   // "gía" = gõ dấu lệch, rất hay gặp
+        if (tu.length === 1 || cuoiHoi) return true
+        if (tu.slice(i + 1, i + 3).some(t => HOI_SAU_GIA.has(t))) return true
+        // "giá như nào / như thế nào" là hỏi; "giá như…" một mình là "phải chi" ("giá như biết sớm")
+        if (tu[i + 1] === 'như' && (tu[i + 2] === 'nào' || tu[i + 2] === 'thế')) return true
+        if (i > 0 && TRUOC_GIA.has(tu[i - 1])) return true
+    }
+    return false
+}
+
+/** "bao nhiêu" hỏi GIÁ — không phải "nặng bao nhiêu", "bao nhiêu lâu", "bao nhiêu W". `s` là chữ thường CÓ dấu. */
+function coBaoNhieuHoiGia(s: string): boolean {
+    for (const m of s.matchAll(BAO_NHIEU)) {
+        const i = m.index ?? 0
+        if (DO_TRUOC_BAO_NHIEU.test(s.slice(0, i))) continue
+        if (DON_VI_SAU_BAO_NHIEU.test(s.slice(i + m[0].length))) continue
+        return true
+    }
+    return false
+}
+
+/** Bình luận hỏi giá / hỏi còn hàng / xin inbox (quy tắc ở khối chú thích trên). */
 export function laHoiGia(chu: string): boolean {
-    const s = String(chu || '')
-    return HOI_GIA_CO_DAU.test(s) || HOI_GIA_KHONG_DAU.test(boDau(s))
+    const goc = chuThuong(chu)
+    if (!goc.trim() || laPhanNan(goc)) return false
+    const s = goc.replace(KHONG_PHAI_GIA, ' ')
+    // "già / giả / giã / giạ" không phải "giá": đổi chỗ trước khi bỏ dấu, kẻo "hàng giả sao" thành "hang gia sao"
+    const k = boDau(s.replace(/(?<![\p{L}\p{N}])gi[àảãạ](?![\p{L}\p{N}])/gu, 'gx')).replace(KHONG_PHAI_GIA_KHONG_DAU, ' ')
+    return coGiaKemTuHoi(s) || GIA_RO_CO_DAU.test(s) || GIA_RO_KHONG_DAU.test(k) || (boDau(goc) === goc && GIA_RO_CHI_KHONG_DAU.test(k))
+        || coBaoNhieuHoiGia(s) || CON_KHONG.test(k) || BN.test(k)
 }
 
 /** Câu trả lời giá — CHỈ giá bán trong kho. Tồn dương mới nói "có hàng"; tồn ≤ 0 không nói "hết hàng". */
@@ -1118,8 +1204,12 @@ export interface BinhLuanFb {
     postTitle: string
     permalink: string | null
     askPrice: boolean
+    /** chê / phàn nàn / khiếu nại — máy không tự trả lời giá (FB-07) */
+    complaint: boolean
     hasPhone: boolean
     product: { productId: string; sku: string; name: string; price: number; stock: number } | null
+    /** vì sao bài không nối được về một mã (tên trùng nhiều mã / mã Pilot đã đăng không còn bán) — FB-08 */
+    productNote: string | null
     suggestion: string | null
     handled: { action: string; success: boolean } | null
     plan: { id: string; kind: string; status: string } | null
@@ -1148,7 +1238,14 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
         select: { id: true, sku: true, name: true, sellingPrice: true, stock: true },
     }) : []
     const spTheoId = new Map(spDs.map(s => [String(s.id), s]))
-    const spTheoTen = new Map(spDs.map(s => [tenGon(s.name), s]))
+    /* FB-08 (10/11/2026): tên → mã CHỈ khi đúng MỘT mã mang tên đó. Cùng tên nhiều mã (khác size / màu…) trước đây lấy mã ĐỌC SAU
+     * CÙNG ⇒ máy tự trả lời giá của mã khác. Chỉ xét tên có trong tenDau (đã đọc ĐỦ mọi mã mang tên đó); bài ngắn < 4 chữ không nối. */
+    const tenCan = new Set(tenDau)
+    const theoTen = new Map<string, any[]>()
+    for (const s of spDs) {
+        const t = tenGon(s.name)
+        if (tenCan.has(t) && !(theoTen.get(t) || []).some(x => x.id === s.id)) theoTen.set(t, [...(theoTen.get(t) || []), s])
+    }
 
     const tho: { c: any; p: any }[] = []
     for (const p of posts) for (const c of p.comments?.data || []) tho.push({ c, p })
@@ -1161,7 +1258,12 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
     let thieuFrom = 0
     const comments: BinhLuanFb[] = tho.map(({ c, p }) => {
         const idSp = theoBai.get(String(p.id))
-        const s = (idSp && spTheoId.get(idSp)) || spTheoTen.get(dongDau(p.message)) || null
+        // bài do Pilot đăng ⇒ CHỈ theo mã đã đăng: mã đó không còn bán thì không rơi về tên (tên có thể là của mã khác)
+        const cungTen = idSp ? [] : (theoTen.get(dongDau(p.message)) || [])
+        const s = idSp ? (spTheoId.get(idSp) || null) : cungTen.length === 1 ? cungTen[0] : null
+        const productNote = idSp && !s ? 'Mã hàng Pilot đã đăng ở bài này không còn trong kho bán (đã xoá / gộp mã / đổi loại) — không tự gắn giá.'
+            : cungTen.length > 1 ? `Dòng đầu bài trùng tên ${cungTen.length} mã hàng trong kho (${cungTen.slice(0, 3).map(x => x.sku).join(', ')}${cungTen.length > 3 ? '…' : ''}) — không biết khách hỏi mã nào, không tự gắn giá.`
+                : null
         const msg = String(c.message || '')
         const hoiGia = laHoiGia(msg)
         if (!c.from) thieuFrom++
@@ -1172,8 +1274,9 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
             fromPage: !!c.from?.id && String(c.from.id) === String(page.pageId),
             createdTime: Date.parse(c.created_time) || 0, isHidden: !!c.is_hidden, replies: Number(c.comment_count) || 0,
             postId: String(p.id), postTitle: dongDau(p.message).slice(0, 120), permalink: p.permalink_url || null,
-            askPrice: hoiGia, hasPhone: coSoDienThoai(msg),
+            askPrice: hoiGia, complaint: laPhanNan(msg), hasPhone: coSoDienThoai(msg),
             product: s ? { productId: String(s.id), sku: s.sku, name: tenGon(s.name), price: Number(s.sellingPrice) || 0, stock: Number(s.stock) || 0 } : null,
+            productNote,
             suggestion: hoiGia && s && Number(s.sellingPrice) > 0 ? cauTraLoiGia(s) : null,
             handled: so ? { action: String(so.action), success: !!so.success } : null,
             plan: kh ? { id: kh.id, kind: kh.kind, status: kh.status } : null,

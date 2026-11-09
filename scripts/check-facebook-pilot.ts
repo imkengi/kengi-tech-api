@@ -29,11 +29,13 @@
  *     dangChay, theo tiện ích chứ không theo hasAiJobs, dò bằng registry.
  * 14. (09/11/2026, FB-20) FacebookService THẬT trước thay đổi Graph đã có hiệu lực: identifyToken không gửi metadata=1, suy loại
  *     token từ /me (USER token ⇒ 'user' qua lỗi "node type (User)"; token chết ném nguyên); Insights chỉ xin chỉ số còn sống.
+ * 15. (10/11/2026, FB-07 / FB-08 / FB-21) nhận "hỏi giá" hẹp lại (đánh giá / khen / chê / hỏi thông số / "bạn" không còn được trả lời
+ *     giá); bài trùng tên nhiều mã hoặc mã Pilot đã đăng không còn bán ⇒ không gắn mã, không gợi ý giá; lịch giữ client suốt lượt.
  */
 import * as fs from 'fs'
 import * as path from 'path'
 import {
-    khoBoNhoFb, chuanHoaChinhSachFb, chuanHoaHashtag, soanBai, boHtml, khungGioTrong, dauNgayVN, anhHopLe, coSoDienThoai, laHoiGia,
+    khoBoNhoFb, chuanHoaChinhSachFb, chuanHoaHashtag, soanBai, boHtml, khungGioTrong, dauNgayVN, anhHopLe, coSoDienThoai, laHoiGia, laPhanNan,
     cauTraLoiGia, timUngVienFb, taoKeHoachBai, thucThiFb, luuCauHinhFb, docBinhLuan, taoKeHoachTraLoi, chayChuKyFb, chayTheoLichFb,
     xayTrangThaiFb, huyKeHoachFb, docGio, kiemKetNoiFb, CHINH_SACH_FB_MAC_DINH, type NgCanhFb, type DichVuFb,
     soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
@@ -967,6 +969,65 @@ async function main() {
             traFetch()
             dapGraph = graphOn
         }
+    }
+
+    // ─── 15. Nhận hỏi giá + nối mã theo tên + giữ client lịch (10/11/2026, FB-07 / FB-08 / FB-21) ───────────
+    {
+        const phaiKeu = ['giá', 'Giá?', 'giá ạ', 'GIÁ BAO NHIÊU', 'giá sao shop', 'giá bn', 'gía bao nhiêu', 'gía ạ', 'gia bao nhieu', 'gia?', 'bao nhiêu',
+            'bao nhiêu 1 cái', 'cái này bao nhiêu vậy', 'bn vậy', 'bn', 'bn?', 'ib', 'ib giá', 'inbox', 'đã ib shop', 'cho mình xin giá', 'báo giá giúp mình',
+            'giá sỉ', 'còn hàng không', 'con hang ko', 'còn không shop', 'size L còn không', 'còn ko ạ', 'còn hông', 'giá cái này', 'nhiêu tiền',
+            'mấy tiền vậy', 'may tien vay', 'mấy k vậy', 'nhiêu vậy shop', 'bán nhiêu', 'giá thế nào ạ', 'giá như nào shop', 'giá bên mình sao ạ',
+            'giá sao' /* NFD */, 'chúc shop đắt hàng, giá sao ạ', 'ship về Đà Nẵng bao nhiêu', 'hàng giá bao nhiêu', 'xin gia']
+        const phaiIm = ['', 'gia đình mình dùng tốt', 'mua cho gia đình dùng', 'đồ gia dụng tốt', 'Đánh giá 5 sao, giao nhanh', 'danh gia sao',
+            'sản phẩm rất đáng giá', 'giá trị sử dụng cao', 'hàng tốt giá hợp lý shop nhé', 'giá rẻ mà xài bền', 'cảm ơn shop ạ, giá tốt', 'giá tốt, cảm ơn shop ạ',
+            'giá như biết sớm thì đã mua rồi', 'giá đắt quá', 'đắt vậy', 'lừa đảo, giá bao nhiêu cũng không mua', 'mua về còn không biết dùng',
+            'con khong biet dung', 'pin dùng được bao nhiêu lâu', 'bảo hành bao nhiêu tháng', 'nặng bao nhiêu vậy', 'công suất bao nhiêu W',
+            'có bao nhiêu màu', 'bn ơi cho mình hỏi', 'cảm ơn bn', 'tốn nhiều tiền quá', 'hàng dỏm', 'hàng tệ quá', 'giao chậm quá',
+            'chưa nhận được hàng, còn không shop', 'giá đỡ này chắc không', 'hàng giả sao bán', 'già sao còn mua', 'máy cắt cỏ dùng tốt',
+            'đặt qua shopee được không']
+        const sai1 = phaiKeu.filter(t => !laHoiGia(t)), sai2 = phaiIm.filter(t => laHoiGia(t))
+        dung(`15a. hỏi giá thật vẫn nhận (${phaiKeu.length} câu, có dấu / không dấu / gõ lệch dấu / NFD)`, sai1.length === 0, JSON.stringify(sai1))
+        dung(`15b. KHÔNG nhận hỏi giá: đánh giá / khen / chê / hỏi thông số / "bạn" / "gia đình" / "giá như" (${phaiIm.length} câu)`, sai2.length === 0, JSON.stringify(sai2))
+        dung('15c. phàn nàn: bắt "đắt quá", "lua dao", "hàng tệ"; KHÔNG bắt lời chúc "đắt hàng", "máy cắt cỏ"',
+            laPhanNan('giá đắt quá') && laPhanNan('lua dao') && laPhanNan('hàng tệ quá') && !laPhanNan('chúc shop đắt hàng') && !laPhanNan('máy cắt cỏ dùng tốt'))
+
+        datLai(); goiFb.length = 0; bayGio = NOW
+        hang.push(
+            { id: 'p8', sku: 'KIM-DO', name: 'Kìm điện', description: '', productType: 'goods', sellingPrice: 89000, stock: 5, mergedIntoId: null, bundleId: null, createdAt: new Date(NOW), images: [] },
+            { id: 'p9', sku: 'KIM-XANH', name: 'Kìm điện', description: '', productType: 'goods', sellingPrice: 99000, stock: 5, mergedIntoId: null, bundleId: null, createdAt: new Date(NOW), images: [] },
+        )
+        const kho = khoBoNhoFb()
+        // bài PG1_402 do Pilot đăng cho p6 (nay đã gộp mã) — dòng đầu lại trùng tên p1 (mã còn bán)
+        kho._keHoach.push({ id: 'kh-cu', kind: 'post', status: 'succeeded', idempotencyKey: 'web:cu', data: { productId: 'p6', sku: 'GOP' }, result: { postId: 'PG1_402' }, createdBy: 'chu@shop', createdAt: NOW - 5 * 86400_000, updatedAt: NOW - 5 * 86400_000 })
+        const bl = (id: string, message: string) => ({ id, message, from: { id: `U_${id}`, name: `Khách ${id}` }, created_time: new Date(NOW - H).toISOString(), comment_count: 0 })
+        baiTrenFb = [
+            { id: 'PG1_401', message: '🔹 Kìm điện\n💰 Giá: 89.000đ', comments: { data: [bl('D1', 'giá sao shop')] } },
+            { id: 'PG1_402', message: '🔹 Mũi khoan lệch tâm 10mm\n💰 Giá: 5.000đ', comments: { data: [bl('D2', 'giá sao shop')] } },
+            { id: 'PG1_403', message: '🔹 Mũi khoan lệch tâm 10mm\n💰 Giá: 26.000đ', comments: { data: [bl('D3', 'Đánh giá 5 sao, giao nhanh'), bl('D4', 'giá đắt quá'), bl('D5', 'giá sao shop')] } },
+        ]
+        const ctx = ngCanh(kho)
+        await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { maxRepliesPerCycle: 5, automation: { posts: false, replyPriceQuestions: true, hidePhoneComments: true } } })
+        const ds = await docBinhLuan(ctx)
+        const c = (id: string) => ds.comments.find(x => x.id === id)!
+        dung('15d. bài trùng tên 2 mã ⇒ KHÔNG gắn mã, không gợi ý giá, nói rõ vì sao (kèm mã)',
+            !c('D1').product && !c('D1').suggestion && /trùng tên 2 mã/.test(c('D1').productNote || '') && /KIM-DO/.test(c('D1').productNote || ''), JSON.stringify(c('D1')))
+        dung('15e. bài Pilot đăng cho mã nay đã gộp ⇒ KHÔNG rơi về mã khác cùng tên', !c('D2').product && !c('D2').suggestion && /không còn trong kho/.test(c('D2').productNote || ''), JSON.stringify(c('D2')))
+        dung('15f. tên chỉ một mã ⇒ vẫn gắn mã + gợi ý giá thật', c('D5').product?.sku === 'KHOAN10' && /26\.000đ/.test(c('D5').suggestion || '') && c('D5').productNote === null, JSON.stringify(c('D5')))
+        dung('15g. "Đánh giá 5 sao" không phải hỏi giá; "giá đắt quá" là phàn nàn, không phải hỏi giá',
+            !c('D3').askPrice && !c('D3').suggestion && !c('D4').askPrice && c('D4').complaint === true && !c('D4').suggestion && c('D5').complaint === false,
+            JSON.stringify([c('D3'), c('D4')].map(x => ({ id: x.id, askPrice: x.askPrice, complaint: x.complaint }))))
+        goiFb.length = 0
+        const kq = await chayChuKyFb(ctx)
+        const traLoi = ghiFb().filter(g => g[0] === 'reply').map(g => g[1])
+        dung('15h. Tự động: CHỈ trả lời D5 — không trả lời bài trùng tên, bài mã đã gộp, đánh giá, lời chê', JSON.stringify(traLoi) === '["D5"]',
+            `${JSON.stringify(traLoi)} ${JSON.stringify(kq.results).slice(0, 300)}`)
+        dung('15i. không lập cả nháp trả lời cho D1–D4', !kho._keHoach.some(k => k.kind === 'reply' && ['D1', 'D2', 'D3', 'D4'].includes(k.data?.commentId)),
+            kho._keHoach.filter(k => k.kind === 'reply').map(k => k.data?.commentId).join(','))
+
+        const cron = fs.readFileSync(path.join(__dirname, '..', 'src', 'cron', 'aiAgentCron.ts'), 'utf8')
+        const khoi = cron.slice(cron.indexOf('FACEBOOK PILOT theo lịch'), cron.indexOf('ADS PILOT theo lịch'))
+        dung('15j. lịch Facebook Pilot giữ client suốt lượt (giuClient … finally nha())',
+            khoi.length > 0 && /const nha = giuClient\(store\.schema\)[\s\S]*chayTheoLichFb\([\s\S]*finally \{\s*nha\(\)/.test(khoi), khoi.slice(0, 200))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

@@ -280,13 +280,18 @@ async function quet(): Promise<void> {
                     nha()
                 }
             }
-            /* FACEBOOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật facebook_pilot. */
+            /* FACEBOOK PILOT theo lịch (02/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật facebook_pilot.
+             * Giữ client suốt lượt (FB-21, 10/11/2026): chu kỳ đọc Facebook (bài, bình luận, bài hẹn) xen truy vấn kho — chờ Graph lâu
+             * thì bộ thải client nhàn rỗi có thể đóng client giữa lượt, như các Pilot khác (lý do xem giuClient). */
             if (docTienIch(store.addOns).includes(TIEN_ICH_FACEBOOK_PILOT)) {
+                const nha = giuClient(store.schema)
                 try {
                     const kq = await chayTheoLichFb(getStorePrisma(store.schema))
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[FacebookPilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[FacebookPilot] lịch ${store.code}:`, e?.message || e)
+                } finally {
+                    nha()
                 }
             }
             /* ADS PILOT theo lịch (05/11/2026) — quảng cáo trong Facebook Pilot, cùng tiện ích facebook_pilot; lịch TẮT mặc định.
