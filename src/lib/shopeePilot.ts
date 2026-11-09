@@ -642,6 +642,16 @@ async function nhacThue(prisma: any, pol: ChinhSachPilot): Promise<string | null
 const TRAN_LISTING = 100
 const TRAN_LISTING_TOI_DA = 200
 const TRAN_UNG_VIEN = 30
+/** Số nháp tối đa /state trả cho khối "Chờ duyệt" — kèm `draftsTotal` để giao diện nói còn bao nhiêu nháp nữa. */
+export const TRAN_NHAP_UI = 300
+
+/** Nháp chờ duyệt cho giao diện — MỌI nháp đang mở, mới nhất trước (TT-13 / SP-20, 10/11/2026). Trước chỉ có nháp lọt vào 60 kế
+ *  hoạch mới nhất: nháp cũ bị kế hoạch mới đẩy khuất thì không ai thấy để duyệt ⇒ tự huỷ sau 3 ngày, chu kỳ lập lại, vòng lặp không
+ *  bao giờ xong. Dùng lại dsKeHoachMo (mốc huỷ ở tương lai ⇒ không kéo kế hoạch đã huỷ). */
+async function dsNhapChoDuyet(kho: KhoPilot): Promise<{ drafts: KeHoach[]; draftsTotal: number }> {
+    const ds = (await kho.dsKeHoachMo(Number.MAX_SAFE_INTEGER)).filter(k => k.status === 'draft')
+    return { drafts: ds.slice(0, TRAN_NHAP_UI), draftsTotal: ds.length }
+}
 
 /** chữ để tìm: thường, bỏ dấu tiếng Việt — gõ "binh" ra "Bình giữ nhiệt" như ô tìm cũ phía trình duyệt */
 const chuTim = (s: any) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().trim()
@@ -655,6 +665,7 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
     const { cfg, kenh, ch } = await docCauHinh(ctx)
     const pol = cfg.policy
     const [plans, audit, todayWrites] = await Promise.all([ctx.kho.dsKeHoach(60), ctx.kho.dsNhatKy(100), ctx.kho.demGhiTuLuc(dauNgayVN())])
+    const nhap = await dsNhapChoDuyet(ctx.kho)
     const channels = kenh.map(c => ({ id: c.id, name: c.name, shopId: c.shopId, authorized: !!(c.accessToken && c.shopId) }))
     const [nhomKho, thue] = await Promise.all([nhomHangKho(ctx.prisma), nhacThue(ctx.prisma, pol)])
     const status: any = {
@@ -666,7 +677,7 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
         khoGroups: nhomKho,
         ...(thue ? { taxNote: thue } : {}),
     }
-    const goc = { csrfToken: 'kengi', now: Date.now(), todayWrites, plans, audit, status }
+    const goc = { csrfToken: 'kengi', now: Date.now(), todayWrites, plans, audit, status, ...nhap }
     if (!ch) {
         status.notice = kenh.length ? `Cửa hàng có ${kenh.length} gian Shopee — chọn một gian ở Tự động hóa → Sửa chính sách.` : 'Cửa hàng chưa kết nối gian Shopee nào.'
         return { ...goc, products: [], tong: 0 }
@@ -767,8 +778,12 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
         })
     }
     const daHien = Math.min(khop.length, offset + listing.length)
+    // SP-20 (10/11/2026): thẻ tổng quan từng ghi "Tổng tồn kho — Số lượng từ kho Kengi" mà cộng tồn LISTING của trang đầu lẫn tồn kho
+    // hàng chưa đăng ⇒ trả tồn TRÊN SHOPEE của CẢ gian (listing đang bán, theo lần đồng bộ gần nhất) để nhãn nói đúng nguồn
+    const dangBan = tatCa.filter(l => l.status === 'NORMAL')
+    const stockOnShop = { total: dangBan.reduce((n, l) => n + Math.max(0, Number(l.stock) || 0), 0), listings: dangBan.length }
     return {
-        ...goc, products,
+        ...goc, products, stockOnShop,
         // tong = số listing KHỚP (cả gian khi không tìm) — giao diện so với số đã tải để hiện "Tải thêm"
         tong: khop.length, offset, lim, ...(q ? { q } : {}),
         catalogNote: `${q ? `${khop.length}/${tatCa.length} sản phẩm trên gian khớp "${q}"` : `${tatCa.length} sản phẩm trên gian`}${daHien < khop.length ? ` (đang hiện ${daHien})` : ''} · ${uv.ungVien.length} mặt hàng kho còn tồn chưa đăng${q ? ' khớp' : ''}`

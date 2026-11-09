@@ -590,6 +590,11 @@ function giaUi(kq: KetQuaGia, ts: ThamSoGia, mauPhi?: MauPhi) {
 // ─── Trạng thái cho giao diện (GET /state) ─────────────────────────────────────
 
 const TRAN_LISTING = 150
+/** Số nháp tối đa /state trả cho khối "Chờ duyệt" (kèm `draftsTotal`). */
+export const TRAN_NHAP_UI = 300
+/** Dòng GHI NHỚ của máy trong sổ kế hoạch: 'skipped' không mang giá (đã biết nhiều phân loại / giá người vừa sửa) — không phải kế
+ *  hoạch người cần xem. 'skipped' có giá là lần thử thật bị TikTok khoá giá (khuyến mãi). */
+const laGhiNho = (k: KeHoachTikTok) => k.status === 'skipped' && !(Number(k.data?.price) > 0)
 /** Trạng thái TikTok coi là đang bán (bộ sản phẩm đồng bộ ghi nguyên status của TikTok) */
 const DANG_BAN = ['ACTIVATE', 'LIVE']
 
@@ -598,7 +603,13 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
     const { cfg, kenh, ch } = await docCauHinhTikTok(ctx)
     const pol = cfg.policy
     // TUẦN TỰ có chủ ý: pool Prisma của cửa hàng chỉ 1 kết nối trên prod
-    const plans = await ctx.kho.dsKeHoach(60)
+    // 10/11/2026 (TT-13): bỏ dòng GHI NHỚ của máy ('skipped' không có giá — nhiều phân loại, giá người sửa) khỏi danh sách kế hoạch
+    // ở máy chủ: trước chúng chiếm chỗ trong 60 dòng mới nhất, trình duyệt lọc đi ⇒ danh sách hụt, nháp thật bị đẩy khuất.
+    // 'skipped' CÓ giá = lần thử thật bị TikTok khoá giá (khuyến mãi) — vẫn giữ.
+    const plans = (await ctx.kho.dsKeHoach(300)).filter(k => !laGhiNho(k)).slice(0, 60)
+    // MỌI nháp đang mở (không chỉ phần lọt vào 60 kế hoạch mới nhất) — khối "Chờ duyệt" duyệt / huỷ hàng loạt
+    const moHet = await ctx.kho.dsKeHoachTheoTrangThai(['draft'], 0)
+    const drafts = moHet.slice(0, TRAN_NHAP_UI)
     const audit = await ctx.kho.dsNhatKy(100)
     const todayWrites = await ctx.kho.demGhiTuLuc(dauNgayVN(now))
     const thue = await nhacThue(ctx.prisma, pol)
@@ -609,7 +620,7 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
         schedule: { ...cfg.schedule, nextRunAt: cfg.nextRunAt, lastRunAt: cfg.lastRunAt, lastResult: cfg.lastResult },
         ...(thue ? { taxNote: thue } : {}),
     }
-    const goc = { now, todayWrites, plans, audit, status }
+    const goc = { now, todayWrites, plans, audit, status, drafts, draftsTotal: moHet.length }
     if (!ch) {
         status.notice = kenh.length ? `Cửa hàng có ${kenh.length} gian TikTok — chọn một gian ở Tự động hóa → Sửa chính sách.` : 'Cửa hàng chưa kết nối gian TikTok nào.'
         return { ...goc, products: [], unlisted: [] }

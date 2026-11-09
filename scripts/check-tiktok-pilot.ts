@@ -213,6 +213,31 @@ async function main() {
         dung('2g. trạng thái KHÔNG gọi TikTok', goi.length === 0)
         dung('2h. hộ kinh doanh + chưa khai thuế ⇒ không nhắc thuế', !st.status.taxNote)
     }
+    // ─── 2i. Nháp chờ duyệt KHÔNG bị khuất (TT-13, 10/11/2026) ─────────────────────────────────────────────
+    // Trước: plans = 60 kế hoạch mới nhất, gồm cả dòng GHI NHỚ của máy ('skipped' không giá: nhiều phân loại / giá người sửa) ⇒
+    // 100 dòng ghi nhớ mới hơn đẩy hết 70 nháp ra ngoài, trình duyệt lọc dòng ghi nhớ đi ⇒ trang không còn nháp nào để duyệt.
+    {
+        const kho = khoBoNhoTikTok()
+        const kh = (id: string, status: string, t: number, data: any) => kho._keHoach.push({ id, kind: 'price', status, idempotencyKey: null, data, result: null, createdBy: 'pilot:auto', createdAt: t, updatedAt: t })
+        for (let i = 0; i < 70; i++) kh(`nhap${i}`, 'draft', 1000 + i, { itemId: `n${i}`, sku: `N${i}`, name: `Nháp ${i}`, price: 120000, snapshot: { price: 130000 } })
+        for (let i = 0; i < 100; i++) kh(`nho${i}`, 'skipped', 5000 + i, { itemId: `m${i}`, sku: `M${i}`, name: `Nhớ ${i}`, nhieuSku: 3 })
+        for (let i = 0; i < 2; i++) kh(`huy${i}`, 'cancelled', 7000 + i, { itemId: `h${i}`, price: 99000 })
+        for (let i = 0; i < 5; i++) kh(`xong${i}`, 'succeeded', 8000 + i, { itemId: `x${i}`, price: 150000 })
+        kh('khoaKM', 'skipped', 9000, { itemId: 'k1', price: 140000, khoaKhuyenMai: true })
+        const st = await xayTrangThaiTikTok(ngCanh(kho))
+        const ghiNho = (p: any) => p.status === 'skipped' && !(Number(p.data?.price) > 0)
+        dung('2i. /state trả MỌI nháp (70) + draftsTotal, toàn draft, mới nhất trước',
+            st.drafts?.length === 70 && st.draftsTotal === 70 && st.drafts.every((p: any) => p.status === 'draft') && st.drafts[0].id === 'nhap69',
+            JSON.stringify({ n: st.drafts?.length, tong: st.draftsTotal, dau: st.drafts?.[0]?.id }))
+        dung('2j. plans bỏ dòng ghi nhớ ở MÁY CHỦ, vẫn 60 dòng, giữ dòng khoá giá (skipped CÓ giá) + đã xong + đã huỷ + nháp mới nhất',
+            st.plans.length === 60 && !st.plans.some(ghiNho) && st.plans.some((p: any) => p.id === 'khoaKM') && st.plans.filter((p: any) => p.status === 'succeeded').length === 5
+            && st.plans.filter((p: any) => p.status === 'cancelled').length === 2 && st.plans.filter((p: any) => p.status === 'draft').length === 52,
+            JSON.stringify(st.plans.map((p: any) => p.id).slice(0, 12)))
+        const kho2 = khoBoNhoTikTok()
+        for (let i = 0; i < 310; i++) kho2._keHoach.push({ id: `d${i}`, kind: 'price', status: 'draft', idempotencyKey: null, data: { itemId: `d${i}`, price: 1 }, result: null, createdBy: null, createdAt: i, updatedAt: i })
+        const st2 = await xayTrangThaiTikTok(ngCanh(kho2))
+        dung('2k. quá 300 nháp ⇒ trả 300 mới nhất, draftsTotal vẫn là số thật (310)', st2.drafts.length === 300 && st2.draftsTotal === 310 && st2.drafts[0].id === 'd309', JSON.stringify({ n: st2.drafts.length, tong: st2.draftsTotal }))
+    }
 
     // ─── 3. Phí: CHỈ số đo của CHÍNH gian — chưa đủ đơn ⇒ phí KHAI hoặc CHƯA BIẾT PHÍ (09/11/2026) ─────────────
     // Chủ shop: "xem phí phải ghi rõ ra không thể mượn được". Trước: gian mới MƯỢN số đo của gian cùng sàn (cờ muon) — gian Mall /

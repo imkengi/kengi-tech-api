@@ -1069,6 +1069,41 @@ async function main() {
                 && !kq2.results.some((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || '')), JSON.stringify({ ghi: goi.slice(t0), r: kq2.results }))
         }
 
+        // ─── E16b. Nháp chờ duyệt KHÔNG bị khuất + tồn TRÊN SHOPEE cả gian (TT-13 / SP-20, 10/11/2026) ─────────────
+        // Trước: /state chỉ trả 60 kế hoạch mới nhất ⇒ 70 nháp cũ bị 60 kế hoạch đã xong mới hơn đẩy khuất, không ai thấy để duyệt ⇒ tự
+        // huỷ sau 3 ngày, chu kỳ lập lại. Thẻ "Tổng tồn kho — Số lượng từ kho Kengi" cộng tồn listing TRANG ĐẦU lẫn tồn kho hàng chưa đăng.
+        {
+            HIEN = taoCuaHang({ don: donSach() })
+            const H = HIEN
+            H.themHang('T1', 60000); H.themListing('T1', 150000, '1701')
+            H.themHang('T2', 60000); H.themListing('T2', 150000, '1702')
+            H.themHang('T3', 60000); H.themListing('T3', 150000, '1703', 'UNLIST')
+            H.listing.find(l => l.platformProductId === '1701')!.stock = 12
+            H.listing.find(l => l.platformProductId === '1702')!.stock = -3   // tồn âm lưu sai ⇒ không trừ vào tổng
+            H.listing.find(l => l.platformProductId === '1703')!.stock = 40   // đang ẩn ⇒ không tính
+            const kh = (id: string, status: string, t: number) => H.kho._keHoach.push({ id, kind: 'price', status, idempotencyKey: null, data: { sku: id, itemId: id, price: 120000, snapshot: { price: 130000 } }, result: null, createdBy: 'pilot:auto', createdAt: t, updatedAt: t })
+            for (let i = 0; i < 70; i++) kh(`nhap${i}`, 'draft', 1000 + i)
+            for (let i = 0; i < 60; i++) kh(`xong${i}`, 'succeeded', 5000 + i)
+            for (let i = 0; i < 3; i++) kh(`huy${i}`, 'cancelled', 9000 + i)
+            kh('dangChay', 'running', 9500)
+            await luuCauHinh(H.ctx, { policy: { targetMarginRate: 0.15, minMarginRate: 0.05 } })
+            const st = await xayTrangThai(H.ctx)
+            dung('E16b. /state trả MỌI nháp (70) + draftsTotal, chỉ trạng thái draft (không kéo đang chạy / đã huỷ), mới nhất trước',
+                st.drafts?.length === 70 && st.draftsTotal === 70 && st.drafts.every((p: any) => p.status === 'draft') && st.drafts[0].id === 'nhap69',
+                JSON.stringify({ n: st.drafts?.length, tong: st.draftsTotal, dau: st.drafts?.[0]?.id }))
+            dung('E16b. (đối chứng) 60 kế hoạch mới nhất KHÔNG còn nháp nào — đường khuất có thật', st.plans.length === 60 && !st.plans.some((p: any) => p.status === 'draft'))
+            dung('E16b. tồn trên Shopee = Σ tồn listing ĐANG BÁN cả gian (12, tồn âm tính 0, hàng ẩn không tính), kèm số listing đang bán',
+                st.stockOnShop?.total === 12 && st.stockOnShop?.listings === 2, JSON.stringify(st.stockOnShop))
+            const rong = await xayTrangThai({ ...H.ctx, kho: khoBoNho() })
+            dung('E16b. không nháp nào ⇒ drafts rỗng, draftsTotal 0', Array.isArray(rong.drafts) && rong.drafts.length === 0 && rong.draftsTotal === 0)
+            // 310 nháp ⇒ trả 300 mới nhất (TRAN_NHAP_UI) nhưng draftsTotal vẫn nói đủ 310 — giao diện báo "Đang hiện 300/310"
+            for (let i = 70; i < 310; i++) kh(`nhap${i}`, 'draft', 1000 + i)
+            const tran = await xayTrangThai(H.ctx)
+            dung('E16b. 310 nháp ⇒ drafts cắt ở 300 mới nhất, draftsTotal vẫn 310',
+                tran.drafts?.length === 300 && tran.draftsTotal === 310 && tran.drafts[0].id === 'nhap309' && !tran.drafts.some((p: any) => p.id === 'nhap0'),
+                JSON.stringify({ n: tran.drafts?.length, tong: tran.draftsTotal, dau: tran.drafts?.[0]?.id }))
+        }
+
         // ─── E17. Tool AI đi qua cửa Pilot (X-03/SP-02, 09/11/2026) ───────────────────────────
         // Trước: shopee_update_price / shopee_toggle_listing / shopee_create_listing ghi THẲNG — Pilot Xem trước vẫn ghi thật, không
         // trần ngày, không biên độ, không né khuyến mãi, không nghỉ 24 giờ, không sổ ShopeePilotWrite; ẩn hàng không có rào nào.
