@@ -26,6 +26,10 @@
  * 14. (10/11/2026) Số GẦN ĐÂY (AD-09): tốt trọn đời mà 8 ngày gần đây chi không ra khách / quá đắt ⇒ tạm dừng; tăng ngân sách
  *     phải tốt CẢ hai. #100/33 mập mờ (AD-08): chỉ là "đã xoá" khi đọc được tài khoản chứa nó, không thì vẫn chiếm trần + báo người.
  *     Quảng cáo bị Facebook từ chối (AD-11): vẫn giữ chỗ trong trần, không tăng chi, không tự tắt, một dòng việc cần người.
+ * 15. (10/11/2026) Báo chủ shop khi máy tự tiêu tiền (AD-10): chỉ việc TĂNG chi máy TỰ làm (Tự động) mới thành một tin ngay — ngoài
+ *     dấu chống lặp, kèm số THẬT đang chạy + cách thôi; báo cáo chi hôm qua mỗi ngày một tin (từ 8 giờ, chỉ lượt theo lịch): chi /
+ *     kết quả CHỈ chiến dịch Pilot, việc máy tự làm tách khỏi việc người làm (kể cả người duyệt đề xuất của máy); không có gì ⇒ im
+ *     mà vẫn đánh dấu; ghi tin / đọc Insights hỏng ⇒ không đánh dấu (lượt sau gửi lại); không gửi hai lần một ngày.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -35,9 +39,9 @@ import {
     chayChuKyAds, chayTheoLichAds, xayTrangThaiAds, kiemKetNoiAds, docCauHinhAds, lyDoDung, nganSachTang, laTangChi,
     CHINH_SACH_ADS_MAC_DINH, NGAN_SACH_TOI_THIEU, TUONG_TAC_TOI_DA, type NgCanhAds, type DichVuAds,
 } from '../src/lib/facebookAdsPilot'
-import { khoBoNhoFb, dauNgayVN } from '../src/lib/facebookPilot'
+import { khoBoNhoFb, dauNgayVN, vnd } from '../src/lib/facebookPilot'
 import { thamSoChienDichDayBai, thamSoNhomDayBai, GRAPH_ADS } from '../src/services/platforms/facebook'
-import { canNguoi } from '../src/lib/pilotBaoChuShop'
+import { canNguoi, baoMayTangChi } from '../src/lib/pilotBaoChuShop'
 import { ToolError } from '../src/lib/mcpTypes'
 
 let loi = 0, dat = 0
@@ -151,14 +155,14 @@ function fbDatLai() {
         perms: null as any,
         accounts: [{ id: 'act_111', account_id: '111', name: 'TK Kengi', account_status: 1, currency: 'VND', amount_spent: '0', balance: '0' }],
         campaigns: new Map<string, any>(),
-        insights: new Map<string, { maximum?: any; today?: any; last_7d?: any }>(),
+        insights: new Map<string, { maximum?: any; today?: any; last_7d?: any; yesterday?: any }>(),
         /** đọc riêng một quảng cáo (issues_info, ad_review_feedback) — 'ad' = tiêm lỗi cho các lần đọc này */
         adsInfo: new Map<string, any>(),
         /** giả Facebook KHÔNG nhận trường ads{…} trên chiến dịch (#100 "nonexisting field") */
         khongChoAds: false,
         posts: new Map<string, any>([['PG1_101', { is_published: true }], ['PG1_102', { is_published: true }], ['PG1_201', { is_published: true }], ['PG1_104', { is_published: true }]]),
         n: 0,
-        /** tiêm lỗi: buoc = đuôi đường gọi (vd 'adsets', 'ACTIVE', 'cd', 'cd:<mã>', 'bai', 'insights', 'act'); lan = số lần còn ném */
+        /** tiêm lỗi: buoc = đuôi đường gọi (vd 'adsets', 'ACTIVE', 'cd', 'cd:<mã>', 'bai', 'insights', 'insights:<date_preset>', 'act'); lan = số lần còn ném */
         tiem: [] as { buoc: string; loi: any; lan: number }[],
     }
 }
@@ -182,7 +186,7 @@ const taoFb = (token: string): DichVuAds => ({
         if (p === 'me/adaccounts') return { data: fb.accounts }
         if (/^act_\d+$/.test(p)) { nemNeuTiem('act'); const a = fb.accounts.find((x: any) => x.id === p); if (!a) throw loiGraph(100, 'Unsupported get request', 33); return a }
         if (/^act_\d+\/insights$/.test(p)) {
-            nemNeuTiem('insights')
+            nemNeuTiem('insights'); nemNeuTiem(`insights:${q.date_preset}`)
             if (q.level === 'account') return { data: [{ spend: '12345', impressions: '1000', reach: '800', clicks: '20', actions: [] }] }
             const ids: string[] = q.filtering?.[0]?.value || []
             return { data: ids.filter(id => fb.insights.get(id)?.[q.date_preset]).map(id => ({ campaign_id: id, ...fb.insights.get(id)[q.date_preset] })) }
@@ -1031,6 +1035,233 @@ async function main() {
         const lib = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'facebookAdsPilot.ts'), 'utf8')
         dung('14u. nối dây: đọc ads{id,effective_status} trong lời đọc chiến dịch; Insights có last_7d',
             /COT_CHIEN_DICH = `\$\{COT_CHIEN_DICH_GOC\},ads\{id,effective_status\}`/.test(lib) && /COT_CHIEN_DICH_GOC = 'id,name,status,effective_status,adsets\{/.test(lib) && /'last_7d'/.test(lib))
+    }
+
+    // ─── 15. (10/11/2026) Báo chủ shop khi máy tự tăng chi + báo cáo chi hằng ngày (AD-10) ─────────
+    {
+        /** prisma ghi ĐƯỢC thông báo (bản chung ném) + push giả bơm qua `guiDay` — không kéo routes/notifications vào bộ kiểm */
+        const tin: any[] = [], day: any[] = []
+        let tinHong: RegExp | null = null
+        const prismaTin: any = {
+            ...prisma,
+            notification: {
+                create: async ({ data }: any) => {
+                    if (tinHong && tinHong.test(String(data?.title))) throw new Error('CSDL hỏng')
+                    tin.push(data); return { id: `N${tin.length}` }
+                },
+            },
+        }
+        const guiDay = async (_p: any, title: string, message: string, extra: any) => { day.push({ title, message, extra }) }
+        const xoaTin = () => { tin.length = 0; day.length = 0 }
+        const ngayCua = (ms: number) => new Date(ms + 7 * H).toISOString().slice(0, 10)
+        const ddmm = (ms: number) => { const [, m, d] = ngayCua(ms).split('-'); return `${d}/${m}` }
+        const baoCao = () => tin.filter(t => /báo cáo chi/.test(String(t.title)))
+        const docYesterday = () => goi.filter(g => g.q?.date_preset === 'yesterday').length
+        const SO_TOT = {
+            maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] },
+            last_7d: { spend: '40000', actions: [{ action_type: 'comment', value: '5' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '3' }] },
+        }
+        const POL_TANG = { dailyBudgetCap: 200000, maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } }
+
+        // Tự động: máy tự tăng ngân sách
+        datLai(); goi = []
+        const c1 = ngCanh()
+        await chuanBi(c1, 'auto', POL_TANG)
+        const q1 = await coQuangCao(c1, 'PG1_101', 50000)
+        fb.insights.set(q1.result.campaignId, SO_TOT)
+        const kq1 = await chuKy(c1)
+        const dongTang = kq1.results.find((x: any) => x.action === 'budget')
+        const khTang = c1.kho._keHoach.find(k => k.kind === 'budget')
+        dung('15a. Tự động: máy tự tăng ngân sách ⇒ dòng kết quả mang tienMay, kế hoạch ghi tuDong (máy tự làm, không người bấm)',
+            dongTang?.status === 'succeeded' && dongTang?.tienMay === true && khTang?.result?.tuDong === true, JSON.stringify({ dongTang, r: khTang?.result }))
+        dung('15b. tổng sau lượt = số THẬT đang chạy: 1 quảng cáo, 60.000đ/ngày, trần 200.000đ',
+            kq1.tongChay?.soChay === 1 && kq1.tongChay?.nganSach === 60000 && kq1.tongChay?.tran === 200000, JSON.stringify(kq1.tongChay))
+        dung('15c. người bấm thực thi (không qua chu kỳ) ⇒ kế hoạch KHÔNG mang tuDong',
+            q1.status === 'succeeded' && !q1.result?.tuDong && !c1.kho._keHoach.find(k => k.kind === 'boost')?.result?.tuDong, JSON.stringify(q1.result))
+
+        // Duyệt tay: cùng số tốt ⇒ chỉ nháp
+        datLai(); goi = []
+        const c2 = ngCanh()
+        await chuanBi(c2, 'approve', POL_TANG)
+        const q2 = await coQuangCao(c2, 'PG1_101', 50000)
+        fb.insights.set(q2.result.campaignId, SO_TOT)
+        const kq2 = await chuKy(c2)
+        dung('15d. Duyệt tay: tăng ngân sách chỉ là nháp chờ duyệt, không dòng nào mang tienMay; tổng vẫn 50.000đ (không tính chỗ giữ cho nháp)',
+            kq2.results.some((x: any) => x.action === 'budget' && x.status === 'draft') && !kq2.results.some((x: any) => x.tienMay) && kq2.tongChay?.soChay === 1 && kq2.tongChay?.nganSach === 50000,
+            JSON.stringify({ r: kq2.results, t: kq2.tongChay }))
+
+        // Tự động: tạm dừng / chạy lại
+        datLai(); goi = []
+        const c3 = ngCanh()
+        await chuanBi(c3, 'auto', { dailyBudgetCap: 100000, automation: { resumeRestocked: true } })
+        await coQuangCao(c3, 'PG1_101', 50000)
+        hang.find(h => h.id === 'p1')!.stock = 0
+        const kq3a = await chuKy(c3)
+        hang.find(h => h.id === 'p1')!.stock = 30
+        const kq3b = await chuKy(c3)
+        dung('15e. Tự động: tạm dừng (giảm chi) KHÔNG mang tienMay; chạy lại khi có hàng (tăng chi) có; tổng theo đúng sau từng lượt',
+            kq3a.results.some((x: any) => x.action === 'pause' && x.status === 'succeeded' && !x.tienMay) && kq3a.tongChay?.soChay === 0 && kq3a.tongChay?.nganSach === 0
+            && kq3b.results.some((x: any) => x.action === 'resume' && x.status === 'succeeded' && x.tienMay === true) && kq3b.tongChay?.soChay === 1 && kq3b.tongChay?.nganSach === 50000,
+            JSON.stringify([kq3a.results, kq3a.tongChay, kq3b.results, kq3b.tongChay]))
+
+        // Tự động + tự lập quảng cáo cho bài mới
+        datLai(); goi = []
+        const c4 = ngCanh()
+        await chuanBi(c4, 'auto', { dailyBudgetCap: 200000, maxActiveAds: 1, automation: { boostNewPosts: true } })
+        const kq4 = await chuKy(c4)
+        const dongMoi = kq4.results.filter((x: any) => x.action === 'boost' && x.status === 'succeeded')
+        const nsMoi = Number(c4.kho._keHoach.find(k => k.kind === 'boost' && k.status === 'succeeded')?.data?.dailyBudget)
+        dung('15f. Tự động: máy tự bật quảng cáo mới ⇒ dòng mang tienMay; tổng cộng quảng cáo vừa bật',
+            dongMoi.length === 1 && dongMoi[0].tienMay === true && kq4.tongChay?.soChay === 1 && kq4.tongChay?.nganSach === nsMoi && nsMoi > 0,
+            JSON.stringify({ r: kq4.results, t: kq4.tongChay, nsMoi }))
+
+        // baoMayTangChi (hàm thuần + ghi tin)
+        xoaTin()
+        dung('15g. không dòng tienMay (Duyệt tay) ⇒ không ghi tin, không push',
+            (await baoMayTangChi(prismaTin, 'Ads Pilot', kq2.results, 'đuôi', guiDay)) === false && tin.length === 0 && day.length === 0)
+        const coTang = await baoMayTangChi(prismaTin, 'Ads Pilot', kq1.results, 'sau lượt này …', guiDay)
+        await new Promise(r => setImmediate(r))
+        dung('15h. một tin "Ads Pilot: máy vừa tự tăng chi (1 việc)" kèm dòng việc + câu đuôi; push nhóm pilot, bấm mở tab Quảng cáo, mang id tin',
+            coTang === true && tin.length === 1 && tin[0].title === 'Ads Pilot: máy vừa tự tăng chi (1 việc)' && tin[0].type === 'warning'
+            && tin[0].message.startsWith('KHOAN10: ') && tin[0].message.includes(`tăng ngân sách ${vnd(50000)} → ${vnd(60000)}/ngày`) && tin[0].message.endsWith(' — sau lượt này …')
+            && day.length === 1 && day[0].extra?.nhom === 'pilot' && day[0].extra?.web === '/pilot-facebook#ads' && day[0].extra?.id === 'N1',
+            JSON.stringify({ tin, day }))
+        xoaTin()
+        const nhieu = Array.from({ length: 6 }, (_, i) => ({ action: 'boost', status: 'succeeded', sku: `SP${i}`, message: `bài ${i}`, tienMay: true }))
+        await baoMayTangChi(prismaTin, 'Ads Pilot', [...nhieu, { action: 'boost', status: 'failed', sku: 'HONG', message: 'hỏng', tienMay: true }, { action: 'pause', status: 'succeeded', sku: 'DUNG', message: 'dừng' }], '', guiDay)
+        dung('15i. 6 việc ⇒ tiêu đề đếm 6, tin kể 4 + "… và 2 việc nữa"; dòng hỏng / dòng không mang tienMay không tính',
+            tin.length === 1 && tin[0].title.endsWith('(6 việc)') && tin[0].message.endsWith('SP3: bài 3 · … và 2 việc nữa') && !/SP4|HONG|DUNG/.test(tin[0].message), JSON.stringify(tin))
+        const hong = await baoMayTangChi({ notification: { create: async () => { throw new Error('CSDL hỏng') } } }, 'Ads Pilot', kq1.results, '', guiDay).then(v => v, () => 'NEM')
+        dung('15j. ghi tin hỏng ⇒ trả false, KHÔNG ném (không làm gãy lượt chạy)', hong === false, String(hong))
+
+        // chạy theo lịch, Tự động, máy tự tăng ngân sách ⇒ tin ngay
+        datLai(); goi = []; xoaTin()
+        const k5 = khoBoNhoAds(), fb5 = khoFbMau()
+        const c5 = ngCanh(k5, fb5)
+        await chuanBi(c5, 'auto', POL_TANG)
+        const q5 = await coQuangCao(c5, 'PG1_101', 50000)
+        fb.insights.set(q5.result.campaignId, SO_TOT)
+        await luuCauHinhAds(c5, { schedule: { enabled: true, intervalMinutes: 120 } })
+        const ngoai5 = { taoFb, bayGio: () => bayGio, khoFb: fb5, guiDay }
+        bayGio = NOW + 121 * 60_000
+        goi = []
+        const r5 = await chayTheoLichAds(prismaTin, k5, ngoai5)
+        const tinTang = tin.filter(t => /máy vừa tự tăng chi/.test(String(t.title)))
+        dung('15k. lịch Tự động: máy tự tăng ngân sách ⇒ MỘT tin ngay, nói sau lượt 1 quảng cáo · 60.000đ/ngày · trần 200.000đ và cách thôi (Duyệt tay)',
+            r5 === 'da-chay' && tinTang.length === 1 && tinTang[0].message.includes(`sau lượt này 1 quảng cáo đang chạy, ${vnd(60000)}/ngày (trần ${vnd(200000)}/ngày)`) && /chuyển Ads Pilot sang Duyệt tay/.test(tinTang[0].message),
+            JSON.stringify(tin))
+        const lr5 = (await k5.docCauHinh())?.lastResult
+        dung('15l. hôm qua không chi đồng nào, không thao tác nào ⇒ KHÔNG tin báo cáo chi, nhưng đã xét (đánh dấu hôm nay, đọc Insights "hôm qua" một lần)',
+            baoCao().length === 0 && lr5?.baoCaoNgay === ngayCua(bayGio) && docYesterday() === 1, JSON.stringify({ bc: lr5?.baoCaoNgay, y: docYesterday() }))
+        xoaTin(); goi = []
+        bayGio += 121 * 60_000
+        await chayTheoLichAds(prismaTin, k5, ngoai5)
+        dung('15m. lượt sau cùng ngày: không tăng lần hai ⇒ không tin tăng chi; báo cáo đã xét ⇒ không đọc Insights "hôm qua" lần nữa',
+            tin.length === 0 && docYesterday() === 0, JSON.stringify(tin))
+
+        // báo cáo chi hôm qua — Duyệt tay: người đẩy bài, máy đề xuất tăng ngân sách + người duyệt, máy tự tạm dừng khi hết hàng
+        datLai(); goi = []; xoaTin()
+        const k6 = khoBoNhoAds(), fb6 = khoFbMau()
+        const c6 = ngCanh(k6, fb6)
+        await chuanBi(c6, 'approve', POL_TANG)
+        const q6 = await coQuangCao(c6, 'PG1_101', 50000)
+        const cid6 = String(q6.result.campaignId)
+        fb.insights.set(cid6, SO_TOT)
+        await chuKy(c6)
+        const nhap6 = c6.kho._keHoach.find(k => k.kind === 'budget' && k.status === 'draft')
+        const duyet6 = nhap6 ? await thucThiAds(c6, nhap6.id) : null
+        hang.find(h => h.id === 'p1')!.stock = 0
+        await chuKy(c6)
+        const daDung6 = fb.campaigns.get(cid6).status === 'PAUSED'
+        // một lần bật quảng cáo HỎNG (sổ ghi 'failed') — báo cáo chỉ đếm việc đã làm xong; dòng 'config' (đổi cấu hình) cũng không đếm
+        c6.kho._nhatKy.push({ id: 'nk-hong', action: 'boost', status: 'failed', planId: null, payload: {}, response: { message: 'hỏng' }, createdAt: Date.now() })
+        await luuCauHinhAds(c6, { schedule: { enabled: true, intervalMinutes: 30 } })
+        const ngoai6 = { taoFb, bayGio: () => bayGio, khoFb: fb6, guiDay }
+        // các việc trên ghi sổ nhật ký "hôm nay" (đồng hồ thật) ⇒ đồng hồ giả sang hôm sau thì chúng là "hôm qua"
+        const homQua = bayGio
+        fb.insights.set(cid6, { ...SO_TOT, yesterday: { spend: '45000', actions: [{ action_type: 'comment', value: '2' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '1' }] } })
+        bayGio = dauNgayVN(NOW) + NGAY + 7 * H + 30 * 60_000
+        goi = []
+        await chayTheoLichAds(prismaTin, k6, ngoai6)
+        dung('15n. 07:30 sáng hôm sau: chưa tới 8 giờ ⇒ không tin báo cáo, không đọc Insights "hôm qua", chưa đánh dấu',
+            duyet6?.status === 'succeeded' && daDung6 && baoCao().length === 0 && docYesterday() === 0 && !(await k6.docCauHinh())?.lastResult?.baoCaoNgay,
+            JSON.stringify({ d: duyet6?.status, daDung6, tin, bc: (await k6.docCauHinh())?.lastResult?.baoCaoNgay }))
+        bayGio = dauNgayVN(NOW) + NGAY + 8 * H + 5 * 60_000
+        tinHong = /báo cáo chi/
+        await chayTheoLichAds(prismaTin, k6, ngoai6)
+        const lr6 = (await k6.docCauHinh())?.lastResult
+        dung('15o. 08:05, ghi tin báo cáo hỏng ⇒ KHÔNG đánh dấu (lượt sau gửi lại), lượt chạy không gãy',
+            baoCao().length === 0 && !lr6?.baoCaoNgay && lr6?.ok === true, JSON.stringify({ tin, lr6 }))
+        tinHong = null
+        tiem('insights:yesterday', loiGraph(17, '(#17) User request limit reached'), 1)
+        bayGio += 31 * 60_000
+        await chayTheoLichAds(prismaTin, k6, ngoai6)
+        dung('15p. đọc Insights "hôm qua" hỏng ⇒ không gửi số thiếu, KHÔNG đánh dấu; lượt chạy không gãy',
+            baoCao().length === 0 && !(await k6.docCauHinh())?.lastResult?.baoCaoNgay && (await k6.docCauHinh())?.lastResult?.ok === true, JSON.stringify(tin))
+        fb.tiem = []
+        bayGio += 31 * 60_000
+        goi = []
+        await chayTheoLichAds(prismaTin, k6, ngoai6)
+        const bc6 = baoCao(), m6 = String(bc6[0]?.message || '')
+        dung('15q. lượt sau: MỘT tin "Ads Pilot: báo cáo chi hôm qua dd/mm" (ngày hôm qua), đánh dấu hôm nay',
+            bc6.length === 1 && bc6[0].title === `Ads Pilot: báo cáo chi hôm qua ${ddmm(homQua)}` && (await k6.docCauHinh())?.lastResult?.baoCaoNgay === ngayCua(bayGio),
+            JSON.stringify({ bc6, bc: (await k6.docCauHinh())?.lastResult?.baoCaoNgay }))
+        dung('15r. số chi CHỈ của chiến dịch Pilot hôm qua: 45.000đ (1 quảng cáo), 3 bình luận / tin nhắn — 15.000đ mỗi kết quả',
+            m6.includes(`chi ${vnd(45000)} (1 quảng cáo), 3 bình luận / tin nhắn — ${vnd(15000)} mỗi kết quả.`), m6)
+        dung('15s. máy TỰ tạm dừng 1; người đẩy bài + người DUYỆT tăng ngân sách máy đề xuất ⇒ phần người làm (không gán cho máy)',
+            m6.includes('Máy tự: tạm dừng 1.') && m6.includes('Người làm (web / trợ lý AI): tăng ngân sách 1, bật quảng cáo mới 1.'), m6)
+        dung('15t. hiện tại: 0 quảng cáo đang chạy (đã tạm dừng), trần 200.000đ', m6.includes(`Hiện 0 quảng cáo đang chạy, ${vnd(0)}/ngày (trần ${vnd(200000)}/ngày).`), m6)
+        dung('15u. push báo cáo: nhóm pilot, mở tab Quảng cáo, mang id tin',
+            day.some(d => /báo cáo chi/.test(d.title) && d.extra?.nhom === 'pilot' && d.extra?.web === '/pilot-facebook#ads' && !!d.extra?.id), JSON.stringify(day))
+        xoaTin(); goi = []
+        bayGio += 31 * 60_000
+        await chayTheoLichAds(prismaTin, k6, ngoai6)
+        dung('15v. lượt sau cùng ngày: không gửi lần hai, không đọc lại Insights "hôm qua"', baoCao().length === 0 && docYesterday() === 0, JSON.stringify(tin))
+        const tay = await chayChuKyAds(c6)
+        const coBc = await chayChuKyAds(c6, { baoCaoNgayCu: null })
+        dung('15w. chạy tay (không qua lịch) KHÔNG kèm báo cáo chi; lượt lịch chưa báo hôm nay thì có',
+            tay.baoCaoNgay === undefined && coBc.baoCaoNgay?.title === `Ads Pilot: báo cáo chi hôm qua ${ddmm(homQua)}`, JSON.stringify({ tay: tay.baoCaoNgay, coBc: coBc.baoCaoNgay }))
+
+        // máy định chạy lại mà có người vừa bật trước (Facebook trả alreadyActive) ⇒ không phải máy tiêu thêm, nhưng cuối lượt vẫn đang chạy
+        datLai(); goi = []
+        const c7 = ngCanh()
+        await chuanBi(c7, 'auto', { dailyBudgetCap: 100000, automation: { resumeRestocked: true } })
+        const q7 = await coQuangCao(c7, 'PG1_101', 50000)
+        hang.find(h => h.id === 'p1')!.stock = 0
+        await chuKy(c7)
+        hang.find(h => h.id === 'p1')!.stock = 30
+        const cd7 = fb.campaigns.get(String(q7.result.campaignId))
+        let docCd7 = 0   // lời đọc đầu lượt (2 lần lấy trạng thái) thấy TẠM DỪNG, lời đọc lại lúc chạy lại thấy ĐANG CHẠY
+        Object.defineProperty(cd7, 'status', { get: () => (docCd7++ < 2 ? 'PAUSED' : 'ACTIVE'), set: () => { }, configurable: true })
+        const kq7 = await chuKy(c7)
+        const dong7 = kq7.results.find((x: any) => x.action === 'resume')
+        dung('15x. chạy lại gặp "đã đang chạy" (người vừa bật) ⇒ dòng KHÔNG mang tienMay; tổng sau lượt vẫn tính nó đang chạy',
+            dong7?.status === 'succeeded' && !dong7?.tienMay && kq7.tongChay?.soChay === 1 && kq7.tongChay?.nganSach === 50000,
+            JSON.stringify({ dong7, t: kq7.tongChay, r: c7.kho._keHoach.find(k => k.kind === 'resume')?.result }))
+
+        // báo cáo: "tăng" hay "hạ" theo ngân sách SỐNG lúc làm — người sửa tay lên 80.000đ rồi duyệt nháp 50.000 → 60.000 ⇒ là HẠ
+        datLai(); goi = []; xoaTin()
+        const k8 = khoBoNhoAds(), fb8 = khoFbMau()
+        const c8 = ngCanh(k8, fb8)
+        await chuanBi(c8, 'approve', POL_TANG)
+        const q8 = await coQuangCao(c8, 'PG1_101', 50000)
+        fb.insights.set(String(q8.result.campaignId), SO_TOT)
+        await chuKy(c8)
+        const nhap8 = c8.kho._keHoach.find(k => k.kind === 'budget' && k.status === 'draft')
+        fb.campaigns.get(String(q8.result.campaignId)).adsets[0].daily_budget = 80000
+        const duyet8 = nhap8 ? await thucThiAds(c8, nhap8.id) : null
+        await luuCauHinhAds(c8, { schedule: { enabled: true, intervalMinutes: 30 } })
+        fb.insights.set(String(q8.result.campaignId), { ...SO_TOT, yesterday: { spend: '30000', actions: [] } })
+        hang.find(h => h.id === 'p1')!.stock = 0      // chính lượt gửi báo cáo tạm dừng quảng cáo ⇒ "Hiện …" phải là số SAU lượt
+        bayGio = dauNgayVN(NOW) + NGAY + 9 * H
+        await chayTheoLichAds(prismaTin, k8, { taoFb, bayGio: () => bayGio, khoFb: fb8, guiDay })
+        const m8 = String(baoCao()[0]?.message || '')
+        dung('15y. nháp "tăng" 50.000 → 60.000 mà ngân sách sống đã 80.000 ⇒ báo cáo ghi người HẠ ngân sách; chi có mà 0 kết quả thì không chia',
+            duyet8?.status === 'succeeded' && m8.includes('Người làm (web / trợ lý AI): hạ ngân sách 1, bật quảng cáo mới 1.') && m8.includes(`chi ${vnd(30000)} (1 quảng cáo), 0 bình luận / tin nhắn.`),
+            JSON.stringify({ d: duyet8?.status, r: duyet8?.result, m8 }))
+        dung('15z. lượt gửi báo cáo vừa tạm dừng quảng cáo hết hàng ⇒ "Hiện 0 quảng cáo đang chạy" (số SAU lượt, không phải đầu lượt)',
+            fb.campaigns.get(String(q8.result.campaignId)).status === 'PAUSED' && m8.includes(`Hiện 0 quảng cáo đang chạy, ${vnd(0)}/ngày (trần ${vnd(200000)}/ngày).`), m8)
+        bayGio = NOW
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

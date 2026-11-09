@@ -31,7 +31,7 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai, laLoiTokenFb, laLoiQuyenFb, quyenThieuFb, isRateLimitError, docLeGraph } from '../services/platforms/facebook'
-import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao, baoMayTangChi, guiTinPilot, type GuiDayPilot } from './pilotBaoChuShop'
 import { ghiDoiCauHinh, NHAN_ADS } from './pilotDoiCauHinh'
 import { docCauHinhFb, khoSqlFb, dauNgayVN, ngayGioVN, vnd, type KhoFbPilot } from './facebookPilot'
 
@@ -403,6 +403,8 @@ export interface NgCanhAds {
     taoFb?: (token: string) => DichVuAds
     /** đồng hồ giả cho bộ kiểm */
     bayGio?: () => number
+    /** push giả cho bộ kiểm (thông báo chủ shop); bỏ trống ⇒ routes/notifications.sendPushToStore */
+    guiDay?: GuiDayPilot
 }
 
 export const luc = (ctx: NgCanhAds) => (ctx.bayGio ? ctx.bayGio() : Date.now())
@@ -1372,6 +1374,8 @@ export async function thucThiAds(ctx: NgCanhAds, planId: string, tuyChon: { tuDo
             await ctx.kho.ghiNhatKy({ action: plan.kind, status, planId: plan.id, payload: tomTat(plan), response: result }).catch(() => { })
             if (!(e instanceof ToolError) && !e?.code) console.error(`[AdsPilot] thực thi ${plan.kind} ${plan.id} lỗi:`, e?.message || e)
         }
+        // AD-10: chu kỳ máy TỰ làm (không người bấm) — báo cáo chi hằng ngày tách "máy tự" khỏi "người duyệt đề xuất của máy"
+        if (status === 'succeeded' && tuyChon.tuDong && result && typeof result === 'object') result = { ...result, tuDong: true }
         await ctx.kho.capNhatKeHoach(plan.id, status, result)
         return (await ctx.kho.layKeHoach(plan.id)) || { ...plan, status, result }
     } finally {
@@ -1451,7 +1455,61 @@ const NHAP_MAY_HET_HAN = 3 * NGAY
 const CHO_DUYET = 'CHỜ NGƯỜI DUYỆT'
 const TEN_VIEC: Record<string, string> = { boost: 'bật quảng cáo mới', resume: 'bật lại quảng cáo', budget: 'tăng ngân sách', pause: 'tạm dừng' }
 
-export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
+/** AD-10: báo cáo chi hằng ngày — lượt chạy theo lịch đầu tiên từ GIO_BAO_CAO giờ sáng (giờ VN) mỗi ngày. */
+const GIO_BAO_CAO = 8
+const gioVN = (ms: number) => new Date(ms + 7 * 3600_000).getUTCHours()
+export interface BaoCaoNgayAds { ngay: string; title: string | null; message: string | null }
+const TEN_VIEC_BAO_CAO: Record<string, string> = { pause: 'tạm dừng', budgetUp: 'tăng ngân sách', budgetDown: 'hạ ngân sách', resume: 'chạy lại', boost: 'bật quảng cáo mới' }
+
+/**
+ * Báo cáo chi HÔM QUA của quảng cáo Pilot (AD-10, 10/11/2026): chi + kết quả (Insights 'yesterday' từng tài khoản, CHỈ chiến dịch
+ * Pilot — "hôm qua" theo múi giờ của tài khoản quảng cáo), việc máy TỰ làm (kế hoạch mang result.tuDong) / việc người làm (web,
+ * trợ lý AI, kể cả người duyệt đề xuất của máy) theo sổ nhật ký, số đang chạy SAU lượt này. Hôm qua không chi đồng nào và không
+ * thao tác nào ⇒ title null (đánh dấu đã xét, không gửi). Đọc Insights hỏng ⇒ NÉM (không đánh dấu ⇒ lượt sau thử lại).
+ */
+async function baoCaoChiHomQua(ctx: NgCanhAds, svc: DichVuAds, ads: QuangCaoPilot[], pol: ChinhSachAds, now: number, hienTai: { soChay: number; nganSach: number }): Promise<BaoCaoNgayAds> {
+    const ngay = ngayVN(now)
+    const dau = dauNgayVN(now), tu = dau - NGAY
+    const [, thang, ngayThang] = ngayVN(tu).split('-')
+    const theoTk = new Map<string, string[]>()
+    for (const a of ads) {
+        if (!a.adAccountId) continue
+        if (!theoTk.has(a.adAccountId)) theoTk.set(a.adAccountId, [])
+        theoTk.get(a.adAccountId)!.push(a.campaignId)
+    }
+    let chi = 0, ketQua = 0, coChi = 0
+    for (const [act, ids] of theoTk) {
+        for (const s of (await docInsightsChienDich(svc, act, ids, 'yesterday')).values()) {
+            chi += s.spend; ketQua += s.results
+            if (s.spend > 0) coChi++
+        }
+    }
+    const nk = (await ctx.kho.dsNhatKy(300)).filter(w => w.createdAt >= tu && w.createdAt < dau && w.status === 'succeeded' && ['boost', 'resume', 'budget', 'pause'].includes(w.action))
+    if (!(chi > 0) && !nk.length) return { ngay, title: null, message: null }
+    const keHoach = new Map((await ctx.kho.dsKeHoachLoai(['boost', 'resume', 'budget', 'pause'], tu - 30 * NGAY)).map(k => [k.id, k]))
+    const dem = () => ({ pause: 0, budgetDown: 0, budgetUp: 0, resume: 0, boost: 0 } as Record<string, number>)
+    const may = dem(), nguoi = dem()
+    for (const w of nk) {
+        const k = w.planId ? keHoach.get(w.planId) : undefined
+        // tăng hay hạ theo ngân sách SỐNG lúc làm (nhật ký ghi from/to thật), không theo số lúc lập kế hoạch
+        const r = w.response || {}
+        const tang = r.to != null && r.from != null ? Number(r.to) > Number(r.from) : !!k && laTangChi(k)
+        const loai = w.action === 'budget' ? (tang ? 'budgetUp' : 'budgetDown') : w.action
+        const o = k?.result?.tuDong === true ? may : nguoi
+        o[loai] = (o[loai] || 0) + 1
+    }
+    const ke = (o: Record<string, number>) => Object.entries(o).filter(([, n]) => n > 0).map(([k, n]) => `${TEN_VIEC_BAO_CAO[k]} ${n}`).join(', ')
+    const message = [
+        `Quảng cáo Pilot chi ${vnd(chi)}${coChi ? ` (${coChi} quảng cáo)` : ''}, ${ketQua} bình luận / tin nhắn${ketQua > 0 ? ` — ${vnd(chi / ketQua)} mỗi kết quả` : ''}.`,
+        ke(may) ? `Máy tự: ${ke(may)}.` : 'Máy không tự thao tác gì.',
+        ke(nguoi) ? `Người làm (web / trợ lý AI): ${ke(nguoi)}.` : '',
+        `Hiện ${hienTai.soChay} quảng cáo đang chạy, ${vnd(hienTai.nganSach)}/ngày (trần ${vnd(pol.dailyBudgetCap)}/ngày).`,
+    ].filter(Boolean).join(' ')
+    return { ngay, title: `Ads Pilot: báo cáo chi hôm qua ${ngayThang}/${thang}`, message: message.slice(0, 500) }
+}
+
+/** `o.baoCaoNgayCu` — CHỈ lượt chạy theo lịch truyền (ngày đã gửi báo cáo chi gần nhất, null = chưa bao giờ): tới giờ thì kèm báo cáo. */
+export async function chayChuKyAds(ctx: NgCanhAds, o: { baoCaoNgayCu?: string | null } = {}): Promise<any> {
     const now = luc(ctx)
     const cfg = await docCauHinhAds(ctx)
     const pol = cfg.policy
@@ -1495,20 +1553,27 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
     if (khongDoc.length > 5) results.push({ action: 'ads', status: 'failed', message: `… và ${khongDoc.length - 5} chiến dịch Pilot nữa không đọc được trên Facebook.` })
     if (statsError) results.push({ action: 'ads', status: 'failed', message: `${statsError} — lượt này chỉ soát kho (hết hàng / đổi giá), chưa soát chi tiêu.` })
 
-    const ghiBuoc = (action: string, p: any, sku: string | null, message: string) => {
+    /** `vuaLam` = chính lượt này vừa thực thi kế hoạch ⇒ thành công + tăng chi thì dòng mang `tienMay` (AD-10: báo chủ shop ngay). */
+    const ghiBuoc = (action: string, p: any, sku: string | null, message: string, vuaLam = false) => {
         const k = p?.plan || p
         if (k?.id) daBao.add(k.id)
         const cho = k?.status === 'draft' && cfg.mode === 'approve' && laTangChi(k) ? ` — ${CHO_DUYET}: ${TEN_VIEC[k.kind] || 'tăng chi'}` : ''
-        results.push({ action, status: k?.status, sku, planId: k?.id, message: `${message}${cho}${k?.result?.message ? ` — ${k.result.message}` : ''}` })
+        results.push({
+            action, status: k?.status, sku, planId: k?.id, message: `${message}${cho}${k?.result?.message ? ` — ${k.result.message}` : ''}`,
+            ...(vuaLam && k?.status === 'succeeded' && laTangChi(k) && !k?.result?.alreadyActive ? { tienMay: true } : {}),
+        })
     }
     /** Nháp máy ⇒ thực thi nếu chế độ cho (thucThiAds tự giữ việc tăng chi lại ở 'approve'), rồi ghi một dòng. */
     const lam = async (action: string, p: KeHoachAds, sku: string | null, message: string): Promise<KeHoachAds> => {
-        const r = thucThiMay && p.status === 'draft' ? await thucThiAds(ctx, p.id, { tuDong: true }) : p
-        ghiBuoc(action, r, sku, message)
+        const chay = thucThiMay && p.status === 'draft'
+        const r = chay ? await thucThiAds(ctx, p.id, { tuDong: true }) : p
+        ghiBuoc(action, r, sku, message, chay)
         return r?.plan || r
     }
     // chỗ trống trong trần cho việc tăng chi máy định làm lượt này (tính dần, kẻo nhiều việc cùng lọt)
     let { soChay, nganSach } = dangChiemTran(ads)
+    /** số THẬT đang chạy: chỉ cộng / trừ việc đã xong trên Facebook (soChay / nganSach còn giữ chỗ cho nháp chờ duyệt) — cho tin báo chủ shop */
+    const soThat = { soChay, nganSach }
     /** AD-11: quảng cáo đang bật mà Facebook từ chối / có vấn đề ⇒ việc cần người (máy không tự tắt: tắt cũng không đỡ đồng nào). */
     const baoQcVanDe = (a: QuangCaoPilot) => {
         if (!a.deliveryIssue) return
@@ -1538,7 +1603,7 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                         campaignId: a.campaignId, reason: ly.reason, reasonText: ly.text, idempotencyKey: `cycle:pause:${a.campaignId}:${ly.reason}:${cungLyDo.length}`,
                     })
                     const k = await lam('pause', p, a.sku, `${a.name}: ${ly.text}`)
-                    if (k?.status === 'succeeded') { soChay--; nganSach -= a.dailyBudget }
+                    if (k?.status === 'succeeded') { soChay--; nganSach -= a.dailyBudget; soThat.soChay--; soThat.nganSach -= a.dailyBudget }
                     continue
                 }
                 if (a.deliveryIssue) { baoQcVanDe(a); continue }
@@ -1565,6 +1630,7 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                     const to = Number(p.data?.to) || moi
                     const k = await lam('budget', p, a.sku, `${a.name}: tăng ngân sách ${vnd(a.dailyBudget)} → ${vnd(to)}/ngày (${soGanDay})`)
                     if (k?.status === 'succeeded' || k?.status === 'draft') nganSach += to - a.dailyBudget
+                    if (k?.status === 'succeeded') soThat.nganSach += to - a.dailyBudget
                 }
             } else if (nenChayLai(a, pol)) {
                 if (liveError) {
@@ -1585,6 +1651,8 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                 })
                 const k = await lam('resume', p, a.sku, `${a.name}: có hàng lại (tồn ${a.product!.stock}) — chạy lại quảng cáo`)
                 if (k?.status === 'succeeded' || k?.status === 'draft') { soChay++; nganSach += a.dailyBudget }
+                // alreadyActive (ai đó vừa bật trước máy) vẫn cộng: cuối lượt nó ĐANG chạy — chỉ là không phải máy tiêu thêm (không tienMay)
+                if (k?.status === 'succeeded') { soThat.soChay++; soThat.nganSach += a.dailyBudget }
             }
         } catch (e: any) {
             results.push({ action: 'ads', status: 'failed', sku: a.sku, message: `${a.name}: ${String(e?.message || e).slice(0, 300)}` })
@@ -1623,7 +1691,8 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                         const p = await lapKeHoachDayTuBai(ctx, cfg, page, b, { idempotencyKey: `cycle:boost:${b.postId}` }, now)
                         if (p.status !== 'draft' || p.createdAt !== now) continue // bài này máy đã đề xuất (người huỷ / đã chạy / đã hỏng) — không đề xuất lại
                         cho--; du -= pol.budgetPerAd; lap++
-                        await lam('boost', p, b.sku, `${b.name} · ${vnd(pol.budgetPerAd)}/ngày × ${pol.days} ngày`)
+                        const k = await lam('boost', p, b.sku, `${b.name} · ${vnd(pol.budgetPerAd)}/ngày × ${pol.days} ngày`)
+                        if (k?.status === 'succeeded') { soThat.soChay++; soThat.nganSach += Number(k.data?.dailyBudget) || pol.budgetPerAd }
                     } catch (e: any) {
                         results.push({ action: 'boost', status: 'failed', sku: b.sku, message: String(e?.message || e).slice(0, 300) })
                     }
@@ -1645,7 +1714,12 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
     if (!results.length) {
         results.push({ action: 'cycle', status: 'unchanged', message: ads.length ? `Soát ${ads.length} quảng cáo Pilot (${ads.filter(a => a.running).length} đang chạy): không có gì cần làm.` : 'Chưa có quảng cáo Pilot nào. Đẩy bài ở mục "Bài nên đẩy", hoặc bật "Tự lập quảng cáo cho bài mới" trong chính sách.' })
     }
-    return { mode: cfg.mode, results }
+    let baoCaoNgay: BaoCaoNgayAds | null = null
+    if (o.baoCaoNgayCu !== undefined && o.baoCaoNgayCu !== ngayVN(now) && gioVN(now) >= GIO_BAO_CAO) {
+        try { baoCaoNgay = await baoCaoChiHomQua(ctx, svc, ads, pol, now, soThat) } catch { /* đọc số hỏng ⇒ lượt sau thử lại */ }
+    }
+    // tongChay: số THẬT đang chạy SAU lượt này (không tính chỗ giữ cho nháp chờ duyệt)
+    return { mode: cfg.mode, results, tongChay: { soChay: soThat.soChay, nganSach: soThat.nganSach, tran: pol.dailyBudgetCap }, ...(baoCaoNgay ? { baoCaoNgay } : {}) }
 }
 
 // ─── Kết nối token ──────────────────────────────────────────────────────────────
@@ -1872,17 +1946,29 @@ export async function chayTheoLichAds(prisma: any, kho?: KhoAds, ngoai: Partial<
     if (den > now) return 'chua-toi'
     const k = kho || khoSqlAds(prisma)
     if (!(await k.gianhLich(den, now + lich.intervalMinutes * 60_000))) return 'bi-gianh'
-    const truoc = (await k.docCauHinh().catch(() => null))?.lastResult?.baoChuShop
-    let ketQua: any
+    const cuoi = (await k.docCauHinh().catch(() => null))?.lastResult
+    const truoc = cuoi?.baoChuShop
+    const baoCaoCu: string | null = typeof cuoi?.baoCaoNgay === 'string' ? cuoi.baoCaoNgay : null
+    let ketQua: any, kq: any = null
     try {
-        const kq = await chayChuKyAds({ ...ngoai, prisma, kho: k, nguoi: 'lich' })
+        kq = await chayChuKyAds({ ...ngoai, prisma, kho: k, nguoi: 'lich' }, { baoCaoNgayCu: baoCaoCu })
         ketQua = { ok: true, mode: kq.mode, results: kq.results }
     } catch (e: any) {
         ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
     // Xem trước chưa làm gì ⇒ chỉ chu kỳ gãy + token quảng cáo sắp hết hạn mới báo (ketQuaDeBao, X-09); còn lại báo mọi việc cần người
-    const bao = await baoChuShop(prisma, 'Ads Pilot', ketQuaDeBao(ketQua, ketQua.mode === 'preview'), truoc, now).catch(() => truoc)
-    await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
+    const bao = await baoChuShop(prisma, 'Ads Pilot', ketQuaDeBao(ketQua, ketQua.mode === 'preview'), truoc, now, ngoai.guiDay).catch(() => truoc)
+    // AD-10: máy vừa tự tăng chi (Tự động) ⇒ một tin NGAY, ngoài dấu chống lặp; báo cáo chi hôm qua mỗi ngày một tin
+    let baoCaoNgay = baoCaoCu
+    if (kq) {
+        const t = kq.tongChay
+        const duoi = t ? `sau lượt này ${t.soChay} quảng cáo đang chạy, ${vnd(t.nganSach)}/ngày (trần ${vnd(t.tran)}/ngày). Muốn máy thôi tự tăng chi: chuyển Ads Pilot sang Duyệt tay.` : ''
+        await baoMayTangChi(prisma, 'Ads Pilot', kq.results, duoi, ngoai.guiDay).catch(() => false)
+        const bc: BaoCaoNgayAds | undefined = kq.baoCaoNgay
+        if (bc && !bc.title) baoCaoNgay = bc.ngay
+        else if (bc?.title && await guiTinPilot(prisma, 'Ads Pilot', bc.title, bc.message || '', ngoai.guiDay).then(() => true, () => false)) baoCaoNgay = bc.ngay
+    }
+    await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}), ...(baoCaoNgay ? { baoCaoNgay } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
 }
 
@@ -1930,4 +2016,7 @@ không có khách hỏi — trong trần ngân sách bạn đặt. Số liệu l
    - Pilot chỉ đụng quảng cáo do Pilot tạo; chiến dịch bạn tự chạy chỉ hiện số tổng 7 ngày.
    - Chạy theo lịch: bật trong chính sách (mỗi 30–1440 phút), máy chủ tự chạy; nháp chờ duyệt / lần hỏng được báo trên chuông web
      + app Android (nhóm «Pilot tự động», có tiếng từ app 1.0.47; bấm vào mở tab Quảng cáo trên trình duyệt).
+   - Mỗi lần máy tự TĂNG chi (bật quảng cáo mới / chạy lại / tăng ngân sách — chỉ ở chế độ Tự động) có một tin báo ngay; mỗi ngày
+     (từ 8 giờ sáng) một tin báo cáo chi hôm qua: tiền chi, bình luận / tin nhắn, việc máy tự làm — chỉ khi hôm qua có chi hoặc có
+     thao tác.
 `

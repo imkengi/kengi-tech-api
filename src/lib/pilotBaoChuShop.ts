@@ -85,6 +85,42 @@ export function viecCanNguoi(results: any[]): { khoa: string; dong: string[] } {
 export type GuiDayPilot = (prisma: any, title: string, message: string, extra: { id?: string; type?: string; nhom?: string; web?: string }) => Promise<unknown>
 
 /**
+ * Ghi MỘT tin Pilot: chuông web (type 'warning') + push nhóm 'pilot', bấm vào mở trang Pilot của `ten`. Ghi CSDL hỏng ⇒ NÉM (người
+ * gọi quyết giữ dấu cũ / thử lại lượt sau); push là phụ — bắn rồi thôi, hỏng (kể cả ném đồng bộ) không làm hỏng tin đã ghi.
+ */
+export async function guiTinPilot(prisma: any, ten: string, title: string, message: string, guiDay?: GuiDayPilot): Promise<void> {
+    const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
+    const gui: GuiDayPilot = guiDay || (await import('../routes/notifications')).sendPushToStore
+    const web = duongPilotCuaTieuDe(ten)
+    void (async () => gui(prisma, title, message, { id: tin?.id, type: 'warning', nhom: NHOM_PILOT, ...(web ? { web } : {}) }))().catch(() => { })
+}
+
+/** AD-10: dòng kết quả chu kỳ mà MÁY vừa tự làm TỐN THÊM TIỀN (bật quảng cáo mới / chạy lại / tăng ngân sách) — nguồn gắn `tienMay: true`. */
+export function dongMayTangChi(results: any[]): string[] {
+    return (Array.isArray(results) ? results : []).filter(r => r?.tienMay === true && r?.status === 'succeeded')
+        .map(r => `${r.sku ? `${r.sku}: ` : ''}${String(r.message || '').replace(/\s+/g, ' ').slice(0, 180)}`)
+}
+
+/**
+ * AD-10 (10/11/2026) — máy tự tiêu thêm tiền thì chủ shop phải biết NGAY, không đợi mở trang. Việc một lần (lượt sau không còn) ⇒ KHÔNG
+ * qua dấu chống lặp của baoChuShop (đổi chưa đủ 3 giờ là nó giữ lại "lượt sau báo" — việc một lần thì mất). Số tin tự có trần: tăng
+ * ngân sách ≤ 1 lần / nhóm QC / ngày, bật mới + chạy lại nằm trong trần thao tác / ngày. Trả true khi đã ghi tin.
+ */
+export async function baoMayTangChi(prisma: any, ten: string, results: any[], duoi = '', guiDay?: GuiDayPilot): Promise<boolean> {
+    const dong = dongMayTangChi(results)
+    if (!dong.length) return false
+    const title = `${ten}: máy vừa tự tăng chi (${dong.length} việc)`
+    const message = (dong.slice(0, 4).join(' · ') + (dong.length > 4 ? ` · … và ${dong.length - 4} việc nữa` : '') + (duoi ? ` — ${duoi}` : '')).slice(0, 500)
+    try {
+        await guiTinPilot(prisma, ten, title, message, guiDay)
+        return true
+    } catch (e: any) {
+        console.warn(`[${ten}] ghi thông báo tăng chi hỏng:`, e?.message || e)
+        return false
+    }
+}
+
+/**
  * Báo nếu cần, trả dấu mới để lưu. `ten` = "Shopee Pilot" / "TikTok Pilot" / "Facebook Pilot" / "Ads Pilot".
  * Ghi thông báo hỏng ⇒ giữ dấu cũ (lượt sau thử lại), không làm gãy lượt chạy.
  */
@@ -106,11 +142,8 @@ export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; me
     const message = ((lap ? `Chưa xử lý từ ${ngayGioVN(tu)}: ` : '')
         + (gay ? `${dong[0]} — mở ${ten} kiểm kết nối.` : dong.slice(0, 4).join(' · ') + (dong.length > 4 ? ` · … và ${dong.length - 4} việc nữa trên ${ten}.` : ''))).slice(0, 500)
     try {
-        const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
-        const gui: GuiDayPilot = guiDay || (await import('../routes/notifications')).sendPushToStore
-        const web = duongPilotCuaTieuDe(ten)
-        // push là phụ: bắn rồi thôi; hỏng (kể cả ném đồng bộ) không được làm mất dấu — thông báo đã ghi rồi
-        void (async () => gui(prisma, title, message, { id: tin?.id, type: 'warning', nhom: NHOM_PILOT, ...(web ? { web } : {}) }))().catch(() => { })
+        // push là phụ (trong guiTinPilot): hỏng không được làm mất dấu — thông báo đã ghi rồi
+        await guiTinPilot(prisma, ten, title, message, guiDay)
     } catch (e: any) {
         console.warn(`[${ten}] ghi thông báo hỏng:`, e?.message || e)
         return cu
