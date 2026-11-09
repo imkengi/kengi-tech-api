@@ -15,6 +15,9 @@
  *   1. Chạy THẬT authMiddleware + handler của toggle-2fa / disable-2fa / setup-2fa / confirm-2fa: JWT ký bằng
  *      khoá thử (không claim schema ⇒ giữ storePrisma giả), bảng User trong bộ nhớ trả đúng theo `select`,
  *      truy vấn ngoài user.findUnique / user.update là lỗi. Không DB, không mạng.
+ *      setup-2fa phải trả `qrDataUrl` = ảnh PNG data: URL vẽ tại máy chủ, đúng là mã QR của `otpauthUrl` (lấy mẫu
+ *      từng ô của ảnh, so với QR dựng lại từ otpauthUrl). Trước 09/11/2026 web lấy ảnh QR từ một dịch vụ vẽ QR công
+ *      khai (`…/create-qr-code/?data=<otpauthUrl>`) ⇒ hạt MỚI đi sang bên thứ ba mỗi lần thiết lập / đặt lại 2FA.
  *   2. Quét mã src/: mọi `*.user.update / updateMany / upsert / create / createMany` ghi twoFactorEnabled:
  *        - `false` (khi sửa) PHẢI kèm `twoFactorSecret: null` + `trustedDevices: '[]'` cùng đối tượng;
  *        - `true` CHỈ trong handler '/confirm-2fa' (sau khi mã TOTP khớp hạt);
@@ -27,6 +30,7 @@
  */
 import fs from 'fs'
 import path from 'path'
+import { createRequire } from 'module'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import ts from 'typescript'
@@ -232,6 +236,36 @@ function taoKho(hang: HangUser[]) {
     return { prisma, bang, goi, hang: (id = 'u1') => bang.get(id)! }
 }
 
+/** Ảnh QR (PNG data: URL) có đúng là mã QR của `chuoi` không: lấy mẫu TÂM từng ô trong khung bao các điểm tối,
+ *  so với ma trận QR dựng lại từ `chuoi`. Thử đủ 4 mức sửa lỗi (đổi thông số vẽ thì không kêu oan).
+ *  Trả mức sửa lỗi khớp, hoặc null. pngjs là phụ thuộc của qrcode ⇒ nạp từ chỗ của qrcode. */
+async function qrCuaChuoi(dataUrl: string, chuoi: string): Promise<string | null> {
+    const TIEN_TO = 'data:image/png;base64,'
+    if (!dataUrl.startsWith(TIEN_TO)) return null
+    const QRCode: any = (await import('qrcode')).default
+    const { PNG } = createRequire(require.resolve('qrcode/package.json'))('pngjs')
+    const anh = PNG.sync.read(Buffer.from(dataUrl.slice(TIEN_TO.length), 'base64'))
+    const toi = (x: number, y: number) => {
+        const i = (y * anh.width + x) * 4
+        return anh.data[i + 3] > 127 && anh.data[i] + anh.data[i + 1] + anh.data[i + 2] < 384
+    }
+    let x0 = anh.width, y0 = anh.height, x1 = -1, y1 = -1
+    for (let y = 0; y < anh.height; y++) for (let x = 0; x < anh.width; x++) {
+        if (toi(x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y) }
+    }
+    if (x1 < 0) return null
+    for (const muc of ['L', 'M', 'Q', 'H']) {
+        const { size, data } = QRCode.create(chuoi, { errorCorrectionLevel: muc }).modules
+        const oX = (x1 - x0 + 1) / size, oY = (y1 - y0 + 1) / size
+        let khop = true
+        for (let r = 0; r < size && khop; r++) for (let c = 0; c < size && khop; c++) {
+            khop = toi(Math.floor(x0 + (c + 0.5) * oX), Math.floor(y0 + (r + 0.5) * oY)) === !!data[r * size + c]
+        }
+        if (khop) return muc
+    }
+    return null
+}
+
 const cacBuoc = (router: any, method: string, duong: string): Function[] =>
     router.stack.find((l: any) => l.route?.path === duong && l.route.methods[method])?.route.stack.map((l: any) => l.handle) || []
 const resGia = () => ({ ma: 200, than: null as any, status(c: number) { this.ma = c; return this }, json(b: any) { this.than = b; return this } })
@@ -376,6 +410,33 @@ async function chayTuyen() {
         const c2 = await goi('confirm', kho, { totpCode: await otplib.generate({ secret: hatMoi }) })
         dung('đặt lại: mã từ hạt MỚI ⇒ confirm-2fa bật, hạt = hạt mới, thiết bị tin cậy cũ không quay lại',
             c2.ma === 200 && kho.hang().twoFactorEnabled === true && kho.hang().twoFactorSecret === hatMoi && kho.hang().trustedDevices === '[]', { c2, bat: kho.hang().twoFactorEnabled })
+    }
+
+    // ── setup-2fa vẽ QR TẠI MÁY CHỦ: hạt mới chỉ đi máy chủ → trình duyệt, không qua dịch vụ vẽ QR bên ngoài
+    {
+        const kho = taoKho([nguoiDung({ twoFactorEnabled: false, twoFactorSecret: null, trustedDevices: '[]' })])
+        const st = await goi('setup', kho, undefined)
+        const d = st.than?.data || {}
+        const hatMoi = kho.hang().twoFactorSecret
+        let hatTrongUrl: string | null = null
+        try { hatTrongUrl = new URL(String(d.otpauthUrl)).searchParams.get('secret') } catch { /* không phải URL */ }
+        dung('setup-2fa ⇒ 200, otpauthUrl + secret (nhập tay) mang đúng hạt MỚI vừa ghi',
+            st.ma === 200 && !!hatMoi && hatTrongUrl === hatMoi && d.secret === hatMoi && String(d.otpauthUrl).startsWith('otpauth://totp/'), { ma: st.ma })
+        dung('setup-2fa trả qrDataUrl là ảnh PNG data: URL — trình duyệt không phải gọi máy nào khác để vẽ QR',
+            typeof d.qrDataUrl === 'string' && d.qrDataUrl.startsWith('data:image/png;base64,') && d.qrDataUrl.length > 500, { dau: String(d.qrDataUrl).slice(0, 24) })
+        const muc = typeof d.qrDataUrl === 'string' ? await qrCuaChuoi(d.qrDataUrl, String(d.otpauthUrl)) : null
+        dung(`ảnh qrDataUrl đúng là mã QR của otpauthUrl (so từng ô với QR dựng lại từ otpauthUrl)${muc ? ` — mức sửa lỗi ${muc}` : ''}`, !!muc)
+        // phải kêu: cùng ảnh mà so với chuỗi khác (hạt khác) ⇒ không khớp — bộ so không xanh rỗng
+        const hatKhac = otplib.generateSecret()
+        const saiChuoi = typeof d.qrDataUrl === 'string' ? await qrCuaChuoi(d.qrDataUrl, String(d.otpauthUrl).replace(`secret=${hatMoi}`, `secret=${hatKhac}`)) : 'x'
+        dung('bộ so ảnh QR tự thử: so với otpauthUrl mang hạt KHÁC ⇒ không khớp', saiChuoi === null)
+        dung('phản hồi setup-2fa không chứa đường dẫn http(s) nào (ảnh QR không trỏ ra máy ngoài)', st.ma === 200 && !/https?:\/\//i.test(JSON.stringify(st.than)))
+    }
+    {
+        const kho = taoKho([nguoiDung()])
+        const r = await goi('setup', kho, undefined)
+        dung('setup-2fa khi 2FA đang bật ⇒ 400 "2FA đã được bật", hạt cũ giữ nguyên, không trả hạt / ảnh QR',
+            r.ma === 400 && r.than?.error === '2FA đã được bật' && !r.than?.data && nguyenVen(kho.hang()) && !kho.goi.includes('user.update'), { r: r.ma, goi: kho.goi })
     }
 }
 

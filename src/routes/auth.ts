@@ -1062,7 +1062,7 @@ router.put('/update-email', authMiddleware, async (req: AuthRequest, res: Respon
     }
 })
 
-// ─── POST /api/auth/setup-2fa — Generate TOTP secret + otpauth URL ───────────
+// ─── POST /api/auth/setup-2fa — Generate TOTP secret + otpauth URL + ảnh QR ───
 router.post('/setup-2fa', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const otplib = await import('otplib')
@@ -1075,10 +1075,18 @@ router.post('/setup-2fa', authMiddleware, async (req: AuthRequest, res: Response
         // Build otpauth URI manually (standard format for Google Authenticator)
         const otpauthUrl = `otpauth://totp/Kengi%20Tech:${encodeURIComponent(user.email)}?secret=${secret}&issuer=Kengi%20Tech&algorithm=SHA1&digits=6&period=30`
 
+        /* Ảnh QR vẽ NGAY TẠI MÁY CHỦ, trả về dạng data: URL (09/11/2026). Web cũ lấy ảnh từ một dịch vụ vẽ QR
+         * công khai với đường dẫn `…/create-qr-code/?data=<otpauthUrl>` ⇒ mỗi lần thiết lập / đặt lại 2FA, hạt TOTP
+         * MỚI đi sang bên thứ ba. Ảnh này chỉ đi máy chủ → trình duyệt trong chính phản hồi. Vẽ TRƯỚC khi ghi
+         * hạt: vẽ hỏng thì 500 mà DB không đổi. Cùng thông số với QR đăng nhập trang admin (xacMinh2BuocAdmin). */
+        const QRCode = (await import('qrcode')).default
+        const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { margin: 1, width: 260, errorCorrectionLevel: 'M' })
+
         // Store secret temporarily (not enabled yet until confirmed)
         await storePrisma.user.update({ where: { id: req.user!.userId }, data: { twoFactorSecret: secret } })
 
-        res.json({ success: true, data: { otpauthUrl, secret } })
+        // otpauthUrl + secret giữ lại cho người nhập tay / ứng dụng gọi API
+        res.json({ success: true, data: { otpauthUrl, secret, qrDataUrl } })
     } catch (err: any) {
         console.error('Setup 2FA error:', err)
         res.status(500).json({ success: false, error: 'Lỗi thiết lập 2FA', detail: errorDetail(err) })
