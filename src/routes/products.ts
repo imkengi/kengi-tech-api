@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { requirePermission } from '../middleware/permissionMiddleware'
-import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { cacheDel } from '../lib/cache'
+import { docDemTheoTon, ghiDemTheoTon } from '../lib/phienBanTon'
 import { validate } from '../middleware/validate'
 import { CreateProductSchema, UpdateProductSchema } from '../schemas'
 import { emitProductEvent } from '../lib/webhookDispatch'
@@ -25,8 +26,11 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
         const branchContextId = (req.query.branchId as string) || (req.headers['x-branch-id'] as string) || getBranchId(req) || null
 
         // Cache check — keyed on the branch context so two branches don't share a page.
+        // ĐỆM THEO PHIÊN BẢN TỒN (09/11/2026): bản cũ đệm 300s trong bộ nhớ TỪNG bản Cloud Run và phiếu
+        // bán không xoá ⇒ POS web / app PC / Android thấy tồn cũ tới 5 phút sau mỗi phiếu. Nay hỏi CSDL
+        // phiên bản tồn TRƯỚC khi đọc dữ liệu — lệch là dựng lại, đúng trên mọi bản máy (lib/phienBanTon.ts).
         const cacheKey = `products:${req.user?.storeSchema || 'default'}:${branchContextId || 'nobranch'}:${JSON.stringify(req.query)}`
-        const cached = await cacheGet(cacheKey)
+        const { data: cached, phienBan } = await docDemTheoTon(prisma, cacheKey)
         if (cached) return res.json(cached)
 
         const {
@@ -228,7 +232,9 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                 totalPages: Math.ceil(filteredTotal / size)
             }
         }
-        await cacheSet(cacheKey, response, 300) // Cache 60s
+        // 60s chỉ còn chặn trên cho thứ NẰM NGOÀI hai bảng tồn (tên danh mục/thương hiệu, ảnh, quy đổi
+        // đơn vị) — tồn/giá/mã đã có phiên bản lo. Chú thích cũ ghi "60s" nhưng mã đặt 300.
+        await ghiDemTheoTon(cacheKey, phienBan, response, 60)
         res.json(response)
     } catch (err) {
         console.error('Get products error:', err)
@@ -242,7 +248,7 @@ router.get('/stats', authMiddleware, requirePermission('products.view'), async (
         const prisma = req.storePrisma!
 
         const cacheKey = `product-stats:${req.user?.storeSchema || 'default'}`
-        const cached = await cacheGet(cacheKey)
+        const { data: cached, phienBan } = await docDemTheoTon(prisma, cacheKey)   // lib/phienBanTon.ts
         if (cached) return res.json(cached)
 
         // Note: Product table does not have branchId column
@@ -293,7 +299,7 @@ router.get('/stats', authMiddleware, requirePermission('products.view'), async (
             success: true,
             data: { total, inStock, lowStock, outOfStock, totalStockValue, avgPrice, topCategories }
         }
-        await cacheSet(cacheKey, response, 120)
+        await ghiDemTheoTon(cacheKey, phienBan, response, 120)
         res.json(response)
     } catch (err) {
         console.error('Get product stats error:', err)
@@ -323,10 +329,10 @@ router.get('/stats', authMiddleware, requirePermission('products.view'), async (
 router.get('/bao-cao-ton-kho', authMiddleware, requirePermission('products.view', 'inventory.view', 'reports.view'), async (req: AuthRequest, res: Response) => {
     try {
         const cacheKey = `bao-cao-ton-kho:${req.user?.storeSchema || 'default'}`
-        const cached = await cacheGet(cacheKey)
+        const { data: cached, phienBan } = await docDemTheoTon(req.storePrisma!, cacheKey)   // lib/phienBanTon.ts
         if (cached) return res.json(cached)
         const response = { success: true, data: await lapBaoCaoTonKho(req.storePrisma!) }
-        await cacheSet(cacheKey, response, 60)
+        await ghiDemTheoTon(cacheKey, phienBan, response, 60)
         res.json(response)
     } catch (err) {
         console.error('Bao cao ton kho error:', err)

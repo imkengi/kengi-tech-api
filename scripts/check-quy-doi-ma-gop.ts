@@ -263,7 +263,7 @@ async function main() {
         const goc = path.join(__dirname, '..', 'src')
         const doc = (f: string) => fs.readFileSync(path.join(goc, f), 'utf8')
         const mp = doc('lib/mergeProduct.ts')
-        ok('8a. Phép gộp KHOÁ hai dòng sản phẩm (FOR UPDATE) rồi đọc lại tồn trong giao dịch', /FOR UPDATE/.test(mp) && /SET stock = stock \+ \$1 WHERE id = \$2`, slDoi, dst\.id/.test(mp) && !/Math\.round\(\(src\.stock \|\| 0\) \* rate\)/.test(mp))
+        ok('8a. Phép gộp KHOÁ hai dòng sản phẩm (FOR UPDATE) rồi đọc lại tồn trong giao dịch', /FOR UPDATE/.test(mp) && /SET stock = stock \+ \$1(, [^`]*?)? WHERE id = \$2`, slDoi, dst\.id/.test(mp) && !/Math\.round\(\(src\.stock \|\| 0\) \* rate\)/.test(mp))
         ok('8b. Phép gộp nhân hệ số cả "số đã trả" (returnedQuantity)', /"returnedQuantity" = "returnedQuantity" \* \$\{rate\}/.test(mp))
         ok('8b2. Phép gộp chỉ dời link listing sàn khi KHÔNG yêu cầu giữ', /onlineProductLinks > 0 && !opts\.giuLienKetSan/.test(mp))
         const ct = doc('routes/cronTick.ts')

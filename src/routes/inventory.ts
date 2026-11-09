@@ -3,7 +3,8 @@ import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
-import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { cacheDel } from '../lib/cache'
+import { docDemTheoTon, ghiDemTheoTon } from '../lib/phienBanTon'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged } from '../lib/webhookDispatch'
@@ -260,7 +261,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
         const cacheKey = `${schema}:inventory:summary`
-        const cached = await cacheGet(cacheKey)
+        // Đệm theo PHIÊN BẢN TỒN — đúng trên mọi bản Cloud Run sau mỗi phiếu (lib/phienBanTon.ts, 09/11/2026)
+        const { data: cached, phienBan } = await docDemTheoTon(prisma, cacheKey)
         if (cached) return res.json(cached)
 
         const [totalProducts, lowStock, outOfStock, agg] = await chayTheoDot([
@@ -270,7 +272,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             () => prisma.product.aggregate({ where: { productType: { not: 'service' } }, _sum: { stock: true } }),
         ])
         const response = { success: true, data: { totalProducts, lowStock, outOfStock, totalStock: agg._sum.stock || 0 } }
-        await cacheSet(cacheKey, response, 300)
+        await ghiDemTheoTon(cacheKey, phienBan, response, 300)
         res.json(response)
     } catch (err) {
         console.error('Inventory summary error:', err)

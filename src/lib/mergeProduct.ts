@@ -188,13 +188,17 @@ export async function mergeProduct(
         if (onlineProductLinks > 0 && !opts.giuLienKetSan) {
             await tx.$executeRawUnsafe(`UPDATE "OnlineProduct" SET "localProductId" = $1 WHERE "localProductId" = $2`, dst.id, src.id)
         }
+        /* SQL thô KHÔNG được Prisma đặt @updatedAt — phải tự đặt, nếu không bộ đệm danh sách hàng
+         * (lib/phienBanTon.ts, so MAX(updatedAt)) không biết mã vừa gộp: gộp hệ số 1 giữ nguyên tổng
+         * tồn nên SUM không bắt được. clock_timestamp() chứ không now(): now() là giờ BẮT ĐẦU giao
+         * dịch (giao dịch này dài tới 120s). Cột lưu giờ UTC không múi ⇒ AT TIME ZONE 'UTC'. */
         await tx.$executeRawUnsafe(
-            `UPDATE "Product" SET stock = stock + $1 WHERE id = $2`, slDoi, dst.id)
+            `UPDATE "Product" SET stock = stock + $1, "updatedAt" = clock_timestamp() AT TIME ZONE 'UTC' WHERE id = $2`, slDoi, dst.id)
         if (opts.tinhGiaVonDich && slDoi !== 0) {
             const giaDich = Number(dichNay.costPrice) || 0
             const g = opts.tinhGiaVonDich({ tonDich: Number(dichNay.stock) || 0, giaDich, slDoi, giaNguon: Number(nguonNay.costPrice) || 0 })
             if (g != null && Number.isFinite(g) && g >= 0 && g !== giaDich) {
-                await tx.$executeRawUnsafe(`UPDATE "Product" SET "costPrice" = $1 WHERE id = $2`, g, dst.id)
+                await tx.$executeRawUnsafe(`UPDATE "Product" SET "costPrice" = $1, "updatedAt" = clock_timestamp() AT TIME ZONE 'UTC' WHERE id = $2`, g, dst.id)
             }
         }
         // KHÔNG dùng ON CONFLICT: ràng buộc (platformSku, platform) vô hiệu khi
@@ -240,18 +244,18 @@ export async function mergeProduct(
                     'uc' + Math.random().toString(36).slice(2, 12), dst.id, dst.baseUnit || 'Cái', unitLabel, rate)
             }
             if (opts.mainUnit === 'source') {
-                await tx.$executeRawUnsafe(`UPDATE "Product" SET "invoiceUnit" = $1 WHERE id = $2`, unitLabel, dst.id)
+                await tx.$executeRawUnsafe(`UPDATE "Product" SET "invoiceUnit" = $1, "updatedAt" = clock_timestamp() AT TIME ZONE 'UTC' WHERE id = $2`, unitLabel, dst.id)
                 // Ghi ĐVT vào CHÍNH mã gộp: mã vỉ mang đơn vị "Vỉ" là sự thật hiển
                 // nhiên, khỏi phải suy ra từ hệ số (và phân biệt được vỉ với lố khi
                 // hai thứ cùng hệ số).
-                await tx.$executeRawUnsafe(`UPDATE "Product" SET "baseUnit" = $1 WHERE id = $2`, unitLabel, src.id)
+                await tx.$executeRawUnsafe(`UPDATE "Product" SET "baseUnit" = $1, "updatedAt" = clock_timestamp() AT TIME ZONE 'UTC' WHERE id = $2`, unitLabel, src.id)
             }
         }
         // KHÔNG đổi mã (sàn dò theo SKU) và KHÔNG đổi TÊN — tên là dữ liệu gốc,
         // dùng để in hoá đơn/tem và đối chiếu với sàn. Chỉ gắn CON TRỎ; giao diện
         // tự hiện nhãn "đã gộp" từ con trỏ đó.
         await tx.$executeRawUnsafe(
-            `UPDATE "Product" SET stock = 0, "mergedIntoId" = $1, "mergedRate" = $2 WHERE id = $3`,
+            `UPDATE "Product" SET stock = 0, "mergedIntoId" = $1, "mergedRate" = $2, "updatedAt" = clock_timestamp() AT TIME ZONE 'UTC' WHERE id = $3`,
             dst.id, rate, src.id)
     }, { timeout: 120000 })
 
