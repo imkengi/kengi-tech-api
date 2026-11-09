@@ -23,6 +23,9 @@
  * 13. (09/11/2026) MỘT chiến dịch đọc hỏng (#17) không làm gãy chu kỳ: quảng cáo hết hàng ĐỌC ĐƯỢC vẫn tạm dừng; KHÔNG tăng
  *     ngân sách / chạy lại / quảng cáo mới; chiến dịch hỏng vào việc cần người + vẫn chiếm trần; người HẠ ngân sách / tạm dừng
  *     vẫn được, TĂNG thì không; lời gọi gộp lỗi quyền mà đọc lẻ được ⇒ chạy như thường.
+ * 14. (10/11/2026) Số GẦN ĐÂY (AD-09): tốt trọn đời mà 8 ngày gần đây chi không ra khách / quá đắt ⇒ tạm dừng; tăng ngân sách
+ *     phải tốt CẢ hai. #100/33 mập mờ (AD-08): chỉ là "đã xoá" khi đọc được tài khoản chứa nó, không thì vẫn chiếm trần + báo người.
+ *     Quảng cáo bị Facebook từ chối (AD-11): vẫn giữ chỗ trong trần, không tăng chi, không tự tắt, một dòng việc cần người.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -148,7 +151,11 @@ function fbDatLai() {
         perms: null as any,
         accounts: [{ id: 'act_111', account_id: '111', name: 'TK Kengi', account_status: 1, currency: 'VND', amount_spent: '0', balance: '0' }],
         campaigns: new Map<string, any>(),
-        insights: new Map<string, { maximum?: any; today?: any }>(),
+        insights: new Map<string, { maximum?: any; today?: any; last_7d?: any }>(),
+        /** đọc riêng một quảng cáo (issues_info, ad_review_feedback) — 'ad' = tiêm lỗi cho các lần đọc này */
+        adsInfo: new Map<string, any>(),
+        /** giả Facebook KHÔNG nhận trường ads{…} trên chiến dịch (#100 "nonexisting field") */
+        khongChoAds: false,
         posts: new Map<string, any>([['PG1_101', { is_published: true }], ['PG1_102', { is_published: true }], ['PG1_201', { is_published: true }], ['PG1_104', { is_published: true }]]),
         n: 0,
         /** tiêm lỗi: buoc = đuôi đường gọi (vd 'adsets', 'ACTIVE', 'cd', 'cd:<mã>', 'bai', 'insights', 'act'); lan = số lần còn ném */
@@ -160,7 +167,12 @@ function nemNeuTiem(buoc: string) {
     const t = fb.tiem.find((x: any) => x.buoc === buoc && x.lan > 0)
     if (t) { t.lan--; throw t.loi }
 }
-const cdRa = (c: any) => ({ id: c.id, name: c.name, status: c.status, effective_status: c.status, adsets: { data: c.adsets.map((s: any) => ({ id: s.id, daily_budget: String(s.daily_budget), end_time: s.end_time, status: s.status, effective_status: s.status })) } })
+/** Chiến dịch như Facebook trả — `ads` CHỈ có khi lời gọi xin trường ads{…} (Facebook thật chỉ trả trường được xin). */
+const cdRa = (c: any, fields: string) => ({
+    id: c.id, name: c.name, status: c.status, effective_status: c.status,
+    adsets: { data: c.adsets.map((s: any) => ({ id: s.id, daily_budget: String(s.daily_budget), end_time: s.end_time, status: s.status, effective_status: s.status })) },
+    ...(/(^|,)ads\{/.test(fields) ? { ads: { data: (c.ads || []).map((x: any) => ({ id: x.id, effective_status: x.effective_status })) } } : {}),
+})
 const taoFb = (token: string): DichVuAds => ({
     async get(p: string, q: any = {}) {
         goi.push({ m: 'get', p, q, token })
@@ -179,7 +191,12 @@ const taoFb = (token: string): DichVuAds => ({
         // nào còn dựa vào nó là đỏ ở đây chứ không lặng lẽ mù trên prod (09/11/2026)
         if (p === '') throw loiGraph(12, '(#12) Root requests using GET /?ids= are deprecated — use per-object requests or supported batching')
         // 'cd' = mọi lần đọc lẻ; 'cd:<mã>' = chỉ chiến dịch đó (09/11/2026: một chiến dịch lỗi, các cái khác đọc được)
-        if (fb.campaigns.has(p)) { nemNeuTiem('cd'); nemNeuTiem(`cd:${p}`); return cdRa(fb.campaigns.get(p)) }
+        if (fb.adsInfo.has(p)) { nemNeuTiem('ad'); return { id: p, ...fb.adsInfo.get(p) } }
+        if (fb.campaigns.has(p)) {
+            nemNeuTiem('cd'); nemNeuTiem(`cd:${p}`)
+            if (fb.khongChoAds && /(^|,)ads\{/.test(String(q.fields || ''))) throw loiGraph(100, '(#100) Tried accessing nonexisting field (ads) on node type (Campaign)')
+            return cdRa(fb.campaigns.get(p), String(q.fields || ''))
+        }
         if (p.includes('_')) {
             const b = fb.posts.get(p); if (!b) throw loiGraph(100, 'post does not exist', 33)
             // tương tác tự nhiên đọc lẻ từng bài; 'bai' = tiêm lỗi cho các lần đọc này
@@ -198,7 +215,12 @@ const taoFb = (token: string): DichVuAds => ({
             c.adsets.push({ id, daily_budget: q.daily_budget, end_time: new Date(q.end_time * 1000).toISOString(), status: q.status, q }); return { id }
         }
         if (/\/adcreatives$/.test(p)) return { id: `CR${++fb.n}` }
-        if (/\/ads$/.test(p)) return { id: `AD${++fb.n}` }
+        if (/\/ads$/.test(p)) {
+            const id = `AD${++fb.n}`
+            const c = [...fb.campaigns.values()].find((x: any) => x.adsets.some((s: any) => s.id === q.adset_id))
+            if (c) (c.ads ||= []).push({ id, effective_status: 'ACTIVE' })
+            return { id }
+        }
         if (fb.campaigns.has(p)) { fb.campaigns.get(p).status = q.status; return { success: true } }
         for (const c of fb.campaigns.values()) { const s = c.adsets.find((x: any) => x.id === p); if (s) { if (q.daily_budget) s.daily_budget = Number(q.daily_budget); if (q.status) s.status = q.status; return { success: true } } }
         throw loiGraph(100, `Unsupported post request ${p}`, 33)
@@ -592,15 +614,20 @@ async function main() {
         const c5 = ngCanh()
         await chuanBi(c5, 'auto', { dailyBudgetCap: 200000, maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })
         const q6 = await coQuangCao(c5, 'PG1_101', 50000)
-        fb.insights.set(q6.result.campaignId, { maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] } })
+        fb.insights.set(q6.result.campaignId, {
+            maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] },
+            last_7d: { spend: '40000', actions: [{ action_type: 'comment', value: '5' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '3' }] },
+        })
         await chuKy(c5)
         const nhom = fb.campaigns.get(q6.result.campaignId).adsets[0]
-        dung('8q. 10 kết quả, 5.000đ/kết quả (≤ nửa mức 20.000đ) ⇒ +20%: 50.000 → 60.000', nhom.daily_budget === 60000, String(nhom.daily_budget))
+        dung('8q. 10 kết quả, 5.000đ/kết quả (≤ nửa mức 20.000đ), 8 ngày gần đây cũng tốt ⇒ +20%: 50.000 → 60.000', nhom.daily_budget === 60000, String(nhom.daily_budget))
         goi = []
         await chuKy(c5)
         dung('8r. cùng ngày không tăng lần hai', ghi().length === 0 && nhom.daily_budget === 60000)
-        const qcTot = { life: { results: 10, spend: 50000 }, dailyBudget: 150000 } as any
-        dung('8s. đã ở trần một quảng cáo ⇒ không tăng nữa', nganSachTang(qcTot, chuanHoaChinhSachAds({ maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })) === null)
+        const polTang = chuanHoaChinhSachAds({ maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })
+        const qcTot = { life: { results: 10, spend: 50000 }, recent: { results: 10, spend: 50000 }, dailyBudget: 150000 } as any
+        dung('8s. đã ở trần một quảng cáo ⇒ không tăng nữa (cùng số đó, chưa ở trần thì tăng)',
+            nganSachTang(qcTot, polTang) === null && nganSachTang({ ...qcTot, dailyBudget: 100000 }, polTang) === 120000)
 
         // trần thao tác/ngày không chặn việc tạm dừng
         datLai(); goi = []
@@ -764,7 +791,10 @@ async function main() {
             [qA, qB, qC, qD].map(q => q.status).join(','))
         hang.find(h => h.id === 'p1')!.stock = 30
         hang.find(h => h.id === 'p6')!.stock = 0
-        fb.insights.set(C, { maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] } })
+        fb.insights.set(C, {
+            maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] },
+            last_7d: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] },
+        })
         await luuCauHinhAds(ctx, { policy: { automation: { boostNewPosts: true } } })
         // riêng chiến dịch A đọc hỏng #17 suốt lượt (các chiến dịch khác đọc lẻ được)
         tiem(`cd:${A}`, loiGraph(17, '(#17) User request limit reached'), 50)
@@ -804,6 +834,203 @@ async function main() {
             fb.campaigns.get(D).status === 'ACTIVE' && fb.campaigns.get(C).adsets[0].daily_budget > 40000
             && !kq2.results.some((x: any) => x.action === 'ads' && x.status === 'failed') && !goi.some((g: any) => g.p === ''), JSON.stringify(kq2.results))
         fb.tiem = []
+    }
+
+    // ─── 14. (10/11/2026) Số gần đây (AD-09) · #100/33 mập mờ (AD-08) · quảng cáo bị từ chối (AD-11) ─────────
+    {
+        const pol = chuanHoaChinhSachAds({ stopLossVnd: 100000, maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })
+        const sl = (spend: number, results: number) => ({ spend, impressions: 0, reach: 0, clicks: 0, comments: results, messages: 0, engagement: 0, results })
+        const qcMau = (life: any, recent: any, them: any = {}) => ({ running: true, productId: null, product: null, priceAtBoost: null, dailyBudget: 50000, life, recent, deliveryIssue: null, ...them }) as any
+        const TOT = sl(300000, 30) // trọn đời 10.000đ / kết quả (mức 20.000đ)
+        dung('14a. (chính sách) mặc định vẫn bật "dừng quảng cáo lỗ"', pol.automation.pauseLosers === true && pol.automation.scaleWinners === true)
+        const r1 = lyDoDung(qcMau(TOT, sl(120000, 0)), pol)
+        dung('14b. trọn đời tốt nhưng 8 ngày gần đây chi 120.000đ mà 0 kết quả (mức dừng 100.000đ) ⇒ tạm dừng "không ra kết quả", lời nêu 8 ngày gần đây',
+            r1?.reason === 'khong_ket_qua' && /8 ngày gần đây/.test(r1.text) && /120\.000/.test(r1.text), JSON.stringify(r1))
+        const r2 = lyDoDung(qcMau(TOT, sl(90000, 3)), pol)
+        dung('14c. trọn đời tốt nhưng 8 ngày gần đây 30.000đ / kết quả (chi 90.000đ ≥ 3 × mức) ⇒ tạm dừng "đắt"',
+            r2?.reason === 'dat' && /8 ngày gần đây/.test(r2.text) && /30\.000/.test(r2.text), JSON.stringify(r2))
+        const phaiIm: [string, any][] = [
+            ['gần đây chi 50.000đ, 0 kết quả (dưới mức dừng)', qcMau(TOT, sl(50000, 0))],
+            ['gần đây 50.000đ / 1 kết quả nhưng mới chi < 3 × mức', qcMau(TOT, sl(50000, 1))],
+            ['gần đây đúng bằng mức (60.000đ / 3 = 20.000đ)', qcMau(TOT, sl(60000, 3))],
+            ['thiếu số gần đây ⇒ chỉ xét trọn đời', qcMau(TOT, undefined)],
+            ['mức dừng 0 ⇒ không dừng theo chi tiêu', null],
+        ]
+        const imHet = phaiIm.every(([, a]) => a === null
+            ? lyDoDung(qcMau(TOT, sl(500000, 0)), chuanHoaChinhSachAds({ stopLossVnd: 0, maxCostPerResult: 0 })) === null
+            : lyDoDung(a, pol) === null)
+        dung('14d. phải im: ' + phaiIm.map(([t]) => t).join(' · '), imHet,
+            phaiIm.map(([t, a]) => `${t}: ${JSON.stringify(a === null ? null : lyDoDung(a, pol))}`).join(' | '))
+        dung('14e. Insights hỏng (coSoLieu false) ⇒ số gần đây xấu cũng không dừng theo chi tiêu', lyDoDung(qcMau(TOT, sl(500000, 0)), pol, false) === null)
+        const tang = (life: any, recent: any, them: any = {}) => nganSachTang(qcMau(life, recent, them), pol)
+        dung('14f. tăng ngân sách: tốt CẢ trọn đời lẫn 8 ngày gần đây ⇒ 50.000 → 60.000', tang(TOT, sl(40000, 8)) === 60000, String(tang(TOT, sl(40000, 8))))
+        dung('14g. KHÔNG tăng: gần đây < 5 kết quả · gần đây 12.000đ/kq (> nửa mức) · thiếu số gần đây · trọn đời xấu · quảng cáo bị từ chối',
+            tang(TOT, sl(30000, 4)) === null && tang(TOT, sl(60000, 5)) === null && tang(TOT, undefined) === null
+            && tang(sl(300000, 10), sl(40000, 8)) === null && tang(TOT, sl(40000, 8), { deliveryIssue: 'Facebook TỪ CHỐI quảng cáo này' }) === null)
+
+        // chu kỳ thật: trọn đời đẹp, 8 ngày gần đây (last_7d + hôm nay) đắt ⇒ tạm dừng; đọc đúng preset last_7d
+        datLai(); goi = []
+        const c1 = ngCanh()
+        await chuanBi(c1, 'auto', { dailyBudgetCap: 200000, maxCostPerResult: 20000, stopLossVnd: 100000 })
+        const q1 = await coQuangCao(c1, 'PG1_101', 50000)
+        const cid1 = String(q1.result?.campaignId)
+        fb.insights.set(cid1, {
+            maximum: { spend: '300000', actions: [{ action_type: 'comment', value: '30' }] },
+            last_7d: { spend: '80000', actions: [{ action_type: 'comment', value: '2' }] },
+            today: { spend: '10000', actions: [{ action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '1' }] },
+        })
+        const st1 = await xayTrangThaiAds(c1)
+        const a1 = st1.ads.find((x: any) => x.campaignId === cid1)
+        dung('14h. số gần đây = 7 ngày trước hôm nay (last_7d) + hôm nay: 90.000đ, 3 kết quả; trọn đời giữ nguyên',
+            a1?.recent?.spend === 90000 && a1?.recent?.results === 3 && a1?.life?.spend === 300000 && goi.some(g => /\/insights$/.test(g.p) && g.q?.date_preset === 'last_7d'),
+            JSON.stringify({ recent: a1?.recent, life: a1?.life }))
+        goi = []
+        const kq1 = await chuKy(c1)
+        const dung1 = c1.kho._keHoach.find(k => k.kind === 'pause')
+        dung('14i. chu kỳ: tạm dừng vì "đắt" theo 8 ngày gần đây (trọn đời vẫn 10.000đ / kết quả)',
+            fb.campaigns.get(cid1).status === 'PAUSED' && dung1?.data?.reason === 'dat'
+            && kq1.results.some((x: any) => x.action === 'pause' && x.status === 'succeeded' && /8 ngày gần đây/.test(x.message)), JSON.stringify(kq1.results))
+
+        // chu kỳ thật: trọn đời tốt mà gần đây chưa tốt ⇒ KHÔNG tăng; gần đây tốt lên ⇒ tăng, lời ghi số gần đây
+        datLai(); goi = []
+        const c2 = ngCanh()
+        await chuanBi(c2, 'auto', { dailyBudgetCap: 200000, maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })
+        const q2 = await coQuangCao(c2, 'PG1_101', 50000)
+        const cid2 = String(q2.result?.campaignId)
+        const tron2 = { spend: '50000', actions: [{ action_type: 'comment', value: '10' }] }
+        fb.insights.set(cid2, { maximum: tron2, last_7d: { spend: '48000', actions: [{ action_type: 'comment', value: '4' }] } })
+        const kq2 = await chuKy(c2)
+        dung('14j. trọn đời 5.000đ/kq nhưng 8 ngày gần đây 12.000đ/kq ⇒ KHÔNG tăng ngân sách, không lệnh ghi',
+            ghi().length === 0 && fb.campaigns.get(cid2).adsets[0].daily_budget === 50000 && !kq2.results.some((x: any) => x.action === 'budget'), JSON.stringify(kq2.results))
+        fb.insights.set(cid2, { maximum: tron2, last_7d: { spend: '40000', actions: [{ action_type: 'comment', value: '8' }] } })
+        const kq3 = await chuKy(c2)
+        const ns2 = c2.kho._keHoach.find(k => k.kind === 'budget')
+        dung('14k. gần đây tốt lên (5.000đ/kq) ⇒ tăng 50.000 → 60.000; lời ghi số 8 ngày gần đây',
+            fb.campaigns.get(cid2).adsets[0].daily_budget === 60000 && /8 ngày gần đây/.test(String(ns2?.data?.reasonText || ''))
+            && kq3.results.some((x: any) => x.action === 'budget' && x.status === 'succeeded' && /8 kết quả 8 ngày gần đây/.test(x.message)), JSON.stringify(kq3.results))
+
+        // AD-08: #100/33 = "không tồn tại HOẶC không có quyền" — đọc được tài khoản chứa nó ⇒ đã xoá thật
+        datLai(); goi = []
+        const c3 = ngCanh()
+        await chuanBi(c3, 'approve', { dailyBudgetCap: 200000, maxActiveAds: 3 })
+        const q3 = await coQuangCao(c3, 'PG1_101', 50000)
+        const q3b = await coQuangCao(c3, 'PG1_201', 50000)
+        const [cid3, cid3b] = [q3, q3b].map(q => String(q.result?.campaignId))
+        fb.campaigns.delete(cid3)
+        goi = []
+        const st3 = await xayTrangThaiAds(c3)
+        const a3 = st3.ads.find((x: any) => x.campaignId === cid3)
+        dung('14l. chiến dịch xoá thật (#100/33, tài khoản đọc được) ⇒ "đã xoá", rời trần, không có lỗi đọc',
+            a3?.status === 'DELETED' && a3?.warnings?.some((w: string) => /không còn trên Facebook/.test(w)) && st3.totals?.committedDaily === 50000 && !st3.liveError,
+            `${a3?.status} ${JSON.stringify(st3.totals)} ${st3.liveError}`)
+        // AD-08: tài khoản cũng không đọc được (token mất quyền) ⇒ KHÔNG biết ⇒ vẫn chiếm trần, chặn tăng chi, báo người
+        fb.campaigns.delete(cid3b)
+        tiem('act', loiGraph(100, 'Unsupported get request', 33), 50)
+        goi = []
+        const st4 = await xayTrangThaiAds(c3)
+        const a4 = st4.ads.filter((x: any) => [cid3, cid3b].includes(x.campaignId))
+        dung('14m. #100/33 mà đọc cả tài khoản cũng không được ⇒ trạng thái null (KHÔNG phải "đã xoá"), vẫn chiếm trần 100.000đ, liveError',
+            a4.length === 2 && a4.every((x: any) => x.status === null && /tài khoản quảng cáo/.test(x.readError || '')) && st4.totals?.committedDaily === 100000 && /2\/2 chiến dịch/.test(st4.liveError || ''),
+            `${JSON.stringify(a4.map((x: any) => [x.status, x.readError]))} ${JSON.stringify(st4.totals)} ${st4.liveError}`)
+        dung('14n. dò tài khoản MỘT lần cho cả hai chiến dịch cùng tài khoản', goi.filter(g => g.p === 'act_111' && g.q?.fields === 'id').length === 1,
+            String(goi.filter(g => g.p === 'act_111' && g.q?.fields === 'id').length))
+        goi = []
+        const kq4 = await chuKy(c3)
+        dung('14o. chu kỳ: mỗi chiến dịch mập mờ một dòng việc cần người, không lệnh ghi nào',
+            ghi().length === 0 && [cid3, cid3b].every(id => kq4.results.some((x: any) => x.action === 'ads' && canNguoi(x) && x.message.includes(id))), JSON.stringify(kq4.results))
+        fb.tiem = []
+
+        // AD-11: quảng cáo bị Facebook từ chối trong chiến dịch ACTIVE
+        datLai(); goi = []
+        const c5 = ngCanh()
+        await chuanBi(c5, 'auto', { dailyBudgetCap: 200000, maxActiveAds: 3, maxCostPerResult: 20000, maxBudgetPerAd: 150000, automation: { scaleWinners: true } })
+        const q5 = await coQuangCao(c5, 'PG1_101', 50000)
+        const cid5 = String(q5.result?.campaignId), ad5 = String(q5.result?.adId)
+        const tot5 = { spend: '40000', actions: [{ action_type: 'comment', value: '8' }] }
+        fb.insights.set(cid5, { maximum: tot5, last_7d: tot5 }) // số tốt: bình thường sẽ được tăng ngân sách
+        dung('14p. (Facebook giả) quảng cáo Pilot dựng ra nằm trong chiến dịch, chưa có vấn đề',
+            fb.campaigns.get(cid5)?.ads?.some((x: any) => x.id === ad5) && (await xayTrangThaiAds(c5)).ads.every((x: any) => x.deliveryIssue === null && x.adEffectiveStatus === 'ACTIVE'))
+        fb.campaigns.get(cid5).ads = [{ id: ad5, effective_status: 'DISAPPROVED' }]
+        fb.adsInfo.set(ad5, { ad_review_feedback: { global: { 'Quảng cáo': 'Dùng từ ngữ hạn chế về sức khoẻ' } } })
+        goi = []
+        const st5 = await xayTrangThaiAds(c5)
+        const a5 = st5.ads.find((x: any) => x.campaignId === cid5)
+        dung('14q. bị từ chối ⇒ deliveryIssue có lý do Facebook ghi, cảnh báo "giữ chỗ", VẪN chiếm trần 50.000đ (duyệt lại là chạy)',
+            a5?.adEffectiveStatus === 'DISAPPROVED' && /TỪ CHỐI/.test(a5?.deliveryIssue || '') && /từ ngữ hạn chế/.test(a5?.deliveryIssue || '')
+            && a5?.running === true && st5.totals?.committedDaily === 50000 && a5?.warnings?.some((w: string) => /giữ chỗ/.test(w)),
+            `${a5?.adEffectiveStatus} ${a5?.deliveryIssue} ${JSON.stringify(st5.totals)}`)
+        goi = []
+        const kq5 = await chuKy(c5)
+        dung('14r. chu kỳ: KHÔNG tăng ngân sách (dù số tốt), KHÔNG tự tắt; một dòng việc cần người chỉ cách trả chỗ',
+            ghi().length === 0 && fb.campaigns.get(cid5).adsets[0].daily_budget === 50000
+            && kq5.results.some((x: any) => x.action === 'ads' && canNguoi(x) && /giữ chỗ trong trần/.test(x.message) && /Tạm dừng/.test(x.message)), JSON.stringify(kq5.results))
+        tiem('ad', loiGraph(1, 'tạm hỏng'), 5)
+        const st6 = await xayTrangThaiAds(c5)
+        dung('14s. đọc lý do từ chối hỏng ⇒ vẫn báo bị từ chối (không lý do), không gãy', /TỪ CHỐI/.test(st6.ads.find((x: any) => x.campaignId === cid5)?.deliveryIssue || ''))
+        fb.tiem = []
+        fb.campaigns.get(cid5).ads = [{ id: ad5, effective_status: 'PENDING_REVIEW' }]
+        const st7 = await xayTrangThaiAds(c5)
+        fb.campaigns.get(cid5).ads = [{ id: 'AD-KHAC-1', effective_status: 'DISAPPROVED' }, { id: 'AD-KHAC-2', effective_status: 'ACTIVE' }]
+        const st8 = await xayTrangThaiAds(c5)
+        const a8 = st8.ads.find((x: any) => x.campaignId === cid5)
+        dung('14t. phải im: chờ duyệt không phải lỗi; quảng cáo KHÁC trong chiến dịch bị từ chối thì không gán cho quảng cáo Pilot',
+            st7.ads.every((x: any) => x.deliveryIssue === null) && a8?.adEffectiveStatus === null && a8?.deliveryIssue === null,
+            `${JSON.stringify(st7.ads.map((x: any) => x.deliveryIssue))} ${a8?.adEffectiveStatus} ${a8?.deliveryIssue}`)
+        // người bật lại sau khi Pilot dừng vì hết hàng — quảng cáo bị từ chối vẫn phải báo
+        fb.campaigns.get(cid5).ads = [{ id: ad5, effective_status: 'ACTIVE' }]
+        hang.find(h => h.id === 'p1')!.stock = 0
+        await chuKy(c5)
+        const daDung5 = fb.campaigns.get(cid5).status === 'PAUSED'
+        fb.campaigns.get(cid5).status = 'ACTIVE' // người bật lại trong Trình quản lý quảng cáo
+        fb.campaigns.get(cid5).ads = [{ id: ad5, effective_status: 'DISAPPROVED' }]
+        goi = []
+        const kq9 = await chuKy(c5)
+        dung('14v. người bật lại sau khi Pilot dừng vì hết hàng, quảng cáo bị từ chối ⇒ vẫn một dòng việc cần người, không lệnh ghi',
+            daDung5 && ghi().length === 0 && kq9.results.some((x: any) => x.action === 'pause' && x.status === 'skipped')
+            && kq9.results.some((x: any) => x.action === 'ads' && canNguoi(x) && /giữ chỗ trong trần/.test(x.message)), JSON.stringify(kq9.results))
+
+        // Facebook không nhận trường ads{…} ⇒ đọc lại bằng bộ trường cũ: KHÔNG được mất chiến dịch (mất là hết tự tạm dừng hàng hết)
+        datLai(); goi = []
+        const c9 = ngCanh()
+        await chuanBi(c9, 'approve', { dailyBudgetCap: 200000, maxActiveAds: 3 })
+        const q9 = await coQuangCao(c9, 'PG1_101', 50000)
+        const q9b = await coQuangCao(c9, 'PG1_201', 50000)
+        fb.khongChoAds = true
+        goi = []
+        const st9 = await xayTrangThaiAds(c9)
+        const docAds = goi.filter(g => g.m === 'get' && /(^|,)ads\{/.test(String(g.q?.fields || ''))).length
+        dung('14w. Facebook không nhận trường ads{…} ⇒ hai chiến dịch vẫn đọc được (không "không đọc được"), trạng thái quảng cáo để trống',
+            [q9, q9b].every(q => st9.ads.some((x: any) => x.campaignId === String(q.result?.campaignId) && x.status === 'ACTIVE' && x.adEffectiveStatus === null)) && !st9.liveError,
+            `${JSON.stringify(st9.ads.map((x: any) => [x.status, x.adEffectiveStatus]))} ${st9.liveError}`)
+        dung('14x. …và cả lượt chỉ thử trường ads{…} MỘT lần (chiến dịch sau đọc thẳng bộ cũ)', docAds === 1, String(docAds))
+        hang.find(h => h.id === 'p1')!.stock = 0
+        goi = []
+        const kq10 = await chuKy(c9)
+        dung('14y. …chu kỳ vẫn TẠM DỪNG quảng cáo hết hàng', fb.campaigns.get(String(q9.result?.campaignId)).status === 'PAUSED'
+            && !kq10.results.some((x: any) => x.action === 'ads' && x.status === 'failed'), JSON.stringify(kq10.results))
+        fb.khongChoAds = false
+
+        // quảng cáo Pilot đã dừng vì hết hàng mà Facebook đang từ chối ⇒ có hàng lại thì máy KHÔNG tự chạy lại (chỉ chiếm trần)
+        datLai(); goi = []
+        const c10 = ngCanh()
+        await chuanBi(c10, 'auto', { dailyBudgetCap: 200000, automation: { resumeRestocked: true } })
+        const q10 = await coQuangCao(c10, 'PG1_101', 50000)
+        const cid10 = String(q10.result?.campaignId)
+        hang.find(h => h.id === 'p1')!.stock = 0
+        await chuKy(c10)
+        const daDung10 = fb.campaigns.get(cid10).status === 'PAUSED'
+        fb.campaigns.get(cid10).ads = [{ id: String(q10.result?.adId), effective_status: 'DISAPPROVED' }]
+        hang.find(h => h.id === 'p1')!.stock = 30
+        goi = []
+        await chuKy(c10)
+        const a10 = (await xayTrangThaiAds(c10)).ads.find((x: any) => x.campaignId === cid10)
+        dung('14z. đã dừng vì hết hàng + Facebook đang từ chối ⇒ có hàng lại máy KHÔNG tự chạy lại; cảnh báo nói rõ',
+            daDung10 && fb.campaigns.get(cid10).status === 'PAUSED' && ghi().length === 0 && a10?.warnings?.some((w: string) => /không tự chạy lại/.test(w)),
+            `${daDung10} ${fb.campaigns.get(cid10).status} ${JSON.stringify(ghi())} ${JSON.stringify(a10?.warnings)}`)
+
+        const lib = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'facebookAdsPilot.ts'), 'utf8')
+        dung('14u. nối dây: đọc ads{id,effective_status} trong lời đọc chiến dịch; Insights có last_7d',
+            /COT_CHIEN_DICH = `\$\{COT_CHIEN_DICH_GOC\},ads\{id,effective_status\}`/.test(lib) && /COT_CHIEN_DICH_GOC = 'id,name,status,effective_status,adsets\{/.test(lib) && /'last_7d'/.test(lib))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

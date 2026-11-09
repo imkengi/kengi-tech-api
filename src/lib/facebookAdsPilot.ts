@@ -609,7 +609,13 @@ export interface QuangCaoPilot {
     ended: boolean
     life: SoLieuAds
     today: SoLieuAds
+    /** số liệu GẦN ĐÂY = 7 ngày trước hôm nay + hôm nay (AD-09, 10/11/2026: luật dừng / tăng ngân sách không chỉ nhìn số trọn đời) */
+    recent: SoLieuAds
     costPerResult: number | null
+    /** trạng thái RIÊNG của quảng cáo (ad) trong chiến dịch: DISAPPROVED, WITH_ISSUES, PENDING_REVIEW… — null = không đọc được (AD-11) */
+    adEffectiveStatus: string | null
+    /** quảng cáo không phân phối vì Facebook từ chối / có vấn đề / chờ thanh toán — vẫn GIỮ CHỖ trong trần (AD-11); null = không thấy */
+    deliveryIssue: string | null
     product: { stock: number; price: number; costPrice: number; merged: boolean } | null
     /** bán ra (mọi kênh) trong lúc chạy so với cùng số ngày ngay trước — KHÔNG chắc do quảng cáo */
     sold: { during: number; before: number; days: number } | null
@@ -638,7 +644,41 @@ export function lyDoNguoiDaBo(ds: KeHoachAds[]): string[] {
     }
     return ra
 }
-const COT_CHIEN_DICH = 'id,name,status,effective_status,adsets{id,daily_budget,end_time,status,effective_status}'
+/* ads{id,effective_status}: trạng thái RIÊNG của quảng cáo (AD-11) — chiến dịch ACTIVE mà quảng cáo bị từ chối thì không chạy. Chỉ xin
+ * effective_status trong lời gọi chung: tên trường sai làm hỏng CẢ lời đọc chiến dịch; lý do từ chối đọc riêng (lyDoQuangCaoFb). */
+const COT_CHIEN_DICH_GOC = 'id,name,status,effective_status,adsets{id,daily_budget,end_time,status,effective_status}'
+const COT_CHIEN_DICH = `${COT_CHIEN_DICH_GOC},ads{id,effective_status}`
+/** Facebook từ chối TRƯỜNG xin đọc (#100, không phải #100/33 "không tồn tại") — vd "Tried accessing nonexisting field (ads)". */
+const laTruongBiTuChoi = (e: any) => Number(e?.code) === 100 && !laKhongTonTai(e)
+/** Trạng thái quảng cáo = không phân phối, cần người (Facebook từ chối / có vấn đề / tài khoản chờ thanh toán). */
+const QC_CO_VAN_DE: Record<string, string> = {
+    DISAPPROVED: 'Facebook TỪ CHỐI quảng cáo này',
+    WITH_ISSUES: 'Quảng cáo đang có vấn đề với Facebook',
+    PENDING_BILLING_INFO: 'Tài khoản quảng cáo chờ thông tin thanh toán — quảng cáo chưa chạy',
+}
+
+/** Lý do Facebook ghi cho quảng cáo có vấn đề — đọc riêng, hỏng thì thôi (chỉ để người đọc hiểu). */
+async function lyDoQuangCaoFb(svc: DichVuAds, adId: string): Promise<string | null> {
+    try {
+        const r = await svc.get(adId, { fields: 'issues_info,ad_review_feedback' })
+        const ds: string[] = []
+        for (const v of Object.values(r?.ad_review_feedback?.global || {})) if (v) ds.push(String(v))
+        for (const i of Array.isArray(r?.issues_info) ? r.issues_info : []) {
+            const t = String(i?.error_summary || i?.error_message || '').trim()
+            if (t) ds.push(t)
+        }
+        return ds.length ? [...new Set(ds)].join('; ').replace(/\s+/g, ' ').slice(0, 300) : null
+    } catch {
+        return null
+    }
+}
+
+/** Cộng hai khoảng KHÔNG chồng nhau (7 ngày trước hôm nay + hôm nay). reach không cộng được (người trùng) ⇒ lấy lớn hơn, chỉ để xem. */
+const congSoLieu = (a: SoLieuAds, b: SoLieuAds): SoLieuAds => ({
+    spend: a.spend + b.spend, impressions: a.impressions + b.impressions, reach: Math.max(a.reach, b.reach), clicks: a.clicks + b.clicks,
+    comments: a.comments + b.comments, messages: a.messages + b.messages, engagement: a.engagement + b.engagement, results: a.results + b.results,
+})
+const GAN_DAY = '8 ngày gần đây'
 /** Số bài tối đa đọc tương tác tự nhiên mỗi lần tìm bài để đẩy (timBaiDeDay) — mỗi bài một lời gọi Graph. */
 export const TUONG_TAC_TOI_DA = 20
 
@@ -649,14 +689,39 @@ export const TUONG_TAC_TOI_DA = 20
  * mới thôi đọc: lời gọi nào cũng sẽ hỏng y vậy. Lỗi QUYỀN của một chiến dịch không chặn đọc các cái khác.
  * `loiTheoMa` = chiến dịch KHÔNG đọc được ⇒ trạng thái null: vẫn tính vào trần, chặn mọi việc tăng chi, vào việc cần người.
  */
-async function docChienDich(svc: DichVuAds, ids: string[]): Promise<{ theoMa: Map<string, any>; loiTheoMa: Map<string, string> }> {
+async function docChienDich(svc: DichVuAds, ids: string[], actCua: (id: string) => string | null = () => null): Promise<{ theoMa: Map<string, any>; loiTheoMa: Map<string, string> }> {
     const theoMa = new Map<string, any>()
     const loiTheoMa = new Map<string, string>()
+    /** tài khoản quảng cáo còn đọc được không — nhớ trong lượt (mỗi tài khoản một lời gọi) */
+    const tkDoc = new Map<string, boolean>()
+    const docDuocTk = async (act: string | null): Promise<boolean> => {
+        if (!act) return false
+        if (!tkDoc.has(act)) tkDoc.set(act, await svc.get(act, { fields: 'id' }).then(() => true, () => false))
+        return tkDoc.get(act)!
+    }
+    /* trường ads{…} (AD-11) bị Facebook từ chối ⇒ đọc lại bằng bộ trường cũ, cả lượt dùng bộ cũ: mất trạng thái quảng cáo, KHÔNG được
+     * mất chiến dịch — chiến dịch không đọc được thì máy không tạm dừng được quảng cáo hết hàng nữa. */
+    let cot = COT_CHIEN_DICH
+    const docMot = async (id: string) => {
+        try { return await svc.get(id, { fields: cot }) } catch (e: any) {
+            if (cot === COT_CHIEN_DICH_GOC || !laTruongBiTuChoi(e)) throw e
+            const r = await svc.get(id, { fields: COT_CHIEN_DICH_GOC })
+            cot = COT_CHIEN_DICH_GOC
+            return r
+        }
+    }
     for (const id of ids) {
         if (theoMa.has(id) || loiTheoMa.has(id)) continue
-        try { theoMa.set(id, await svc.get(id, { fields: COT_CHIEN_DICH })) } catch (e2: any) {
-            // xoá hẳn khỏi Facebook ⇒ không tiêu tiền; lỗi khác ⇒ KHÔNG biết ⇒ báo (rào trần sẽ chặn tăng chi)
-            if (laKhongTonTai(e2)) { theoMa.set(id, { id, status: 'DELETED', effective_status: 'DELETED', khongTonTai: true }); continue }
+        try { theoMa.set(id, await docMot(id)) } catch (e2: any) {
+            /* AD-08 (10/11/2026): #100/33 nghĩa là "không tồn tại, HOẶC không có quyền đọc". Trước đây coi luôn là đã xoá ⇒ chiến dịch rời
+             * trần trong khi có thể VẪN đang tiêu tiền (token mất quyền trên tài khoản quảng cáo). Giờ chỉ là "đã xoá" khi CHÍNH tài
+             * khoản chứa nó vẫn đọc được; không thì KHÔNG biết ⇒ vẫn chiếm trần, chặn tăng chi, báo người. */
+            if (laKhongTonTai(e2)) {
+                const act = actCua(id)
+                if (await docDuocTk(act)) { theoMa.set(id, { id, status: 'DELETED', effective_status: 'DELETED', khongTonTai: true }); continue }
+                loiTheoMa.set(id, `${moTaLoi(e2)} — đọc cả tài khoản quảng cáo ${act || '(không rõ)'} cũng không được: có thể token mất quyền, chiến dịch có thể VẪN đang chạy`)
+                continue
+            }
             loiTheoMa.set(id, moTaLoi(e2))
             if (laLoiToken(e2)) {
                 for (const x of ids) if (!theoMa.has(x) && !loiTheoMa.has(x)) loiTheoMa.set(x, moTaLoi(e2))
@@ -711,11 +776,12 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
     const ids = boost.map(k => String(k.result.campaignId))
 
     // TUẦN TỰ có chủ ý: lời gọi Facebook tuần tự cho dễ đọc nhật ký; Prisma của cửa hàng chỉ 1 kết nối trên prod
-    const { theoMa, loiTheoMa } = await docChienDich(svc, ids)
+    const actTheoMa = new Map(boost.map(k => [String(k.result.campaignId), chuanAct(k.data?.adAccountId)]))
+    const { theoMa, loiTheoMa } = await docChienDich(svc, ids, id => actTheoMa.get(id) || null)
     const [dauLoi] = [...loiTheoMa]
     const liveError = dauLoi ? `${loiTheoMa.size}/${ids.length} chiến dịch không đọc được — ${dauLoi[0]}: ${dauLoi[1]}` : null
     let statsError: string | null = null
-    const tron = new Map<string, SoLieuAds>(), homNay = new Map<string, SoLieuAds>()
+    const tron = new Map<string, SoLieuAds>(), homNay = new Map<string, SoLieuAds>(), bayNgay = new Map<string, SoLieuAds>()
     if (o.soLieu !== false) {
         const theoTk = new Map<string, string[]>()
         for (const k of boost) {
@@ -727,6 +793,8 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
             try {
                 for (const [id, v] of await docInsightsChienDich(svc, act, maCd, 'maximum')) tron.set(id, v)
                 for (const [id, v] of await docInsightsChienDich(svc, act, maCd, 'today')) homNay.set(id, v)
+                // last_7d của Facebook = 7 ngày TRƯỚC hôm nay (không gồm hôm nay) ⇒ cộng 'today' thành 8 ngày gần đây (AD-09)
+                for (const [id, v] of await docInsightsChienDich(svc, act, maCd, 'last_7d')) bayNgay.set(id, v)
             } catch (e: any) { statsError = statsError || `Số liệu quảng cáo (${act}): ${moTaLoi(e)}` }
         }
     }
@@ -748,6 +816,11 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
         const nhomTat = nhom ? ['PAUSED', 'DELETED', 'ARCHIVED'].includes(String(nhom.status || '')) : false
         const running = status === 'ACTIVE' && !ended && !nhomTat && !['DELETED', 'ARCHIVED'].includes(String(c?.effective_status || ''))
         const life = tron.get(cid) || soLieuRong()
+        const today = homNay.get(cid) || soLieuRong()
+        // quảng cáo của Pilot trong chiến dịch: theo mã đã lưu; không lưu mã mà chiến dịch chỉ có MỘT quảng cáo thì là nó — không đoán
+        const dsQc: any[] = Array.isArray(c?.ads?.data) ? c.ads.data : []
+        const qcFb = (r.adId ? dsQc.find(x => String(x?.id) === String(r.adId)) : null) || (!r.adId && dsQc.length === 1 ? dsQc[0] : null)
+        const adEffectiveStatus = qcFb ? String(qcFb.effective_status || '') || null : null
         const sp = d.productId ? spTheoId.get(String(d.productId)) : null
         const cuaNo = viec.get(cid) || []
         const cuoi = cuaNo.find(v => v.status === 'succeeded') || null
@@ -762,7 +835,9 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
             dailyBudget: nhom?.daily_budget != null ? Number(nhom.daily_budget) : Number(r.dailyBudget ?? d.dailyBudget) || 0,
             startAt: Number(r.startAt) || k.updatedAt, endAt,
             status, readError: c ? null : loiTheoMa.get(cid) || 'Facebook không trả chiến dịch này', effectiveStatus: c ? String(c.effective_status || '') : null, running, ended,
-            life, today: homNay.get(cid) || soLieuRong(), costPerResult: life.results > 0 ? Math.round(life.spend / life.results) : null,
+            life, today, recent: congSoLieu(bayNgay.get(cid) || soLieuRong(), today),
+            costPerResult: life.results > 0 ? Math.round(life.spend / life.results) : null,
+            adEffectiveStatus, deliveryIssue: adEffectiveStatus && QC_CO_VAN_DE[adEffectiveStatus] ? QC_CO_VAN_DE[adEffectiveStatus] : null,
             product: d.productId ? (sp ? { stock: Number(sp.stock) || 0, price: Number(sp.sellingPrice) || 0, costPrice: Number(sp.costPrice) || 0, merged: !!sp.mergedIntoId } : null) : null,
             sold: null,
             lastAction: cuoi ? { kind: String(cuoi.kind), reason: cuoi.data?.reason || null, by: laMay(cuoi) ? 'pilot' : 'nguoi', at: cuoi.updatedAt } : null,
@@ -776,6 +851,20 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
         else if (!c) qc.warnings.push(`Không đọc được trạng thái chiến dịch trên Facebook (${String(qc.readError).slice(0, 200)}) — Pilot không bật / tăng chi cho tới khi đọc lại được; muốn dừng ngay thì bấm Tạm dừng.`)
         if (humanOverride.length) qc.warnings.push(`Có người bật lại sau khi Pilot tạm dừng (${humanOverride.map(x => LY_DO_DUNG[x] || x).join(', ')}) — Pilot không tự tắt lại vì cùng lý do.`)
         ads.push(qc)
+    }
+    /* AD-11: chiến dịch ACTIVE mà quảng cáo bị từ chối / có vấn đề ⇒ không phân phối nhưng VẪN giữ chỗ trong trần (Facebook duyệt lại
+     * là chạy ngay — không bỏ khỏi trần). Lý do Facebook ghi: đọc riêng, chỉ khi đọc đủ số liệu, tối đa 5 quảng cáo đang chạy mỗi lượt. */
+    let docLyDo = 0
+    for (const a of ads) {
+        if (!a.deliveryIssue) continue
+        if (o.soLieu !== false && a.running && a.adId && docLyDo < 5) {
+            docLyDo++
+            const ly = await lyDoQuangCaoFb(svc, a.adId)
+            if (ly) a.deliveryIssue = `${a.deliveryIssue}: ${ly}`
+        }
+        a.warnings.push(a.running
+            ? `${a.deliveryIssue} — quảng cáo không phân phối nhưng vẫn giữ chỗ trong trần ngân sách.`
+            : `${a.deliveryIssue} — chạy lại cũng không phân phối cho tới khi sửa trong Trình quản lý quảng cáo; Pilot không tự chạy lại.`)
     }
     // bán ra trong lúc chạy — chỉ quảng cáo đang chạy / mới hết ≤ 14 ngày, tối đa 12 mã (mỗi mã 2 truy vấn, TUẦN TỰ)
     if (o.banHang) {
@@ -1313,23 +1402,42 @@ export function lyDoDung(a: QuangCaoPilot, pol: ChinhSachAds, coSoLieu = true): 
         if (pol.maxCostPerResult > 0 && L.results > 0 && L.spend >= 3 * pol.maxCostPerResult && L.spend / L.results > pol.maxCostPerResult) {
             return { reason: 'dat', text: `${vnd(L.spend / L.results)} mỗi bình luận / tin nhắn — trên mức ${vnd(pol.maxCostPerResult)} của chính sách` }
         }
+        /* AD-09 (10/11/2026): cùng hai luật trên, xét thêm 8 ngày gần đây — quảng cáo tốt ở tuần đầu rồi "chết" (chi đều mà không ai hỏi)
+         * thì số TRỌN ĐỜI vẫn đẹp, máy cũ để chạy mãi. Cùng mã lý do ⇒ người đã bật lại vì lý do đó thì máy cũng không tự tắt lại. */
+        const R = a.recent
+        if (R) {
+            if (pol.stopLossVnd > 0 && R.spend >= pol.stopLossVnd && R.results === 0) {
+                return { reason: 'khong_ket_qua', text: `${GAN_DAY} đã chi ${vnd(R.spend)} mà không có bình luận / tin nhắn nào (mức dừng ${vnd(pol.stopLossVnd)})` }
+            }
+            if (pol.maxCostPerResult > 0 && R.results > 0 && R.spend >= 3 * pol.maxCostPerResult && R.spend / R.results > pol.maxCostPerResult) {
+                return { reason: 'dat', text: `${GAN_DAY}: ${vnd(R.spend / R.results)} mỗi bình luận / tin nhắn — trên mức ${vnd(pol.maxCostPerResult)} của chính sách` }
+            }
+        }
     }
     return null
 }
 
-/** Ngân sách mới cho quảng cáo TỐT (≥ 5 kết quả, chi phí ≤ nửa mức cho phép): +20%, tròn nghìn, không quá trần một quảng cáo. */
+/** Đủ tốt để tăng ngân sách: ≥ 5 kết quả, chi phí mỗi kết quả ≤ nửa mức cho phép. */
+const soTot = (s: SoLieuAds | null | undefined, max: number) => !!s && s.results >= 5 && s.spend / s.results <= 0.5 * max
+
+/**
+ * Ngân sách mới cho quảng cáo TỐT: +20%, tròn nghìn, không quá trần một quảng cáo. AD-09: phải tốt CẢ trọn đời LẪN 8 ngày gần
+ * đây (thiếu số gần đây ⇒ không tăng); AD-11: quảng cáo Facebook từ chối / có vấn đề ⇒ không tăng.
+ */
 export function nganSachTang(a: QuangCaoPilot, pol: ChinhSachAds): number | null {
     if (!pol.automation.scaleWinners || !(pol.maxCostPerResult > 0)) return null
-    const L = a.life
-    if (L.results < 5 || L.spend / L.results > 0.5 * pol.maxCostPerResult) return null
+    if (a.deliveryIssue) return null
+    if (!soTot(a.life, pol.maxCostPerResult) || !soTot(a.recent, pol.maxCostPerResult)) return null
     if (a.dailyBudget >= pol.maxBudgetPerAd) return null
     const moi = Math.min(pol.maxBudgetPerAd, tron1000(a.dailyBudget * 1.2))
     return moi > a.dailyBudget ? moi : null
 }
 
-/** Máy tự chạy lại quảng cáo nó đã tạm dừng vì HẾT HÀNG, khi kho có hàng lại (và giá bài còn đúng). */
+/** Máy tự chạy lại quảng cáo nó đã tạm dừng vì HẾT HÀNG, khi kho có hàng lại (và giá bài còn đúng). Quảng cáo Facebook đang từ chối /
+ *  có vấn đề thì KHÔNG (chạy lại chỉ chiếm chỗ trong trần mà không phân phối — AD-11). */
 export function nenChayLai(a: QuangCaoPilot, pol: ChinhSachAds): boolean {
     return pol.automation.resumeRestocked && !a.running && !a.ended && !DA_XOA(a) && a.status === 'PAUSED' && a.planStatus === 'succeeded'
+        && !a.deliveryIssue
         && (!a.adsetStatus || a.adsetStatus === 'ACTIVE')
         && a.lastAction?.kind === 'pause' && a.lastAction.by === 'pilot' && a.lastAction.reason === 'het_ton'
         && !!a.product && !a.product.merged && a.product.stock >= pol.minStock
@@ -1401,6 +1509,14 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
     }
     // chỗ trống trong trần cho việc tăng chi máy định làm lượt này (tính dần, kẻo nhiều việc cùng lọt)
     let { soChay, nganSach } = dangChiemTran(ads)
+    /** AD-11: quảng cáo đang bật mà Facebook từ chối / có vấn đề ⇒ việc cần người (máy không tự tắt: tắt cũng không đỡ đồng nào). */
+    const baoQcVanDe = (a: QuangCaoPilot) => {
+        if (!a.deliveryIssue) return
+        results.push({
+            action: 'ads', status: 'failed', sku: a.sku, planId: a.planId,
+            message: `${a.name || a.campaignId}: ${a.deliveryIssue} — quảng cáo không phân phối nhưng vẫn giữ chỗ trong trần; sửa trong Trình quản lý quảng cáo, hoặc bấm Tạm dừng để trả chỗ.`,
+        })
+    }
 
     for (const a of ads) {
         const ds = viec.get(a.campaignId) || []
@@ -1411,6 +1527,7 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                 if (ly) {
                     if (a.humanOverride.includes(ly.reason)) {
                         results.push({ action: 'pause', status: 'skipped', sku: a.sku, message: `${a.name}: ${ly.text} — có người bật lại sau khi Pilot tạm dừng, Pilot không tự tắt lại.` })
+                        baoQcVanDe(a)
                         continue
                     }
                     const cungLyDo = cuaMay('pause', k => k.data?.reason === ly.reason)
@@ -1424,6 +1541,7 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                     if (k?.status === 'succeeded') { soChay--; nganSach -= a.dailyBudget }
                     continue
                 }
+                if (a.deliveryIssue) { baoQcVanDe(a); continue }
                 const moi = statsError ? null : nganSachTang(a, pol)
                 if (moi !== null && a.adsetId) {
                     if (liveError) {
@@ -1437,12 +1555,15 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                         results.push({ action: 'budget', status: 'unchanged', sku: a.sku, message: `${a.name}: quảng cáo tốt nhưng tăng lên ${vnd(moi)}/ngày sẽ vượt trần ${vnd(pol.dailyBudgetCap)}/ngày — giữ nguyên.` })
                         continue
                     }
+                    // nganSachTang đã bắt CẢ trọn đời lẫn gần đây tốt ⇒ ghi số GẦN ĐÂY (cái người cần thấy để tin việc tăng chi hôm nay)
+                    const R = a.recent
+                    const soGanDay = `${R.results} kết quả ${GAN_DAY}, ${vnd(R.spend / Math.max(1, R.results))} mỗi kết quả; trọn đời ${a.life.results} kết quả`
                     const p = nhap || await taoKeHoachNganSach(ctx, {
                         campaignId: a.campaignId, dailyBudget: moi, from: a.dailyBudget,
-                        reasonText: `Quảng cáo tốt: ${a.life.results} kết quả, ${vnd(a.life.spend / a.life.results)} mỗi kết quả`, idempotencyKey: khoa,
+                        reasonText: `Quảng cáo tốt: ${soGanDay}`, idempotencyKey: khoa,
                     })
                     const to = Number(p.data?.to) || moi
-                    const k = await lam('budget', p, a.sku, `${a.name}: tăng ngân sách ${vnd(a.dailyBudget)} → ${vnd(to)}/ngày (${a.life.results} kết quả, ${vnd(a.life.spend / Math.max(1, a.life.results))} mỗi kết quả)`)
+                    const k = await lam('budget', p, a.sku, `${a.name}: tăng ngân sách ${vnd(a.dailyBudget)} → ${vnd(to)}/ngày (${soGanDay})`)
                     if (k?.status === 'succeeded' || k?.status === 'draft') nganSach += to - a.dailyBudget
                 }
             } else if (nenChayLai(a, pol)) {
