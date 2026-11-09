@@ -82,6 +82,10 @@ export const CreateTransactionSchema = z.object({
     // (phải đi qua các endpoint void/return để hoàn kho + hoàn nợ đúng).
     status: z.enum(['completed', 'partial', 'pending']).default('completed'),
     revisionOfId: z.string().optional().nullable(),
+    // Nhân viên được tính doanh số (khác người bấm máy). THIẾU dòng này thì validate() CẮT IM LẶNG trường web/PC
+    // gửi lên ⇒ từ 15/08/2026 mọi phiếu đều ghi công cho người bấm máy. Route tự tra lại id trong DB (nhân viên
+    // còn làm của cửa hàng) — không tin tên client gửi. Bộ soát: scripts/check-txdata-zod.ts.
+    salespersonId: z.string().max(100).optional().nullable(),
     appliedPromotionIds: z.array(z.string()).optional(),
     // Optional target warehouse for the per-warehouse stock decrement. When omitted
     // the branch's default warehouse is used (see routes/transactions.ts).
