@@ -6406,6 +6406,8 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                     if (settlement && settlement.settlementAmount > 0) {
                         platformFee = Math.round(settlement.feeAmount)
                         netRevenue = Math.round(settlement.settlementAmount)
+                        // hoa hồng affiliate TikTok (10/11/2026, TT-02) — đã nằm trong phí; null = statement không mang trường đó
+                        affiliateFee = settlement.affiliateFee ?? null
                     }
                 }
 

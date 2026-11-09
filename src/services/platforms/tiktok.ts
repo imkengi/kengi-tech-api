@@ -65,6 +65,42 @@ export function loiTikTokVi(d: any): string {
     return `[${code}] ${vi ? `${vi} (${String(d?.message || '').slice(0, 160)})` : (d?.message || 'lỗi không rõ')}`
 }
 
+/** Trường hoa hồng affiliate của một giao dịch trong statement_transactions (finance 202309). Đo statement THẬT 10/11/2026:
+ *  trường PHẲNG ngay trên giao dịch (không có fee_tax_breakdown), số là CHUỖI, phí mang dấu ÂM; đơn không qua affiliate vẫn
+ *  trả đủ bốn trường = "0" ⇒ phân biệt được "0 thật" với "chưa đọc được". */
+const TRUONG_AFF_TIKTOK = ['affiliate_commission_amount', 'affiliate_commission_before_pit', 'affiliate_partner_commission_amount', 'affiliate_ads_commission_amount']
+
+/**
+ * Hoa hồng affiliate NGƯỜI BÁN GÁNH cho một đơn TikTok (đồng, > 0 hoặc 0), đã nằm trong `fee_amount` — 10/11/2026, TT-02.
+ * Mô hình phí dùng chung (giaShopee.uocLuongPhi) đo phí trên phí − hoa hồng và lấy hoa hồng CAO NHẤT một đơn cho giá sàn —
+ * trước đây đơn TikTok để NULL nên đơn qua affiliate bị coi như đơn thường (hoa hồng lẫn vào phí trung bình).
+ *  - null = statement không mang trường affiliate nào (KHÁC 0 — đừng coi là đơn thường).
+ *  - Cộng CÓ DẤU qua mọi giao dịch của đơn: giao dịch điều chỉnh / hoàn trả lại hoa hồng thì bù trừ, không cộng đôi.
+ *  - Nhà sáng tạo: `affiliate_commission_before_pit` (trước thuế TNCN khấu trừ hộ affiliate) khi khác 0, không thì
+ *    `affiliate_commission_amount` + `pit_amount` — hai đường cùng ra hoa hồng gộp, KHÔNG cộng cả hai. `pit_amount` chỉ
+ *    tính khi có hoa hồng: đơn thường mang pit_amount = 0, thuế khấu trừ của chính người bán nằm ở isr_income_tax_amount.
+ *  - Cộng hoa hồng đối tác (affiliate_partner_*) và hoa hồng quảng cáo affiliate (affiliate_ads_*).
+ *  - Có trường khác 0 mà tổng không ra số âm (hoa hồng bị hoàn hết / dấu lạ) ⇒ null: không chắc thì không nói 0.
+ */
+export function hoaHongAffiliateTikTok(txs: any[] | null | undefined): number | null {
+    let coTruong = false, khac0 = false, tong = 0
+    for (const t of Array.isArray(txs) ? txs : []) {
+        if (!t || typeof t !== 'object') continue
+        const so = (k: string) => { const v = Number(t[k]); return Number.isFinite(v) ? v : 0 }
+        for (const k of TRUONG_AFF_TIKTOK) {
+            if (t[k] === undefined || t[k] === null || t[k] === '') continue
+            coTruong = true
+            if (so(k) !== 0) khac0 = true
+        }
+        const truocThue = so('affiliate_commission_before_pit'), sauThue = so('affiliate_commission_amount')
+        const nhaSangTao = truocThue !== 0 ? truocThue : sauThue !== 0 ? sauThue + so('pit_amount') : 0
+        tong += nhaSangTao + so('affiliate_partner_commission_amount') + so('affiliate_ads_commission_amount')
+    }
+    if (!coTruong) return null
+    if (!khac0) return 0
+    return tong < 0 ? Math.round(-tong) : null
+}
+
 export class TikTokService extends PlatformService {
     get platformName() { return 'tiktok' }
 
@@ -876,8 +912,9 @@ export class TikTokService extends PlatformService {
      * Real settlement for an order — GET /finance/202309/orders/{order_id}/statement_transactions.
      * Amounts come back as strings; fee = revenue - settlement when no explicit
      * fee field is present. Returns null when the order isn't settled yet.
+     * affiliateFee (10/11/2026, TT-02): hoa hồng affiliate ĐÃ NẰM TRONG feeAmount — xem hoaHongAffiliateTikTok; null = chưa đọc được.
      */
-    async getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number } | null> {
+    async getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number; affiliateFee: number | null } | null> {
         const path = `/finance/202309/orders/${orderId}/statement_transactions`
         const { url, headers } = this.buildUrl(path, {})
         const data = await this.httpGet(url, headers)
@@ -897,7 +934,7 @@ export class TikTokService extends PlatformService {
             fee += Math.abs(Number(t.fee_amount ?? t.fee_and_tax_amount ?? t.fee_tax_amount ?? 0))
         }
         if (fee === 0 && revenue > settlement) fee = revenue - settlement
-        return { settlementAmount: settlement, feeAmount: fee, revenueAmount: revenue }
+        return { settlementAmount: settlement, feeAmount: fee, revenueAmount: revenue, affiliateFee: hoaHongAffiliateTikTok(txs) }
     }
 
     // ─── Customer Service Chat (IM) ─────────────────────────────────────────────

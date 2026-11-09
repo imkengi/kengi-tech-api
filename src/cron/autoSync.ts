@@ -41,7 +41,7 @@ const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
 const FEE_INTERVAL      = 6 * 60 * 60 * 1000   // 6 tiếng
 const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
 const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
-const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh Shopee
+const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh (Shopee, TikTok từ 10/11/2026)
 const AFF_BU_MS         = 120_000              // giờ RIÊNG cho lượt bù, tính từ lúc bắt đầu bù
 
 let syncTimer:    NodeJS.Timeout | null = null
@@ -569,8 +569,12 @@ const buAffBoQua = new Map<string, number>()
  * mang NULL (chưa đọc — KHÁC 0), mà vòng đối soát chính không bao giờ hỏi lại (chỉ quét platformFee = 0).
  * Hỏi lại escrow và CHỈ ghi affiliateFee — phí / thực nhận đã đối soát giữ nguyên. Hết đơn NULL thì thôi
  * gọi sàn. `han` = mốc giờ (ms) phải dừng. Trả số đơn đã ghi.
+ * TikTok (10/11/2026, TT-02): hỏi lại statement (getOrderSettlement().affiliateFee), cửa sổ 90 ngày = cửa sổ mẫu phí
+ * (statement TikTok còn số cho đơn ≥ 70 ngày, đo 21/10), 2 luồng + nghỉ 350ms như vòng đối soát chính — API tài chính
+ * TikTok bóp hạn mức chung cả nhóm app (36009002).
  */
-async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurrency: any, ShopeeService: any): Promise<number> {
+export async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurrency: any, ShopeeService: any, TikTokService: any): Promise<number> {
+    const tiktok = ch.platform === 'tiktok'
     const now = Date.now()
     for (const [id, luc] of buAffBoQua) if (now - luc > 24 * 3600_000) buAffBoQua.delete(id)
     const boQua = [...buAffBoQua.keys()]
@@ -579,7 +583,7 @@ async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurre
             channelId: ch.id, platformFee: { gt: 0 }, affiliateFee: null,
             status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
             externalOrderId: { not: null },
-            createdAt: { gte: new Date(now - 45 * 86400_000) },
+            createdAt: { gte: new Date(now - (tiktok ? 90 : 45) * 86400_000) },
             ...(boQua.length ? { id: { notIn: boQua } } : {}),
         },
         select: { id: true, externalOrderId: true },
@@ -587,27 +591,39 @@ async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurre
         take: AFF_BU_BATCH,
     }).catch((e: any) => { console.warn(`[FeeSync] bù hoa hồng affiliate ${ch.name}: đọc đơn hỏng:`, fmtErr(e)); return [] })
     if (!orders.length) return 0
-    const svc = new ShopeeService({
+    const creds = {
         apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
         accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
         shopId: ch.shopId || undefined,
-    })
-    let ok = 0, khongRa = 0, hetGio = 0
+    }
+    const svc: any = tiktok ? new TikTokService(creds) : new ShopeeService(creds)
+    let ok = 0, khongRa = 0, hetGio = 0, dungKenh = 0, hongLienTiep = 0
     await mapWithConcurrency(orders, async (o: any) => {
         if (Date.now() > han) { hetGio++; return }
-        const sn = String(o.externalOrderId || '').replace(/^SPE-/i, '')
+        /* 5 đơn liền không đọc được mà chưa đơn nào được (token chết / sàn bóp hạn mức 36009002) ⇒ thôi kênh này lượt này:
+         * hỏi tiếp chỉ đốt hạn mức chung với vòng đối soát chính và rải log. Đơn còn lại KHÔNG bị nghỉ 24 giờ — lượt sau hỏi lại. */
+        if (ok === 0 && hongLienTiep >= 5) { dungKenh++; return }
+        const sn = String(o.externalOrderId || '').replace(/^(SPE-|TIK-)/i, '')
         try {
-            const e = sn ? await svc.getEscrowDetail(sn) : null
-            if (e?.affiliateFee == null) { khongRa++; buAffBoQua.set(o.id, Date.now()); return }
-            await sp.onlineOrder.update({ where: { id: o.id }, data: { affiliateFee: e.affiliateFee } })
-            ok++
+            const aff = !sn ? null : tiktok ? (await svc.getOrderSettlement(sn))?.affiliateFee : (await svc.getEscrowDetail(sn))?.affiliateFee
+            if (aff == null) {
+                khongRa++; hongLienTiep++
+                buAffBoQua.set(o.id, Date.now())
+            } else {
+                await sp.onlineOrder.update({ where: { id: o.id }, data: { affiliateFee: aff } })
+                ok++; hongLienTiep = 0
+            }
         } catch {
-            khongRa++
+            khongRa++; hongLienTiep++
             buAffBoQua.set(o.id, Date.now())
+        } finally {
+            // nghỉ cả khi hỏng — hỏng vì hạn mức mà bắn tiếp liền tay thì càng bị bóp
+            if (tiktok) await new Promise(r => setTimeout(r, 350))
         }
-    }, 6)
+    }, tiktok ? 2 : 6)
     console.log(`[FeeSync] ${ch.name}: bù hoa hồng affiliate ${ok} đơn (quét ${orders.length}, chưa đọc được ${khongRa}` +
-        `${hetGio ? `, hết giờ để lượt sau ${hetGio}` : ''})`)
+        `${hetGio ? `, hết giờ để lượt sau ${hetGio}` : ''}` +
+        `${dungKenh ? `, dừng kênh vì ${khongRa} đơn đầu không đọc được — để lượt sau ${dungKenh}` : ''})`)
     return ok
 }
 
@@ -652,7 +668,7 @@ async function runFeeSync() {
                     shopId: ch.shopId || undefined,
                 }
                 const svc: any = ch.platform === 'tiktok' ? new TTS(creds) : new ShopeeService(creds)
-                if (ch.platform === 'shopee') kenhBuAff.push({ schema: store.schema, ch })
+                kenhBuAff.push({ schema: store.schema, ch })   // TikTok cũng bù (10/11/2026, TT-02)
                 // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
                 // lại chỉ tốn lượt gọi mà không bao giờ ra dữ liệu.
                 const orders = await sp.onlineOrder.findMany({
@@ -679,7 +695,7 @@ async function runFeeSync() {
                         if (ch.platform === 'tiktok') {
                             const s = await svc.getOrderSettlement(sn)
                             if (s && (s.feeAmount > 0 || s.settlementAmount > 0)) {
-                                phi = s.feeAmount; thucNhan = s.settlementAmount
+                                phi = s.feeAmount; thucNhan = s.settlementAmount; aff = s.affiliateFee ?? null
                             }
                         } else {
                             const e = await svc.getEscrowDetail(sn)
@@ -741,7 +757,7 @@ async function runFeeSync() {
             const { schema, ch } = kenhBuAff[(dau + i) % kenhBuAff.length]
             const nhaClient = giuClient(schema)
             try {
-                tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, hanBu, mapWithConcurrency, ShopeeService)
+                tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, hanBu, mapWithConcurrency, ShopeeService, TTS)
             } catch (e: any) {
                 console.warn(`[FeeSync] bù hoa hồng affiliate ${ch.name} hỏng:`, fmtErr(e))
             } finally {

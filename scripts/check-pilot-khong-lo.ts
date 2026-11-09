@@ -44,6 +44,8 @@ import { noteProxyFailure, noteProxySuccess } from '../src/lib/proxyBreaker'
 import { ToolError } from '../src/lib/mcpTypes'
 import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT } from '../src/lib/tienIchCuaHang'
 import { xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
+import { buHoaHongAffiliate } from '../src/cron/autoSync'
+import { mapWithConcurrency } from '../src/lib/prisma'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -884,7 +886,22 @@ async function main() {
                 JSON.stringify([thieu?.affiliateFee, rong?.affiliateFee, am?.affiliateFee]))
             const src = fs.readFileSync(path.join(__dirname, '../src/cron/autoSync.ts'), 'utf8')
             dung('E13. lượt bù hoa hồng chỉ ghi cột affiliateFee và chỉ khi đọc được (không ghi 0 thay số thiếu)',
-                /e\?\.affiliateFee == null\) \{ khongRa\+\+/.test(src) && /data: \{ affiliateFee: e\.affiliateFee \}/.test(src) && /affiliateFee: null/.test(src))
+                /if \(aff == null\) \{\s*khongRa\+\+/.test(src) && /data: \{ affiliateFee: aff \}/.test(src) && /affiliateFee: null/.test(src))
+            // chạy THẬT hàm bù (export từ 10/11/2026) trên gian Shopee giả: escrow thiếu số ⇒ không ghi; 0 ⇒ ghi 0; mã bỏ tiền tố SPE-
+            {
+                const ghiBu: any[] = [], hoiEscrow: string[] = []
+                const spB: any = { onlineOrder: {
+                    findMany: async () => [{ id: 'e1', externalOrderId: 'SPE-2511AA' }, { id: 'e2', externalOrderId: 'SPE-2511BB' }, { id: 'e3', externalOrderId: '2511CC' }],
+                    update: async (a: any) => { ghiBu.push(a) },
+                } }
+                class SPB { constructor(_c: any) { } async getEscrowDetail(sn: string) { hoiEscrow.push(sn); return sn.endsWith('AA') ? { affiliateFee: null } : sn.endsWith('BB') ? { affiliateFee: 0 } : { affiliateFee: 8000 } } }
+                class TTB { constructor(_c: any) { } async getOrderSettlement() { throw new Error('không được gọi TikTok cho gian Shopee') } }
+                const nB = await buHoaHongAffiliate(spB, { id: 'chS', name: 'Gian S', platform: 'shopee' }, Date.now() + 60_000, mapWithConcurrency, SPB, TTB)
+                dung('E13. hàm bù chạy thật (Shopee): escrow thiếu số ⇒ KHÔNG ghi, 0 ⇒ ghi 0, 8.000 ⇒ ghi 8.000; hỏi mã bỏ tiền tố SPE-',
+                    nB === 2 && ghiBu.length === 2 && !ghiBu.some(g => g.where.id === 'e1') && ghiBu.find(g => g.where.id === 'e2')?.data?.affiliateFee === 0
+                    && ghiBu.find(g => g.where.id === 'e3')?.data?.affiliateFee === 8000 && hoiEscrow.sort().join(',') === '2511AA,2511BB,2511CC',
+                    JSON.stringify({ nB, ghiBu, hoiEscrow }))
+            }
             // đo 01/11: lượt chính ăn gần hết 240s ⇒ lượt bù chỉ còn ~1 phút, bù 38 đơn của đúng kênh đứng đầu danh sách
             dung('E13. lượt bù có giờ RIÊNG (lượt chính ăn hết 240s vẫn bù được) và bắt đầu từ kênh ngẫu nhiên (không kênh nào bị bỏ đói)',
                 /hanBu = Math\.max\(batDau \+ FEE_DEADLINE_MS, Date\.now\(\) \+ AFF_BU_MS\)/.test(src) && /if \(Date\.now\(\) > han\) \{ hetGio\+\+/.test(src) &&

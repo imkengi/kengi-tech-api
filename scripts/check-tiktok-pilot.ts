@@ -23,6 +23,8 @@
  *     L3 nghỉ 24 giờ tính từ lúc THỰC THI.   L4 đồng bộ danh mục lấy ngành mã mới, một mã lỗi không dừng lượt.
  *     L5 giá chủ shop sửa tay ⇒ để yên 7 ngày.   L6 TikTok khoá giá vì khuyến mãi ⇒ 'skipped' + nghỉ 24 giờ.
  *     L7 làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT dòng 'token', không ghi gì lượt đó.
+ *  A. (10/11/2026, TT-02) hoa hồng affiliate TikTok đọc từ statement từng đơn: "0" thật ≠ không có trường (null); hoa hồng gộp
+ *     trước thuế TNCN không cộng đôi; điều chỉnh bù trừ có dấu; mô hình phí tách affiliate, giá sàn theo hoa hồng cao nhất đo.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -31,13 +33,15 @@ import {
     luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
     giaSkuTikTok, laLoiKhoaGiaKhuyenMai, laLoiTokenTikTok, boSungNganhTikTok,
 } from '../src/lib/tiktokPilot'
-import { TikTokService } from '../src/services/platforms/tiktok'
+import { TikTokService, hoaHongAffiliateTikTok } from '../src/services/platforms/tiktok'
 import { docMauPhi, xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
 import { tinhGiaDeXuat, lyDoPhiChuaDuTin, chanGiaDuoiSan, uocLuongPhi, type MauPhi, type ThamSoGia } from '../src/lib/giaShopee'
 import { viecCanNguoi } from '../src/lib/pilotBaoChuShop'
 import { dauNgayVN } from '../src/lib/shopeePilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_TIKTOK_PILOT } from '../src/lib/tienIchCuaHang'
+import { buHoaHongAffiliate } from '../src/cron/autoSync'
+import { mapWithConcurrency } from '../src/lib/prisma'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { ok ? dat++ : loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -837,6 +841,98 @@ async function main() {
         datLai()
     }
 
+    // ─── A. Hoa hồng affiliate TikTok đo từng đơn (10/11/2026, TT-02) ─────────────
+    // Statement THẬT (finance 202309, đo 10/11/2026): trường PHẲNG trên từng giao dịch, số là chuỗi, phí mang dấu ÂM; đơn
+    // thường vẫn trả đủ 4 trường affiliate = "0". Trước: getOrderSettlement không đọc ⇒ affiliateFee NULL ⇒ mô hình phí
+    // không tách được đơn affiliate, giá sàn coi đơn qua affiliate như đơn thường.
+    {
+        const gd = (them: Record<string, string> = {}) => ({
+            statement_id: 's1', status: 'SETTLED', currency: 'VND',
+            revenue_amount: '600000', settlement_amount: '400000', fee_amount: '-200000',
+            platform_commission_amount: '-60000', iva_vat_amount: '-6000', isr_income_tax_amount: '-3000', pit_amount: '0',
+            affiliate_commission_amount: '0', affiliate_commission_before_pit: '0', affiliate_partner_commission_amount: '0',
+            affiliate_ads_commission_amount: '0', ...them,
+        })
+        const boAff = (t: any) => { const x = { ...t }; for (const k of Object.keys(x)) if (/affiliate/.test(k)) delete x[k]; return x }
+        dung('A1. đơn thường (4 trường affiliate = "0", như statement thật) ⇒ 0 — biết chắc KHÔNG qua affiliate', hoaHongAffiliateTikTok([gd()]) === 0)
+        dung('A2. statement không mang trường affiliate nào ⇒ null (chưa đọc được, KHÁC 0); mảng rỗng / null ⇒ null',
+            hoaHongAffiliateTikTok([boAff(gd())]) === null && hoaHongAffiliateTikTok([]) === null && hoaHongAffiliateTikTok(null) === null)
+        dung('A3. có cả "trước thuế TNCN" lẫn "sau thuế" + pit ⇒ lấy hoa hồng GỘP một lần (33.000), không cộng đôi',
+            hoaHongAffiliateTikTok([gd({ affiliate_commission_amount: '-30000', pit_amount: '-3000', affiliate_commission_before_pit: '-33000' })]) === 33000)
+        dung('A4. không có "trước thuế" ⇒ sau thuế + pit (33.000); cộng hoa hồng đối tác + quảng cáo affiliate (⇒ 40.000)',
+            hoaHongAffiliateTikTok([gd({ affiliate_commission_amount: '-30000', pit_amount: '-3000' })]) === 33000
+            && hoaHongAffiliateTikTok([gd({ affiliate_commission_amount: '-30000', pit_amount: '-3000', affiliate_partner_commission_amount: '-5000', affiliate_ads_commission_amount: '-2000' })]) === 40000)
+        dung('A5. pit_amount khác 0 mà KHÔNG có hoa hồng nhà sáng tạo ⇒ không quy cho affiliate (0; chỉ hoa hồng đối tác 5.000 ⇒ 5.000, không 8.000)',
+            hoaHongAffiliateTikTok([gd({ pit_amount: '-3000' })]) === 0
+            && hoaHongAffiliateTikTok([gd({ pit_amount: '-3000', affiliate_partner_commission_amount: '-5000' })]) === 5000)
+        dung('A6. nhiều giao dịch: điều chỉnh hoàn một phần hoa hồng ⇒ bù trừ CÓ DẤU (30.000 − 10.000 = 20.000); hoàn hết ⇒ null (không nói 0 khi không chắc)',
+            hoaHongAffiliateTikTok([gd({ affiliate_commission_amount: '-30000' }), gd({ affiliate_commission_amount: '10000' })]) === 20000
+            && hoaHongAffiliateTikTok([gd({ affiliate_commission_amount: '-30000' }), gd({ affiliate_commission_amount: '30000' })]) === null)
+
+        // getOrderSettlement đọc thẳng phản hồi (httpGet giả) — cùng hàm FeeSync, nút "Lấy phí", bù hoa hồng gọi
+        const svc: any = new TikTokService({ apiKey: 'k', apiSecret: 's', accessToken: 'tk-gia', shopId: '1' } as any)
+        let phanHoi: any = null
+        svc.httpGet = async () => phanHoi
+        phanHoi = { code: 0, data: { statement_transactions: [gd()] } }
+        const s1 = await svc.getOrderSettlement('O1')
+        phanHoi = { code: 0, data: { statement_transactions: [gd({ fee_amount: '-260000', settlement_amount: '340000', affiliate_commission_amount: '-54000', pit_amount: '-6000', affiliate_commission_before_pit: '-60000' })] } }
+        const s2 = await svc.getOrderSettlement('O2')
+        phanHoi = { code: 36009002, message: 'Too many requests' }
+        const s3 = await svc.getOrderSettlement('O3')
+        dung('A7. getOrderSettlement: đơn thường affiliateFee 0, phí 200.000 / thực nhận 400.000; đơn affiliate affiliateFee 60.000 (nằm trong phí 260.000); TikTok từ chối ⇒ null (không ghi gì)',
+            s1?.affiliateFee === 0 && s1?.feeAmount === 200000 && s1?.settlementAmount === 400000
+            && s2?.affiliateFee === 60000 && s2?.feeAmount === 260000 && s3 === null,
+            JSON.stringify({ s1, s2, s3 }))
+
+        // Mô hình phí dùng chung: đủ đơn TikTok biết hoa hồng ⇒ tách affiliate khỏi phí; một đơn affiliate 10% ⇒ giá sàn tính 10%
+        const dongThuong = Array.from({ length: 40 }, (_, i) => ({ giaBan: 200000 + i * 1000, phi: Math.round((200000 + i * 1000) * 0.2), aff: 0 }))
+        const mauThuong = uocLuongPhi(dongThuong, 6, 'Gian TT')
+        const dongCoAff = [...dongThuong.slice(0, 39), { giaBan: 300000, phi: 60000 + 30000, aff: 30000 }]
+        const mauAff = uocLuongPhi(dongCoAff, 6, 'Gian TT')
+        const giaSan = (m: MauPhi) => tinhGiaDeXuat({ giaVon: 100000, phi: m, bienLoiNhuanPct: 15, bienToiThieuPct: 5, phiDongGoi: 0, phiQuangCaoPct: 0, phiAffiliatePct: 0, thueGtgtPct: 0, lamTron: 1000 } as ThamSoGia).giaSan
+        dung('A8. mô hình phí: 40 đơn TikTok biết hoa hồng = 0 ⇒ tách riêng, ghi chú "chưa đơn nào qua affiliate"; thêm MỘT đơn hoa hồng 10% ⇒ tyLeMax 10% và giá sàn TĂNG (chính sách khai 0% vẫn tính số đo)',
+            !!mauThuong.affiliate?.tachRieng && mauThuong.affiliate?.soDonCo === 0 && /chưa đơn nào qua affiliate/.test(mauThuong.ghiChu || '')
+            && Math.abs((mauAff.affiliate?.tyLeMax || 0) - 0.1) < 1e-9 && (giaSan(mauAff) || 0) > (giaSan(mauThuong) || 0),
+            JSON.stringify({ thuong: mauThuong.affiliate, aff: mauAff.affiliate, giaSan: [giaSan(mauThuong), giaSan(mauAff)] }))
+
+        // Lượt BÙ hoa hồng cho đơn đã đối soát trước (cột NULL): gian TikTok hỏi statement, bỏ tiền tố TIK-, 2 luồng
+        const donBu = (n: number, dau = 'b') => Array.from({ length: n }, (_, i) => ({ id: `${dau}${i}`, externalOrderId: `TIK-58${i}` }))
+        const spBu = (ds: any[]) => {
+            const ghi: any[] = [], hoi: any[] = []
+            return { ghi, hoi, sp: { onlineOrder: {
+                findMany: async (a: any) => { hoi.push(a); const bo = new Set(a?.where?.id?.notIn || []); return ds.filter(d => !bo.has(d.id)) },
+                update: async (a: any) => { ghi.push(a) },
+            } } }
+        }
+        const goiTT: string[] = []
+        let traVe: (sn: string) => any = () => null
+        class TTGia { constructor(_c: any) { } async getOrderSettlement(sn: string) { goiTT.push(sn); return traVe(sn) } }
+        class SPGia { constructor(_c: any) { } async getEscrowDetail() { throw new Error('không được gọi Shopee cho gian TikTok') } }
+        const chTT = { id: 'chTT', name: 'Gian TT', platform: 'tiktok', apiKey: 'k', apiSecret: 's', accessToken: 'tk-gia', shopId: '1' }
+        const b1 = spBu(donBu(4))
+        traVe = sn => ({ settlementAmount: 1, feeAmount: 1, revenueAmount: 2, affiliateFee: sn.endsWith('2') ? 12000 : 0 })
+        const n1 = await buHoaHongAffiliate(b1.sp, chTT, Date.now() + 60_000, mapWithConcurrency, SPGia, TTGia)
+        const cua90 = b1.hoi[0]?.where?.createdAt?.gte ? Math.round((Date.now() - new Date(b1.hoi[0].where.createdAt.gte).getTime()) / 86400_000) : null
+        dung('A9. bù hoa hồng gian TikTok: hỏi statement mã KHÔNG tiền tố (58…), ghi đúng affiliateFee (0 / 12.000), cửa sổ 90 ngày như mẫu phí, không đụng Shopee',
+            n1 === 4 && goiTT.length === 4 && goiTT.every(s => /^58\d$/.test(s)) && b1.ghi.length === 4
+            && b1.ghi.find(g => g.where.id === 'b2')?.data?.affiliateFee === 12000 && b1.ghi.filter(g => g.data.affiliateFee === 0).length === 3 && cua90 === 90,
+            JSON.stringify({ n1, goiTT, ghi: b1.ghi, cua90 }))
+        // Token chết / sàn bóp hạn mức: 5 đơn liền không đọc được mà chưa đơn nào được ⇒ thôi kênh lượt này; đơn chưa hỏi
+        // KHÔNG bị nghỉ 24 giờ (lượt sau hỏi lại ngay), đơn đã hỏng thì nghỉ
+        goiTT.length = 0
+        const b2 = spBu(donBu(20, 'h'))
+        traVe = () => null
+        const n2 = await buHoaHongAffiliate(b2.sp, chTT, Date.now() + 60_000, mapWithConcurrency, SPGia, TTGia)
+        const soHoi2 = goiTT.length
+        const b3 = spBu(donBu(20, 'h'))
+        traVe = sn => ({ settlementAmount: 1, feeAmount: 1, revenueAmount: 2, affiliateFee: 0 })
+        goiTT.length = 0
+        const n3 = await buHoaHongAffiliate(b3.sp, chTT, Date.now() + 60_000, mapWithConcurrency, SPGia, TTGia)
+        dung('A10. 5 đơn liền không đọc được (token / hạn mức) ⇒ dừng kênh (≤ 6 lời gọi / 20 đơn, 0 ghi); lượt sau hỏi lại đúng các đơn CHƯA hỏi, đơn đã hỏng nghỉ 24 giờ',
+            n2 === 0 && soHoi2 >= 5 && soHoi2 <= 6 && b2.ghi.length === 0 && n3 === 20 - soHoi2 && goiTT.length === 20 - soHoi2,
+            JSON.stringify({ n2, soHoi2, n3, hoiLai: goiTT.length }))
+    }
+
     // ─── 9. Nối dây (soát mã nguồn) ─────────────────────────────────────────────
     {
         const goc = path.join(__dirname, '..', 'src')
@@ -854,6 +950,12 @@ async function main() {
             /boSungNganhTikTok\(prisma, channel\.id, tkService/.test(oo) && !/break \/\/ rate-limit\/token lỗi/.test(oo))
         dung('9h. hướng dẫn nói thật: Pilot CHƯA biết khuyến mãi SẮP chạy — tắt Tự động đổi giá trước đợt lớn (09/11/2026)',
             /TikTok Pilot CHƯA biết khuyến mãi SẮP chạy — nên tắt Tự động đổi giá/.test(doc('lib/tiktokPilot.ts')))
+        const as = doc('cron/autoSync.ts')
+        dung('9i. hoa hồng affiliate TikTok (10/11/2026, TT-02): vòng đối soát ghi aff từ statement, lượt bù nhận cả gian TikTok (statement, 2 luồng), nút "Lấy phí" ghi affiliateFee',
+            /phi = s\.feeAmount; thucNhan = s\.settlementAmount; aff = s\.affiliateFee \?\? null/.test(as)
+            && /kenhBuAff\.push\(\{ schema: store\.schema, ch \}\)/.test(as) && !/if \(ch\.platform === 'shopee'\) kenhBuAff\.push/.test(as)
+            && /tiktok \? \(await svc\.getOrderSettlement\(sn\)\)\?\.affiliateFee/.test(as) && /\}, tiktok \? 2 : 6\)/.test(as)
+            && /affiliateFee = settlement\.affiliateFee \?\? null/.test(doc('routes/onlineOrders.ts')))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

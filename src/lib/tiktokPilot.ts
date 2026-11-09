@@ -330,7 +330,7 @@ export interface DichVuTikTok {
     testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }>
     getProductDetail(productId: string): Promise<any>
     updatePrice(productId: string, price: number, skuId?: string, sellerSku?: string): Promise<void>
-    getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number } | null>
+    getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number; affiliateFee?: number | null } | null>
     /** danh mục gian (cùng đường nút "Đồng bộ") — chu kỳ tự làm mới khi bản lưu cũ; bộ kiểm không giả thì chu kỳ bỏ bước này */
     fetchProducts?(): Promise<{ products: any[]; total?: number }>
     /** sản phẩm THÔ của gian (products/search mọi trang: skus[] có id / seller_sku / price, status) — chu kỳ đọc giá SỐNG cả lô
@@ -1222,7 +1222,9 @@ export async function kiemKetNoiTikTok(ctx: NgCanhTikTok): Promise<any> {
         await thu('Đối soát tài chính (finance statement_transactions)', async () => {
             const s = await fb.getOrderSettlement(String(don.externalOrderId))
             if (!s) return 'Đơn chưa có đối soát (bình thường với đơn mới) — đọc được API tài chính.'
-            return `Thực nhận ${vnd(s.settlementAmount)} · phí ${vnd(s.feeAmount)}`
+            // hoa hồng affiliate (10/11/2026, TT-02): đọc được thì mô hình phí tách riêng, giá sàn tính đơn qua affiliate theo số đo
+            const aff = s.affiliateFee == null ? ' · chưa đọc được hoa hồng affiliate' : s.affiliateFee > 0 ? ` · trong đó hoa hồng affiliate ${vnd(s.affiliateFee)}` : ' · không qua affiliate'
+            return `Thực nhận ${vnd(s.settlementAmount)} · phí ${vnd(s.feeAmount)}${aff}`
         })
     } else buoc.push({ ten: 'Đối soát tài chính', ok: true, chiTiet: 'Chưa có đơn cũ hơn 7 ngày để thử.' })
     const het = ch.tokenExpiresAt ? new Date(ch.tokenExpiresAt).getTime() : null
