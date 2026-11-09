@@ -67,8 +67,11 @@ const ngayGioVN = (ms: number) => {
 }
 
 /** Dòng kết quả chu kỳ cần người làm gì đó. "CHƯA BIẾT PHÍ" (09/11/2026): gian chưa đủ đơn đo phí, chưa khai phí ⇒ chu kỳ không
- *  đổi giá / đăng mới được gì — chủ shop phải khai phí (MỘT dòng cho cả gian, lib/giaShopee.dongChuKyChuaBietPhi). */
+ *  đổi giá / đăng mới được gì — chủ shop phải khai phí (MỘT dòng cho cả gian, lib/giaShopee.dongChuKyChuaBietPhi).
+ *  Cờ `canNguoi: true` (10/11/2026, SP-13) là đường CHÍNH: dòng tự nói nó cần người — trước chỉ dò chữ khoá trong câu, sửa câu một
+ *  chữ là chủ shop thôi được báo mà không ai hay. Chữ khoá giữ lại làm lưới cho dòng chưa gắn cờ. Cờ chỉ THÊM việc, không bớt. */
 export function canNguoi(r: any): boolean {
+    if (r?.canNguoi === true) return true
     const st = String(r?.status || ''), m = String(r?.message || '')
     return ['failed', 'uncertain', 'partial'].includes(st) || r?.action === 'token' || /CHỜ NGƯỜI DUYỆT|CẦU DAO|CHƯA CÓ HỒ SƠ ĐĂNG|CHƯA BIẾT PHÍ/.test(m)
 }

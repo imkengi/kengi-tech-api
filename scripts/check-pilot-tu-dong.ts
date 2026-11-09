@@ -47,14 +47,20 @@
  *       nhuận» cho Pilot có số tiền; quyền gán chi tiết ưu tiên vai trò; đọc quyền hỏng ⇒ 503 (vẫn chặn); cả 4 route đều gắn
  *    T. (10/11/2026, SP-11) SKU TRÙNG giữa hai listing: tra theo SKU trước đây findFirst lấy BỪA một cái ⇒ đổi giá / khuyến mãi nhầm
  *       sản phẩm. Giờ Shopee + TikTok từ chối, nêu các mã sản phẩm sàn; tra theo item_id không bị ảnh hưởng
+ *    U. (10/11/2026, TT-18) số đã bán 14 ngày: khớp theo SKU / mã sàn / hàng kho đã nối; đọc hỏng ⇒ NÉM (không coi là "không bán")
+ *    V. (10/11/2026, SP-13) Shopee Pilot báo ĐÚNG việc: làm mới token hỏng (trước chỉ console.warn, chạy tiếp bằng token chết) ⇒
+ *       đọc lại kênh (bản khác vừa làm mới thì dùng token đó), không thì MỘT dòng 'token' kèm đường «Cấp lại quyền», báo cả ở Xem
+ *       trước, cả lượt không ghi; Shopee trả invalid_access_token giữa lượt (đọc giá, ghi giá, đẩy tồn) ⇒ dòng token + dừng, con
+ *       trỏ đứng yên; đẩy tồn không mã nào lệch ⇒ không ghi sổ (từng ăn trần ghi / ngày mỗi chu kỳ); hết lượt ghi mà còn mã LỆCH kho
+ *       hoặc bán DƯỚI GIÁ SÀN thật (xác nhận bằng giá sống) ⇒ dòng cần người; cờ canNguoi có cấu trúc (chữ khoá giữ làm lưới)
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { ShopeeService } from '../src/services/platforms/shopee'
-import { chayChuKy, chayTheoLich, khoBoNho, khoSql, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, xayTrangThai, soThuTuMa, type NgCanh, type KhoPilot } from '../src/lib/shopeePilot'
+import { chayChuKy, chayTheoLich, khoBoNho, khoSql, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, xayTrangThai, soThuTuMa, laLoiTokenShopee, cauUyQuyenLaiShopee, LoiTokenShopee, type NgCanh, type KhoPilot } from '../src/lib/shopeePilot'
 import * as fs from 'fs'
 import * as path from 'path'
-import { viecCanNguoi, baoChuShop, ketQuaDeBao, GIAN_CACH_BAO_MS, NHAC_LAI_MS, DUONG_PILOT_WEB, duongPilotCuaTieuDe } from '../src/lib/pilotBaoChuShop'
+import { viecCanNguoi, baoChuShop, ketQuaDeBao, canNguoi, GIAN_CACH_BAO_MS, NHAC_LAI_MS, DUONG_PILOT_WEB, duongPilotCuaTieuDe } from '../src/lib/pilotBaoChuShop'
 import { phanNhomThongBao, duLieuPush } from '../src/routes/notifications'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
@@ -154,15 +160,21 @@ const prisma: any = {
 const goi: string[] = []
 const songGia: Record<string, any> = {}      // item_id → { goc, ban, phanLoai, trangThai }
 const kmSap: Record<string, string> = {}     // item_id → 'ongoing' | 'upcoming'
-let docSongHong = false, kmHong = false, soLanDongBo = 0, soLanDocSong = 0
+/** docSongHong = đọc giá sống hỏng kiểu THƯỜNG (Shopee bận) — từ 10/11/2026 (SP-13) lỗi token có đường riêng (docSongToken, mục V):
+ *  trước ca này dùng lời "error_auth - invalid access_token", giờ lời đó là token hỏng ⇒ dòng 'token', không còn là "đọc hỏng" chung */
+let docSongHong = false, docSongToken = false, kmHong = false, soLanDongBo = 0, soLanDocSong = 0
 /** mọi item_id đã đọc giá sống — mục Q đếm chu kỳ soát những mã nào */
 const docSongIds: string[] = []
+/** access token mà mỗi lần đọc giá sống mang theo — mục V soát dịch vụ dùng token nào */
+const tokenDocSong: string[] = []
 const P = ShopeeService.prototype as any
 P.refreshAccessToken = async () => { throw new Error('bộ kiểm không cho làm mới token') }
-P.getItemBaseInfo = async function (ids: number[]) {
+P.getItemBaseInfo = async function (this: any, ids: number[]) {
     soLanDocSong++
     docSongIds.push(...ids.map(String))
-    if (docSongHong) throw new Error('Shopee get_item_base_info: error_auth - invalid access_token')
+    tokenDocSong.push(String(this?.credentials?.accessToken))
+    if (docSongToken) throw new Error('Shopee get_item_base_info: invalid_acceess_token - Invalid access_token.')
+    if (docSongHong) throw new Error('Shopee get_item_base_info: error_server - Shopee đang bận, thử lại sau')
     return ids.map(id => {
         const l = listing.find(x => x.platformProductId === String(id) && x.platform === 'shopee')
         if (!l) return null
@@ -176,8 +188,11 @@ P.getItemPromotion = async (ids: number[]) => {
     if (kmHong) throw new Error('Shopee get_item_promotion: error_permission')
     return ids.filter(id => kmSap[String(id)]).map(id => ({ item_id: id, promotion: [{ promotion_type: 'Discount', promotion_staging: kmSap[String(id)] }] }))
 }
+/** ghi giá hỏng vì token (mục V5) — lời gọi VẪN được đếm trong `goi` (đã gửi lên Shopee, Shopee từ chối) */
+let ghiGiaToken = false
 P.updatePrice = async function (this: any, id: any, gia: number) {
     goi.push(`gia:${this.credentials?.shopId}:${id}:${gia}`)
+    if (ghiGiaToken) throw new Error('Shopee update_price: error_auth - Invalid access_token.')
     const l = listing.find(x => x.platformProductId === String(id) && x.platform === 'shopee')
     if (l) songGia[String(id)] = { ...(songGia[String(id)] || {}), goc: gia, ban: undefined }
 }
@@ -324,7 +339,7 @@ const sanPhanLoai = (o: {
 }
 
 const nem = async (f: () => Promise<any>) => { try { await f(); return null } catch (e: any) { return e } }
-const xoaHet = () => { listing.length = 0; for (const k of Object.keys(hang)) delete hang[k]; for (const k of Object.keys(songGia)) delete songGia[k]; for (const k of Object.keys(kmSap)) delete kmSap[k]; goi.length = 0; goiTT.length = 0; daySo.length = 0; docSongHong = false; kmHong = false }
+const xoaHet = () => { listing.length = 0; for (const k of Object.keys(hang)) delete hang[k]; for (const k of Object.keys(songGia)) delete songGia[k]; for (const k of Object.keys(kmSap)) delete kmSap[k]; goi.length = 0; goiTT.length = 0; daySo.length = 0; docSongHong = false; docSongToken = false; ghiGiaToken = false; kmHong = false }
 
 async function main() {
     // ─── A. Báo chủ shop ─────────────────────────────────────────────────────────
@@ -1535,7 +1550,248 @@ async function main() {
             /OR \(\$4 <> '' AND i\."productId" = \$4\)/.test(nguonSp) && /soBan14NgayMa\(ctx\.prisma, ch\.id, itemId, l\.sku \|\| null, l\.localProductId \|\| null\)/.test(nguonSp))
     }
 
-    console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)
+    // ─── V. (10/11/2026, SP-13) Shopee Pilot báo ĐÚNG việc: token hỏng, hết lượt ghi ──────────────────────────────────────
+    {
+        /** chA về token thường (hết hạn sau 1 giờ ⇒ moDichVuShopee không làm mới) */
+        const traToken = () => Object.assign(kenh[0], { accessToken: 'tA', refreshToken: undefined, tokenExpiresAt: new Date(Date.now() + 3600_000) })
+        /** token chA còn 1 phút (< đệm 5 phút) ⇒ moDichVuShopee làm mới — bộ kiểm luôn cho làm mới HỎNG (P.refreshAccessToken) */
+        const sapHet = () => { kenh[0].tokenExpiresAt = new Date(Date.now() + 60_000) }
+        /** lượt MỚI (ngữ cảnh mới ⇒ dịch vụ mở lại) trên kho riêng, gian A */
+        const moi = async (pol: any, o: { mode?: string; pz?: any; dayTon?: any } = {}) => {
+            const k = khoBoNho()
+            const c: NgCanh = { prisma: o.pz || prisma, kho: k, nguoi: 'chu@shop', dayTon: o.dayTon || dayTonGia }
+            await luuCauHinh(c, { channelId: 'chA', executionMode: (o.mode || 'auto') as any, policy: pol })
+            return { c, k }
+        }
+        const tuDongV = (them: any = {}) => ({ reprice: true, syncStock: false, publishNewProducts: false, campaign: { enabled: false }, ...them })
+        const polV = (them: any = {}, auto: any = {}) => ({ automation: tuDongV(auto), maxWritesPerDay: 500, ...them })
+        const dongTk = (kq: any): any[] => kq.results.filter((r: any) => r.action === 'token')
+        const daGhiSan = async (k: KhoPilot, n: number) => { for (let i = 0; i < n; i++) await k.ghiNhatKy({ action: 'price', status: 'succeeded', planId: null, payload: { truoc: i }, response: null }) }
+        const CAU_TOKEN_A = /^Cần uỷ quyền lại gian Shopee "Gian A" — Đơn Hàng Online → nút «Kênh bán hàng» → nút «Cấp lại quyền» ở dòng của gian\. Pilot dừng ghi lên Shopee lượt này\. \(/
+
+        // V1 — làm mới token hỏng lúc mở lượt
+        xoaHet(); phiTin(true); daySo.length = 0; bangTon = []
+        themListing('chA', '5101', 'V1', 100000, 100000, { syncedAt: tg(5) })   // dưới sàn 127.200; danh mục cũ 5 giờ ⇒ lượt thường đồng bộ + nâng giá
+        const { c: c1, k: k1 } = await moi(polV({}, { syncStock: true }))
+        const dB = soLanDongBo, dS = soLanDocSong
+        sapHet()
+        const v1 = await chayChuKy(c1)
+        traToken()
+        const tk1 = dongTk(v1)
+        dung('V1. làm mới token hỏng lúc mở lượt ⇒ MỘT dòng token (failed, cờ cần người): đường «Kênh bán hàng» → «Cấp lại quyền» đứng đầu, lời gốc ở cuối',
+            tk1.length === 1 && tk1[0].status === 'failed' && tk1[0].canNguoi === true && CAU_TOKEN_A.test(tk1[0].message) && /\(bộ kiểm không cho làm mới token\)$/.test(tk1[0].message), JSON.stringify(v1.results))
+        dung('V1b. … lượt đó KHÔNG đụng Shopee: không đồng bộ danh mục, không chạy thử / đẩy tồn, không đọc giá sống, không ghi; tồn + giá mỗi thứ một dòng "bỏ qua" trỏ về dòng token',
+            soLanDongBo === dB && daySo.length === 0 && soLanDocSong === dS && goi.length === 0 && k1._keHoach.length === 0
+            && v1.results.some((r: any) => r.action === 'stock' && r.status === 'skipped' && /token Shopee của gian cần uỷ quyền lại \(xem dòng token\)/.test(r.message))
+            && v1.results.some((r: any) => r.action === 'price' && r.status === 'skipped' && /^Không đổi giá lượt này — token Shopee/.test(r.message)),
+            JSON.stringify({ dB, soLanDongBo, daySo, dS, soLanDocSong, goi, r: v1.results }))
+        const vc1 = viecCanNguoi(v1.results)
+        dung('V1c. … chuông chủ shop: đúng MỘT việc (dòng token, còn nguyên đường bấm sau khi cắt 180 ký tự), không dòng "failed" nào khác',
+            vc1.dong.length === 1 && /«Kênh bán hàng» → nút «Cấp lại quyền»/.test(vc1.dong[0] || '') && v1.results.filter((r: any) => r.status === 'failed').length === 1, JSON.stringify(vc1))
+        // đối chứng: CÙNG lượt, token tốt ⇒ có đồng bộ danh mục, chạy thử + đẩy tồn, đọc giá sống, nâng giá (V1b không rỗng nghĩa)
+        const { c: c1d } = await moi(polV({}, { syncStock: true }))
+        const v1d = await chayChuKy(c1d)
+        dung('V1d. đối chứng token tốt: cùng lượt đó có đồng bộ danh mục, chạy thử + đẩy tồn, đọc giá sống và nâng giá; không dòng token',
+            soLanDongBo === dB + 1 && daySo.length === 2 && soLanDocSong > dS && goi.some(g => g.startsWith('gia:1:5101:')) && !dongTk(v1d).length, JSON.stringify({ soLanDongBo, daySo, goi, r: v1d.results }))
+
+        // V2 — làm mới hỏng vì bản khác VỪA làm mới (refresh token cũ mất hiệu lực ngay) ⇒ đọc lại kênh trong CSDL
+        const kenhDb = (them: any): any => ({ ...prisma, onlineChannel: { ...prisma.onlineChannel, findUnique: async ({ where }: any) => (where?.id === 'chA' ? { ...kenh[0], ...them } : null) } })
+        xoaHet(); phiTin(true)
+        themListing('chA', '5201', 'V2', 100000, 100000)
+        const { c: c2 } = await moi(polV(), { pz: kenhDb({ accessToken: 'tA-ban-khac', refreshToken: 'rA-ban-khac', tokenExpiresAt: new Date(Date.now() + 4 * 3600_000) }) })
+        sapHet(); tokenDocSong.length = 0
+        const v2 = await chayChuKy(c2)
+        const kenhSau2 = { ...kenh[0] }
+        traToken()
+        dung('V2. làm mới hỏng nhưng CSDL có token KHÁC còn hạn (bản khác vừa làm mới) ⇒ dùng token đó: không dòng token, đọc giá sống + nâng giá bằng token mới, kênh trong lượt mang token mới',
+            !dongTk(v2).length && tokenDocSong.length > 0 && tokenDocSong.every(t => t === 'tA-ban-khac') && goi.some(g => g.startsWith('gia:1:5201:')) && kenhSau2.accessToken === 'tA-ban-khac',
+            JSON.stringify({ tokenDocSong, goi, r: v2.results }))
+        const caTk: [string, any][] = [
+            // hạn trống: tách phép "token KHÁC" khỏi phép "còn hạn" — cùng token ⇒ không phải bản khác vừa làm mới, dù hạn nói gì
+            ['CSDL vẫn token cũ (chưa ai làm mới; ô hạn trống)', kenhDb({ tokenExpiresAt: null })],
+            ['CSDL token khác nhưng sắp hết hạn (< 1 phút)', kenhDb({ accessToken: 'tA-cu-khac', tokenExpiresAt: new Date(Date.now() + 30_000) })],
+            ['đọc lại kênh hỏng', { ...prisma, onlineChannel: { ...prisma.onlineChannel, findUnique: async () => { throw new Error('Connection terminated unexpectedly') } } }],
+        ]
+        const saiTk: string[] = []
+        for (const [ten, pz] of caTk) {
+            xoaHet(); phiTin(true)
+            themListing('chA', '5202', 'V2b', 100000, 100000)
+            const { c } = await moi(polV(), { pz })
+            sapHet()
+            const kq = await chayChuKy(c)
+            traToken()
+            if (dongTk(kq).length !== 1 || goi.length) saiTk.push(`${ten}: ${JSON.stringify({ goi, r: kq.results })}`)
+        }
+        dung('V2b. CSDL vẫn token cũ / token khác mà sắp hết hạn / đọc lại kênh hỏng ⇒ vẫn MỘT dòng token, không ghi', !saiTk.length, saiTk.join(' | '))
+
+        // V3 — Xem trước + token hỏng: lịch vẫn báo (dòng token qua lọc Xem trước của ketQuaDeBao)
+        xoaHet(); phiTin(true); thongBao.length = 0
+        themListing('chA', '5301', 'V3', 100000, 100000)
+        const k3 = khoBoNho()
+        const c3: NgCanh = { prisma, kho: k3, nguoi: 'chu@shop' }
+        const cf3 = await luuCauHinh(c3, { channelId: 'chA', executionMode: 'preview' as any, policy: polV(), schedule: { enabled: true, intervalMinutes: 60 } })
+        await k3.luuCauHinh({ ...cf3, nextRunAt: Date.now() - 1000 })
+        sapHet()
+        const st3 = await chayTheoLich(prisma, k3)
+        traToken()
+        const lr3: any = (await k3.docCauHinh())?.lastResult
+        dung('V3. Xem trước + token hỏng ⇒ lịch VẪN báo chủ shop đúng một tin nêu «Cấp lại quyền» (Xem trước chỉ bỏ nháp / dòng ghi, không bỏ token); không nháp, không ghi',
+            st3 === 'da-chay' && thongBao.length === 1 && /^Shopee Pilot cần anh\/chị xem 1 việc/.test(thongBao[0].title) && /«Cấp lại quyền»/.test(thongBao[0].message)
+            && goi.length === 0 && k3._keHoach.length === 0 && (lr3?.results || []).some((r: any) => r.action === 'token') && !!lr3?.baoChuShop?.khoa,
+            JSON.stringify({ st3, thongBao, lr3 }))
+
+        // V4 — Shopee thu hồi token giữa chừng: đọc giá sống trả invalid_acceess_token
+        xoaHet(); phiTin(true)
+        themListing('chA', '5401', 'V4', 100000, 100000)
+        const { c: c4, k: k4 } = await moi(polV())
+        docSongToken = true
+        const v4 = await chayChuKy(c4)
+        docSongToken = false
+        dung('V4. đọc giá sống: invalid_acceess_token ⇒ MỘT dòng token mang lời gốc — không dòng "Không đọc được giá" (failed), không tóm tắt "không mã nào cần đổi", không ghi, con trỏ đứng yên',
+            dongTk(v4).length === 1 && CAU_TOKEN_A.test(dongTk(v4)[0].message) && /invalid_acceess_token/.test(dongTk(v4)[0].message)
+            && !v4.results.some((r: any) => r.action === 'price' && (r.status === 'failed' || /không mã nào cần đổi/.test(r.message || '')))
+            && goi.length === 0 && (await k4.docConTro('chA')) === null && viecCanNguoi(v4.results).dong.length === 1, JSON.stringify(v4.results))
+
+        // V5 — Shopee từ chối LẦN GHI vì token
+        xoaHet(); phiTin(true)
+        themListing('chA', '5501', 'V5a', 100000, 100000)
+        themListing('chA', '5502', 'V5b', 100000, 100000)
+        const { c: c5, k: k5 } = await moi(polV())
+        ghiGiaToken = true
+        const v5 = await chayChuKy(c5)
+        ghiGiaToken = false
+        const kh5 = k5._keHoach.filter(k => k.kind === 'price')
+        dung('V5. ghi giá: error_auth "Invalid access_token" ⇒ dừng NGAY sau lần ghi hỏng đầu (mã thứ hai không thử — mỗi lần thử ăn một lượt ghi / ngày), dòng token thay cho dòng giá, không tóm tắt "Soát…", con trỏ đứng yên',
+            goi.length === 1 && dongTk(v5).length === 1 && /Invalid access_token/.test(dongTk(v5)[0].message)
+            && kh5.length === 1 && kh5[0].status === 'failed' && kh5[0].result?.loiToken === true
+            && !v5.results.some((r: any) => r.action === 'price' && (r.status === 'failed' || /^Soát /.test(r.message || '')))
+            && (await k5.docConTro('chA')) === null && viecCanNguoi(v5.results).dong.length === 1, JSON.stringify({ goi, r: v5.results, kh5 }))
+
+        // V6 + V7 — nhận diện lỗi token, câu báo
+        const laTk = ['Shopee get_item_base_info: invalid_acceess_token - Invalid access_token.', 'invalid_access_token', 'Shopee update_price: error_auth - Invalid access_token.', 'error_auth: access token expired', 'INVALID_ACESS_TOKEN']
+        const khongTk = ['Shopee get_item_promotion: error_permission', 'error_permission - no permission', 'source_ip_undeclared - IP chưa khai', 'error_auth - no permission to access this api', 'Shopee get_item_base_info: error_server - Shopee đang bận', 'fetch failed', '']
+        dung('V6. laLoiTokenShopee: invalid_access_token (cả chữ Shopee viết sai "acceess") / error_auth kèm access token ⇒ token; error_permission, source_ip_undeclared, error_auth "no permission", lỗi máy chủ, mất mạng ⇒ KHÔNG (uỷ quyền lại không chữa được)',
+            laTk.every(m => laLoiTokenShopee(new Error(m)) && laLoiTokenShopee(m)) && khongTk.every(m => !laLoiTokenShopee(new Error(m))) && !laLoiTokenShopee(null) && !laLoiTokenShopee(undefined)
+            && laLoiTokenShopee(new LoiTokenShopee('bất kỳ', 'Gian A')), JSON.stringify({ sai: [...laTk.filter(m => !laLoiTokenShopee(m)), ...khongTk.filter(m => laLoiTokenShopee(m))] }))
+        const cA = cauUyQuyenLaiShopee('Gian A', 'Shopee refresh: error_param - refresh_token invalid')
+        const cB = cauUyQuyenLaiShopee('Gian A', 'fetch failed')
+        const cC = cauUyQuyenLaiShopee(null, 'TypeError: fetch failed — invalid_access_token')
+        const dau180 = (s: string) => viecCanNguoi([{ action: 'token', status: 'failed', canNguoi: true, message: s }]).dong[0] || ''
+        dung('V7. câu uỷ quyền lại: đường «Kênh bán hàng» → «Cấp lại quyền» nằm trong 180 ký tự đầu (tin chủ shop cắt ở đó); mất mạng lúc làm mới ⇒ "mất kết nối?", lời token thật thì không hạ thành mất mạng',
+            /^Cần uỷ quyền lại gian Shopee "Gian A" — /.test(cA) && /^Không làm mới được token gian Shopee "Gian A" \(mất kết nối\?\) — /.test(cB) && /^Cần uỷ quyền lại gian Shopee — /.test(cC)
+            && [cA, cB, cC].every(s => /«Kênh bán hàng» → nút «Cấp lại quyền»/.test(dau180(s))) && /Pilot dừng ghi lên Shopee lượt này/.test(cB), JSON.stringify([cA, cB, cC].map(dau180)))
+
+        // V8 — người bấm thực thi khi làm mới token hỏng
+        xoaHet(); phiTin(true)
+        themListing('chA', '5801', 'V8', 100000, 100000)
+        const { c: c8, k: k8 } = await moi(polV())
+        const kh8 = await taoKeHoachGia(c8, { sku: 'V8', price: 127200, idempotencyKey: 'tay-v8' })
+        sapHet()
+        const x8 = await thucThi({ prisma, kho: k8, nguoi: 'chu@shop', dayTon: dayTonGia }, kh8.id)   // lượt bấm tay MỚI ⇒ mở lại dịch vụ ⇒ làm mới ⇒ hỏng
+        traToken()
+        dung('V8. người bấm thực thi khi làm mới token hỏng ⇒ "failed" nói thẳng đường uỷ quyền lại, KHÔNG ghi lên Shopee (trước: chạy bằng token chết, lỗi khó hiểu)',
+            x8.status === 'failed' && CAU_TOKEN_A.test(x8.result?.message || '') && x8.result?.loiToken === true && goi.length === 0, JSON.stringify(x8))
+
+        // V9 — đẩy tồn: không mã nào lệch ⇒ không ghi sổ (trước: mỗi chu kỳ một dòng "Đẩy 0 mã" ăn trần ghi / ngày)
+        const goiD: any[] = []
+        let conL = 0, soG = 0
+        const dayD = (thu: any) => async (o: any) => { goiD.push(o); return o.dryRun ? thu : { ok: true, data: { pushed: 0, skipped: 7, failed: 0 } } }
+        const r9 = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'A', day: dayD({ ok: true, banDocSan: { phanLoai: new Map() }, data: { seDay: 0, seBoQua: 7, bang: [] } }), conLuot: async () => { conL++ }, ghi: async () => { soG++ } })
+        dung('V9. chạy thử ĐÃ đọc sàn mà không mã nào lệch ⇒ "unchanged": không xin lượt ghi, không đẩy thật, KHÔNG ghi sổ',
+            r9.status === 'unchanged' && /^Tồn trên Shopee đã khớp kho — không mã nào cần đẩy \(giữ nguyên 7 mã\), không ghi gì lên Shopee\.$/.test(r9.message) && goiD.length === 1 && conL === 0 && soG === 0 && !canNguoi(r9),
+            JSON.stringify({ r9, goiD, conL, soG }))
+        goiD.length = 0; conL = 0; soG = 0
+        const r9b = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'A', day: dayD({ ok: true, data: { seDay: 0, seBoQua: 7, bang: [] } }), conLuot: async () => { conL++ }, ghi: async () => { soG++ } })
+        dung('V9b. chạy thử KHÔNG đọc được sàn (token sắp hết ⇒ không có bản đọc) mà seDay 0 ⇒ vẫn chạy thật như cũ (lượt thật tự đọc lại sàn)',
+            goiD.length === 2 && !goiD[1].dryRun && conL === 1 && soG === 1 && r9b.status === 'succeeded', JSON.stringify({ r9b, goiD, conL, soG }))
+        xoaHet(); phiTin(true)
+        const { c: c9, k: k9 } = await moi(polV({}, { reprice: false, syncStock: true }), {
+            dayTon: async (_p: any, _id: string, o: any) => o.dryRun ? { ok: true, banDocSan: {}, data: { seDay: 0, seBoQua: 4, bang: [] } } : { ok: true, data: { pushed: 0 } },
+        })
+        for (let i = 0; i < 3; i++) await chayChuKy(c9)
+        dung('V9c. 3 chu kỳ liền, tồn đã khớp ⇒ sổ ghi KHÔNG thêm dòng nào (trần ghi / ngày còn nguyên cho đổi giá)', (await k9.demGhiTuLuc(0)) === 0, JSON.stringify(k9._nhatKy))
+
+        // V10 — hết lượt ghi mà còn mã LỆCH kho
+        const hetTran = async () => { throw new Error('Đã đạt giới hạn 50 thao tác ghi hôm nay theo chính sách — để mai hoặc nâng giới hạn.') }
+        const r10 = await dayTonChuKy({ tuDong: true, san: 'Shopee', gian: 'A', day: async (o: any) => o.dryRun ? { ok: true, banDocSan: {}, data: { seDay: 5, seBoQua: 3, veKhong: 2, bang: [] } } : { ok: true, data: { pushed: 5 } }, conLuot: hetTran, ghi: async () => { } })
+        dung('V10. hết lượt ghi mà 5 mã LỆCH kho (2 mã đã hết ở kho vẫn bán trên sàn) ⇒ "skipped" CẦN NGƯỜI: đường nâng trần đứng đầu, rồi số mã, lý do trần ở cuối',
+            r10.status === 'skipped' && r10.canNguoi === true
+            && /^CHƯA ĐẨY TỒN — hết lượt ghi hôm nay \(nâng «Thao tác ghi mỗi ngày» ở Tự động hóa → Sửa chính sách\): 5 mã trên Shopee lệch với kho, trong đó 2 mã đã HẾT ở kho mà Shopee vẫn bán/.test(r10.message)
+            && /giới hạn 50/.test(r10.message) && viecCanNguoi([r10]).dong.length === 1 && /«Thao tác ghi mỗi ngày»/.test(viecCanNguoi([r10]).dong[0] || ''), JSON.stringify(r10))
+        const r10b = await dayTonChuKy({ tuDong: true, san: 'TikTok', gian: 'T', day: async (o: any) => o.dryRun ? { ok: true, data: { seDay: 3, seBoQua: 0, veKhong: 0, bang: [] } } : { ok: true, data: { pushed: 3 } }, conLuot: hetTran, ghi: async () => { } })
+        dung('V10b. … không mã nào về 0 ⇒ câu không nói "trong đó"; tên sàn theo người gọi (TikTok)', r10b.canNguoi === true && /3 mã trên TikTok lệch với kho\. \(/.test(r10b.message) && !/trong đó/.test(r10b.message), r10b.message)
+
+        // V11 — hết lượt ghi TRƯỚC chu kỳ: còn mã bán dưới giá sàn THẬT?
+        xoaHet(); phiTin(true)
+        themListing('chA', '5601', 'V11a', 100000, 100000)                                                // lưu + sống 100.000 < sàn 127.200 ⇒ báo
+        themListing('chA', '5602', 'V11b', 100000, 100000); songGia['5602'] = { goc: 140000 }             // lưu dưới sàn, sống 140.000 (chủ shop vừa sửa) ⇒ im
+        themListing('chA', '5603', 'V11c', 100000, 100000); songGia['5603'] = { goc: 120000, ban: 100000 } // gốc dưới sàn nhưng đang khuyến mãi (máy không đổi giá giữa chương trình) ⇒ im
+        themListing('chA', '5604', 'V11d', 150000, 100000)                                                // lưu trên sàn ⇒ không đọc
+        const { c: c11, k: k11 } = await moi(polV({ maxWritesPerDay: 3 }))
+        await daGhiSan(k11, 3)
+        docSongIds.length = 0
+        const v11 = await chayChuKy(c11)
+        const g11 = v11.results.filter((r: any) => r.action === 'price')
+        dung('V11. hết lượt ghi TRƯỚC chu kỳ, 1 mã bán dưới sàn THẬT (giá sống) ⇒ MỘT dòng cần người nêu mã + giá + sàn và đường nâng trần; mã giá sống đã trên sàn / đang khuyến mãi không kể; chỉ đọc mã có giá lưu dưới sàn; không ghi, không lập kế hoạch',
+            g11.length === 1 && g11[0].status === 'skipped' && g11[0].canNguoi === true
+            && /^HẾT LƯỢT GHI hôm nay \(3 theo chính sách\) — 1 mã đang bán DƯỚI GIÁ SÀN trên Shopee chưa được nâng — nâng «Thao tác ghi mỗi ngày» ở Tự động hóa → Sửa chính sách hoặc sửa giá trên Shopee: V11a 100\.000đ < sàn 127\.200đ\.$/.test(g11[0].message)
+            && goi.length === 0 && k11._keHoach.length === 0 && viecCanNguoi(v11.results).dong.length === 1
+            && JSON.stringify([...new Set(docSongIds)].sort()) === JSON.stringify(['5601', '5602', '5603']), JSON.stringify({ g11, docSongIds }))
+        songGia['5601'] = { goc: 135000 }
+        const g11b = (await chayChuKy(c11)).results.filter((r: any) => r.action === 'price')
+        dung('V11b. hết lượt, giá sống mọi mã đã trên sàn ⇒ dòng cũ "Đã đủ 3 lần ghi…" KHÔNG chuông',
+            g11b.length === 1 && /^Đã đủ 3 lần ghi hôm nay theo chính sách — đổi giá để mai\.$/.test(g11b[0]?.message || '') && !canNguoi(g11b[0]), JSON.stringify(g11b))
+        delete songGia['5601']; docSongHong = true
+        const v11c = await chayChuKy(c11)
+        docSongHong = false
+        dung('V11c. hết lượt + đọc giá sống hỏng (Shopee bận) ⇒ IM như cũ: dòng "Đã đủ…" không chuông, không dòng failed (thà im còn hơn báo sai)',
+            viecCanNguoi(v11c.results).dong.length === 0 && v11c.results.some((r: any) => /^Đã đủ 3 lần ghi hôm nay/.test(r.message || '')), JSON.stringify(v11c.results))
+        docSongToken = true
+        const v11d = await chayChuKy(c11)
+        docSongToken = false
+        dung('V11d. hết lượt + đọc giá sống trả lỗi token ⇒ dòng token (việc duy nhất)', dongTk(v11d).length === 1 && viecCanNguoi(v11d.results).dong.length === 1 && goi.length === 0, JSON.stringify(v11d.results))
+
+        // V12 — trần NGÀY chặn GIỮA chu kỳ
+        xoaHet(); phiTin(true)
+        for (const [i, sku] of ['V12a', 'V12b', 'V12c', 'V12d'].entries()) themListing('chA', String(5701 + i), sku, 100000, 100000)
+        const { c: c12 } = await moi(polV({ maxWritesPerDay: 3 }))
+        await daGhiSan(c12.kho, 1)
+        const v12 = await chayChuKy(c12)
+        const h12 = v12.results.filter((r: any) => r.action === 'price' && /HẾT LƯỢT GHI/.test(r.message || ''))
+        dung('V12. trần NGÀY chặn giữa chu kỳ (còn 2 lượt, 4 mã dưới sàn) ⇒ nâng 2 mã, MỘT dòng cần người "còn 2 mã để mai" kể đúng 2 mã chưa nâng (trước: "mỗi chu kỳ đổi tối đa 2 mã" — sai lý do, không báo)',
+            goi.length === 2 && goi[0]!.startsWith('gia:1:5701:') && goi[1]!.startsWith('gia:1:5702:')
+            && h12.length === 1 && h12[0].canNguoi === true && /^HẾT LƯỢT GHI hôm nay \(3 theo chính sách\) — còn 2 mã để mai; 2 mã đang bán DƯỚI GIÁ SÀN trên Shopee chưa được nâng/.test(h12[0].message)
+            && /V12c 100\.000đ < sàn 127\.200đ; V12d 100\.000đ < sàn 127\.200đ\.$/.test(h12[0].message) && !v12.results.some((r: any) => /Mỗi chu kỳ đổi tối đa/.test(r.message || ''))
+            && viecCanNguoi(v12.results).dong.length === 1, JSON.stringify({ goi, r: v12.results }))
+        xoaHet(); phiTin(true)
+        for (let i = 0; i < 12; i++) themListing('chA', String(5901 + i), `V12x${i}`, 100000, 100000)
+        const { c: c12b } = await moi(polV())
+        const v12b = await chayChuKy(c12b)
+        dung('V12b. đối chứng: trần MỖI CHU KỲ (10) chặn, trần ngày còn rộng ⇒ dòng cũ "Mỗi chu kỳ đổi tối đa 10 mã — còn 2 mã chờ chu kỳ sau." KHÔNG chuông (chu kỳ sau tự nâng tiếp)',
+            goi.length === 10 && v12b.results.some((r: any) => r.status === 'skipped' && /^Mỗi chu kỳ đổi tối đa 10 mã — còn 2 mã chờ chu kỳ sau\.$/.test(r.message || '')) && viecCanNguoi(v12b.results).dong.length === 0,
+            JSON.stringify({ n: goi.length, r: v12b.results.filter((r: any) => r.status !== 'succeeded') }))
+
+        // V13 — cờ canNguoi
+        dung('V13. canNguoi: cờ canNguoi: true là đường chính (dòng không có chữ khoá vẫn báo); thiếu cờ ⇒ như cũ theo trạng thái / chữ khoá; cờ chỉ THÊM (false không tắt được CẦU DAO / failed); "true" dạng chuỗi không tính',
+            canNguoi({ action: 'price', status: 'skipped', canNguoi: true, message: 'HẾT LƯỢT GHI hôm nay' }) && !canNguoi({ action: 'price', status: 'skipped', message: 'HẾT LƯỢT GHI hôm nay' })
+            && canNguoi({ action: 'stock', status: 'skipped', canNguoi: false, message: 'CẦU DAO — không đẩy tồn' }) && canNguoi({ action: 'price', status: 'failed', canNguoi: false, message: 'x' })
+            && !canNguoi({ action: 'price', status: 'skipped', canNguoi: 'true', message: 'x' }) && !canNguoi(null) && !canNguoi(undefined))
+
+        // V14 — lần ghi đầu của lượt (đẩy tồn) gặp lỗi token
+        xoaHet(); phiTin(true)
+        themListing('chA', '6101', 'V14', 100000, 100000)
+        const { c: c14 } = await moi(polV({}, { syncStock: true }), {
+            dayTon: async (_p: any, _id: string, o: any) => o.dryRun ? { ok: true, data: { seDay: 2, seBoQua: 0, bang: [] } }
+                : { ok: true, data: { pushed: 0, skipped: 0, failed: 2, errors: ['A1: Shopee update_stock: invalid_acceess_token - Invalid access_token.'] } },
+        })
+        const v14 = await chayChuKy(c14)
+        dung('V14. đẩy tồn (lần ghi đầu của lượt) gặp lỗi token ⇒ MỘT dòng token, KHÔNG đổi giá lượt này (mỗi lần ghi sau cũng hỏng y vậy, ăn trần)',
+            dongTk(v14).length === 1 && /invalid_acceess_token/.test(dongTk(v14)[0].message) && goi.length === 0
+            && v14.results.some((r: any) => r.action === 'price' && r.status === 'skipped' && /^Không đổi giá lượt này — token Shopee/.test(r.message)), JSON.stringify(v14.results))
+        traToken()
+    }
+
+    console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian, token Shopee, hết lượt ghi; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)
     process.exit(loi ? 1 : 0)
 }
 

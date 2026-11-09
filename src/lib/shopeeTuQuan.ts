@@ -69,7 +69,23 @@ export async function moDichVuShopee(prisma: any, ch: any): Promise<ShopeeServic
             // cùng lượt mở lại dịch vụ (chu kỳ Pilot) thì khỏi làm mới lần hai bằng refresh token vừa bị thay
             Object.assign(ch, { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: het })
         } catch (e: any) {
-            console.warn(`[ShopeeTuQuan] làm mới token ${ch.name} hỏng:`, e?.message || e)
+            /* 10/11/2026 (SP-13 — như TikTok Pilot TT-20): trước chỉ console.warn rồi chạy tiếp bằng token sắp / đã hết hạn ⇒ mỗi lần
+             * ghi sau đó hỏng một kiểu khó hiểu, không ai được bảo phải uỷ quyền lại. Bản khác (đồng bộ đơn, đẩy tồn, lượt Pilot khác)
+             * có thể VỪA làm mới — refresh token cũ mất hiệu lực ngay ⇒ đọc lại kênh: token KHÁC và còn hạn thì dùng nó. Không thì
+             * ghi lý do lên dịch vụ: chu kỳ Pilot ra MỘT dòng action 'token' và không ghi gì lượt đó (lib/shopeePilot). */
+            const lyDo = String(e?.message || e || 'không rõ').slice(0, 300)
+            let moi: any = null
+            try { moi = await prisma.onlineChannel.findUnique({ where: { id: ch.id } }) } catch { moi = null }
+            const hetMoi = moi?.tokenExpiresAt ? new Date(moi.tokenExpiresAt).getTime() : 0
+            if (moi?.accessToken && moi.accessToken !== ch.accessToken && (!hetMoi || hetMoi > Date.now() + 60_000)) {
+                ;(svc as any).credentials.accessToken = moi.accessToken
+                ;(svc as any).credentials.refreshToken = moi.refreshToken || undefined
+                Object.assign(ch, { accessToken: moi.accessToken, refreshToken: moi.refreshToken, tokenExpiresAt: moi.tokenExpiresAt })
+                console.log(`[ShopeeTuQuan] làm mới token ${ch.name} hỏng (${lyDo}) — dùng token bản khác vừa làm mới`)
+            } else {
+                console.warn(`[ShopeeTuQuan] làm mới token ${ch.name} hỏng:`, lyDo)
+                ;(svc as any).loiLamMoiToken = lyDo
+            }
         }
     }
     return svc

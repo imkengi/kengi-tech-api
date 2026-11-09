@@ -36,7 +36,7 @@ import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien, THIEU_MO_TA, soatSkuTrung } from './shopeeThaoTac'
-import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
+import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, cauConDuoiSan, NGHI_DOI_GIA_MS } from './shopeePilot'
 import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
 import { ghiDoiCauHinh, NHAN_TIKTOK } from './pilotDoiCauHinh'
 import { TikTokService } from '../services/platforms/tiktok'
@@ -996,7 +996,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
     const baoToken = (lyDo: string, e?: any) => {
         if (loiToken) return
         loiToken = e instanceof LoiTokenTikTok ? e.lyDo : lyDo
-        results.push({ action: 'token', status: 'failed', message: cauUyQuyenLaiTikTok(ch.name, loiToken) })
+        results.push({ action: 'token', status: 'failed', canNguoi: true, message: cauUyQuyenLaiTikTok(ch.name, loiToken) })
     }
     const moNhap = await donKeHoachMoTikTok(ctx, tuDong, results, now)
     const fb0 = await dichVu(ctx, ch)
@@ -1023,7 +1023,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
      * "không mã nào cần đổi giá" (quyetDinhGia bỏ qua mã không có giá sàn), khỏi đọc TikTok vô ích. Đẩy tồn vẫn chạy. */
     const bangPhiGian = pol.automation.reprice && pol.maxRepricePerCycle > 0 ? await docMauPhiTheoNganh(ctx.prisma, ch) : null
     const chuaBietPhi = !!bangPhiGian?.toanGian.chuaBiet && !bangPhiGian.theoNganh.size
-    if (chuaBietPhi) results.push({ action: 'cycle', status: 'skipped', message: dongChuKyChuaBietPhi(bangPhiGian!.toanGian.soDon, ch.name, 'chưa đổi giá mã nào') })
+    if (chuaBietPhi) results.push({ action: 'cycle', status: 'skipped', canNguoi: true, message: dongChuKyChuaBietPhi(bangPhiGian!.toanGian.soDon, ch.name, 'chưa đổi giá mã nào') })
 
     if (bangPhiGian && !chuaBietPhi && loiToken) {
         results.push({ action: 'price', status: 'skipped', message: 'Không đổi giá lượt này — token TikTok của gian cần uỷ quyền lại (xem dòng token).' })
@@ -1064,7 +1064,28 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
          * lưu (cũ tới 2 giờ). Đọc hỏng ⇒ không đổi giá mã nào, MỘT dòng lý do. Hết lượt ghi ⇒ khỏi đọc. */
         let song: Map<string, GiaSongTikTok> | null = null
         if (tranGhi <= 0) {
-            results.push({ action: 'price', status: 'skipped', message: `Đã hết lượt ghi hôm nay (${daGhiHomNay}/${pol.maxWritesPerDay} theo chính sách) — đổi giá để mai, hoặc nâng «Thao tác ghi mỗi ngày» ở Sửa chính sách.` })
+            /* HẾT TRẦN NGÀY mà còn mã bán DƯỚI GIÁ SÀN thật (10/11/2026, SP-13 — như Shopee Pilot): máy không nâng được tới mai ⇒ chủ shop
+             * phải biết (trước: một dòng 'skipped' im lặng). Lọc bằng giá LƯU, XÁC NHẬN bằng giá SỐNG — đọc không phải lệnh ghi, không ăn
+             * trần. Đọc hỏng ⇒ im như cũ (thà im còn hơn báo sai); lỗi token ⇒ dòng 'token'. Không đọc gì khi giá lưu không nghi mã nào. */
+            const sanCua = (x: { v: any; mauPhi: MauPhi }) => tinhGiaDeXuat(thamSoTinh(pol, x.v.giaVon, x.mauPhi)).giaSan
+            const nghi = xet.filter(x => { const g = Number(x.l.price) || 0, san = sanCua(x); return g > 0 && san > 0 && g < san })
+            const duoi: string[] = []
+            if (nghi.length) {
+                try {
+                    const s0 = await giaSongLoTikTok(await dichVu(ctx, ch), nghi.map(x => String(x.l.platformProductId)))
+                    for (const x of nghi) {
+                        const s = s0.get(String(x.l.platformProductId)), san = sanCua(x)
+                        if (!s || s.soSku !== 1 || !(s.gia > 0) || (s.trangThai && !DANG_BAN.includes(s.trangThai.toUpperCase()))) continue
+                        if (s.gia < san) duoi.push(`${x.l.sku || x.l.platformProductId} ${vnd(s.gia)} < sàn ${vnd(san)}`)
+                    }
+                } catch (e: any) {
+                    if (laLoiTokenTikTok(e)) baoToken(String(e?.message || e), e)
+                }
+            }
+            results.push({
+                action: 'price', status: 'skipped', ...(duoi.length ? { canNguoi: true } : {}),
+                message: `Đã hết lượt ghi hôm nay (${daGhiHomNay}/${pol.maxWritesPerDay} theo chính sách) — ${duoi.length ? cauConDuoiSan('TikTok', duoi) : 'đổi giá để mai, hoặc nâng «Thao tác ghi mỗi ngày» ở Sửa chính sách.'}`,
+            })
         } else if (!xet.length) {
             song = new Map()
         } else {
@@ -1156,6 +1177,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                 const p = plan.plan || plan
                 results.push({
                     action: 'price', status: p.status, sku: u.l.sku || u.l.platformProductId, planId: p.id,
+                    ...(choDuyet ? { canNguoi: true } : {}),
                     message: `${vnd(Number(p.data?.snapshot?.price) || u.giaCu)} → ${vnd(u.quyet.gia)}: ${u.quyet.lyDo}${p.result?.message ? ` — ${p.result.message}` : ''}${p.result?.warning ? ` — ${p.result.warning}` : ''}${choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
                 })
             } catch (e: any) {
@@ -1176,7 +1198,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
         if (soNhieuSku) results.push({ action: 'price', status: 'skipped', message: `${soNhieuSku} sản phẩm nhiều phân loại — Pilot chưa đổi giá hàng nhiều phân loại, sửa trên TikTok Seller Center.` })
         if (soVuaDoi) results.push({ action: 'price', status: 'skipped', message: `${soVuaDoi} sản phẩm vừa đổi giá trong 24 giờ — chờ xem đơn rồi mới đổi tiếp.` })
         if (soChoDuyet) results.push({ action: 'price', status: 'skipped', message: `${soChoDuyet} sản phẩm đang có nháp chờ duyệt / người vừa huỷ — duyệt hoặc huỷ trên TikTok Pilot (nháp máy lập tự huỷ sau 3 ngày, mã người huỷ thì 14 ngày không đề xuất lại).` })
-        if (soChuaBietPhi) results.push({ action: 'price', status: 'skipped', message: `${soChuaBietPhi} sản phẩm CHƯA BIẾT PHÍ sàn (ngành chưa đủ đơn để đo, gian chưa khai phí) — không tính được giá. Khai phí sàn của gian ở Kênh bán online.` })
+        if (soChuaBietPhi) results.push({ action: 'price', status: 'skipped', canNguoi: true, message: `${soChuaBietPhi} sản phẩm CHƯA BIẾT PHÍ sàn (ngành chưa đủ đơn để đo, gian chưa khai phí) — không tính được giá. Khai phí sàn của gian ở Kênh bán online.` })
         if (bo.nguoiSua) {
             results.push({ action: 'price', status: 'skipped', message: `${bo.nguoiSua} mã chủ shop vừa sửa giá tay trên TikTok — Pilot để yên tới ${ngayThangVN(denNguoiSua)}`
                 + `${bo.nguoiSuaDuoiSan ? ` (trong đó ${bo.nguoiSuaDuoiSan} mã đang dưới giá sàn — xem lại giá trên Seller Center)` : ''}.` })
@@ -1188,7 +1210,15 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
         if (song && !loiToken) {
             if (hetLuot || (hetTranNgay && soGhi >= tranGhi && con > 0)) {
                 const daGhi = await ctx.kho.demGhiTuLuc(dauNgayVN(now))
-                results.push({ action: 'price', status: 'skipped', message: `Đã hết lượt ghi hôm nay (${daGhi}/${pol.maxWritesPerDay} theo chính sách)${con > 0 ? ` — còn ${con} sản phẩm để mai` : ''}.` })
+                // mã chưa tới lượt mà giá SỐNG (đọc lượt này) dưới giá sàn ⇒ chờ tới mai là bán dưới mức lãi tối thiểu ⇒ cần người (SP-13)
+                const duoi = uv.slice(i).filter(u => u.uu === 0).map(u => {
+                    const v = von.get(u.l.id)
+                    return `${u.l.sku || u.l.platformProductId} ${vnd(u.giaCu)} < sàn ${vnd(v ? tinhGiaDeXuat(thamSoTinh(pol, v.giaVon, u.mauPhi)).giaSan : 0)}`
+                })
+                results.push({
+                    action: 'price', status: 'skipped', ...(duoi.length ? { canNguoi: true } : {}),
+                    message: `Đã hết lượt ghi hôm nay (${daGhi}/${pol.maxWritesPerDay} theo chính sách)${con > 0 ? ` — còn ${con} sản phẩm để mai` : ''}${duoi.length ? `; ${cauConDuoiSan('TikTok', duoi)}` : '.'}`,
+                })
             } else if (!soGhi && !soNhap && !soNhieuSku) {
                 // còn mã bị giữ / chưa biết phí / không đọc được giá thì không biết có cần đổi hay không — đừng nói "không mã nào cần đổi"
                 const chua = soChuaBietPhi || bo.nguoiSua || bo.khuyenMai || boQua

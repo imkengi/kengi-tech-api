@@ -1457,6 +1457,7 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                         soTraLoi++
                         results.push({
                             action: 'reply', status: p.status, planId: p.id, sku: c.product.sku,
+                            ...(tuDong && choDuyet ? { canNguoi: true } : {}),
                             message: `${c.fromName || 'Khách'}: "${c.message.slice(0, 60)}" → giá ${vnd(c.product.price)}${p.result?.message ? ` — ${p.result.message}` : ''}${tuDong && choDuyet ? ` — CHỜ NGƯỜI DUYỆT: ${choDuyet}` : ''}`,
                         })
                     } catch (e: any) {

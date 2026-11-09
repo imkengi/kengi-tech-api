@@ -641,8 +641,12 @@ async function main() {
         dung('L2b. … phần còn lại MỘT dòng "skipped" "Đã hết lượt ghi hôm nay (50/50 …) — còn 8 sản phẩm để mai"; KHÔNG dòng "failed"',
             het.length === 1 && het[0].status === 'skipped' && /\(50\/50 theo chính sách\) — còn 8 sản phẩm để mai/.test(het[0].message)
             && !kq.results.some((r: any) => r.status === 'failed'), JSON.stringify(kq.results))
-        dung('L2c. … viecCanNguoi KHÔNG có mục nào từ chuyện hết trần; không lập nháp thừa quá trần',
-            viecCanNguoi(kq.results).dong.length === 0 && ctx.kho._keHoach.filter(k => k.status === 'draft').length === 0,
+        // 10/11/2026 (SP-13): còn mã bán DƯỚI GIÁ SÀN chờ tới mai ⇒ MỘT việc cần người (TT-10 cũ: không chuông) — vẫn không 'failed'
+        dung('L2c. … hết trần mà còn mã DƯỚI GIÁ SÀN (giá sống lượt này) ⇒ đúng MỘT việc cần người: chính dòng hết lượt, có đường nâng trần; không nháp thừa',
+            // 10 ứng viên: X7…X0 + OC4 dưới sàn, BINH hạ; ghi X7, X6 ⇒ còn 8, trong đó 7 dưới sàn (X5…X0, OC4) — mã ĐÃ nâng không kể
+            viecCanNguoi(kq.results).dong.length === 1 && het[0]?.canNguoi === true
+            && /— còn 8 sản phẩm để mai; 7 mã đang bán DƯỚI GIÁ SÀN trên TikTok chưa được nâng — nâng «Thao tác ghi mỗi ngày»/.test(het[0]?.message || '')
+            && /: X5 100\.000đ < sàn 127\.200đ; X4 /.test(het[0]?.message || '') && ctx.kho._keHoach.filter(k => k.status === 'draft').length === 0,
             JSON.stringify({ viec: viecCanNguoi(kq.results), kh: ctx.kho._keHoach.map(k => k.status) }))
 
         datLai(); datTikTok(); goi.length = 0; them8()
@@ -651,9 +655,48 @@ async function main() {
         const ctx2 = ctxL(kho2)
         await luuCauHinhTikTok(ctx2, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
         const kq2 = await chayChuKyTikTok(ctx2)
-        dung('L2d. đủ 50/50 TRƯỚC chu kỳ ⇒ không đọc / ghi TikTok, không lập kế hoạch, đúng MỘT dòng giá "skipped" hết lượt',
-            goi.length === 0 && ctx2.kho._keHoach.length === 0 && dongGia(kq2).length === 1 && dongGia(kq2)[0].status === 'skipped'
-            && /^Đã hết lượt ghi hôm nay \(50\/50/.test(dongGia(kq2)[0].message) && viecCanNguoi(kq2.results).dong.length === 0, JSON.stringify(kq2.results))
+        // 10/11/2026 (SP-13): giá LƯU nghi dưới sàn ⇒ đọc giá SỐNG để xác nhận (đọc không phải lệnh ghi) — 9 mã: X0–X7 + OC4
+        const d2 = dongGia(kq2)[0]
+        dung('L2d. đủ 50/50 TRƯỚC chu kỳ ⇒ KHÔNG ghi TikTok, không lập kế hoạch; đúng MỘT dòng giá "skipped" hết lượt, xác nhận 9 mã dưới sàn bằng giá sống ⇒ cần người',
+            ghiTT().length === 0 && ctx2.kho._keHoach.length === 0 && dongGia(kq2).length === 1 && d2?.status === 'skipped'
+            && /^Đã hết lượt ghi hôm nay \(50\/50 theo chính sách\) — 9 mã đang bán DƯỚI GIÁ SÀN trên TikTok/.test(d2?.message || '') && d2?.canNguoi === true
+            && goi.filter(g => g[0] === 'detail').length === 9 && viecCanNguoi(kq2.results).dong.length === 1, JSON.stringify(kq2.results))
+
+        // L2f. đối chứng: đủ trần mà giá LƯU không nghi mã nào ⇒ không đọc TikTok, dòng cũ không chuông
+        datLai(); datTikTok(); goi.length = 0
+        const kho2f = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho2f, 50)
+        const ctx2f = ctxL(kho2f)
+        listing.find(l => l.platformProductId === '111')!.price = 150000   // OC4 lưu 150.000 > sàn 127.200; BINH vốn đã trên sàn
+        await luuCauHinhTikTok(ctx2f, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq2f = await chayChuKyTikTok(ctx2f)
+        dung('L2f. đủ trần, giá lưu không mã nào dưới sàn ⇒ KHÔNG đọc / ghi TikTok, dòng "đổi giá để mai" không chuông',
+            goi.length === 0 && dongGia(kq2f).length === 1 && /đổi giá để mai, hoặc nâng «Thao tác ghi mỗi ngày»/.test(dongGia(kq2f)[0]?.message || '')
+            && !dongGia(kq2f)[0]?.canNguoi && viecCanNguoi(kq2f.results).dong.length === 0, JSON.stringify({ goi, r: kq2f.results }))
+
+        // L2g. giá lưu nghi nhưng giá SỐNG đã trên sàn (chủ shop vừa sửa trên Seller Center) ⇒ đọc rồi im
+        datLai(); datTikTok(); goi.length = 0
+        const kho2g = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho2g, 50)
+        const ctx2g = ctxL(kho2g)
+        chiTiet['111'] = giaTT(150000, 'sku111')   // lưu 120.000 (nghi), sống 150.000
+        await luuCauHinhTikTok(ctx2g, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq2g = await chayChuKyTikTok(ctx2g)
+        dung('L2g. giá lưu dưới sàn nhưng giá SỐNG đã trên sàn ⇒ đọc 1 mã rồi IM (không chuông, không ghi)',
+            ghiTT().length === 0 && goi.filter(g => g[0] === 'detail').length === 1 && !dongGia(kq2g)[0]?.canNguoi && viecCanNguoi(kq2g.results).dong.length === 0,
+            JSON.stringify({ goi, r: kq2g.results }))
+
+        // L2h. đọc giá sống hỏng (mất mạng) ⇒ im như cũ — thà im còn hơn báo sai; token hỏng ⇒ dòng 'token'
+        datLai(); datTikTok(); goi.length = 0
+        const kho2h = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho2h, 50)
+        const ctx2h = ctxL(kho2h)
+        chiTiet['111'] = new TypeError('fetch failed')
+        await luuCauHinhTikTok(ctx2h, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq2h = await chayChuKyTikTok(ctx2h)
+        dung('L2h. đọc giá sống hỏng ⇒ dòng hết lượt KHÔNG chuông, không "failed", không ghi',
+            ghiTT().length === 0 && !dongGia(kq2h)[0]?.canNguoi && !kq2h.results.some((r: any) => r.status === 'failed') && viecCanNguoi(kq2h.results).dong.length === 0,
+            JSON.stringify(kq2h.results))
 
         // lượt khác (tab khác / thực thi tay) ghi chen giữa chừng ⇒ trần chạm NGAY TRONG thucThi
         datLai(); datTikTok(); goi.length = 0; them8()
@@ -665,10 +708,23 @@ async function main() {
         const kq3 = await chayChuKyTikTok(ctx3)
         sauGhiGia = null
         const het3 = kq3.results.filter((r: any) => /Đã hết lượt ghi hôm nay/.test(r.message || ''))
-        dung('L2e. lượt khác ghi chen ⇒ thucThi chạm trần ⇒ MỘT dòng "skipped" (không "failed"), giữ nháp, 1 lần ghi, không chuông',
+        dung('L2e. lượt khác ghi chen ⇒ thucThi chạm trần ⇒ MỘT dòng "skipped" (không "failed"), giữ nháp, 1 lần ghi; còn mã dưới sàn ⇒ một việc cần người',
             ghiTT().length === 1 && het3.length === 1 && het3[0].status === 'skipped' && /còn 9 sản phẩm để mai/.test(het3[0].message)
             && !kq3.results.some((r: any) => r.status === 'failed') && ctx3.kho._keHoach.filter(k => k.status === 'draft').length === 1
-            && viecCanNguoi(kq3.results).dong.length === 0, JSON.stringify(kq3.results))
+            // SP-13: mã dưới sàn còn lại (gồm mã vừa chạm trần, nháp giữ lại) ⇒ đúng MỘT việc cần người, chính là dòng hết lượt
+            && viecCanNguoi(kq3.results).dong.length === 1 && het3[0].canNguoi === true && /— còn 9 sản phẩm để mai; 8 mã đang bán DƯỚI GIÁ SÀN trên TikTok/.test(het3[0].message), JSON.stringify(kq3.results))
+
+        // L2i. đủ trần + đọc xác nhận trả lỗi TOKEN ⇒ dòng 'token' (việc duy nhất), dòng hết lượt không chuông
+        datLai(); datTikTok(); goi.length = 0
+        const kho2i = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho2i, 50)
+        const ctx2i = ctxL(kho2i)
+        chiTiet['111'] = new Error('TikTok products/detail: [105005] Access token is expired')
+        await luuCauHinhTikTok(ctx2i, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq2i = await chayChuKyTikTok(ctx2i)
+        dung('L2i. đủ trần + đọc giá sống báo token hết hạn ⇒ MỘT dòng token (việc duy nhất), không ghi',
+            kq2i.results.filter((r: any) => r.action === 'token').length === 1 && viecCanNguoi(kq2i.results).dong.length === 1 && ghiTT().length === 0 && !dongGia(kq2i)[0]?.canNguoi,
+            JSON.stringify(kq2i.results))
     }
 
     // L3 (TT-11) — nghỉ 24 giờ tính từ lúc THỰC THI, không phải lúc lập nháp

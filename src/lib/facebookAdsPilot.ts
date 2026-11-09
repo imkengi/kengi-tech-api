@@ -1560,6 +1560,7 @@ export async function chayChuKyAds(ctx: NgCanhAds, o: { baoCaoNgayCu?: string | 
         const cho = k?.status === 'draft' && cfg.mode === 'approve' && laTangChi(k) ? ` — ${CHO_DUYET}: ${TEN_VIEC[k.kind] || 'tăng chi'}` : ''
         results.push({
             action, status: k?.status, sku, planId: k?.id, message: `${message}${cho}${k?.result?.message ? ` — ${k.result.message}` : ''}`,
+            ...(cho ? { canNguoi: true } : {}),
             ...(vuaLam && k?.status === 'succeeded' && laTangChi(k) && !k?.result?.alreadyActive ? { tienMay: true } : {}),
         })
     }
@@ -1708,7 +1709,7 @@ export async function chayChuKyAds(ctx: NgCanhAds, o: { baoCaoNgayCu?: string | 
     if (cfg.mode === 'approve') {
         for (const k of await ctx.kho.dsKeHoachLoai(['boost', 'resume', 'budget'], now - 30 * NGAY)) {
             if (k.status !== 'draft' || !laMay(k) || daBao.has(k.id)) continue
-            results.push({ action: k.kind, status: 'draft', sku: k.data?.sku || null, planId: k.id, message: `${k.data?.name || k.data?.sku || ''} — ${CHO_DUYET}: ${TEN_VIEC[k.kind] || 'tăng chi'}` })
+            results.push({ action: k.kind, status: 'draft', sku: k.data?.sku || null, planId: k.id, canNguoi: true, message: `${k.data?.name || k.data?.sku || ''} — ${CHO_DUYET}: ${TEN_VIEC[k.kind] || 'tăng chi'}` })
         }
     }
     if (!results.length) {
