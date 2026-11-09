@@ -1108,23 +1108,37 @@ router.post('/confirm-2fa', authMiddleware, async (req: AuthRequest, res: Respon
     }
 })
 
+/* ─── Tắt 2FA — MỘT đường cho cả DELETE /disable-2fa lẫn PUT /toggle-2fa (09/11/2026) ───
+ * Đòi mật khẩu, rồi xoá CẢ hạt TOTP lẫn thiết bị tin cậy chứ không chỉ hạ cờ: hạt cũ có thể đã lộ
+ * (GET /api/employees từng trả twoFactorSecret + trustedDevices trước b0e24cf), còn trustedDevices[].id
+ * gửi kèm POST /auth/login là bỏ qua bước TOTP ⇒ chỉ lật cờ thì bật lại vẫn dùng được hạt + thiết bị cũ.
+ * Trả null khi đã tắt; ngược lại trả mã HTTP + câu lỗi (giữ nguyên câu cũ của disable-2fa).
+ * Tài khoản đăng ký bằng Google mang mật khẩu tự sinh ⇒ phải đặt mật khẩu qua Quên mật khẩu trước. */
+async function tat2FA(
+    storePrisma: NonNullable<AuthRequest['storePrisma']>,
+    userId: string,
+    password: unknown,
+): Promise<{ ma: number; loi: string } | null> {
+    if (!password || typeof password !== 'string') return { ma: 400, loi: 'Mật khẩu là bắt buộc' }
+
+    const user = await storePrisma.user.findUnique({ where: { id: userId }, select: { password: true } })
+    if (!user) return { ma: 404, loi: 'User not found' }
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return { ma: 400, loi: 'Mật khẩu không đúng' }
+
+    await storePrisma.user.update({
+        where: { id: userId },
+        data: { twoFactorEnabled: false, twoFactorSecret: null, trustedDevices: '[]' },
+    })
+    return null
+}
+
 // ─── DELETE /api/auth/disable-2fa — Disable 2FA (requires password) ──────────
 router.delete('/disable-2fa', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const storePrisma = req.storePrisma!
-        const { password } = req.body
-        if (!password) { res.status(400).json({ success: false, error: 'Mật khẩu là bắt buộc' }); return }
-
-        const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId } })
-        if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
-
-        const valid = await bcrypt.compare(password, user.password)
-        if (!valid) { res.status(400).json({ success: false, error: 'Mật khẩu không đúng' }); return }
-
-        await storePrisma.user.update({
-            where: { id: req.user!.userId },
-            data: { twoFactorEnabled: false, twoFactorSecret: null, trustedDevices: '[]' },
-        })
+        const chan = await tat2FA(req.storePrisma!, req.user!.userId, req.body?.password)
+        if (chan) { res.status(chan.ma).json({ success: false, error: chan.loi }); return }
         res.json({ success: true, message: 'Đã tắt 2FA' })
     } catch (err: any) {
         console.error('Disable 2FA error:', err)
@@ -1162,15 +1176,43 @@ router.delete('/trusted-devices/:id', authMiddleware, async (req: AuthRequest, r
     }
 })
 
-// ─── PUT /api/auth/toggle-2fa ────────────────────────────────────────────────
+// ─── PUT /api/auth/toggle-2fa — chỉ còn TẮT, và tắt y hệt disable-2fa ────────
+/* Trước 09/11/2026 tuyến này chỉ lật cờ twoFactorEnabled (công tắc "Xác thực 2 lớp (2FA)" trên web):
+ *   (1) tắt rồi bật lại vẫn giữ NGUYÊN hạt TOTP cũ — có thể đã lộ qua GET /api/employees trước b0e24cf —
+ *       cùng thiết bị tin cậy;
+ *   (2) ai cầm phiên đăng nhập (hay khoá API write/admin) cũng tắt được 2FA, không cần mật khẩu;
+ *   (3) bật khi chưa có hạt ⇒ cờ bật mà cổng TOTP ở /login bỏ qua (cổng đó đòi twoFactorSecret), trong khi
+ *       giao diện báo "được bảo vệ bởi Google Authenticator".
+ * Nay TẮT đi qua tat2FA như DELETE /disable-2fa. BẬT luôn bị từ chối: chỉ setup-2fa (sinh hạt MỚI) +
+ * confirm-2fa (mã TOTP khớp hạt đó) mới bật được. Không cột nào cho biết hạt đang nằm trong DB đã được
+ * xác nhận hay chưa — setup-2fa ghi hạt TRƯỚC khi xác nhận, công tắc cũ để lại hạt cũ khi tắt — nên
+ * đường này không bật lại bất kỳ hạt nào.
+ * Body `{ enabled?: boolean, password?: string }`: có `enabled` thì là trạng thái MUỐN (trùng trạng thái
+ * hiện tại ⇒ không đổi gì); không có thì lật như cũ — web bản cũ còn trong trình duyệt gọi không body. */
 router.put('/toggle-2fa', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const storePrisma = req.storePrisma!
-        const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId }, select: { twoFactorEnabled: true } })
+        const userId = req.user!.userId
+        const user = await storePrisma.user.findUnique({ where: { id: userId }, select: { twoFactorEnabled: true } })
         if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
-        const newVal = !user.twoFactorEnabled
-        await storePrisma.user.update({ where: { id: req.user!.userId }, data: { twoFactorEnabled: newVal } })
-        res.json({ success: true, data: { twoFactorEnabled: newVal } })
+
+        const dangBat = !!user.twoFactorEnabled
+        const muonBat = typeof req.body?.enabled === 'boolean' ? req.body.enabled : !dangBat
+        if (muonBat === dangBat) { res.json({ success: true, data: { twoFactorEnabled: dangBat } }); return }
+
+        if (muonBat) {
+            res.status(400).json({
+                success: false,
+                code: 'BAT_2FA_QUA_THIET_LAP',
+                error: 'Bật 2FA phải quét mã QR rồi nhập mã xác nhận: Cài đặt → Bảo mật → Thiết Lập 2FA '
+                    + '(API: POST /api/auth/setup-2fa rồi POST /api/auth/confirm-2fa)',
+            })
+            return
+        }
+
+        const chan = await tat2FA(storePrisma, userId, req.body?.password)
+        if (chan) { res.status(chan.ma).json({ success: false, error: chan.loi }); return }
+        res.json({ success: true, message: 'Đã tắt 2FA', data: { twoFactorEnabled: false } })
     } catch (err) {
         console.error('Toggle 2FA error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
