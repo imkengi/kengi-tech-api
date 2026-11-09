@@ -1810,12 +1810,16 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
                 ...transaction,
                 createdAt: transaction.createdAt.toISOString(),
                 returnedAt: transaction.returnedAt?.toISOString(),
+                /* `items` lấy từ returnItemsJson — đúng những dòng vừa ghi vào ReturnItem. TRƯỚC 09/11/2026 chỗ này là
+                 * JSON.parse(returnOrder.items): ReturnOrder.items là QUAN HỆ chứ không phải cột chuỗi, create không
+                 * include thì không có khoá đó ⇒ SyntaxError ⇒ 500 SAU KHI đã cộng tồn / lập phiếu RT- / trừ nợ khách.
+                 * POS báo lỗi, thu ngân bấm lại ⇒ trả một phần bị ghi hai lần. Bộ soát: check:tra-hang-pos. */
                 returnOrder: returnOrder ? {
                     code: returnOrder.code,
                     id: returnOrder.id,
                     totalRefund: returnOrder.totalRefund,
-                    items: JSON.parse(returnOrder.items),
-                } : { code: returnCode, totalRefund: returnTotal },
+                    items: returnItemsJson,
+                } : { code: returnCode, totalRefund: returnTotal, items: returnItemsJson },
             },
         })
     } catch (err) {
