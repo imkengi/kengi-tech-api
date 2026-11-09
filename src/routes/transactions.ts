@@ -1297,6 +1297,25 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
             return
         }
 
+        /* Phiếu ĐÃ CÓ TRẢ HÀNG (một phần — trạng thái vẫn 'completed'/'partial') thì KHÔNG huỷ (09/11/2026). Huỷ hoàn
+         * kho TOÀN BỘ baseQuantity và trừ TRỌN doanh số khách, cộng với phần đã hoàn lúc trả ⇒ kho thừa đúng số đã
+         * trả, doanh số khách trừ hai lần. Trả nốt phần còn lại bằng Trả hàng (phần cuối thì phiếu thành 'returned').
+         * Xét cả returnedAt (mọi luồng trả đều đặt) lẫn phiếu RT- còn hiệu lực (phiếu chuyển sang từ lần sửa phiếu). */
+        const traTruoc = await prisma.returnOrder.findFirst({
+            where: {
+                OR: [{ originalInvoice: existing.receiptNumber }, { transactionId: existing.id }],
+                status: { notIn: ['rejected', 'cancelled'] },
+            },
+            select: { code: true },
+        })
+        if (existing.returnedAt || traTruoc) {
+            res.status(400).json({
+                success: false,
+                error: `Phiếu ${existing.receiptNumber} đã có trả hàng${traTruoc?.code ? ` (${traTruoc.code})` : ''} — không huỷ được nữa. Trả nốt phần còn lại bằng Trả hàng.`,
+            })
+            return
+        }
+
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
         const voidWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         const stockEmits: any[] = []
@@ -1583,13 +1602,41 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
 
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
 
-        // Determine which items to return (all if returnItems not specified)
-        const itemsToReturn = returnItems && Array.isArray(returnItems) && returnItems.length > 0
-            ? existing.items.filter(i => returnItems.some((ri: any) => ri.productId === i.productId))
-            : existing.items
+        /* SỐ ĐÃ TRẢ Ở CÁC LẦN TRƯỚC (09/11/2026). Bản cũ chỉ so số xin trả với số ĐÃ BÁN của từng lần gọi ⇒ trả một
+         * phần nhiều lần (phiếu vẫn 'completed' nên lọt qua) cộng dồn vượt số bán: bán 2 trả 2 lần × 2 ⇒ cộng 4 vào
+         * kho, hoàn tiền gấp đôi. Giờ trừ đi mọi phiếu RT- của hoá đơn này (theo số phiếu, hoặc transactionId với
+         * phiếu lập ở trang Trả hàng), trừ phiếu bị từ chối / huỷ. */
+        const phieuTraTruoc: any[] = await prisma.returnOrder.findMany({
+            where: {
+                OR: [{ originalInvoice: existing.receiptNumber }, { transactionId: existing.id }],
+                status: { notIn: ['rejected', 'cancelled'] },
+            },
+            select: { code: true, items: { select: { productId: true, quantity: true } } },
+        })
+        const daTraTheoMa = new Map<string, number>()
+        for (const r of phieuTraTruoc || []) {
+            for (const i of r.items || []) {
+                if (!i.productId) continue
+                daTraTheoMa.set(i.productId, (daTraTheoMa.get(i.productId) || 0) + (Number(i.quantity) || 0))
+            }
+        }
+        /* Phiếu có thể có NHIỀU DÒNG CÙNG MÃ (POS "+" nhân dòng để bán giá khác; client chỉ gửi productId). Bản cũ áp
+         * cùng một số lượng cho MỌI dòng cùng mã ⇒ xin trả 1 mà cộng kho 2, hoàn tiền hai dòng. Giờ chia số trả lần
+         * lượt theo thứ tự dòng — số đã trả ở các lần trước cũng chia đúng thứ tự đó. Khoá = id DÒNG, không phải mã. */
+        const daTraDong = new Map<string, number>()
+        {
+            const conMa = new Map(daTraTheoMa)
+            for (const it of existing.items) {
+                const c = conMa.get(it.productId) || 0
+                const lay = Math.min(it.quantity, c)
+                daTraDong.set(it.id, lay)
+                conMa.set(it.productId, c - lay)
+            }
+        }
+        const conDong = (it: { id: string; quantity: number }) => Math.max(0, it.quantity - (daTraDong.get(it.id) || 0))
 
-        // Determine return quantities (from returnItems or use full qty)
-        const returnQtyMap = new Map<string, number>()
+        // Số xin trả theo mã hàng (không gửi danh sách ⇒ trả hết phần còn lại của cả phiếu)
+        const xinTheoMa = new Map<string, number>()
         if (returnItems && Array.isArray(returnItems) && returnItems.length > 0) {
             /* ⚠ KHÔNG ĐƯỢC TIN SỐ LƯỢNG TRẢ TỪ CLIENT.
              *
@@ -1603,27 +1650,57 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
              * TỪ CHỐI chứ không kẹp âm thầm: kẹp thì người bấm tưởng đã trả 100
              * trong khi hệ chỉ ghi 1, và chênh lệch đó không ai phát hiện ra. */
             for (const ri of returnItems) {
-                const dong = existing.items.find(i => i.productId === ri.productId)
-                if (!dong) continue
+                const cacDong = existing.items.filter(i => i.productId === ri.productId)
+                if (!cacDong.length) continue
                 const xin = Number(ri.quantity)
-                if (Number.isFinite(xin) && xin > dong.quantity) {
-                    res.status(400).json({
-                        success: false,
-                        error: `Số lượng trả (${xin}) vượt quá số đã bán (${dong.quantity}) của "${dong.productName}"`,
-                    })
-                    return
-                }
                 if (Number.isFinite(xin) && xin < 0) {
                     res.status(400).json({ success: false, error: 'Số lượng trả không được âm' })
                     return
                 }
-                // Bỏ trống / 0 → hiểu là trả trọn dòng, giữ nguyên nếp cũ
-                returnQtyMap.set(ri.productId, (Number.isFinite(xin) && xin > 0) ? xin : dong.quantity)
+                const conLai = cacDong.reduce((s, d) => s + conDong(d), 0)
+                // Bỏ trống / 0 → hiểu là trả hết phần còn lại của mã này, giữ nếp cũ "trả trọn dòng"
+                xinTheoMa.set(ri.productId, (xinTheoMa.get(ri.productId) || 0) + ((Number.isFinite(xin) && xin > 0) ? xin : conLai))
+            }
+            for (const [ma, xin] of xinTheoMa) {
+                const cacDong = existing.items.filter(i => i.productId === ma)
+                const daBan = cacDong.reduce((s, d) => s + d.quantity, 0)
+                const conLai = cacDong.reduce((s, d) => s + conDong(d), 0)
+                if (xin > conLai) {
+                    const ten = cacDong[0]?.productName
+                    res.status(400).json({
+                        success: false,
+                        error: conLai === daBan
+                            ? `Số lượng trả (${xin}) vượt quá số đã bán (${daBan}) của "${ten}"`
+                            : `Số lượng trả (${xin}) vượt quá số còn trả được (${conLai}) của "${ten}" — đã bán ${daBan}, đã trả ${daBan - conLai} ở các lần trước`,
+                    })
+                    return
+                }
             }
         } else {
-            for (const item of itemsToReturn) {
-                returnQtyMap.set(item.productId, item.quantity)
+            for (const it of existing.items) xinTheoMa.set(it.productId, (xinTheoMa.get(it.productId) || 0) + conDong(it))
+        }
+
+        // Chia số trả của từng mã xuống các DÒNG (lần lượt), id dòng → SL trả lần này
+        const traDong = new Map<string, number>()
+        for (const [ma, tongXin] of xinTheoMa) {
+            let can = tongXin
+            for (const it of existing.items) {
+                if (it.productId !== ma || can <= 0) continue
+                const lay = Math.min(conDong(it), can)
+                if (lay > 0) traDong.set(it.id, lay)
+                can -= lay
             }
+        }
+        const itemsToReturn = existing.items.filter(i => (traDong.get(i.id) || 0) > 0)
+        if (itemsToReturn.length === 0) {
+            // Không còn gì để trả (đã trả hết ở các lần trước / mã không có trên phiếu) — KHÔNG lập phiếu RT- rỗng 0đ.
+            res.status(400).json({
+                success: false,
+                error: phieuTraTruoc?.length
+                    ? `Phiếu ${existing.receiptNumber} không còn món nào để trả — đã trả ở ${phieuTraTruoc.map((r: any) => r.code).join(', ')}`
+                    : 'Không có món nào trên phiếu khớp danh sách trả',
+            })
+            return
         }
 
         // Tiền hoàn theo giá THỰC TRẢ: đơn giá hiệu lực = lineTotal/quantity (đã gồm
@@ -1631,7 +1708,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // lineTotal — không dùng unitPrice thô (hoàn dư cho đơn có giảm giá).
         const orderDiscountAmount = tienGiamGiaPhieu(existing as any)
         const returnTotal = itemsToReturn.reduce((sum, item) => {
-            const qty = returnQtyMap.get(item.productId) || item.quantity
+            const qty = traDong.get(item.id) || 0
             if (!item.quantity) return sum
             const discountShare = existing.subtotal > 0
                 ? orderDiscountAmount * (item.lineTotal / existing.subtotal)
@@ -1640,8 +1717,9 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         }, 0)
 
         // Trả MỘT PHẦN không được đánh dấu cả đơn 'returned' (dashboard sẽ mất
-        // toàn bộ doanh thu đơn). Chỉ 'returned' khi MỌI dòng đều trả đủ số lượng.
-        const isFullReturn = existing.items.every(i => (returnQtyMap.get(i.productId) || 0) >= i.quantity)
+        // toàn bộ doanh thu đơn). Chỉ 'returned' khi MỌI dòng đều trả đủ số lượng —
+        // CỘNG CẢ các lần trả trước (trả nốt phần cuối thì phiếu mới thành 'returned').
+        const isFullReturn = existing.items.every(i => (daTraDong.get(i.id) || 0) + (traDong.get(i.id) || 0) >= i.quantity)
 
         const transaction = await prisma.transaction.update({
             where: { id: String(req.params.id) },
@@ -1663,7 +1741,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         const returnItemsJson = itemsToReturn.map((item: any) => ({
             productName: item.productName,
             sku: item.sku,
-            quantity: returnQtyMap.get(item.productId) || item.quantity,
+            quantity: traDong.get(item.id) || 0,
             unitPrice: item.unitPrice,
             productId: item.productId,
         }))
@@ -1702,7 +1780,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // bản ghi cũ baseQuantity=0 → fallback qty. Hoàn cả kho mặc định chi nhánh.
         const returnWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         for (const item of itemsToReturn) {
-            const qty = returnQtyMap.get(item.productId) || item.quantity
+            const qty = traDong.get(item.id) || 0
             const baseRestore = (item as any).baseQuantity > 0 && item.quantity > 0
                 ? Math.round((item as any).baseQuantity * (qty / item.quantity))
                 : qty
