@@ -46,6 +46,36 @@ const invoicePayload = (t: any) => ({
 // Lỗi hết hàng khi trừ kho có guard chống âm — throw bên trong $transaction
 // để rollback toàn bộ đơn, handler bắt và trả 409.
 class StockConflictError extends Error { }
+// Phiếu gốc của lần "Cập nhật phiếu" đã bị huỷ / cập nhật ở thao tác khác (bấm hai lần, máy khác) — cũng trả 409.
+class XungDotSuaPhieu extends StockConflictError { }
+
+/**
+ * Xoá phần NỢ còn treo của một phiếu bị huỷ vì "Cập nhật phiếu" — GIỐNG HỆT nút Huỷ (PUT /:id/void): nợ = total − đã
+ * thu khi 'partial', trừ tối đa số nợ khách đang có, ghi DebtEntry 'return' cùng mô tả "Hủy đơn <số> - xóa nợ" (sổ chi
+ * tiết công nợ nhận diện mô tả này là phát sinh gắn hoá đơn). Trước 10/11/2026 sửa phiếu ghi nợ thì nợ phiếu gốc ở lại
+ * nguyên, phiếu mới ghi nợ thêm lần nữa ⇒ khách nợ HAI LẦN. Trả về số đã xoá.
+ */
+async function xoaNoPhieuHuyDoSua(
+    tx: any,
+    goc: { receiptNumber: string; status: string; total: number; amountReceived?: number | null; customerId?: string | null; customerName?: string | null },
+): Promise<number> {
+    if (!goc.customerId || goc.status !== 'partial') return 0
+    const conNo = Math.max(0, (goc.total || 0) - (goc.amountReceived ?? 0))
+    if (!(conNo > 0)) return 0
+    const kh = await tx.customer.findUnique({ where: { id: goc.customerId }, select: { debt: true, name: true, phone: true } })
+    const giam = Math.min(conNo, Math.max(0, kh?.debt ?? 0))
+    if (!(giam > 0)) return 0
+    await tx.customer.update({ where: { id: goc.customerId }, data: { debt: { decrement: giam } } })
+    await tx.debtEntry.create({
+        data: {
+            customerId: goc.customerId, customerName: kh?.name || goc.customerName || 'Khách hàng',
+            phone: kh?.phone || null, type: 'return', amount: giam,
+            description: `Hủy đơn ${goc.receiptNumber} - xóa nợ`,
+            balance: Math.max(0, (kh?.debt ?? 0) - giam),
+        },
+    })
+    return giam
+}
 
 // Resolve how many base units 1 `selectedUnit` represents for a given product.
 // Returns 1 when selectedUnit equals the product's baseUnit or no matching conversion.
@@ -728,6 +758,40 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
+        /* CẬP NHẬT PHIẾU = HUỶ phiếu gốc + bán phiếu mới ⇒ phải qua ĐÚNG các chốt của nút Huỷ (PUT /:id/void) — 10/11/2026.
+         * Từ khi việc huỷ phiếu gốc dời vào đây (13/08/2026) thì lọt mất: chặn chéo chi nhánh (/:id/revise có), chặn phiếu
+         * đã trả hàng (một phần — vẫn 'completed' — cập nhật là hoàn kho TOÀN BỘ lần nữa phần đã trả + trừ doanh số khách hai
+         * lần) và phiếu 'returned'. Phiếu gốc đã huỷ (bấm hai lần / máy khác vừa cập nhật) trước đây vẫn lập phiếu .2 như
+         * một đơn bán MỚI mà không hoàn kho ⇒ bán trùng; giờ 409. Chặn TRƯỚC khi ghi bất cứ gì. */
+        if (revisionSource) {
+            if (!canAccessBranch(req, revisionSource.branchId)) {
+                res.status(404).json({ success: false, error: 'Source transaction not found' })
+                return
+            }
+            if (revisionSource.status === 'voided') {
+                res.status(409).json({ success: false, error: `Phiếu ${revisionSource.receiptNumber} đã bị huỷ hoặc đã được cập nhật ở thao tác khác — tải lại danh sách phiếu.` })
+                return
+            }
+            if (revisionSource.status === 'returned') {
+                res.status(400).json({ success: false, error: `Phiếu ${revisionSource.receiptNumber} đã trả hàng toàn bộ — không cập nhật được nữa.` })
+                return
+            }
+            const traTruoc = await prisma.returnOrder.findFirst({
+                where: {
+                    OR: [{ originalInvoice: revisionSource.receiptNumber }, { transactionId: revisionSource.id }],
+                    status: { notIn: ['rejected', 'cancelled'] },
+                },
+                select: { code: true },
+            })
+            if (revisionSource.returnedAt || traTruoc) {
+                res.status(400).json({
+                    success: false,
+                    error: `Phiếu ${revisionSource.receiptNumber} đã có trả hàng${traTruoc?.code ? ` (${traTruoc.code})` : ''} — không cập nhật được nữa. Trả nốt phần còn lại bằng Trả hàng rồi lập phiếu mới.`,
+                })
+                return
+            }
+        }
+
         // Công nợ SUY RA từ dữ liệu đơn (không tin debtAmount client gửi để tránh lệch
         // với stats total-amountReceived): đơn 'partial' nợ = total - đã thu, else 0 (#15).
         const _status = txData.status || 'completed'
@@ -818,6 +882,10 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             branchId: branchId || null,
             appliedPromotionIds: promoIds.length > 0 ? JSON.stringify(promoIds) : null,
             channel: isVanSale ? 'van' : (txData.channel || 'direct'),
+            // Nối phiếu mới về phiếu gốc ngay khi tạo — bước 5 của /:id/revise làm việc này, nhưng từ 13/08/2026 nó
+            // gặp phiếu gốc đã 'voided' (POST này huỷ trước) và trả 400 sớm ⇒ phiếu mới mồ côi. Chỉ gửi cột khi CÓ
+            // sửa phiếu: đơn bán thường không đụng tới cột này (cột do index.ts thêm lúc khởi động cho mọi cửa hàng).
+            ...(revisionSource ? { revisionOfId: revisionSource.id } : {}),
             items: {
                 create: itemsWithConversion.map((item: any) => ({
                     productId: item.productId,
@@ -898,7 +966,14 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                                 notes: (revisionSource.notes ? revisionSource.notes + '\n' : '') + `[Cập nhật] → ${receiptNumber}`,
                             },
                         })
+                        // Không giành được = phiếu gốc vừa bị huỷ / cập nhật ở thao tác khác (bấm hai lần, máy khác) — trước
+                        // đây vẫn lập phiếu .N như đơn bán MỚI mà không hoàn kho ⇒ bán trùng. Huỷ cả đơn này, trả 409.
+                        if (gianhQuyenHuy.count !== 1) {
+                            throw new XungDotSuaPhieu(`Phiếu ${revisionSource.receiptNumber} vừa bị huỷ hoặc được cập nhật ở thao tác khác — tải lại danh sách phiếu.`)
+                        }
                         if (gianhQuyenHuy.count === 1) {
+                            // Nợ còn treo của phiếu gốc: xoá như nút Huỷ (phiếu mới ghi nợ lại phần của nó ở dưới)
+                            await xoaNoPhieuHuyDoSua(tx, revisionSource)
                             const khoGoc = await getOrCreateDefaultWarehouse(tx as any, revisionSource.branchId || null)
                             for (const dong of (revisionSource.items || []) as any[]) {
                                 const traLai = dong.baseQuantity > 0 ? dong.baseQuantity : dong.quantity
@@ -1142,6 +1217,14 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 }
                 throw txErr
             }
+        }
+
+        // CẬP NHẬT PHIẾU: đảo bút toán doanh thu/VAT/giảm giá/giá vốn/thu nợ của phiếu gốc vừa huỷ — y như nút Huỷ
+        // (post-commit, không chặn, hỏng thì ERROR lên Nhật ký lỗi). Trước 10/11/2026 không đảo ⇒ sổ ghi doanh thu
+        // HAI LẦN (phiếu gốc đã huỷ + phiếu mới). Phiếu mới mang số "<gốc>.N" nên COLLECT-<gốc>- không chạm phiếu mới.
+        if (revisionSource) {
+            await reverseJournalEntriesForTransaction(prisma, revisionSource.receiptNumber, { branchId: revisionSource.branchId ?? null, userId: req.user!.userId })
+                .catch((e: any) => console.error(`[cap-nhat-phieu] Đảo bút toán HỎNG cho ${revisionSource.receiptNumber} — sổ còn doanh thu của phiếu đã huỷ do cập nhật:`, moTaLoi(e)))
         }
 
         // Increment bundle soldCount for any bundles included in the order (best-effort)
@@ -2067,65 +2150,90 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
             return
         }
 
-        if (existing.status === 'voided') {
+        /* POST /transactions có revisionOfId đã huỷ phiếu gốc NGAY lúc bán (hoàn kho, trả doanh số khách — 13/08/2026; xoá
+         * nợ, đảo bút toán — 10/11/2026) và ghi "[Cập nhật] → <số mới>" vào ghi chú ⇒ lời gọi này (POS web vẫn gọi sau khi
+         * bán) chỉ còn việc NỐI: phiếu mới ← gốc, chuyển bảo hành + phiếu trả hàng. Trước đây gặp 'voided' là trả 400 ⇒
+         * bảo hành ở lại phiếu đã huỷ. Phiếu huỷ vì lý do khác (nút Huỷ, lần cập nhật khác) thì vẫn 400 như cũ. */
+        const daHuyKhiBan = existing.status === 'voided' && String(existing.notes || '').includes(`[Cập nhật] → ${newReceiptNumber}`)
+        if (existing.status === 'voided' && !daHuyKhiBan) {
             res.status(400).json({ success: false, error: 'Transaction already voided' })
             return
+        }
+        if (!daHuyKhiBan) {
+            // Đường cũ (POST không đọc được phiếu gốc nên chưa huỷ): cùng các chốt của nút Huỷ
+            if (existing.status === 'returned') {
+                res.status(400).json({ success: false, error: `Phiếu ${existing.receiptNumber} đã trả hàng toàn bộ — không cập nhật được nữa.` })
+                return
+            }
+            const traTruoc = await prisma.returnOrder.findFirst({
+                where: { OR: [{ originalInvoice: existing.receiptNumber }, { transactionId: existing.id }], status: { notIn: ['rejected', 'cancelled'] } },
+                select: { code: true },
+            })
+            if (existing.returnedAt || traTruoc) {
+                res.status(400).json({ success: false, error: `Phiếu ${existing.receiptNumber} đã có trả hàng${traTruoc?.code ? ` (${traTruoc.code})` : ''} — không cập nhật được nữa.` })
+                return
+            }
         }
 
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
 
-        // 2. Void the old transaction
-        await prisma.transaction.update({
-            where: { id: sourceId },
-            data: { status: 'voided', notes: (existing.notes ? existing.notes + '\n' : '') + `[Cập nhật] → ${newReceiptNumber}` },
-        })
-
-        // 3. Restore stock from old transaction.
-        // Hoàn theo ĐƠN VỊ GỐC đã trừ lúc bán (baseQuantity; bản ghi cũ → quantity),
-        // kèm hoàn kho mặc định của chi nhánh (nơi bị trừ lock-step lúc bán).
-        const reviseWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
-        for (const item of existing.items) {
-            const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
-            const updatedProduct = await prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: restoreQty } },
+        if (!daHuyKhiBan) {
+            // 2. Void the old transaction
+            await prisma.transaction.update({
+                where: { id: sourceId },
+                data: { status: 'voided', notes: (existing.notes ? existing.notes + '\n' : '') + `[Cập nhật] → ${newReceiptNumber}` },
             })
 
-            if (reviseWarehouse?.id) {
-                await updateWarehouseStock(prisma as any, reviseWarehouse.id, item.productId, restoreQty)
-                    .catch((err: any) => console.error(`[Revision] WarehouseStock restore failed for product ${item.productId}:`, err))
+            // 3. Restore stock from old transaction.
+            // Hoàn theo ĐƠN VỊ GỐC đã trừ lúc bán (baseQuantity; bản ghi cũ → quantity),
+            // kèm hoàn kho mặc định của chi nhánh (nơi bị trừ lock-step lúc bán).
+            const reviseWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
+            for (const item of existing.items) {
+                const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
+                const updatedProduct = await prisma.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: restoreQty } },
+                })
+
+                if (reviseWarehouse?.id) {
+                    await updateWarehouseStock(prisma as any, reviseWarehouse.id, item.productId, restoreQty)
+                        .catch((err: any) => console.error(`[Revision] WarehouseStock restore failed for product ${item.productId}:`, err))
+                }
+                // Webhook đầu ra: stock.changed do hoàn kho khi sửa đơn (trước khi áp lại)
+                emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: restoreQty, stock: (updatedProduct as any).stock, reason: 'revise' }, req.user?.storeSchema).catch(() => { })
+
+                await prisma.inventoryTransaction.create({
+                    data: {
+                        type: 'adjustment',
+                        productId: item.productId,
+                        productName: item.productName,
+                        productSku: item.sku,
+                        quantity: restoreQty,
+                        reason: `Cập nhật phiếu - ${existing.receiptNumber} → ${newReceiptNumber}`,
+                        note: `Hoàn kho do cập nhật giao dịch ${existing.receiptNumber}`,
+                        referenceId: existing.receiptNumber,
+                        referenceType: 'revision',
+                        unitPrice: item.unitPrice || 0,
+                        costPriceAfter: updatedProduct.costPrice,
+                        userId: req.user!.userId,
+                        userName: user?.name || 'Admin',
+                    },
+                })
             }
-            // Webhook đầu ra: stock.changed do hoàn kho khi sửa đơn (trước khi áp lại)
-            emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: restoreQty, stock: (updatedProduct as any).stock, reason: 'revise' }, req.user?.storeSchema).catch(() => { })
 
-            await prisma.inventoryTransaction.create({
-                data: {
-                    type: 'adjustment',
-                    productId: item.productId,
-                    productName: item.productName,
-                    productSku: item.sku,
-                    quantity: restoreQty,
-                    reason: `Cập nhật phiếu - ${existing.receiptNumber} → ${newReceiptNumber}`,
-                    note: `Hoàn kho do cập nhật giao dịch ${existing.receiptNumber}`,
-                    referenceId: existing.receiptNumber,
-                    referenceType: 'revision',
-                    unitPrice: item.unitPrice || 0,
-                    costPriceAfter: updatedProduct.costPrice,
-                    userId: req.user!.userId,
-                    userName: user?.name || 'Admin',
-                },
-            })
-        }
-
-        // 4. Revert customer stats from old transaction
-        if (existing.customerId) {
-            await prisma.customer.update({
-                where: { id: existing.customerId },
-                data: {
-                    totalPurchases: { decrement: existing.total },
-                    totalOrders: { decrement: 1 },
-                },
-            }).catch(() => {})
+            // 4. Revert customer stats from old transaction (+ nợ còn treo của phiếu gốc, như nút Huỷ)
+            if (existing.customerId) {
+                await prisma.customer.update({
+                    where: { id: existing.customerId },
+                    data: {
+                        totalPurchases: { decrement: existing.total },
+                        totalOrders: { decrement: 1 },
+                    },
+                }).catch(() => {})
+                await xoaNoPhieuHuyDoSua(prisma, existing)
+            }
+            // (đảo bút toán phiếu gốc: ở cuối hàm, chạy cho cả hai đường — JournalEntry.reference @unique nên đường
+            // POST đã đảo rồi thì lần này chỉ đụng khoá trùng, không đảo hai lần)
         }
 
         // 5. Link the new transaction as revision of the old one
