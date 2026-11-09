@@ -941,9 +941,14 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     // Van sale: Product.stock đã trừ lúc chất hàng lên xe — chỉ trừ kho xe.
                     for (const item of itemsWithConversion) {
                         let productAfter: { costPrice: number } | null = null
+                        // DỊCH VỤ không có tồn thật (danh sách tồn, báo cáo kho, POS web đều bỏ productType 'service')
+                        // ⇒ không chặn "hết hàng" kể cả khi cửa hàng TẮT bán âm kho. Trước đây: cửa hàng tắt bán âm
+                        // bán "Dịch vụ gói quà" (tồn 0) bị 409 "chỉ còn 0 trong kho" — POS web lẫn app máy tính.
+                        // Vẫn trừ + ghi thẻ như cửa hàng cho bán âm (huỷ/trả phiếu cộng lại khớp số đã trừ).
+                        const khongChanTon = allowNegativeStock || productMap.get(item.productId)?.productType === 'service'
                         if (isVanSale) {
                             productAfter = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
-                        } else if (allowNegativeStock) {
+                        } else if (khongChanTon) {
                             productAfter = await tx.product.update({
                                 where: { id: item.productId },
                                 data: { stock: { decrement: item.baseQuantity } },
@@ -963,7 +968,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
 
                         // Kho mặc định đi lock-step với Product.stock
                         if (defaultWarehouseId) {
-                            if (allowNegativeStock) {
+                            if (khongChanTon) {
                                 await updateWarehouseStock(tx as any, defaultWarehouseId, item.productId, -item.baseQuantity)
                             } else {
                                 const whDec = await (tx as any).warehouseStock.updateMany({
