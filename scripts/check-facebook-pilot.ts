@@ -14,6 +14,13 @@
  *  8. Chạy theo lịch: chưa tới hẹn thì thôi; tới hẹn thì một bản giành, chạy, hẹn lượt kế.
  *  9. Tiện ích facebook_pilot chỉ-quản-trị; trạng thái KHÔNG lộ page token.
  * 10. Nối dây (soát mã nguồn): route gắn, cron chỉ chạy cửa hàng đã bật, /admin/migrate tạo bảng.
+ * 11. (09/11/2026) Lỗi Graph đi qua FacebookService THẬT (fetch giả trả JSON lỗi Graph — không tự gắn isTokenError): xét theo
+ *     MÃ, không theo type 'OAuthException'. #100 ⇒ hỏng riêng kế hoạch, trang sống; #190 ⇒ token_expired; #4 / #17 / #613 ⇒ giữ
+ *     nháp, lùi, trang giữ nguyên; #200 ⇒ nói tên quyền; ghi gặp 5xx / không phải JSON / hết giờ ⇒ 'uncertain'; đối soát #32 ⇒
+ *     không đánh dấu hết hạn.
+ * 12. (09/11/2026) Dọn kế hoạch mở — CÙNG MỘT kho qua nhiều lượt: Xem trước 6 nháp → 4 giờ sau bật Tự động ⇒ có bài lên, nháp
+ *     Xem trước bị huỷ; 'running' quá 1 giờ ⇒ uncertain + việc cần người; nháp máy quá giờ / quá 3 ngày ⇒ huỷ; nháp người ⇒ giữ;
+ *     người huỷ nháp máy ⇒ nhớ 14 ngày.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -24,6 +31,8 @@ import {
 } from '../src/lib/facebookPilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
+import { canNguoi } from '../src/lib/pilotBaoChuShop'
+import { reconcilePage } from '../src/cron/fanpageCron'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { ok ? dat++ : loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -140,6 +149,39 @@ const fbGia = (token: string): DichVuFb => ({
     listScheduledPosts: async () => [],
 })
 const ghiFb = () => goiFb.filter(g => g[0] !== 'get')
+
+/* ── Graph giả ở TẦNG fetch (09/11/2026): ca lỗi Graph đi qua FacebookService THẬT (goi → buildError → loaiLoiFb) thay vì
+ *    tự gắn isTokenError như dịch vụ giả ở trên. Chỉ trả lời graph(-video).facebook.com — gọi đi đâu khác là ném. ── */
+type DapGraph = { status: number; body: any } | { nem: 'het_gio' | 'mang' } | { html: number }
+let dapGraph: (method: string, duong: string) => DapGraph = () => ({ status: 200, body: {} })
+const goiGraph: { method: string; duong: string; coHenGio: boolean }[] = []
+const fetchGoc = globalThis.fetch
+function batGraphGia() {
+    globalThis.fetch = (async (input: any, init: any = {}) => {
+        const url = new URL(String(input?.url || input))
+        if (!/^graph(-video)?\.facebook\.com$/.test(url.hostname)) throw new Error(`bộ kiểm chặn lời gọi ra ngoài: ${url.hostname}`)
+        const method = String(init.method || 'GET').toUpperCase()
+        const duong = url.pathname.replace(/^\/v\d+\.\d+\//, '')
+        goiGraph.push({ method, duong, coHenGio: init.signal instanceof AbortSignal })
+        const d = dapGraph(method, duong)
+        // AbortSignal.timeout hết giờ ⇒ fetch ném DOMException tên 'TimeoutError' (giả lập thẳng, khỏi chờ 90 giây thật)
+        if ('nem' in d) throw d.nem === 'het_gio' ? new DOMException('The operation was aborted due to timeout', 'TimeoutError') : new TypeError('fetch failed')
+        if ('html' in d) return new Response('<html><body>502 Bad Gateway</body></html>', { status: d.html, headers: { 'Content-Type': 'text/html' } })
+        return new Response(JSON.stringify(d.body), { status: d.status, headers: { 'Content-Type': 'application/json' } })
+    }) as any
+}
+const traFetch = () => { globalThis.fetch = fetchGoc }
+/** JSON lỗi đúng dạng Graph — type LUÔN 'OAuthException' (Graph gắn type này cho cả #100, #200, #4…): phân loại phải theo MÃ. */
+const loiGraph = (status: number, code: number, message: string, them: any = {}) =>
+    ({ status, body: { error: { message, type: 'OAuthException', code, fbtrace_id: 'TRACE-GIA', ...them } } })
+/** Graph bình thường: tải ảnh ẩn, đăng bài, trả lời / ẩn bình luận, đọc bài + bài hẹn giờ đều được. */
+const graphOn = (method: string, duong: string): DapGraph => {
+    if (method === 'POST' && /\/photos$/.test(duong)) return { status: 200, body: { id: `ANH${goiGraph.length}` } }
+    if (method === 'POST' && /\/feed$/.test(duong)) return { status: 200, body: { id: `PG1_9${goiGraph.length}` } }
+    if (method === 'POST' && /\/comments$/.test(duong)) return { status: 200, body: { id: `R${goiGraph.length}` } }
+    if (method === 'POST') return { status: 200, body: { success: true } }
+    return { status: 200, body: { data: [] } }
+}
 
 function ngCanh(kho = khoBoNhoFb()): NgCanhFb & { kho: ReturnType<typeof khoBoNhoFb> } {
     return { prisma, kho, nguoi: 'chu@shop', taoFb: fbGia, bayGio: () => bayGio } as any
@@ -391,6 +433,204 @@ async function main() {
         dung('10e. mọi thao tác ghi đánh dấu ghi: true (quản lý mới được)', ghi)
         // chỉ cần có mặt trong danh sách — thêm tiện ích khác (TikTok Pilot 02/11) không được làm đỏ ca này
         dung('10f. tiện ích chỉ-quản-trị có facebook_pilot', /TIEN_ICH_CHI_QUAN_TRI: readonly string\[\] = \[[^\]\n]*\bTIEN_ICH_FACEBOOK_PILOT\b[^\]\n]*\]/.test(doc('lib/tienIchCuaHang.ts')))
+        // 09/11/2026: 'cycle:' là dấu "máy lập" (tự huỷ khi quá hạn, nhớ người huỷ) ⇒ lên bài / trả lời / ẩn từ web phải qua khoaWeb
+        const khoiFb = rt.slice(rt.indexOf('const VIEC: Record'), rt.indexOf('const VIEC_ADS'))
+        dung('10g. post / reply / hide từ web đi qua khoaWeb (trình duyệt không giả được khoá "cycle:" của máy)',
+            (khoiFb.match(/idempotencyKey: khoaWeb\(b\?\.idempotencyKey\)/g) || []).length === 3 && !/idempotencyKey: b\?\.idempotencyKey/.test(khoiFb))
+        const svc = doc('services/platforms/facebook.ts')
+        dung('10h. FacebookService: token hỏng theo MÃ (không theo type OAuthException), fetch có hẹn giờ',
+            !/type === 'OAuthException'/.test(svc) && /signal: AbortSignal\.timeout\(ms\)/.test(svc) && /AbortSignal\.timeout\(CHO_DOC_MS\)/.test(svc))
+    }
+
+    // ─── 11. Lỗi Graph qua FacebookService THẬT (fetch giả) — 09/11/2026 ───────────
+    {
+        datLai(); bayGio = NOW
+        batGraphGia()
+        try {
+            // KHÔNG taoFb ⇒ dichVu() dựng FacebookService thật bằng page token; mọi lời gọi rơi vào fetch giả ở trên
+            const ctx: NgCanhFb = { prisma, kho: khoBoNhoFb(), nguoi: 'chu@shop', bayGio: () => bayGio }
+            await luuCauHinhFb(ctx, { executionMode: 'auto' })
+            const thuc = async (sku: string) => thucThiFb(ctx, (await taoKeHoachBai(ctx, { sku, publishNow: true })).id)
+            const daGoi = (m: string, re: RegExp) => goiGraph.some(g => g.method === m && re.test(g.duong))
+
+            dapGraph = (m, d) => (m === 'POST' && /\/photos$/.test(d) ? loiGraph(400, 100, '(#100) Invalid image URL — could not download image') : graphOn(m, d))
+            goiGraph.length = 0
+            const a = await thuc('KHOAN10')
+            dung('11a. #100 lúc tải ảnh (type OAuthException) ⇒ kế hoạch failed, fanpage KHÔNG token_expired, chưa gọi /feed',
+                a.status === 'failed' && pages[0].status === 'active' && /dữ liệu của riêng kế hoạch/.test(a.result?.message) && !daGoi('POST', /\/feed$/),
+                `${a.status} · trang ${pages[0].status} · ${a.result?.message}`)
+            dapGraph = graphOn
+            const b = await thuc('OC4')
+            dung('11b. …kế hoạch kế tiếp vẫn chạy (trang không bị chặn)', b.status === 'succeeded' && /^PG1_9/.test(b.result?.postId || ''), `${b.status} ${JSON.stringify(b.result)}`)
+
+            dapGraph = (m, d) => (m === 'POST' && /\/photos$/.test(d)
+                ? loiGraph(400, 190, 'Error validating access token: The session has been invalidated because the user changed their password.', { error_subcode: 460 }) : graphOn(m, d))
+            const c = await thuc('KHOAN10')
+            dung('11c. #190 (subcode 460) ⇒ failed + fanpage token_expired + nhắc dán token mới', c.status === 'failed' && pages[0].status === 'token_expired' && /dán page token mới/.test(c.result?.message),
+                `${c.status} · trang ${pages[0].status} · ${c.result?.message}`)
+            pages[0].status = 'active'
+
+            dapGraph = (m, d) => (m === 'POST' && /\/photos$/.test(d) ? loiGraph(400, 4, '(#4) Application request limit reached', { is_transient: true }) : graphOn(m, d))
+            const d4 = await thuc('KHOAN10')
+            dung('11d. #4 hạn mức ⇒ trang giữ nguyên, kế hoạch về NHÁP (thử lại sau) chứ không failed', d4.status === 'draft' && d4.result?.tamThoi === true && pages[0].status === 'active',
+                `${d4.status} · trang ${pages[0].status} · ${JSON.stringify(d4.result)}`)
+
+            dapGraph = (m, d) => (m === 'POST' && /\/comments$/.test(d) ? loiGraph(403, 200, '(#200) Requires pages_manage_engagement permission to manage the object') : graphOn(m, d))
+            const tl = await thucThiFb(ctx, (await taoKeHoachTraLoi(ctx, { commentId: 'C1', message: 'Dạ 26.000đ ạ' })).id)
+            dung('11e. #200 ⇒ failed, nói đúng quyền thiếu, trang giữ nguyên, trả chỗ trong sổ trả lời', tl.status === 'failed' && /pages_manage_engagement/.test(tl.result?.message)
+                && pages[0].status === 'active' && !soTraLoi.some(r => r.commentId === 'C1'), `${tl.status} · ${tl.result?.message}`)
+
+            dapGraph = (m, d) => (m === 'POST' && /\/feed$/.test(d) ? loiGraph(500, 2, 'An unexpected error has occurred. Please retry your request later.', { is_transient: true }) : graphOn(m, d))
+            const f = await thuc('OC4')
+            dung('11f. lệnh ghi gặp HTTP 500 ⇒ "uncertain" (có thể đã lên), không failed, trang giữ nguyên', f.status === 'uncertain' && pages[0].status === 'active', `${f.status} · ${f.result?.message}`)
+            dapGraph = (m, d) => (m === 'POST' && /\/feed$/.test(d) ? { html: 502 } : graphOn(m, d))
+            const g = await thuc('OC4')
+            dung('11g. lệnh ghi nhận phản hồi KHÔNG phải JSON (502 HTML) ⇒ "uncertain"', g.status === 'uncertain', `${g.status} · ${g.result?.message}`)
+            dapGraph = (m, d) => (m === 'POST' && /\/feed$/.test(d) ? { nem: 'het_gio' } : graphOn(m, d))
+            const h = await thuc('OC4')
+            dung('11h. lệnh ghi hết giờ (AbortSignal.timeout) ⇒ "uncertain"', h.status === 'uncertain' && /không trả lời sau/.test(h.result?.message), `${h.status} · ${h.result?.message}`)
+            dung('11i. mọi lời gọi Graph đều mang hẹn giờ (signal)', goiGraph.length > 0 && goiGraph.every(x => x.coHenGio), JSON.stringify(goiGraph.filter(x => !x.coHenGio)))
+
+            // cron đối soát: hạn mức #32 (type OAuthException) từng bị coi là token hỏng
+            baiDaHen.push({ id: 'sp-hen', pageId: 'PG1', fbPostId: 'PG1_777', status: 'scheduled', scheduledAt: new Date(NOW + 5 * H) })
+            dapGraph = (m, d) => (m === 'GET' && /\/scheduled_posts$/.test(d) ? loiGraph(400, 32, '(#32) Page request limit reached') : graphOn(m, d))
+            await reconcilePage(prisma, pages[0])
+            dung('11j. fanpageCron: #32 hạn mức trang ⇒ KHÔNG đánh dấu token_expired', pages[0].status === 'active', pages[0].status)
+            dapGraph = (m, d) => (m === 'GET' && /\/scheduled_posts$/.test(d) ? loiGraph(400, 190, 'Error validating access token: Session has expired', { error_subcode: 463 }) : graphOn(m, d))
+            await reconcilePage(prisma, pages[0])
+            dung('11k. fanpageCron: #190 ⇒ token_expired (ca trên không xanh oan vì cron hết nhạy)', pages[0].status === 'token_expired', pages[0].status)
+            pages[0].status = 'active'
+
+            // chu kỳ Tự động: hạn mức ⇒ dừng ghi ngay lượt đó, giữ nháp; lượt sau thực thi lại ĐÚNG nháp đó
+            datLai(); bayGio = NOW
+            const c2: NgCanhFb = { prisma, kho: khoBoNhoFb(), nguoi: 'lich', bayGio: () => bayGio }
+            const kho2 = c2.kho as ReturnType<typeof khoBoNhoFb>
+            await luuCauHinhFb(c2, { executionMode: 'auto', policy: { automation: { posts: true, replyPriceQuestions: false, hidePhoneComments: false } } })
+            dapGraph = (m, d) => (m === 'POST' && /\/photos$/.test(d) ? loiGraph(400, 17, '(#17) User request limit reached', { is_transient: true }) : graphOn(m, d))
+            goiGraph.length = 0
+            const k1 = await chayChuKyFb(c2)
+            const nhap1 = kho2._keHoach.filter(k => k.kind === 'post')
+            dung('11l. chu kỳ gặp #17 ⇒ dừng sau lần ghi đầu, nháp giữ lại, trang giữ nguyên, KHÔNG báo chủ shop như hỏng',
+                goiGraph.filter(x => x.method === 'POST').length === 1 && nhap1.length === 1 && nhap1[0].status === 'draft' && nhap1[0].result?.tamThoi === true
+                && pages[0].status === 'active' && k1.results.some((x: any) => x.action === 'cycle' && x.status === 'skipped') && !k1.results.some(canNguoi), JSON.stringify(k1.results))
+            dapGraph = graphOn
+            bayGio += 31 * 60_000
+            const k2 = await chayChuKyFb(c2)
+            dung('11m. lượt sau Graph ổn ⇒ thực thi lại đúng nháp đó (không lập đôi), lập tiếp mã còn lại',
+                (await kho2.layKeHoach(nhap1[0].id))?.status === 'succeeded' && kho2._keHoach.filter(k => k.kind === 'post').length === 2
+                && kho2._keHoach.every(k => k.status === 'succeeded') && k2.results.some((x: any) => /Thực thi lại nháp máy/.test(x.message || '')), JSON.stringify(k2.results))
+
+            const c3: NgCanhFb = { prisma, kho: khoBoNhoFb(), nguoi: 'lich', bayGio: () => bayGio }
+            await luuCauHinhFb(c3, { executionMode: 'auto', policy: { automation: { posts: false, replyPriceQuestions: true, hidePhoneComments: true } } })
+            dapGraph = (m, d) => (m === 'GET' && /\/posts$/.test(d) ? loiGraph(400, 613, 'Calls to this api have exceeded the rate limit.') : graphOn(m, d))
+            const k3 = await chayChuKyFb(c3)
+            dung('11n. đọc bình luận gặp #613 ⇒ "skipped" (lượt sau đọc lại), không báo hỏng, trang giữ nguyên',
+                k3.results.some((x: any) => x.action === 'comments' && x.status === 'skipped') && !k3.results.some(canNguoi) && pages[0].status === 'active', JSON.stringify(k3.results))
+        } finally {
+            traFetch()
+        }
+    }
+
+    // ─── 12. Dọn kế hoạch mở — CÙNG MỘT kho qua nhiều lượt (09/11/2026) ───────────
+    {
+        datLai(); goiFb.length = 0; bayGio = NOW
+        // thêm 14 mã đủ điều kiện ⇒ 16 mã: đủ 6 khung giờ của 3 ngày (2 bài/ngày) mà các lượt sau vẫn còn mã để lập
+        for (let i = 1; i <= 14; i++) {
+            hang.push({
+                id: `q${i}`, sku: `KEP${i}`, name: `Kìm điện số ${i}`, description: 'Thép CR-V, cán bọc nhựa.', productType: 'goods', sellingPrice: 50000 + i * 1000,
+                stock: 10 + i, mergedIntoId: null, bundleId: null, createdAt: new Date(NOW), images: [{ url: ANH(`kep${i}`), isPrimary: true }],
+            })
+        }
+        const kho = khoBoNhoFb()
+        const ctx = ngCanh(kho)
+        const dau = dauNgayVN(NOW)
+        const lay = (id: string) => kho._keHoach.find(k => k.id === id)!
+        const baiNhap = () => kho._keHoach.filter(k => k.kind === 'post' && k.status === 'draft')
+        await luuCauHinhFb(ctx, { policy: { postsPerDay: 2, automation: { posts: true, replyPriceQuestions: false, hidePhoneComments: false } } })
+        await chayChuKyFb(ctx)
+        const xem = baiNhap()
+        dung('12a. Xem trước: 6 nháp cho 6 khung giờ 3 ngày, khoá riêng "cycle:xem:post:", không gọi ghi Facebook',
+            xem.length === 6 && xem.every(k => String(k.idempotencyKey).startsWith('cycle:xem:post:')) && ghiFb().length === 0, xem.map(k => k.idempotencyKey).join(' '))
+        const st1 = await xayTrangThaiFb(ctx)
+        dung('12b. nháp chưa đăng KHÔNG tính "vừa lên bài" (chặn 21 ngày) — chỉ "đang có kế hoạch"', st1.excluded?.daDangGanDay === 0 && st1.excluded?.dangCoKeHoach === 6, JSON.stringify(st1.excluded))
+        await chayChuKyFb(ctx)
+        dung('12c. chạy lại Xem trước ⇒ không lập chồng nháp (nháp còn hạn giữ khung của nó)', baiNhap().length === 6, String(baiNhap().length))
+        // nháp NGƯỜI lập (khoá web:) — máy không bao giờ tự huỷ
+        const tay = await taoKeHoachBai(ctx, { sku: 'KHOAN10', scheduledAt: dau + 2 * 86400_000 + 20 * H, idempotencyKey: 'web:tay-12' })
+        bayGio = NOW + 4 * H // 12:00 — nháp Xem trước 9h đã quá giờ hẹn
+        await luuCauHinhFb(ctx, { executionMode: 'auto' })
+        dung('12d. 4 giờ sau bật Tự động ⇒ 6 nháp Xem trước bị huỷ, ghi lý do, đánh dấu máy tự huỷ',
+            xem.every(k => lay(k.id).status === 'cancelled' && lay(k.id).result?.tuHuy === true && /Xem trước/.test(lay(k.id).result?.message || '')),
+            xem.map(k => `${lay(k.id).status}:${lay(k.id).result?.message}`).join(' | '))
+        dung('12e. …nháp người lập giữ nguyên', lay(tay.id).status === 'draft')
+        goiFb.length = 0
+        const r2 = await chayChuKyFb(ctx)
+        const len = ghiFb().filter(g => g[0] === 'post')
+        const daLen = kho._keHoach.filter(k => k.kind === 'post' && k.status === 'succeeded')
+        dung('12f. lượt Tự động đầu tiên có bài lên (20h nay, 9h + 12h mai, 9h ngày kia) — khoá "cycle:post:"',
+            len.length === 4 && daLen.length === 4 && daLen.every(k => String(k.idempotencyKey).startsWith('cycle:post:')), JSON.stringify(r2.results))
+        dung('12g. …mã của nháp Xem trước vừa huỷ được lập lại; khung + mã của nháp người lập không bị đè',
+            daLen.some(k => xem.some(x => x.data.productId === k.data.productId)) && !daLen.some(k => k.data.productId === 'p1')
+            && len.every(x => Math.abs(Number(x[1].scheduledAtMs) - tay.data.scheduledAt) >= 3 * H), daLen.map(k => `${k.data.sku}@${(k.data.scheduledAt - dau) / H}h`).join(','))
+
+        // máy chết giữa lượt ghi: một 'running' kẹt 2 giờ; một lượt khác vừa giành 10 phút trước
+        const ket = await taoKeHoachBai(ctx, { sku: 'KEP1', publishNow: true, idempotencyKey: 'web:ket-1' })
+        const dangChay = await taoKeHoachBai(ctx, { sku: 'KEP2', publishNow: true, idempotencyKey: 'web:ket-2' })
+        await kho.gianhKeHoach(ket.id); await kho.gianhKeHoach(dangChay.id)
+        // kho bộ nhớ ghi updatedAt theo đồng hồ THẬT (như khoSqlFb) ⇒ lùi tay cho "kẹt quá 1 giờ" theo đồng hồ giả
+        lay(ket.id).updatedAt = bayGio - 2 * H
+        lay(dangChay.id).updatedAt = bayGio - 10 * 60_000
+        const nhapMay = (id: string, kind: string, khoa: string, tao: number, data: any, createdBy = 'lich') =>
+            kho._keHoach.push({ id, kind, status: 'draft', idempotencyKey: khoa, createdBy, createdAt: tao, updatedAt: tao, data: { pageId: 'PG1', ...data }, result: null })
+        const baiQ3 = { productId: 'q3', sku: 'KEP3', name: 'Kìm điện số 3', price: 53000, stock: 13, message: '🔹 Kìm điện số 3', mediaUrls: [ANH('kep3')], scheduledAt: bayGio - H }
+        nhapMay('may-qua-gio', 'post', `cycle:post:q3:${bayGio - H}`, bayGio - 3 * H, baiQ3)
+        nhapMay('nguoi-qua-gio', 'post', 'web:tay-qua-gio', bayGio - 3 * H, baiQ3, 'chu@shop')
+        nhapMay('may-qua-han', 'reply', 'cycle:reply:CX', bayGio - 4 * 86400_000, { commentId: 'CX', message: 'Dạ shop gửi giá ạ', fromName: 'Khách' })
+        goiFb.length = 0
+        const r3 = await chayChuKyFb(ctx)
+        dung('12h. "running" quá 1 giờ ⇒ uncertain + việc cần người "mở fanpage kiểm bài đã lên chưa", máy không làm lại',
+            lay(ket.id).status === 'uncertain' && /mở fanpage kiểm bài đã lên chưa/.test(lay(ket.id).result?.message || '')
+            && r3.results.some((x: any) => x.planId === ket.id && x.status === 'uncertain' && canNguoi(x)) && !kho._nhatKy.some(w => w.planId === ket.id) && ghiFb().length === 0,
+            JSON.stringify(r3.results))
+        dung('12i. "running" mới 10 phút ⇒ để yên (lượt khác có thể đang ghi)', lay(dangChay.id).status === 'running')
+        dung('12j. nháp MÁY quá giờ hẹn ⇒ tự huỷ, ghi lý do, không thực thi', lay('may-qua-gio').status === 'cancelled' && lay('may-qua-gio').result?.tuHuy === true
+            && /quá giờ hẹn/.test(lay('may-qua-gio').result?.message || '') && !kho._nhatKy.some(w => w.planId === 'may-qua-gio'), JSON.stringify(lay('may-qua-gio').result))
+        dung('12k. nháp NGƯỜI lập quá giờ hẹn ⇒ giữ nguyên (người quyết)', lay('nguoi-qua-gio').status === 'draft' && lay(tay.id).status === 'draft')
+        dung('12l. nháp MÁY quá 3 ngày ⇒ tự huỷ', lay('may-qua-han').status === 'cancelled' && /quá 3 ngày/.test(lay('may-qua-han').result?.message || ''), JSON.stringify(lay('may-qua-han').result))
+        dung('12m. dòng "Huỷ 2 nháp cũ của máy" là skipped — không báo chủ shop như hỏng',
+            r3.results.some((x: any) => x.action === 'plan' && /Huỷ 2 nháp cũ/.test(x.message) && !canNguoi(x)), JSON.stringify(r3.results))
+
+        // người huỷ một nháp MÁY đề xuất ⇒ chu kỳ nhớ 14 ngày (kể cả qua lần đổi Xem trước → Tự động)
+        await luuCauHinhFb(ctx, { executionMode: 'preview' })
+        bayGio = NOW + 52 * H // ngày kia 12:00 ⇒ trống 4 khung (2 ngày sau, mỗi ngày 2 bài)
+        await chayChuKyFb(ctx)
+        const xem2 = baiNhap().filter(k => String(k.idempotencyKey).startsWith('cycle:xem:'))
+        const bo = xem2[0]
+        const huy = await huyKeHoachFb(ctx, bo.id)
+        dung('12n. người huỷ nháp máy ⇒ ghi "không đề xuất lại … 14 ngày" (không phải máy tự huỷ)', xem2.length === 4 && huy.status === 'cancelled' && /14 ngày/.test(huy.result?.message || '') && !huy.result?.tuHuy,
+            `${xem2.length} ${JSON.stringify(huy.result)}`)
+        const truoc = new Set(kho._keHoach.map(k => k.id))
+        await chayChuKyFb(ctx)
+        const moi = kho._keHoach.filter(k => !truoc.has(k.id) && k.kind === 'post')
+        dung('12o. lượt sau lấp khung trống bằng mã KHÁC, không đề xuất lại mã người vừa huỷ', moi.length === 1 && moi[0].data.productId !== bo.data.productId
+            && (await xayTrangThaiFb(ctx)).excluded?.dangCoKeHoach >= 5, moi.map(k => k.data.sku).join(','))
+        const cfg = (await kho.docCauHinh())!
+        await kho.luuCauHinh({ ...cfg, executionMode: 'auto' }) // như thể bước huỷ nháp của luuCauHinhFb hỏng giữa chừng
+        const conXem = baiNhap().filter(k => String(k.idempotencyKey).startsWith('cycle:xem:'))
+        const truoc2 = new Set(kho._keHoach.map(k => k.id))
+        goiFb.length = 0
+        await chayChuKyFb(ctx)
+        const len5 = kho._keHoach.filter(k => !truoc2.has(k.id) && k.kind === 'post' && k.status === 'succeeded')
+        dung('12p. (lưới thứ hai) chu kỳ Tự động gặp nháp Xem trước còn sót ⇒ huỷ trước khi lập, rồi lên bài theo số hiện tại',
+            conXem.length === 4 && conXem.every(k => lay(k.id).status === 'cancelled' && lay(k.id).result?.tuHuy === true) && len5.length === 4 && ghiFb().filter(g => g[0] === 'post').length === 4,
+            `${conXem.length} xem · ${len5.map(k => k.data.sku).join(',')}`)
+        dung('12q. …vẫn nhớ mã người đã huỷ dù vừa đổi Xem trước → Tự động', !len5.some(k => k.data.productId === bo.data.productId), len5.map(k => k.data.sku).join(','))
+        const pol = cfg.policy
+        const conNho = !(await timUngVienFb(ctx, pol, { lim: 50 })).ungVien.some(u => u.productId === bo.data.productId)
+        lay(bo.id).updatedAt = bayGio - 15 * 86400_000
+        const hetNho = (await timUngVienFb(ctx, pol, { lim: 50 })).ungVien.some(u => u.productId === bo.data.productId)
+        dung('12r. trong 14 ngày mã người huỷ bị né; quá 14 ngày ⇒ được đề xuất lại', conNho && hetNho, `${conNho} ${hetNho}`)
+        bayGio = NOW
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

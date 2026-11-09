@@ -53,14 +53,66 @@ export interface FbGraphError extends Error {
     code?: number
     subcode?: number
     fbtraceId?: string
+    /** CHỈ token hỏng thật: #190 / #102 (xem loaiLoiFb) — trước 09/11/2026 là mọi type 'OAuthException' */
     isTokenError?: boolean
+    /** Graph tự báo lỗi tạm thời (`is_transient`) — thử lại sau là được */
+    isTransient?: boolean
+    httpStatus?: number
+    /** Lệnh GHI không biết kết cục (HTTP 5xx / hết giờ / phản hồi không phải JSON / đứt mạng sau khi gửi) ⇒ có thể ĐÃ lên.
+     *  false = FacebookService chắc chắn chưa ghi gì (vd ảnh tải ẩn của bài nhiều ảnh hỏng trước khi gọi /feed). */
+    khongRoKetCuc?: boolean
+    /** hết giờ chờ Graph (AbortSignal.timeout) */
+    hetGio?: boolean
 }
 
-/** Mã rate-limit của Graph: 4 (app), 17 (user), 32 (page), 613 (custom throttle) */
+/* ── Phân loại lỗi Graph theo MÃ (09/11/2026) ──
+ * Graph gắn type 'OAuthException' cho cả #100 (tham số / ảnh hỏng), #200 (thiếu quyền), #4/#17/#32/#613 (hạn mức). Trước đây
+ * mọi OAuthException đều là "token hỏng" ⇒ fanpage bị đánh dấu token_expired, Facebook Pilot + đối soát dừng hẳn tới khi chủ
+ * shop dán token mới — chỉ vì MỘT ảnh lỗi hay MỘT lần chạm hạn mức. Một luật chung cho Fanpage Manager, Facebook Pilot,
+ * Ads Pilot, cron đối soát (Ads Pilot vốn đã phân loại theo mã — giờ dùng chính các hàm này). */
+export type LoaiLoiFb = 'khong_ro' | 'tam_thoi' | 'token' | 'quyen' | 'du_lieu' | 'khac'
+
+/** Hạn mức / tạm thời: 4 (app), 17 (user), 32 (page), 613 (throttle riêng), 80000–80014 (hạn mức Marketing API theo tài khoản
+ *  quảng cáo — cùng danh sách laGioiHan của Ads drill), hoặc Graph gắn is_transient. Lùi rồi thử lại — KHÔNG đổi trạng thái trang. */
 export function isRateLimitError(err: any): boolean {
-    const c = err?.code
-    return c === 4 || c === 17 || c === 32 || c === 613
+    const c = Number(err?.code)
+    return c === 4 || c === 17 || c === 32 || c === 613 || (c >= 80000 && c <= 80014) || err?.isTransient === true
 }
+
+/** Token hỏng: CHỈ #190 (mọi subcode — 458–467 là hết hạn / đổi mật khẩu / gỡ app / phiên vô hiệu) hoặc #102 (phiên).
+ *  Lỗi Graph tự báo tạm thời thì không tính (thử lại là được — đừng giết fanpage vì nó). */
+export function laLoiTokenFb(err: any): boolean {
+    const c = Number(err?.code)
+    return (c === 190 || c === 102) && !isRateLimitError(err)
+}
+
+/** Thiếu quyền: #10, #200–299 (vd #200 pages_manage_posts, #294 ads_management). */
+export function laLoiQuyenFb(err: any): boolean {
+    const c = Number(err?.code)
+    return c === 10 || (c >= 200 && c <= 299)
+}
+
+export function loaiLoiFb(err: any): LoaiLoiFb {
+    if (err?.khongRoKetCuc === true) return 'khong_ro'
+    if (isRateLimitError(err)) return 'tam_thoi'
+    if (laLoiTokenFb(err)) return 'token'
+    if (laLoiQuyenFb(err)) return 'quyen'
+    // #100: tham số / dữ liệu của RIÊNG lệnh này (ảnh không tải được, chữ quá dài, đối tượng không còn…) — trang vẫn sống
+    if (Number(err?.code) === 100) return 'du_lieu'
+    return 'khac'
+}
+
+/** Tên quyền Graph nhắc trong lỗi thiếu quyền (vd "(#200) Requires pages_manage_posts permission…") — null nếu không có. */
+export function quyenThieuFb(err: any): string | null {
+    const m = String(err?.message || '').match(/\b(pages_[a-z_]+|ads_management|ads_read|business_management|read_insights|publish_video|instagram_[a-z_]+)\b/i)
+    return m ? m[1] : null
+}
+
+/** Chờ Graph tối đa bấy nhiêu (09/11/2026) — fetch không hẹn giờ thì một lời gọi treo giữ kế hoạch 'running' mãi.
+ *  Đọc 30 giây; ghi 90 giây (Facebook tự tải ảnh từ URL); video 5 phút (Facebook tải cả tệp). */
+const CHO_DOC_MS = 30_000
+const CHO_GHI_MS = 90_000
+const CHO_VIDEO_MS = 300_000
 
 export interface FbPageInfo {
     id: string
@@ -109,20 +161,49 @@ export class FacebookService {
         err.code = e.code
         err.subcode = e.error_subcode
         err.fbtraceId = e.fbtrace_id
-        // 190 = token hết hạn/không hợp lệ; 102 = session; 10/200 = quyền
-        err.isTokenError = e.code === 190 || e.code === 102 || e.type === 'OAuthException'
+        err.httpStatus = httpStatus
+        err.isTransient = e.is_transient === true
+        // 09/11/2026: theo MÃ (190 / 102), KHÔNG theo type 'OAuthException' — Graph gắn type đó cả cho #100, #200, #4/#17/#32/#613
+        err.isTokenError = laLoiTokenFb(err)
         return err
     }
 
-    private async parse(res: Response): Promise<any> {
-        const text = await res.text()
+    /** Một lời gọi Graph có hẹn giờ. `ghi` = lệnh ghi: chưa có phản hồi trọn vẹn (hết giờ / đứt mạng) thì Facebook có thể đã
+     *  nhận ⇒ gắn khongRoKetCuc để người gọi ghi 'uncertain', không 'failed' (đăng lại là đăng đúp). */
+    private async goi(url: string, init: RequestInit, ghi: boolean, ms: number): Promise<any> {
+        const loiChuaCoPhanHoi = (e: any): FbGraphError => {
+            const hetGio = e?.name === 'TimeoutError' || e?.name === 'AbortError'
+            const err = new Error(hetGio
+                ? `Facebook không trả lời sau ${Math.round(ms / 1000)} giây (aborted: timeout)`
+                : `Không gọi được Facebook: ${String(e?.message || e)}`) as FbGraphError
+            err.hetGio = hetGio
+            if (ghi) err.khongRoKetCuc = true
+            return err
+        }
+        let res: Response
+        let text: string
+        try {
+            res = await fetch(url, { ...init, signal: AbortSignal.timeout(ms) })
+            text = await res.text()
+        } catch (e: any) {
+            throw loiChuaCoPhanHoi(e)
+        }
         let json: any
         try {
             json = JSON.parse(text)
         } catch {
-            throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`)
+            const err = new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`) as FbGraphError
+            err.httpStatus = res.status
+            // phản hồi không phải JSON (trang lỗi của proxy / Facebook quá tải) ⇒ không biết lệnh ghi đã tới chưa
+            if (ghi) err.khongRoKetCuc = true
+            throw err
         }
-        if (!res.ok || json?.error) throw this.buildError(json, res.status)
+        if (!res.ok || json?.error) {
+            const err = this.buildError(json, res.status)
+            // 5xx = Facebook lỗi phía máy chủ SAU khi nhận lệnh — bài / bình luận có thể đã lên
+            if (ghi && res.status >= 500) err.khongRoKetCuc = true
+            throw err
+        }
         return json
     }
 
@@ -133,8 +214,7 @@ export class FacebookService {
             if (v === undefined || v === null) continue
             qs.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
         }
-        const res = await fetch(`${base}/${path}?${qs.toString()}`, { method: 'GET' })
-        return this.parse(res)
+        return this.goi(`${base}/${path}?${qs.toString()}`, { method: 'GET' }, false, CHO_DOC_MS)
     }
 
     /** POST Graph (form-urlencoded). Field object/array được JSON hoá. */
@@ -145,17 +225,15 @@ export class FacebookService {
             if (v === undefined || v === null) continue
             body.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
         }
-        const res = await fetch(`${base}/${path}`, {
+        return this.goi(`${base}/${path}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body.toString(),
-        })
-        return this.parse(res)
+        }, true, base === GRAPH_VIDEO ? CHO_VIDEO_MS : CHO_GHI_MS)
     }
 
     async del(path: string): Promise<any> {
-        const res = await fetch(`${GRAPH}/${path}?access_token=${encodeURIComponent(this.token)}`, { method: 'DELETE' })
-        return this.parse(res)
+        return this.goi(`${GRAPH}/${path}?access_token=${encodeURIComponent(this.token)}`, { method: 'DELETE' }, true, CHO_GHI_MS)
     }
 
     // ─── Auth / token / pages ─────────────────────────────────────────────────
@@ -168,7 +246,7 @@ export class FacebookService {
             client_secret: appSecret,
             fb_exchange_token: shortToken,
         })
-        const res = await fetch(`${GRAPH}/oauth/access_token?${qs.toString()}`)
+        const res = await fetch(`${GRAPH}/oauth/access_token?${qs.toString()}`, { signal: AbortSignal.timeout(CHO_DOC_MS) })
         const text = await res.text()
         let json: any
         try { json = JSON.parse(text) } catch { throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`) }
@@ -257,7 +335,15 @@ export class FacebookService {
             // Upload từng ảnh dạng unpublished → gom media_fbid vào feed
             const fbids: string[] = []
             for (const url of mediaUrls) {
-                const r = await this.post(`${pageId}/photos`, { url, published: false, temporary: true })
+                let r: any
+                try {
+                    r = await this.post(`${pageId}/photos`, { url, published: false, temporary: true })
+                } catch (e: any) {
+                    // ảnh tải ẨN (published:false, temporary) chưa phải bài — hỏng / hết giờ ở bước này thì bài CHẮC CHẮN chưa lên
+                    // (chưa gọi /feed) ⇒ đánh dấu "chưa ghi", người gọi ghi 'failed' chứ không 'uncertain' (09/11/2026)
+                    if (e && typeof e === 'object') e.khongRoKetCuc = false
+                    throw e
+                }
                 if (r.id) fbids.push(r.id)
             }
             return this.post(`${pageId}/feed`, {

@@ -40,7 +40,9 @@ function ngCanhAds(req: AuthRequest): NgCanhAds {
     return { prisma, kho: khoSqlAds(prisma), khoFb: khoSqlFb(prisma), nguoi: (req.user as any)?.email || req.user?.userId || null }
 }
 
-/** Khoá chống trùng từ trình duyệt — 'cycle:' là của máy (luật "người bật lại thì máy không tắt lại" dựa vào nó) ⇒ không cho mượn. */
+/** Khoá chống trùng từ trình duyệt — 'cycle:' là của máy (luật "người bật lại thì máy không tắt lại" dựa vào nó) ⇒ không cho mượn.
+ *  09/11/2026: Facebook Pilot cũng dựa vào nó — nháp 'cycle:' bị chu kỳ tự huỷ khi quá hạn, người huỷ thì nhớ 14 ngày — nên
+ *  lên bài / trả lời / ẩn từ web cũng phải qua đây: nháp người lập mà mang khoá máy là bị tự huỷ oan. */
 const khoaWeb = (v: any): string | undefined => (v ? (String(v).startsWith('cycle:') ? `web:${v}` : String(v)).slice(0, 200) : undefined)
 
 /** Bật lịch ⇒ bật cờ registry hasAiJobs để cron (aiAgentCron) quét cửa hàng này — cron chỉ chạm store có cờ. */
@@ -89,21 +91,21 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
         ghi: true,
         chay: (ctx, b) => taoKeHoachBai(ctx, {
             sku: String(b?.sku || ''), message: typeof b?.message === 'string' ? b.message : undefined,
-            scheduledAt: b?.scheduledAt ?? null, publishNow: b?.publishNow === true, idempotencyKey: b?.idempotencyKey,
+            scheduledAt: b?.scheduledAt ?? null, publishNow: b?.publishNow === true, idempotencyKey: khoaWeb(b?.idempotencyKey),
         }),
     },
     reply: {
         ghi: true,
         chay: (ctx, b) => taoKeHoachTraLoi(ctx, {
             commentId: String(b?.commentId || ''), message: String(b?.message || ''), postId: b?.postId, commentMsg: b?.commentMsg,
-            fromName: b?.fromName, productId: b?.productId, sku: b?.sku, price: b?.price, idempotencyKey: b?.idempotencyKey,
+            fromName: b?.fromName, productId: b?.productId, sku: b?.sku, price: b?.price, idempotencyKey: khoaWeb(b?.idempotencyKey),
         }),
     },
     hide: {
         ghi: true,
         chay: (ctx, b) => taoKeHoachAn(ctx, {
             commentId: String(b?.commentId || ''), postId: b?.postId, commentMsg: b?.commentMsg, fromName: b?.fromName,
-            reason: b?.reason, idempotencyKey: b?.idempotencyKey,
+            reason: b?.reason, idempotencyKey: khoaWeb(b?.idempotencyKey),
         }),
     },
     cancel: { ghi: true, chay: (ctx, b) => huyKeHoachFb(ctx, String(b?.planId || '')) },

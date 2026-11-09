@@ -20,6 +20,9 @@
  * 11. Trạng thái gửi giao diện KHÔNG có token; mất token vẫn liệt kê quảng cáo Pilot; kiểm kết nối chỉ đọc.
  * 12. Nối dây (soát mã nguồn): route, quyền ghi, khoá 'cycle:' không cho trình duyệt mượn, cron, migrate, chặn chữa token,
  *     bản Marketing API không phải v21.
+ * 13. (09/11/2026) MỘT chiến dịch đọc hỏng (#17) không làm gãy chu kỳ: quảng cáo hết hàng ĐỌC ĐƯỢC vẫn tạm dừng; KHÔNG tăng
+ *     ngân sách / chạy lại / quảng cáo mới; chiến dịch hỏng vào việc cần người + vẫn chiếm trần; người HẠ ngân sách / tạm dừng
+ *     vẫn được, TĂNG thì không; lời gọi gộp lỗi quyền mà đọc lẻ được ⇒ chạy như thường.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -180,7 +183,8 @@ const taoFb = (token: string): DichVuAds => ({
             for (const id of ids) { const c = fb.campaigns.get(id); if (!c) throw loiGraph(100, `Object with ID '${id}' does not exist`, 33); r[id] = cdRa(c) }
             return r
         }
-        if (fb.campaigns.has(p)) { nemNeuTiem('cd'); return cdRa(fb.campaigns.get(p)) }
+        // 'cd' = mọi lần đọc lẻ; 'cd:<mã>' = chỉ chiến dịch đó (09/11/2026: một chiến dịch lỗi, các cái khác đọc được)
+        if (fb.campaigns.has(p)) { nemNeuTiem('cd'); nemNeuTiem(`cd:${p}`); return cdRa(fb.campaigns.get(p)) }
         if (p.includes('_')) { const b = fb.posts.get(p); if (!b) throw loiGraph(100, 'post does not exist', 33); return { id: p, ...b } }
         throw loiGraph(100, `Unsupported get request ${p}`, 33)
     },
@@ -722,6 +726,69 @@ async function main() {
         dung('12g. check:facebook-ads-pilot nằm trong check:all-goc', /"check:facebook-ads-pilot": "npx tsx scripts\/check-facebook-ads-pilot\.ts"/.test(pk) && /check:all-goc"[^\n]*npm run check:facebook-ads-pilot/.test(pk))
         const lib = doc('lib/facebookAdsPilot.ts')
         dung('12h. Ads Pilot không gọi Promise.all với prisma (pool 1 kết nối trên prod)', !/Promise\.all\(/.test(lib))
+    }
+
+    // ─── 13. Một chiến dịch đọc hỏng — chỉ chặn TĂNG chi, không chặn tạm dừng (09/11/2026) ─────────
+    {
+        datLai(); goi = []
+        const ctx = ngCanh()
+        await chuanBi(ctx, 'auto', {
+            dailyBudgetCap: 400000, maxActiveAds: 5, maxCostPerResult: 20000, maxBudgetPerAd: 150000,
+            automation: { resumeRestocked: true, scaleWinners: true, boostNewPosts: false },
+        })
+        const qA = await coQuangCao(ctx, 'PG1_104', 50000) // BUA — sẽ KHÔNG đọc được
+        const qB = await coQuangCao(ctx, 'PG1_201', 50000) // KEO — đọc được, sắp hết hàng ⇒ phải tạm dừng
+        const qC = await coQuangCao(ctx, 'PG1_102', 50000) // OC4 — đọc được, quảng cáo tốt ⇒ bình thường được tăng ngân sách
+        const qD = await coQuangCao(ctx, 'PG1_101', 50000) // KHOAN10 — Pilot đã dừng vì hết hàng, nay có hàng ⇒ bình thường chạy lại
+        const [A, B, C, D] = [qA, qB, qC, qD].map(q => String(q.result?.campaignId))
+        hang.find(h => h.id === 'p1')!.stock = 0
+        await chuKy(ctx)
+        dung('13a. (dựng) 4 quảng cáo; KHOAN10 hết hàng ⇒ Pilot tạm dừng', [qA, qB, qC, qD].every(q => q.status === 'succeeded') && fb.campaigns.get(D).status === 'PAUSED',
+            [qA, qB, qC, qD].map(q => q.status).join(','))
+        hang.find(h => h.id === 'p1')!.stock = 30
+        hang.find(h => h.id === 'p6')!.stock = 0
+        fb.insights.set(C, { maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] } })
+        await luuCauHinhAds(ctx, { policy: { automation: { boostNewPosts: true } } })
+        // lời gọi gộp hỏng #17 ⇒ đọc lẻ; riêng chiến dịch A hỏng #17 suốt lượt
+        tiem('ids', loiGraph(17, '(#17) User request limit reached'), 50)
+        tiem(`cd:${A}`, loiGraph(17, '(#17) User request limit reached'), 50)
+        const soChienDich = fb.campaigns.size
+        goi = []
+        const kq = await chuKy(ctx)
+        dung('13b. vẫn TẠM DỪNG quảng cáo hết hàng đọc được (KEO) dù chiến dịch khác không đọc được',
+            fb.campaigns.get(B).status === 'PAUSED' && kq.results.some((x: any) => x.action === 'pause' && x.status === 'succeeded' && x.sku === 'KEO'), JSON.stringify(kq.results))
+        dung('13c. KHÔNG tăng chi: không tăng ngân sách (OC4), không chạy lại (KHOAN10), không lập quảng cáo mới — lệnh ghi duy nhất là tạm dừng KEO',
+            fb.campaigns.get(C).adsets[0].daily_budget === 50000 && fb.campaigns.get(D).status === 'PAUSED' && fb.campaigns.size === soChienDich
+            && ghi().length === 1 && ghi()[0].p === B && ghi()[0].q.status === 'PAUSED'
+            && kq.results.some((x: any) => x.action === 'budget' && x.status === 'unchanged') && kq.results.some((x: any) => x.action === 'resume' && x.status === 'unchanged')
+            && kq.results.some((x: any) => x.action === 'boost' && x.status === 'skipped'), JSON.stringify(ghi()))
+        dung('13d. chiến dịch không đọc được ⇒ một dòng việc cần người (báo chủ shop), nêu đúng chiến dịch',
+            kq.results.some((x: any) => x.action === 'ads' && x.sku === 'BUA' && canNguoi(x) && x.message.includes(A) && /#17|request limit/i.test(x.message)), JSON.stringify(kq.results.filter((x: any) => x.action === 'ads')))
+        const st = await xayTrangThaiAds(ctx)
+        const a = st.ads.find((x: any) => x.campaignId === A)
+        dung('13e. trạng thái: chiến dịch hỏng status null + lý do, VẪN chiếm trần (BUA 50.000 + OC4 50.000 đang chạy)',
+            a?.status === null && /request limit/i.test(a?.readError || '') && st.totals?.committedDaily === 100000 && /1\/4 chiến dịch/.test(st.liveError || ''),
+            `${a?.status} ${a?.readError} ${JSON.stringify(st.totals)} ${st.liveError}`)
+        const ha = await thucThiAds(ctx, (await taoKeHoachNganSach(ctx, { campaignId: C, dailyBudget: 40000, idempotencyKey: 'web:13f-ha' })).id)
+        const tang = await thucThiAds(ctx, (await taoKeHoachNganSach(ctx, { campaignId: C, dailyBudget: 60000, idempotencyKey: 'web:13f-tang' })).id)
+        dung('13f. người HẠ ngân sách vẫn được; TĂNG thì không (còn chiến dịch không đọc được)',
+            ha.status === 'succeeded' && tang.status === 'failed' && /không TĂNG/.test(tang.result?.message || '') && fb.campaigns.get(C).adsets[0].daily_budget === 40000,
+            `${ha.status} ${tang.status} ${tang.result?.message}`)
+        const nsA = await thucThiAds(ctx, (await taoKeHoachNganSach(ctx, { campaignId: A, dailyBudget: 40000, idempotencyKey: 'web:13g-ns' })).id)
+        const dungA = await thucThiAds(ctx, (await taoKeHoachDung(ctx, { campaignId: A, idempotencyKey: 'web:13g-dung' })).id)
+        dung('13g. chiến dịch không đọc được: không đổi ngân sách (không biết số sống) nhưng người TẠM DỪNG được',
+            nsA.status === 'failed' && /không đổi ngân sách/.test(nsA.result?.message || '') && dungA.status === 'succeeded' && fb.campaigns.get(A).status === 'PAUSED',
+            `${nsA.status} ${nsA.result?.message} · ${dungA.status}`)
+
+        // lời gọi gộp lỗi QUYỀN (#200) mà đọc lẻ được ⇒ chu kỳ chạy như thường
+        fb.tiem = []
+        tiem('ids', loiGraph(200, '(#200) Ad account owner has NOT grant ads_management or ads_read permission'), 50)
+        goi = []
+        const kq2 = await chuKy(ctx)
+        dung('13h. gộp lỗi quyền, đọc lẻ được ⇒ chạy như thường: chạy lại KHOAN10 (có hàng lại), tăng ngân sách OC4, không dòng "không đọc được"',
+            fb.campaigns.get(D).status === 'ACTIVE' && fb.campaigns.get(C).adsets[0].daily_budget > 40000
+            && !kq2.results.some((x: any) => x.action === 'ads' && x.status === 'failed'), JSON.stringify(kq2.results))
+        fb.tiem = []
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

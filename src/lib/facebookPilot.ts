@@ -29,7 +29,7 @@
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
-import { FacebookService, type SchedulePostInput } from '../services/platforms/facebook'
+import { FacebookService, isRateLimitError, loaiLoiFb, quyenThieuFb, type SchedulePostInput } from '../services/platforms/facebook'
 import { baoChuShop } from './pilotBaoChuShop'
 
 // ─── Tiện ích nhỏ ───────────────────────────────────────────────────────────────
@@ -114,6 +114,20 @@ export const CTA_MAC_DINH = 'Inbox shop hoặc để lại bình luận để đ
 const CTA_TRA_LOI = 'Anh/chị nhắn tin cho shop để được tư vấn và đặt hàng nhé.'
 /** Mỗi chu kỳ lập tối đa bấy nhiêu bài (khung giờ 3 ngày tới vẫn là trần chính). */
 const TRAN_BAI_MOI_CHU_KY = 6
+
+/* Vệ sinh kế hoạch mở (09/11/2026 — chép tinh thần donKeHoachMo của Shopee Pilot). Trước đây nháp không bao giờ hết hạn, giữ
+ * khung giờ + chặn mã 21 ngày dù chưa đăng (đo offline: Xem trước theo lịch rồi bật Tự động ⇒ ~3 ngày không lên bài nào, chủ
+ * shop không được báo), còn 'running' kẹt thì kẹt mãi. */
+/** Nháp do MÁY lập (khoá 'cycle:') quá hạn này chưa thực thi ⇒ chu kỳ tự huỷ — giá / tồn lúc lập đã cũ. */
+const HAN_NHAP_MAY_MS = 3 * 86400_000
+/** Lượt thực thi 'running' lâu chừng này = máy chết giữa lượt ghi — không ai biết bài đã lên chưa. */
+const KET_THUC_THI_MS = 3600_000
+/** Người huỷ nháp máy đề xuất ⇒ chu kỳ không đề xuất lại mã / bình luận đó trong chừng này (huỷ = "đừng làm"). */
+const NHO_NGUOI_HUY_MS = 14 * 86400_000
+/** Khoá 'cycle:' = máy lập (routes/facebookPilot.khoaWeb đổi khoá 'cycle:' từ trình duyệt thành 'web:…' nên không giả được). */
+const laNhapMay = (k: { idempotencyKey?: string | null }) => String(k.idempotencyKey || '').startsWith('cycle:')
+/** Lượt Xem trước dùng khoá riêng 'cycle:xem:' — sang Tự động thì huỷ mà khoá không chặn lập lại bằng khoá 'cycle:'. */
+const laNhapXemTruoc = (k: { idempotencyKey?: string | null }) => String(k.idempotencyKey || '').startsWith('cycle:xem:')
 
 export function chuanHoaGio(x: any): number[] {
     const ds = (Array.isArray(x) ? x : typeof x === 'string' ? x.split(/[\s,;]+/) : [])
@@ -209,11 +223,14 @@ export interface KhoFbPilot {
     /** draft → running, nguyên tử. false = bản khác đã giành / không còn là nháp. */
     gianhKeHoach(id: string): Promise<boolean>
     capNhatKeHoach(id: string, status: string, result: any): Promise<void>
-    /** draft → cancelled. false = không còn là nháp. */
-    huyKeHoach(id: string): Promise<boolean>
+    /** draft → cancelled kèm `result` (lý do; `tuHuy: true` = máy tự huỷ), nguyên tử. false = không còn là nháp. */
+    huyKeHoach(id: string, result?: any): Promise<boolean>
     dsKeHoach(lim: number): Promise<KeHoachFb[]>
-    /** Kế hoạch đăng bài tạo từ mốc `tuLuc`, trừ bài đã huỷ / hỏng — né đăng lặp một mã + đếm khung giờ. */
+    /** Kế hoạch đăng bài ĐÃ / ĐANG đăng (running, succeeded, uncertain) tạo từ mốc `tuLuc` — né đăng lặp một mã + đếm khung giờ.
+     *  09/11/2026: nháp KHÔNG còn ở đây — nháp chưa đăng từng chặn mã 21 ngày; nháp đi đường dsKeHoachMo. */
     dsKeHoachBaiTu(tuLuc: number): Promise<KeHoachFb[]>
+    /** Kế hoạch còn MỞ (nháp, đang chạy) + kế hoạch huỷ từ mốc `huyTuLuc` — chu kỳ dọn nháp quá hạn, bắt lượt kẹt, nhớ người huỷ. */
+    dsKeHoachMo(huyTuLuc: number): Promise<KeHoachFb[]>
     /** Kế hoạch trả lời / ẩn của các bình luận này, trừ bản đã huỷ. */
     dsKeHoachBinhLuan(commentIds: string[]): Promise<KeHoachFb[]>
     ghiNhatKy(w: Omit<NhatKyFb, 'id' | 'createdAt'>): Promise<void>
@@ -311,15 +328,20 @@ export function khoSqlFb(prisma: any): KhoFbPilot {
         async capNhatKeHoach(id, status, result) {
             await x(`UPDATE "FacebookPilotPlan" SET status = $2, result = $3, "updatedAt" = $4 WHERE id = $1`, id, status, result == null ? null : JSON.stringify(result), Date.now())
         },
-        async huyKeHoach(id) {
-            return (await x(`UPDATE "FacebookPilotPlan" SET status = 'cancelled', "updatedAt" = $2 WHERE id = $1 AND status = 'draft'`, id, Date.now())) === 1
+        async huyKeHoach(id, result) {
+            return (await x(`UPDATE "FacebookPilotPlan" SET status = 'cancelled', result = $3, "updatedAt" = $2 WHERE id = $1 AND status = 'draft'`,
+                id, Date.now(), result == null ? null : JSON.stringify(result))) === 1
         },
         async dsKeHoach(lim) {
             return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" ORDER BY "createdAt" DESC LIMIT $1`, lim)).map(hangKeHoach)
         },
         async dsKeHoachBaiTu(tuLuc) {
-            return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE kind = 'post' AND status IN ('draft', 'running', 'succeeded', 'uncertain')
+            return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE kind = 'post' AND status IN ('running', 'succeeded', 'uncertain')
                                AND "createdAt" >= $1 ORDER BY "createdAt" DESC LIMIT 2000`, tuLuc)).map(hangKeHoach)
+        },
+        async dsKeHoachMo(huyTuLuc) {
+            return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE status IN ('draft', 'running') OR (status = 'cancelled' AND "updatedAt" >= $1)
+                               ORDER BY "createdAt" DESC LIMIT 2000`, huyTuLuc)).map(hangKeHoach)
         },
         async dsKeHoachBinhLuan(ids) {
             if (!ids.length) return []
@@ -359,12 +381,20 @@ export function khoBoNhoFb(): KhoFbPilot & { _keHoach: KeHoachFb[]; _nhatKy: Nha
             keHoach.push(sao(k)); return sao(k)
         },
         async layKeHoach(id) { const k = keHoach.find(x => x.id === id); return k ? sao(k) : null },
-        async gianhKeHoach(id) { const k = keHoach.find(x => x.id === id); if (!k || k.status !== 'draft') return false; k.status = 'running'; return true },
+        // updatedAt theo đồng hồ thật như khoSqlFb (bộ kiểm muốn "kẹt quá 1 giờ" thì tự lùi updatedAt)
+        async gianhKeHoach(id) { const k = keHoach.find(x => x.id === id); if (!k || k.status !== 'draft') return false; k.status = 'running'; k.updatedAt = Date.now(); return true },
         async capNhatKeHoach(id, status, result) { const k = keHoach.find(x => x.id === id); if (k) { k.status = status; k.result = sao(result); k.updatedAt = Date.now() } },
-        async huyKeHoach(id) { const k = keHoach.find(x => x.id === id); if (!k || k.status !== 'draft') return false; k.status = 'cancelled'; return true },
+        async huyKeHoach(id, result) {
+            const k = keHoach.find(x => x.id === id)
+            if (!k || k.status !== 'draft') return false
+            k.status = 'cancelled'; k.result = result == null ? null : sao(result); k.updatedAt = Date.now(); return true
+        },
         async dsKeHoach(lim) { return sao([...keHoach].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
         async dsKeHoachBaiTu(tuLuc) {
-            return sao(keHoach.filter(k => k.kind === 'post' && ['draft', 'running', 'succeeded', 'uncertain'].includes(k.status) && k.createdAt >= tuLuc))
+            return sao(keHoach.filter(k => k.kind === 'post' && ['running', 'succeeded', 'uncertain'].includes(k.status) && k.createdAt >= tuLuc))
+        },
+        async dsKeHoachMo(huyTuLuc) {
+            return sao(keHoach.filter(k => k.status === 'draft' || k.status === 'running' || (k.status === 'cancelled' && k.updatedAt >= huyTuLuc)).sort((a, b) => b.createdAt - a.createdAt))
         },
         async dsKeHoachBinhLuan(ids) {
             return sao(keHoach.filter(k => (k.kind === 'reply' || k.kind === 'hide') && k.status !== 'cancelled' && ids.includes(String(k.data?.commentId))))
@@ -446,7 +476,12 @@ export function gioDang(pol: ChinhSachFbPilot, hoSo: any): number[] {
 
 async function conLuotGhi(ctx: NgCanhFb, pol: ChinhSachFbPilot) {
     const n = await ctx.kho.demGhiTuLuc(dauNgayVN(luc(ctx)))
-    if (n >= pol.maxWritesPerDay) throw new ToolError(`Đã đủ ${pol.maxWritesPerDay} thao tác ghi lên Facebook hôm nay (giới hạn trong chính sách) — mai chạy tiếp.`)
+    if (n >= pol.maxWritesPerDay) {
+        // gắn cờ để chu kỳ biết mà dừng thực thi lại nháp cũ, khỏi báo cùng một lỗi cho từng nháp (09/11/2026)
+        const e: any = new ToolError(`Đã đủ ${pol.maxWritesPerDay} thao tác ghi lên Facebook hôm nay (giới hạn trong chính sách) — mai chạy tiếp.`)
+        e.hetLuotGhi = true
+        throw e
+    }
 }
 
 // ─── Soạn bài ──────────────────────────────────────────────────────────────────
@@ -545,17 +580,27 @@ export function khungGioTrong(now: number, gio: number[], pol: ChinhSachFbPilot,
     return ra
 }
 
-/** Giờ của các bài đã có quanh hiện tại: bài Kengi đã hẹn / đã đăng (FbScheduledPost) + kế hoạch Pilot chưa thực thi. */
+/**
+ * Giờ của các bài đã có quanh hiện tại: bài Kengi đã hẹn / đã đăng (FbScheduledPost) + kế hoạch Pilot ĐÃ / ĐANG đăng chưa có
+ * dòng FbScheduledPost (đang chạy, không rõ — có thể đã lên) + nháp CÒN thực thi được (giờ hẹn cách ≥ 10 phút).
+ * 09/11/2026: nháp quá giờ / đã huỷ không giữ khung nữa — trước đây nháp Xem trước giữ khung 3 ngày ⇒ bật Tự động không lên
+ * bài nào. Nháp còn hạn vẫn giữ khung CỦA NÓ: không thì nhiều nháp lập liền tay từ form cùng rơi vào một khung trống đầu tiên,
+ * và mỗi lượt Xem trước lại lập thêm một loạt nháp chồng lên cùng các khung.
+ */
 async function gioDaCo(ctx: NgCanhFb, pageId: string, now: number): Promise<number[]> {
     const ds: any[] = await ctx.prisma.fbScheduledPost.findMany({
         where: { pageId, status: { in: ['scheduled', 'published'] }, scheduledAt: { gte: new Date(dauNgayVN(now) - 86400_000), lte: new Date(now + 5 * 86400_000) } },
         select: { scheduledAt: true },
     })
-    const kh = await ctx.kho.dsKeHoachBaiTu(now - 7 * 86400_000)
+    const cuaPage = (k: KeHoachFb) => String(k.data?.pageId || pageId) === String(pageId)
+    const gio = (k: KeHoachFb) => Number(k.data?.scheduledAt) || (k.status === 'draft' ? 0 : k.updatedAt)
+    const daDang = (await ctx.kho.dsKeHoachBaiTu(now - 7 * 86400_000)).filter(cuaPage)
+    const nhap = (await ctx.kho.dsKeHoachMo(now)).filter(k => k.kind === 'post' && k.status === 'draft' && cuaPage(k))
     return [
         ...ds.map(r => new Date(r.scheduledAt).getTime()),
-        // kế hoạch đã thực thi có dòng FbScheduledPost rồi — chỉ đếm bản chưa thực thi, khỏi đếm đôi
-        ...kh.filter(k => k.status === 'draft' || k.status === 'running').map(k => Number(k.data?.scheduledAt) || 0).filter(t => t > 0),
+        // đăng xong (succeeded) thì có dòng FbScheduledPost rồi — chỉ đếm bản chưa có dòng đó, khỏi đếm đôi
+        ...daDang.filter(k => k.status !== 'succeeded' || !k.result?.scheduledPostId).map(gio).filter(t => t > 0),
+        ...nhap.map(gio).filter(t => t >= now + 10 * 60_000),
     ]
 }
 
@@ -582,9 +627,26 @@ export interface UngVienFb {
     message: string
 }
 
-export interface LoaiTruFb { thieuAnh: number; anhKhongDung: number; daDangGanDay: number; tuCam: number }
+/** `dangCoKeHoach` (09/11/2026): mã đang có kế hoạch mở (nháp / đang chạy) hoặc người vừa huỷ nháp máy đề xuất (14 ngày) —
+ *  trước đây nháp tính vào `daDangGanDay` (chặn 21 ngày như đã đăng). */
+export interface LoaiTruFb { thieuAnh: number; anhKhongDung: number; daDangGanDay: number; tuCam: number; dangCoKeHoach: number }
 
 const DIEU_KIEN_HANG = { productType: 'goods', mergedIntoId: null, bundleId: null }
+
+/** Mã hàng / bình luận mà chu kỳ phải né: kế hoạch còn mở (khỏi lập trùng), hoặc nháp MÁY bị NGƯỜI huỷ trong 14 ngày. */
+export interface NeKeHoachFb { maHang: Set<string>; binhLuan: Set<string> }
+function themNe(ne: NeKeHoachFb, k: KeHoachFb) {
+    if (k.kind === 'post' && k.data?.productId) ne.maHang.add(String(k.data.productId))
+    if ((k.kind === 'reply' || k.kind === 'hide') && k.data?.commentId) ne.binhLuan.add(String(k.data.commentId))
+}
+/** Bản CHỈ ĐỌC (trang trạng thái, form) — chu kỳ dùng bản dọn của donKeHoachMoFb. */
+async function keHoachCanNe(ctx: NgCanhFb, now: number): Promise<NeKeHoachFb> {
+    const ne: NeKeHoachFb = { maHang: new Set(), binhLuan: new Set() }
+    for (const k of await ctx.kho.dsKeHoachMo(now - NHO_NGUOI_HUY_MS)) {
+        if (k.status !== 'cancelled' || (laNhapMay(k) && !k.result?.tuHuy)) themNe(ne, k)
+    }
+    return ne
+}
 
 async function maDaDangGanDay(ctx: NgCanhFb, pol: ChinhSachFbPilot, now: number): Promise<Map<string, number>> {
     const tu = now - pol.repostAfterDays * 86400_000
@@ -606,9 +668,10 @@ async function maDaDangGanDay(ctx: NgCanhFb, pol: ChinhSachFbPilot, now: number)
 
 /**
  * Hàng đủ điều kiện lên bài: hàng hoá, chưa gộp, không combo, tồn ≥ minStock, có giá bán, có ảnh dùng được,
- * chưa lên bài trong repostAfterDays ngày, bài soạn ra không dính từ cấm. Xếp: bán chạy 30 ngày, rồi tồn nhiều.
+ * chưa lên bài trong repostAfterDays ngày, không có kế hoạch đang mở / người vừa huỷ đề xuất (`neMa` — chu kỳ truyền bản
+ * vừa dọn), bài soạn ra không dính từ cấm. Xếp: bán chạy 30 ngày, rồi tồn nhiều.
  */
-export async function timUngVienFb(ctx: NgCanhFb, pol: ChinhSachFbPilot, o: { lim: number; hoSo?: any } = { lim: 30 }): Promise<{ ungVien: UngVienFb[]; loaiTru: LoaiTruFb; daXet: number }> {
+export async function timUngVienFb(ctx: NgCanhFb, pol: ChinhSachFbPilot, o: { lim: number; hoSo?: any; neMa?: Set<string> } = { lim: 30 }): Promise<{ ungVien: UngVienFb[]; loaiTru: LoaiTruFb; daXet: number }> {
     const now = luc(ctx)
     const hoSo = o.hoSo !== undefined ? o.hoSo : await docHoSo(ctx.prisma)
     /* Hai nguồn, TUẦN TỰ (pool 1 kết nối): hàng bán chạy 30 ngày + hàng tồn nhiều. Chỉ lấy theo tồn thì cửa hàng
@@ -631,12 +694,14 @@ export async function timUngVienFb(ctx: NgCanhFb, pol: ChinhSachFbPilot, o: { li
     const tonNhieu: any[] = await ctx.prisma.product.findMany({ where: dieuKien, select: chon, orderBy: { stock: 'desc' }, take: 300 })
     const rows = [...banChay, ...tonNhieu.filter(r => !daBan.has(r.id))]
     const daDang = await maDaDangGanDay(ctx, pol, now)
-    const loaiTru: LoaiTruFb = { thieuAnh: 0, anhKhongDung: 0, daDangGanDay: 0, tuCam: 0 }
+    const neMa = o.neMa || (await keHoachCanNe(ctx, now)).maHang
+    const loaiTru: LoaiTruFb = { thieuAnh: 0, anhKhongDung: 0, daDangGanDay: 0, tuCam: 0, dangCoKeHoach: 0 }
     const ungVien: UngVienFb[] = []
     for (const r of rows) {
         const anh = anhHopLe(r.images || [], pol.maxImages)
         if (!anh.length) { (r.images || []).length ? loaiTru.anhKhongDung++ : loaiTru.thieuAnh++; continue }
         if (daDang.has(r.id)) { loaiTru.daDangGanDay++; continue }
+        if (neMa.has(String(r.id))) { loaiTru.dangCoKeHoach++; continue }
         const bai = soanBai(r, pol, hoSo)
         if (bai.tuCam.length) { loaiTru.tuCam++; continue }
         ungVien.push({
@@ -811,13 +876,24 @@ export async function taoKeHoachAn(ctx: NgCanhFb, b: { commentId: string; postId
     return ctx.kho.taoKeHoach(keHoachMoi('hide', data, b.idempotencyKey, ctx.nguoi, now))
 }
 
+/** Người huỷ một nháp. Nháp MÁY đề xuất (khoá 'cycle:') ⇒ chu kỳ nhớ 14 ngày, không đề xuất lại mã / bình luận đó (09/11/2026 —
+ *  trước đây không nhớ gì; còn nháp chưa đăng thì chặn mã 21 ngày như bài đã lên). */
 export async function huyKeHoachFb(ctx: NgCanhFb, id: string): Promise<KeHoachFb> {
-    if (!(await ctx.kho.huyKeHoach(String(id || '')))) throw new ToolError('Kế hoạch không còn là bản nháp — không huỷ được.')
-    return (await ctx.kho.layKeHoach(String(id)))!
+    const k = await ctx.kho.layKeHoach(String(id || ''))
+    const ai = `Người huỷ${ctx.nguoi ? ` (${String(ctx.nguoi).slice(0, 80)})` : ''}`
+    const message = k && laNhapMay(k)
+        ? `${ai} — chu kỳ không đề xuất lại ${k.kind === 'post' ? 'mã này' : 'bình luận này'} trong 14 ngày.`
+        : `${ai}.`
+    if (!k || !(await ctx.kho.huyKeHoach(k.id, { message }))) throw new ToolError('Kế hoạch không còn là bản nháp — không huỷ được.')
+    return (await ctx.kho.layKeHoach(k.id))!
 }
 
-/** Lỗi mạng sau khi đã gửi: không biết Facebook đã nhận chưa ⇒ 'uncertain', đừng tự đăng lại. */
+/** Lệnh ghi không rõ kết cục ⇒ 'uncertain', đừng tự đăng lại. 09/11/2026: FacebookService gắn khongRoKetCuc (HTTP 5xx / hết giờ /
+ *  phản hồi không phải JSON / đứt mạng sau khi gửi) — true là không rõ, false là chắc chưa ghi (ảnh tải ẩn hỏng trước /feed).
+ *  Lỗi mạng thô (dịch vụ giả của bộ kiểm) vẫn bắt theo chữ. */
 function laLoiMang(e: any): boolean {
+    if (e?.khongRoKetCuc === true) return true
+    if (e?.khongRoKetCuc === false) return false
     return !e?.code && !(e instanceof ToolError) && /fetch failed|network|ECONNRESET|ETIMEDOUT|socket|aborted|EAI_AGAIN/i.test(String(e?.message || e))
 }
 
@@ -843,14 +919,32 @@ export async function thucThiFb(ctx: NgCanhFb, planId: string, tuyChon: { tuDong
         else if (plan.kind === 'hide') result = await anBinhLuan(ctx, plan, fb)
         else throw new ToolError(`Loại kế hoạch lạ: ${plan.kind}`)
     } catch (e: any) {
-        status = laLoiMang(e) ? 'uncertain' : 'failed'
-        result = { message: String(e?.message || e).slice(0, 800) }
-        if (status === 'uncertain') result.message = `Mất kết nối giữa chừng — không rõ Facebook đã nhận chưa. Mở fanpage kiểm tra trước khi lập lại. (${result.message})`
-        if (e?.isTokenError) {
-            await ctx.prisma.fbPage.update({ where: { pageId: page.pageId }, data: { status: 'token_expired' } }).catch(() => { })
-            result.message = `Facebook từ chối token của fanpage — dán page token mới ở tab Kết nối. (${result.message})`
+        /* 09/11/2026 — phân loại theo MÃ lỗi Graph (services/platforms/facebook.loaiLoiFb). Trước đây mọi lỗi mang type
+         * 'OAuthException' (cả #100 ảnh hỏng, #200 thiếu quyền, #4/#17/#32/#613 hạn mức) đều đánh dấu fanpage token_expired
+         * ⇒ canPage chặn mọi chu kỳ sau tới khi chủ shop dán token mới. Giờ chỉ #190 / #102 mới đụng trạng thái trang. */
+        const goc = String(e?.message || e).slice(0, 800)
+        const loai = e instanceof ToolError ? 'khac' : loaiLoiFb(e)
+        if (laLoiMang(e)) {
+            status = 'uncertain'
+            result = { message: `Không rõ Facebook đã nhận chưa (mất kết nối / hết giờ / Facebook lỗi máy chủ) — mở fanpage kiểm tra trước khi lập lại. (${goc})` }
+        } else if (loai === 'tam_thoi') {
+            // Facebook chưa nhận gì (từ chối hẳn vì hạn mức) ⇒ trả về NHÁP: lượt sau (hoặc người bấm lại) thử tiếp; trang giữ nguyên
+            status = 'draft'
+            result = { tamThoi: true, message: `Facebook đang giới hạn lượt gọi / lỗi tạm thời — giữ nháp, thử lại sau (fanpage vẫn bình thường). (${goc})` }
+        } else {
+            status = 'failed'
+            result = { message: goc }
+            if (loai === 'token') {
+                await ctx.prisma.fbPage.update({ where: { pageId: page.pageId }, data: { status: 'token_expired' } }).catch(() => { })
+                result.message = `Facebook từ chối token của fanpage — dán page token mới ở tab Kết nối. (${goc})`
+            } else if (loai === 'quyen') {
+                const q = quyenThieuFb(e)
+                result.message = `Page token thiếu quyền${q ? ` ${q}` : ''} cho thao tác này — cấp lại quyền rồi dán token mới ở tab Kết nối. (${goc})`
+            } else if (loai === 'du_lieu') {
+                result.message = `Facebook từ chối dữ liệu của riêng kế hoạch này (ảnh / chữ / bình luận không còn) — fanpage vẫn chạy bình thường. (${goc})`
+            }
         }
-        await ctx.kho.ghiNhatKy({ action: plan.kind, status, planId: plan.id, payload: { sku: plan.data?.sku, commentId: plan.data?.commentId }, response: result }).catch(() => { })
+        await ctx.kho.ghiNhatKy({ action: plan.kind, status: status === 'draft' ? 'failed' : status, planId: plan.id, payload: { sku: plan.data?.sku, commentId: plan.data?.commentId }, response: result }).catch(() => { })
         if (!(e instanceof ToolError) && !e?.code) console.error(`[FacebookPilot] thực thi ${plan.kind} ${plan.id} lỗi:`, e?.message || e)
     }
     await ctx.kho.capNhatKeHoach(plan.id, status, result)
@@ -1042,11 +1136,62 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
 
 // ─── Chu kỳ ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Kế hoạch còn mở (09/11/2026, chép tinh thần donKeHoachMo của Shopee Pilot) — trước đây nằm im mãi:
+ *   - 'running' quá 1 giờ ⇒ 'uncertain' + việc cần người (máy chết giữa lượt ghi, bài có thể đã lên) — KHÔNG tự đăng lại
+ *   - nháp MÁY lập (khoá 'cycle:') đã quá giờ hẹn (Facebook không nhận giờ cách < 10 phút) hoặc quá 3 ngày ⇒ tự huỷ, ghi lý do.
+ *     Nháp NGƯỜI lập không bao giờ tự huỷ.
+ *   - chế độ Tự động mà còn nháp của lượt Xem trước (khoá 'cycle:xem:') ⇒ huỷ để lập lại theo giá / tồn / khung giờ hiện tại
+ * Trả: mã hàng / bình luận chu kỳ phải né (kế hoạch còn mở, hoặc nháp máy bị NGƯỜI huỷ trong 14 ngày), và — chỉ Tự động — nháp
+ * máy còn hạn cần thực thi lại: bài hụt lượt ghi ở lượt trước, việc Facebook từng từ chối vì giới hạn lượt gọi (result.tamThoi).
+ */
+async function donKeHoachMoFb(ctx: NgCanhFb, tuDong: boolean, results: any[], now: number): Promise<NeKeHoachFb & { thuLai: KeHoachFb[] }> {
+    const ne: NeKeHoachFb = { maHang: new Set(), binhLuan: new Set() }
+    const thuLai: KeHoachFb[] = []
+    let soHuy = 0
+    for (const k of await ctx.kho.dsKeHoachMo(now - NHO_NGUOI_HUY_MS)) {
+        if (k.status === 'cancelled') {
+            // người huỷ nháp máy đề xuất = "đừng làm" ⇒ nhớ; máy tự huỷ (quá hạn / Xem trước) thì lượt sau được lập lại
+            if (laNhapMay(k) && !k.result?.tuHuy) themNe(ne, k)
+            continue
+        }
+        if (k.status === 'running') {
+            if (now - k.updatedAt > KET_THUC_THI_MS) {
+                const kiem = k.kind === 'post' ? 'mở fanpage kiểm bài đã lên chưa' : k.kind === 'reply' ? 'mở bài kiểm câu trả lời đã có chưa' : 'mở bài kiểm bình luận đã ẩn chưa'
+                const message = `Lượt thực thi dừng giữa chừng quá 1 giờ (máy chủ khởi động lại?) — không rõ Facebook đã nhận chưa: ${kiem}. Máy không tự làm lại.`
+                await ctx.kho.capNhatKeHoach(k.id, 'uncertain', { message })
+                results.push({ action: k.kind, status: 'uncertain', sku: k.data?.sku || null, planId: k.id, message })
+            }
+            themNe(ne, k)
+            continue
+        }
+        if (laNhapMay(k)) {
+            const hen = Number(k.data?.scheduledAt) || 0
+            const quaGio = hen > 0 && hen < now + 10 * 60_000
+            const quaHan = now - k.createdAt > HAN_NHAP_MAY_MS
+            if (quaGio || quaHan || (tuDong && laNhapXemTruoc(k))) {
+                const message = quaGio ? `Nháp máy lập đã quá giờ hẹn ${ngayGioVN(hen)} — tự huỷ; chu kỳ lập lại vào khung giờ còn trống.`
+                    : quaHan ? 'Nháp máy lập quá 3 ngày chưa thực thi — tự huỷ; chu kỳ lập lại theo giá / tồn hiện tại nếu vẫn cần.'
+                        : 'Nháp của lượt Xem trước — chế độ Tự động lập lại theo giá / tồn / khung giờ hiện tại.'
+                if (await ctx.kho.huyKeHoach(k.id, { message, tuHuy: true })) soHuy++
+                continue
+            }
+            // nháp máy của lượt Tự động: bài (hụt lượt ghi / chưa kịp thực thi) hoặc việc Facebook từng báo "thử lại sau"
+            if (tuDong && !laNhapXemTruoc(k) && (k.kind === 'post' || k.result?.tamThoi)) thuLai.push(k)
+        }
+        themNe(ne, k)
+    }
+    if (soHuy) results.push({ action: 'plan', status: 'skipped', message: `Huỷ ${soHuy} nháp cũ của máy (quá giờ hẹn / quá 3 ngày / còn từ lượt Xem trước).` })
+    return { ...ne, thuLai }
+}
+
 export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
     const now = luc(ctx)
     const { cfg, page } = await canPage(ctx)
     const pol = cfg.policy
     const tuDong = cfg.executionMode === 'auto'
+    // khoá riêng cho lượt Xem trước — sang Tự động, nháp xem trước bị huỷ mà khoá không chặn lập lại (09/11/2026)
+    const tienTo = tuDong ? 'cycle' : 'cycle:xem'
     const results: any[] = []
 
     if (page.tokenExpiresAt) {
@@ -1054,22 +1199,48 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
         if (con <= 7) results.push({ action: 'token', status: 'skipped', message: `Page token còn khoảng ${Math.max(0, con)} ngày — dán token mới ở tab Kết nối trước khi hết hạn, kẻo bài hẹn giờ không lên.` })
     }
 
-    if (pol.automation.posts && pol.postsPerDay > 0) {
+    const mo = await donKeHoachMoFb(ctx, tuDong, results, now)
+    /** Facebook giới hạn lượt gọi (#4/#17/#32/#613…) ⇒ LÙI: lượt này không ghi / lập thêm gì, lượt sau làm tiếp. */
+    let tamDung: string | null = null
+    const xemTamDung = (p: any) => { if (p?.status === 'draft' && p?.result?.tamThoi) tamDung = String(p.result.message || 'Facebook đang giới hạn lượt gọi') }
+    // giờ hẹn gần trước (hạn mức ghi mỗi ngày có hạn); việc bình luận (không hẹn giờ) làm trước hết
+    mo.thuLai.sort((a, b) => (Number(a.data?.scheduledAt) || 0) - (Number(b.data?.scheduledAt) || 0))
+    for (const k of mo.thuLai) {
+        if (tamDung) break
+        try {
+            const r: any = await thucThiFb(ctx, k.id, { tuDong: true })
+            const p = r.plan || r
+            xemTamDung(p)
+            const hen = Number(k.data?.scheduledAt) || 0
+            results.push({
+                action: k.kind, status: p.status, sku: k.data?.sku || null, planId: k.id,
+                message: `Thực thi lại nháp máy${k.data?.name ? ` ${k.data.name}` : ''}${hen ? ` · hẹn ${ngayGioVN(hen)}` : ''}${p.result?.message ? ` — ${p.result.message}` : ''}`,
+            })
+        } catch (e: any) {
+            // hết lượt ghi hôm nay ⇒ nháp nằm chờ (quá giờ hẹn thì tự huỷ) — mục lên bài bên dưới tự báo hạn mức nếu còn lập bài
+            if (e?.hetLuotGhi) break
+            results.push({ action: k.kind, status: 'failed', sku: k.data?.sku || null, planId: k.id, message: String(e?.message || e).slice(0, 300) })
+        }
+    }
+
+    if (pol.automation.posts && pol.postsPerDay > 0 && !tamDung) {
         const hoSo = await docHoSo(ctx.prisma)
         const ban = await gioDaCo(ctx, page.pageId, now)
         const slots = khungGioTrong(now, gioDang(pol, hoSo), pol, ban)
         if (!slots.length) {
             results.push({ action: 'post', status: 'unchanged', message: `3 ngày tới đã đủ ${pol.postsPerDay} bài/ngày (hoặc không còn khung giờ cách các bài khác ≥ ${pol.minGapMinutes} phút).` })
         } else {
-            const uv = await timUngVienFb(ctx, pol, { lim: slots.length, hoSo })
+            const uv = await timUngVienFb(ctx, pol, { lim: slots.length, hoSo, neMa: mo.maHang })
             const n = Math.min(slots.length, uv.ungVien.length, TRAN_BAI_MOI_CHU_KY)
             for (let i = 0; i < n; i++) {
+                if (tamDung) break
                 const u = uv.ungVien[i]
                 const t = slots[i]
                 try {
-                    let plan: any = await taoKeHoachBai(ctx, { sku: u.sku, scheduledAt: t, idempotencyKey: `cycle:post:${u.productId}:${t}` })
+                    let plan: any = await taoKeHoachBai(ctx, { sku: u.sku, scheduledAt: t, idempotencyKey: `${tienTo}:post:${u.productId}:${t}` })
                     if (tuDong && plan.status === 'draft') plan = await thucThiFb(ctx, plan.id, { tuDong: true })
                     const p = plan.plan || plan
+                    xemTamDung(p)
                     results.push({
                         action: 'post', status: p.status, sku: u.sku, planId: p.id,
                         message: `${u.name} · ${vnd(u.price)} · hẹn ${ngayGioVN(t)}${p.result?.message ? ` — ${p.result.message}` : ''}`,
@@ -1082,7 +1253,7 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                 const l = uv.loaiTru
                 results.push({
                     action: 'post', status: 'unchanged',
-                    message: `Không còn mặt hàng đủ điều kiện lên bài (soát ${uv.daXet} mã còn tồn ≥ ${pol.minStock} có giá): ${l.thieuAnh} chưa có ảnh, ${l.anhKhongDung} chỉ có ảnh WebP/HEIC, ${l.daDangGanDay} đã lên bài trong ${pol.repostAfterDays} ngày, ${l.tuCam} dính từ cấm.`,
+                    message: `Không còn mặt hàng đủ điều kiện lên bài (soát ${uv.daXet} mã còn tồn ≥ ${pol.minStock} có giá): ${l.thieuAnh} chưa có ảnh, ${l.anhKhongDung} chỉ có ảnh WebP/HEIC, ${l.daDangGanDay} đã lên bài trong ${pol.repostAfterDays} ngày, ${l.dangCoKeHoach} đang có kế hoạch / người vừa huỷ đề xuất, ${l.tuCam} dính từ cấm.`,
                 })
             } else if (slots.length > n && uv.ungVien.length > n) {
                 results.push({ action: 'post', status: 'skipped', message: `Mỗi chu kỳ lập tối đa ${TRAN_BAI_MOI_CHU_KY} bài — chu kỳ sau lập tiếp.` })
@@ -1090,27 +1261,33 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
         }
     }
 
-    if (pol.automation.replyPriceQuestions || pol.automation.hidePhoneComments) {
+    if ((pol.automation.replyPriceQuestions || pol.automation.hidePhoneComments) && !tamDung) {
         let bl: Awaited<ReturnType<typeof docBinhLuan>> | null = null
         try { bl = await docBinhLuan(ctx, { soBai: 10 }) } catch (e: any) {
-            results.push({ action: 'comments', status: 'failed', message: `Không đọc được bình luận: ${String(e?.message || e).slice(0, 300)}` })
+            // giới hạn lượt gọi ⇒ lượt sau đọc lại, khỏi báo chủ shop như hỏng
+            results.push({ action: 'comments', status: isRateLimitError(e) ? 'skipped' : 'failed', message: `Không đọc được bình luận: ${String(e?.message || e).slice(0, 300)}` })
         }
         if (bl) {
             let soTraLoi = 0, soAn = 0
             for (const c of bl.comments) {
+                if (tamDung) break
                 if (c.handled || c.plan || c.fromPage) continue
+                // nháp máy cho bình luận này bị NGƯỜI huỷ (14 ngày) ⇒ không đề xuất lại — kể cả khi vừa đổi Xem trước → Tự động
+                if (mo.binhLuan.has(c.id)) continue
                 if (now - c.createdTime > 3 * 86400_000) continue
                 if (pol.automation.hidePhoneComments && c.hasPhone && !c.isHidden && c.fromId) {
                     try {
-                        let plan: any = await taoKeHoachAn(ctx, { commentId: c.id, postId: c.postId, commentMsg: c.message, fromName: c.fromName, reason: 'Bình luận lộ số điện thoại', idempotencyKey: `cycle:hide:${c.id}` })
+                        let plan: any = await taoKeHoachAn(ctx, { commentId: c.id, postId: c.postId, commentMsg: c.message, fromName: c.fromName, reason: 'Bình luận lộ số điện thoại', idempotencyKey: `${tienTo}:hide:${c.id}` })
                         if (tuDong && plan.status === 'draft') plan = await thucThiFb(ctx, plan.id, { tuDong: true })
                         const p = plan.plan || plan
+                        xemTamDung(p)
                         soAn++
                         results.push({ action: 'hide', status: p.status, planId: p.id, message: `Ẩn bình luận có số điện thoại của ${c.fromName || 'khách'} trên "${c.postTitle.slice(0, 50)}"${p.result?.message ? ` — ${p.result.message}` : ''}` })
                     } catch (e: any) {
                         results.push({ action: 'hide', status: 'failed', message: String(e?.message || e).slice(0, 300) })
                     }
                 }
+                if (tamDung) break
                 if (pol.automation.replyPriceQuestions && c.askPrice && c.suggestion && c.product && soTraLoi < pol.maxRepliesPerCycle) {
                     // Máy chỉ TỰ GỬI khi chắc là khách, chưa ai trả lời, và tồn dương — còn lại để nháp chờ người duyệt
                     const choDuyet = !c.fromId ? 'không rõ người viết (token thiếu quyền đọc người bình luận)'
@@ -1120,10 +1297,11 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                     try {
                         let plan: any = await taoKeHoachTraLoi(ctx, {
                             commentId: c.id, message: c.suggestion, postId: c.postId, commentMsg: c.message, fromName: c.fromName,
-                            productId: c.product.productId, sku: c.product.sku, price: c.product.price, idempotencyKey: `cycle:reply:${c.id}`,
+                            productId: c.product.productId, sku: c.product.sku, price: c.product.price, idempotencyKey: `${tienTo}:reply:${c.id}`,
                         })
                         if (tuDong && !choDuyet && plan.status === 'draft') plan = await thucThiFb(ctx, plan.id, { tuDong: true })
                         const p = plan.plan || plan
+                        xemTamDung(p)
                         soTraLoi++
                         results.push({
                             action: 'reply', status: p.status, planId: p.id, sku: c.product.sku,
@@ -1140,6 +1318,8 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
             }
         }
     }
+    // 'skipped' (không phải 'failed'): hạn mức tự hồi, fanpage vẫn bình thường — khỏi báo chủ shop như hỏng (09/11/2026)
+    if (tamDung) results.push({ action: 'cycle', status: 'skipped', message: `${tamDung} — lượt này dừng ghi; nháp giữ nguyên, lượt sau làm tiếp.`.slice(0, 400) })
     if (!results.length) results.push({ action: 'cycle', status: 'unchanged', message: 'Chính sách đang tắt cả lên bài lẫn xử lý bình luận.' })
     return { executionMode: cfg.executionMode, results }
 }
@@ -1200,6 +1380,20 @@ export async function luuCauHinhFb(ctx: NgCanhFb, b: any): Promise<CauHinhFbPilo
     const nextRunAt = !schedule.enabled ? null : (!doiLich && cfg.nextRunAt) ? cfg.nextRunAt : luc(ctx) + schedule.intervalMinutes * 60_000
     const moi: CauHinhFbPilot = { ...cfg, pageId, executionMode, policy, schedule, nextRunAt, updatedAt: Date.now() }
     await ctx.kho.luuCauHinh(moi)
+    /* Xem trước → Tự động (09/11/2026): nháp của lượt Xem trước soạn theo giá / tồn / khung giờ LÚC ĐÓ — huỷ ngay để chu kỳ Tự động
+     * lập lại theo số hiện tại; trước đây chúng giữ chỗ khung giờ + chặn mã 21 ngày nên chu kỳ Tự động đầu không đăng được bài nào.
+     * Hỏng ở đây không chặn lưu cấu hình — chu kỳ (donKeHoachMoFb) dọn lại lần nữa. */
+    if (executionMode === 'auto' && cfg.executionMode !== 'auto') {
+        try {
+            for (const k of await ctx.kho.dsKeHoachMo(luc(ctx))) {
+                if (k.status === 'draft' && laNhapXemTruoc(k)) {
+                    await ctx.kho.huyKeHoach(k.id, { message: 'Nháp của lượt Xem trước — chế độ Tự động lập lại theo giá / tồn / khung giờ hiện tại.', tuHuy: true })
+                }
+            }
+        } catch (e: any) {
+            console.error('[FacebookPilot] huỷ nháp Xem trước khi bật Tự động lỗi:', e?.message || e)
+        }
+    }
     return moi
 }
 
@@ -1313,11 +1507,18 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
 4. Kế hoạch → thực thi
    - Mọi thao tác ghi tạo KẾ HOẠCH trước. Chế độ Xem trước: thực thi không gọi Facebook. Chế độ Tự động: thực thi đăng / trả lời thật.
    - Giới hạn: số thao tác ghi mỗi ngày, số câu trả lời mỗi chu kỳ.
+   - Lỗi Facebook xét theo MÃ: chỉ #190 / #102 là token hỏng (fanpage chuyển "token hết hạn", dán token mới). Giới hạn lượt gọi
+     (#4, #17, #32, #613) ⇒ giữ nháp, lượt sau thử lại, fanpage vẫn bình thường. Thiếu quyền (#10, #200–299) ⇒ báo tên quyền.
+     #100 ⇒ hỏng riêng kế hoạch đó. Hết giờ / Facebook lỗi máy chủ khi đang ghi ⇒ "không rõ kết quả": mở fanpage kiểm, máy không tự làm lại.
 
 5. Chu kỳ
    - Lập bài cho các khung giờ trống trong 3 ngày tới (tối đa 6 bài mỗi chu kỳ), soát bình luận 10 bài gần nhất (nếu bật).
    - Máy tự trả lời chỉ khi: biết chắc người viết là khách, bình luận chưa có ai trả lời, hàng tồn dương. Còn lại để nháp chờ người duyệt.
    - Chạy theo lịch: bật ở Sửa chính sách (mỗi 60–1440 phút), máy chủ tự chạy, không cần mở trang.
+   - Dọn kế hoạch mỗi chu kỳ: nháp MÁY lập quá giờ hẹn hoặc quá 3 ngày thì tự huỷ (nháp người lập giữ nguyên); thực thi kẹt quá 1 giờ
+     ⇒ "không rõ kết quả" để người kiểm. Chuyển Xem trước → Tự động: nháp của lượt Xem trước bị huỷ, chu kỳ lập lại theo số hiện tại.
+   - Người huỷ nháp máy đề xuất ⇒ máy không đề xuất lại mã / bình luận đó trong 14 ngày. Chỉ bài ĐÃ gửi Facebook mới tính vào
+     "không lên lại trong N ngày"; nháp còn hạn chỉ giữ khung giờ của nó.
 
 6. Chưa làm
    - Nhắn tin Messenger cho khách: cần app Facebook được duyệt quyền pages_messaging.

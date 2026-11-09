@@ -30,7 +30,7 @@
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
-import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai } from '../services/platforms/facebook'
+import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai, laLoiTokenFb, laLoiQuyenFb, quyenThieuFb } from '../services/platforms/facebook'
 import { baoChuShop } from './pilotBaoChuShop'
 import { docCauHinhFb, khoSqlFb, dauNgayVN, ngayGioVN, vnd, type KhoFbPilot } from './facebookPilot'
 
@@ -60,8 +60,11 @@ export function laiGop(gia: number, giaVon: number): number | null {
     return Math.round(((gia - giaVon) / gia) * 1000) / 10
 }
 
-/** Lỗi mạng sau khi đã gửi: không biết Facebook đã nhận chưa ⇒ 'uncertain', đừng tự làm lại. */
+/** Lỗi mạng sau khi đã gửi: không biết Facebook đã nhận chưa ⇒ 'uncertain', đừng tự làm lại. 09/11/2026: FacebookService gắn
+ *  khongRoKetCuc cho lệnh ghi gặp HTTP 5xx / hết giờ / phản hồi không phải JSON — cũng là "không rõ" (5xx mang mã lỗi Graph nên
+ *  phép thử chữ cũ bỏ sót). Lỗi mạng thô của dịch vụ giả trong bộ kiểm vẫn bắt theo chữ. */
 function laLoiMang(e: any): boolean {
+    if (e?.khongRoKetCuc === true || e?.hetGio === true) return true
     return !e?.code && !(e instanceof ToolError) && /fetch failed|network|ECONNRESET|ETIMEDOUT|socket|aborted|EAI_AGAIN/i.test(String(e?.message || e))
 }
 
@@ -487,10 +490,11 @@ export async function canTokenAds(ctx: NgCanhAds, cfg: CauHinhAds): Promise<Toke
     return t
 }
 
-/* Graph gắn type 'OAuthException' cả cho lỗi tham số (#100) ⇒ isTokenError của FacebookService quá rộng cho quảng cáo
- * (một mã chiến dịch lạ không phải "token hỏng"). Ads Pilot tự phân loại theo MÃ lỗi. */
-export const laLoiToken = (e: any) => e?.code === 190 || e?.code === 102
-export const laLoiQuyen = (e: any) => { const c = Number(e?.code); return c === 10 || c === 294 || (c >= 200 && c < 300) }
+/* Graph gắn type 'OAuthException' cả cho lỗi tham số (#100) ⇒ Ads Pilot phân loại theo MÃ lỗi. 09/11/2026: luật này nay là
+ * luật chung ở services/platforms/facebook (laLoiTokenFb / laLoiQuyenFb — Fanpage Manager, Facebook Pilot, cron đối soát cùng
+ * dùng); giữ tên cũ cho Ads drill + bộ kiểm. */
+export const laLoiToken = (e: any) => laLoiTokenFb(e)
+export const laLoiQuyen = (e: any) => laLoiQuyenFb(e)
 /** #100 subcode 33: đối tượng không tồn tại (chiến dịch đã bị xoá hẳn). */
 export const laKhongTonTai = (e: any) => Number(e?.code) === 100 && Number(e?.subcode) === 33
 
@@ -498,7 +502,10 @@ export const laKhongTonTai = (e: any) => Number(e?.code) === 100 && Number(e?.su
 export function moTaLoi(e: any): string {
     const m = String(e?.message || e).slice(0, 300)
     if (laLoiToken(e)) return `Facebook từ chối token (hết hạn / bị thu hồi / đổi mật khẩu) — dán token mới. (${m})`
-    if (laLoiQuyen(e)) return `Token thiếu quyền cho thao tác này — cần ads_management và quyền quản trị tài khoản quảng cáo / fanpage. (${m})`
+    if (laLoiQuyen(e)) {
+        const q = quyenThieuFb(e)
+        return `Token thiếu quyền${q ? ` ${q}` : ''} cho thao tác này — cần ads_management và quyền quản trị tài khoản quảng cáo / fanpage. (${m})`
+    }
     return m
 }
 
@@ -592,6 +599,8 @@ export interface QuangCaoPilot {
     endAt: number
     /** trạng thái chiến dịch trên Facebook; null = chưa đọc được */
     status: string | null
+    /** vì sao không đọc được chiến dịch này (status null) — null = đọc được (09/11/2026) */
+    readError: string | null
     effectiveStatus: string | null
     /** chiến dịch đang được phép tiêu tiền: ACTIVE, nhóm QC không tắt, chưa tới giờ kết thúc */
     running: boolean
@@ -629,27 +638,40 @@ export function lyDoNguoiDaBo(ds: KeHoachAds[]): string[] {
 }
 const COT_CHIEN_DICH = 'id,name,status,effective_status,adsets{id,daily_budget,end_time,status,effective_status}'
 
-/** Trạng thái sống của các chiến dịch theo mã. Gọi gộp ?ids=; hỏng thì đọc từng cái (một mã lạ không làm mù cả bảng). */
-async function docChienDich(svc: DichVuAds, ids: string[]): Promise<{ theoMa: Map<string, any>; loi: string | null }> {
+/**
+ * Trạng thái sống của các chiến dịch theo mã. Gọi gộp ?ids=; hỏng (hoặc sót mã) thì đọc TỪNG cái — một mã lạ không làm mù cả
+ * bảng. 09/11/2026: lỗi QUYỀN của lời gọi gộp cũng đọc lẻ (một chiến dịch ở tài khoản token không còn quyền làm hỏng cả lời gọi
+ * gộp — trước đây thế là cả bảng "không đọc được", chu kỳ dừng trước vòng tạm dừng ⇒ quảng cáo hết hàng đọc được vẫn chạy tiêu
+ * tiền). Chỉ token hỏng (#190 / #102) mới thôi đọc lẻ: lời gọi nào cũng sẽ hỏng y vậy.
+ * `loiTheoMa` = chiến dịch KHÔNG đọc được ⇒ trạng thái null: vẫn tính vào trần, chặn mọi việc tăng chi, vào việc cần người.
+ */
+async function docChienDich(svc: DichVuAds, ids: string[]): Promise<{ theoMa: Map<string, any>; loiTheoMa: Map<string, string> }> {
     const theoMa = new Map<string, any>()
-    if (!ids.length) return { theoMa, loi: null }
+    const loiTheoMa = new Map<string, string>()
+    if (!ids.length) return { theoMa, loiTheoMa }
     try {
         const r = await svc.get('', { ids: ids.join(','), fields: COT_CHIEN_DICH })
         for (const id of ids) if (r?.[id]) theoMa.set(id, r[id])
-        const thieu = ids.filter(id => !theoMa.has(id))
-        return { theoMa, loi: thieu.length ? `Facebook không trả ${thieu.length} chiến dịch (${thieu.slice(0, 3).join(', ')})` : null }
     } catch (e: any) {
-        if (laLoiToken(e) || laLoiQuyen(e)) return { theoMa, loi: moTaLoi(e) }
-        let loi: string | null = null
-        for (const id of ids) {
-            try { theoMa.set(id, await svc.get(id, { fields: COT_CHIEN_DICH })) } catch (e2: any) {
-                // xoá hẳn khỏi Facebook ⇒ không tiêu tiền; lỗi khác ⇒ KHÔNG biết ⇒ báo (rào trần sẽ chặn tăng chi)
-                if (laKhongTonTai(e2)) theoMa.set(id, { id, status: 'DELETED', effective_status: 'DELETED', khongTonTai: true })
-                else loi = loi || `Chiến dịch ${id}: ${moTaLoi(e2)}`
+        if (laLoiToken(e)) {
+            const m = moTaLoi(e)
+            for (const id of ids) loiTheoMa.set(id, m)
+            return { theoMa, loiTheoMa }
+        }
+    }
+    for (const id of ids) {
+        if (theoMa.has(id)) continue
+        try { theoMa.set(id, await svc.get(id, { fields: COT_CHIEN_DICH })) } catch (e2: any) {
+            // xoá hẳn khỏi Facebook ⇒ không tiêu tiền; lỗi khác ⇒ KHÔNG biết ⇒ báo (rào trần sẽ chặn tăng chi)
+            if (laKhongTonTai(e2)) { theoMa.set(id, { id, status: 'DELETED', effective_status: 'DELETED', khongTonTai: true }); continue }
+            loiTheoMa.set(id, moTaLoi(e2))
+            if (laLoiToken(e2)) {
+                for (const x of ids) if (!theoMa.has(x) && !loiTheoMa.has(x)) loiTheoMa.set(x, moTaLoi(e2))
+                break
             }
         }
-        return { theoMa, loi }
     }
+    return { theoMa, loiTheoMa }
 }
 
 async function docInsightsChienDich(svc: DichVuAds, act: string, ids: string[], datePreset: string): Promise<Map<string, SoLieuAds>> {
@@ -677,7 +699,8 @@ async function soLuongBan(prisma: any, productId: string, tu: number, den: numbe
 
 /**
  * Quảng cáo do Pilot tạo (MỌI tài khoản quảng cáo Pilot từng dùng — trần ngân sách tính chung) + trạng thái / ngân sách /
- * số liệu SỐNG từ Facebook. `liveError` = không đọc được TRẠNG THÁI (rào trần phải chặn); `statsError` = chỉ hỏng số liệu.
+ * số liệu SỐNG từ Facebook. `liveError` = có chiến dịch không đọc được TRẠNG THÁI (rào trần phải chặn mọi việc TĂNG chi;
+ * 09/11/2026: chiến dịch đọc được vẫn đủ dữ liệu để TẠM DỪNG — xem `readError` từng quảng cáo); `statsError` = chỉ hỏng số liệu.
  * `soLieu: false` ⇒ chỉ trạng thái + ngân sách (đủ cho soát trần, bớt các lời gọi Insights).
  */
 export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: number, o: { soLieu?: boolean; banHang?: boolean } = {}): Promise<{ ads: QuangCaoPilot[]; liveError: string | null; statsError: string | null; viec: Map<string, KeHoachAds[]> }> {
@@ -695,8 +718,9 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
     const ids = boost.map(k => String(k.result.campaignId))
 
     // TUẦN TỰ có chủ ý: lời gọi Facebook tuần tự cho dễ đọc nhật ký; Prisma của cửa hàng chỉ 1 kết nối trên prod
-    const { theoMa, loi } = await docChienDich(svc, ids)
-    const liveError = loi
+    const { theoMa, loiTheoMa } = await docChienDich(svc, ids)
+    const [dauLoi] = [...loiTheoMa]
+    const liveError = dauLoi ? `${loiTheoMa.size}/${ids.length} chiến dịch không đọc được — ${dauLoi[0]}: ${dauLoi[1]}` : null
     let statsError: string | null = null
     const tron = new Map<string, SoLieuAds>(), homNay = new Map<string, SoLieuAds>()
     if (o.soLieu !== false) {
@@ -744,7 +768,7 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
             priceAtBoost: d.priceInPost == null ? null : Number(d.priceInPost),
             dailyBudget: nhom?.daily_budget != null ? Number(nhom.daily_budget) : Number(r.dailyBudget ?? d.dailyBudget) || 0,
             startAt: Number(r.startAt) || k.updatedAt, endAt,
-            status, effectiveStatus: c ? String(c.effective_status || '') : null, running, ended,
+            status, readError: c ? null : loiTheoMa.get(cid) || 'Facebook không trả chiến dịch này', effectiveStatus: c ? String(c.effective_status || '') : null, running, ended,
             life, today: homNay.get(cid) || soLieuRong(), costPerResult: life.results > 0 ? Math.round(life.spend / life.results) : null,
             product: d.productId ? (sp ? { stock: Number(sp.stock) || 0, price: Number(sp.sellingPrice) || 0, costPrice: Number(sp.costPrice) || 0, merged: !!sp.mergedIntoId } : null) : null,
             sold: null,
@@ -756,7 +780,7 @@ export async function docQuangCaoPilot(ctx: NgCanhAds, svc: DichVuAds, now: numb
         else if (k.status === 'uncertain') qc.warnings.push('Lần tạo / bật bị đứt giữa chừng — kiểm tra trong Trình quản lý quảng cáo.')
         else if (k.status === 'failed') qc.warnings.push(`Chưa bật được: ${String(r.message || 'lỗi không rõ').slice(0, 200)}`)
         if (c?.khongTonTai) qc.warnings.push('Chiến dịch không còn trên Facebook (đã bị xoá?).')
-        else if (!c) qc.warnings.push('Không đọc được trạng thái chiến dịch trên Facebook.')
+        else if (!c) qc.warnings.push(`Không đọc được trạng thái chiến dịch trên Facebook (${String(qc.readError).slice(0, 200)}) — Pilot không bật / tăng chi cho tới khi đọc lại được; muốn dừng ngay thì bấm Tạm dừng.`)
         if (humanOverride.length) qc.warnings.push(`Có người bật lại sau khi Pilot tạm dừng (${humanOverride.map(x => LY_DO_DUNG[x] || x).join(', ')}) — Pilot không tự tắt lại vì cùng lý do.`)
         ads.push(qc)
     }
@@ -1195,12 +1219,15 @@ async function thucThiNganSach(ctx: NgCanhAds, plan: KeHoachAds, cfg: CauHinhAds
     const to = Number(d.to)
     if (!(to >= NGAN_SACH_TOI_THIEU) || to > pol.maxBudgetPerAd) throw new ToolError(`Ngân sách ${vnd(to)}/ngày ngoài khoảng ${vnd(NGAN_SACH_TOI_THIEU)}–${vnd(pol.maxBudgetPerAd)} của chính sách hiện tại.`)
     const { ads, liveError } = await docQuangCaoPilot(ctx, svc, luc(ctx), { soLieu: false })
-    if (liveError) throw new ToolError(`Không đọc được quảng cáo trên Facebook — không đổi ngân sách cho an toàn. (${liveError})`)
     const a = ads.find(x => x.campaignId === String(d.campaignId))
+    // tăng hay giảm phải biết ngân sách SỐNG của CHÍNH chiến dịch này — không đọc được nó thì không đổi gì
+    if (a && a.status === null) throw new ToolError(`Không đọc được chiến dịch này trên Facebook — không đổi ngân sách cho an toàn. (${a.readError || liveError})`)
     if (!a?.adsetId) throw new ToolError('Không thấy nhóm quảng cáo của chiến dịch trên Facebook.')
     if (DA_XOA(a)) throw new ToolError('Chiến dịch đã bị xoá / lưu trữ trên Facebook.')
     // "tăng" hay "giảm" tính theo ngân sách SỐNG (kế hoạch lập từ trước, người có thể đã sửa trong Trình quản lý)
     if (to > a.dailyBudget) {
+        // 09/11/2026: chiến dịch KHÁC không đọc được chỉ chặn việc TĂNG (trần có thể đang đếm thiếu); HẠ ngân sách vẫn làm
+        if (liveError) throw new ToolError(`Không đọc được quảng cáo trên Facebook — không TĂNG ngân sách cho an toàn (hạ / tạm dừng vẫn làm được). (${liveError})`)
         if (tuDong && cfg.mode !== 'auto') throw new ToolError(`Ngân sách đang là ${vnd(a.dailyBudget)}/ngày — đổi thành ${vnd(to)} là TĂNG chi, chờ người duyệt.`)
         if (!(pol.dailyBudgetCap > 0)) throw new ToolError(CHUA_DAT_TRAN)
         if (a.running) {
@@ -1341,12 +1368,27 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
 
     let lyDoTk: string | null = null
     if (cfg.adAccountId) {
-        lyDoTk = lyDoTaiKhoanKhongTangChi(await docTaiKhoan(svc, cfg.adAccountId))
+        // 09/11/2026: đọc tài khoản hỏng KHÔNG làm gãy chu kỳ (trước đây ném ở đây ⇒ không tạm dừng được quảng cáo nào) —
+        // chưa đọc được thì coi như tài khoản không cho TĂNG chi; tạm dừng không cần tài khoản
+        try { lyDoTk = lyDoTaiKhoanKhongTangChi(await docTaiKhoan(svc, cfg.adAccountId)) } catch (e: any) {
+            lyDoTk = `Không đọc được tài khoản quảng cáo ${cfg.adAccountId}: ${moTaLoi(e)} — lượt này không bật quảng cáo mới (vẫn tạm dừng được).`
+        }
         if (lyDoTk) results.push({ action: 'account', status: 'failed', message: lyDoTk })
     }
 
     const { ads, liveError, statsError, viec } = await docQuangCaoPilot(ctx, svc, now, { soLieu: true })
-    if (liveError) throw new ToolError(`Không đọc được quảng cáo Pilot trên Facebook: ${liveError}`)
+    /* 09/11/2026 — chiến dịch không đọc được KHÔNG làm gãy chu kỳ nữa. Trước đây ném ngay ở đây, TRƯỚC vòng tạm dừng ⇒ một chiến
+     * dịch lỗi #17 / mất quyền làm mọi quảng cáo hết hàng (đọc được) chạy tiếp tiêu tiền. Giờ liveError CHỈ chặn việc TĂNG chi
+     * (chạy lại, tăng ngân sách, quảng cáo mới); tạm dừng vẫn chạy cho mọi chiến dịch đọc được. Chiến dịch không đọc được: trạng
+     * thái null — vẫn chiếm trần (dangChiemTran), mỗi cái một dòng việc cần người. */
+    const khongDoc = ads.filter(a => a.status === null)
+    for (const a of khongDoc.slice(0, 5)) {
+        results.push({
+            action: 'ads', status: 'failed', sku: a.sku, planId: a.planId,
+            message: `${a.name || a.campaignId}: không đọc được chiến dịch ${a.campaignId} trên Facebook (${String(a.readError || liveError).slice(0, 200)}) — lượt này Pilot không bật / tăng chi quảng cáo nào; kiểm trong Trình quản lý quảng cáo, cần dừng ngay thì bấm Tạm dừng.`,
+        })
+    }
+    if (khongDoc.length > 5) results.push({ action: 'ads', status: 'failed', message: `… và ${khongDoc.length - 5} chiến dịch Pilot nữa không đọc được trên Facebook.` })
     if (statsError) results.push({ action: 'ads', status: 'failed', message: `${statsError} — lượt này chỉ soát kho (hết hàng / đổi giá), chưa soát chi tiêu.` })
 
     const ghiBuoc = (action: string, p: any, sku: string | null, message: string) => {
@@ -1388,6 +1430,10 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                 }
                 const moi = statsError ? null : nganSachTang(a, pol)
                 if (moi !== null && a.adsetId) {
+                    if (liveError) {
+                        results.push({ action: 'budget', status: 'unchanged', sku: a.sku, message: `${a.name}: quảng cáo tốt nhưng còn chiến dịch Pilot không đọc được (trần có thể đang đếm thiếu) — lượt này không tăng ngân sách.` })
+                        continue
+                    }
                     const nhap = cuaMay('budget', k => k.status === 'draft')[0] || null
                     const khoa = `cycle:budget:${a.adsetId}:${ngayVN(now)}`
                     if (!nhap && ds.some(k => k.idempotencyKey === khoa)) continue // hôm nay máy đã tăng / đã thử
@@ -1404,6 +1450,10 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
                     if (k?.status === 'succeeded' || k?.status === 'draft') nganSach += to - a.dailyBudget
                 }
             } else if (nenChayLai(a, pol)) {
+                if (liveError) {
+                    results.push({ action: 'resume', status: 'unchanged', sku: a.sku, message: `${a.name}: có hàng lại (tồn ${a.product!.stock}) nhưng còn chiến dịch Pilot không đọc được (trần có thể đang đếm thiếu) — lượt này không chạy lại.` })
+                    continue
+                }
                 const lanDung = ds.find(k => k.status === 'succeeded')!
                 const sauDung = cuaMay('resume', k => k.createdAt > lanDung.createdAt)
                 const cu = sauDung[0] || null
@@ -1431,15 +1481,19 @@ export async function chayChuKyAds(ctx: NgCanhAds): Promise<any> {
             results.push({ action: 'boost', status: 'skipped', message: 'Chưa đặt trần ngân sách/ngày — Pilot không lập quảng cáo mới.' })
         } else if (pol.maxActiveAds <= 0) {
             results.push({ action: 'boost', status: 'skipped', message: 'Chính sách cho 0 quảng cáo chạy cùng lúc — Pilot không lập quảng cáo mới.' })
+        } else if (liveError) {
+            results.push({ action: 'boost', status: 'skipped', message: 'Còn chiến dịch Pilot không đọc được (trần có thể đang đếm thiếu) — lượt này không lập quảng cáo mới.' })
         } else {
             // đọc lại sau các bước ở trên (đã tạm dừng / chạy lại thật) cho đúng chỗ còn trống
             const sau = thucThiMay ? await docQuangCaoPilot(ctx, svc, now, { soLieu: false }) : null
-            if (sau?.liveError) throw new ToolError(`Không đọc được quảng cáo Pilot trên Facebook: ${sau.liveError}`)
             const dang = sau ? dangChiemTran(sau.ads) : { soChay, nganSach }
             const nhap = (await ctx.kho.dsKeHoachLoai(['boost'], now - 30 * NGAY)).filter(k => k.status === 'draft')
             let cho = pol.maxActiveAds - dang.soChay - nhap.length
             let du = pol.dailyBudgetCap - dang.nganSach - nhap.reduce((s, k) => s + (Number(k.data?.dailyBudget) || 0), 0)
-            if (cho <= 0 || du < pol.budgetPerAd) {
+            if (sau?.liveError) {
+                // 09/11/2026: không ném nữa — các bước tạm dừng ở trên đã xong; chỉ việc lập quảng cáo mới (TĂNG chi) dừng lại
+                results.push({ action: 'boost', status: 'skipped', message: `Đọc lại quảng cáo Pilot không được (${sau.liveError}) — lượt này không lập quảng cáo mới.` })
+            } else if (cho <= 0 || du < pol.budgetPerAd) {
                 results.push({ action: 'boost', status: 'unchanged', message: `Hết chỗ cho quảng cáo mới: ${dang.soChay}/${pol.maxActiveAds} đang chạy, ${vnd(dang.nganSach)}/${vnd(pol.dailyBudgetCap)} ngân sách/ngày${nhap.length ? `, ${nhap.length} nháp chờ duyệt` : ''}.` })
             } else {
                 const page = await canPageAds(ctx)

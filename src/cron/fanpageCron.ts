@@ -26,8 +26,8 @@ const healFailedAt = new Map<string, number>()
 
 let timer: NodeJS.Timeout | null = null
 
-/** Đối soát bài lên lịch của 1 page với danh sách scheduled_posts live trên FB. */
-async function reconcilePage(storePrisma: any, page: any): Promise<void> {
+/** Đối soát bài lên lịch của 1 page với danh sách scheduled_posts live trên FB. Xuất ra cho bộ kiểm (check-facebook-pilot). */
+export async function reconcilePage(storePrisma: any, page: any): Promise<void> {
     const pending = await storePrisma.fbScheduledPost.findMany({
         where: { pageId: page.pageId, status: 'scheduled' },
     })
@@ -39,12 +39,15 @@ async function reconcilePage(storePrisma: any, page: any): Promise<void> {
         const live = await svc.listScheduledPosts(page.pageId)
         liveIds = new Set(live.map(p => p.id))
     } catch (e: any) {
-        if (e?.isTokenError) {
-            await storePrisma.fbPage.update({ where: { pageId: page.pageId }, data: { status: 'token_expired' } }).catch(() => { })
-        }
-        // Rate-limit Graph → dừng chu kỳ page này, sang page khác
+        // Rate-limit Graph → dừng chu kỳ page này, sang page khác. Xét TRƯỚC token (09/11/2026): lỗi hạn mức #32 / #4 mang
+        // type 'OAuthException' từng bị coi là token hỏng ⇒ page thành token_expired, Pilot dừng hẳn chỉ vì gọi dày.
         if (isRateLimitError(e)) {
             console.warn(`[FanpageCron] Rate-limit Graph (page ${page.name || page.pageId}) — bỏ qua chu kỳ này`)
+            return
+        }
+        // isTokenError giờ CHỈ là #190 / #102 (services/platforms/facebook.loaiLoiFb)
+        if (e?.isTokenError) {
+            await storePrisma.fbPage.update({ where: { pageId: page.pageId }, data: { status: 'token_expired' } }).catch(() => { })
         }
         return
     }
