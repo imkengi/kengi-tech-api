@@ -1121,14 +1121,31 @@ export class ShopeeService extends PlatformService {
     /**
      * Push price for one item — POST /api/v2/product/update_price.
      * Items WITH variations require model_id (same caveat as updateStock).
+     *
+     * X-22 (09/11/2026): lỗi KHÔNG RÕ Shopee đã nhận chưa (mạng / quá hạn sau các lần thử / HTTP 5xx / phản hồi không phải JSON /
+     * lỗi phía máy chủ Shopee) ⇒ lỗi mang `khongRo: true`. Trước mọi lỗi đều thành "hỏng" ⇒ Pilot ghi 'failed' dù giá có thể đã
+     * lên sàn, chu kỳ sau bỏ qua nghỉ 24 giờ. Gửi lại update_price an toàn (đặt giá TUYỆT ĐỐI, không cộng dồn) nên vẫn giữ thử lại.
+     * Ngắt mạch proxy chặn trước khi gửi (`chuaGui`) ⇒ ném nguyên: chắc chắn chưa tới Shopee.
      */
     async updatePrice(itemId: string | number, price: number, modelId?: string | number): Promise<void> {
         const priceEntry: any = { original_price: Math.max(0, price) }
         if (modelId) priceEntry.model_id = Number(modelId)
         const body = { item_id: Number(itemId), price_list: [priceEntry] }
+        const khongRo = (lyDo: string) => Object.assign(new Error(`KHÔNG RÕ Shopee đã nhận update_price chưa: ${lyDo.slice(0, 300)}`), { khongRo: true })
 
-        const data = await this.httpPost(this.apiUrl('/api/v2/product/update_price'), body)
-        if (data.error) throw new Error(`Shopee update_price: ${data.error} - ${data.message}`)
+        let res: Response
+        try { res = await this.shopeeFetch(this.apiUrl('/api/v2/product/update_price'), 'POST', body) } catch (e: any) {
+            if (e?.chuaGui) throw e
+            throw khongRo(String(e?.message || e))
+        }
+        let data: any
+        try { data = await this.parseResponse(res) } catch (e: any) { throw khongRo(String(e?.message || e)) }
+        if (res.status >= 500) throw khongRo(`HTTP ${res.status}${data?.error ? ` ${data.error} - ${data.message}` : ''}`)
+        if (data.error) {
+            // lỗi nội bộ / quá tải phía Shopee không nói được lệnh đã áp hay chưa
+            if (/inner|server|system|busy|timeout|time_out/i.test(String(data.error))) throw khongRo(`${data.error} - ${data.message}`)
+            throw new Error(`Shopee update_price: ${data.error} - ${data.message}`)
+        }
         const fail = data.response?.failure_list?.[0]
         if (fail) throw new Error(`Shopee update_price item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
     }

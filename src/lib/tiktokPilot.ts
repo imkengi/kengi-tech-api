@@ -37,7 +37,8 @@ import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBi
 import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
-import { baoChuShop } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { ghiDoiCauHinh, NHAN_TIKTOK } from './pilotDoiCauHinh'
 import { TikTokService } from '../services/platforms/tiktok'
 
 const docJson = (s: any, d: any = null) => { try { return s ? JSON.parse(s) : d } catch { return d } }
@@ -282,7 +283,8 @@ export function khoSqlTikTok(prisma: any): KhoTikTokPilot {
             return rs.map(r => ({ id: r.id, action: r.action, status: r.status, planId: r.planId ?? null, payload: docJson(r.payload, {}), response: docJson(r.response, null), createdAt: Number(r.createdAt) }))
         },
         async demGhiTuLuc(ms) {
-            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "TikTokPilotWrite" WHERE "createdAt" >= $1`, ms)
+            // dòng 'config' (ai đổi cấu hình, X-14) không phải lệnh ghi lên TikTok — không tính trần ghi / ngày
+            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "TikTokPilotWrite" WHERE "createdAt" >= $1 AND action <> 'config'`, ms)
             return Number(r?.n) || 0
         },
     }
@@ -317,7 +319,7 @@ export function khoBoNhoTikTok(dongHo: () => number = () => Date.now()): KhoTikT
         },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: dongHo() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
-        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
+        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms && w.action !== 'config').length },
     }
 }
 
@@ -1248,6 +1250,12 @@ export async function luuCauHinhTikTok(ctx: NgCanhTikTok, b: any): Promise<CauHi
     const nextRunAt = !schedule.enabled ? null : (!doiLich && cfg.nextRunAt) ? cfg.nextRunAt : luc(ctx) + schedule.intervalMinutes * 60_000
     const moi: CauHinhTikTok = { ...cfg, channelId, executionMode, policy, schedule, nextRunAt, updatedAt: Date.now() }
     await ctx.kho.luuCauHinh(moi)
+    // X-14: ai đổi gì — dòng sổ 'config' (không tính vào trần ghi / ngày)
+    await ghiDoiCauHinh(ctx.kho, {
+        nguoi: ctx.nguoi, nhan: NHAN_TIKTOK, docRieng: { channelId: v => kenh.find(c => c.id === v)?.name || String(v) },
+        cu: { channelId: cfg.channelId, executionMode: cfg.executionMode, policy: cfg.policy, schedule: cfg.schedule },
+        moi: { channelId, executionMode, policy, schedule },
+    })
     return moi
 }
 
@@ -1283,8 +1291,8 @@ export async function chayTheoLichTikTok(prisma: any, kho?: KhoTikTokPilot, ngoa
     } catch (e: any) {
         ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
-    // Xem trước chưa ghi gì lên sàn — chỉ chu kỳ gãy mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
-    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'TikTok Pilot', ketQua, truoc, now).catch(() => truoc)
+    // Xem trước chưa ghi gì lên sàn ⇒ chỉ chu kỳ gãy + token hỏng mới báo (ketQuaDeBao, X-09); Tự động ⇒ mọi việc cần người
+    const bao = await baoChuShop(prisma, 'TikTok Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto'), truoc, now).catch(() => truoc)
     await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
 }

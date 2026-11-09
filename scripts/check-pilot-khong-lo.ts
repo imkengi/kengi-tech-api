@@ -40,6 +40,7 @@ import {
 import { chinhSachGia } from '../src/lib/shopeeThaoTac'
 import { SHOPEE_TOOLS } from '../src/routes/mcpShopeeTools'
 import { ShopeeService } from '../src/services/platforms/shopee'
+import { noteProxyFailure, noteProxySuccess } from '../src/lib/proxyBreaker'
 import { ToolError } from '../src/lib/mcpTypes'
 import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT } from '../src/lib/tienIchCuaHang'
 import { xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
@@ -194,8 +195,8 @@ function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { ngan
 let HIEN: ReturnType<typeof taoCuaHang>
 
 const P = ShopeeService.prototype as any
-/** bản THẬT của hai lệnh khuyến mãi (SP-04) — ca E18 gọi thẳng với fetch giả để đếm số lần gửi / đọc */
-const KM_THAT = { addDiscountItems: P.addDiscountItems, getDiscount: P.getDiscount }
+/** bản THẬT của hai lệnh khuyến mãi (SP-04) — ca E18 gọi thẳng với fetch giả để đếm số lần gửi / đọc; update_price thật — ca E19 (X-22) */
+const KM_THAT = { addDiscountItems: P.addDiscountItems, getDiscount: P.getDiscount, updatePrice: P.updatePrice }
 P.getItemLimit =async () => ({ price_limit: { min_limit: 1000, max_limit: 1e8 }, item_name_length_limit: { min_limit: 5, max_limit: 120 }, item_description_length_limit: { min_limit: 10, max_limit: 3000 } })
 P.getLogisticsChannels = async () => [{ logistics_channel_id: 50021, logistics_channel_name: 'Nhanh', enabled: true, mask_channel_id: 0 }]
 P.uploadImage = async () => ({ imageId: 'img-1' })
@@ -1073,7 +1074,7 @@ async function main() {
             dung('E17. Xem trước: update_price chỉ lập nháp — người lập ai:…, khoá ai:… (không cycle:), gọi lại cùng việc ra đúng nháp đó; 0 lần gọi Shopee, 0 dòng sổ',
                 !n1.loi && n1.kq.nhap === true && n1.kq.daDoi === false && /đã lập nháp/.test(n1.kq.thongBao) && /đừng báo là đã đổi giá/.test(n1.kq.thongBao)
                 && n2.kq?.planId === n1.kq.planId && kh1.length === 1 && kh1[0].status === 'draft' && kh1[0].createdBy === AI
-                && /^ai:price:/.test(kh1[0].idempotencyKey || '') && kh1[0].data?.lyDo === 'Bán chậm' && ghiShopee().length === t0 && H.kho._nhatKy.length === 0,
+                && /^ai:price:/.test(kh1[0].idempotencyKey || '') && kh1[0].data?.lyDo === 'Bán chậm' && ghiShopee().length === t0 && H.kho._nhatKy.filter(w => w.action !== 'config').length === 0,
                 n1.loi?.message || JSON.stringify({ kq: n1.kq, kh: kh1.map(k => [k.status, k.createdBy, k.idempotencyKey]) }))
             // chủ shop HUỶ nháp AI ⇒ AI không lập lại đúng việc đó trong ngày (chu kỳ thì vẫn soát mã — ca chu kỳ cuối E17)
             const n8 = await chay('shopee_update_price', { item_id: '1708', gia_moi: 190000 })
@@ -1337,6 +1338,84 @@ async function main() {
                 P.addDiscountItems = addDiscountItemsGia
                 P.getItemBaseInfo = docGiaGoc
                 kmGui = null; kmDocHong = false; kmXoaHong = false
+            }
+        }
+
+        // ─── E19 (X-22, 09/11/2026). Đổi giá KHÔNG RÕ đã lên Shopee chưa ⇒ 'uncertain' (tính như đã đổi), không 'failed' ───
+        // Trước: mọi lỗi update_price (kể cả đứt mạng sau khi Shopee đã nhận) ⇒ 'failed' ⇒ chu kỳ sau bỏ qua nghỉ 24 giờ, đổi tiếp.
+        {
+            const fetchGoc = globalThis.fetch, proxyGoc = process.env.SHOPEE_FORWARD_PROXY
+            let soFetch = 0
+            const giaFetch = (f: () => Response) => { soFetch = 0; (globalThis as any).fetch = async () => { soFetch++; return f() } }
+            delete process.env.SHOPEE_FORWARD_PROXY   // đi thẳng (fetch giả), khỏi đụng ngắt mạch proxy
+            try {
+                const svcThat: any = new ShopeeService({ apiKey: '1', apiSecret: 's', accessToken: 'tok', shopId: '777' } as any)
+                const goiGia = () => nem(() => KM_THAT.updatePrice.call(svcThat, 1901, 150000))
+                giaFetch(() => new Response('<html>502 Bad Gateway</html>', { status: 502 }))
+                const g1 = await goiGia()
+                giaFetch(() => new Response(JSON.stringify({ message: 'upstream unavailable' }), { status: 503 }))
+                const g2 = await goiGia()
+                giaFetch(() => new Response(JSON.stringify({ error: 'error_inner', message: 'Inner error, please try later' }), { status: 200 }))
+                const g3 = await goiGia()
+                giaFetch(() => new Response(JSON.stringify({ error: 'error_param', message: 'price is invalid' }), { status: 200 }))
+                const g4 = await goiGia()
+                giaFetch(() => new Response(JSON.stringify({ response: { success_list: [{ item_id: 1901 }] } }), { status: 200 }))
+                const g5 = await goiGia()
+                dung('E19. dịch vụ thật: update_price 502 không JSON / 503 / error_inner ⇒ KHÔNG RÕ (khongRo); error_param ⇒ lỗi RÕ; thành công ⇒ không ném',
+                    [g1, g2, g3].every(e => e?.khongRo === true && /^KHÔNG RÕ Shopee đã nhận update_price chưa/.test(e.message))
+                    && !!g4 && !g4.khongRo && /^Shopee update_price: error_param/.test(g4.message) && g5 === null,
+                    [g1, g2, g3, g4, g5].map(e => e?.message || String(e)).join(' | '))
+                giaFetch(() => { throw new TypeError('fetch failed') })
+                const g6 = await goiGia()
+                dung('E19. dịch vụ thật: đứt mạng sau mọi lần thử ⇒ KHÔNG RÕ', g6?.khongRo === true && soFetch >= 1, `${soFetch} lần · ${g6?.message}`)
+                // ngắt mạch THẬT: đi qua proxy, 5 lần hỏng liên tiếp ⇒ mạch mở ⇒ shopeeFetch ném trước vòng thử, fetch không được gọi
+                process.env.SHOPEE_FORWARD_PROXY = 'http://proxy-gia.invalid/chuyen-tiep'
+                for (let i = 0; i < 5; i++) noteProxyFailure()
+                giaFetch(() => new Response(JSON.stringify({ response: {} }), { status: 200 }))
+                const g7 = await goiGia()
+                dung('E19. ngắt mạch proxy chặn TRƯỚC khi gửi (chuaGui) ⇒ lỗi RÕ (chắc chưa tới Shopee), không khongRo, 0 lần gọi',
+                    !!g7 && !g7.khongRo && g7.chuaGui === true && /^Proxy chuyển tiếp/.test(g7.message) && soFetch === 0, `${soFetch} lần · ${g7?.message}`)
+            } finally {
+                noteProxySuccess()   // đóng mạch — ca sau đi proxy không bị chặn oan
+                ;(globalThis as any).fetch = fetchGoc
+                if (proxyGoc !== undefined) process.env.SHOPEE_FORWARD_PROXY = proxyGoc
+                else delete process.env.SHOPEE_FORWARD_PROXY
+            }
+
+            HIEN = taoCuaHang({ don: donSach() })
+            const H = HIEN
+            H.themHang('U1', 100000); H.themListing('U1', 150000, '1901')
+            H.themHang('U2', 100000); H.themListing('U2', 150000, '1902')
+            H.models['1902'] = [{ model_id: 21, name: 'A', sku: 'U2', price: 150000, giaHienTai: 150000, stock: 3 }]
+            H.themHang('U3', 100000); H.themListing('U3', 150000, '1903')
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 1000, maxPriceChangeRate: 0.5 } })
+            const giaGia = P.updatePrice
+            const khongRoGia = () => Object.assign(new Error('KHÔNG RÕ Shopee đã nhận update_price chưa: Gọi Shopee trực tiếp thất bại sau 3 lần (quá 30s): aborted'), { khongRo: true })
+            try {
+                P.updatePrice = async (id: any, gia: number, modelId?: any) => {
+                    goi.push(`update_price:${id}:${gia}${modelId ? `:${modelId}` : ''}`)
+                    if (String(id) === '1902' && !modelId) throw new Error('Shopee update_price: error_param - model_id is mandatory for item with variations')
+                    if (String(id) === '1903') throw new Error('Shopee update_price: error_param - price is invalid')
+                    throw khongRoGia()
+                }
+                const so = (planId: string) => H.kho._nhatKy.filter(w => w.planId === planId && w.action === 'price').pop()
+                const k1 = await taoKeHoachGia(H.ctx, { sku: 'U1', price: 160000 })
+                const r1 = await thucThi(H.ctx, k1.id)
+                dung('E19. Pilot: Shopee KHÔNG RÕ đã nhận giá mới ⇒ kế hoạch + sổ ghi "uncertain" (không "failed"), câu nói kiểm Seller Center, giá lưu KHÔNG đổi',
+                    r1.status === 'uncertain' && so(k1.id)?.status === 'uncertain' && /KHÔNG RÕ Shopee đã nhận giá mới 160\.000đ của U1 chưa/.test(r1.result?.message || '')
+                    && /Seller Center/.test(r1.result?.message || '') && H.listing.find((l: any) => l.sku === 'U1')?.price === 150000,
+                    JSON.stringify({ st: r1.status, r: r1.result, so: so(k1.id)?.status }))
+                const lai = await chay('shopee_update_price', { item_id: '1901', gia_moi: 170000 })
+                dung('E19. lần KHÔNG RÕ tính như ĐÃ đổi ⇒ AI đổi lại mã đó < 24 giờ bị từ chối, 0 lần gọi Shopee',
+                    lai.loi instanceof ToolError && /1 lần \/ 24 giờ/.test(lai.loi.message) && !goi.includes('update_price:1901:170000'), lai.loi?.message || JSON.stringify(lai.kq))
+                const k2 = await taoKeHoachGia(H.ctx, { sku: 'U2', price: 160000 })
+                const r2 = await thucThi(H.ctx, k2.id)
+                dung('E19. hàng phân loại: lần gửi lại theo model_id KHÔNG RÕ ⇒ cũng "uncertain"', r2.status === 'uncertain' && goi.includes('update_price:1902:160000:21'), JSON.stringify({ st: r2.status, r: r2.result }))
+                const k3 = await taoKeHoachGia(H.ctx, { sku: 'U3', price: 160000 })
+                const r3 = await thucThi(H.ctx, k3.id)
+                dung('E19. Shopee từ chối RÕ ⇒ vẫn "failed" (không phải mọi lỗi đều thành không rõ)', r3.status === 'failed' && so(k3.id)?.status === 'failed', JSON.stringify({ st: r3.status, r: r3.result }))
+            } finally {
+                P.updatePrice = giaGia
             }
         }
 

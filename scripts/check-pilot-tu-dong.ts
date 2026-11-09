@@ -3,7 +3,8 @@
  *
  *  Bài chạy thử chu kỳ THẬT trên dữ liệu KENGISTORE (chỉ đọc, sàn giả) cho thấy những chỗ máy phải chờ người hoặc
  *  làm sai mà không ai biết. Mỗi mục dưới đây canh một chỗ đã vá:
- *    A. báo chủ shop (lib/pilotBaoChuShop): việc cần người, chống lặp theo dấu, giãn 3 giờ, chu kỳ gãy báo ngay
+ *    A. báo chủ shop (lib/pilotBaoChuShop): việc cần người, chống lặp theo dấu, giãn 3 giờ, chu kỳ gãy báo ngay; (X-09) việc y hệt
+ *       vẫn còn ⇒ nhắc lại sau 24 giờ; Xem trước chỉ báo chỗ làm Pilot mù (token, gian hỏng); cả 4 Pilot đi qua ketQuaDeBao
  *    B. cầu dao đẩy tồn: nhiều mã đang có hàng về 0 ⇒ không đẩy (TikTok 117 mã về 0 vì hàng ở kho HUTI, kho mẹ tắt)
  *    C. Shopee giá SỐNG: quyết theo giá GỐC trên Shopee (bản lưu cũ / là giá KM), né KM đang / sắp chạy, phân loại;
  *       đọc hỏng ⇒ không đổi; thực thi tự động đọc hỏng ⇒ không ghi mù
@@ -12,7 +13,8 @@
  *    E. Xem trước → Tự động: nháp xem trước bị huỷ, lập lại và ghi ngay trong ngày (khoá riêng)
  *    F. danh mục cũ > 2 giờ ⇒ tự đồng bộ (trước chỉ khi có người bấm "Đồng bộ")
  *    G. nhiều gian Shopee: lịch chạy mọi gian, kế hoạch mang gian, thực thi đúng gian
- *    H. lịch Tự động báo chủ shop đúng một lần; Xem trước không báo; Facebook gãy báo ngay
+ *    H. lịch Tự động báo chủ shop đúng một lần; Xem trước không báo nháp / dòng ghi hỏng, NHƯNG gian hỏng cả lượt ("tất cả
+ *       gian") thì báo (X-09); Facebook gãy báo ngay
  *    I. TikTok: nháp không ăn trần, không trùng, người huỷ, cầu dao
  *    J. ĐỐI CHỨNG: ngành chưa đo ⇒ không tự hạ dù ngành đắt nhất đã đo vẫn lãi (ngành chưa đo có thể đắt hơn)
  *    K. chạm trần thao tác ghi / ngày khi đẩy tồn ⇒ bỏ qua, không phải hỏng
@@ -37,10 +39,14 @@
 
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { chayChuKy, chayTheoLich, khoBoNho, khoSql, luuCauHinh, taoKeHoachGia, thucThi, huyKeHoach, cauDaoTon, dayTonChuKy, xayTrangThai, soThuTuMa, type NgCanh, type KhoPilot } from '../src/lib/shopeePilot'
-import { viecCanNguoi, baoChuShop, GIAN_CACH_BAO_MS } from '../src/lib/pilotBaoChuShop'
+import * as fs from 'fs'
+import * as path from 'path'
+import { viecCanNguoi, baoChuShop, ketQuaDeBao, GIAN_CACH_BAO_MS, NHAC_LAI_MS } from '../src/lib/pilotBaoChuShop'
 import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
 import { chayChuKyTikTok, chayTheoLichTikTok, khoBoNhoTikTok, luuCauHinhTikTok, huyKeHoachTikTok } from '../src/lib/tiktokPilot'
 import { chayTheoLichFb, khoBoNhoFb, luuCauHinhFb } from '../src/lib/facebookPilot'
+import { khoBoNhoAds, luuCauHinhAds } from '../src/lib/facebookAdsPilot'
+import { soCauHinh, tomTatDoiCauHinh, NHAN_SHOPEE, NHAN_ADS } from '../src/lib/pilotDoiCauHinh'
 import { dayTonLenSan } from '../src/lib/dayTonLenSan'
 import { dayGiaLenSan } from '../src/lib/dayGiaLenSan'
 
@@ -76,12 +82,17 @@ const phiTin = (tin: boolean, phiKhai = 20) => {
 const thongBao: any[] = []
 let thongBaoHong = false
 let fbPages: any[] = []
+/** gian đọc hỏng cả lượt (ca H4: "tất cả gian" ở Xem trước, một gian hỏng) — mọi lần đọc listing của gian này ném lỗi */
+let gianHong: string | null = null
 
 const prisma: any = {
     onlineChannel: { findMany: async ({ where }: any = {}) => kenh.filter(c => !where?.platform || c.platform === where.platform), update: async () => ({}) },
     onlineProduct: {
-        findMany: async ({ where }: any) => listing.filter(l => l.channelId === where.channelId
-            && (!where.status || (typeof where.status === 'string' ? l.status === where.status : where.status.in.includes(l.status)))),
+        findMany: async ({ where }: any) => {
+            if (gianHong && where?.channelId === gianHong) throw new Error('Shopee trả HTTP 403 cho gian này (shop bị khoá API)')
+            return listing.filter(l => l.channelId === where.channelId
+                && (!where.status || (typeof where.status === 'string' ? l.status === where.status : where.status.in.includes(l.status))))
+        },
         findFirst: async ({ where }: any) => {
             const ds = listing.filter(l => l.channelId === where.channelId)
             if (where.syncedAt) return ds.filter(l => l.syncedAt).sort((a, b) => +b.syncedAt - +a.syncedAt)[0] || null
@@ -265,6 +276,52 @@ async function main() {
         const d8 = await baoChuShop(prisma, 'Shopee Pilot', viecMoi, d7, t0 + 3 * GIAN_CACH_BAO_MS)
         thongBaoHong = false
         dung('A9. ghi thông báo hỏng ⇒ giữ dấu cũ để lượt sau thử lại, không ném', d8.khoa === d7.khoa)
+
+        // ── X-09 (09/11/2026): việc y hệt VẪN còn ⇒ nhắc lại sau 24 giờ (trước: im mãi sau tin đầu) ──
+        thongBao.length = 0
+        const viecCu = { ok: true, results: [{ action: 'price', status: 'failed', sku: 'X9', message: 'Shopee lỗi kéo dài' }] }
+        const n0 = t0 + 10 * GIAN_CACH_BAO_MS
+        const e1 = await baoChuShop(prisma, 'Shopee Pilot', viecCu, { khoa: '', luc: 0, n: 0 }, n0)
+        const e2 = await baoChuShop(prisma, 'Shopee Pilot', viecCu, e1, n0 + NHAC_LAI_MS - 60_000)
+        dung('A10. việc y hệt, chưa đủ 24 giờ ⇒ im (không spam chu kỳ 30 phút)', thongBao.length === 1 && e2.luc === n0 && e1.tu === n0, JSON.stringify({ thongBao, e2 }))
+        const e3 = await baoChuShop(prisma, 'Shopee Pilot', viecCu, e2, n0 + NHAC_LAI_MS + 1)
+        dung('A11. việc y hệt VẪN còn sau 24 giờ ⇒ nhắc lại MỘT tin "vẫn còn…", nói "Chưa xử lý từ" mốc báo đầu; giữ mốc đầu',
+            thongBao.length === 2 && /^Shopee Pilot vẫn còn 1 việc cần anh\/chị xem/.test(thongBao[1].title) && /^Chưa xử lý từ \d\d\/\d\d \d\d:\d\d: X9: Shopee lỗi kéo dài/.test(thongBao[1].message)
+            && e3.tu === n0 && e3.luc === n0 + NHAC_LAI_MS + 1, JSON.stringify({ tb: thongBao[1], e3 }))
+        const e4 = await baoChuShop(prisma, 'Shopee Pilot', viecCu, e3, n0 + NHAC_LAI_MS + 120_000)
+        dung('A12. vừa nhắc xong ⇒ im tới 24 giờ sau', thongBao.length === 2 && e4.luc === e3.luc && e4.tu === n0)
+        const loiCu = 'Gian "A" chưa uỷ quyền API Shopee.'
+        const e5 = await baoChuShop(prisma, 'Shopee Pilot', { ok: false, message: loiCu }, { khoa: `loi:${loiCu}`, luc: n0, n: 1 }, n0 + NHAC_LAI_MS + 5)
+        dung('A13. chu kỳ GÃY kéo dài ⇒ sau 24 giờ nhắc "vẫn bị lỗi"; dấu cũ (trước 09/11, không có mốc đầu) lấy lần báo trước làm mốc',
+            thongBao.length === 3 && thongBao[2].title === 'Shopee Pilot: chu kỳ tự động vẫn bị lỗi' && /uỷ quyền/.test(thongBao[2].message) && e5.tu === n0, JSON.stringify(thongBao[2]))
+
+        // ── X-09: Xem trước chỉ báo chỗ làm Pilot MÙ ──
+        const ds = [
+            { action: 'price', status: 'draft', sku: 'D1', message: '100đ → 90đ — CHỜ NGƯỜI DUYỆT' },
+            { action: 'price', status: 'failed', sku: 'D2', message: 'đọc giá sống hỏng' },
+            { action: 'token', status: 'skipped', message: 'Page token còn 3 ngày' },
+            { action: 'token', status: 'failed', message: 'TikTok cần uỷ quyền lại' },
+            { action: 'cycle', status: 'failed', channel: 'Gian B', message: '[Gian B] Shopee 403' },
+            { action: 'cycle', status: 'skipped', message: 'CHƯA BIẾT PHÍ sàn của gian' },
+        ]
+        const xt = ketQuaDeBao({ ok: true, results: ds }, true)
+        const td = ketQuaDeBao({ ok: true, results: ds }, false)
+        const gy = ketQuaDeBao({ ok: false, message: 'gãy', results: ds }, true)
+        dung('A14. ketQuaDeBao: Xem trước chỉ giữ token + gian hỏng cả lượt (bỏ nháp, dòng ghi hỏng, CHƯA BIẾT PHÍ); Tự động / chu kỳ gãy giữ nguyên',
+            JSON.stringify(xt.results!.map((r: any) => `${r.action}:${r.status}`)) === '["token:skipped","token:failed","cycle:failed"]'
+            && td.results!.length === ds.length && gy.results!.length === ds.length && gy.ok === false && ds.length === 6, JSON.stringify(xt.results))
+        // đúng TÊN + đúng điều kiện "Xem trước" của từng Pilot (Ads có 3 chế độ: chỉ 'preview' là xem trước — 'approve' chờ duyệt phải báo đủ)
+        const canCo: Record<string, string> = {
+            shopeePilot: "baoChuShop(prisma, 'Shopee Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto')",
+            tiktokPilot: "baoChuShop(prisma, 'TikTok Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto')",
+            facebookPilot: "baoChuShop(prisma, 'Facebook Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto')",
+            facebookAdsPilot: "baoChuShop(prisma, 'Ads Pilot', ketQuaDeBao(ketQua, ketQua.mode === 'preview')",
+        }
+        const thieuNoi = Object.keys(canCo).filter(f => {
+            const s = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', `${f}.ts`), 'utf8')
+            return s.split(canCo[f]!).length !== 2 || /ketQua\.ok && ketQua\.(executionMode|mode)[^\n]*\? truoc :/.test(s)
+        })
+        dung('A15. cả 4 Pilot (Shopee / TikTok / Facebook / Ads) báo qua ketQuaDeBao — không còn nhánh "Xem trước ⇒ khỏi gọi báo"', !thieuNoi.length, thieuNoi.join(', '))
     }
 
     // ─── B. Cầu dao đẩy tồn ──────────────────────────────────────────────────────
@@ -493,6 +550,26 @@ async function main() {
         const loiLich = await chayTheoLich(prisma, kho)
         kenh[0]!.accessToken = 'tA'
         dung('H3. chu kỳ gãy (gian mất uỷ quyền) ⇒ báo ngay, kể cả Xem trước', loiLich === 'loi' && thongBao.length === 2 && /bị lỗi/.test(thongBao[1].title), JSON.stringify(thongBao))
+
+        // H3b (X-09, 09/11/2026): Xem trước + "tất cả gian" — MỘT gian hỏng cả lượt ⇒ VẪN báo (trước: lượt vẫn ok ⇒ im tới khi
+        // chủ shop tự mở trang). Lần báo trước (H3) dời về 4 giờ trước để khỏi vướng giãn 3 giờ.
+        {
+            await luuCauHinh(ctx, { executionMode: 'preview', schedule: { enabled: true, allChannels: true } })
+            const lr = (await kho.docCauHinh())!.lastResult || {}
+            await kho.ghiKetQuaLich(Date.now(), { ...lr, baoChuShop: { ...(lr.baoChuShop || { khoa: '', n: 0 }), luc: Date.now() - 4 * 3600_000 } })
+            await kho.luuCauHinh({ ...(await kho.docCauHinh())!, nextRunAt: Date.now() - 1000 })
+            const tb0 = thongBao.length
+            gianHong = 'chB'
+            const kqH4 = await chayTheoLich(prisma, kho)
+            gianHong = null
+            const lr4 = (await kho.docCauHinh())!.lastResult
+            const tin = thongBao.slice(tb0)
+            dung('H3b. Xem trước + "tất cả gian": gian B hỏng cả lượt ⇒ VẪN báo MỘT tin nêu gian B (lượt vẫn chạy gian A)',
+                kqH4 === 'da-chay' && tin.length === 1 && /^Shopee Pilot cần anh\/chị xem 1 việc/.test(tin[0].title) && /Gian B/.test(tin[0].message)
+                && lr4?.results?.some((r: any) => r.action === 'cycle' && r.status === 'failed' && r.channel === 'Gian B'),
+                JSON.stringify({ kqH4, tin, r: lr4?.results?.map((r: any) => [r.action, r.status, r.channel]) }))
+            await luuCauHinh(ctx, { schedule: { allChannels: false } })
+        }
         phiTin(true)
     }
 
@@ -893,6 +970,77 @@ async function main() {
             sauLuu.enabled === false && sauLuu.intervalMinutes === 180 && sauLuu.conTro?.chA?.sau === '10500' && ctSql?.sau === '10500'
             && !!ghiCt && ghiCt.v[0] === 'chB' && JSON.parse(ghiCt.v[1]).sau === '777' && !/"executionMode"|policy/.test(ghiCt.sql),
             JSON.stringify({ sauLuu, ctSql, ghiCt }))
+    }
+
+    // ─── R. X-14 (10/11/2026): sổ ĐỔI CẤU HÌNH — ai đổi, đổi gì; không ăn trần ghi / ngày ─────────────────────
+    {
+        const ds1 = soCauHinh(
+            { executionMode: 'preview', policy: { targetMarginRate: 0.1 + 0.2, maxWritesPerDay: 50, truongMoi: 1 }, schedule: { enabled: false, intervalMinutes: 180, conTro: { chA: { sau: '1' } } }, nextRunAt: 1 },
+            { executionMode: 'auto', policy: { targetMarginRate: 30 / 100, maxWritesPerDay: 200, truongMoi: 2 }, schedule: { enabled: false, intervalMinutes: 180, allChannels: false }, nextRunAt: 2 },
+            NHAN_SHOPEE)
+        dung('R1. so cấu hình: 0,1+0,2 lưu ↔ 30/100 gửi lại = KHÔNG đổi; allChannels vắng = tắt; con trỏ / lượt kế (máy ghi) bỏ qua; xếp theo nhãn, trường lạ sau cùng',
+            JSON.stringify(ds1.map(d => d.truong)) === '["executionMode","policy.maxWritesPerDay","policy.truongMoi"]', JSON.stringify(ds1))
+        const t2 = tomTatDoiCauHinh(soCauHinh(
+            { mode: 'preview', policy: { dailyBudgetCap: 0, automation: { scaleWinners: false }, minMarginPct: 20 }, schedule: { enabled: false } },
+            { mode: 'auto', policy: { dailyBudgetCap: 300000, automation: { scaleWinners: true }, minMarginPct: 25 }, schedule: { enabled: true } }, NHAN_ADS), NHAN_ADS)
+        dung('R2. câu tóm tắt: đúng chữ trên trang + đơn vị (tiền 300.000đ, %, bật/tắt, chế độ tiếng Việt), theo thứ tự nhãn',
+            t2 === 'Chế độ: Xem trước → Tự động; Trần ngân sách/ngày cho TẤT CẢ quảng cáo Pilot: 0đ → 300.000đ; Tăng ngân sách quảng cáo tốt: tắt → bật; Máy tự đẩy khi lãi gộp từ: 20% → 25%; Chạy theo lịch trên máy chủ: tắt → bật', t2)
+
+        xoaHet()
+        const khoS = khoBoNho()
+        const ctxS: NgCanh = { prisma, kho: khoS, nguoi: 'nv@shop' }
+        await luuCauHinh(ctxS, { channelId: 'chA', executionMode: 'auto', policy: { maxWritesPerDay: 200, targetMarginRate: 0.2 }, schedule: { enabled: true, intervalMinutes: 60 } })
+        const dongS = khoS._nhatKy.filter(w => w.action === 'config')
+        dung('R3. Shopee: lưu chính sách ⇒ MỘT dòng sổ "config" mang người đổi + từng thay đổi (gian theo TÊN, chế độ, lịch, trần ghi, lãi)',
+            dongS.length === 1 && dongS[0].payload.actor === 'nv@shop' && dongS[0].status === 'succeeded' && dongS[0].planId === null
+            && dongS[0].payload.tomTat === 'Chế độ thực thi: Xem trước → Tự động; Gian Shopee Pilot quản: trống → Gian A; Chạy theo lịch trên máy chủ: tắt → bật; Chạy theo lịch mỗi: 180 phút → 60 phút; Thao tác ghi mỗi ngày: 50 → 200; Lãi mục tiêu: 15% → 20%'
+            && dongS[0].payload.thayDoi.some((d: any) => d.truong === 'policy.maxWritesPerDay' && d.cu === 50 && d.moi === 200), JSON.stringify(dongS))
+        dung('R4. dòng "config" KHÔNG tính vào trần ghi / ngày', (await khoS.demGhiTuLuc(0)) === 0 && khoS._nhatKy.length === 1)
+        const cS = (await khoS.docCauHinh())!
+        const pct = (v: number) => Math.round(v * 1000) / 10
+        await luuCauHinh(ctxS, {
+            channelId: 'chA', executionMode: 'auto', schedule: { ...cS.schedule },
+            policy: Object.fromEntries(Object.entries(cS.policy).map(([k, v]) => [k, typeof v === 'number' && /Rate$/.test(k) ? pct(v) / 100 : v])),
+        })
+        dung('R5. lưu lại y nguyên như trang gửi (% ÷ 100) ⇒ không thêm dòng', khoS._nhatKy.filter(w => w.action === 'config').length === 1, JSON.stringify(khoS._nhatKy.slice(1)))
+        const khoHong = khoBoNho()
+        khoHong.ghiNhatKy = async () => { throw new Error('mất kết nối CSDL') }
+        const loiGoc = console.error
+        let baoLoi = ''
+        console.error = (...a: any[]) => { baoLoi += a.map(String).join(' ') }
+        let r6: any = null
+        try { r6 = await luuCauHinh({ prisma, kho: khoHong, nguoi: 'nv@shop' }, { executionMode: 'auto' }) } catch (e) { r6 = e } finally { console.error = loiGoc }
+        dung('R6. ghi sổ đổi cấu hình hỏng ⇒ cấu hình VẪN lưu, người bấm không thấy lỗi giả, log máy chủ có dấu (không nuốt im)',
+            r6?.executionMode === 'auto' && (await khoHong.docCauHinh())?.executionMode === 'auto' && /ghi sổ đổi cấu hình hỏng/.test(baoLoi) && /nv@shop/.test(baoLoi), baoLoi || String(r6))
+
+        const khoT2 = khoBoNhoTikTok()
+        await luuCauHinhTikTok({ prisma, kho: khoT2, nguoi: 'nv@shop', taoTikTok: ttGia, dayTon: dayTonGia } as any, { channelId: 'chT', policy: { maxRepricePerCycle: 25 } })
+        const dT = khoT2._nhatKy.filter(w => w.action === 'config')
+        dung('R7. TikTok: đổi trần đổi giá / chu kỳ ⇒ dòng "config", gian theo TÊN; không tính trần ghi / ngày',
+            dT.length === 1 && dT[0].payload.actor === 'nv@shop' && /^Gian TikTok Pilot quản: trống → TikTok Shop; Đổi giá tối đa mỗi chu kỳ \(sản phẩm\): \d+ → 25$/.test(dT[0].payload.tomTat)
+            && (await khoT2.demGhiTuLuc(0)) === 0, JSON.stringify(dT))
+
+        fbPages = [{ pageId: 'pg1', name: 'Trang A', status: 'active', accessToken: 'x', tokenExpiresAt: null, createdAt: new Date(0) }]
+        const khoF2 = khoBoNhoFb()
+        await luuCauHinhFb({ prisma, kho: khoF2, nguoi: 'nv@shop' } as any, { pageId: 'pg1', policy: { postHours: [9, 20], automation: { replyPriceQuestions: true } } })
+        const dF = khoF2._nhatKy.filter(w => w.action === 'config')
+        dung('R8. Facebook: fanpage theo TÊN, khung giờ "mặc định → 9h, 20h", công tắc tắt → bật; không tính trần ghi / ngày',
+            dF.length === 1 && dF[0].payload.tomTat === 'Fanpage Pilot quản: trống → Trang A; Tự trả lời câu hỏi giá: tắt → bật; Khung giờ đăng: mặc định → 9h, 20h'
+            && (await khoF2.demGhiTuLuc(0)) === 0, JSON.stringify(dF))
+
+        const khoA = khoBoNhoAds()
+        await luuCauHinhAds({ prisma, kho: khoA, nguoi: 'nv@shop' } as any, { mode: 'auto', policy: { dailyBudgetCap: 300000, automation: { scaleWinners: true } } })
+        const dA = khoA._nhatKy.filter(w => w.action === 'config')
+        dung('R9. Ads Pilot: bật Tự động + nâng trần ngân sách (tiền thật) ⇒ dòng "config" ghi rõ người + số tiền; không tính trần thao tác / ngày',
+            dA.length === 1 && dA[0].payload.actor === 'nv@shop'
+            && dA[0].payload.tomTat === 'Chế độ: Xem trước → Tự động; Trần ngân sách/ngày cho TẤT CẢ quảng cáo Pilot: 0đ → 300.000đ; Tăng ngân sách quảng cáo tốt: tắt → bật'
+            && (await khoA.demGhiTuLuc(0)) === 0, JSON.stringify(dA))
+
+        const thieuLoai = [['shopeePilot', 'ShopeePilotWrite'], ['tiktokPilot', 'TikTokPilotWrite'], ['facebookPilot', 'FacebookPilotWrite'], ['facebookAdsPilot', 'FacebookAdsPilotWrite']].filter(([f, bang]) => {
+            const s = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', `${f}.ts`), 'utf8')
+            return !s.includes(`SELECT COUNT(*)::int AS n FROM "${bang}" WHERE "createdAt" >= $1 AND action <> 'config'`)
+        })
+        dung('R10. cả 4 kho SQL: đếm trần ghi / ngày loại dòng "config"', !thieuLoai.length, thieuLoai.join(', '))
     }
 
     console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)

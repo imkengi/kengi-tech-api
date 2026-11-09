@@ -33,7 +33,8 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, isRateLimitError, loaiLoiFb, quyenThieuFb, type SchedulePostInput } from '../services/platforms/facebook'
-import { baoChuShop } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { ghiDoiCauHinh, NHAN_FACEBOOK } from './pilotDoiCauHinh'
 
 // ─── Tiện ích nhỏ ───────────────────────────────────────────────────────────────
 
@@ -393,7 +394,8 @@ export function khoSqlFb(prisma: any): KhoFbPilot {
             return rs.map(r => ({ id: r.id, action: r.action, status: r.status, planId: r.planId ?? null, payload: docJson(r.payload, {}), response: docJson(r.response, null), createdAt: Number(r.createdAt) }))
         },
         async demGhiTuLuc(ms) {
-            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "FacebookPilotWrite" WHERE "createdAt" >= $1`, ms)
+            // dòng 'config' (ai đổi cấu hình, X-14) không phải lệnh ghi lên Facebook — không tính trần ghi / ngày
+            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "FacebookPilotWrite" WHERE "createdAt" >= $1 AND action <> 'config'`, ms)
             return Number(r?.n) || 0
         },
     }
@@ -445,7 +447,7 @@ export function khoBoNhoFb(): KhoFbPilot & { _keHoach: KeHoachFb[]; _nhatKy: Nha
         },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: Date.now() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
-        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
+        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms && w.action !== 'config').length },
     }
 }
 
@@ -1427,6 +1429,12 @@ export async function luuCauHinhFb(ctx: NgCanhFb, b: any): Promise<CauHinhFbPilo
     const nextRunAt = !schedule.enabled ? null : (!doiLich && cfg.nextRunAt) ? cfg.nextRunAt : luc(ctx) + schedule.intervalMinutes * 60_000
     const moi: CauHinhFbPilot = { ...cfg, pageId, executionMode, policy, schedule, nextRunAt, updatedAt: Date.now() }
     await ctx.kho.luuCauHinh(moi)
+    // X-14: ai đổi gì — dòng sổ 'config' (không tính vào trần ghi / ngày)
+    await ghiDoiCauHinh(ctx.kho, {
+        nguoi: ctx.nguoi, nhan: NHAN_FACEBOOK, docRieng: { pageId: v => pages.find(p => String(p.pageId) === String(v))?.name || String(v) },
+        cu: { pageId: cfg.pageId, executionMode: cfg.executionMode, policy: cfg.policy, schedule: cfg.schedule },
+        moi: { pageId, executionMode, policy, schedule },
+    })
     /* Xem trước → Tự động (09/11/2026): nháp của lượt Xem trước soạn theo giá / tồn / khung giờ LÚC ĐÓ — huỷ ngay để chu kỳ Tự động
      * lập lại theo số hiện tại; trước đây chúng giữ chỗ khung giờ + chặn mã 21 ngày nên chu kỳ Tự động đầu không đăng được bài nào.
      * Hỏng ở đây không chặn lưu cấu hình — chu kỳ (donKeHoachMoFb) dọn lại lần nữa. */
@@ -1517,8 +1525,8 @@ export async function chayTheoLichFb(prisma: any, kho?: KhoFbPilot, ngoai: Parti
     } catch (e: any) {
         ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
-    // Xem trước chưa đăng gì — chỉ chu kỳ gãy (token hết hạn…) mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
-    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'Facebook Pilot', ketQua, truoc, now).catch(() => truoc)
+    // Xem trước chưa đăng gì ⇒ chỉ chu kỳ gãy + token sắp hết hạn mới báo (ketQuaDeBao, X-09); Tự động ⇒ mọi việc cần người
+    const bao = await baoChuShop(prisma, 'Facebook Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto'), truoc, now).catch(() => truoc)
     await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
 }

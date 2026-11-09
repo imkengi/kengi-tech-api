@@ -31,7 +31,8 @@ import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai, laLoiTokenFb, laLoiQuyenFb, quyenThieuFb, isRateLimitError, docLeGraph } from '../services/platforms/facebook'
-import { baoChuShop } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { ghiDoiCauHinh, NHAN_ADS } from './pilotDoiCauHinh'
 import { docCauHinhFb, khoSqlFb, dauNgayVN, ngayGioVN, vnd, type KhoFbPilot } from './facebookPilot'
 
 // ─── Tiện ích nhỏ ───────────────────────────────────────────────────────────────
@@ -339,7 +340,8 @@ export function khoSqlAds(prisma: any): KhoAds {
             return rs.map(r => ({ id: r.id, action: r.action, status: r.status, planId: r.planId ?? null, payload: docJson(r.payload, {}), response: docJson(r.response, null), createdAt: Number(r.createdAt) }))
         },
         async demGhiTuLuc(ms) {
-            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "FacebookAdsPilotWrite" WHERE "createdAt" >= $1`, ms)
+            // dòng 'config' (ai đổi cấu hình, X-14) không phải lệnh ghi quảng cáo — không tính trần thao tác / ngày
+            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "FacebookAdsPilotWrite" WHERE "createdAt" >= $1 AND action <> 'config'`, ms)
             return Number(r?.n) || 0
         },
     }
@@ -379,7 +381,7 @@ export function khoBoNhoAds(): KhoAds & { _keHoach: KeHoachAds[]; _nhatKy: NhatK
         },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: Date.now() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
-        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
+        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms && w.action !== 'config').length },
     }
 }
 
@@ -1648,6 +1650,12 @@ export async function luuCauHinhAds(ctx: NgCanhAds, b: any): Promise<CauHinhAds>
     const nextRunAt = !schedule.enabled ? null : (!doiLich && cfg.nextRunAt) ? cfg.nextRunAt : luc(ctx) + schedule.intervalMinutes * 60_000
     const moi: CauHinhAds = { ...cfg, adAccountId, mode, policy, schedule, nextRunAt, updatedAt: Date.now() }
     await ctx.kho.luuCauHinh(moi)
+    // X-14: ai đổi gì (trần ngân sách = tiền thật) — dòng sổ 'config', không tính vào trần thao tác / ngày
+    await ghiDoiCauHinh(ctx.kho, {
+        nguoi: ctx.nguoi, nhan: NHAN_ADS,
+        cu: { mode: cfg.mode, adAccountId: cfg.adAccountId, policy: cfg.policy, schedule: cfg.schedule },
+        moi: { mode, adAccountId, policy, schedule },
+    })
     // tài khoản mặc định của fanpage Pilot — Fanpage Manager / công cụ MCP quảng cáo cùng mặc định (best-effort)
     if (adAccountId && adAccountId !== cfg.adAccountId) {
         const page = await docCauHinhFb(ngCanhFb(ctx)).then(r => r.page).catch(() => null)
@@ -1751,8 +1759,8 @@ export async function chayTheoLichAds(prisma: any, kho?: KhoAds, ngoai: Partial<
     } catch (e: any) {
         ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
-    // Xem trước chưa làm gì — chỉ chu kỳ gãy mới báo; còn lại báo mọi việc cần người (nháp tăng chi chờ duyệt, lần hỏng…)
-    const bao = ketQua.ok && ketQua.mode === 'preview' ? truoc : await baoChuShop(prisma, 'Ads Pilot', ketQua, truoc, now).catch(() => truoc)
+    // Xem trước chưa làm gì ⇒ chỉ chu kỳ gãy + token quảng cáo sắp hết hạn mới báo (ketQuaDeBao, X-09); còn lại báo mọi việc cần người
+    const bao = await baoChuShop(prisma, 'Ads Pilot', ketQuaDeBao(ketQua, ketQua.mode === 'preview'), truoc, now).catch(() => truoc)
     await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
 }

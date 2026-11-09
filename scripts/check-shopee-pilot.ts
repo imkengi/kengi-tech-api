@@ -232,7 +232,7 @@ async function main() {
         dung('Shopee từ chối một phần ⇒ "partial" kèm lý do', kmMotPhan.status === 'partial' && /item_already_in_promotion/.test(kmMotPhan.result?.message || ''), kmMotPhan.result?.message)
 
         // ─── Giới hạn thao tác / ngày ───────────────────────────────────────────────
-        const dem = kho._nhatKy.length
+        const dem = await kho.demGhiTuLuc(0)   // số lệnh ghi THẬT — dòng 'config' (ai đổi cấu hình, X-14) không tính trần
         await luuCauHinh(ctx, { policy: { maxWritesPerDay: dem } })
         const khGioiHan = await taoKeHoachGia(ctx, { sku: 'BINH', price: 150000, idempotencyKey: 'k9' })
         const truocGioiHan = ghiShopee()

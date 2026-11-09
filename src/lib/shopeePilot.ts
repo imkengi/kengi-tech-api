@@ -35,7 +35,8 @@ import {
     num, giaVonHangLoat, soBan14Ngay, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
     chinhSachGia, giaSongShopee, maDangKhuyenMai, lyDoKhongHienLai, type ChinhSachGia, type GiaSongShopee, type UngVien,
 } from './shopeeThaoTac'
-import { baoChuShop } from './pilotBaoChuShop'
+import { baoChuShop, ketQuaDeBao } from './pilotBaoChuShop'
+import { ghiDoiCauHinh, NHAN_SHOPEE } from './pilotDoiCauHinh'
 import { cauDaoTon } from './dayTonLenSan'
 
 // ─── Chính sách ─────────────────────────────────────────────────────────────────
@@ -465,7 +466,8 @@ export function khoSql(prisma: any): KhoPilot {
             return rs.map(r => ({ id: r.id, action: r.action, status: r.status, planId: r.planId ?? null, payload: docJson(r.payload, {}), response: docJson(r.response, null), createdAt: Number(r.createdAt) }))
         },
         async demGhiTuLuc(ms) {
-            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "ShopeePilotWrite" WHERE "createdAt" >= $1`, ms)
+            // dòng 'config' (ai đổi cấu hình, X-14) không phải lệnh ghi lên Shopee — không tính trần ghi / ngày
+            const [r] = await q(`SELECT COUNT(*)::int AS n FROM "ShopeePilotWrite" WHERE "createdAt" >= $1 AND action <> 'config'`, ms)
             return Number(r?.n) || 0
         },
         async lanTangGiaCuoi(sku) {
@@ -523,7 +525,7 @@ export function khoBoNho(): KhoPilot & { _keHoach: KeHoach[]; _nhatKy: NhatKy[] 
         },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: Date.now() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
-        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
+        async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms && w.action !== 'config').length },
         async lanTangGiaCuoi(sku) {
             const ds = keHoach.filter(k => k.kind === 'price' && k.status === 'succeeded' && String(k.data?.sku).toLowerCase() === sku.toLowerCase() && k.data.price > k.data?.snapshot?.price)
             return ds.length ? Math.max(...ds.map(k => k.updatedAt)) : null
@@ -2141,6 +2143,12 @@ export async function luuCauHinh(ctx: NgCanh, b: any): Promise<CauHinhPilot> {
     const nextRunAt = !schedule.enabled ? null : (!doiLich && cfg.nextRunAt) ? cfg.nextRunAt : Date.now() + schedule.intervalMinutes * 60_000
     const moi: CauHinhPilot = { ...cfg, channelId, executionMode, policy, schedule, nextRunAt, updatedAt: Date.now() }
     await ctx.kho.luuCauHinh(moi)
+    // X-14: ai đổi gì — dòng sổ 'config' (không tính vào trần ghi / ngày)
+    await ghiDoiCauHinh(ctx.kho, {
+        nguoi: ctx.nguoi, nhan: NHAN_SHOPEE, docRieng: { channelId: v => kenh.find(c => c.id === v)?.name || String(v) },
+        cu: { channelId: cfg.channelId, executionMode: cfg.executionMode, policy: cfg.policy, schedule: cfg.schedule },
+        moi: { channelId, executionMode, policy, schedule },
+    })
     return moi
 }
 
@@ -2179,8 +2187,9 @@ export async function chayTheoLich(prisma: any, kho?: KhoPilot): Promise<'khong-
     } catch (e: any) {
         ketQua = { ok: false, message: String(e?.message || e).slice(0, 500) }
     }
-    // Xem trước thì chưa ghi gì lên sàn — chỉ chu kỳ gãy mới báo; Tự động thì báo mọi việc cần người (lib/pilotBaoChuShop)
-    const bao = ketQua.ok && ketQua.executionMode !== 'auto' ? truoc : await baoChuShop(prisma, 'Shopee Pilot', ketQua, truoc).catch(() => truoc)
+    /* Xem trước chưa ghi gì lên sàn ⇒ nháp / dòng ghi hỏng không báo; chu kỳ gãy, token, gian hỏng trong "tất cả gian" VẪN báo
+     * (lib/pilotBaoChuShop.ketQuaDeBao — X-09, 09/11/2026). Tự động ⇒ báo mọi việc cần người. */
+    const bao = await baoChuShop(prisma, 'Shopee Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto'), truoc).catch(() => truoc)
     await k.ghiKetQuaLich(luc, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
 }

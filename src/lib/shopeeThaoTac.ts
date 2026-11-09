@@ -385,15 +385,20 @@ export async function doiGiaShopee(prisma: any, a: any, tuyChon: TuyChonGhi): Pr
         if (!(giaShopee > 0 && giaMoi > giaShopee)) throw new ToolError(`Không tự đổi giá ${l.sku || l.platformProductId}: ${phiChuaTin}`)
     }
     let modelId: number | undefined
+    /* X-22 (09/11/2026): dịch vụ báo KHÔNG RÕ (`khongRo`: mạng / quá hạn / 5xx / lỗi phía máy chủ Shopee) ⇒ LoiKhongRo — người gọi
+     * ghi 'uncertain' = tính như ĐÃ đổi (nghỉ 24 giờ, đừng đổi lại khi chưa xem Seller Center). Lỗi Shopee trả rõ vẫn là lỗi thường. */
+    const khongRoGia = (e: any) => (e?.khongRo && !(e instanceof LoiKhongRo)
+        ? new LoiKhongRo(`KHÔNG RÕ Shopee đã nhận giá mới ${Math.round(giaMoi).toLocaleString('vi-VN')}đ của ${l.sku || l.platformProductId} chưa (${String(e?.message || e).replace(/^KHÔNG RÕ Shopee đã nhận update_price chưa:\s*/, '').slice(0, 200)}) — kiểm giá trên Seller Center trước khi đổi lại.`)
+        : e)
     try {
         await svc.updatePrice(l.platformProductId, giaMoi)
     } catch (e: any) {
-        if (!/model_id is mandatory|under model level/i.test(String(e?.message || ''))) throw e
+        if (!/model_id is mandatory|under model level/i.test(String(e?.message || ''))) throw khongRoGia(e)
         const models = await svc.getModelList(Number(l.platformProductId))
         const khop = models.filter(m => String(m.sku || '').trim().toLowerCase() === String(v.sku || l.sku || '').trim().toLowerCase())
         if (khop.length !== 1) throw new ToolError(`Sản phẩm có ${models.length} phân loại, ${khop.length} cái mang SKU "${v.sku || l.sku}" — không đoán, đổi giá tay trên Shopee.`)
         modelId = khop[0]!.model_id
-        await svc.updatePrice(l.platformProductId, giaMoi, modelId)
+        try { await svc.updatePrice(l.platformProductId, giaMoi, modelId) } catch (e2: any) { throw khongRoGia(e2) }
     }
     const giaCu = Number(l.price) || 0
     await prisma.onlineProduct.update({ where: { id: l.id }, data: { price: giaMoi } }).catch(() => { })

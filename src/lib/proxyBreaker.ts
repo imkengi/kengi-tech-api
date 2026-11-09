@@ -38,12 +38,13 @@ export function proxyCircuitOpen(): boolean {
     return true
 }
 
+/** `chuaGui: true` — ngắt mạch chặn TRƯỚC khi gửi: lệnh ghi chắc chắn chưa tới sàn (khác lỗi mạng giữa chừng = không rõ, X-22). */
 export function proxyCircuitError(): Error {
     const conLai = Math.max(0, COOLDOWN_MS - (Date.now() - openedAt))
-    return new Error(
+    return Object.assign(new Error(
         `Proxy chuyển tiếp đang mất kết nối (${consecutiveFailures} lần hỏng liên tiếp) — ` +
         `tạm dừng gọi ${Math.ceil(conLai / 1000)}s nữa. Kiểm tra firewall/IP whitelist ở hosting Tino.`
-    )
+    ), { chuaGui: true })
 }
 
 export function noteProxySuccess(): void {

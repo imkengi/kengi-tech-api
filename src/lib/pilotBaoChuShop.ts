@@ -7,12 +7,39 @@
  *  Giờ: MỘT thông báo (chuông web + push app) mỗi khi danh sách việc cần người ĐỔI, cách nhau ≥ 3 giờ;
  *  chu kỳ gãy thì báo ngay. Danh sách y như lượt trước ⇒ im (chu kỳ 30 phút không spam).
  *  Kiểu 'warning' — kiểu sẵn có ở chuông web và kênh Android, khỏi khai kiểu mới ở ba nơi.
+ *
+ *  X-09 (09/11/2026) — Pilot hỏng mà không báo:
+ *   - việc y như lần đã báo mà VẪN còn ⇒ trước im mãi (chủ shop lỡ tin đầu là token hỏng nằm im tới khi tự mở trang);
+ *     nay nhắc lại sau NHAC_LAI_MS, câu nói "chưa xử lý từ …";
+ *   - Xem trước ⇒ trước chỉ báo khi CẢ chu kỳ gãy; nay vẫn báo chỗ làm Pilot mù (ketQuaDeBao): token hỏng / sắp hết hạn,
+ *     một gian hỏng cả lượt khi chạy "tất cả gian". Nháp chờ duyệt / dòng ghi hỏng ở Xem trước vẫn không báo (chưa ghi gì).
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
-/** Dấu của lần báo gần nhất — lưu trong lastResult.baoChuShop của cấu hình Pilot. */
-export interface DauBao { khoa: string; luc: number; n: number }
+/** Dấu của lần báo gần nhất — lưu trong lastResult.baoChuShop của cấu hình Pilot. `tu` = lúc báo LẦN ĐẦU đúng danh sách việc
+ *  này (nhắc lại giữ nguyên `tu`; dấu cũ chưa có `tu` thì lấy `luc` — trước 09/11 việc y hệt không bao giờ được báo lại). */
+export interface DauBao { khoa: string; luc: number; n: number; tu?: number }
 
 export const GIAN_CACH_BAO_MS = 3 * 3600_000
+/** Việc y như lần đã báo mà vẫn còn sau chừng này ⇒ nhắc lại (mỗi ngày một lần, không spam chu kỳ 30 phút). */
+export const NHAC_LAI_MS = 24 * 3600_000
+
+/** Dòng làm Pilot MÙ — phải báo kể cả ở Xem trước: token hỏng / sắp hết hạn, một gian hỏng cả lượt ("tất cả gian"). */
+export function hongCanBao(r: any): boolean {
+    return r?.action === 'token' || (r?.action === 'cycle' && r?.status === 'failed')
+}
+
+/** Kết quả đưa vào baoChuShop theo chế độ: Tự động / Duyệt tay ⇒ nguyên vẹn; Xem trước ⇒ chu kỳ gãy vẫn nguyên vẹn, còn lại
+ *  chỉ giữ dòng hongCanBao (nháp chờ duyệt / lần ghi hỏng ở Xem trước chưa đụng sàn ⇒ không báo). */
+export function ketQuaDeBao<T extends { ok: boolean; results?: any[] }>(kq: T, xemTruoc: boolean): T {
+    if (!xemTruoc || kq.ok === false) return kq
+    return { ...kq, results: (Array.isArray(kq.results) ? kq.results : []).filter(hongCanBao) }
+}
+
+/** dd/mm hh:mm giờ Việt Nam */
+const ngayGioVN = (ms: number) => {
+    const d = new Date(ms + 7 * 3600_000), p = (n: number) => String(n).padStart(2, '0')
+    return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`
+}
 
 /** Dòng kết quả chu kỳ cần người làm gì đó. "CHƯA BIẾT PHÍ" (09/11/2026): gian chưa đủ đơn đo phí, chưa khai phí ⇒ chu kỳ không
  *  đổi giá / đăng mới được gì — chủ shop phải khai phí (MỘT dòng cho cả gian, lib/giaShopee.dongChuKyChuaBietPhi). */
@@ -34,16 +61,22 @@ export function viecCanNguoi(results: any[]): { khoa: string; dong: string[] } {
  * Ghi thông báo hỏng ⇒ giữ dấu cũ (lượt sau thử lại), không làm gãy lượt chạy.
  */
 export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; message?: string; results?: any[] }, truoc: DauBao | null | undefined, now = Date.now()): Promise<DauBao> {
-    const cu: DauBao = truoc && typeof truoc.khoa === 'string' ? { khoa: truoc.khoa, luc: Number(truoc.luc) || 0, n: Number(truoc.n) || 0 } : { khoa: '', luc: 0, n: 0 }
+    const cu: DauBao = truoc && typeof truoc.khoa === 'string'
+        ? { khoa: truoc.khoa, luc: Number(truoc.luc) || 0, n: Number(truoc.n) || 0, ...(Number(truoc.tu) > 0 ? { tu: Number(truoc.tu) } : {}) }
+        : { khoa: '', luc: 0, n: 0 }
     const gay = kq.ok === false
     const { khoa, dong } = gay
         ? { khoa: `loi:${String(kq.message || '').slice(0, 120)}`, dong: [String(kq.message || 'Chu kỳ lỗi không rõ lý do').slice(0, 400)] }
         : viecCanNguoi(kq.results || [])
     if (!khoa) return { khoa: '', luc: cu.luc, n: 0 }          // hết việc ⇒ im; lần sau có việc lại báo
-    if (khoa === cu.khoa) return cu                               // y như lượt trước đã báo
-    if (!gay && now - cu.luc < GIAN_CACH_BAO_MS) return cu        // đổi mà chưa đủ 3 giờ ⇒ giữ dấu cũ, lượt sau báo
-    const title = gay ? `${ten}: chu kỳ tự động bị lỗi` : `${ten} cần anh/chị xem ${dong.length} việc`
-    const message = (gay ? `${dong[0]} — mở ${ten} kiểm kết nối.` : dong.slice(0, 4).join(' · ') + (dong.length > 4 ? ` · … và ${dong.length - 4} việc nữa trên ${ten}.` : '')).slice(0, 500)
+    const lap = khoa === cu.khoa
+    if (lap && now - cu.luc < NHAC_LAI_MS) return cu             // y như lần đã báo, chưa đủ một ngày ⇒ im
+    if (!lap && !gay && now - cu.luc < GIAN_CACH_BAO_MS) return cu // đổi mà chưa đủ 3 giờ ⇒ giữ dấu cũ, lượt sau báo
+    const tu = lap ? (cu.tu || cu.luc) : now
+    const title = gay ? `${ten}: chu kỳ tự động ${lap ? 'vẫn ' : ''}bị lỗi`
+        : lap ? `${ten} vẫn còn ${dong.length} việc cần anh/chị xem` : `${ten} cần anh/chị xem ${dong.length} việc`
+    const message = ((lap ? `Chưa xử lý từ ${ngayGioVN(tu)}: ` : '')
+        + (gay ? `${dong[0]} — mở ${ten} kiểm kết nối.` : dong.slice(0, 4).join(' · ') + (dong.length > 4 ? ` · … và ${dong.length - 4} việc nữa trên ${ten}.` : ''))).slice(0, 500)
     try {
         const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
         const { sendPushToStore } = await import('../routes/notifications')
@@ -52,5 +85,5 @@ export async function baoChuShop(prisma: any, ten: string, kq: { ok: boolean; me
         console.warn(`[${ten}] ghi thông báo hỏng:`, e?.message || e)
         return cu
     }
-    return { khoa, luc: now, n: dong.length }
+    return { khoa, luc: now, n: dong.length, tu }
 }
