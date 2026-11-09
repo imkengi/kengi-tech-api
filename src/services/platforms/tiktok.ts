@@ -459,11 +459,14 @@ export class TikTokService extends PlatformService {
     }
 
     /**
-     * Pull the product catalog — POST /product/202309/products/search
-     * (page_token cursor, max 100/page). Stock = sum of every SKU's inventory.
+     * Raw product rows of the shop — POST /product/202309/products/search, every page
+     * (page_token cursor, max 100/page, safety cap 50 pages = 5000 products). Each row keeps
+     * skus[] (id, seller_sku, price, inventory) + status exactly as TikTok returns them.
+     * 09/11/2026: TikTok Pilot đọc GIÁ SỐNG cả lô bằng hàm này (vài lời gọi thay cho từng mã
+     * product detail) — fetchProducts dưới đây chỉ là phép chiếu của cùng các dòng này.
      */
-    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
-        const products: PlatformProduct[] = []
+    async timSanPhamTho(): Promise<any[]> {
+        const rows: any[] = []
         let pageToken: string | undefined
         const bodyObj = {} // no filter → all statuses
         const bodyStr = JSON.stringify(bodyObj)
@@ -475,24 +478,35 @@ export class TikTokService extends PlatformService {
             const data = await this.httpPost(url, bodyObj, headers)
             if (data.code !== 0) throw new Error(`TikTok products/search: [${data.code}] ${data.message || 'Unknown error'}`)
 
-            for (const p of data.data?.products || []) {
-                const skus = p.skus || []
-                const firstSku = skus[0]
-                const stock = skus.reduce((sum: number, sk: any) =>
-                    sum + (sk.inventory || []).reduce((a: number, inv: any) => a + (inv.quantity || 0), 0), 0)
-                products.push({
-                    platformProductId: String(p.id),
-                    name: p.title || 'Unnamed',
-                    sku: firstSku?.seller_sku || undefined,
-                    price: Number(firstSku?.price?.tax_exclusive_price || firstSku?.price?.sale_price || 0),
-                    stock,
-                    status: p.status || 'ACTIVATE',
-                    imageUrl: p.main_images?.[0]?.thumb_urls?.[0] || p.main_images?.[0]?.urls?.[0] || undefined,
-                })
-            }
+            for (const p of data.data?.products || []) rows.push(p)
 
             pageToken = data.data?.next_page_token
             if (!pageToken) break
+        }
+        return rows
+    }
+
+    /**
+     * Pull the product catalog — POST /product/202309/products/search
+     * (page_token cursor, max 100/page). Stock = sum of every SKU's inventory.
+     */
+    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+        const products: PlatformProduct[] = []
+
+        for (const p of await this.timSanPhamTho()) {
+            const skus = p.skus || []
+            const firstSku = skus[0]
+            const stock = skus.reduce((sum: number, sk: any) =>
+                sum + (sk.inventory || []).reduce((a: number, inv: any) => a + (inv.quantity || 0), 0), 0)
+            products.push({
+                platformProductId: String(p.id),
+                name: p.title || 'Unnamed',
+                sku: firstSku?.seller_sku || undefined,
+                price: Number(firstSku?.price?.tax_exclusive_price || firstSku?.price?.sale_price || 0),
+                stock,
+                status: p.status || 'ACTIVATE',
+                imageUrl: p.main_images?.[0]?.thumb_urls?.[0] || p.main_images?.[0]?.urls?.[0] || undefined,
+            })
         }
 
         console.log(`[TikTok Products] Total: ${products.length} products fetched`)

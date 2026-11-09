@@ -17,13 +17,21 @@
  *  7. Chạy theo lịch: chưa tới hẹn thì thôi; tới hẹn thì một bản giành, chạy, hẹn lượt kế.
  *  8. Tiện ích tiktok_pilot chỉ-quản-trị.
  *  9. Nối dây (soát mã nguồn).
+ *  L. Lô 3 (09/11/2026) — quyết theo giá THẬT, không báo động giả, không giành giá người sửa:
+ *     L1 giá sống = số DƯƠNG đầu tiên, giá 0 / đọc hỏng ⇒ không đổi; chu kỳ quyết theo giá sống (lô), không theo giá lưu.
+ *     L2 trần ghi/ngày tính TRƯỚC vòng lặp ⇒ MỘT dòng 'skipped', không 'failed', không việc cần người, không nháp sót.
+ *     L3 nghỉ 24 giờ tính từ lúc THỰC THI.   L4 đồng bộ danh mục lấy ngành mã mới, một mã lỗi không dừng lượt.
+ *     L5 giá chủ shop sửa tay ⇒ để yên 7 ngày.   L6 TikTok khoá giá vì khuyến mãi ⇒ 'skipped' + nghỉ 24 giờ.
+ *     L7 làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT dòng 'token', không ghi gì lượt đó.
  */
 import * as fs from 'fs'
 import * as path from 'path'
 import {
     khoBoNhoTikTok, chuanHoaChinhSachTikTok, xayTrangThaiTikTok, taoKeHoachGiaTikTok, thucThiTikTok, chayChuKyTikTok,
     luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
+    giaSkuTikTok, laLoiKhoaGiaKhuyenMai, laLoiTokenTikTok, boSungNganhTikTok,
 } from '../src/lib/tiktokPilot'
+import { TikTokService } from '../src/services/platforms/tiktok'
 import { docMauPhi, xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
 import { tinhGiaDeXuat, lyDoPhiChuaDuTin, chanGiaDuoiSan, uocLuongPhi, type MauPhi, type ThamSoGia } from '../src/lib/giaShopee'
 import { viecCanNguoi } from '../src/lib/pilotBaoChuShop'
@@ -94,8 +102,19 @@ const prisma: any = {
         update: async () => ({}),
     },
     onlineProduct: {
-        findMany: async ({ where, select, take }: any) => listing.filter(l => l.channelId === where.channelId && (!where.status?.in || where.status.in.includes(l.status)))
+        // `categoryId: null` (mã còn thiếu ngành — lib/tiktokPilot.boSungNganhTikTok, 09/11/2026) chỉ lọc khi có trong where
+        findMany: async ({ where, select, take }: any) => listing.filter(l => l.channelId === where.channelId && (!where.status?.in || where.status.in.includes(l.status))
+            && (!('categoryId' in where) || (where.categoryId === null ? l.categoryId == null : l.categoryId === where.categoryId)))
             .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, take ?? 1e9).map(l => chon(l, select)),
+        // đồng bộ danh mục (lib/shopeeTuQuan.luuDanhMucSan) — đóng dấu theo đồng hồ giả
+        upsert: async ({ where, create, update }: any) => {
+            const k = where.channelId_platformProductId
+            const l = listing.find(x => x.channelId === k.channelId && x.platformProductId === k.platformProductId)
+            if (l) { Object.assign(l, update, { syncedAt: new Date(bayGio) }); return l }
+            const moi = { id: `op-${k.platformProductId}`, localProductId: null, updatedAt: new Date(bayGio), ...create, syncedAt: new Date(bayGio) }
+            listing.push(moi)
+            return moi
+        },
         findFirst: async ({ where }: any) => listing.find(l => l.channelId === where.channelId
             && (!where.platformProductId || l.platformProductId === where.platformProductId)
             && (!where.sku || String(l.sku).toLowerCase() === String(where.sku.equals).toLowerCase())
@@ -125,16 +144,30 @@ const prisma: any = {
 
 /* ── TikTok giả ── */
 const goi: any[] = []
+/** chi tiết sản phẩm TikTok theo mã; một Error ⇒ đọc mã đó hỏng (09/11/2026) */
 let chiTiet: Record<string, any> = {}
 let loiGia: any = null
+/** lỗi đổi giá RIÊNG từng mã (khuyến mãi khoá giá, token…) — 09/11/2026 */
+let loiGiaMa: Record<string, any> = {}
+/** đổi giá thành công thì giá sống trên TikTok giả đổi theo (ca nghỉ 24 giờ / giá người sửa) — mặc định tắt như trước */
+let giaSongTheoGhi = false
+/** chạy sau mỗi lần ghi giá thành công (ca "lượt khác vừa ghi giữa chừng") */
+let sauGhiGia: (() => Promise<void>) | null = null
 const giaTT = (gia: number, id = 'sku') => ({ skus: [{ id, seller_sku: 'x', price: { tax_exclusive_price: String(gia) } }] })
 function datTikTok() {
     chiTiet = { '111': giaTT(120000, 'sku111'), '222': giaTT(160000, 'sku222'), '333': { skus: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }, '555': giaTT(100000, 'sku555') }
+    loiGiaMa = {}; giaSongTheoGhi = false; sauGhiGia = null
 }
 const ttGia = async (): Promise<DichVuTikTok> => ({
     testConnection: async () => ({ success: true, shopName: 'Kengi TikTok' }),
-    getProductDetail: async (id: string) => { goi.push(['detail', id]); return chiTiet[id] || { skus: [] } },
-    updatePrice: async (id: string, gia: number, skuId?: string) => { goi.push(['price', id, gia, skuId]); if (loiGia) throw loiGia },
+    getProductDetail: async (id: string) => { goi.push(['detail', id]); const d = chiTiet[id]; if (d instanceof Error) throw d; return d || { skus: [] } },
+    updatePrice: async (id: string, gia: number, skuId?: string) => {
+        goi.push(['price', id, gia, skuId])
+        if (loiGia) throw loiGia
+        if (loiGiaMa[id]) throw loiGiaMa[id]
+        if (giaSongTheoGhi) chiTiet[id] = giaTT(gia, skuId || 'sku')
+        if (sauGhiGia) await sauGhiGia()
+    },
     getOrderSettlement: async () => ({ settlementAmount: 100000, feeAmount: 15000, revenueAmount: 115000 }),
 })
 const daySo: any[] = []
@@ -444,6 +477,366 @@ async function main() {
         dung('8d. kiểm kết nối chỉ ĐỌC, đủ các bước', kn.tong >= 4 && ghiTT().length === 0 && kn.buoc[0].ok === true, JSON.stringify(kn))
     }
 
+    // ─── L. Lô 3 (09/11/2026): quyết theo giá THẬT, không báo động giả, không giành giá người sửa ─────────────
+    const ctxL = (kho = khoBoNhoTikTok(() => bayGio), them: Partial<NgCanhTikTok> = {}) =>
+        ({ ...ngCanh(kho), ...them }) as NgCanhTikTok & { kho: ReturnType<typeof khoBoNhoTikTok> }
+    const dongGia = (kq: any): any[] => kq.results.filter((r: any) => r.action === 'price')
+    const ghiMa = (id: string) => ghiTT().filter(g => g[1] === id)
+    const ngayThang = (ms: number) => { const d = new Date(ms + 7 * 3600_000).toISOString(); return `${d.slice(8, 10)}/${d.slice(5, 7)}` }
+    const giaRong = (sale: string) => ({ skus: [{ id: 'sku111', seller_sku: 'OC4', price: { tax_exclusive_price: '', sale_price: sale } }] })
+
+    // L1 (TT-09) — giá sống = số DƯƠNG đầu tiên; 0 / rỗng / đọc hỏng ⇒ không đổi; chu kỳ quyết theo giá SỐNG đọc theo lô
+    {
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        dung('L1a. giá SKU = số DƯƠNG đầu tiên: tax_exclusive_price rỗng / "0" ⇒ sale_price; không có số dương ⇒ 0',
+            giaSkuTikTok({ price: { tax_exclusive_price: '', sale_price: '99000' } }) === 99000
+            && giaSkuTikTok({ price: { tax_exclusive_price: '0', sale_price: '120000' } }) === 120000
+            && giaSkuTikTok({ price: { tax_exclusive_price: '130000', sale_price: '99000' } }) === 130000
+            && giaSkuTikTok({ price: { tax_exclusive_price: '', sale_price: '0' } }) === 0 && giaSkuTikTok({}) === 0)
+        const ctx = ctxL()
+        chiTiet['111'] = giaRong('125000')
+        const kh: any = await taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 137000 }).catch(e => e)
+        dung('L1b. TikTok trả tax_exclusive_price rỗng ⇒ giá đang bán đọc từ sale_price (125.000), không phải 0', kh?.data?.snapshot?.price === 125000, kh?.message || JSON.stringify(kh?.data?.snapshot))
+        chiTiet['111'] = giaRong('0')
+        const so = ctx.kho._keHoach.length
+        const k0 = await nem(() => taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 130000 }))
+        dung('L1c. giá sống 0 / rỗng ⇒ lập kế hoạch TỪ CHỐI "không đọc được giá đang bán", không lưu (trước: lấy giá lưu làm mốc biên độ)',
+            k0 instanceof ToolError && /không đọc được giá đang bán/.test(k0.message) && ctx.kho._keHoach.length === so, k0?.message)
+        chiTiet['111'] = new Error('TikTok getProduct: [36009004] internal error')
+        const so2 = ctx.kho._keHoach.length
+        const kLoi = await nem(() => taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 130000 }))
+        dung('L1d. đọc giá sống hỏng ⇒ lập kế hoạch từ chối "Không đọc được giá đang bán trên TikTok", không lưu',
+            kLoi instanceof ToolError && /Không đọc được giá đang bán trên TikTok/.test(kLoi.message) && ctx.kho._keHoach.length === so2, kLoi?.message)
+
+        // chu kỳ Tự động: bản lưu 120.000 (đồng bộ tới 2 giờ trước), TikTok đang bán 125.000 ⇒ quyết theo 125.000
+        datLai(); datTikTok(); goi.length = 0
+        chiTiet['111'] = giaTT(125000, 'sku111')
+        const c1 = ctxL()
+        await luuCauHinhTikTok(c1, { executionMode: 'auto' })
+        const kq1 = await chayChuKyTikTok(c1)
+        dung('L1e. chu kỳ quyết theo giá SỐNG: TikTok bán 125.000 (bản lưu 120.000) ⇒ nâng 10% từ 125.000 = 137.000 (không phải 132.000)',
+            ghiMa('111').length === 1 && ghiMa('111')[0][2] === 137000, JSON.stringify({ ghi: ghiTT(), r: kq1.results }))
+
+        datLai(); datTikTok(); goi.length = 0
+        chiTiet['111'] = giaRong('0')
+        const c2 = ctxL()
+        await luuCauHinhTikTok(c2, { executionMode: 'auto' })
+        const kq2 = await chayChuKyTikTok(c2)
+        dung('L1f. chu kỳ: TikTok trả giá 0 / rỗng ⇒ 0 lời gọi đổi giá mã đó, dòng lý do; mã khác vẫn đổi',
+            ghiMa('111').length === 0 && ghiMa('222').length === 1
+            && kq2.results.some((r: any) => r.status === 'skipped' && /1 TikTok trả giá 0 \/ rỗng/.test(r.message || '')), JSON.stringify(kq2.results))
+
+        datLai(); datTikTok(); goi.length = 0
+        for (const id of ['111', '222', '333']) chiTiet[id] = new Error('TikTok getProduct: [36009004] internal error')
+        const c3 = ctxL()
+        await luuCauHinhTikTok(c3, { executionMode: 'auto' })
+        const kq3 = await chayChuKyTikTok(c3)
+        dung('L1g. đọc giá sống hỏng mọi mã ⇒ 0 lời gọi đổi giá, không lập kế hoạch, đúng MỘT dòng lý do',
+            ghiTT().length === 0 && c3.kho._keHoach.length === 0 && dongGia(kq3).length === 1
+            && /^Không đọc được giá đang bán trên TikTok — chu kỳ không đổi giá mã nào/.test(dongGia(kq3)[0].message), JSON.stringify(kq3.results))
+
+        // dịch vụ thật đọc LÔ products/search (vài lời gọi) — không đọc từng mã trước khi quyết
+        datLai(); datTikTok(); goi.length = 0
+        chiTiet['111'] = giaTT(125000, 'sku111')
+        let loiLo: any = null
+        const ttLo = async (): Promise<DichVuTikTok> => ({
+            ...(await ttGia()),
+            timSanPhamTho: async () => { goi.push(['search']); if (loiLo) throw loiLo; return ['111', '222', '333'].map(id => ({ id, status: 'ACTIVATE', ...chiTiet[id] })) },
+        })
+        const c4 = ctxL(undefined, { taoTikTok: ttLo })
+        await luuCauHinhTikTok(c4, { executionMode: 'auto' })
+        await chayChuKyTikTok(c4)
+        const dauDetail = goi.findIndex(g => g[0] === 'detail')
+        dung('L1h. đọc giá sống theo LÔ: MỘT lần products/search trước mọi lần đọc lẻ; đọc lẻ chỉ lúc thực thi (bằng số lần ghi); quyết theo giá lô',
+            goi.filter(g => g[0] === 'search').length === 1 && goi.findIndex(g => g[0] === 'search') < dauDetail
+            && goi.filter(g => g[0] === 'detail').length === ghiTT().length && ghiMa('111')[0]?.[2] === 137000, JSON.stringify(goi))
+        datLai(); datTikTok(); goi.length = 0
+        loiLo = new Error('TikTok products/search: [36009004] internal error')
+        const c5 = ctxL(undefined, { taoTikTok: ttLo })
+        await luuCauHinhTikTok(c5, { executionMode: 'auto' })
+        const kq5 = await chayChuKyTikTok(c5)
+        dung('L1i. đọc LÔ hỏng ⇒ không đổi giá mã nào, MỘT dòng lý do "failed"',
+            ghiTT().length === 0 && c5.kho._keHoach.length === 0 && dongGia(kq5).length === 1 && dongGia(kq5)[0].status === 'failed', JSON.stringify(kq5.results))
+
+        // thực thi: kế hoạch lập lúc TikTok bán 120.000; tới lúc ghi TikTok trả 0 / đọc mất mạng ⇒ không ghi
+        datLai(); datTikTok(); goi.length = 0
+        const c6 = ctxL()
+        await luuCauHinhTikTok(c6, { executionMode: 'auto' })
+        const kh6 = await taoKeHoachGiaTikTok(c6, { itemId: '111', price: 130000 })
+        chiTiet['111'] = giaRong('')
+        const x6 = await thucThiTikTok(c6, kh6.id)
+        dung('L1j. thực thi: TikTok trả giá 0 / rỗng ⇒ "failed" không đọc được giá đang bán, KHÔNG gọi đổi giá (trước: biên độ so với 0 ⇒ lọt)',
+            x6.status === 'failed' && /không đọc được giá đang bán/.test(x6.result?.message || '') && ghiTT().length === 0, JSON.stringify(x6.result))
+        chiTiet['111'] = giaTT(120000, 'sku111')
+        const kh7 = await taoKeHoachGiaTikTok(c6, { itemId: '111', price: 131000 })
+        chiTiet['111'] = new TypeError('fetch failed')
+        const ghi7 = ghiTT().length
+        const x7 = await thucThiTikTok(c6, kh7.id)
+        dung('L1k. thực thi: ĐỌC giá sống mất mạng (chưa gửi gì) ⇒ "failed" không đọc được giá, không ghi — không phải "uncertain"',
+            x7.status === 'failed' && /Không đọc được giá đang bán trên TikTok/.test(x7.result?.message || '') && ghiTT().length === ghi7, JSON.stringify({ st: x7.status, r: x7.result }))
+    }
+
+    // L2 (TT-10) — trần ghi / ngày tính TRƯỚC vòng lặp: hết lượt là MỘT dòng 'skipped', không 'failed', không chuông
+    {
+        // 8 mã thêm đang dưới giá sàn (giá vốn 100.000, TikTok bán 100.000) + OC4 + BINH = 10 ứng viên
+        const them8 = () => {
+            for (let i = 0; i < 8; i++) {
+                hang.push({ id: `pX${i}`, sku: `X${i}`, name: `Hàng X${i}`, description: 'x', costPrice: 100000, sellingPrice: 180000, stock: 5, productType: 'goods', mergedIntoId: null, bundleId: null, category: { name: 'Điện' }, _count: { images: 1 }, images: [] })
+                listing.push({ id: `opX${i}`, channelId: 'tt1', categoryId: '601', platformProductId: `90${i}`, name: `Hàng X${i}`, sku: `X${i}`, price: 100000, stock: 5, status: 'ACTIVATE', localProductId: `pX${i}`, imageUrl: null, updatedAt: new Date(10 + i) })
+                chiTiet[`90${i}`] = giaTT(100000, `skuX${i}`)
+            }
+        }
+        const daGhi = async (kho: ReturnType<typeof khoBoNhoTikTok>, n: number) => {
+            for (let i = 0; i < n; i++) await kho.ghiNhatKy({ action: 'price', status: 'succeeded', planId: null, payload: { truoc: i }, response: null })
+        }
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW; them8()
+        const kho = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho, 48)
+        const ctx = ctxL(kho)
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 50, maxRepricePerCycle: 10 } })
+        const kq = await chayChuKyTikTok(ctx)
+        const het = kq.results.filter((r: any) => /Đã hết lượt ghi hôm nay/.test(r.message || ''))
+        dung('L2a. đã ghi 48/50, chu kỳ 10 ứng viên ⇒ đúng 2 lần ghi lên TikTok', ghiTT().length === 2, JSON.stringify({ ghi: ghiTT(), r: kq.results }))
+        dung('L2b. … phần còn lại MỘT dòng "skipped" "Đã hết lượt ghi hôm nay (50/50 …) — còn 8 sản phẩm để mai"; KHÔNG dòng "failed"',
+            het.length === 1 && het[0].status === 'skipped' && /\(50\/50 theo chính sách\) — còn 8 sản phẩm để mai/.test(het[0].message)
+            && !kq.results.some((r: any) => r.status === 'failed'), JSON.stringify(kq.results))
+        dung('L2c. … viecCanNguoi KHÔNG có mục nào từ chuyện hết trần; không lập nháp thừa quá trần',
+            viecCanNguoi(kq.results).dong.length === 0 && ctx.kho._keHoach.filter(k => k.status === 'draft').length === 0,
+            JSON.stringify({ viec: viecCanNguoi(kq.results), kh: ctx.kho._keHoach.map(k => k.status) }))
+
+        datLai(); datTikTok(); goi.length = 0; them8()
+        const kho2 = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho2, 50)
+        const ctx2 = ctxL(kho2)
+        await luuCauHinhTikTok(ctx2, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq2 = await chayChuKyTikTok(ctx2)
+        dung('L2d. đủ 50/50 TRƯỚC chu kỳ ⇒ không đọc / ghi TikTok, không lập kế hoạch, đúng MỘT dòng giá "skipped" hết lượt',
+            goi.length === 0 && ctx2.kho._keHoach.length === 0 && dongGia(kq2).length === 1 && dongGia(kq2)[0].status === 'skipped'
+            && /^Đã hết lượt ghi hôm nay \(50\/50/.test(dongGia(kq2)[0].message) && viecCanNguoi(kq2.results).dong.length === 0, JSON.stringify(kq2.results))
+
+        // lượt khác (tab khác / thực thi tay) ghi chen giữa chừng ⇒ trần chạm NGAY TRONG thucThi
+        datLai(); datTikTok(); goi.length = 0; them8()
+        const kho3 = khoBoNhoTikTok(() => bayGio)
+        await daGhi(kho3, 48)
+        sauGhiGia = async () => { await kho3.ghiNhatKy({ action: 'price', status: 'succeeded', planId: null, payload: { luotKhac: true }, response: null }) }
+        const ctx3 = ctxL(kho3)
+        await luuCauHinhTikTok(ctx3, { executionMode: 'auto', policy: { maxWritesPerDay: 50 } })
+        const kq3 = await chayChuKyTikTok(ctx3)
+        sauGhiGia = null
+        const het3 = kq3.results.filter((r: any) => /Đã hết lượt ghi hôm nay/.test(r.message || ''))
+        dung('L2e. lượt khác ghi chen ⇒ thucThi chạm trần ⇒ MỘT dòng "skipped" (không "failed"), giữ nháp, 1 lần ghi, không chuông',
+            ghiTT().length === 1 && het3.length === 1 && het3[0].status === 'skipped' && /còn 9 sản phẩm để mai/.test(het3[0].message)
+            && !kq3.results.some((r: any) => r.status === 'failed') && ctx3.kho._keHoach.filter(k => k.status === 'draft').length === 1
+            && viecCanNguoi(kq3.results).dong.length === 0, JSON.stringify(kq3.results))
+    }
+
+    // L3 (TT-11) — nghỉ 24 giờ tính từ lúc THỰC THI, không phải lúc lập nháp
+    {
+        datLai(); datTikTok(); goi.length = 0; giaSongTheoGhi = true
+        const ctx = ctxL()
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
+        bayGio = NOW - 2 * 86400_000
+        const kh = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 150000 })   // nháp lập 2 ngày trước
+        bayGio = NOW - 3600_000
+        const x = await thucThiTikTok(ctx, kh.id)                                     // duyệt + ghi 1 giờ trước
+        bayGio = NOW
+        const kq = await chayChuKyTikTok(ctx)
+        dung('L3a. nháp lập 2 ngày trước, duyệt + ghi 1 giờ trước ⇒ chu kỳ KHÔNG đổi lại BINH ("vừa đổi giá trong 24 giờ"), không coi là người sửa',
+            x.status === 'succeeded' && ghiMa('222').length === 1 && kq.results.some((r: any) => /^1 sản phẩm vừa đổi giá trong 24 giờ/.test(r.message || ''))
+            && !kq.results.some((r: any) => /sửa giá tay/.test(r.message || '')), JSON.stringify({ ghi: ghiTT(), r: kq.results }))
+        bayGio = NOW + 24 * 3600_000
+        await chayChuKyTikTok(ctx)
+        dung('L3b. đối chứng: 25 giờ sau lần ghi ⇒ BINH được xét lại (hạ tiếp 10%: 150.000 → 135.000)',
+            ghiMa('222').length === 2 && ghiMa('222')[1][2] === 135000, JSON.stringify(ghiTT()))
+        bayGio = NOW; giaSongTheoGhi = false
+    }
+
+    // L4 (TT-12) — đồng bộ danh mục trong chu kỳ lấy NGÀNH cho mã mới; một mã lỗi không dừng lượt
+    {
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const moi = ['701', '702', '703'].map((id, i) => ({ platformProductId: id, name: `Hàng mới ${i + 1}`, sku: `MOI${i + 1}`, price: 99000, stock: 3, status: 'ACTIVATE' }))
+        const nganh: Record<string, any> = {
+            '701': { categoryId: '601', categoryName: 'Điện > Ổ cắm' }, '702': new Error('TikTok getProduct: [36009004] internal error'),
+            '703': { categoryId: '602', categoryName: 'Gia dụng > Bình' },
+        }
+        const ttDanhMuc = async (): Promise<DichVuTikTok> => ({
+            ...(await ttGia()),
+            fetchProducts: async () => { goi.push(['danh-muc']); return { products: moi, total: moi.length } },
+            fetchProductCategory: async (id: string) => { goi.push(['nganh', id]); const r = nganh[id]; if (r instanceof Error) throw r; return r ?? null },
+        })
+        const ctx = ctxL(undefined, { taoTikTok: ttDanhMuc })
+        const kq = await chayChuKyTikTok(ctx)
+        const lp = (id: string) => listing.find(l => l.platformProductId === id)
+        const dm = kq.results.find((r: any) => r.action === 'catalog')
+        dung('L4a. đồng bộ danh mục trong chu kỳ: 3 mã mới thiếu ngành, mã giữa lỗi ⇒ 2 mã CÓ ngành (cả mã SAU mã lỗi), mã lỗi vẫn trống',
+            lp('701')?.categoryId === '601' && lp('703')?.categoryId === '602' && lp('703')?.categoryName === 'Gia dụng > Bình' && lp('702')?.categoryId == null
+            && goi.filter(g => g[0] === 'nganh').map(g => g[1]).join() === '701,702,703', JSON.stringify({ l: listing.slice(-3), goi }))
+        dung('L4b. … dòng danh mục "succeeded" nói 2/3 mã + 1 mã lỗi; chu kỳ vẫn chạy tiếp (soát giá như thường)',
+            dm?.status === 'succeeded' && /Lấy ngành 2\/3 mã chưa rõ ngành/.test(dm?.message || '') && /1 mã lỗi: MOI2/.test(dm?.message || '')
+            && dongGia(kq).length > 0, JSON.stringify(kq.results))
+        const st = await xayTrangThaiTikTok(ctx)
+        dung('L4c. trạng thái báo số mã CHƯA RÕ NGÀNH (gian đã đo phí theo ngành) — tab Định giá hiện', st.status.feeModel.uncategorized === 1, JSON.stringify(st.status.feeModel))
+
+        // hàm dùng chung (nút Đồng bộ ở Đơn online cũng gọi): 3 lỗi liền ⇒ dừng; lỗi token ⇒ dừng ngay
+        datLai()
+        for (const id of ['801', '802', '803', '804']) listing.push({ id: `op${id}`, channelId: 'tt1', categoryId: null, platformProductId: id, name: id, sku: `S${id}`, price: 1, stock: 0, status: 'ACTIVATE', localProductId: null, imageUrl: null, updatedAt: new Date(1) })
+        const hoi: string[] = []
+        const r1 = await boSungNganhTikTok(prisma, 'tt1', { fetchProductCategory: async (id: string) => { hoi.push(id); throw new Error('TikTok getProduct: [36009004] busy') } }, { nghiMs: 0 })
+        dung('L4d. 3 lỗi LIỀN (sàn trục trặc / rate-limit) ⇒ dừng, mã thứ 4 để lần sau', r1.dung === 'lien-tiep' && hoi.length === 3 && r1.loi.length === 3 && r1.daCo === 0, JSON.stringify(r1))
+        hoi.length = 0
+        const r2 = await boSungNganhTikTok(prisma, 'tt1', { fetchProductCategory: async (id: string) => { hoi.push(id); throw new Error('TikTok getProduct: [105005] access token expired') } }, { nghiMs: 0 })
+        dung('L4e. lỗi token ⇒ dừng ngay sau MỘT lời gọi, báo "token"', r2.dung === 'token' && hoi.length === 1, JSON.stringify(r2))
+        datLai()
+    }
+
+    // L5 (TT-14) — giá chủ shop vừa sửa tay (khác giá Pilot ghi lần cuối) ⇒ để yên 7 ngày
+    {
+        datLai(); datTikTok(); goi.length = 0; giaSongTheoGhi = true
+        const kho = khoBoNhoTikTok(() => bayGio)
+        const ctx = ctxL(kho)
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
+        bayGio = NOW - 25 * 3600_000                                                   // hôm qua: Pilot ghi BINH 160.000 → 144.000
+        const kh = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 144000 })
+        await thucThiTikTok(ctx, kh.id)
+        chiTiet['222'] = giaTT(170000, 'sku222')    // nay chủ shop sửa tay trên Seller Center (bản lưu vẫn 144.000)
+        chiTiet['111'] = giaTT(125000, 'sku111')    // OC4: Pilot chưa từng ghi
+        bayGio = NOW
+        const kq = await chayChuKyTikTok(ctx)
+        const giu = kq.results.filter((r: any) => /chủ shop vừa sửa giá tay/.test(r.message || ''))
+        dung('L5a. Pilot ghi 144.000 hôm qua, TikTok nay bán 170.000 ⇒ KHÔNG đổi BINH; MỘT dòng "skipped" gộp có ngày để yên (+7 ngày)',
+            ghiMa('222').length === 1 && giu.length === 1 && giu[0].status === 'skipped'
+            && giu[0].message.startsWith(`1 mã chủ shop vừa sửa giá tay trên TikTok — Pilot để yên tới ${ngayThang(NOW + 7 * 86400_000)}`), JSON.stringify(kq.results))
+        dung('L5b. … mã Pilot CHƯA từng ghi (OC4) xét như cũ: TikTok bán 125.000 ⇒ nâng 137.000', ghiMa('111').length === 1 && ghiMa('111')[0][2] === 137000, JSON.stringify(ghiTT()))
+        dung('L5c. … giá người sửa không vào việc cần người', viecCanNguoi(kq.results).dong.length === 0, JSON.stringify(viecCanNguoi(kq.results)))
+        const st = await xayTrangThaiTikTok(ctx)
+        const binh = st.products.find((p: any) => p.itemId === '222')
+        dung('L5d. trang: dòng BINH hiện lý do để yên (manual, tới +7 ngày, Pilot ghi 144.000đ / nay 170.000đ), giá lưu theo giá thật',
+            binh?.hold?.reason === 'manual' && binh.hold.until === NOW + 7 * 86400_000 && /Pilot ghi 144\.000đ, nay 170\.000đ/.test(binh.hold.message)
+            && binh.currentPrice === 170000 && !st.products.find((p: any) => p.itemId === '111')?.hold, JSON.stringify(binh))
+        bayGio = NOW + 3 * 3600_000
+        await chayChuKyTikTok(ctx)
+        dung('L5e. lượt sau trong 7 ngày: vẫn để yên, không thêm dòng giữ mới', ghiMa('222').length === 1 && kho._keHoach.filter(k => k.data?.nguoiSua).length === 1)
+        bayGio = NOW + 7 * 86400_000 + 3600_000
+        const kq3 = await chayChuKyTikTok(ctx)
+        dung('L5f. sau 7 ngày ⇒ xét lại: BINH 170.000 ế + lãi cao ⇒ hạ 10% (153.000)', ghiMa('222').length === 2 && ghiMa('222')[1][2] === 153000, JSON.stringify({ ghi: ghiTT(), r: kq3.results }))
+
+        // lần ghi 'uncertain' (mất mạng sau khi gửi): sàn có thể còn giá CŨ — không phải người sửa
+        datLai(); datTikTok(); goi.length = 0
+        const kho4 = khoBoNhoTikTok(() => bayGio)
+        const ctx4 = ctxL(kho4)
+        await luuCauHinhTikTok(ctx4, { executionMode: 'auto' })
+        bayGio = NOW - 25 * 3600_000
+        const kh4 = await taoKeHoachGiaTikTok(ctx4, { itemId: '222', price: 144000 })
+        loiGia = new TypeError('fetch failed')
+        const x4 = await thucThiTikTok(ctx4, kh4.id)
+        loiGia = null
+        bayGio = NOW
+        const kq4 = await chayChuKyTikTok(ctx4)
+        dung('L5g. lần ghi "uncertain", sàn còn giá cũ 160.000 ⇒ KHÔNG coi là người sửa: BINH xét như thường (ghi lại 144.000)',
+            x4.status === 'uncertain' && !kq4.results.some((r: any) => /sửa giá tay/.test(r.message || '')) && !kho4._keHoach.some(k => k.data?.nguoiSua)
+            && ghiMa('222').length === 2 && ghiMa('222')[1][2] === 144000, JSON.stringify({ st: x4.status, ghi: ghiTT(), r: kq4.results }))
+        bayGio = NOW; giaSongTheoGhi = false
+    }
+
+    // L6 (TT-04 một phần) — TikTok khoá giá vì khuyến mãi ⇒ 'skipped' + nghỉ mã đó 24 giờ (KHÔNG gọi API khuyến mãi nào)
+    {
+        datLai(); datTikTok(); goi.length = 0; giaSongTheoGhi = true; bayGio = NOW
+        dung('L6a. nhận lỗi khoá giá vì khuyến mãi: mã 12052038 / 12019045 / câu "price is locked"; lỗi khác thì không',
+            laLoiKhoaGiaKhuyenMai(new Error('TikTok prices/update: [12052038] Product price locked due to ongoing promotion'))
+            && laLoiKhoaGiaKhuyenMai(new Error('TikTok prices/update: [12019045] price is locked'))
+            && laLoiKhoaGiaKhuyenMai(new Error('TikTok prices/update: [1] The price is locked during the campaign'))
+            && !laLoiKhoaGiaKhuyenMai(new TypeError('fetch failed')) && !laLoiKhoaGiaKhuyenMai(new Error('TikTok prices/update: [120520380] x')))
+        const ctx = ctxL()
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
+        loiGiaMa['111'] = new Error('TikTok prices/update: [12052038] Product price locked due to ongoing promotion')
+        const kq = await chayChuKyTikTok(ctx)
+        const oc4 = kq.results.find((r: any) => r.action === 'price' && r.sku === 'OC4')
+        dung('L6b. updatePrice ném 12052038 ⇒ dòng OC4 "skipped" "Đang khuyến mãi — TikTok khoá giá", KHÔNG "failed"; BINH vẫn đổi',
+            oc4?.status === 'skipped' && /Đang khuyến mãi — TikTok khoá giá/.test(oc4?.message || '') && !kq.results.some((r: any) => r.status === 'failed')
+            && ghiMa('222').length === 1, JSON.stringify(kq.results))
+        dung('L6c. … không vào việc cần người', viecCanNguoi(kq.results).dong.length === 0, JSON.stringify(viecCanNguoi(kq.results)))
+        const st = await xayTrangThaiTikTok(ctx)
+        dung('L6d. trang: dòng OC4 hiện lý do để yên "promo"', st.products.find((p: any) => p.itemId === '111')?.hold?.reason === 'promo', JSON.stringify(st.products.find((p: any) => p.itemId === '111')))
+        bayGio = NOW + 16 * 3600_000    // đã sang NGÀY khác (khoá idempotency mới) — chỉ còn rào nghỉ 24 giờ chặn thử lại
+        const kq2 = await chayChuKyTikTok(ctx)
+        dung('L6e. 16 giờ sau (sang ngày mới): mã đó KHÔNG bị thử lại; MỘT dòng gộp "đang khuyến mãi"',
+            ghiMa('111').length === 1 && kq2.results.some((r: any) => r.status === 'skipped' && /^1 mã đang khuyến mãi — TikTok khoá giá/.test(r.message || '')), JSON.stringify(kq2.results))
+        delete loiGiaMa['111']
+        bayGio = NOW + 25 * 3600_000
+        await chayChuKyTikTok(ctx)
+        dung('L6f. sau 24 giờ ⇒ thử lại, ghi được', ghiMa('111').length === 2 && ghiMa('111')[1][2] === 132000, JSON.stringify(ghiTT()))
+        bayGio = NOW; giaSongTheoGhi = false
+    }
+
+    // L7 (TT-20) — làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT dòng 'token', không ghi gì lượt đó
+    {
+        datLai(); datTikTok(); goi.length = 0; daySo.length = 0; bayGio = NOW
+        // token đã hết hạn theo đồng hồ THẬT (moDichVuTikTok so Date.now()); làm mới hỏng; cấm mọi lời gọi mạng thật
+        kenh[0].tokenExpiresAt = new Date(Date.now() - 3600_000)
+        const lamMoiGoc = TikTokService.prototype.refreshAccessToken
+        const fetchGoc = globalThis.fetch
+        let soLamMoi = 0, soMang = 0
+        TikTokService.prototype.refreshAccessToken = async function () { soLamMoi++; throw new Error('TikTok refresh error: [36004004] refresh token is invalid') }
+        globalThis.fetch = (async () => { soMang++; throw new Error('bộ kiểm: cấm gọi mạng') }) as any
+        try {
+            const kho = khoBoNhoTikTok(() => bayGio)
+            const ctx = ctxL(kho, { taoTikTok: undefined })
+            await luuCauHinhTikTok(ctx, { executionMode: 'auto', policy: { automation: { reprice: true, syncStock: true } } })
+            const kq = await chayChuKyTikTok(ctx)
+            const tok = kq.results.filter((r: any) => r.action === 'token')
+            const viec = viecCanNguoi(kq.results)
+            dung('L7a. làm mới token hỏng ⇒ đúng MỘT dòng action "token": cần uỷ quyền lại gian, ĐƯỜNG BẤM «Cấp lại quyền»',
+                soLamMoi === 1 && tok.length === 1 && /^Cần uỷ quyền lại gian TikTok "Kengi TikTok" — Đơn Hàng Online → nút «Kênh bán hàng» → nút «Cấp lại quyền»/.test(tok[0].message),
+                JSON.stringify(kq.results))
+            dung('L7b. … 0 lời gọi ghi (0 lời gọi mạng), không đẩy tồn, không lập kế hoạch giá',
+                soMang === 0 && daySo.length === 0 && kho._keHoach.length === 0 && ghiTT().length === 0, JSON.stringify({ soMang, daySo, kh: kho._keHoach.length }))
+            dung('L7c. … viecCanNguoi có ĐÚNG mục token (giữ đường bấm dù cắt 180 ký tự)',
+                viec.dong.length === 1 && /uỷ quyền lại/.test(viec.dong[0]) && /«Cấp lại quyền»/.test(viec.dong[0]), JSON.stringify(viec))
+            const kh = await taoKeHoachGiaTikTok(ctxL(kho), { itemId: '111', price: 130000 })   // lập lúc token còn tốt (TikTok giả)
+            const mang0 = soMang
+            const x = await thucThiTikTok(ctxL(kho, { taoTikTok: undefined }), kh.id)
+            dung('L7d. người bấm thực thi khi làm mới token hỏng ⇒ "failed" + câu uỷ quyền lại, 0 lời gọi mạng',
+                x.status === 'failed' && /^Cần uỷ quyền lại gian TikTok "Kengi TikTok"/.test(x.result?.message || '') && x.result?.loiToken === true && soMang === mang0, JSON.stringify(x.result))
+            const kn = await kiemKetNoiTikTok(ctxL(kho, { taoTikTok: undefined }))
+            dung('L7e. kiểm kết nối: bước đầu "Làm mới token" HỎNG kèm đường uỷ quyền lại; bước Token API không báo đạt',
+                kn.buoc[0]?.ten === 'Làm mới token' && kn.buoc[0].ok === false && /Cấp lại quyền/.test(kn.buoc[0].chiTiet)
+                && kn.buoc.find((b: any) => b.ten === 'Token API')?.ok === false, JSON.stringify(kn.buoc))
+        } finally {
+            TikTokService.prototype.refreshAccessToken = lamMoiGoc
+            globalThis.fetch = fetchGoc
+        }
+
+        datLai(); datTikTok(); goi.length = 0
+        loiGia = new Error('TikTok prices/update: [105005] Access token is expired')
+        const c2 = ctxL()
+        await luuCauHinhTikTok(c2, { executionMode: 'auto' })
+        const kq2 = await chayChuKyTikTok(c2)
+        loiGia = null
+        dung('L7f. TikTok trả 105005 lúc GHI ⇒ MỘT dòng "token", dừng ghi cả lượt (1 lời gọi đổi giá, không dòng giá "failed")',
+            ghiTT().length === 1 && kq2.results.filter((r: any) => r.action === 'token').length === 1
+            && !kq2.results.some((r: any) => r.action === 'price' && r.status === 'failed'), JSON.stringify(kq2.results))
+        datLai(); datTikTok(); goi.length = 0
+        chiTiet['111'] = new Error('TikTok getProduct: [106011] invalid access_token')
+        const c3 = ctxL()
+        await luuCauHinhTikTok(c3, { executionMode: 'auto' })
+        const kq3 = await chayChuKyTikTok(c3)
+        dung('L7g. TikTok trả 106011 lúc ĐỌC giá sống ⇒ MỘT dòng "token", 0 lời gọi ghi', ghiTT().length === 0 && kq3.results.filter((r: any) => r.action === 'token').length === 1, JSON.stringify(kq3.results))
+        dung('L7h. nhận mã token: 105005 / 106011 / 106001; mã khác thì không',
+            ['[105005] x', '[106011] x', '[106001] x'].every(m => laLoiTokenTikTok(new Error(m))) && !laLoiTokenTikTok(new Error('[1050050] x')) && !laLoiTokenTikTok(new Error('[36009004] x')))
+        // đẩy tồn (lần ghi ĐẦU của lượt) gặp 105005 ⇒ dòng token, không đổi giá lượt này
+        datLai(); datTikTok(); goi.length = 0
+        const dayTonToken = async (_p: any, _c: string, o: { dryRun?: boolean }) => o.dryRun
+            ? { ok: true, data: { seDay: 3, seBoQua: 0 } }
+            : { ok: true, data: { pushed: 0, skipped: 0, failed: 3, errors: ['OC4: TikTok inventory/update: [105005] Access token is expired'] } }
+        const c4 = ctxL(undefined, { dayTon: dayTonToken })
+        await luuCauHinhTikTok(c4, { executionMode: 'auto', policy: { automation: { reprice: true, syncStock: true } } })
+        const kq4 = await chayChuKyTikTok(c4)
+        dung('L7i. đẩy tồn gặp 105005 ⇒ MỘT dòng "token", KHÔNG đổi giá lượt này (0 lời gọi đổi giá, một dòng giá "skipped")',
+            ghiTT().length === 0 && kq4.results.filter((r: any) => r.action === 'token').length === 1
+            && dongGia(kq4).length === 1 && dongGia(kq4)[0].status === 'skipped' && /token TikTok của gian cần uỷ quyền lại/.test(dongGia(kq4)[0].message), JSON.stringify(kq4.results))
+        datLai()
+    }
+
     // ─── 9. Nối dây (soát mã nguồn) ─────────────────────────────────────────────
     {
         const goc = path.join(__dirname, '..', 'src')
@@ -456,6 +849,11 @@ async function main() {
         dung('9d. route chặn theo tiện ích tiktok_pilot', /lyDoChanPilot\(req\.user\?\.storeCode, TIEN_ICH_TIKTOK_PILOT\)/.test(rt))
         dung('9e. mọi thao tác ghi đánh dấu ghi: true', ['cycle', 'execute', 'price', 'cancel', 'config'].every(v => new RegExp(`(^|\\s|')${v}'?: \\{\\s*ghi: true`, 'm').test(rt)))
         dung('9f. tiện ích chỉ-quản-trị có tiktok_pilot', /TIEN_ICH_CHI_QUAN_TRI[^\n]*TIEN_ICH_TIKTOK_PILOT\]/.test(doc('lib/tienIchCuaHang.ts')))
+        const oo = doc('routes/onlineOrders.ts')
+        dung('9g. nút Đồng bộ (Đơn online) lấy ngành bằng hàm chung boSungNganhTikTok — một mã lỗi không còn dừng cả lượt (09/11/2026)',
+            /boSungNganhTikTok\(prisma, channel\.id, tkService/.test(oo) && !/break \/\/ rate-limit\/token lỗi/.test(oo))
+        dung('9h. hướng dẫn nói thật: Pilot CHƯA biết khuyến mãi SẮP chạy — tắt Tự động đổi giá trước đợt lớn (09/11/2026)',
+            /TikTok Pilot CHƯA biết khuyến mãi SẮP chạy — nên tắt Tự động đổi giá/.test(doc('lib/tiktokPilot.ts')))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

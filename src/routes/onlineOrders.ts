@@ -4038,30 +4038,18 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             // ── TikTok: enrich mã ngành hàng (nền, sau khi trả response) ──────────
             // products/search KHÔNG trả category → đọc từ product detail, CHỈ cho SP
             // còn thiếu, throttle 250ms + cap 80 SP/lần sync để không đụng rate-limit.
+            // 09/11/2026: dùng chung hàm với chu kỳ TikTok Pilot — một mã lỗi thì ghi lại rồi đi tiếp
+            // (trước: mã lỗi đầu tiên dừng cả lượt); lỗi token / 3 lỗi liền mới dừng, lần sync sau chạy tiếp.
             if (channel.platform === 'tiktok' && service instanceof TikTokService) {
                 const tkService = service as TikTokService
                 ;(async () => {
                     try {
-                        const missing = await prisma.onlineProduct.findMany({
-                            where: { channelId: channel.id, platform: 'tiktok', categoryId: null },
-                            select: { id: true, platformProductId: true },
-                            take: 80,
-                        })
-                        if (!missing.length) return
-                        let done = 0
-                        for (const m of missing) {
-                            try {
-                                const cat = await tkService.fetchProductCategory(m.platformProductId)
-                                if (cat) {
-                                    await prisma.onlineProduct.update({ where: { id: m.id }, data: cat })
-                                    done++
-                                }
-                            } catch {
-                                break // rate-limit/token lỗi → dừng, lần sync sau chạy tiếp
-                            }
-                            await new Promise(r => setTimeout(r, 250))
-                        }
-                        console.log(`[Sync] TikTok category enriched: ${done}/${missing.length}`)
+                        const { boSungNganhTikTok } = await import('../lib/tiktokPilot')
+                        const r = await boSungNganhTikTok(prisma, channel.id, tkService, { toiDa: 80, nghiMs: 250 })
+                        if (!r.thieu) return
+                        console.log(`[Sync] TikTok category enriched: ${r.daCo}/${r.thieu}` +
+                            `${r.loi.length ? ` — ${r.loi.length} mã lỗi (${r.loi.slice(0, 3).join('; ')})` : ''}` +
+                            `${r.dung ? ` — dừng giữa chừng (${r.dung}), lần sync sau chạy tiếp` : ''}`)
                     } catch (enrichErr: any) {
                         console.error('[Sync] TikTok category enrich failed:', enrichErr.message)
                     }
