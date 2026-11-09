@@ -8,13 +8,13 @@ import { validate } from '../middleware/validate'
 import { CreateEmployeeSchema, UpdateEmployeeSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
+import { CHON_NHAN_VIEN_AN_TOAN } from '../lib/nhanVienAnToan'
 
 const router = Router()
 
-const safeUser = (u: any) => {
-    const { password, ...rest } = u
-    return rest
-}
+/* Mọi đường trả nhân viên ra ngoài đều `select: CHON_NHAN_VIEN_AN_TOAN` (danh sách TRẮNG — 09/11/2026).
+ * Trước đó các route dưới đây trả nguyên dòng User chỉ bỏ `password` ⇒ lộ twoFactorSecret (hạt TOTP) và
+ * trustedDevices (deviceId bỏ qua 2FA) cho ai có quyền employees.view. Lý do đầy đủ: lib/nhanVienAnToan.ts. */
 
 const DEPARTMENT_ROLES: Record<string, string[]> = {
     office: ['admin', 'manager', 'accountant'],
@@ -69,7 +69,9 @@ router.get('/stats', authMiddleware, requirePermission('employees.view'), async 
 router.get('/', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
-        const cacheKey = `${schema}:employees:${JSON.stringify(req.query)}`
+        // 'v2' (09/11/2026): khoá cache mới để bản lưu cũ — còn mang cột bí mật — không bao giờ được trả lại.
+        // Mẫu xoá `${schema}:employees:*` vẫn khớp.
+        const cacheKey = `${schema}:employees:v2:${JSON.stringify(req.query)}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json(cached)
         const prisma = req.storePrisma!
@@ -90,8 +92,8 @@ router.get('/', authMiddleware, requirePermission('employees.view'), async (req:
                 { email: { contains: q, mode: 'insensitive' } },
             ]
         }
-        const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
-        const _response = { success: true, data: users.map(u => { const { password, ...rest } = u; return rest }) }
+        const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, select: CHON_NHAN_VIEN_AN_TOAN })
+        const _response = { success: true, data: users }
         await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
@@ -104,11 +106,10 @@ router.get('/', authMiddleware, requirePermission('employees.view'), async (req:
 router.get('/:id', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const user = await prisma.user.findFirst({ where: { id: String(req.params.id) }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
+        const user = await prisma.user.findFirst({ where: { id: String(req.params.id) }, select: CHON_NHAN_VIEN_AN_TOAN })
         if (!user) return res.status(404).json({ success: false, error: 'Not found' })
         if (!canAccessBranch(req, user.branchId)) return res.status(404).json({ success: false, error: 'Not found' })
-        const { password, ...rest } = user
-        res.json({ success: true, data: rest })
+        res.json({ success: true, data: user })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
@@ -149,9 +150,10 @@ router.post('/', authMiddleware, requirePermission('employees.create'), validate
                 hireDate: new Date(), employeeStatus: 'active',
                 notes: notes?.trim() || null, branchId: effectiveBranchId || null,
             },
+            select: CHON_NHAN_VIEN_AN_TOAN,
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:employees:*`).catch(() => { })
-        res.status(201).json({ success: true, data: safeUser(user) })
+        res.status(201).json({ success: true, data: user })
     } catch (err) {
         console.error('Create employee error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -198,9 +200,8 @@ router.put('/:id', authMiddleware, requirePermission('employees.edit'), validate
         if (employeeStatus !== undefined) data.employeeStatus = employeeStatus
         if (newBranchId !== undefined) data.branchId = newBranchId || null
 
-        const user = await prisma.user.update({ where: { id: empId }, data, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
-        const { password: _, ...rest } = user
-        res.json({ success: true, data: rest })
+        const user = await prisma.user.update({ where: { id: empId }, data, select: CHON_NHAN_VIEN_AN_TOAN })
+        res.json({ success: true, data: user })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
@@ -240,8 +241,9 @@ router.put('/:id/toggle-status', authMiddleware, requireRole('admin', 'manager')
         const updated = await prisma.user.update({
             where: { id: String(req.params.id) },
             data: { employeeStatus: user.employeeStatus === 'active' ? 'inactive' : 'active' },
+            select: CHON_NHAN_VIEN_AN_TOAN,
         })
-        res.json({ success: true, data: safeUser(updated) })
+        res.json({ success: true, data: updated })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }

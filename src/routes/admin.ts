@@ -23,6 +23,7 @@ import { SQL_TAO_BANG_FB_PILOT } from '../lib/facebookPilot'
 import { SQL_TAO_BANG_ADS_PILOT } from '../lib/facebookAdsPilot'
 import { SQL_TAO_BANG_TIKTOK_PILOT } from '../lib/tiktokPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
+import { CHON_NHAN_VIEN_AN_TOAN } from '../lib/nhanVienAnToan'
 
 const router = Router()
 
@@ -412,7 +413,9 @@ router.get('/users', async (_req: Request, res: Response) => {
         await mapWithConcurrency(stores, async (store) => {
             try {
                 const sp = getStorePrisma(store.schema)
-                const users = await sp.user.findMany({ include: { branch: { select: { name: true } } } })
+                // Danh sách TRẮNG (09/11/2026): trước đây `...u` của nguyên dòng User ⇒ trang admin nhận cả hash
+                // mật khẩu + hạt TOTP + deviceId tin cậy của MỌI nhân viên MỌI cửa hàng. Xem lib/nhanVienAnToan.ts.
+                const users = await sp.user.findMany({ select: CHON_NHAN_VIEN_AN_TOAN })
                 users.forEach(u => allUsers.push({
                     ...u, storeName: store.name, storeCode: store.code, _storeSchema: store.schema,
                     branchName: (u as any).branch?.name || null
