@@ -11,7 +11,7 @@ import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG
 import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
-import { khoaDoiDuocToken, lyDoChanDucPhien } from '../lib/phamViKhoaApi'
+import { khoaDoiDuocToken, lyDoChanDucPhien, lyDoChanDoiThongTinDangNhap } from '../lib/phamViKhoaApi'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -1048,15 +1048,56 @@ router.post('/verify-password', authMiddleware, async (req: AuthRequest, res: Re
     }
 })
 
-// ─── PUT /api/auth/update-email ──────────────────────────────────────────────
+// ─── PUT /api/auth/update-email — đổi email đăng nhập của CHÍNH MÌNH (cần mật khẩu) ─
+/* Email là chìa khoá tài khoản ở ba chỗ: ô đăng nhập; "Quên mật khẩu" (send-otp / verify-otp tra người dùng theo email, OTP
+ * gửi về email đó); đăng nhập Google (danh tính = email trong token Google, KHÔNG so mật khẩu). Cổng OTP 2FA ở /login cũng
+ * gửi mã về user.email. Trước 09/11/2026 tuyến này ghi thẳng newEmail, không hỏi gì ⇒ ai cầm phiên đăng nhập, hay token đổi
+ * từ khoá API write/admin, đổi email chủ tài khoản sang hộp thư / gmail của mình rồi đăng nhập Google hoặc Quên mật khẩu là
+ * chiếm hẳn tài khoản, vượt cả 2FA, và sống tiếp sau khi thu hồi khoá. Nay:
+ *   1. request đi bằng khoá API (X-API-Key hoặc JWT đổi từ khoá) ⇒ 403 TRƯỚC mọi truy vấn (lyDoChanDoiThongTinDangNhap);
+ *   2. email mới phải đúng dạng (cùng luật với /signup);
+ *   3. đòi mật khẩu hiện tại, câu lỗi y hệt DELETE /disable-2fa;
+ *   4. không trùng email người khác trong cửa hàng — so KHÔNG phân biệt hoa thường (PUT /employees/:id ghi email nguyên chữ
+ *      hoa) và chỉ sau khi mật khẩu đúng, để phiên không mật khẩu không dò được email nào đã có tài khoản.
+ * Tài khoản đăng ký bằng Google mang mật khẩu tự sinh (/signup) ⇒ phải đặt mật khẩu qua "Quên mật khẩu" ở trang đăng nhập
+ * trước (OTP về email hiện tại). Soát ở scripts/check-doi-email.ts. */
+const EMAIL_HOP_LE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const LOI_EMAIL_TRUNG = 'Email này đã có tài khoản khác trong cửa hàng'
 router.put('/update-email', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const lyDoKhoa = lyDoChanDoiThongTinDangNhap((req as any).viaApiKey, req.user, 'đổi email phải đăng nhập kengi.vn bằng tài khoản và nhập mật khẩu')
+        if (lyDoKhoa) { res.status(403).json({ success: false, error: lyDoKhoa }); return }
+
         const storePrisma = req.storePrisma!
-        const { newEmail } = req.body
-        if (!newEmail?.trim()) { res.status(400).json({ success: false, error: 'Email mới là bắt buộc' }); return }
-        await storePrisma.user.update({ where: { id: req.user!.userId }, data: { email: newEmail.trim().toLowerCase() } })
-        res.json({ success: true, message: 'Cập nhật email thành công' })
-    } catch (err) {
+        const userId = req.user!.userId
+        const { newEmail, password } = req.body || {}
+        const email = typeof newEmail === 'string' ? newEmail.trim().toLowerCase() : ''
+        if (!email) { res.status(400).json({ success: false, error: 'Email mới là bắt buộc' }); return }
+        if (email.length > 254 || !EMAIL_HOP_LE.test(email)) { res.status(400).json({ success: false, error: 'Email không hợp lệ' }); return }
+        if (!password || typeof password !== 'string') { res.status(400).json({ success: false, error: 'Mật khẩu là bắt buộc' }); return }
+
+        const user = await storePrisma.user.findUnique({ where: { id: userId }, select: { email: true, password: true } })
+        if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
+
+        const valid = await bcrypt.compare(password, user.password)
+        if (!valid) { res.status(400).json({ success: false, error: 'Mật khẩu không đúng' }); return }
+
+        // So NGUYÊN VĂN: email cũ lưu chữ hoa (từ PUT /employees/:id) thì /login — tra email đã hạ chữ thường — không thấy;
+        // lưu lại bản chữ thường chính là chữa cho người ấy đăng nhập được bằng email.
+        if (email === user.email) {
+            res.json({ success: true, message: 'Email không đổi', data: { email } })
+            return
+        }
+        const trung = await storePrisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' }, NOT: { id: userId } },
+            select: { id: true },
+        })
+        if (trung) { res.status(409).json({ success: false, error: LOI_EMAIL_TRUNG }); return }
+
+        await storePrisma.user.update({ where: { id: userId }, data: { email } })
+        res.json({ success: true, message: 'Cập nhật email thành công', data: { email } })
+    } catch (err: any) {
+        if (err?.code === 'P2002') { res.status(409).json({ success: false, error: LOI_EMAIL_TRUNG }); return }   // hai người cùng giành một email
         console.error('Update email error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }

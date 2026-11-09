@@ -1,4 +1,4 @@
-// Phạm vi của API key theo scope — hàm THUẦN cho middleware/auth.ts, routes/auth.ts, livestream.ts (soát ở scripts/check-chatbot-san-pham.ts + check-pham-vi-khoa.ts).
+// Phạm vi của API key theo scope — hàm THUẦN cho middleware/auth.ts, routes/auth.ts, livestream.ts (soát ở scripts/check-chatbot-san-pham.ts + check-pham-vi-khoa.ts + check-doi-email.ts).
 // 20/10/2026: scope 'chatbot' = khoá nằm trong n8n của chatbot trả lời KHÁCH ⇒ CHỈ được gọi webhook trả lời + tra sản
 // phẩm / kênh. KHÔNG gồm /api/chatbot/shops (kho kiến thức — thứ chatbot nói với khách): lộ khoá cũng không sửa được.
 const DUONG_KHOA_CHATBOT = /^\/api\/chatbot\/(webhook|san-pham|kenh)\/?$/
@@ -51,9 +51,27 @@ export function lyDoChanJwtKhoa(payload: unknown, method: unknown, url: unknown)
  * gọi hai đường này bằng khoá — switch-branch 0 lượt, session-token chỉ trình duyệt. Trả lý do chặn hoặc null = cho qua.
  */
 export function lyDoChanDucPhien(viaApiKey: unknown, payload: unknown, goiY: string): string | null {
-    const quaKhoa = !!viaApiKey || (!!payload && typeof payload === 'object' && 'apiKeyScopes' in payload)
-    if (!quaKhoa) return null
+    if (!diBangKhoaApi(viaApiKey, payload)) return null
     return `Khoá API không đúc được phiên đăng nhập mới (phiên ấy không mang phạm vi của khoá và vẫn sống sau khi thu hồi khoá) — ${goiY}`
+}
+
+/** Request này đi bằng khoá API? Cờ viaApiKey (authMiddleware gắn cho CẢ X-API-Key lẫn JWT đổi từ khoá) HOẶC payload có claim
+ *  apiKeyScopes (chỗ tự jwt.verify, không qua authMiddleware). Một chỗ cho lyDoChanDucPhien + lyDoChanDoiThongTinDangNhap. */
+export function diBangKhoaApi(viaApiKey: unknown, payload: unknown): boolean {
+    return !!viaApiKey || (!!payload && typeof payload === 'object' && 'apiKeyScopes' in payload)
+}
+
+/**
+ * ĐỔI THÔNG TIN ĐĂNG NHẬP của tài khoản (email…) — chỉ người đăng nhập, KHÔNG cho API key (09/11/2026, PUT /auth/update-email).
+ * Email là chìa khoá khôi phục: "Quên mật khẩu" gửi OTP về email, đăng nhập Google lấy danh tính từ email trong token Google
+ * (không so mật khẩu), cổng OTP 2FA ở /login cũng gửi mã về email ⇒ đổi được email chủ tài khoản là chiếm hẳn tài khoản, vượt
+ * cả 2FA, và quyền ấy sống tiếp sau khi thu hồi khoá. Đòi mật khẩu ở tuyến chưa đủ: khoá API vốn đi KHÔNG qua 2FA, nên khoá lộ
+ * + mật khẩu lộ (dùng lại ở nơi khác) vẫn chiếm được tài khoản qua tuyến đổi email dù đăng nhập thẳng bị 2FA chặn.
+ * Log 30 ngày (đo 20/10): 0 lượt tới update-email. Trả lý do chặn hoặc null = cho qua.
+ */
+export function lyDoChanDoiThongTinDangNhap(viaApiKey: unknown, payload: unknown, goiY: string): string | null {
+    if (!diBangKhoaApi(viaApiKey, payload)) return null
+    return `Khoá API không đổi được thông tin đăng nhập của tài khoản (đổi email là chiếm được tài khoản qua "Quên mật khẩu" / đăng nhập Google) — ${goiY}`
 }
 
 /**
