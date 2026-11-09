@@ -1,8 +1,12 @@
 import { Router, Response } from 'express'
 import { authMiddleware, getBranchId, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { docGioCa, docGioRa, laLoiGio } from '../lib/chamCong'
 
 const router = Router()
+
+/** Danh sách chấm công cache 300 giây theo cửa hàng ⇒ MỌI lần ghi phải xoá, kẻo trang Chấm công hiện bản cũ 5 phút. */
+const xoaCache = (req: AuthRequest) => cacheDel(`${req.user?.storeSchema || 'default'}:attendance:*`).catch(() => { })
 
 // GET /api/attendance/stats
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -61,22 +65,22 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 })
 
-// POST /api/attendance — Check in
+// POST /api/attendance — Check in. Nhận thêm checkIn/checkOut (Chốt ca POS gửi đầu ca + lúc chốt) — lib/chamCong.ts.
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
-        const { userId, userName, role, date, note } = req.body
+        const { userId, userName, role, note } = req.body || {}
         if (!userId || !userName) return res.status(400).json({ success: false, error: 'userId and userName required' })
-        const checkDate = date ? new Date(date) : new Date()
-        const now = new Date()
+        const gio = docGioCa(req.body)
+        if (laLoiGio(gio)) return res.status(400).json({ success: false, error: gio.loi })
         const data = await prisma.attendance.create({
             data: {
                 branchId, userId, userName, role: role || null,
-                date: checkDate, checkIn: now, status: 'present', note: note || null,
+                date: gio.date, checkIn: gio.checkIn, checkOut: gio.checkOut, status: 'present', note: note || null,
             }
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:attendance:*`).catch(() => { })
+        xoaCache(req)
         res.status(201).json({ success: true, data })
     } catch (err) {
         console.error('Create attendance error:', err)
@@ -88,12 +92,16 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { checkOut, status, note } = req.body
+        const { status, note } = req.body || {}
+        // giờ ra hỏng ⇒ 400 (trước đây new Date('rác') lọt xuống Prisma ⇒ 500 "Internal server error")
+        const ra = docGioRa(req.body)
+        if (laLoiGio(ra)) return res.status(400).json({ success: false, error: ra.loi })
         const updateData: any = {}
-        if (checkOut) updateData.checkOut = new Date(checkOut)
+        if (ra) updateData.checkOut = ra
         if (status) updateData.status = status
         if (note !== undefined) updateData.note = note
         const data = await prisma.attendance.update({ where: { id: String(req.params.id) }, data: updateData })
+        xoaCache(req)
         res.json({ success: true, data })
     } catch (err) {
         console.error('Update attendance error:', err)
@@ -106,6 +114,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     try {
         const prisma = req.storePrisma!
         await prisma.attendance.delete({ where: { id: String(req.params.id) } })
+        xoaCache(req)
         res.json({ success: true })
     } catch (err) {
         console.error('Delete attendance error:', err)
