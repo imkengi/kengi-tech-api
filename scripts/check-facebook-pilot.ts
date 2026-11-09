@@ -27,6 +27,8 @@
  *     ngoài cửa sổ, chữ đã sửa trên Facebook, Xem trước. Hai lượt song song ⇒ một lệnh xoá; hạn mức ⇒ giữ, nhịp sau rút; token /
  *     không rõ kết cục ⇒ báo KHẨN, không đánh dấu "đã rút"; còn < 3 phút ⇒ không xoá. Nối dây: quetTuNgoai soát TRƯỚC chốt
  *     dangChay, theo tiện ích chứ không theo hasAiJobs, dò bằng registry.
+ * 14. (09/11/2026, FB-20) FacebookService THẬT trước thay đổi Graph đã có hiệu lực: identifyToken không gửi metadata=1, suy loại
+ *     token từ /me (USER token ⇒ 'user' qua lỗi "node type (User)"; token chết ném nguyên); Insights chỉ xin chỉ số còn sống.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -40,6 +42,7 @@ import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
 import { canNguoi } from '../src/lib/pilotBaoChuShop'
 import { reconcilePage } from '../src/cron/fanpageCron'
+import { FacebookService } from '../src/services/platforms/facebook'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { ok ? dat++ : loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -182,7 +185,8 @@ const ghiFb = () => goiFb.filter(g => g[0] !== 'get')
  *    tự gắn isTokenError như dịch vụ giả ở trên. Chỉ trả lời graph(-video).facebook.com — gọi đi đâu khác là ném. ── */
 type DapGraph = { status: number; body: any } | { nem: 'het_gio' | 'mang' } | { html: number }
 let dapGraph: (method: string, duong: string) => DapGraph = () => ({ status: 200, body: {} })
-const goiGraph: { method: string; duong: string; coHenGio: boolean }[] = []
+/** `tham` = tham số query của lời gọi (bỏ access_token) — 09/11/2026 mục 14 soát tham số gửi đi */
+const goiGraph: { method: string; duong: string; coHenGio: boolean; tham?: Record<string, string> }[] = []
 const fetchGoc = globalThis.fetch
 function batGraphGia() {
     globalThis.fetch = (async (input: any, init: any = {}) => {
@@ -190,7 +194,8 @@ function batGraphGia() {
         if (!/^graph(-video)?\.facebook\.com$/.test(url.hostname)) throw new Error(`bộ kiểm chặn lời gọi ra ngoài: ${url.hostname}`)
         const method = String(init.method || 'GET').toUpperCase()
         const duong = url.pathname.replace(/^\/v\d+\.\d+\//, '')
-        goiGraph.push({ method, duong, coHenGio: init.signal instanceof AbortSignal })
+        const tham = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'access_token'))
+        goiGraph.push({ method, duong, coHenGio: init.signal instanceof AbortSignal, tham })
         const d = dapGraph(method, duong)
         // AbortSignal.timeout hết giờ ⇒ fetch ném DOMException tên 'TimeoutError' (giả lập thẳng, khỏi chờ 90 giây thật)
         if ('nem' in d) throw d.nem === 'het_gio' ? new DOMException('The operation was aborted due to timeout', 'TimeoutError') : new TypeError('fetch failed')
@@ -911,6 +916,57 @@ async function main() {
             && (quetThan.match(/nhipSoatBaiHenFb\(/g) || []).length === 1)
         henFbBat = false
         bayGio = NOW
+    }
+
+    // ─── 14. FacebookService THẬT trước thay đổi Graph đã có hiệu lực (09/11/2026, FB-20) ───────────
+    //  metadata=1 thôi trả metadata ở MỌI phiên bản từ 19/05/2026 (changelog v25.0); page_impressions_unique bị bỏ ở mọi phiên bản
+    //  từ khi v26.0 ra 29/07/2026, page_engaged_users không còn trong tham chiếu Insights.
+    {
+        batGraphGia()
+        try {
+            const svc = new FacebookService('TOKEN-GIA-14')
+            dapGraph = (m, d) => (m === 'GET' && d === 'me' ? { status: 200, body: { id: 'PG1', name: 'Kengi Fanpage', category: 'Cửa hàng', fan_count: 120 } } : graphOn(m, d))
+            goiGraph.length = 0
+            const a = await svc.identifyToken()
+            dung('14a. page token: /me đọc được category + fan_count ⇒ loại page, KHÔNG gửi metadata=1 (Facebook đã bỏ)',
+                a.type === 'page' && a.id === 'PG1' && a.fanCount === 120 && goiGraph.length === 1 && !('metadata' in (goiGraph[0].tham || {})),
+                `${JSON.stringify(a)} · ${JSON.stringify(goiGraph.map(g => g.tham))}`)
+
+            let lan = 0
+            dapGraph = (m, d) => {
+                if (!(m === 'GET' && d === 'me')) return graphOn(m, d)
+                lan++
+                return lan === 1 ? loiGraph(400, 100, '(#100) Tried accessing nonexisting field (category) on node type (User)') : { status: 200, body: { id: 'U77', name: 'Chủ shop' } }
+            }
+            goiGraph.length = 0
+            const b = await svc.identifyToken()
+            dung('14b. USER token: lỗi #100 "node type (User)" ⇒ đọc lại id/name, trả loại user (người gọi báo "đây là USER token")',
+                b.type === 'user' && b.id === 'U77' && lan === 2 && goiGraph[1]?.tham?.fields === 'id,name', `${JSON.stringify(b)} · lần ${lan}`)
+
+            dapGraph = (m, d) => (m === 'GET' && d === 'me' ? loiGraph(400, 190, 'Error validating access token: Session has expired') : graphOn(m, d))
+            const c = await nem(() => svc.identifyToken())
+            dung('14c. token chết (#190) ⇒ ném nguyên lỗi token như cũ, không đoán loại', !!c && (c as any).isTokenError === true, String(c?.message || c))
+
+            // lần đọc lại (id,name) mà có thì trả được — bản sai "gán bừa loại user" sẽ lộ ra ở đây thay vì ném lại cùng lỗi
+            let lan2 = 0
+            dapGraph = (m, d) => {
+                if (!(m === 'GET' && d === 'me')) return graphOn(m, d)
+                lan2++
+                return lan2 === 1 ? loiGraph(400, 100, '(#100) Unknown fields: fan_count.') : { status: 200, body: { id: 'PG1', name: 'Kengi Fanpage' } }
+            }
+            const c2 = await nem(() => svc.identifyToken())
+            dung('14d. #100 KHÔNG nói "node type" ⇒ ném nguyên, không gán bừa loại, không đọc lại', !!c2 && /Unknown fields/.test(String(c2?.message)) && lan2 === 1, `${String(c2?.message || c2)} · lần ${lan2}`)
+
+            dapGraph = graphOn
+            goiGraph.length = 0
+            await svc.getPageInsights('PG1')
+            const met = String(goiGraph[0]?.tham?.metric || '')
+            dung('14e. Insights mặc định chỉ xin chỉ số còn sống (page_total_media_view_unique, page_post_engagements)',
+                met === 'page_total_media_view_unique,page_post_engagements' && !/page_impressions_unique|page_engaged_users/.test(met), met)
+        } finally {
+            traFetch()
+            dapGraph = graphOn
+        }
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

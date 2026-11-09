@@ -30,7 +30,7 @@ import {
     khoBoNhoAds, chuanHoaChinhSachAds, chuanAct, laiGop, giaTrongBai, docSoLieu, tokenChuaDuocPage, laLoiToken, laLoiQuyen,
     noiTokenAds, luuCauHinhAds, timBaiDeDay, taoKeHoachDay, taoKeHoachDung, taoKeHoachChayLai, taoKeHoachNganSach, thucThiAds, huyKeHoachAds,
     chayChuKyAds, chayTheoLichAds, xayTrangThaiAds, kiemKetNoiAds, docCauHinhAds, lyDoDung, nganSachTang, laTangChi,
-    CHINH_SACH_ADS_MAC_DINH, NGAN_SACH_TOI_THIEU, type NgCanhAds, type DichVuAds,
+    CHINH_SACH_ADS_MAC_DINH, NGAN_SACH_TOI_THIEU, TUONG_TAC_TOI_DA, type NgCanhAds, type DichVuAds,
 } from '../src/lib/facebookAdsPilot'
 import { khoBoNhoFb, dauNgayVN } from '../src/lib/facebookPilot'
 import { thamSoChienDichDayBai, thamSoNhomDayBai, GRAPH_ADS } from '../src/services/platforms/facebook'
@@ -151,7 +151,7 @@ function fbDatLai() {
         insights: new Map<string, { maximum?: any; today?: any }>(),
         posts: new Map<string, any>([['PG1_101', { is_published: true }], ['PG1_102', { is_published: true }], ['PG1_201', { is_published: true }], ['PG1_104', { is_published: true }]]),
         n: 0,
-        /** tiêm lỗi: buoc = đuôi đường gọi (vd 'adsets', 'ACTIVE', 'ids', 'insights', 'act'); lan = số lần còn ném */
+        /** tiêm lỗi: buoc = đuôi đường gọi (vd 'adsets', 'ACTIVE', 'cd', 'cd:<mã>', 'bai', 'insights', 'act'); lan = số lần còn ném */
         tiem: [] as { buoc: string; loi: any; lan: number }[],
     }
 }
@@ -175,17 +175,17 @@ const taoFb = (token: string): DichVuAds => ({
             const ids: string[] = q.filtering?.[0]?.value || []
             return { data: ids.filter(id => fb.insights.get(id)?.[q.date_preset]).map(id => ({ campaign_id: id, ...fb.insights.get(id)[q.date_preset] })) }
         }
-        if (p === '' && q.ids) {
-            const ids = String(q.ids).split(',')
-            if (/reactions/.test(String(q.fields))) { const r: any = {}; for (const id of ids) r[id] = { reactions: { summary: { total_count: id === 'PG1_201' ? 50 : 1 } }, comments: { summary: { total_count: 0 } } }; return r }
-            nemNeuTiem('ids')
-            const r: any = {}
-            for (const id of ids) { const c = fb.campaigns.get(id); if (!c) throw loiGraph(100, `Object with ID '${id}' does not exist`, 33); r[id] = cdRa(c) }
-            return r
-        }
+        // Facebook trả LỖI cho mọi lời gọi gốc `GET /?ids=` ở mọi phiên bản từ 27/10/2026 (changelog Graph v26.0) — giả y vậy, để mã
+        // nào còn dựa vào nó là đỏ ở đây chứ không lặng lẽ mù trên prod (09/11/2026)
+        if (p === '') throw loiGraph(12, '(#12) Root requests using GET /?ids= are deprecated — use per-object requests or supported batching')
         // 'cd' = mọi lần đọc lẻ; 'cd:<mã>' = chỉ chiến dịch đó (09/11/2026: một chiến dịch lỗi, các cái khác đọc được)
         if (fb.campaigns.has(p)) { nemNeuTiem('cd'); nemNeuTiem(`cd:${p}`); return cdRa(fb.campaigns.get(p)) }
-        if (p.includes('_')) { const b = fb.posts.get(p); if (!b) throw loiGraph(100, 'post does not exist', 33); return { id: p, ...b } }
+        if (p.includes('_')) {
+            const b = fb.posts.get(p); if (!b) throw loiGraph(100, 'post does not exist', 33)
+            // tương tác tự nhiên đọc lẻ từng bài; 'bai' = tiêm lỗi cho các lần đọc này
+            if (/reactions/.test(String(q.fields))) { nemNeuTiem('bai'); return { id: p, reactions: { summary: { total_count: p === 'PG1_201' ? 50 : 1 } }, comments: { summary: { total_count: p === 'PG1_102' ? 4 : 0 } }, shares: { count: 2 } } }
+            return { id: p, ...b }
+        }
         throw loiGraph(100, `Unsupported get request ${p}`, 33)
     },
     async post(p: string, q: any = {}) {
@@ -332,6 +332,24 @@ async function main() {
         dung('4e. bài Kengi khác nối mã theo dòng đầu = tên hàng', b('PG1_201')?.productId === 'p6' && b('PG1_201')?.source === 'ten' && b('PG1_201')?.priceInPost === 45000)
         dung('4f. xếp: đủ điều kiện trước (bán chạy trước), rồi chỉ-chặn-máy, rồi bị chặn', ma.slice(0, 4).join(',') === 'PG1_101,PG1_201,PG1_102,PG1_104', ma.join(','))
         dung('4g. tìm bài không gọi ghi Facebook', ghi().length === 0)
+
+        // 09/11/2026: tương tác tự nhiên đọc LẺ từng bài — lời gọi gộp gốc ?ids= cũ bị Facebook bỏ từ 27/10/2026 (Graph giả trả #12)
+        goi = []
+        const tt = (await timBaiDeDay(ctx, cfg, pages[0], NOW, { tuongTac: true })).list
+        const bt = (id: string) => tt.find(x => x.postId === id)
+        const docBai = goi.filter((g: any) => g.m === 'get' && /^PG1_/.test(g.p) && /reactions/.test(String(g.q?.fields)))
+        dung('4h. tương tác đọc lẻ từng bài, không gọi gốc ?ids=, không ghi gì: PG1_201 50 cảm xúc, PG1_102 4 bình luận',
+            bt('PG1_201')?.engagement?.reactions === 50 && bt('PG1_102')?.engagement?.comments === 4 && bt('PG1_101')?.engagement?.shares === 2
+            && docBai.length > 0 && docBai.length <= TUONG_TAC_TOI_DA && !goi.some((g: any) => g.p === '') && ghi().length === 0,
+            `${JSON.stringify(tt.map(x => [x.postId, x.engagement]))} · ${docBai.length} lần đọc`)
+        dung('4i. …và xếp hạng giữ nguyên thứ tự 4f (tương tác chỉ là tiêu chí phụ sau bán chạy)', tt.slice(0, 4).map(x => x.postId).join(',') === 'PG1_101,PG1_201,PG1_102,PG1_104', tt.map(x => x.postId).join(','))
+        goi = []
+        tiem('bai', loiGraph(17, '(#17) User request limit reached'), 50)
+        const tt2 = (await timBaiDeDay(ctx, cfg, pages[0], NOW, { tuongTac: true })).list
+        const docBai2 = goi.filter((g: any) => g.m === 'get' && /^PG1_/.test(g.p) && /reactions/.test(String(g.q?.fields)))
+        dung('4j. đọc tương tác gặp hạn mức (#17) ⇒ thôi đọc sau đợt đầu (≤ 5 lời gọi), danh sách vẫn trả đủ, tương tác để trống',
+            tt2.length === tt.length && tt2.every(x => x.engagement === null) && docBai2.length >= 1 && docBai2.length <= 5, `${docBai2.length} lần đọc · ${tt2.length}/${tt.length}`)
+        fb.tiem = []
     }
 
     // ─── 5. Kế hoạch → thực thi ─────────────────────────────────────────────────
@@ -397,7 +415,6 @@ async function main() {
         const r2 = await thucThiAds(ctx, p2.id)
         dung('6b. đủ số quảng cáo chạy cùng lúc ⇒ không bật thêm', r2.status === 'failed' && /tối đa 1 cùng lúc/.test(r2.result?.message) && ghi().length === 0, r2.result?.message)
         await luuCauHinhAds(ctx, { policy: { maxActiveAds: 3 } })
-        tiem('ids', loiGraph(1, 'Lỗi Facebook tạm thời'), 1)
         tiem('cd', loiGraph(1, 'Lỗi Facebook tạm thời'), 1)
         const p3 = await taoKeHoachDay(ctx, { postId: 'PG1_201', dailyBudget: 50000, idempotencyKey: 'web:6c' })
         const r3 = await thucThiAds(ctx, p3.id)
@@ -749,8 +766,7 @@ async function main() {
         hang.find(h => h.id === 'p6')!.stock = 0
         fb.insights.set(C, { maximum: { spend: '50000', actions: [{ action_type: 'comment', value: '6' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '4' }] } })
         await luuCauHinhAds(ctx, { policy: { automation: { boostNewPosts: true } } })
-        // lời gọi gộp hỏng #17 ⇒ đọc lẻ; riêng chiến dịch A hỏng #17 suốt lượt
-        tiem('ids', loiGraph(17, '(#17) User request limit reached'), 50)
+        // riêng chiến dịch A đọc hỏng #17 suốt lượt (các chiến dịch khác đọc lẻ được)
         tiem(`cd:${A}`, loiGraph(17, '(#17) User request limit reached'), 50)
         const soChienDich = fb.campaigns.size
         goi = []
@@ -780,14 +796,13 @@ async function main() {
             nsA.status === 'failed' && /không đổi ngân sách/.test(nsA.result?.message || '') && dungA.status === 'succeeded' && fb.campaigns.get(A).status === 'PAUSED',
             `${nsA.status} ${nsA.result?.message} · ${dungA.status}`)
 
-        // lời gọi gộp lỗi QUYỀN (#200) mà đọc lẻ được ⇒ chu kỳ chạy như thường
+        // hết lỗi ⇒ chu kỳ chạy như thường, và KHÔNG còn lời gọi gộp gốc ?ids= nào (Facebook bỏ từ 27/10/2026 — Graph giả trả lỗi #12)
         fb.tiem = []
-        tiem('ids', loiGraph(200, '(#200) Ad account owner has NOT grant ads_management or ads_read permission'), 50)
         goi = []
         const kq2 = await chuKy(ctx)
-        dung('13h. gộp lỗi quyền, đọc lẻ được ⇒ chạy như thường: chạy lại KHOAN10 (có hàng lại), tăng ngân sách OC4, không dòng "không đọc được"',
+        dung('13h. đọc lẻ được ⇒ chạy như thường: chạy lại KHOAN10 (có hàng lại), tăng ngân sách OC4, không dòng "không đọc được", không gọi gốc ?ids=',
             fb.campaigns.get(D).status === 'ACTIVE' && fb.campaigns.get(C).adsets[0].daily_budget > 40000
-            && !kq2.results.some((x: any) => x.action === 'ads' && x.status === 'failed'), JSON.stringify(kq2.results))
+            && !kq2.results.some((x: any) => x.action === 'ads' && x.status === 'failed') && !goi.some((g: any) => g.p === ''), JSON.stringify(kq2.results))
         fb.tiem = []
     }
 

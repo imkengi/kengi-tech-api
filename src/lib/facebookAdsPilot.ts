@@ -30,7 +30,7 @@
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
-import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai, laLoiTokenFb, laLoiQuyenFb, quyenThieuFb } from '../services/platforms/facebook'
+import { FacebookService, GRAPH_ADS, thamSoChienDichDayBai, thamSoNhomDayBai, laLoiTokenFb, laLoiQuyenFb, quyenThieuFb, isRateLimitError, docLeGraph } from '../services/platforms/facebook'
 import { baoChuShop } from './pilotBaoChuShop'
 import { docCauHinhFb, khoSqlFb, dauNgayVN, ngayGioVN, vnd, type KhoFbPilot } from './facebookPilot'
 
@@ -637,30 +637,21 @@ export function lyDoNguoiDaBo(ds: KeHoachAds[]): string[] {
     return ra
 }
 const COT_CHIEN_DICH = 'id,name,status,effective_status,adsets{id,daily_budget,end_time,status,effective_status}'
+/** Số bài tối đa đọc tương tác tự nhiên mỗi lần tìm bài để đẩy (timBaiDeDay) — mỗi bài một lời gọi Graph. */
+export const TUONG_TAC_TOI_DA = 20
 
 /**
- * Trạng thái sống của các chiến dịch theo mã. Gọi gộp ?ids=; hỏng (hoặc sót mã) thì đọc TỪNG cái — một mã lạ không làm mù cả
- * bảng. 09/11/2026: lỗi QUYỀN của lời gọi gộp cũng đọc lẻ (một chiến dịch ở tài khoản token không còn quyền làm hỏng cả lời gọi
- * gộp — trước đây thế là cả bảng "không đọc được", chu kỳ dừng trước vòng tạm dừng ⇒ quảng cáo hết hàng đọc được vẫn chạy tiêu
- * tiền). Chỉ token hỏng (#190 / #102) mới thôi đọc lẻ: lời gọi nào cũng sẽ hỏng y vậy.
+ * Trạng thái sống của các chiến dịch theo mã — đọc TỪNG cái, một mã lạ không làm mù cả bảng. 09/11/2026: bỏ lời gọi gộp gốc
+ * `GET /?ids=` — Facebook trả lỗi cho mọi lời gọi gốc kiểu đó ở MỌI phiên bản từ 27/10/2026 (changelog Graph v26.0, "Legacy Graph
+ * API protocol features deprecated"; trước bản này lượt nào cũng tốn một lời gọi hỏng rồi mới đọc lẻ). Chỉ token hỏng (#190 / #102)
+ * mới thôi đọc: lời gọi nào cũng sẽ hỏng y vậy. Lỗi QUYỀN của một chiến dịch không chặn đọc các cái khác.
  * `loiTheoMa` = chiến dịch KHÔNG đọc được ⇒ trạng thái null: vẫn tính vào trần, chặn mọi việc tăng chi, vào việc cần người.
  */
 async function docChienDich(svc: DichVuAds, ids: string[]): Promise<{ theoMa: Map<string, any>; loiTheoMa: Map<string, string> }> {
     const theoMa = new Map<string, any>()
     const loiTheoMa = new Map<string, string>()
-    if (!ids.length) return { theoMa, loiTheoMa }
-    try {
-        const r = await svc.get('', { ids: ids.join(','), fields: COT_CHIEN_DICH })
-        for (const id of ids) if (r?.[id]) theoMa.set(id, r[id])
-    } catch (e: any) {
-        if (laLoiToken(e)) {
-            const m = moTaLoi(e)
-            for (const id of ids) loiTheoMa.set(id, m)
-            return { theoMa, loiTheoMa }
-        }
-    }
     for (const id of ids) {
-        if (theoMa.has(id)) continue
+        if (theoMa.has(id) || loiTheoMa.has(id)) continue
         try { theoMa.set(id, await svc.get(id, { fields: COT_CHIEN_DICH })) } catch (e2: any) {
             // xoá hẳn khỏi Facebook ⇒ không tiêu tiền; lỗi khác ⇒ KHÔNG biết ⇒ báo (rào trần sẽ chặn tăng chi)
             if (laKhongTonTai(e2)) { theoMa.set(id, { id, status: 'DELETED', effective_status: 'DELETED', khongTonTai: true }); continue }
@@ -908,19 +899,22 @@ export async function timBaiDeDay(ctx: NgCanhAds, cfg: CauHinhAds, page: any, no
     }).catch((e: any) => { console.error('[AdsPilot] đọc hàng bán chạy lỗi:', e?.message || e); return [] }) : []
     const daBan = new Map(ban.map(b => [String(b.productId), Number(b._sum?.quantity) || 0]))
 
-    // tương tác tự nhiên của bài — đọc bằng PAGE token, một lời gọi gộp; hỏng thì thôi (chỉ để xếp hạng)
+    // tương tác tự nhiên của bài — đọc bằng PAGE token, TỪNG bài. 09/11/2026: lời gọi gộp gốc `GET /?ids=` cũ bị Facebook trả lỗi ở
+    // MỌI phiên bản từ 27/10/2026 (changelog Graph v26.0) ⇒ mục tương tác đã im lặng mất hẳn. Nay (docLeGraph): tối đa
+    // TUONG_TAC_TOI_DA bài mới nhất, mỗi đợt 5 lời gọi Graph song song, dừng sau 15 giây; token hỏng / hạn mức ⇒ thôi đọc, khỏi đốt
+    // lượt gọi. Hỏng thì thôi — chỉ để xếp hạng.
     const tuongTac = new Map<string, { reactions: number; comments: number; shares: number }>()
     if (o.tuongTac && ghep.length && page.accessToken) {
-        try {
-            const r = await dichVuAds(ctx, page.accessToken).get('', {
-                ids: ghep.slice(0, 50).map(x => x.t.postId).join(','),
-                fields: 'reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares',
-            })
-            for (const x of ghep) {
-                const p = r?.[x.t.postId]
-                if (p) tuongTac.set(x.t.postId, { reactions: Number(p.reactions?.summary?.total_count) || 0, comments: Number(p.comments?.summary?.total_count) || 0, shares: Number(p.shares?.count) || 0 })
-            }
-        } catch (e: any) { console.warn('[AdsPilot] đọc tương tác bài lỗi:', moTaLoi(e)) }
+        const svc = dichVuAds(ctx, page.accessToken)
+        const can = [...new Set([...ghep].sort((a, b) => b.t.at - a.t.at).map(x => x.t.postId))].slice(0, TUONG_TAC_TOI_DA)
+        const doc = await docLeGraph(can, id => svc.get(id, { fields: 'reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares' }), {
+            dong: 5, hanMs: 15_000,
+            dungKhi: e => laLoiToken(e) || isRateLimitError(e),
+            onLoi: (id, e) => console.warn(`[AdsPilot] đọc tương tác bài ${id} lỗi:`, moTaLoi(e)),
+        })
+        for (const [id, p] of doc) {
+            tuongTac.set(id, { reactions: Number(p?.reactions?.summary?.total_count) || 0, comments: Number(p?.comments?.summary?.total_count) || 0, shares: Number(p?.shares?.count) || 0 })
+        }
     }
 
     const list: BaiDeDay[] = ghep.map(({ t, sp }) => {

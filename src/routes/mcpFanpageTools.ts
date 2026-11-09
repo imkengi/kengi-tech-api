@@ -291,7 +291,7 @@ export const FANPAGE_TOOLS: Tool[] = [
     },
     {
         name: 'fanpage_insights',
-        description: 'Số liệu fanpage theo ngày: lượt tiếp cận (người dùng duy nhất) và số người tương tác. Dùng để báo cáo hiệu quả trang.',
+        description: 'Số liệu fanpage theo ngày: số người xem nội dung của trang (page_total_media_view_unique — người duy nhất) và lượt tương tác với bài (page_post_engagements: cảm xúc, bình luận, chia sẻ…). Dùng để báo cáo hiệu quả trang.',
         inputSchema: {
             type: 'object',
             properties: { ...PAGE_ID_PROP, days: { type: 'number', description: 'Số ngày gần nhất (mặc định 7, tối đa 90)' } },

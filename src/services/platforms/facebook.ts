@@ -145,6 +145,30 @@ export interface SchedulePostInput {
     scheduledAtMs?: number | null
 }
 
+/**
+ * Đọc LẺ nhiều đối tượng Graph — thay lời gọi gộp gốc `GET /?ids=`, thứ Facebook trả lỗi ở MỌI phiên bản từ 27/10/2026 (changelog
+ * Graph v26.0: "Use per-object requests or supported batching"). Mỗi đợt `dong` lời gọi song song — CHỈ gọi Facebook qua `doc`,
+ * ⛔ đừng đưa prisma vào đây (prod pool 1 kết nối / cửa hàng). Dừng khi quá `hanMs` (đo từ lúc bắt đầu) hoặc khi `dungKhi(lỗi)` đúng
+ * (token hỏng / hạn mức — gọi tiếp chỉ đốt lượt). Trả Map mã → kết quả; mã lỗi hoặc chưa kịp đọc thì vắng mặt.
+ */
+export async function docLeGraph<T>(ids: string[], doc: (id: string) => Promise<T>, o: {
+    dong?: number; hanMs?: number; dungKhi?: (e: any) => boolean; onLoi?: (id: string, e: any) => void
+} = {}): Promise<Map<string, T>> {
+    const ra = new Map<string, T>()
+    const dong = Math.max(1, o.dong ?? 5)
+    const batDau = Date.now()
+    let thoi = false
+    for (let i = 0; i < ids.length && !thoi && (o.hanMs == null || Date.now() - batDau < o.hanMs); i += dong) {
+        await Promise.all(ids.slice(i, i + dong).map(async id => {
+            try { ra.set(id, await doc(id)) } catch (e: any) {
+                if (o.dungKhi?.(e)) thoi = true
+                o.onLoi?.(id, e)
+            }
+        }))
+    }
+    return ra
+}
+
 export class FacebookService {
     /** token dùng cho mọi lệnh instance (page token cho post/comment, user token cho ads) */
     private token: string
@@ -269,12 +293,22 @@ export class FacebookService {
     async identifyToken(): Promise<{
         type: string; id: string; name?: string; category?: string; fanCount?: number; picture?: string
     }> {
-        const d = await this.get('me', {
-            metadata: 1,
-            fields: 'id,name,category,fan_count,picture{url}',
-        })
+        // 09/11/2026: bỏ `metadata=1` — Facebook thôi trả metadata ở MỌI phiên bản từ 19/05/2026 (changelog Graph v25.0 "Node
+        // metadata") ⇒ `type` cũ luôn rỗng, dán USER token chỉ nhận lỗi #100 khó hiểu. Nay suy loại từ chính /me: đọc được category +
+        // fan_count (chỉ node Page có cả hai) ⇒ 'page'; lỗi "#100 … on node type (User)" ⇒ đọc lại id/name rồi trả 'user' để
+        // người gọi báo đúng "đây là USER token". Lỗi khác (token chết…) ném nguyên như cũ.
+        let d: any
+        let type = 'page'
+        try {
+            d = await this.get('me', { fields: 'id,name,category,fan_count,picture{url}' })
+        } catch (e: any) {
+            const node = /node type \((\w+)\)/i.exec(String(e?.message || ''))?.[1]
+            if (Number(e?.code) !== 100 || !node || node.toLowerCase() === 'page') throw e
+            type = node.toLowerCase()
+            d = await this.get('me', { fields: 'id,name' })
+        }
         return {
-            type: String(d?.metadata?.type || '').toLowerCase(),
+            type,
             id: String(d.id),
             name: d.name,
             category: d.category,
@@ -490,7 +524,10 @@ export class FacebookService {
 
     // ─── Insights (bài viết / page) ──────────────────────────────────────────
 
-    async getPageInsights(pageId: string, metrics = 'page_impressions_unique,page_engaged_users', sinceDays = 7): Promise<any> {
+    /** 09/11/2026: mặc định cũ `page_impressions_unique,page_engaged_users` hỏng cả lời gọi — `page_engaged_users` không còn trong
+     *  tham chiếu Insights, `page_impressions_unique` bị bỏ ở MỌI phiên bản từ khi Graph v26.0 ra (29/07/2026; changelog v25.0 gợi ý
+     *  thay bằng `page_total_media_view_unique`). Nay: người xem duy nhất + lượt tương tác bài, cả hai có period=day. */
+    async getPageInsights(pageId: string, metrics = 'page_total_media_view_unique,page_post_engagements', sinceDays = 7): Promise<any> {
         const since = Math.floor((Date.now() - sinceDays * 86400_000) / 1000)
         return this.get(`${pageId}/insights`, { metric: metrics, period: 'day', since })
     }
