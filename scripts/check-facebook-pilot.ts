@@ -21,6 +21,12 @@
  * 12. (09/11/2026) Dọn kế hoạch mở — CÙNG MỘT kho qua nhiều lượt: Xem trước 6 nháp → 4 giờ sau bật Tự động ⇒ có bài lên, nháp
  *     Xem trước bị huỷ; 'running' quá 1 giờ ⇒ uncertain + việc cần người; nháp máy quá giờ / quá 3 ngày ⇒ huỷ; nháp người ⇒ giữ;
  *     người huỷ nháp máy ⇒ nhớ 14 ngày.
+ * 13. (09/11/2026) Soát bài HẸN sắp lên (soatBaiHenSapLen — nhịp ngoài mỗi phút): giá đổi + chữ còn giá cũ / tồn dưới mức / mã gộp
+ *     / mã mất ⇒ RÚT (xoá bài hẹn chưa lên, kế hoạch 'cancelled' + tuHuy, dòng FbScheduledPost 'cancelled', MỘT tin gộp). Phải IM:
+ *     chữ không ghi giá, giá lệch < 1đ, bài người khác tạo / nối lệch mã, bài đã lên (published / Facebook không còn liệt kê),
+ *     ngoài cửa sổ, chữ đã sửa trên Facebook, Xem trước. Hai lượt song song ⇒ một lệnh xoá; hạn mức ⇒ giữ, nhịp sau rút; token /
+ *     không rõ kết cục ⇒ báo KHẨN, không đánh dấu "đã rút"; còn < 3 phút ⇒ không xoá. Nối dây: quetTuNgoai soát TRƯỚC chốt
+ *     dangChay, theo tiện ích chứ không theo hasAiJobs, dò bằng registry.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -28,6 +34,7 @@ import {
     khoBoNhoFb, chuanHoaChinhSachFb, chuanHoaHashtag, soanBai, boHtml, khungGioTrong, dauNgayVN, anhHopLe, coSoDienThoai, laHoiGia,
     cauTraLoiGia, timUngVienFb, taoKeHoachBai, thucThiFb, luuCauHinhFb, docBinhLuan, taoKeHoachTraLoi, chayChuKyFb, chayTheoLichFb,
     xayTrangThaiFb, huyKeHoachFb, docGio, kiemKetNoiFb, CHINH_SACH_FB_MAC_DINH, type NgCanhFb, type DichVuFb,
+    soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
 } from '../src/lib/facebookPilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
@@ -86,6 +93,7 @@ let hoSo: any = null
 const baiDaHen: any[] = []
 const soTraLoi: any[] = []
 const pages: any[] = []
+const thongBao: any[] = []
 
 function datLai() {
     hang = [
@@ -101,6 +109,7 @@ function datLai() {
     nhapAi = []
     hoSo = { cta: 'Gọi 0909 000 111 hoặc inbox shop', hashtags: '["#kengi", "dụng cụ"]', bannedWords: '["rẻ nhất"]', bestHours: '[]', emojiLevel: 'vua', createdAt: new Date(0) }
     baiDaHen.length = 0
+    henTrenFb.clear()
     soTraLoi.length = 0
     pages.length = 0
     pages.push({ pageId: 'PG1', name: 'Kengi Fanpage', avatar: null, fanCount: 1200, status: 'active', tokenExpiresAt: new Date(NOW + 40 * 86400_000), webhookSubscribed: false, autoReplyEnabled: false, accessToken: 'TOKEN-BI-MAT-PG1', createdAt: new Date(0) })
@@ -122,7 +131,9 @@ const prisma: any = {
     fbScheduledPost: {
         findMany: async ({ where, select, take }: any) => baiDaHen.filter(b => khop(b, where)).slice(0, take ?? 1e9).map(b => chon(b, select)),
         create: async ({ data }: any) => { const r = { id: `sp${baiDaHen.length + 1}`, ...data }; baiDaHen.push(r); return r },
+        updateMany: async ({ where, data }: any) => { let count = 0; for (const b of baiDaHen) if (khop(b, where)) { Object.assign(b, data); count++ } return { count } },
     },
+    notification: { create: async ({ data }: any) => { const t = { id: `tb${thongBao.length + 1}`, ...data }; thongBao.push(t); return t } },
     fbAutoReplyLog: {
         findMany: async ({ where, select }: any) => soTraLoi.filter(r => khop(r, where)).map(r => chon(r, select)),
         create: async ({ data }: any) => {
@@ -140,14 +151,31 @@ let loiDang: any = null
 let loiTraLoi: any = null
 let baiTrenFb: any[] = []
 let soBai = 0
+/* Phía FACEBOOK của bài hẹn (13 — soát bài hẹn sắp lên): bài hẹn giao xong nằm ở đây tới khi bị xoá; bộ kiểm tự gỡ để giả "đã lên"
+ * / "chủ shop xoá tay", tự sửa chữ để giả "sửa thẳng trên Facebook". henFbBat = false (mặc định) ⇒ scheduled_posts trả [] như cũ. */
+const henTrenFb = new Map<string, { id: string; message: string; scheduledPublishTime: number }>()
+let henFbBat = false
+let loiDsHen: any = null
+let loiXoa: any = null
 const fbGia = (token: string): DichVuFb => ({
     get: async (p: string, params?: any) => { goiFb.push(['get', p, params, token]); return { data: baiTrenFb } },
     identifyToken: async () => ({ type: 'page', id: 'PG1', name: 'Kengi Fanpage' }),
-    createOrSchedulePost: async (input: any) => { goiFb.push(['post', input]); if (loiDang) throw loiDang; soBai++; return { id: `PG1_${100 + soBai}` } },
+    createOrSchedulePost: async (input: any) => {
+        goiFb.push(['post', input]); if (loiDang) throw loiDang; soBai++
+        const id = `PG1_${100 + soBai}`
+        if (input.scheduledAtMs) henTrenFb.set(id, { id, message: input.message, scheduledPublishTime: Math.floor(input.scheduledAtMs / 1000) })
+        return { id }
+    },
     replyToComment: async (id: string, msg: string) => { goiFb.push(['reply', id, msg]); if (loiTraLoi) throw loiTraLoi; return { id: `r_${id}` } },
     hideComment: async (id: string) => { goiFb.push(['hide', id]); return { success: true } },
-    listScheduledPosts: async () => [],
+    // lệnh ĐỌC ⇒ ghi 'get' (ghiFb() chỉ đếm lệnh ghi)
+    listScheduledPosts: async (pageId: string) => {
+        goiFb.push(['get', `${pageId}/scheduled_posts`, null, token]); if (loiDsHen) throw loiDsHen
+        return henFbBat ? [...henTrenFb.values()].map(x => ({ ...x })) : []
+    },
+    deletePost: async (id: string) => { goiFb.push(['delete', id]); if (loiXoa) throw loiXoa; henTrenFb.delete(id); return { success: true } },
 })
+const lenhXoa = () => goiFb.filter(g => g[0] === 'delete').map(g => g[1] as string)
 const ghiFb = () => goiFb.filter(g => g[0] !== 'get')
 
 /* ── Graph giả ở TẦNG fetch (09/11/2026): ca lỗi Graph đi qua FacebookService THẬT (goi → buildError → loaiLoiFb) thay vì
@@ -630,6 +658,258 @@ async function main() {
         lay(bo.id).updatedAt = bayGio - 15 * 86400_000
         const hetNho = (await timUngVienFb(ctx, pol, { lim: 50 })).ungVien.some(u => u.productId === bo.data.productId)
         dung('12r. trong 14 ngày mã người huỷ bị né; quá 14 ngày ⇒ được đề xuất lại', conNho && hetNho, `${conNho} ${hetNho}`)
+        bayGio = NOW
+    }
+
+    // ─── 13. Soát bài HẸN sắp lên — rút khi giá / tồn đổi (09/11/2026, FB-02) ─────────
+    {
+        datLai(); goiFb.length = 0; henFbBat = true; thongBao.length = 0; loiXoa = null; loiDsHen = null; bayGio = NOW
+        const PHUT = 60_000
+        const dau = dauNgayVN(NOW)
+        const G = (h: number, m = 0) => dau + h * H + m * PHUT
+        for (let i = 1; i <= 20; i++) {
+            hang.push({
+                id: `r${i}`, sku: `R${i}`, name: `Kìm cắt số ${i}`, description: 'Thép CR-V.', productType: 'goods', sellingPrice: 30000 + i * 1000,
+                stock: 20, mergedIntoId: null, bundleId: null, createdAt: new Date(NOW), images: [{ url: ANH(`r${i}`), isPrimary: true }],
+            })
+        }
+        const sp = (id: string) => hang.find(h => h.id === id)!
+        const kho = khoBoNhoFb()
+        const ctx = ngCanh(kho)
+        const lay = (id: string) => kho._keHoach.find(k => k.id === id)!
+        const guongCua = (k: any) => baiDaHen.find(b => b.id === k.result?.scheduledPostId)
+        const soat = () => soatBaiHenSapLen(prisma, kho, { taoFb: fbGia, bayGio: () => bayGio })
+        await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 200 } })
+        const hen = async (sku: string, gio: number, message?: string, khoa = `web:soat-${sku}`) =>
+            thucThiFb(ctx, (await taoKeHoachBai(ctx, { sku, scheduledAt: gio, idempotencyKey: khoa, ...(message ? { message } : {}) })).id)
+
+        // 08:00 — giao 10 bài hẹn trưa nay. R1 mang khoá MÁY ("cycle:post:") như chu kỳ Tự động lập — rút xong không được thành
+        // "người huỷ nháp máy ⇒ nhớ 14 ngày"
+        const a1 = await hen('R1', G(12, 30), undefined, `cycle:post:r1:${G(12, 30)}`) // chữ máy soạn ghi giá — giá sẽ đổi
+        const a2 = await hen('R2', G(12, 35))    // tồn sẽ về 0
+        const a3 = await hen('R3', G(12, 40))    // mã sẽ bị gộp
+        const a4 = await hen('R4', G(12, 45))    // mã sẽ bị xoá
+        const a5 = await hen('R5', G(12, 50), 'Kìm cắt R5 hàng mới về — inbox shop để được tư vấn nhé') // chữ người viết, không ghi giá
+        const a6 = await hen('R6', G(12, 55))    // giá sẽ lệch 0,4đ
+        const a7 = await hen('R7', G(12, 58))    // không đổi gì
+        const a8 = await hen('R8', G(13, 30))    // giá đổi nhưng giờ lên còn xa
+        const a9 = await hen('R9', G(11, 50))    // đã lên, cron đối soát đã đánh 'published'
+        const a10 = await hen('R10', G(11, 55))  // đã lên, đêm chưa đối soát ⇒ dòng còn 'scheduled'
+        const caA = [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10]
+        dung('13a. chuẩn bị: 10 bài hẹn đã giao Facebook — kế hoạch succeeded (published false) + dòng FbScheduledPost scheduled + bài hẹn trên Facebook',
+            caA.every(k => k.status === 'succeeded' && k.result?.published === false && guongCua(k)?.status === 'scheduled' && henTrenFb.has(k.result?.postId)),
+            caA.map(k => `${k.data?.sku}:${k.status}:${guongCua(k)?.status}`).join(' '))
+        // bài KHÔNG phải của Pilot: Fanpage Manager đăng tay (không kế hoạch nào nối tới), và một kế hoạch trỏ dòng nhưng LỆCH mã bài
+        const chuR18 = '🔹 Kìm cắt số 18\n💰 Giá: 48.000đ'
+        const themNgoai = (id: string, fbPostId: string, gio: number) => {
+            baiDaHen.push({ id, pageId: 'PG1', fbPostId, message: chuR18, mediaType: 'text', mediaUrls: '[]', linkUrl: null, scheduledAt: new Date(gio), status: 'scheduled', publishedAt: null, createdBy: 'chu@shop' })
+            henTrenFb.set(fbPostId, { id: fbPostId, message: chuR18, scheduledPublishTime: Math.floor(gio / 1000) })
+        }
+        themNgoai('sp-tay', 'PG1_900', G(12, 42))
+        themNgoai('sp-lech', 'PG1_901', G(12, 44))
+        kho._keHoach.push({
+            id: 'kh-lech', kind: 'post', status: 'succeeded', idempotencyKey: 'web:lech', createdBy: 'chu@shop', createdAt: NOW, updatedAt: NOW,
+            data: { pageId: 'PG1', productId: 'r18', sku: 'R18', price: 48000, message: chuR18, scheduledAt: G(12, 44) },
+            result: { postId: 'PG1_555', scheduledAt: G(12, 44), published: false, scheduledPostId: 'sp-lech' },
+        })
+        sp('r1').sellingPrice = 33000                         // 31.000 → 33.000, chữ máy soạn ghi "31.000đ"
+        sp('r2').stock = 0
+        sp('r3').mergedIntoId = 'p1'
+        hang.splice(hang.findIndex(h => h.id === 'r4'), 1)
+        sp('r5').sellingPrice = 40000
+        sp('r6').sellingPrice = 36000.4
+        for (const id of ['r8', 'r9', 'r10', 'r18']) sp(id).sellingPrice = 50000
+        guongCua(a9).status = 'published'; henTrenFb.delete(a9.result.postId)
+        henTrenFb.delete(a10.result.postId)
+        bayGio = G(12, 0) // cửa sổ soát: giờ lên 11:30 → 13:00
+        goiFb.length = 0
+        const kq1 = await soat()
+        const xoa1 = lenhXoa()
+        const daRut = (k: any, xoa: string[]) => lay(k.id).status === 'cancelled' && lay(k.id).result?.tuHuy === true && lay(k.id).result?.rutBai?.trangThai === 'da_rut'
+            && xoa.includes(k.result.postId) && !henTrenFb.has(k.result.postId) && guongCua(k)?.status === 'cancelled' && /Facebook Pilot rút bài hẹn/.test(guongCua(k)?.errorMessage || '')
+        const im = (k: any, xoa: string[]) => lay(k.id).status === 'succeeded' && !lay(k.id).result?.rutBai && !xoa.includes(k.result.postId) && guongCua(k)?.status === 'scheduled'
+        dung('13b. giá đổi + chữ máy soạn còn giá cũ ⇒ RÚT: xoá bài hẹn, kế hoạch "đã rút" (cancelled + tuHuy) ghi lý do, dòng FbScheduledPost cancelled',
+            daRut(a1, xoa1) && /31\.000đ thành 33\.000đ/.test(lay(a1.id).result?.message || ''), JSON.stringify(lay(a1.id).result))
+        dung('13c. tồn tụt dưới mức tối thiểu ⇒ RÚT', daRut(a2, xoa1) && /tồn kho còn 0/.test(lay(a2.id).result?.message || ''), JSON.stringify(lay(a2.id).result))
+        dung('13d. mã đã gộp ⇒ RÚT', daRut(a3, xoa1) && /gộp/.test(lay(a3.id).result?.message || ''), JSON.stringify(lay(a3.id).result))
+        dung('13e. mã không còn trong kho ⇒ RÚT', daRut(a4, xoa1) && /không còn trong kho/.test(lay(a4.id).result?.message || ''), JSON.stringify(lay(a4.id).result))
+        dung('13f. giá đổi nhưng chữ (người viết) KHÔNG ghi giá ⇒ IM', im(a5, xoa1), JSON.stringify(lay(a5.id).result))
+        dung('13g. giá lệch < 1đ ⇒ IM', im(a6, xoa1), JSON.stringify(lay(a6.id).result))
+        dung('13h. không đổi gì ⇒ IM', im(a7, xoa1))
+        dung('13i. giá đổi nhưng giờ lên còn 90 phút (ngoài cửa sổ 60 phút) ⇒ lượt này IM', im(a8, xoa1))
+        dung('13j. bài Fanpage Manager (không kế hoạch Pilot) + kế hoạch nối LỆCH mã bài ⇒ không xoá, không đổi gì',
+            !xoa1.includes('PG1_900') && !xoa1.includes('PG1_901') && baiDaHen.find(b => b.id === 'sp-tay')?.status === 'scheduled'
+            && baiDaHen.find(b => b.id === 'sp-lech')?.status === 'scheduled' && lay('kh-lech').status === 'succeeded' && !lay('kh-lech').result?.rutBai, xoa1.join(','))
+        dung('13k. bài đã lên (dòng published) ⇒ không đụng: không xoá, không báo', lay(a9.id).status === 'succeeded' && !lay(a9.id).result?.rutBai && !xoa1.includes(a9.result.postId))
+        dung('13l. đã lên mà dòng còn scheduled (Facebook không còn liệt kê, giờ đã qua) ⇒ KHÔNG xoá bài công khai, chỉ báo; kế hoạch "Cần kiểm tra"',
+            !xoa1.includes(a10.result.postId) && lay(a10.id).status === 'uncertain' && lay(a10.id).result?.rutBai?.trangThai === 'da_len'
+            && /KHÔNG xoá bài đã công khai/.test(lay(a10.id).result?.message || ''), JSON.stringify(lay(a10.id).result))
+        dung('13m. đúng 4 lệnh xoá (R1–R4), MỘT lần đọc danh sách bài hẹn cho cả lượt', xoa1.length === 4 && goiFb.filter(g => g[1] === 'PG1/scheduled_posts').length === 1,
+            JSON.stringify(goiFb.map(g => `${g[0]}:${typeof g[1] === 'string' ? g[1] : ''}`)))
+        const tb = thongBao[0]
+        dung('13n. MỘT tin gộp cho chủ shop: warning, tiêu đề "Facebook Pilot KHẨN…" (có bài đã lên với giá cũ), liệt kê đủ 5 bài',
+            thongBao.length === 1 && tb.type === 'warning' && /^Facebook Pilot KHẨN/.test(tb.title) && ['R1', 'R2', 'R3', 'R4', 'R10'].every(s => tb.message.includes(`• ${s}:`)) && kq1.daBao === true,
+            JSON.stringify(thongBao))
+        dung('13o. nhật ký ghi: 4 dòng "withdraw" thành công (mỗi lệnh xoá một dòng)', kho._nhatKy.filter(w => w.action === 'withdraw' && w.status === 'succeeded').length === 4)
+        goiFb.length = 0
+        await soat()
+        dung('13p. lượt kế (cùng giờ) ⇒ không xoá lại, không báo lại, không gọi Facebook', goiFb.length === 0 && thongBao.length === 1, JSON.stringify(goiFb))
+        bayGio = G(12, 40) // R8 (13:30) vào cửa sổ
+        goiFb.length = 0
+        await soat()
+        dung('13q. 50 phút trước giờ lên ⇒ R8 bị rút; tin thường "Facebook Pilot: đã rút 1 bài hẹn giờ…"',
+            daRut(a8, lenhXoa()) && lenhXoa().length === 1 && thongBao.length === 2 && /^Facebook Pilot: đã rút 1 bài hẹn/.test(thongBao[1].title), JSON.stringify(thongBao[1]))
+        const uv = (await timUngVienFb(ctx, (await kho.docCauHinh())!.policy, { lim: 50 })).ungVien
+        dung('13r. bài đã rút KHÔNG chặn mã 21 ngày, không bị nhớ như "người huỷ" ⇒ R1 lập lại được theo giá mới; bài "đã lên" (R10) vẫn chặn',
+            uv.some(u => u.productId === 'r1') && !uv.some(u => u.productId === 'r10'), uv.map(u => u.sku).join(','))
+        {
+            const khoXem = khoBoNhoFb()
+            const cXem = ngCanh(khoXem)
+            await luuCauHinhFb(cXem, { policy: { maxWritesPerDay: 200 } }) // chế độ mặc định: Xem trước
+            await chayChuKyFb(cXem)
+            goiFb.length = 0
+            const kq = await soatBaiHenSapLen(prisma, khoXem, { taoFb: fbGia, bayGio: () => bayGio })
+            dung('13s. Xem trước: chu kỳ chỉ lập nháp, không giao gì cho Facebook ⇒ không có bài nào để soát, không gọi Facebook',
+                khoXem._keHoach.some(k => k.status === 'draft') && !khoXem._keHoach.some(k => k.status === 'succeeded') && kq.trangThai === 'khong-co' && goiFb.length === 0,
+                `${kq.trangThai} ${goiFb.length}`)
+        }
+
+        // 14:00 — từng ca lỗi / ca biên, mỗi ca một bài mới
+        bayGio = G(14, 0)
+        const b1 = await hen('R11', G(14, 40))
+        sp('r11').sellingPrice = 50000
+        goiFb.length = 0
+        const tb0 = thongBao.length
+        await Promise.all([soat(), soat()])
+        dung('13t. hai lượt soát SONG SONG (hai bản máy) ⇒ đúng MỘT lệnh xoá, MỘT thông báo, kế hoạch "đã rút"',
+            lenhXoa().length === 1 && thongBao.length === tb0 + 1 && lay(b1.id).status === 'cancelled' && lay(b1.id).result?.rutBai?.trangThai === 'da_rut',
+            `${lenhXoa().length} xoá, ${thongBao.length - tb0} tin, ${lay(b1.id).status}`)
+
+        const b2 = await hen('R12', G(14, 45))
+        sp('r12').sellingPrice = 50000
+        goiFb.length = 0
+        const tb1 = thongBao.length, nk1 = kho._nhatKy.length
+        loiXoa = Object.assign(new Error('(#32) Page request limit reached'), { code: 32 })
+        await soat()
+        loiXoa = null
+        dung('13u. Facebook giới hạn lượt gọi khi xoá ⇒ giữ nguyên: kế hoạch succeeded không mang dấu giữ, dòng scheduled, không báo, không ghi nhật ký',
+            lenhXoa().length === 1 && lay(b2.id).status === 'succeeded' && !lay(b2.id).result?.rutBai && guongCua(lay(b2.id))?.status === 'scheduled'
+            && thongBao.length === tb1 && kho._nhatKy.length === nk1, JSON.stringify(lay(b2.id).result))
+        await soat()
+        dung('13v. …nhịp sau Facebook nhận ⇒ rút + báo', lay(b2.id).status === 'cancelled' && lay(b2.id).result?.rutBai?.trangThai === 'da_rut' && lenhXoa().length === 2 && thongBao.length === tb1 + 1)
+
+        const b3 = await hen('R13', G(14, 50))
+        sp('r13').sellingPrice = 50000
+        goiFb.length = 0
+        const tb2 = thongBao.length
+        loiXoa = Object.assign(new Error('Error validating access token: Session has expired'), { code: 190 })
+        await soat()
+        loiXoa = null
+        const k3 = lay(b3.id)
+        dung('13w. token hỏng khi xoá ⇒ báo KHẨN "vào fanpage xoá tay"; kế hoạch "Cần kiểm tra" (KHÔNG "đã rút"); dòng vẫn scheduled; fanpage token_expired',
+            k3.status === 'uncertain' && k3.result?.rutBai?.trangThai === 'can_nguoi' && /KHẨN/.test(k3.result?.message || '') && /xoá tay/.test(k3.result?.message || '')
+            && guongCua(k3)?.status === 'scheduled' && pages[0].status === 'token_expired' && thongBao.length === tb2 + 1 && /^Facebook Pilot KHẨN/.test(thongBao[thongBao.length - 1].title)
+            && kho._nhatKy.some(w => w.action === 'withdraw' && w.status === 'failed' && w.planId === b3.id), JSON.stringify(k3.result))
+        await soat()
+        dung('13x. …lượt sau không xoá lại, không báo lại', lenhXoa().length === 1 && thongBao.length === tb2 + 1)
+        pages[0].status = 'active'
+
+        const b4 = await hen('R14', G(14, 52))
+        sp('r14').sellingPrice = 50000
+        goiFb.length = 0
+        loiXoa = Object.assign(new Error('Facebook không trả lời sau 90 giây (aborted: timeout)'), { khongRoKetCuc: true, hetGio: true })
+        await soat()
+        loiXoa = null
+        dung('13y. lệnh xoá hết giờ (không rõ Facebook đã xoá chưa) ⇒ báo KHẨN, kế hoạch "Cần kiểm tra", nhật ký "uncertain", không tự xoá lại',
+            lay(b4.id).status === 'uncertain' && lay(b4.id).result?.rutBai?.trangThai === 'can_nguoi' && /không rõ Facebook đã xoá chưa/.test(lay(b4.id).result?.message || '')
+            && kho._nhatKy.some(w => w.planId === b4.id && w.status === 'uncertain') && lenhXoa().length === 1, JSON.stringify(lay(b4.id).result))
+
+        const b5 = await hen('R15', G(14, 55))
+        sp('r15').sellingPrice = 50000
+        henTrenFb.delete(b5.result.postId) // chủ shop xoá tay thẳng trên Facebook
+        goiFb.length = 0
+        await soat()
+        dung('13z. Facebook không còn bài hẹn mà giờ chưa tới (xoá tay / đăng sớm) ⇒ KHÔNG gửi lệnh xoá, báo kiểm tay',
+            lenhXoa().length === 0 && lay(b5.id).status === 'uncertain' && lay(b5.id).result?.rutBai?.trangThai === 'khong_con_hen', JSON.stringify(lay(b5.id).result))
+
+        const b6 = await hen('R16', G(14, 58))
+        sp('r16').sellingPrice = 50000
+        henTrenFb.get(b6.result.postId)!.message = 'Kìm cắt số 16 — giá mới, inbox shop nhé' // sửa thẳng trên Facebook, bỏ giá
+        goiFb.length = 0
+        const tb3 = thongBao.length
+        await soat()
+        dung('13A. chữ đã sửa thẳng trên Facebook, không còn giá cũ ⇒ giữ bài: không xoá, không báo, kế hoạch không mang dấu giữ',
+            goiFb.some(g => g[1] === 'PG1/scheduled_posts') && lenhXoa().length === 0 && thongBao.length === tb3 && lay(b6.id).status === 'succeeded' && !lay(b6.id).result?.rutBai,
+            JSON.stringify(lay(b6.id).result))
+
+        const b7 = await hen('R17', G(14, 15))
+        sp('r17').sellingPrice = 50000
+        bayGio = G(14, 13) // còn 2 phút tới giờ lên
+        goiFb.length = 0
+        await soat()
+        dung('13B. còn < 3 phút tới giờ lên ⇒ KHÔNG gửi lệnh xoá (có thể lên giữa chừng), báo KHẨN sửa / xoá tay',
+            lenhXoa().length === 0 && lay(b7.id).status === 'uncertain' && lay(b7.id).result?.rutBai?.trangThai === 'qua_gio' && /^Facebook Pilot KHẨN/.test(thongBao[thongBao.length - 1].title),
+            JSON.stringify(lay(b7.id).result))
+
+        const b8 = await hen('R19', G(14, 53))
+        sp('r19').sellingPrice = 50000
+        lay(b8.id).result = { ...lay(b8.id).result, rutBai: { trangThai: 'dang', luot: 'may-khac', luc: bayGio, han: bayGio + 5 * PHUT, lyDo: 'x' } } // bản máy khác đang giữ
+        goiFb.length = 0
+        await soat()
+        dung('13I. kế hoạch đang được lượt khác giữ (chưa hết hạn giữ) ⇒ để yên, không xoá',
+            lenhXoa().length === 0 && lay(b8.id).status === 'succeeded' && lay(b8.id).result?.rutBai?.luot === 'may-khac', JSON.stringify(lay(b8.id).result))
+        lay(b8.id).result.rutBai.han = bayGio - 1 // bản máy kia chết giữa chừng
+        await soat()
+        dung('13J. …quá hạn giữ (máy kia chết giữa chừng) ⇒ lượt sau giành lại và rút',
+            lenhXoa().length === 1 && lay(b8.id).status === 'cancelled' && lay(b8.id).result?.rutBai?.trangThai === 'da_rut' && !lay(b8.id).result?.rutBai?.luot, JSON.stringify(lay(b8.id).result))
+
+        const b9 = await hen('R20', G(15, 5))
+        sp('r20').sellingPrice = 55000 // 50.000 → 55.000
+        goiFb.length = 0
+        const tb4 = thongBao.length
+        loiDsHen = new TypeError('fetch failed')
+        await soat()
+        loiDsHen = null
+        dung('13K. đọc danh sách bài hẹn hỏng (mạng) ⇒ không xoá mù, không báo, nhả để nhịp sau đọc lại',
+            goiFb.some(g => g[1] === 'PG1/scheduled_posts') && lenhXoa().length === 0 && thongBao.length === tb4 && lay(b9.id).status === 'succeeded' && !lay(b9.id).result?.rutBai,
+            JSON.stringify(lay(b9.id).result))
+        await soat()
+        dung('13L. …nhịp sau đọc được ⇒ rút', lay(b9.id).status === 'cancelled' && lenhXoa().length === 1 && thongBao.length === tb4 + 1)
+
+        // hàm thuần + nối dây
+        dung('13C. chuCoGia: bắt "26.000đ" / "26,000" / "26 000" / "26000" / "26k" / "26 nghìn"; không nhầm "126.000", "26.000.000", "26kg", không có số',
+            ['Giá: 26.000đ', 'giá 26,000 VND', 'chỉ 26 000đ', '26000đ', 'chỉ 26k thôi', '26K/cái', '26 nghìn'].every(s => chuCoGia(s, 26000))
+            && !['Giá: 126.000đ', 'Giá: 26.000.000đ', 'nặng 26kg', 'inbox shop', 'Giá: 25.000đ'].some(s => chuCoGia(s, 26000)))
+        dung('13D. chuCoGia: "1,2tr" / "1tr2" / "1.200.000" / "1 triệu 200 nghìn" cho 1.200.000; "26,5k" / "26k5" cho 26.500; giá 0 ⇒ không',
+            ['1,2tr', 'giá 1tr2', '1.200.000đ', '1 triệu 200 nghìn'].every(s => chuCoGia(s, 1_200_000)) && ['26,5k', '26k5', '26.500đ'].every(s => chuCoGia(s, 26500))
+            && !chuCoGia('0đ', 0) && !chuCoGia('1,25tr', 1_200_000))
+        const pol0 = chuanHoaChinhSachFb({})
+        dung('13E. lyDoRutBai: mã → tồn → giá; giá chỉ tính khi chữ còn giá cũ và lệch ≥ 1đ',
+            lyDoRutBai(null, 1, '', pol0)?.loai === 'ma' && lyDoRutBai({ sellingPrice: 1, stock: 5, mergedIntoId: 'x' }, 1, '', pol0)?.loai === 'ma'
+            && lyDoRutBai({ sellingPrice: 2000, stock: 0 }, 1000, 'Giá 1.000đ', pol0)?.loai === 'ton' && lyDoRutBai({ sellingPrice: 2000, stock: 5 }, 1000, 'Giá 1.000đ', pol0)?.loai === 'gia'
+            && lyDoRutBai({ sellingPrice: 2000, stock: 5 }, 1000, 'inbox shop', pol0) === null && lyDoRutBai({ sellingPrice: 1000.5, stock: 5 }, 1000, 'Giá 1.000đ', pol0) === null)
+        const sql = sqlDemBaiHenSapLen('store_kengi')
+        dung('13F. câu dò registry: ghi rõ schema, chỉ bài scheduled có mã Facebook trong cửa sổ (giờ UTC, nới 1 phút), chỉ khi có kế hoạch Pilot succeeded nối tới; schema lạ ⇒ ném',
+            /FROM "store_kengi"\."FbScheduledPost" s/.test(sql) && /FROM "store_kengi"\."FacebookPilotPlan" p/.test(sql) && /s\.status = 'scheduled' AND s\."fbPostId" IS NOT NULL/.test(sql)
+            && /\(NOW\(\) AT TIME ZONE 'UTC'\) - interval '31 minutes'/.test(sql) && /\(NOW\(\) AT TIME ZONE 'UTC'\) \+ interval '61 minutes'/.test(sql)
+            && /p\.kind = 'post' AND p\.status = 'succeeded'/.test(sql) && /p\.result::jsonb->>'scheduledPostId' = s\.id/.test(sql)
+            && (await nem(async () => sqlDemBaiHenSapLen('x"; DROP TABLE y; --'))) !== null, sql)
+        dung('13G. laThieuBang: chỉ "bảng chưa có" (42P01 / P2021) — sai tên cột (42703), lỗi mạng KHÔNG bị nuốt',
+            laThieuBang({ code: 'P2010', meta: { code: '42P01', message: 'relation "store_x.FacebookPilotPlan" does not exist' } }) && laThieuBang({ code: 'P2021' })
+            && !laThieuBang({ code: 'P2010', meta: { code: '42703', message: 'column "fbPostIdx" does not exist' } }) && !laThieuBang(new Error('timeout')))
+        const cron = fs.readFileSync(path.join(__dirname, '..', 'src', 'cron', 'aiAgentCron.ts'), 'utf8')
+        const ham = cron.slice(cron.indexOf('export async function nhipSoatBaiHenFb'), cron.indexOf('export async function quetTuNgoai'))
+        dung('13H. nối dây: quetTuNgoai soát bài hẹn TRƯỚC chốt dangChay; nhịp theo tiện ích facebook_pilot, KHÔNG theo hasAiJobs; dò bằng registry rồi mới giữ client cửa hàng',
+            /export async function quetTuNgoai\(\): Promise<boolean> \{[^}]*?await nhipSoatBaiHenFb\(\)[\s\S]*?if \(dangChay\) return false/.test(cron)
+            && ham.length > 0 && /includes\(TIEN_ICH_FACEBOOK_PILOT\)/.test(ham) && !/hasAiJobs/.test(ham) && /registryPrisma\.\$queryRawUnsafe\(sqlDemBaiHenSapLen\(/.test(ham)
+            && /if \(!laThieuBang\(e\)\) console\.error/.test(ham) && /const nha = giuClient\(store\.schema\)[\s\S]*soatBaiHenSapLen\(getStorePrisma\(store\.schema\)\)[\s\S]*finally \{\s*nha\(\)/.test(ham))
+        // setInterval (5 phút) chạy cả đêm nhưng ngoài request bị hãm CPU ⇒ lượt soát nó mở treo, giữ chốt dangSoatFb ⇒ nhịp ngoài 'bo-qua'
+        const quetThan = cron.slice(cron.indexOf('async function quet()'), cron.indexOf('export function startAiAgentCron'))
+        dung('13M. nối dây: quet() (setInterval) chỉ soát bài hẹn khi nhịp ngoài IM ≥ 3 phút; quetTuNgoai đánh dấu nhịp ngoài TRƯỚC khi soát',
+            /nhipNgoaiLuc = Date\.now\(\)\s*\n\s*await nhipSoatBaiHenFb\(\)/.test(cron) && (cron.match(/nhipNgoaiLuc = Date\.now\(\)/g) || []).length === 1
+            && quetThan.length > 0 && /if \(Date\.now\(\) - nhipNgoaiLuc > 3 \* 60_000\) await nhipSoatBaiHenFb\(\)/.test(quetThan)
+            && (quetThan.match(/nhipSoatBaiHenFb\(/g) || []).length === 1)
+        henFbBat = false
         bayGio = NOW
     }
 

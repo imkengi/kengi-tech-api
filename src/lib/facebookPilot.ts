@@ -18,6 +18,9 @@
  *  Rào máy chủ chặn (không trông vào giao diện):
  *    - lúc THỰC THI soát lại: hàng còn tồn ≥ mức tối thiểu, giá bán chưa đổi từ lúc lập kế hoạch,
  *      giờ hẹn còn cách ≥ 10 phút (Facebook không nhận gần hơn)
+ *    - (09/11/2026) bài HẸN đã giao cho Facebook được soát lại lần nữa TRƯỚC GIỜ LÊN ~1 tiếng (soatBaiHenSapLen, nhịp ngoài mỗi
+ *      phút): mã không còn / gộp, tồn < mức tối thiểu, hay giá đổi mà chữ bài còn ghi giá cũ ⇒ RÚT (xoá bài hẹn chưa lên) + báo
+ *      chủ shop; không rút được ⇒ báo KHẨN để xoá tay. Trước đây chỉ soát lúc giao — bài hẹn 3 ngày lên với giá / tồn cũ.
  *    - mỗi ngày (giờ VN) tối đa postsPerDay bài — đếm cả bài Kengi khác đã hẹn — và các bài cách nhau ≥ minGapMinutes
  *    - từ CẤM trong hồ sơ thương hiệu (FbBrandProfile.bannedWords) ⇒ không lập kế hoạch
  *    - máy tự chạy KHÔNG tự trả lời: bình luận đã có người trả lời, bình luận không rõ người viết (token thiếu
@@ -45,6 +48,15 @@ const jsonMang = (raw: any): any[] => {
     if (Array.isArray(raw)) return raw
     const v = docJson(raw, [])
     return Array.isArray(v) ? v : []
+}
+/** JSON với khoá xếp thứ tự — hai giá trị cùng nội dung ra cùng chuỗi (kho bộ nhớ so như `result::jsonb IS NOT DISTINCT FROM`). */
+const jsonChuan = (v: any): string => JSON.stringify(v ?? null, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+    ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x))
+/** Bảng chưa tồn tại (Postgres 42P01 / Prisma P2021) = cửa hàng chưa từng dùng tính năng. Lỗi khác (sai tên cột 42703…) KHÔNG
+ *  tính — nuốt nó là nhịp soát im lặng chết hẳn. */
+export function laThieuBang(e: any): boolean {
+    const ma = String(e?.meta?.code || e?.code || '')
+    return ma === '42P01' || ma === 'P2021' || /relation "[^"]+" does not exist/i.test(String(e?.meta?.message || e?.message || ''))
 }
 
 const VN = 7 * 3600_000
@@ -233,6 +245,12 @@ export interface KhoFbPilot {
     dsKeHoachMo(huyTuLuc: number): Promise<KeHoachFb[]>
     /** Kế hoạch trả lời / ẩn của các bình luận này, trừ bản đã huỷ. */
     dsKeHoachBinhLuan(commentIds: string[]): Promise<KeHoachFb[]>
+    /** (09/11/2026) Kế hoạch đăng bài 'succeeded' có bài HẸN ứng với các dòng FbScheduledPost này (result.scheduledPostId) — lượt
+     *  soát bài sắp lên. KHÔNG tạo bảng hộ: cửa hàng chưa từng dùng Pilot thì bảng chưa có ⇒ []. */
+    dsKeHoachBaiHen(scheduledPostIds: string[]): Promise<KeHoachFb[]>
+    /** (09/11/2026) Đổi trạng thái + kết quả NẾU kế hoạch còn y như `cu` (so cả result) — nguyên tử. Lượt soát bài hẹn dùng để
+     *  giành / nhả / chốt một bài giữa nhiều bản máy (prod không có Redis): bản nào đổi được mới gọi Facebook. */
+    doiKeHoachNeu(id: string, cu: { status: string; result: any }, moi: { status: string; result: any }): Promise<boolean>
     ghiNhatKy(w: Omit<NhatKyFb, 'id' | 'createdAt'>): Promise<void>
     dsNhatKy(lim: number): Promise<NhatKyFb[]>
     demGhiTuLuc(ms: number): Promise<number>
@@ -348,6 +366,24 @@ export function khoSqlFb(prisma: any): KhoFbPilot {
             return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE kind IN ('reply', 'hide') AND status <> 'cancelled'
                                AND data::jsonb->>'commentId' = ANY($1::text[]) ORDER BY "createdAt" DESC`, ids)).map(hangKeHoach)
         },
+        async dsKeHoachBaiHen(ids) {
+            if (!ids.length) return []
+            let rs: any[]
+            try {
+                // gọi thẳng, KHÔNG qua chacBang: nhịp mỗi phút không được tạo bảng hộ cửa hàng chưa từng dùng Pilot
+                rs = await prisma.$queryRawUnsafe(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE kind = 'post' AND status = 'succeeded'
+                                                     AND result IS NOT NULL AND result::jsonb->>'scheduledPostId' = ANY($1::text[])`, ids)
+            } catch (e: any) {
+                if (laThieuBang(e)) return []
+                throw e
+            }
+            return rs.map(hangKeHoach)
+        },
+        async doiKeHoachNeu(id, cu, moi) {
+            return (await x(`UPDATE "FacebookPilotPlan" SET status = $4, result = $5, "updatedAt" = $6
+                              WHERE id = $1 AND status = $2 AND result::jsonb IS NOT DISTINCT FROM $3::jsonb`,
+                id, cu.status, cu.result == null ? null : JSON.stringify(cu.result), moi.status, moi.result == null ? null : JSON.stringify(moi.result), Date.now())) === 1
+        },
         async ghiNhatKy(w) {
             await x(`INSERT INTO "FacebookPilotWrite" (id, action, status, "planId", payload, response, "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 crypto.randomUUID(), w.action, w.status, w.planId, JSON.stringify(w.payload ?? {}), w.response == null ? null : JSON.stringify(w.response).slice(0, 20000), Date.now())
@@ -399,6 +435,14 @@ export function khoBoNhoFb(): KhoFbPilot & { _keHoach: KeHoachFb[]; _nhatKy: Nha
         async dsKeHoachBinhLuan(ids) {
             return sao(keHoach.filter(k => (k.kind === 'reply' || k.kind === 'hide') && k.status !== 'cancelled' && ids.includes(String(k.data?.commentId))))
         },
+        async dsKeHoachBaiHen(ids) {
+            return sao(keHoach.filter(k => k.kind === 'post' && k.status === 'succeeded' && k.result?.scheduledPostId != null && ids.includes(String(k.result.scheduledPostId))))
+        },
+        async doiKeHoachNeu(id, cu, moi) {
+            const k = keHoach.find(x => x.id === id)
+            if (!k || k.status !== cu.status || jsonChuan(k.result) !== jsonChuan(cu.result)) return false
+            k.status = moi.status; k.result = moi.result == null ? null : sao(moi.result); k.updatedAt = Date.now(); return true
+        },
         async ghiNhatKy(w) { nhatKy.push({ ...sao(w), id: crypto.randomUUID(), createdAt: Date.now() }) },
         async dsNhatKy(lim) { return sao([...nhatKy].sort((a, b) => b.createdAt - a.createdAt).slice(0, lim)) },
         async demGhiTuLuc(ms) { return nhatKy.filter(w => w.createdAt >= ms).length },
@@ -415,6 +459,8 @@ export interface DichVuFb {
     replyToComment(commentId: string, message: string): Promise<{ id: string }>
     hideComment(commentId: string, hidden?: boolean): Promise<{ success: boolean }>
     listScheduledPosts(pageId: string): Promise<any[]>
+    /** Xoá bài — Pilot CHỈ dùng để rút bài HẸN chưa lên của chính nó (soatBaiHenSapLen), sau khi thấy bài còn trong scheduled_posts. */
+    deletePost(postId: string): Promise<{ success: boolean }>
 }
 
 export interface NgCanhFb {
@@ -598,8 +644,9 @@ async function gioDaCo(ctx: NgCanhFb, pageId: string, now: number): Promise<numb
     const nhap = (await ctx.kho.dsKeHoachMo(now)).filter(k => k.kind === 'post' && k.status === 'draft' && cuaPage(k))
     return [
         ...ds.map(r => new Date(r.scheduledAt).getTime()),
-        // đăng xong (succeeded) thì có dòng FbScheduledPost rồi — chỉ đếm bản chưa có dòng đó, khỏi đếm đôi
-        ...daDang.filter(k => k.status !== 'succeeded' || !k.result?.scheduledPostId).map(gio).filter(t => t > 0),
+        // đăng xong thì có dòng FbScheduledPost rồi — chỉ đếm bản chưa có dòng đó, khỏi đếm đôi. 09/11/2026: xét theo scheduledPostId,
+        // không theo 'succeeded' — bài hẹn rút không được chuyển 'uncertain' (soatBaiHenSapLen) vẫn giữ dòng 'scheduled' của nó
+        ...daDang.filter(k => !k.result?.scheduledPostId).map(gio).filter(t => t > 0),
         ...nhap.map(gio).filter(t => t >= now + 10 * 60_000),
     ]
 }
@@ -1476,6 +1523,261 @@ export async function chayTheoLichFb(prisma: any, kho?: KhoFbPilot, ngoai: Parti
     return ketQua.ok ? 'da-chay' : 'loi'
 }
 
+// ─── Soát bài hẹn sắp lên (09/11/2026 — gọi từ cron/aiAgentCron mỗi nhịp phút) ──────────────────
+
+/* Pilot giao bài HẸN GIỜ cho Facebook trước tới 3 ngày; tồn / giá chỉ soát lúc giao (dangBai). Giá đổi hay hàng hết sau đó thì
+ * bài vẫn lên với số cũ. Nhịp ngoài (POST /api/cron/tick mỗi phút → aiAgentCron.quetTuNgoai → nhipSoatBaiHenFb) soát lại bài hẹn CỦA PILOT
+ * sắp lên — dòng FbScheduledPost 'scheduled' nối được về kế hoạch 'succeeded' (result.scheduledPostId VÀ result.postId khớp
+ * fbPostId) — đọc SỐNG kho rồi RÚT (xoá bài hẹn chưa lên) khi:
+ *   - mã không còn / đã gộp / tồn < minStock của chính sách HIỆN TẠI;
+ *   - giá bán đổi ≥ 1đ VÀ chữ bài còn hiện giá cũ (chữ không ghi giá thì giá đổi không làm bài sai).
+ * Chữ + giờ lên lấy ở dòng FbScheduledPost (Fanpage Manager sửa được cả hai), đối chiếu thêm bản Facebook trả về.
+ * CHỈ xoá khi Facebook còn liệt kê bài trong scheduled_posts VÀ giờ lên còn cách ≥ BIEN_XOA_MS — không bao giờ xoá bài đã công
+ * khai, không bao giờ đụng bài không do Pilot tạo. Rút xong: kế hoạch 'cancelled' + tuHuy (không chặn mã 21 ngày, không thành
+ * "người huỷ ⇒ nhớ 14 ngày"), dòng FbScheduledPost 'cancelled', nhật ký 'withdraw', MỘT tin gộp cho chủ shop. Không rút được
+ * (token / quyền / không rõ kết cục / quá sát giờ / đã lên) ⇒ kế hoạch 'uncertain' + tin KHẨN "vào fanpage xử lý tay".
+ * Hạn mức / đọc hỏng tạm thời ⇒ nhả, nhịp sau thử lại. Nhiều bản máy (prod không có Redis): giành từng kế hoạch bằng
+ * doiKeHoachNeu (CAS trên dòng CSDL) TRƯỚC khi gọi Facebook ⇒ hai lượt song song không cùng xoá, không cùng báo.
+ */
+
+/** Soát bài có giờ lên trong 60 phút tới: đủ sát giờ để quyết theo số LÚC LÊN (hôm nay hết hàng, mai về thì bài hẹn ngày kia
+ *  vẫn đúng — rút sớm là mất bài oan), đủ rộng để hạn mức Facebook / vài nhịp hụt vẫn còn hàng chục lượt thử. */
+export const SOAT_TRUOC_MS = 60 * 60_000
+/** Quá giờ ≤ 30 phút mà dòng vẫn 'scheduled' (đêm không có đối soát fanpageCron) — chỉ để BÁO bài đã lên với số cũ, không xoá. */
+export const SOAT_TRE_MS = 30 * 60_000
+/** Chỉ gửi lệnh xoá khi giờ lên còn cách ≥ 3 phút: lệnh ghi chờ tối đa 90 giây ⇒ lệnh xoá tới Facebook TRƯỚC giờ lên. */
+export const BIEN_XOA_MS = 3 * 60_000
+/** Một lượt giữ một kế hoạch tối đa bấy nhiêu (đọc 30 giây + xoá 90 giây + ghi sổ); chết giữa chừng thì lượt sau giành lại. */
+const HAN_GIU_SOAT_MS = 5 * 60_000
+
+/** Chữ bài có hiện giá `gia` không — "26.000đ" (bài máy soạn), "26,000", "26 000", "26000", "26k", "26,5k", "26 nghìn",
+ *  "1,2tr", "1tr2", "1 triệu"… Ranh giới số: "126.000" hay "26.000.000" không phải 26.000; "26kg" không phải giá. */
+export function chuCoGia(chu: string, gia: number): boolean {
+    const n = Math.round(Number(gia) || 0)
+    if (!(n > 0)) return false
+    const s = String(chu || '').normalize('NFC').replace(/[    ]/g, ' ')
+    const dau = '(?<![\\d.,])'
+    const het = '(?![\\p{L}\\d])'
+    const NGHIN = '(?:k|nghìn|ngàn|nghin|ngan)'
+    const TRIEU = '(?:tr|triệu|trieu)'
+    const mau = [`${dau}${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '#').split('#').join('[., ]?')}(?![.,]?\\d)`]
+    const le = (du: number, chuSo: number) => String(du).padStart(chuSo, '0').replace(/0+$/, '')
+    if (n >= 1000 && n % 10 === 0) {
+        const a = Math.floor(n / 1000), d = le(n % 1000, 3)
+        mau.push(d ? `${dau}${a}[.,]${d} ?${NGHIN}${het}` : `${dau}${a} ?${NGHIN}${het}`)
+        if (d) mau.push(`${dau}${a} ?k ?${d}${het}`)
+    }
+    if (n >= 1_000_000 && n % 10_000 === 0) {
+        const a = Math.floor(n / 1_000_000), d = le(n % 1_000_000, 6)
+        mau.push(d ? `${dau}${a}[.,]${d} ?${TRIEU}${het}` : `${dau}${a} ?${TRIEU}${het}`)
+        if (d) mau.push(`${dau}${a} ?${TRIEU} ?${d}${het}`, `${dau}${a} ?${TRIEU} ?${(n % 1_000_000) / 1000} ?${NGHIN}${het}`)
+    }
+    return mau.some(m => new RegExp(m, 'iu').test(s))
+}
+
+export interface LyDoRut { loai: 'ma' | 'ton' | 'gia'; lyDo: string }
+/** Lý do RÚT một bài hẹn của Pilot theo kho HIỆN TẠI; null = bài vẫn đúng. `chu` = chữ bài sẽ lên, `giaCu` = giá lúc lập kế hoạch. */
+export function lyDoRutBai(sp: { sellingPrice?: any; stock?: any; mergedIntoId?: any } | null, giaCu: number, chu: string, pol: ChinhSachFbPilot): LyDoRut | null {
+    if (!sp) return { loai: 'ma', lyDo: 'mã hàng không còn trong kho' }
+    if (sp.mergedIntoId) return { loai: 'ma', lyDo: 'mã đã gộp vào mã khác' }
+    if (!(Number(sp.stock) >= pol.minStock)) return { loai: 'ton', lyDo: `tồn kho còn ${Number(sp.stock) || 0}, dưới mức ${pol.minStock} của chính sách` }
+    const moi = Number(sp.sellingPrice) || 0, cu = Number(giaCu) || 0
+    if (Math.abs(moi - cu) >= 1 && chuCoGia(chu, cu)) return { loai: 'gia', lyDo: `giá bán đã đổi từ ${vnd(cu)} thành ${vnd(moi)} mà bài còn ghi giá cũ` }
+    return null
+}
+
+const SCHEMA_HOP_LE = /^[A-Za-z0-9_]+$/
+/** Câu dò NHẸ chạy bằng kết nối REGISTRY (cùng CSDL, ghi rõ schema — như lib/donTonMaGop): số bài hẹn CỦA PILOT có giờ lên trong
+ *  cửa sổ soát. 0 ⇒ nhịp không mở client riêng cho cửa hàng (cả cụm chỉ ~45 kết nối, client bị chạm mỗi phút thì không bao giờ
+ *  được thải). Bảng kế hoạch chưa có (chưa từng dùng Pilot) ⇒ câu ném 42P01, người gọi bỏ qua êm (laThieuBang). Giờ so bằng đồng
+ *  hồ CSDL theo UTC như mọi cột Prisma DateTime (timestamp không múi giờ, giữ giờ UTC), nới mỗi bên 1 phút — soatBaiHenSapLen
+ *  lọc lại chính xác theo đồng hồ máy chủ. */
+export function sqlDemBaiHenSapLen(schema: string): string {
+    if (!SCHEMA_HOP_LE.test(schema)) throw new Error(`schema lạ: ${schema}`)
+    const truoc = Math.ceil(SOAT_TRUOC_MS / 60_000) + 1, tre = Math.ceil(SOAT_TRE_MS / 60_000) + 1
+    return `SELECT COUNT(*)::int AS n FROM "${schema}"."FbScheduledPost" s
+             WHERE s.status = 'scheduled' AND s."fbPostId" IS NOT NULL
+               AND s."scheduledAt" >= (NOW() AT TIME ZONE 'UTC') - interval '${tre} minutes'
+               AND s."scheduledAt" <= (NOW() AT TIME ZONE 'UTC') + interval '${truoc} minutes'
+               AND EXISTS (SELECT 1 FROM "${schema}"."FacebookPilotPlan" p WHERE p.kind = 'post' AND p.status = 'succeeded'
+                             AND p.result IS NOT NULL AND p.result::jsonb->>'scheduledPostId' = s.id)`
+}
+
+/** da_rut = đã xoá bài hẹn · can_nguoi = không xoá được (token / quyền / không rõ kết cục…) · qua_gio = còn < BIEN_XOA_MS, không
+ *  kịp xoá an toàn · da_len = Facebook không còn bài hẹn và giờ đã tới · khong_con_hen = Facebook không còn bài hẹn mà giờ chưa tới
+ *  (xoá tay / đăng sớm) · thu_lai = hạn mức / đọc hỏng tạm thời, nhịp sau thử lại · giu_nguyen = chữ trên Facebook không còn giá cũ. */
+export type KetCucSoatBaiHen = 'da_rut' | 'can_nguoi' | 'qua_gio' | 'da_len' | 'khong_con_hen' | 'thu_lai' | 'giu_nguyen'
+export interface ViecSoatBaiHen { planId: string; sku: string | null; scheduledAt: number; lyDo: string; ketCuc: KetCucSoatBaiHen; message: string; baoChu: boolean }
+export interface KetQuaSoatBaiHen {
+    /** khong-co = không có bài hẹn nào của Pilot trong cửa sổ · da-soat = đã xét (có thể chẳng phải làm gì) */
+    trangThai: 'khong-co' | 'da-soat'
+    daXet: number
+    viec: ViecSoatBaiHen[]
+    daBao: boolean
+}
+
+/**
+ * Soát các bài hẹn của Pilot sắp lên (xem khối chú thích ở trên). Đọc nhẹ: một truy vấn FbScheduledPost theo chỉ mục
+ * status + scheduledAt; không có bài trong cửa sổ thì dừng. TUẦN TỰ (pool 1 kết nối) — người gọi giữ client (giuClient).
+ * Bài không có lý do rút ⇒ không gọi Facebook, không ghi gì. Ngân sách thời gian `nganSachMs` (mặc định 40 giây, đồng hồ thật):
+ * hết thì dừng, bài còn lại nhịp sau soát tiếp (còn trong cửa sổ).
+ */
+export async function soatBaiHenSapLen(prisma: any, kho?: KhoFbPilot, ngoai: Partial<NgCanhFb> & { nganSachMs?: number } = {}): Promise<KetQuaSoatBaiHen> {
+    const dongHo = () => (ngoai.bayGio ? ngoai.bayGio() : Date.now())
+    const batDau = Date.now()
+    const nganSach = ngoai.nganSachMs ?? 40_000
+    const now = dongHo()
+    const ra: KetQuaSoatBaiHen = { trangThai: 'khong-co', daXet: 0, viec: [], daBao: false }
+    const guong: any[] = await prisma.fbScheduledPost.findMany({
+        where: { status: 'scheduled', fbPostId: { not: null }, scheduledAt: { gte: new Date(now - SOAT_TRE_MS), lte: new Date(now + SOAT_TRUOC_MS) } },
+        select: { id: true, pageId: true, fbPostId: true, message: true, scheduledAt: true },
+        orderBy: { scheduledAt: 'asc' },
+        take: 200,
+    })
+    if (!guong.length) return ra
+    const k = kho || khoSqlFb(prisma)
+    const theoId = new Map(guong.map(g => [String(g.id), g]))
+    const cap = (await k.dsKeHoachBaiHen([...theoId.keys()]))
+        .map(p => ({ p, g: theoId.get(String(p.result?.scheduledPostId)) }))
+        // CHỈ bài của Pilot, còn HẸN: kế hoạch nối đúng dòng FbScheduledPost VÀ đúng mã bài Facebook, lúc giao là bài hẹn (published
+        // false). Dòng FbScheduledPost của Fanpage Manager / Content AI không có kế hoạch nối tới ⇒ không bao giờ bị đụng.
+        .filter((x): x is { p: KeHoachFb; g: any } => !!x.g && x.p.result?.published === false && !!x.p.result?.postId && String(x.p.result.postId) === String(x.g.fbPostId))
+        .sort((a, b) => new Date(a.g.scheduledAt).getTime() - new Date(b.g.scheduledAt).getTime())
+    if (!cap.length) return ra
+    ra.trangThai = 'da-soat'
+    const pol = ((await k.docCauHinh()) || cauHinhMacDinh()).policy
+    const trang = new Map<string, any>()                     // pageId → dòng FbPage (đọc một lần mỗi lượt)
+    const henTrenFb = new Map<string, any[] | { loi: any }>() // pageId → scheduled_posts Facebook trả (một lần mỗi lượt)
+    const luot = crypto.randomUUID()
+
+    for (const { p, g } of cap) {
+        if (Date.now() - batDau > nganSach) break
+        ra.daXet++
+        const hen = new Date(g.scheduledAt).getTime()
+        const d = p.data || {}
+        const sp = await docHangBaiHen(prisma, String(d.productId || ''))
+        const ly = lyDoRutBai(sp, Number(d.price) || 0, String(g.message || d.message || ''), pol)
+        if (!ly) continue
+        const goc = p.result || {}
+        const truoc = goc.rutBai
+        if (truoc && !(truoc.trangThai === 'dang' && Number(truoc.han) < dongHo())) continue // lượt khác đang giữ bài này
+        const { rutBai: _cu, ...sach } = goc
+        const giu = { ...sach, rutBai: { trangThai: 'dang', luot, luc: dongHo(), han: dongHo() + HAN_GIU_SOAT_MS, lyDo: ly.lyDo } }
+        if (!(await k.doiKeHoachNeu(p.id, { status: 'succeeded', result: goc }, { status: 'succeeded', result: giu }))) continue
+
+        // ── giữ được bài: hỏi Facebook rồi quyết ──
+        let kq: { ketCuc: KetCucSoatBaiHen; loi?: string; loai?: string; daGoiXoa?: boolean; len?: number }
+        const loiFb = (e: any, laXoa: boolean): typeof kq => {
+            const loai = loaiLoiFb(e)
+            const loi = String(e?.message || e).slice(0, 300)
+            // lệnh ĐỌC hỏng vì mạng / hết giờ / Facebook 5xx cũng chỉ là tạm — đọc lại nhịp sau (đọc không đổi gì trên Facebook)
+            if (loai === 'tam_thoi' || (!laXoa && (e?.hetGio || !e?.code || Number(e?.httpStatus) >= 500))) return { ketCuc: 'thu_lai', loi, loai }
+            return { ketCuc: 'can_nguoi', loi, loai, daGoiXoa: laXoa }
+        }
+        if (!trang.has(g.pageId)) {
+            const [pg] = await prisma.fbPage.findMany({ where: { pageId: String(g.pageId) }, select: { pageId: true, name: true, status: true, accessToken: true } })
+            trang.set(g.pageId, pg || null)
+        }
+        const pg = trang.get(g.pageId)
+        if (!pg || pg.status !== 'active' || !pg.accessToken) {
+            kq = { ketCuc: 'can_nguoi', loi: !pg ? 'fanpage không còn nối ở Kengi' : pg.status === 'token_expired' ? 'token fanpage đã hết hạn — dán token mới ở tab Kết nối' : pg.status === 'disconnected' ? 'fanpage đã ngắt nối ở Kengi' : 'fanpage chưa có token' }
+        } else {
+            const fb: DichVuFb = ngoai.taoFb ? ngoai.taoFb(pg.accessToken) : new FacebookService(pg.accessToken)
+            let ds = henTrenFb.get(g.pageId)
+            if (!ds) {
+                try { ds = await fb.listScheduledPosts(pg.pageId) } catch (e: any) { ds = { loi: e } }
+                henTrenFb.set(g.pageId, ds)
+            }
+            if (!Array.isArray(ds)) kq = loiFb(ds.loi, false)
+            else {
+                const tren = ds.find(x => String(x?.id) === String(g.fbPostId))
+                if (!tren) {
+                    kq = ds.length >= 100
+                        ? { ketCuc: 'can_nguoi', loi: 'fanpage có từ 100 bài hẹn trở lên — không đọc hết danh sách để biết bài còn hẹn hay không' }
+                        : { ketCuc: hen <= dongHo() + BIEN_XOA_MS ? 'da_len' : 'khong_con_hen' }
+                } else if (ly.loai === 'gia' && typeof tren.message === 'string' && !chuCoGia(tren.message, Number(d.price) || 0)) {
+                    kq = { ketCuc: 'giu_nguyen' } // chữ đã sửa thẳng trên Facebook, không còn giá cũ ⇒ bài không sai
+                } else {
+                    const henFb = Number(tren.scheduledPublishTime) > 0 ? Number(tren.scheduledPublishTime) * 1000 : hen
+                    const len = Math.min(hen, henFb)
+                    if (len - dongHo() < BIEN_XOA_MS) kq = { ketCuc: 'qua_gio', len }
+                    else {
+                        try {
+                            await fb.deletePost(String(g.fbPostId))
+                            kq = { ketCuc: 'da_rut', daGoiXoa: true }
+                        } catch (e: any) {
+                            kq = loiFb(e, true)
+                        }
+                    }
+                }
+            }
+            if (kq.loai === 'token') {
+                await prisma.fbPage.update({ where: { pageId: pg.pageId }, data: { status: 'token_expired' } }).catch(() => { })
+                trang.set(g.pageId, { ...pg, status: 'token_expired' })
+            }
+        }
+
+        // ── ghi kết cục: CAS từ đúng bản đang giữ ──
+        const sku = (d.sku || sp?.sku || null) as string | null
+        const tg = ngayGioVN(hen)
+        if (kq.ketCuc === 'thu_lai' || kq.ketCuc === 'giu_nguyen') {
+            await k.doiKeHoachNeu(p.id, { status: 'succeeded', result: giu }, { status: 'succeeded', result: sach })
+            if (kq.ketCuc === 'thu_lai') console.warn(`[FacebookPilot] rút bài hẹn ${p.id} (${sku}) tạm hoãn — nhịp sau thử lại:`, kq.loi)
+            ra.viec.push({ planId: p.id, sku, scheduledAt: hen, lyDo: ly.lyDo, ketCuc: kq.ketCuc, message: kq.loi || 'Chữ bài trên Facebook không còn giá cũ — giữ nguyên.', baoChu: false })
+            continue
+        }
+        const q = kq.loai === 'quyen' ? quyenThieuFb({ message: kq.loi }) : null
+        const vi = kq.loai === 'khong_ro' ? 'không rõ Facebook đã xoá chưa (hết giờ / Facebook lỗi máy chủ)'
+            : kq.loai === 'token' ? `Facebook từ chối token của fanpage — dán page token mới ở tab Kết nối (${kq.loi})`
+                : kq.loai === 'quyen' ? `page token thiếu quyền${q ? ` ${q}` : ''} (${kq.loi})` : kq.loi || 'lỗi lạ'
+        const soCu = ly.loai === 'gia' ? 'giá cũ' : ly.loai === 'ton' ? 'tồn cũ' : 'mã hàng cũ'
+        const message = kq.ketCuc === 'da_rut' ? `Đã RÚT bài hẹn ${tg} trước giờ lên — ${ly.lyDo}. Bài chưa lên Facebook; lập kế hoạch mới để đăng theo số hiện tại.`
+            : kq.ketCuc === 'can_nguoi' ? `KHẨN: bài hẹn ${tg} sẽ lên với ${soCu} (${ly.lyDo}) — Pilot không rút được: ${vi}. Vào fanpage xoá tay bài hẹn này.`
+                : kq.ketCuc === 'qua_gio' ? `KHẨN: bài hẹn ${ngayGioVN(kq.len || hen)} sẽ lên với ${soCu} (${ly.lyDo}) — còn dưới ${BIEN_XOA_MS / 60_000} phút, Pilot không kịp rút an toàn. Sửa hoặc xoá tay trên fanpage.`
+                    : kq.ketCuc === 'da_len' ? `Bài hẹn ${tg} đã lên Facebook với ${soCu} (${ly.lyDo}) — Pilot KHÔNG xoá bài đã công khai. Sửa hoặc xoá tay trên fanpage nếu cần.`
+                        : `Facebook không còn bài hẹn ${tg} trong danh sách hẹn giờ — đã bị xoá tay, hoặc đã đăng sớm (khi đó bài mang ${soCu}: ${ly.lyDo}). Pilot không xoá gì; kiểm trên fanpage.`
+        const luc = dongHo()
+        const daChot = kq.ketCuc === 'da_rut'
+            ? await k.doiKeHoachNeu(p.id, { status: 'succeeded', result: giu }, { status: 'cancelled', result: { ...sach, tuHuy: true, message, rutBai: { trangThai: 'da_rut', luc, lyDo: ly.lyDo } } })
+            : await k.doiKeHoachNeu(p.id, { status: 'succeeded', result: giu }, { status: 'uncertain', result: { ...sach, message, rutBai: { trangThai: kq.ketCuc, luc, lyDo: ly.lyDo, ...(kq.loi ? { loi: kq.loi } : {}) } } })
+        if (!daChot) console.warn(`[FacebookPilot] rút bài hẹn ${p.id}: kế hoạch đã bị lượt khác đổi (quá hạn giữ?) — kết cục ${kq.ketCuc} không ghi`)
+        if (kq.ketCuc === 'da_rut') {
+            await prisma.fbScheduledPost.updateMany({ where: { id: g.id, status: 'scheduled' }, data: { status: 'cancelled', errorMessage: `Facebook Pilot rút bài hẹn: ${ly.lyDo}`.slice(0, 500) } })
+                .catch((e: any) => console.error('[FacebookPilot] rút bài hẹn — ghi FbScheduledPost lỗi:', e?.message || e))
+        }
+        if (kq.daGoiXoa) {
+            await k.ghiNhatKy({ action: 'withdraw', status: kq.ketCuc === 'da_rut' ? 'succeeded' : kq.loai === 'khong_ro' ? 'uncertain' : 'failed', planId: p.id, payload: { sku, postId: g.fbPostId, scheduledAt: hen, lyDo: ly.lyDo }, response: { message } })
+                .catch((e: any) => console.error('[FacebookPilot] rút bài hẹn — ghi nhật ký lỗi:', e?.message || e))
+        }
+        ra.viec.push({ planId: p.id, sku, scheduledAt: hen, lyDo: ly.lyDo, ketCuc: kq.ketCuc, message, baoChu: daChot })
+    }
+
+    // ── MỘT tin gộp cho chủ shop mỗi lượt — chỉ việc vừa chốt (CAS) ⇒ mỗi bài báo đúng một lần dù nhiều bản máy cùng soát ──
+    const bao = ra.viec.filter(v => v.baoChu)
+    if (bao.length) {
+        const khan = bao.filter(v => v.ketCuc !== 'da_rut').length
+        const title = khan
+            ? `Facebook Pilot KHẨN: ${khan} bài hẹn giờ cần xử lý tay trên fanpage`
+            : `Facebook Pilot: đã rút ${bao.length} bài hẹn giờ vì giá / tồn / mã hàng đã đổi`
+        const message = bao.map(v => `• ${v.sku || 'Bài'}: ${v.message}`).join('\n').slice(0, 2000)
+        try {
+            const tin = await prisma.notification.create({ data: { type: 'warning', title, message } })
+            ra.daBao = true
+            const { sendPushToStore } = await import('../routes/notifications')
+            sendPushToStore(prisma, title, message, { id: tin?.id, type: 'warning' }).catch(() => { })
+        } catch (e: any) {
+            console.error('[FacebookPilot] rút bài hẹn — ghi thông báo chủ shop lỗi:', e?.message || e)
+        }
+    }
+    return ra
+}
+
+/** Hàng của bài hẹn, đọc SỐNG (đủ trường lyDoRutBai cần + sku cho tin báo). */
+async function docHangBaiHen(prisma: any, id: string): Promise<{ id: string; sku: string; sellingPrice: any; stock: any; mergedIntoId: string | null } | null> {
+    if (!id) return null
+    return prisma.product.findUnique({ where: { id }, select: { id: true, sku: true, sellingPrice: true, stock: true, mergedIntoId: true } })
+}
+
 export const HUONG_DAN_FB_PILOT = `FACEBOOK PILOT TRÊN KENGI
 
 Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu lấy thẳng từ kho của cửa hàng — tên, giá, mô tả, ảnh đều là số thật.
@@ -1496,6 +1798,13 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
    - Khung giờ: theo giờ đăng trong chính sách (trống thì giờ vàng của hồ sơ thương hiệu, không có nữa thì 9h, 12h, 20h), mỗi ngày tối đa
      N bài — đếm cả bài Kengi khác đã hẹn — và các bài cách nhau tối thiểu X phút.
    - Lúc thực thi máy chủ soát lại: hàng còn tồn, giá chưa đổi từ lúc lập kế hoạch, giờ hẹn còn cách ≥ 10 phút. Sai một điều là không đăng.
+   - Bài HẸN GIỜ (giao cho Facebook trước tới 3 ngày) được soát lại lần nữa trong 1 tiếng trước giờ lên — máy chủ tự chạy mỗi phút,
+     cả đêm, kể cả khi lịch tắt hay đã chuyển về Xem trước. Mã không còn / đã gộp, tồn dưới mức tối thiểu, hoặc giá bán đổi mà chữ bài
+     còn ghi giá cũ ⇒ Pilot RÚT bài hẹn (xoá bài CHƯA lên trên Facebook), kế hoạch hiện "Đã rút bài hẹn" kèm lý do, chủ shop nhận
+     thông báo. Bài không ghi giá thì giá đổi không rút. Chỉ đụng bài do Pilot đăng, chỉ xoá khi Facebook còn liệt kê bài trong danh
+     sách hẹn giờ và giờ lên còn cách ≥ 3 phút — không bao giờ xoá bài đã công khai.
+   - Không rút được (token hỏng, thiếu quyền, Facebook không trả lời rõ, còn dưới 3 phút, bài đã lên) ⇒ thông báo KHẨN "vào fanpage
+     xoá / sửa tay", kế hoạch chuyển "Cần kiểm tra". Facebook giới hạn lượt gọi ⇒ giữ nguyên, phút sau thử lại.
 
 3. Bình luận
    - Tab Bình luận đọc bình luận mới trên 15 bài gần nhất, đánh dấu: hỏi giá / xin inbox, có số điện thoại, đã có người trả lời.
@@ -1518,7 +1827,8 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
    - Dọn kế hoạch mỗi chu kỳ: nháp MÁY lập quá giờ hẹn hoặc quá 3 ngày thì tự huỷ (nháp người lập giữ nguyên); thực thi kẹt quá 1 giờ
      ⇒ "không rõ kết quả" để người kiểm. Chuyển Xem trước → Tự động: nháp của lượt Xem trước bị huỷ, chu kỳ lập lại theo số hiện tại.
    - Người huỷ nháp máy đề xuất ⇒ máy không đề xuất lại mã / bình luận đó trong 14 ngày. Chỉ bài ĐÃ gửi Facebook mới tính vào
-     "không lên lại trong N ngày"; nháp còn hạn chỉ giữ khung giờ của nó.
+     "không lên lại trong N ngày"; nháp còn hạn chỉ giữ khung giờ của nó. Bài hẹn bị Pilot RÚT không tính, cũng không bị nhớ 14 ngày:
+     mã đó được lập lại theo giá / tồn mới khi còn đủ điều kiện.
 
 6. Chưa làm
    - Nhắn tin Messenger cho khách: cần app Facebook được duyệt quyền pages_messaging.

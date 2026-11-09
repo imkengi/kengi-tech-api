@@ -18,7 +18,7 @@ import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedul
 import { ToolCtx } from '../lib/mcpTypes'
 import { layKeyAi } from '../lib/keyAi'
 import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
-import { chayTheoLichFb } from '../lib/facebookPilot'
+import { chayTheoLichFb, soatBaiHenSapLen, sqlDemBaiHenSapLen, laThieuBang } from '../lib/facebookPilot'
 import { chayTheoLichAds } from '../lib/facebookAdsPilot'
 import { chayTheoLichTikTok } from '../lib/tiktokPilot'
 import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT } from '../lib/tienIchCuaHang'
@@ -167,9 +167,68 @@ export async function gianhJob(sp: any, job: { id: string; nextRunAt: Date | nul
     return r.count === 1
 }
 
+/* ── SOÁT BÀI HẸN FACEBOOK PILOT SẮP LÊN (09/11/2026) ──
+ * Pilot giao bài HẸN GIỜ cho Facebook trước tới 3 ngày; lib/facebookPilot.soatBaiHenSapLen soát lại tồn / giá trong 1 giờ trước
+ * giờ lên và RÚT bài sai. PHẢI chạy cả đêm ⇒ đi nhịp ngoài (quetTuNgoai, mỗi phút) và chạy TRƯỚC chốt `dangChay`: một lượt quet()
+ * dài (tác vụ AI, chu kỳ Pilot) không được chặn bước rút bài sắp lên. KHÔNG theo cờ hasAiJobs (cờ đó chỉ bật khi BẬT LỊCH Pilot —
+ * cửa hàng chạy Tự động bằng tay vẫn có bài hẹn): duyệt mọi cửa hàng đang hoạt động có tiện ích facebook_pilot, dò bằng kết nối
+ * REGISTRY (sqlDemBaiHenSapLen, một câu COUNT) — không có bài hẹn nào của Pilot trong cửa sổ thì KHÔNG mở client riêng của cửa hàng
+ * (client bị chạm mỗi phút thì không bao giờ được thải; cả cụm chỉ ~45 kết nối). Có thì giữ client (giuClient) và soát tuần tự.
+ * Nhiều bản máy cùng soát được — mỗi bài giành bằng CAS trên dòng kế hoạch; chốt `dangSoatFb` + giãn 50 giây chỉ để một bản máy
+ * không tự chạy chồng / chạy hai lần trong một phút. quet() (setInterval 5 phút) chỉ gọi làm lưới phụ khi nhịp ngoài IM ≥ 3 phút:
+ * setInterval chạy cả đêm nhưng ngoài request bị hãm CPU — lượt soát nó mở có thể treo giữa chừng, giữ chốt dangSoatFb khiến
+ * nhịp ngoài kế tiếp 'bo-qua'.
+ */
+let dangSoatFb = false
+let soatFbLuc = 0
+let nhipNgoaiLuc = 0 // lần cuối nhịp ngoài (quetTuNgoai) gọi tới bản máy này
+export async function nhipSoatBaiHenFb(): Promise<string> {
+    if (dangSoatFb || Date.now() - soatFbLuc < 50_000) return 'bo-qua'
+    dangSoatFb = true
+    soatFbLuc = Date.now()
+    const ra: string[] = []
+    try {
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true, addOns: true } })
+        for (const store of stores) {
+            if (!docTienIch(store.addOns).includes(TIEN_ICH_FACEBOOK_PILOT)) continue
+            let n = 0
+            try {
+                const dem: any[] = await registryPrisma.$queryRawUnsafe(sqlDemBaiHenSapLen(String(store.schema || '')))
+                n = Number(dem[0]?.n) || 0
+            } catch (e: any) {
+                // chưa từng dùng Facebook Pilot (bảng kế hoạch chưa có) ⇒ không có gì để soát; lỗi khác PHẢI kêu — im là nhịp chết hẳn
+                if (!laThieuBang(e)) console.error(`[FacebookPilot] soát bài hẹn ${store.code} — câu dò hỏng:`, e?.message || e)
+                continue
+            }
+            if (!n) continue
+            const nha = giuClient(store.schema)
+            try {
+                const kq = await soatBaiHenSapLen(getStorePrisma(store.schema))
+                const lam = kq.viec.filter(v => v.ketCuc !== 'giu_nguyen')
+                if (lam.length) console.log(`[FacebookPilot] soát bài hẹn ${store.code}: ${lam.map(v => `${v.sku || v.planId} → ${v.ketCuc}`).join(', ')}`)
+                ra.push(`${store.code}:${kq.daXet}/${lam.length}`)
+            } catch (e: any) {
+                console.error(`[FacebookPilot] soát bài hẹn ${store.code}:`, e?.message || e)
+                ra.push(`${store.code}:loi`)
+            } finally {
+                nha()
+            }
+        }
+    } catch (e: any) {
+        console.error('[FacebookPilot] soát bài hẹn — đọc danh sách cửa hàng hỏng:', e?.message || e)
+        return 'loi'
+    } finally {
+        dangSoatFb = false
+    }
+    return ra.join(' ') || 'khong-co'
+}
+
 /** Nhịp do Cloud Scheduler gọi qua POST /api/cron/tick (routes/cronTick.ts) — chạy TRONG
  *  request nên có CPU. Lượt đang chạy dở trên bản máy này thì bỏ qua. */
 export async function quetTuNgoai(): Promise<boolean> {
+    // soát bài hẹn Facebook Pilot TRƯỚC chốt dangChay — lượt quet() dài không được chặn bước rút bài sắp lên (09/11/2026)
+    nhipNgoaiLuc = Date.now()
+    await nhipSoatBaiHenFb().catch((e: any) => console.error('[FacebookPilot] soát bài hẹn:', e?.message || e))
     if (dangChay) return false
     return chayNeuLanhDao('ai-agent', CHU_KY - 30_000, quet)
 }
@@ -178,6 +237,8 @@ async function quet(): Promise<void> {
     if (dangChay) return          // lượt trước chưa xong (job có thể chạy lâu) → bỏ lượt này
     dangChay = true
     try {
+        // lưới phụ khi nhịp ngoài im ≥ 3 phút (Cloud Scheduler hụt) — nhịp ngoài còn sống thì để nó lo (xem khối chú thích nhipSoatBaiHenFb)
+        if (Date.now() - nhipNgoaiLuc > 3 * 60_000) await nhipSoatBaiHenFb().catch((e: any) => console.error('[FacebookPilot] soát bài hẹn:', e?.message || e))
         const stores = await registryPrisma.store.findMany({
             where: { status: 'active', hasAiJobs: true } as any,
         }) as any[]
