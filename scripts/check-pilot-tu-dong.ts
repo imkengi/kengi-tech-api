@@ -16,6 +16,9 @@
  *    I. TikTok: nháp không ăn trần, không trùng, người huỷ, cầu dao
  *    J. ĐỐI CHỨNG: ngành chưa đo ⇒ không tự hạ dù ngành đắt nhất đã đo vẫn lãi (ngành chưa đo có thể đắt hơn)
  *    K. chạm trần thao tác ghi / ngày khi đẩy tồn ⇒ bỏ qua, không phải hỏng
+ *    L. CHƯA BIẾT PHÍ sàn (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): gian chưa đủ đơn đối soát, ô phí
+ *       còn 6% mặc định ⇒ chu kỳ Shopee / TikTok không ghi gì, MỘT dòng lý do kèm đường khai phí, lịch báo chủ shop đúng một
+ *       lần; khai phí xong thì chạy lại. (D, H, I: "phí chưa đủ tin" giờ là gian ĐÃ khai phí 20% mà chưa đủ đơn để đo.)
  *  Chạy: npm run check:pilot-tu-dong
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
@@ -48,7 +51,13 @@ const themListing = (ch: string, item: string, sku: string, gia: number, giaVon:
 const donDoiSoat = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.14 * g + 3000 } })
 let donGian: any[] = donDoiSoat
 let donNganh: any[] = donDoiSoat.map(d => ({ ...d, nganh: '101' }))
-const phiTin = (tin: boolean) => { donGian = tin ? donDoiSoat : []; donNganh = tin ? donDoiSoat.map(d => ({ ...d, nganh: '101' })) : []; xoaDemPhiTheoNganh() }
+/** tin = 40 đơn đối soát (phí đo được, đủ tin); không thì 0 đơn và ô «Phí sàn (%)» của mọi gian = `phiKhai` — 20 = gian ĐÃ khai
+ *  phí (người duyệt được, máy không tự hạ), 6 = mặc định chưa khai ⇒ CHƯA BIẾT PHÍ (09/11/2026, không còn mượn / tính theo 6%). */
+const phiTin = (tin: boolean, phiKhai = 20) => {
+    donGian = tin ? donDoiSoat : []; donNganh = tin ? donDoiSoat.map(d => ({ ...d, nganh: '101' })) : []
+    for (const c of kenh) c.commissionRate = phiKhai
+    xoaDemPhiTheoNganh()
+}
 const thongBao: any[] = []
 let thongBaoHong = false
 let fbPages: any[] = []
@@ -96,10 +105,11 @@ const prisma: any = {
 const goi: string[] = []
 const songGia: Record<string, any> = {}      // item_id → { goc, ban, phanLoai, trangThai }
 const kmSap: Record<string, string> = {}     // item_id → 'ongoing' | 'upcoming'
-let docSongHong = false, kmHong = false, soLanDongBo = 0
+let docSongHong = false, kmHong = false, soLanDongBo = 0, soLanDocSong = 0
 const P = ShopeeService.prototype as any
 P.refreshAccessToken = async () => { throw new Error('bộ kiểm không cho làm mới token') }
 P.getItemBaseInfo = async function (ids: number[]) {
+    soLanDocSong++
     if (docSongHong) throw new Error('Shopee get_item_base_info: error_auth - invalid access_token')
     return ids.map(id => {
         const l = listing.find(x => x.platformProductId === String(id) && x.platform === 'shopee')
@@ -128,9 +138,10 @@ P.fetchProducts = async function (this: any) {
 
 // ─── TikTok giả ─────────────────────────────────────────────────────────────────
 const goiTT: string[] = []
+let soLanDocTT = 0
 const ttGia = async () => ({
     testConnection: async () => ({ success: true }),
-    getProductDetail: async (id: string) => { const l = listing.find(x => x.platformProductId === id && x.platform === 'tiktok'); return { skus: l ? [{ id: `sku-${id}`, seller_sku: l.sku, price: { tax_exclusive_price: String(l.price) } }] : [] } },
+    getProductDetail: async (id: string) => { soLanDocTT++; const l = listing.find(x => x.platformProductId === id && x.platform === 'tiktok'); return { skus: l ? [{ id: `sku-${id}`, seller_sku: l.sku, price: { tax_exclusive_price: String(l.price) } }] : [] } },
     updatePrice: async (id: string, gia: number) => { goiTT.push(`gia:${id}:${gia}`); const l = listing.find(x => x.platformProductId === id && x.platform === 'tiktok'); if (l) l.price = gia },
     getOrderSettlement: async () => null,
 }) as any
@@ -260,7 +271,7 @@ async function main() {
 
     // ─── D. Nháp chờ duyệt ──────────────────────────────────────────────────────
     {
-        xoaHet(); phiTin(false)      // phí CHƯA ĐO ⇒ máy không tự hạ giá
+        xoaHet(); phiTin(false)      // phí KHAI 20%, CHƯA ĐO ⇒ máy không tự hạ giá (TĂNG vẫn tự làm)
         kho._keHoach.length = 0
         for (let i = 1; i <= 12; i++) themListing('chA', String(2000 + i), `E${i}`, 160000, 50000)   // ế + lãi cao ⇒ HẠ (chờ duyệt)
         themListing('chA', '2000', 'LO', 100000, 100000)      // dưới sàn ⇒ TĂNG (tự làm) — xếp CUỐI danh sách, vẫn phải được xét trước
@@ -444,6 +455,68 @@ async function main() {
         await khoT.luuCauHinh({ ...cT, nextRunAt: Date.now() - 1000 })
         await chayTheoLichTikTok(prisma, khoT, { taoTikTok: ttGia, dayTon: dayTonGia })
         dung('I5. TikTok theo lịch: cầu dao nhảy ⇒ báo chủ shop', thongBao.length === 1 && /TikTok Pilot cần anh\/chị xem/.test(thongBao[0].title) && /CẦU DAO/.test(thongBao[0].message), JSON.stringify(thongBao))
+        phiTin(true)
+    }
+
+    // ─── L. CHƯA BIẾT PHÍ sàn (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được") ─────────────
+    // Gian chưa có đơn đối soát, ô «Phí sàn (%)» còn 6% mặc định. Trước: tính giá theo 6% (phí thật 20–30%) — máy "nâng lên sàn"
+    // mà vẫn lỗ, lập nháp hạ giá theo số bịa. Giờ: chu kỳ không ghi / không lập gì, MỘT dòng lý do kèm đường khai phí; lịch Tự
+    // động báo chủ shop đúng MỘT lần (lượt sau y như cũ thì im) — không mỗi mã một việc trên chuông.
+    {
+        xoaHet(); phiTin(false, 6); thongBao.length = 0; kho._keHoach.length = 0
+        themListing('chA', '9501', 'CB1', 100000, 100000)      // dưới mọi giá sàn thật — trước đây máy TĂNG theo 6%
+        themListing('chA', '9502', 'CB2', 160000, 50000)       // ế + lãi cao — trước đây lập nháp HẠ theo 6%
+        const c = await luuCauHinh(ctx, { channelId: 'chA', executionMode: 'auto', schedule: { enabled: true, intervalMinutes: 60, allChannels: false },
+            policy: { automation: { reprice: true, syncStock: false, publishNewProducts: true } } })
+        await kho.luuCauHinh({ ...c, nextRunAt: Date.now() - 1000 })
+        await kho.ghiKetQuaLich(Date.now() - 5 * 3600_000, { ...((await kho.docCauHinh())!.lastResult || {}), baoChuShop: undefined })   // lần báo trước (H) không chặn
+        const s0 = soLanDocSong
+        await chayTheoLich(prisma, kho)
+        const kq1 = (await kho.docCauHinh())!.lastResult
+        const dong1 = (kq1?.results || []).filter((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || ''))
+        dung('L1. Shopee chưa biết phí: chu kỳ Tự động KHÔNG ghi giá, không đọc giá Shopee, không lập kế hoạch; MỘT dòng "CHƯA BIẾT PHÍ" (đổi giá / đăng mới) kèm đường khai',
+            goi.length === 0 && soLanDocSong === s0 && kho._keHoach.length === 0 && dong1.length === 1 && dong1[0].action === 'cycle' && dong1[0].status === 'skipped'
+            && /"Gian A"/.test(dong1[0].message) && /0\/8 đơn/.test(dong1[0].message) && /chưa đổi giá \/ đăng mới mã nào/.test(dong1[0].message) && /«Phí sàn \(%\)»/.test(dong1[0].message),
+            JSON.stringify(kq1))
+        const sau1 = thongBao.length
+        const c2 = (await kho.docCauHinh())!
+        await kho.luuCauHinh({ ...c2, nextRunAt: Date.now() - 1000 })
+        await chayTheoLich(prisma, kho)
+        dung('L2. lịch Tự động báo chủ shop ĐÚNG MỘT lần (một việc, giữ đường khai «Phí sàn (%)»); lượt sau y như cũ thì im',
+            sau1 === 1 && thongBao.length === 1 && /Shopee Pilot cần anh\/chị xem 1 việc/.test(thongBao[0].title) && /CHƯA BIẾT PHÍ/.test(thongBao[0].message)
+            && /«Phí sàn \(%\)»/.test(thongBao[0].message) && goi.length === 0, JSON.stringify(thongBao))
+
+        // TikTok: cùng luật
+        thongBao.length = 0
+        const khoT = khoBoNhoTikTok()
+        const ctxT: any = { prisma, kho: khoT, nguoi: 'chu@shop', taoTikTok: ttGia, dayTon: dayTonGia }
+        themListing('chT', '9601', 'TCB1', 100000, 100000)
+        themListing('chT', '9602', 'TCB2', 160000, 50000)
+        await luuCauHinhTikTok(ctxT, { channelId: 'chT', executionMode: 'auto', policy: { maxWritesPerDay: 500, automation: { reprice: true, syncStock: false } } })
+        await luuCauHinhTikTok(ctxT, { schedule: { enabled: true, intervalMinutes: 60 } })
+        const t0 = soLanDocTT
+        const cT = (await khoT.docCauHinh())!
+        await khoT.luuCauHinh({ ...cT, nextRunAt: Date.now() - 1000 })
+        await chayTheoLichTikTok(prisma, khoT, { taoTikTok: ttGia, dayTon: dayTonGia })
+        const kqT = (await khoT.docCauHinh())!.lastResult
+        const dongT = (kqT?.results || []).filter((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || ''))
+        dung('L3. TikTok chưa biết phí: KHÔNG ghi giá, không đọc TikTok, không lập kế hoạch; MỘT dòng "CHƯA BIẾT PHÍ"',
+            goiTT.length === 0 && soLanDocTT === t0 && khoT._keHoach.length === 0 && dongT.length === 1 && dongT[0].action === 'cycle'
+            && /"TikTok Shop"/.test(dongT[0].message) && /chưa đổi giá mã nào/.test(dongT[0].message), JSON.stringify(kqT))
+        const sauT = thongBao.length
+        const cT2 = (await khoT.docCauHinh())!
+        await khoT.luuCauHinh({ ...cT2, nextRunAt: Date.now() - 1000 })
+        await chayTheoLichTikTok(prisma, khoT, { taoTikTok: ttGia, dayTon: dayTonGia })
+        dung('L4. TikTok theo lịch: báo chủ shop ĐÚNG MỘT lần', sauT === 1 && thongBao.length === 1 && /TikTok Pilot cần anh\/chị xem 1 việc/.test(thongBao[0].title)
+            && /CHƯA BIẾT PHÍ/.test(thongBao[0].message), JSON.stringify(thongBao))
+
+        // chủ shop khai phí 20% ở Kênh bán online ⇒ lượt sau máy chạy lại: TĂNG mã dưới sàn, HẠ thành nháp chờ duyệt
+        phiTin(false, 20)
+        await luuCauHinh(ctx, { policy: { automation: { publishNewProducts: false } } })
+        const ck = await chayChuKy(ctx)
+        dung('L5. khai phí xong ⇒ máy TĂNG mã dưới sàn theo phí khai (133.400), hạ giá thành nháp chờ duyệt, hết dòng CHƯA BIẾT PHÍ',
+            goi.join() === 'gia:1:9501:133400' && ck.results.some((r: any) => r.sku === 'CB2' && r.status === 'draft' && /CHỜ NGƯỜI DUYỆT/.test(r.message || ''))
+            && !ck.results.some((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || '')), JSON.stringify({ goi, r: ck.results }))
         phiTin(true)
     }
 

@@ -14,7 +14,7 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, ghiChuAffiliate, SO_DON_TU_GHI, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
+import { uocLuongPhi, SO_DON_TU_GHI, SO_DON_TOI_THIEU, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import type { PlatformProduct } from '../services/platforms/base'
@@ -96,32 +96,16 @@ async function dongPhi(prisma: any, channelIds: string[]): Promise<DongPhiDon[]>
 }
 
 /**
- * Mô hình phí của gian: đo từ đơn ĐÃ ĐỐI SOÁT 90 ngày của chính gian; gian mới chưa
- * đủ đơn thì mượn số đo của các gian CÙNG SÀN khác cùng store (cùng biểu phí của sàn,
- * sát hơn nhiều so với tỷ lệ cấu hình mặc định 6%); vẫn không có mới dùng cấu hình.
- * 02/11/2026: dùng chung cho TikTok Pilot — đơn TikTok cũng ghi netRevenue/platformFee từ đối soát tài chính,
- * nên chỉ phần mượn gian khác cần theo sàn của gian (trước cứng 'shopee').
+ * Mô hình phí của gian: đo từ đơn ĐÃ ĐỐI SOÁT 90 ngày của CHÍNH gian — và chỉ của chính gian.
+ * Gian chưa đủ đơn ⇒ phí KHAI của gian (OnlineChannel.commissionRate, cờ `khai`) hoặc CHƯA BIẾT PHÍ (`chuaBiet`,
+ * không tính giá) — luật ở giaShopee.doMauPhi, ghiChu nói rõ tên gian + số đơn.
+ * 09/11/2026 (chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): BỎ hẳn việc mượn số đo của các gian cùng sàn —
+ * gian Mall và gian thường, ngành hàng khác nhau thì phí khác nhau, mà số mượn từng hiện trên kế hoạch đổi giá như phí
+ * của chính gian. Hoa hồng affiliate đọc được ở đơn của chính gian vẫn giữ (uocLuongPhi gắn `affiliate` cả khi chưa đo).
+ * 02/11/2026: dùng chung cho TikTok Pilot — đơn TikTok cũng ghi netRevenue/platformFee từ đối soát tài chính.
  */
 export async function docMauPhi(prisma: any, ch: any): Promise<MauPhi> {
-    const rieng = uocLuongPhi(await dongPhi(prisma, [ch.id]), ch.commissionRate)
-    if (rieng.nguon !== 'cau-hinh-kenh') return rieng
-    const san = String(ch.platform || 'shopee')
-    const tenSan = san === 'tiktok' ? 'TikTok' : san === 'shopee' ? 'Shopee' : san
-    const khac: any[] = await prisma.onlineChannel.findMany({
-        where: { platform: san, id: { not: ch.id } }, select: { id: true },
-    }).catch(() => [])
-    if (!khac.length) return rieng
-    // Mượn PHÍ, không mượn hoa hồng affiliate: mức hoa hồng do từng gian tự đặt — giữ số đo của chính gian (nếu có)
-    const muon = uocLuongPhi((await dongPhi(prisma, khac.map(c => c.id))).map(d => ({ giaBan: d.giaBan, phi: d.phi })), ch.commissionRate)
-    if (muon.nguon === 'cau-hinh-kenh') return rieng
-    return {
-        ...muon,
-        ...(rieng.affiliate ? { affiliate: rieng.affiliate } : {}),
-        // số MƯỢN: Mall / thường, ngành hàng của gian kia có thể khác ⇒ máy không tự ghi theo số này (lyDoPhiChuaDuTin)
-        muon: true,
-        ghiChu: `Gian này chưa đủ đơn đối soát — MƯỢN số đo của các gian ${tenSan} khác cùng cửa hàng. ${muon.ghiChu}` +
-            (rieng.affiliate ? ` ${ghiChuAffiliate(rieng.affiliate)}` : ''),
-    }
+    return uocLuongPhi(await dongPhi(prisma, [ch.id]), ch.commissionRate, ch.name)
 }
 
 /* ─── Phí theo NGÀNH (02/11/2026) ─────────────────────────────────────────────────
@@ -167,7 +151,8 @@ export async function dongPhiTheoNganh(prisma: any, channelId: string): Promise<
 }
 
 export interface BangPhiNganh {
-    /** phí cả gian (có thể là số MƯỢN gian khác — muon) */
+    /** phí cả gian — đo từ đơn của chính gian; chưa đủ đơn thì phí KHAI (`khai`) hoặc chưa biết phí (`chuaBiet`), không
+     *  bao giờ là số của gian khác (09/11/2026) */
     toanGian: MauPhi
     /** ngành đủ đơn để đo riêng ⇒ mô hình riêng */
     theoNganh: Map<string, MauPhi>
@@ -185,16 +170,53 @@ export async function docMauPhiSanPham(prisma: any, ch: any, nganh: string | num
     return (await docMauPhiTheoNganh(prisma, ch)).chon(nganh)
 }
 
-/** Tóm tắt một mô hình phí cho giao diện Pilot — tỷ lệ, phí cố định, số đơn, phạm vi đo (ngành / cả gian / mượn). */
+/** Phạm vi của phí đang dùng — khớp FE pilot-shopee/kieu.ts PhiNganh.scope (09/11/2026 bỏ 'muon': không còn mượn gian khác). */
+export type PhamViPhi = 'nganh' | 'thay-nganh' | 'khai' | 'chua-biet' | 'gian'
+
+/** Phạm vi của một mô hình phí. Thứ tự: ngành → chưa biết → khai → thay ngành → cả gian. Số cấu hình kênh mà thiếu cờ
+ *  (mô hình dựng tay, không qua doMauPhi) coi như số khai: không phải số đo, không đủ tin cho máy. */
+export function phamViPhi(m: MauPhi): PhamViPhi {
+    if (m.nganh) return 'nganh'
+    if (m.chuaBiet) return 'chua-biet'
+    if (m.khai || m.nguon === 'cau-hinh-kenh') return 'khai'
+    if (m.thayNganh || m.chuaRoNganh) return 'thay-nganh'
+    return 'gian'
+}
+
+/** MỘT câu nguồn phí, hiện THẲNG trên giao diện (09/11/2026, chủ shop: "xem phí phải ghi rõ ra" — trước chỉ nằm trong
+ *  tooltip `title`, điện thoại không rê chuột được). FE (PhiNganh.detail / MoHinhPhi.detail) hiện nguyên văn câu này. */
+export function cauNguonPhi(m: MauPhi, bang?: Pick<BangPhiNganh, 'tenNganh' | 'viDuNganh'>): string {
+    const n = Math.max(0, Math.round(Number(m.soDon) || 0))
+    switch (phamViPhi(m)) {
+        case 'nganh': {
+            const ten = bang?.tenNganh.get(m.nganh!) || m.nganh!
+            const viDu = String(bang?.viDuNganh.get(m.nganh!)?.viDu || '').trim()
+            const vd = viDu.length > 50 ? `${viDu.slice(0, 49).trimEnd()}…` : viDu
+            return `Đo từ ${n} đơn đã đối soát của ngành ${ten}${vd ? ` — vd: ${vd}` : ''}`
+        }
+        case 'chua-biet': return `Chưa biết phí — gian mới có ${n}/${SO_DON_TOI_THIEU} đơn đã đối soát và chưa khai phí ở Kênh bán online`
+        case 'khai': return `Phí khai ở Kênh bán online — gian mới có ${n}/${SO_DON_TOI_THIEU} đơn đã đối soát, chưa đo được phí thật`
+        case 'thay-nganh': return m.thayNganh
+            ? `Ngành ${m.thayNganh} chưa đủ đơn để đo riêng — dùng phí đo từ ${n} đơn của cả gian`
+            : `Chưa rõ ngành của sản phẩm — dùng phí đo từ ${n} đơn của cả gian`
+        default: return `Đo từ ${n} đơn đã đối soát của cả gian`
+    }
+}
+
+/** Tóm tắt một mô hình phí cho giao diện Pilot — tỷ lệ, phí cố định, số đơn, phạm vi (ngành / cả gian / khai / chưa biết)
+ *  và `detail` (câu nguồn phí hiện thẳng trên giao diện). */
 export function tomTatMauPhi(m: MauPhi, bang?: Pick<BangPhiNganh, 'tenNganh' | 'viDuNganh'>) {
     const vd = m.nganh ? bang?.viDuNganh.get(m.nganh) : undefined
+    const scope = phamViPhi(m)
     return {
         rate: m.tyLe, fixedPerOrder: m.coDinh, orders: m.soDon, source: m.nguon, note: m.ghiChu,
-        scope: (m.nganh ? 'nganh' : m.muon ? 'muon' : m.thayNganh || m.chuaRoNganh ? 'thay-nganh' : 'gian') as 'nganh' | 'muon' | 'thay-nganh' | 'gian',
+        scope,
+        detail: cauNguonPhi(m, bang),
         category: m.nganh ? (bang?.tenNganh.get(m.nganh) || m.nganh) : m.thayNganh || null,
         categoryId: m.nganh || null,
         ...(vd ? { example: vd.viDu, products: vd.so } : {}),
-        trusted: m.nguon !== 'cau-hinh-kenh' && m.soDon >= SO_DON_TU_GHI && !m.muon && !m.thayNganh && !m.chuaRoNganh,
+        // phí khai / chưa biết là số cấu hình, không phải số đo ⇒ không bao giờ đủ tin cho máy tự đăng / hạ giá
+        trusted: m.nguon !== 'cau-hinh-kenh' && !m.khai && !m.chuaBiet && m.soDon >= SO_DON_TU_GHI && !m.thayNganh && !m.chuaRoNganh,
     }
 }
 
@@ -241,7 +263,7 @@ async function doPhiTungNganh(prisma: any, ch: any): Promise<Pick<BangPhiNganh, 
 export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiNganh> {
     // cả gian đọc MỖI lần như docMauPhi trước giờ; phần theo ngành lấy từ đệm nếu số đo cả gian chưa đổi
     const goc = await docMauPhi(prisma, ch)
-    const dau = [goc.nguon, goc.soDon, goc.tyLe, goc.coDinh, !!goc.muon, goc.affiliate?.soDonBiet ?? -1].join('|')
+    const dau = [goc.nguon, goc.soDon, goc.tyLe, goc.coDinh, !!goc.khai, !!goc.chuaBiet, goc.affiliate?.soDonBiet ?? -1].join('|')
     const khoa = String(ch.id)
     let co = demPhiNganh.get(khoa)
     if (!co || co.het <= Date.now() || co.dau !== dau) {
@@ -268,6 +290,9 @@ export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiN
     }
     const toanGian = nangAff(goc)
     const theoNganh = new Map([...co.theoNganh].map(([k, m]) => [k, nangAff(m)] as const))
+    // Cả gian chưa đo được thì đừng nói "dùng phí cả gian" như thể có số đo: chưa biết phí / phí khai (09/11/2026).
+    // Hai cờ khai / chuaBiet đi theo `...toanGian` vào mọi biến thể dưới đây ⇒ tinhGiaDeXuat, lyDoPhiChuaDuTin vẫn chặn.
+    const veGian = toanGian.chuaBiet ? 'cả gian cũng chưa biết phí' : toanGian.khai ? 'dùng phí KHAI của gian' : 'dùng phí cả gian'
     return {
         toanGian, theoNganh, tenNganh, viDuNganh,
         chon(nganh) {
@@ -276,14 +301,14 @@ export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiN
                 // Gian đã đo ra phí từng ngành khác nhau mà sản phẩm chưa rõ ngành ⇒ số cả gian có thể sai ngành:
                 // người xem được, máy không tự đăng / hạ giá. Gian không đo được ngành nào ⇒ như trước.
                 if (!theoNganh.size) return toanGian
-                return { ...toanGian, chuaRoNganh: true, ghiChu: `Sản phẩm chưa rõ ngành trên sàn — dùng phí cả gian. ${toanGian.ghiChu}` }
+                return { ...toanGian, chuaRoNganh: true, ghiChu: `Sản phẩm chưa rõ ngành trên sàn — ${veGian}. ${toanGian.ghiChu}` }
             }
             const m = theoNganh.get(k)
             if (m) return m
             const ten = tenNganh.get(k)
             return {
                 ...toanGian, thayNganh: ten ? `${ten} (${k})` : k,
-                ghiChu: `Ngành ${ten ? `${ten} (${k})` : k} chưa đủ đơn đối soát để đo riêng — dùng phí cả gian. ${toanGian.ghiChu}`,
+                ghiChu: `Ngành ${ten ? `${ten} (${k})` : k} chưa đủ đơn đối soát để đo riêng — ${veGian}. ${toanGian.ghiChu}`,
             }
         },
     }

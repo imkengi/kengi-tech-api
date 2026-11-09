@@ -4,7 +4,10 @@
  *  1. Chính sách: phần chung kẹp như Shopee Pilot, mặc định đổi giá BẬT / đẩy tồn TẮT.
  *  2. Trạng thái: tự chọn gian TikTok duy nhất, Xem trước; giá đề xuất / giá sàn theo PHÍ TIKTOK đo từ đơn (cùng công thức
  *     Shopee Pilot); listing chưa nối mã kho / không đang bán / nhiều SKU thì không đổi giá; hàng kho chưa có trên gian.
- *  3. Phí: gian TikTok mới MƯỢN số đo của gian TikTok khác (không mượn Shopee) — số mượn KHÔNG đủ tin cho máy tự hạ.
+ *  3. Phí: CHỈ số đo của chính gian (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được" — bỏ mượn số đo
+ *     gian khác, cả TikTok lẫn Shopee). Gian chưa đủ 8 đơn đối soát: ô «Phí sàn (%)» đã khai ⇒ phí KHAI (người duyệt được,
+ *     máy không tự hạ); còn 6% mặc định / 0 ⇒ CHƯA BIẾT PHÍ: không giá nào tính / ghi được — trạng thái, kế hoạch, chu kỳ
+ *     (MỘT dòng lý do, đẩy tồn vẫn chạy), thực thi kế hoạch cũ. Trạng thái: declared / unknown / scope / detail, hết borrowed.
  *     Phí theo NGÀNH (02/11/2026): mỗi sản phẩm tính theo phí ngành của nó; ngành chưa đủ đơn ⇒ phí cả gian, máy không tự hạ.
  *  4. Kế hoạch giá: dưới sàn / vượt biên độ so với giá ĐỌC THẲNG TikTok bị chặn; hàng nhiều SKU bị chặn; khoá idempotency.
  *  5. Thực thi: Xem trước KHÔNG gọi TikTok; Tự động gọi đúng một lần (cả khi hai tab bấm cùng lúc), đúng SKU;
@@ -21,8 +24,9 @@ import {
     khoBoNhoTikTok, chuanHoaChinhSachTikTok, xayTrangThaiTikTok, taoKeHoachGiaTikTok, thucThiTikTok, chayChuKyTikTok,
     luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
 } from '../src/lib/tiktokPilot'
-import { docMauPhi, xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
-import { tinhGiaDeXuat, lyDoPhiChuaDuTin } from '../src/lib/giaShopee'
+import { docMauPhi, xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
+import { tinhGiaDeXuat, lyDoPhiChuaDuTin, chanGiaDuoiSan, uocLuongPhi, type MauPhi, type ThamSoGia } from '../src/lib/giaShopee'
+import { viecCanNguoi } from '../src/lib/pilotBaoChuShop'
 import { dauNgayVN } from '../src/lib/shopeePilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_TIKTOK_PILOT } from '../src/lib/tienIchCuaHang'
@@ -52,6 +56,8 @@ let kenh: any[] = []
 let listing: any[] = []
 let hang: any[] = []
 let donPhi: Record<string, { giaBan: number; phi: number }[]> = {}
+/** mã gian của mỗi lần đọc phí cả gian (dongPhi) — canh "KHÔNG đọc đơn của gian khác" (09/11/2026, bỏ mượn số đo) */
+const hoiPhi: string[][] = []
 /** đơn MỘT ngành theo gian (truy vấn phí theo ngành); null = mọi đơn của gian thuộc ngành 601 như listing */
 let donNganh: Record<string, (any & { nganh: string })[]> | null = null
 let daBan: { sku: string; sl: number }[] = []
@@ -106,7 +112,7 @@ const prisma: any = {
     storeSettings: { findFirst: async ({ select }: any = {}) => chon({ businessType: 'household', khoMeMa: null }, select) },
     $queryRawUnsafe: async (sql: string, ...v: any[]) => {
         if (sql.includes('AS nganh')) return donNganh ? (donNganh[v[0]] || []) : (donPhi[v[0]] || []).map(d => ({ ...d, nganh: '601' }))
-        if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) return (v[0] as string[]).flatMap(id => donPhi[id] || [])
+        if (sql.includes('"OnlineOrder" o') && sql.includes('platformFee')) { hoiPhi.push([...(v[0] as string[])]); return (v[0] as string[]).flatMap(id => donPhi[id] || []) }
         if (sql.includes('"OnlineOrderItem"')) return daBan.map(d => ({ sku: d.sku, sl: d.sl }))
         if (sql.includes('FROM "Product"')) {
             const ids: string[] = v[0] || [], skus: string[] = v[1] || []
@@ -164,23 +170,51 @@ async function main() {
         dung('2h. hộ kinh doanh + chưa khai thuế ⇒ không nhắc thuế', !st.status.taxNote)
     }
 
-    // ─── 3. Phí: mượn gian CÙNG SÀN ─────────────────────────────────────────────
+    // ─── 3. Phí: CHỈ số đo của CHÍNH gian — chưa đủ đơn ⇒ phí KHAI hoặc CHƯA BIẾT PHÍ (09/11/2026) ─────────────
+    // Chủ shop: "xem phí phải ghi rõ ra không thể mượn được". Trước: gian mới MƯỢN số đo của gian cùng sàn (cờ muon) — gian Mall /
+    // gian thường, ngành khác nhau thì phí khác nhau, mà số mượn hiện trên kế hoạch đổi giá như phí của chính gian.
     {
         datLai(0)
         kenh.push({ id: 'tt2', name: 'TikTok cũ', platform: 'tiktok', shopId: '7002', accessToken: 'tok', commissionRate: 6, createdAt: new Date(2) })
         donPhi.tt2 = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.1 * g + 2000 } })
         donPhi.sp1 = Array.from({ length: 40 }, (_, i) => { const g = 60000 + i * 10000; return { giaBan: g, phi: 0.3 * g } })
+        hoiPhi.length = 0
         const m = await docMauPhi(prisma, kenh[0])
-        dung('3a. gian TikTok chưa có đơn ⇒ mượn gian TIKTOK khác (10%), không mượn Shopee (30%)', Math.abs(m.tyLe - 0.1) < 0.005 && /gian TikTok khác/.test(m.ghiChu), `${m.tyLe} ${m.ghiChu}`)
-        const s = await docMauPhi(prisma, { ...kenh[1], id: 'spMoi', platform: 'shopee' })
-        dung('3b. gian Shopee vẫn mượn gian Shopee (câu chữ cũ giữ nguyên)', Math.abs(s.tyLe - 0.3) < 0.01 && /gian Shopee khác/.test(s.ghiChu), `${s.tyLe} ${s.ghiChu}`)
-        // gian Mall / gian thường, ngành khác nhau thì phí khác ⇒ số MƯỢN chỉ để người xem, máy không tự hạ / đăng theo nó
-        dung('3c. số MƯỢN gắn cờ ⇒ chưa đủ tin cho máy tự ghi (kể cả giá cao)', m.muon === true && /MƯỢN/.test(lyDoPhiChuaDuTin(5_000_000, m) || ''), JSON.stringify({ muon: m.muon }))
-        const ctxM = ngCanh()
-        await luuCauHinhTikTok(ctxM, { channelId: 'tt1' })   // cửa hàng có hai gian TikTok ⇒ chọn gian mới
-        const stM = await xayTrangThaiTikTok(ctxM)
-        const oc4M = stM.products.find((p: any) => p.itemId === '111')
-        dung('3d. trạng thái: phí mượn ⇒ không đủ tin, sản phẩm bị chặn tự ghi', stM.status.feeModel.borrowed === true && stM.status.feeModel.trusted === false && /MƯỢN/.test(oc4M?.pricing.autoBlocked || ''), JSON.stringify({ fm: stM.status.feeModel, p: oc4M?.pricing }))
+        dung('3a. TikTok: gian 0 đơn, cửa hàng có gian TikTok khác 40 đơn ⇒ KHÔNG mượn (chỉ đọc đơn của chính gian); ô phí 6% mặc định ⇒ CHƯA BIẾT PHÍ',
+            m.chuaBiet === true && !m.khai && !('muon' in m) && m.nguon === 'cau-hinh-kenh' && m.soDon === 0 && JSON.stringify(hoiPhi) === '[["tt1"]]'
+            && /"Kengi TikTok"/.test(m.ghiChu) && /0\/8 đơn/.test(m.ghiChu) && /Không mượn số đo của gian khác/.test(m.ghiChu), JSON.stringify({ m, hoiPhi }))
+        hoiPhi.length = 0
+        const s = await docMauPhi(prisma, { ...kenh[1], id: 'spMoi', name: 'Shopee mới' })
+        dung('3b. Shopee: gian mới, cửa hàng có gian Shopee khác 40 đơn ⇒ cũng KHÔNG mượn — CHƯA BIẾT PHÍ',
+            s.chuaBiet === true && !('muon' in s) && JSON.stringify(hoiPhi) === '[["spMoi"]]' && /"Shopee mới"/.test(s.ghiChu), JSON.stringify({ s, hoiPhi }))
+        // CHƯA BIẾT PHÍ ⇒ như thiếu giá vốn: không tính giá, không ghi được giá nào (người lẫn máy)
+        const ts = (mp: MauPhi, giaVon = 100000): ThamSoGia => ({ giaVon, phi: mp, bienLoiNhuanPct: 15, bienToiThieuPct: 5, lamTron: 1000 })
+        const kq = tinhGiaDeXuat(ts(m))
+        dung('3c. chưa biết phí ⇒ không tính giá (hopLe=false, sàn 0), lý do "Chưa biết phí sàn của gian…" kèm đường khai «Phí sàn (%)»',
+            !kq.hopLe && kq.giaSan === 0 && kq.giaDeXuat === 0 && /^Chưa biết phí sàn của gian/.test(kq.lyDo || '') && /«Phí sàn \(%\)»/.test(kq.lyDo || ''), JSON.stringify(kq))
+        dung('3c2. … chanGiaDuoiSan chặn MỌI giá: 1.000đ / 150.000đ / 5.000.000đ', [1000, 150000, 5_000_000].every(g => /^Chưa biết phí sàn/.test(chanGiaDuoiSan(g, kq) || '')))
+        dung('3c3. thiếu giá vốn vẫn báo TRƯỚC (việc của từng sản phẩm; phí là việc của cả gian)', /CHƯA CÓ GIÁ VỐN/.test(tinhGiaDeXuat(ts(m, 0)).lyDo || ''))
+        const lyM = lyDoPhiChuaDuTin(0, m) || ''
+        dung('3c4. lyDoPhiChuaDuTin: chưa biết phí ⇒ nói chưa biết phí, máy không tự đăng mới / hạ', /^Chưa biết phí sàn/.test(lyM) && /Máy không tự đăng mới \/ hạ giá/.test(lyM), lyM)
+        const fm = tomTatMauPhi(m)
+        dung('3c5. tomTatMauPhi: scope chua-biet, không đủ tin, câu nguồn phí ghi rõ',
+            fm.scope === 'chua-biet' && fm.trusted === false && fm.detail === 'Chưa biết phí — gian mới có 0/8 đơn đã đối soát và chưa khai phí ở Kênh bán online', JSON.stringify(fm))
+        // ô phí 0 / âm / không phải số cũng là chưa khai
+        const lech = [0, -5, NaN, undefined as any, null as any].map(r => uocLuongPhi([], r))
+        dung('3d. ô phí 0 / âm / không phải số ⇒ cũng CHƯA BIẾT PHÍ', lech.every(x => x.chuaBiet === true && !x.khai), JSON.stringify(lech.map(x => [x.chuaBiet, x.khai])))
+        // chủ shop đã khai phí sàn cho gian (25%) ⇒ số KHAI: người duyệt được, máy không tự đăng / hạ theo nó
+        kenh[0].commissionRate = 25
+        const k = await docMauPhi(prisma, kenh[0])
+        const kqK = tinhGiaDeXuat(ts(k))
+        const lyK = lyDoPhiChuaDuTin(kqK.giaDeXuat, k) || ''
+        const fk = tomTatMauPhi(k)
+        dung('3d2. ô phí 25% ⇒ phí KHAI: tính giá theo 25%, hợp lệ; ghiChu nói tên gian + số đơn + số khai',
+            k.khai === true && !k.chuaBiet && Math.abs(k.tyLe - 0.25) < 1e-9 && kqK.hopLe && kqK.thamSo.tyLePhiPct === 25
+            && /"Kengi TikTok" mới có 0\/8 đơn/.test(k.ghiChu) && /KHAI 25%/.test(k.ghiChu), JSON.stringify({ k, ts: kqK.thamSo }))
+        dung('3d3. phí khai ⇒ máy KHÔNG tự đăng / hạ (lyDoPhiChuaDuTin nói rõ là số KHAI, không phải "chưa biết")',
+            /KHAI 25%/.test(lyK) && /Máy không tự đăng mới \/ hạ giá/.test(lyK) && !/Chưa biết phí/.test(lyK), lyK)
+        dung('3d4. tomTatMauPhi phí khai: scope khai, không đủ tin, câu nguồn phí ghi rõ',
+            fk.scope === 'khai' && fk.trusted === false && fk.detail === 'Phí khai ở Kênh bán online — gian mới có 0/8 đơn đã đối soát, chưa đo được phí thật', JSON.stringify(fk))
         datLai()
     }
 
@@ -216,6 +250,60 @@ async function main() {
         const kh2 = ctx.kho._keHoach.find(k => k.data?.itemId === '222' && k.status === 'draft')
         const ha = kh2 ? await thucThiTikTok(ctx, kh2.id, { tuDong: true }) : null
         dung('3j. lớp rào ở bước ghi: máy tự chạy + ngành chưa đo ⇒ từ chối HẠ giá', ha?.status === 'failed' && /chưa đủ đơn/.test(ha?.result?.message || '') && !ghiTT().some(g => g[1] === '222'), JSON.stringify(ha?.result))
+        datLai()
+    }
+
+    // ─── 3c. CHƯA BIẾT PHÍ / phí KHAI trên TikTok Pilot: trạng thái, kế hoạch, chu kỳ, thực thi (09/11/2026) ─────────────
+    {
+        datLai(3); datTikTok(); goi.length = 0; daySo.length = 0; bayGio = NOW     // 3 đơn đối soát, ô phí còn 6% mặc định
+        const ctx = ngCanh()
+        const st = await xayTrangThaiTikTok(ctx)
+        const fm = st.status.feeModel
+        const oc4 = st.products.find((p: any) => p.itemId === '111')
+        dung('3k. trạng thái: CHƯA BIẾT PHÍ — unknown, không declared, scope chua-biet, không đủ tin, câu nguồn phí ghi rõ, không còn borrowed',
+            fm.unknown === true && fm.declared === false && fm.scope === 'chua-biet' && fm.trusted === false && !('borrowed' in fm) && fm.autoFromPrice === null
+            && fm.detail === 'Chưa biết phí — gian mới có 3/8 đơn đã đối soát và chưa khai phí ở Kênh bán online', JSON.stringify(fm))
+        dung('3l. cảnh báo nói tên gian, số đơn và ĐƯỜNG BẤM khai phí (đúng nhãn trên kengi.vn)',
+            /^Chưa biết phí sàn của gian "Kengi TikTok": mới có 3\/8 đơn đã đối soát/.test(fm.warning || '')
+            && (fm.warning || '').includes('Đơn Hàng Online → nút «Kênh bán hàng» → nút «Key» ở dòng của gian → ô «Phí sàn (%)» → Lưu'), fm.warning)
+        dung('3m. sản phẩm: không giá đề xuất / giá sàn, lý do "Chưa biết phí", phí scope chua-biet (giao diện không hiện 6% như phí thật)',
+            oc4?.pricing.price === null && oc4?.pricing.floor === null && /^Chưa biết phí sàn/.test(oc4?.pricing.reason || '') && !oc4?.pricing.autoBlocked
+            && oc4?.pricing.fee?.scope === 'chua-biet', JSON.stringify(oc4?.pricing))
+        const kh = await nem(() => taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 150000 }))
+        dung('3n. lập kế hoạch giá ⇒ từ chối "Chưa biết phí sàn của gian…", không đọc TikTok, không lưu kế hoạch',
+            kh instanceof ToolError && /^Chưa biết phí sàn của gian "Kengi TikTok"/.test(kh.message) && goi.length === 0 && ctx.kho._keHoach.length === 0, kh?.message)
+
+        // chu kỳ Tự động (đổi giá + đẩy tồn): không ghi, không đọc TikTok, MỘT dòng lý do; đẩy tồn không cần phí nên vẫn chạy
+        await luuCauHinhTikTok(ctx, { executionMode: 'auto', policy: { automation: { reprice: true, syncStock: true } } })
+        const ck = await chayChuKyTikTok(ctx)
+        const dongPhi = ck.results.filter((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || ''))
+        const viec = viecCanNguoi(ck.results)
+        dung('3o. chu kỳ Tự động: KHÔNG ghi giá, không đọc TikTok, không lập kế hoạch; đúng MỘT dòng "CHƯA BIẾT PHÍ" (tên gian, số đơn)',
+            ghiTT().length === 0 && goi.length === 0 && ctx.kho._keHoach.length === 0 && dongPhi.length === 1 && dongPhi[0].action === 'cycle'
+            && dongPhi[0].status === 'skipped' && /"Kengi TikTok"/.test(dongPhi[0].message) && /3\/8 đơn/.test(dongPhi[0].message)
+            && !ck.results.some((r: any) => r.action === 'price'), JSON.stringify(ck.results))
+        dung('3p. … đẩy tồn vẫn chạy; việc cần người: một việc "CHƯA BIẾT PHÍ", giữ đường khai «Phí sàn (%)» dù thông báo cắt 180 ký tự',
+            daySo.length === 2 && daySo[0].dryRun === true && !daySo[1].dryRun && viec.dong.filter(d => /CHƯA BIẾT PHÍ/.test(d)).length === 1
+            && viec.dong.some(d => /CHƯA BIẾT PHÍ/.test(d) && /«Phí sàn \(%\)»/.test(d)), JSON.stringify({ daySo, viec }))
+
+        // chủ shop khai phí 20% ⇒ tính giá theo số khai, người duyệt được; máy không tự hạ
+        kenh[0].commissionRate = 20
+        const st2 = await xayTrangThaiTikTok(ctx)
+        const fm2 = st2.status.feeModel, oc42 = st2.products.find((p: any) => p.itemId === '111')
+        dung('3q. khai phí 20% ⇒ declared, scope khai, câu nguồn phí ghi rõ; giá theo 20% (154.000 / sàn 133.400), máy không tự hạ',
+            fm2.declared === true && fm2.unknown === false && fm2.scope === 'khai' && fm2.trusted === false && !('borrowed' in fm2)
+            && fm2.detail === 'Phí khai ở Kênh bán online — gian mới có 3/8 đơn đã đối soát, chưa đo được phí thật' && /KHAI 20%/.test(fm2.warning || '')
+            && oc42?.pricing.price === 154000 && oc42?.pricing.floor === 133400 && /KHAI 20%/.test(oc42?.pricing.autoBlocked || '') && oc42?.pricing.fee?.scope === 'khai',
+            JSON.stringify({ fm2, p: oc42?.pricing }))
+        // kế hoạch lập lúc còn phí khai; chủ shop trả ô phí về 6% (chưa khai) trước khi duyệt ⇒ thực thi không ghi
+        const khBinh = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 150000 })
+        const lapDuoc = khBinh.status   // kho bộ nhớ giữ cùng đối tượng — đọc trước khi thực thi đổi trạng thái
+        kenh[0].commissionRate = 6
+        const tr = goi.length
+        const xong = await thucThiTikTok(ctx, khBinh.id)
+        dung('3r. kế hoạch cũ, ô phí trả về chưa khai trước lúc thực thi ⇒ thất bại "Chưa biết phí", không gọi TikTok',
+            lapDuoc === 'draft' && xong.status === 'failed' && /Chưa biết phí sàn/.test(xong.result?.message || '') && ghiTT().length === 0 && goi.length === tr,
+            JSON.stringify(xong.result))
         datLai()
     }
 

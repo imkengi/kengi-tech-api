@@ -14,10 +14,11 @@ export interface DauBao { khoa: string; luc: number; n: number }
 
 export const GIAN_CACH_BAO_MS = 3 * 3600_000
 
-/** Dòng kết quả chu kỳ cần người làm gì đó. */
+/** Dòng kết quả chu kỳ cần người làm gì đó. "CHƯA BIẾT PHÍ" (09/11/2026): gian chưa đủ đơn đo phí, chưa khai phí ⇒ chu kỳ không
+ *  đổi giá / đăng mới được gì — chủ shop phải khai phí (MỘT dòng cho cả gian, lib/giaShopee.dongChuKyChuaBietPhi). */
 export function canNguoi(r: any): boolean {
     const st = String(r?.status || ''), m = String(r?.message || '')
-    return ['failed', 'uncertain', 'partial'].includes(st) || r?.action === 'token' || /CHỜ NGƯỜI DUYỆT|CẦU DAO|CHƯA CÓ HỒ SƠ ĐĂNG/.test(m)
+    return ['failed', 'uncertain', 'partial'].includes(st) || r?.action === 'token' || /CHỜ NGƯỜI DUYỆT|CẦU DAO|CHƯA CÓ HỒ SƠ ĐĂNG|CHƯA BIẾT PHÍ/.test(m)
 }
 
 /** Việc cần người trong kết quả chu kỳ: khoá (để so lượt trước) + từng dòng cho thông báo. */

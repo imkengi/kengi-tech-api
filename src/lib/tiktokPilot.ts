@@ -16,13 +16,15 @@
  *      nhiều phân loại không biết giá vốn từng SKU ⇒ không đổi giá (đọc getProductDetail lúc lập kế hoạch + lúc thực thi)
  *    - máy tự chạy (chu kỳ Tự động) KHÔNG hạ giá khi phí chưa đủ tin (lib/giaShopee.lyDoPhiChuaDuTin) — TĂNG giá vẫn
  *      tự làm, kế hoạch hạ giá để nháp chờ người duyệt
+ *    - CHƯA BIẾT PHÍ sàn của gian (09/11/2026: chưa đủ đơn để đo, chưa khai phí — KHÔNG mượn số đo gian TikTok khác) ⇒
+ *      không giá nào tính / ghi được; chu kỳ báo MỘT dòng kèm đường khai phí, không đọc TikTok
  *    - quá maxWritesPerDay lần ghi/ngày (tính cả lần hỏng)
  *  CHƯA làm: đăng sản phẩm mới lên TikTok, khuyến mãi — cần thử trên gian thật trước (ngành / thuộc tính / kho TikTok).
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
 import { docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, luuDanhMucSan } from './shopeeTuQuan'
 import { num, giaVonHangLoat, soBan14Ngay, timUngVien, THIEU_MO_TA } from './shopeeThaoTac'
 import { chuanHoaChinhSach, quyetDinhGia, vuotBienDong, dauNgayVN, dayTonChuKy, NGHI_DOI_GIA_MS } from './shopeePilot'
@@ -449,12 +451,16 @@ export async function xayTrangThaiTikTok(ctx: NgCanhTikTok): Promise<any> {
     // Phí THEO NGÀNH (02/11/2026: "mỗi ngành hàng lại 1 % phí khác nhau") — mỗi sản phẩm lấy mô hình đúng ngành của nó
     const bang = await docMauPhiTheoNganh(ctx.prisma, ch)
     const mauPhi = bang.toanGian
-    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !(mauPhi.soDon >= SO_DON_TU_GHI) || !!mauPhi.muon
+    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !!mauPhi.khai || !!mauPhi.chuaBiet || !(mauPhi.soDon >= SO_DON_TU_GHI)
+    const tomTatGian = tomTatMauPhi(mauPhi, bang)
     status.feeModel = {
         rate: mauPhi.tyLe, fixedPerOrder: mauPhi.coDinh, source: mauPhi.nguon, orders: mauPhi.soDon, note: mauPhi.ghiChu,
-        trusted: !chuaTuGhi, borrowed: !!mauPhi.muon,
+        trusted: !chuaTuGhi,
+        // 09/11/2026: bỏ `borrowed` (không mượn số đo gian TikTok khác) — cùng bộ trường với Shopee Pilot: declared = phí KHAI,
+        // unknown = CHƯA BIẾT PHÍ (không giá nào tính / ghi được), detail = câu nguồn phí hiện thẳng trên giao diện
+        declared: !!mauPhi.khai, unknown: !!mauPhi.chuaBiet, scope: tomTatGian.scope, detail: tomTatGian.detail,
         autoFromPrice: chuaTuGhi ? null : mauPhi.nguon === 'ty-le-don' ? Math.ceil(mauPhi.giaBanTB || 0) : Math.ceil(mauPhi.giaBanMin || 0),
-        ...(chuaTuGhi ? { warning: lyDoPhiChuaDuTin(0, mauPhi) } : {}),
+        ...(mauPhi.chuaBiet ? { warning: lyDoChuaBietPhi(mauPhi.soDon, ch.name) } : chuaTuGhi ? { warning: lyDoPhiChuaDuTin(0, mauPhi) } : {}),
         byCategory: [...bang.theoNganh.values()].sort((a, b) => b.soDon - a.soDon).slice(0, 30).map(m => tomTatMauPhi(m, bang)),
         // ngành có hàng trên gian mà chưa đủ đơn đo riêng — sản phẩm các ngành này dùng phí cả gian, máy không tự hạ giá
         unmeasuredCategories: [...bang.viDuNganh.keys()].filter(k => !bang.theoNganh.has(k)).length,
@@ -519,6 +525,9 @@ export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: strin
     const mauPhi = await docMauPhiSanPham(ctx.prisma, ch, l.categoryId)   // phí ĐÚNG ngành của sản phẩm
     const ts = thamSoTinh(cfg.policy, v.giaVon, mauPhi)
     const kq = tinhGiaDeXuat(ts)
+    // Không tính được giá sàn (CHƯA BIẾT PHÍ sàn của gian, biên + phí ≥ 100%…) ⇒ không giá nào qua được chanGiaDuoiSan — nói ngay,
+    // khỏi đọc TikTok cho một kế hoạch chắc chắn không lập được (09/11/2026)
+    if (!kq.hopLe && !(kq.giaSan > 0)) throw new ToolError(mauPhi.chuaBiet ? lyDoChuaBietPhi(mauPhi.soDon, ch.name) : kq.lyDo || 'Không tính được giá sàn')
     // Giá đang bán + SKU: đọc THẲNG TikTok — hàng nhiều phân loại dừng ở đây
     const song = await docSkuDuy(await dichVu(ctx, ch), String(l.platformProductId))
     const giaCu = song.gia || Number(l.price) || 0
@@ -677,14 +686,21 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
         results.push(await dayTonChuKy({ tuDong, san: 'TikTok', gian: ch.name, day: o => dayTon(ctx, ch.id, o), conLuot: () => conLuotGhi(ctx, pol), ghi: w => ctx.kho.ghiNhatKy(w) }))
     }
 
-    if (pol.automation.reprice && pol.maxRepricePerCycle > 0) {
+    /* CHƯA BIẾT PHÍ sàn của gian (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): gian chưa đủ đơn đối soát
+     * để đo phí, chưa khai phí ⇒ không giá nào tính / ghi được. Không đổi giá, báo MỘT dòng — khỏi soát từng mã rồi im lặng
+     * "không mã nào cần đổi giá" (quyetDinhGia bỏ qua mã không có giá sàn), khỏi đọc TikTok vô ích. Đẩy tồn vẫn chạy. */
+    const bangPhiGian = pol.automation.reprice && pol.maxRepricePerCycle > 0 ? await docMauPhiTheoNganh(ctx.prisma, ch) : null
+    const chuaBietPhi = !!bangPhiGian?.toanGian.chuaBiet && !bangPhiGian.theoNganh.size
+    if (chuaBietPhi) results.push({ action: 'cycle', status: 'skipped', message: dongChuKyChuaBietPhi(bangPhiGian!.toanGian.soDon, ch.name, 'chưa đổi giá mã nào') })
+
+    if (bangPhiGian && !chuaBietPhi) {
         const listing: any[] = await ctx.prisma.onlineProduct.findMany({ where: { channelId: ch.id, status: { in: DANG_BAN } }, orderBy: { updatedAt: 'desc' }, take: 300 })
         const von = await giaVonHangLoat(ctx.prisma, listing)
         const daBan = await soBan14Ngay(ctx.prisma, ch.id)
-        const bangPhi = await docMauPhiTheoNganh(ctx.prisma, ch)
+        const bangPhi = bangPhiGian
         const nhieuSku = await maNhieuSkuGanDay(ctx, now)
         const polS = chuanHoaChinhSach(pol)
-        let soChoDuyet = 0, soVuaDoi = 0
+        let soChoDuyet = 0, soVuaDoi = 0, soChuaBietPhi = 0
         // máy đổi giá cùng mã cách nhau ≥ 24 giờ (lib/shopeePilot.NGHI_DOI_GIA_MS) — trừ mã đang dưới giá sàn
         const vuaDoi = new Set((await ctx.kho.dsKeHoachTu(now - NGHI_DOI_GIA_MS)).filter(k => k.status === 'succeeded' && now - k.updatedAt < NGHI_DOI_GIA_MS).map(k => String(k.data?.itemId)))
         const uv: { l: any; mauPhi: MauPhi; giaCu: number; quyet: { gia: number; lyDo: string }; uu: number }[] = []
@@ -695,6 +711,8 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
             const v = von.get(l.id)
             if (!v || !(v.giaVon > 0) || !(Number(l.price) > 0)) continue
             const mauPhi = bangPhi.chon(l.categoryId)   // phí ĐÚNG ngành — mỗi ngành TikTok thu một khác
+            // chưa biết phí (ngành chưa đo trong gian chưa khai phí) ⇒ quyetDinhGia sẽ im lặng "giữ nguyên" — đếm ra để nói
+            if (mauPhi.chuaBiet) { soChuaBietPhi++; continue }
             const ts = thamSoTinh(pol, v.giaVon, mauPhi)
             const kq = tinhGiaDeXuat(ts)
             const giaCu = Number(l.price)
@@ -746,7 +764,9 @@ export async function chayChuKyTikTok(ctx: NgCanhTikTok): Promise<any> {
         if (soNhieuSku) results.push({ action: 'price', status: 'skipped', message: `${soNhieuSku} sản phẩm nhiều phân loại — Pilot chưa đổi giá hàng nhiều phân loại, sửa trên TikTok Seller Center.` })
         if (soVuaDoi) results.push({ action: 'price', status: 'skipped', message: `${soVuaDoi} sản phẩm vừa đổi giá trong 24 giờ — chờ xem đơn rồi mới đổi tiếp.` })
         if (soChoDuyet) results.push({ action: 'price', status: 'skipped', message: `${soChoDuyet} sản phẩm đang có nháp chờ duyệt / người vừa huỷ — duyệt hoặc huỷ trên TikTok Pilot (nháp máy lập tự huỷ sau 3 ngày, mã người huỷ thì 14 ngày không đề xuất lại).` })
-        if (!soGhi && !soNhap && !soNhieuSku) results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào cần đổi giá.` })
+        if (soChuaBietPhi) results.push({ action: 'price', status: 'skipped', message: `${soChuaBietPhi} sản phẩm CHƯA BIẾT PHÍ sàn (ngành chưa đủ đơn để đo, gian chưa khai phí) — không tính được giá. Khai phí sàn của gian ở Kênh bán online.` })
+        // mã chưa biết phí thì không biết có cần đổi hay không — đừng nói "không mã nào cần đổi giá"
+        if (!soGhi && !soNhap && !soNhieuSku && !soChuaBietPhi) results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: không mã nào cần đổi giá.` })
         else if (soGhi >= tran && uv.length > soGhi + soNhap + soNhieuSku) results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${tran} sản phẩm — còn ${uv.length - soGhi - soNhap - soNhieuSku} sản phẩm chờ chu kỳ sau.` })
     }
     if (!results.length) results.push({ action: 'cycle', status: 'unchanged', message: 'Chính sách đang tắt cả đổi giá lẫn đẩy tồn.' })
@@ -859,7 +879,12 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
    - Giá vốn lấy từ mã kho đã nối (SKU trùng mã kho, ánh xạ SKU, mã gộp). Chưa nối thì không có giá vốn, không đổi giá.
 
 3. Định giá
-   - Phí TikTok đo từ chính các đơn đã đối soát của gian (gian mới thì mượn số đo của gian TikTok khác cùng cửa hàng).
+   - Phí TikTok đo từ chính các đơn đã đối soát của gian — KHÔNG lấy số đo của gian khác (gian khác nhau, ngành hàng khác
+     nhau thì phí khác nhau). Mỗi chỗ hiện phí đều ghi rõ nguồn: đo từ bao nhiêu đơn, của ngành nào / cả gian, hay số khai.
+   - Gian chưa đủ 8 đơn đã đối soát: dùng phí sàn chủ shop KHAI cho gian ở Kênh bán online (Đơn Hàng Online → nút «Kênh bán
+     hàng» → nút «Key» ở dòng của gian → ô «Phí sàn (%)») — người duyệt được, máy không tự hạ giá theo số khai.
+     Ô phí còn để mặc định 6% (chưa khai) thì CHƯA BIẾT PHÍ: không tính được giá, không đổi được giá nào cho tới khi khai phí;
+     chu kỳ báo một dòng kèm đường khai phí.
    - Giá đề xuất = đạt lãi mục tiêu sau phí TikTok, đóng gói, quảng cáo, thuế GTGT (nếu khai). Giá sàn = lãi tối thiểu NGAY CẢ KHI
      đơn đi qua affiliate (cộng trọn "Hoa hồng affiliate"). Máy chủ từ chối mọi giá dưới giá sàn.
    - Chỉ đổi giá sản phẩm MỘT phân loại: Pilot đọc thẳng TikTok giá đang bán và mã SKU lúc lập kế hoạch và lúc thực thi.
@@ -876,7 +901,7 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
    - Mỗi sản phẩm máy đổi giá tối đa 1 lần / 24 giờ (trừ hàng đang dưới giá sàn); hàng đang lỗ được xét trước.
    - Danh mục trong hệ thống cũ hơn 2 giờ thì chu kỳ tự đồng bộ lại. Đẩy tồn có cầu dao: nhiều mã đang có hàng sẽ về 0 ⇒ không đẩy.
    - Nháp chờ duyệt không chiếm lượt đổi giá; máy lập tự huỷ sau 3 ngày; Huỷ = 14 ngày không đề xuất lại.
-     Có việc cần người: chuông + app báo một lần mỗi khi danh sách đổi.
+     Có việc cần người (nháp chờ duyệt, ghi hỏng, cầu dao, chưa biết phí): chuông + app báo một lần mỗi khi danh sách đổi.
 
 6. Chưa làm
    - Đăng sản phẩm mới lên TikTok và tạo khuyến mãi — cần thử trên gian thật trước (ngành hàng, thuộc tính, kho của TikTok).

@@ -14,9 +14,12 @@
 //     định 5%, không bao giờ < 0) là TỪ CHỐI. Thiếu giá vốn là KHÔNG đăng.
 //   - Chính sách Shopee Pilot của cửa hàng (biên tối thiểu, đóng gói, quảng cáo, hoa hồng
 //     affiliate, thuế GTGT) là NỀN: tham số AI truyền vào chỉ được chặt hơn (01/11/2026).
-//   - Phí sàn chưa đủ tin (chưa đo / đo từ < 30 đơn / giá thấp hơn mọi đơn đã đo) ⇒ tool ghi TỪ CHỐI
+//   - Phí sàn chưa đủ tin (phí khai / đo từ < 30 đơn / giá thấp hơn mọi đơn đã đo) ⇒ tool ghi TỪ CHỐI
 //     đăng mới / HẠ giá / hiện lại, để chủ shop duyệt trên Shopee Pilot. TĂNG giá vẫn được (lãi mỗi
 //     đơn tăng theo giá — không bao giờ lỗ thêm). Hiện lại sản phẩm đang ẩn cũng qua rào giá sàn.
+//   - CHƯA BIẾT PHÍ sàn của gian (09/11/2026: chưa đủ đơn đối soát để đo, chưa khai phí — KHÔNG mượn số đo
+//     gian khác) ⇒ không tool nào tính / ghi được giá nào, cả tăng lẫn hạ; tool đọc không đưa lãi / biên tính
+//     theo số cấu hình 6% (số bịa) mà báo "chưa biết phí" kèm đường khai phí.
 //   - Ba tool ghi ra Shopee nằm trong TOOL_NHAY_CAM — tác vụ tự động phải khai đích danh.
 //   - Đăng trùng: kiểm listing của gian (localProductId / SKU / ánh xạ SKU) trước khi
 //     gọi add_item; danh mục cũ quá thì cảnh báo đồng bộ lại.
@@ -24,7 +27,7 @@
 
 import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { lyDoChanPilot, TIEN_ICH_SHOPEE_PILOT } from '../lib/tienIchCuaHang'
-import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia, type MauPhi } from '../lib/giaShopee'
+import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, lyDoChuaBietPhi, type ThamSoGia, type MauPhi } from '../lib/giaShopee'
 import {
     chonKenhShopee, moDichVuShopee, docMauPhiTheoNganh, timHangKho, luuDanhMucSan, duongNganh,
 } from '../lib/shopeeTuQuan'
@@ -47,10 +50,15 @@ const tomTatAffiliate = (m: MauPhi) => m.affiliate ? {
     soDonQuaAffiliate: m.affiliate.soDonCo,
 } : null
 
-/** Mô hình phí cho AI đọc — kèm PHẠM VI đo: ngành riêng / cả gian thay ngành chưa đủ đơn / mượn gian khác. */
+/** Mô hình phí cho AI đọc — kèm PHẠM VI: ngành riêng / cả gian thay ngành chưa đủ đơn / phí KHAI / CHƯA BIẾT PHÍ.
+ *  09/11/2026 (chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): không còn "mượn số đo gian khác". Chưa biết phí ⇒
+ *  tyLePct null — số cấu hình 6% mặc định không phải phí, đừng để AI tự tính giá theo nó. */
 const tomTatPhi = (m: MauPhi) => ({
-    tyLePct: Math.round(m.tyLe * 10000) / 100, coDinhMoiDon: m.coDinh, nguon: m.nguon, soDon: m.soDon,
-    phamVi: m.nganh ? `ngành ${m.nganh}` : m.muon ? 'MƯỢN số đo gian khác cùng sàn' : m.thayNganh ? `cả gian (ngành ${m.thayNganh} chưa đủ đơn)` : m.chuaRoNganh ? 'cả gian (chưa rõ ngành)' : 'cả gian',
+    tyLePct: m.chuaBiet ? null : Math.round(m.tyLe * 10000) / 100, coDinhMoiDon: m.coDinh, nguon: m.nguon, soDon: m.soDon,
+    phamVi: m.nganh ? `ngành ${m.nganh}`
+        : m.chuaBiet ? 'CHƯA BIẾT PHÍ — gian chưa đủ đơn đối soát để đo, chưa khai phí: không tính / ghi được giá nào'
+            : m.khai ? 'phí KHAI của gian (chưa đủ đơn đối soát để đo) — chỉ người duyệt, máy không tự đăng / hạ giá'
+                : m.thayNganh ? `cả gian (ngành ${m.thayNganh} chưa đủ đơn)` : m.chuaRoNganh ? 'cả gian (chưa rõ ngành)' : 'cả gian',
     ghiChu: m.ghiChu, hoaHongAffiliate: tomTatAffiliate(m),
 })
 
@@ -116,6 +124,7 @@ const CAC_TOOL: Tool[] = [
                     ? { canhBaoDanhMuc: 'Danh mục listing của gian chưa đồng bộ gần đây — gọi shopee_sync_listings TRƯỚC khi đăng, nếu không có thể đăng TRÙNG sản phẩm đã có.' }
                     : {}),
                 mauPhi: tomTatPhi(mauPhi),
+                ...(mauPhi.chuaBiet ? { canhBaoPhi: lyDoChuaBietPhi(mauPhi.soDon, ch.name) } : {}),
                 // mỗi ngành Shopee thu một % khác — tool tính giá tự dùng phí ĐÚNG ngành của sản phẩm
                 phiTheoNganh: [...bang.theoNganh.values()].sort((x, y) => y.soDon - x.soDon).slice(0, 20).map(m => ({
                     nganh: m.nganh, tenNganh: bang.tenNganh.get(m.nganh!) || null,
@@ -205,10 +214,11 @@ const CAC_TOOL: Tool[] = [
                 sanPham: { sku: p.sku, ten: p.name, giaVon: p.costPrice, giaBanLe: p.sellingPrice },
                 ...kq,
                 ...(tuDong ? { canhBaoTuDong: tuDong } : {}),
-                giaThu: a?.gia_thu ? {
+                // chưa biết phí: lãi của mức giá thử tính theo 6% cấu hình là số bịa — chỉ nói bị chặn vì sao (09/11/2026)
+                giaThu: a?.gia_thu ? (mauPhi.chuaBiet ? { gia: num(a.gia_thu, 0), biChan: chanGiaDuoiSan(num(a.gia_thu, 0), kq) } : {
                     ...danhGiaGia(num(a.gia_thu, 0), ts), quaAffiliate: danhGiaGia(num(a.gia_thu, 0), ts, true),
                     biChan: chanGiaDuoiSan(num(a.gia_thu, 0), kq) || lyDoPhiChuaDuTin(num(a.gia_thu, 0), mauPhi, cs.bienToiThieuPct),
-                } : undefined,
+                }) : undefined,
                 chinhSach: cs,
                 mauPhi: tomTatPhi(mauPhi),
                 giaDangBanNoiKhac: khac.map(k => ({ gian: k.channel?.name, san: k.platform, gia: k.price, trangThai: k.status, laGianNay: k.channelId === ch.id })),
@@ -367,7 +377,7 @@ const CAC_TOOL: Tool[] = [
 
             const von = await giaVonHangLoat(prisma, ds)
             const ra: any[] = []
-            let duoiSan = 0, thieuVon = 0
+            let duoiSan = 0, thieuVon = 0, chuaBietPhi = 0
             for (const l of ds) {
                 const daBan14 = daBan.get(String(l.sku || '').toLowerCase()) || 0
                 if (!(l.price > 0)) {
@@ -381,6 +391,12 @@ const CAC_TOOL: Tool[] = [
                     continue
                 }
                 const mp = bang.chon(l.categoryId)
+                if (mp.chuaBiet) {
+                    // chưa biết phí sàn: lãi / biên / giá sàn tính theo 6% cấu hình là số bịa — không đưa cho AI (09/11/2026)
+                    chuaBietPhi++
+                    if (ra.length < lim) ra.push({ itemId: l.platformProductId, sku: l.sku, ten: l.name, gia: l.price, tonSan: l.stock, daBan14, giaVon: Math.round(v.giaVon), vanDe: ['CHƯA BIẾT PHÍ SÀN — không tính được lãi / giá sàn, không đổi giá được'] })
+                    continue
+                }
                 const ts: ThamSoGia = { giaVon: v.giaVon, phi: mp, ...cs }
                 const kq = tinhGiaDeXuat(ts)
                 const hien = danhGiaGia(l.price, ts)
@@ -399,7 +415,8 @@ const CAC_TOOL: Tool[] = [
             return {
                 ...canhBaoCat(ds.length, TRAN, 'listing'),
                 gian: ch.name, soListingDangBan: ds.length, duoiGiaSan: duoiSan, thieuGiaVon: thieuVon,
-                ...(ra.length >= lim ? { ghiChuDanhSach: `Chỉ liệt kê ${lim} dòng đầu; hai con số duoiGiaSan / thieuGiaVon tính trên toàn bộ ${ds.length} listing đã đọc.` } : {}),
+                ...(chuaBietPhi ? { chuaBietPhi, canhBaoPhi: lyDoChuaBietPhi(mauPhi.soDon, ch.name) } : {}),
+                ...(ra.length >= lim ? { ghiChuDanhSach: `Chỉ liệt kê ${lim} dòng đầu; các con số duoiGiaSan / thieuGiaVon${chuaBietPhi ? ' / chuaBietPhi' : ''} tính trên toàn bộ ${ds.length} listing đã đọc.` } : {}),
                 mauPhi: mauPhi.ghiChu, chinhSach: cs,
                 ghiChu: 'Số bán 14 ngày đếm từ đơn còn trong hệ thống (đơn hoàn tất cũ bị dọn sau ~18 ngày). Giảm giá chỉ khi còn trên giá sàn; tăng giá hàng bán chạy dưới mục tiêu trước.',
                 sanPham: ra,
@@ -408,7 +425,7 @@ const CAC_TOOL: Tool[] = [
     },
     {
         name: 'shopee_update_price',
-        description: 'ĐỔI GIÁ một sản phẩm đang bán trên gian Shopee (theo item_id hoặc sku). Giá mới dưới GIÁ SÀN (biên tối thiểu sau phí sàn) hoặc sản phẩm thiếu giá vốn sẽ bị TỪ CHỐI. Hàng có phân loại chỉ đổi được khi đúng MỘT phân loại mang SKU đó. Phí sàn của gian chưa đủ tin (chưa đo, đo từ dưới 30 đơn đối soát, hoặc giá thấp hơn mọi đơn đã đo) thì chỉ TĂNG giá được, HẠ giá bị từ chối — báo chủ shop duyệt trên Shopee Pilot.',
+        description: 'ĐỔI GIÁ một sản phẩm đang bán trên gian Shopee (theo item_id hoặc sku). Giá mới dưới GIÁ SÀN (biên tối thiểu sau phí sàn) hoặc sản phẩm thiếu giá vốn sẽ bị TỪ CHỐI. Hàng có phân loại chỉ đổi được khi đúng MỘT phân loại mang SKU đó. Phí sàn của gian chưa đủ tin (phí khai chưa đo, đo từ dưới 30 đơn đối soát, hoặc giá thấp hơn mọi đơn đã đo) thì chỉ TĂNG giá được, HẠ giá bị từ chối — báo chủ shop duyệt trên Shopee Pilot. Gian CHƯA BIẾT PHÍ (chưa đủ đơn để đo, chưa khai phí) thì không giá nào ghi được, cả tăng lẫn hạ — báo chủ shop khai phí sàn của gian ở Kênh bán online.',
         write: true,
         inputSchema: {
             type: 'object',

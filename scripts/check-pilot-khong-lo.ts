@@ -13,12 +13,16 @@
  *  D3. Phí thật ở vùng giá chưa từng bán khác đường đo được (mức phí tối thiểu) ⇒ không ngoại suy dưới đơn rẻ nhất.
  *  D4. Hoa hồng affiliate ĐO TỪNG ĐƠN (OnlineOrder.affiliateFee): tách khỏi phí khi đủ đơn biết; chưa khai / khai thiếu
  *     mà đã đo được ⇒ sàn dùng mức đo; NULL ≠ 0; số lệch bị bỏ; 2.000 gian đang bù dần hoa hồng không lỗ.
- *  E. Đầu-cuối trên prisma giả + Shopee giả: chu kỳ Tự động; phí chưa đo; phí tỷ lệ trung bình + hàng rẻ; tool AI (chính
- *     sách nền, phí chưa đo, hiện lại hàng ẩn, đọc chính sách hỏng); khuyến mãi soát lại lúc thực thi (giá vốn tăng /
- *     chính sách chặt hơn / phân loại); đăng và đổi giá sau khi giá vốn tăng; thuế GTGT và lời nhắc theo loại hình;
+ *  E. Đầu-cuối trên prisma giả + Shopee giả: chu kỳ Tự động; phí KHAI chưa đo; phí tỷ lệ trung bình + hàng rẻ; tool AI
+ *     (chính sách nền, phí khai chưa đo, hiện lại hàng ẩn, đọc chính sách hỏng); khuyến mãi soát lại lúc thực thi (giá vốn
+ *     tăng / chính sách chặt hơn / phân loại); đăng và đổi giá sau khi giá vốn tăng; thuế GTGT và lời nhắc theo loại hình;
  *     hoa hồng affiliate đo được cao hơn mức khai (E11); cửa hàng chưa migrate cột affiliateFee (E12); đọc escrow (E13);
- *     phí theo NGÀNH (E14): hàng ngành phí cao không bị hạ theo phí trung bình cả gian, ngành đổi lúc thực thi ⇒ soát lại.
+ *     phí theo NGÀNH (E14): hàng ngành phí cao không bị hạ theo phí trung bình cả gian, ngành đổi lúc thực thi ⇒ soát lại;
+ *     CHƯA BIẾT PHÍ sàn (E16, 09/11/2026): gian chưa đủ đơn, ô phí còn 6% mặc định ⇒ không giá nào tính / ghi được — người,
+ *     máy, tool AI, đăng mới, khuyến mãi; khai phí xong thì chạy lại như phí khai.
  *  F. Bộ chọn hồ sơ đăng: nhóm kèm số mã, tìm mã theo tên / SKU, cờ đã đăng / đã có hồ sơ.
+ *  G. Nguồn phí GHI RÕ (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): tomTatMauPhi.scope + detail
+ *     cho đủ 6 ca (ngành / cả gian / ngành chưa đủ đơn / chưa rõ ngành / phí khai / chưa biết phí), không còn "muon".
  */
 import fs from 'fs'
 import path from 'path'
@@ -34,7 +38,7 @@ import { SHOPEE_TOOLS } from '../src/routes/mcpShopeeTools'
 import { ShopeeService } from '../src/services/platforms/shopee'
 import { ToolError } from '../src/lib/mcpTypes'
 import { datDemTienIch, TIEN_ICH_SHOPEE_PILOT } from '../src/lib/tienIchCuaHang'
-import { xoaDemPhiTheoNganh } from '../src/lib/shopeeTuQuan'
+import { xoaDemPhiTheoNganh, tomTatMauPhi } from '../src/lib/shopeeTuQuan'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (!ok) loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet ? ' — ' + chiTiet : ''}`) }
@@ -67,9 +71,10 @@ type Don = { giaBan: number; phi: number; aff?: number | null }
 const goi: string[] = []
 const ghiShopee = () => goi.filter(g => /^(add_item|update_price|add_discount|unlist)/.test(g))
 
-function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { nganh: string })[] }) {
+/** `phiKhai` = ô «Phí sàn (%)» của gian; bỏ trống = 6% mặc định của schema (chưa khai ⇒ gian chưa đủ đơn là CHƯA BIẾT PHÍ). */
+function taoCuaHang(o: { don: Don[]; loaiHinh?: string; donNganh?: (Don & { nganh: string })[]; phiKhai?: number }) {
     xoaDemPhiTheoNganh()   // mọi cửa hàng giả cùng mã gian 'ch1' — đừng để đệm phí ngành của ca trước lọt sang
-    const kenh = { id: 'ch1', name: 'Gian thử', platform: 'shopee', shopId: '777', accessToken: 'tok', apiKey: '1', apiSecret: 's', commissionRate: 6, tokenExpiresAt: new Date(Date.now() + 3600_000), createdAt: new Date() }
+    const kenh = { id: 'ch1', name: 'Gian thử', platform: 'shopee', shopId: '777', accessToken: 'tok', apiKey: '1', apiSecret: 's', commissionRate: o.phiKhai ?? 6, tokenExpiresAt: new Date(Date.now() + 3600_000), createdAt: new Date() }
     const hang: Record<string, any> = {}
     const listing: any[] = []
     const st = { don: o.don, donNganh: o.donNganh || null, loaiHinh: o.loaiHinh || 'company', loiChinhSach: null as null | 'khong-bang' | 'hong', thieuCotAff: false, hoiCotAff: 0 }
@@ -192,7 +197,9 @@ P.addDiscount = async (ten: string) => { goi.push(`add_discount:${ten}`); return
 P.addDiscountItems = async (_id: number, items: any[]) => { goi.push(`add_discount_item:${JSON.stringify(items)}`); return { loi: [] } }
 P.deleteDiscount = async () => { goi.push('delete_discount') }
 P.getModelList = async (itemId: number) => HIEN.models[String(itemId)] || []
-P.getItemBaseInfo = async (ids: number[]) => ids.map(id => HIEN.baseInfo[String(id)]).filter(Boolean)
+/** số lần đọc giá đang để trên Shopee — ca CHƯA BIẾT PHÍ (E16) canh "khỏi đọc Shopee cho kế hoạch chắc chắn không lập được" */
+let docGiaShopee = 0
+P.getItemBaseInfo = async (ids: number[]) => { docGiaShopee++; return ids.map(id => HIEN.baseInfo[String(id)]).filter(Boolean) }
 P.unlistItem = async (id: any, an: boolean) => { goi.push(`unlist:${id}:${an}`) }
 
 const tool = (n: string) => SHOPEE_TOOLS.find(t => t.name === n)!
@@ -517,11 +524,12 @@ async function main() {
             dung(`E1. sau 6 lượt không còn listing nào lỗ với đơn affiliate (${conDuoi.length} còn lỗ)`, conDuoi.length === 0, conDuoi.map(l => `${l.sku}@${l.price}`).join(', '))
         }
 
-        // ─── E2. Phí CHƯA đo (3 đơn) ────────────────────────────────────────────────
+        // ─── E2. Phí KHAI, chưa đo (3 đơn, chủ shop khai ô «Phí sàn (%)» 20%) ─────────────────
+        // 09/11/2026: ô phí còn 6% mặc định thì là CHƯA BIẾT PHÍ (E16) — ca này canh gian ĐÃ khai phí mà chưa đủ đơn để đo
         {
-            HIEN = taoCuaHang({ don: donSach().slice(0, 3) })
+            HIEN = taoCuaHang({ don: donSach().slice(0, 3), phiKhai: 20 })
             const H = HIEN
-            H.themHang('RE1', 100000); H.themListing('RE1', 100000, '201')          // dưới sàn theo phí cấu hình 6% ⇒ chu kỳ TĂNG
+            H.themHang('RE1', 100000); H.themListing('RE1', 100000, '201')          // dưới sàn theo phí khai 20% (133.400) ⇒ chu kỳ TĂNG
             H.themHang('CAO1', 100000); H.themListing('CAO1', 300000, '202')        // lãi cao, 14 ngày không bán ⇒ chu kỳ muốn HẠ
             H.themHang('MOI1', 80000)                                               // chưa đăng, có hồ sơ nhóm
             await luuHoSo(H.ctx, { scope: 'nhom', key: 'Điện', categoryId: 101, weightGram: 300 })
@@ -530,16 +538,19 @@ async function main() {
             const kq = await chayChuKy(H.ctx)
             const r = (sku: string) => kq.results.find((x: any) => x.sku === sku)
             const ghiMoi = ghiShopee().slice(truoc)
-            dung('E2. phí chưa đo: máy vẫn TĂNG giá hàng đang dưới sàn (tăng giá không bao giờ lỗ thêm), kèm lời nhắc giá sàn có thể còn thấp',
-                r('RE1')?.status === 'succeeded' && ghiMoi.includes('update_price:201:112400') && /chưa đủ tin/.test(r('RE1')?.message || ''), r('RE1')?.message)
-            dung('E2. phí chưa đo: HẠ giá và đăng mới để nháp "CHỜ NGƯỜI DUYỆT", không gọi Shopee',
+            dung('E2. phí khai chưa đo: máy vẫn TĂNG giá hàng đang dưới sàn (100.000 / 0,75 = 133.400 — tăng giá không bao giờ lỗ thêm), kèm lời nhắc giá sàn có thể còn thấp',
+                r('RE1')?.status === 'succeeded' && ghiMoi.includes('update_price:201:133400') && /chưa đủ tin/.test(r('RE1')?.message || ''), r('RE1')?.message)
+            dung('E2. phí khai chưa đo: HẠ giá và đăng mới để nháp "CHỜ NGƯỜI DUYỆT", không gọi Shopee',
                 r('CAO1')?.status === 'draft' && /CHỜ NGƯỜI DUYỆT/.test(r('CAO1')?.message || '') && r('MOI1')?.status === 'draft'
                 && /CHỜ NGƯỜI DUYỆT/.test(r('MOI1')?.message || '') && ghiMoi.length === 1,
                 JSON.stringify({ kq: kq.results.map((x: any) => [x.action, x.sku, x.status]), ghiMoi }))
             const kh = H.kho._keHoach.find(k => k.kind === 'price' && k.data?.sku === 'CAO1')!
-            dung('E2. kế hoạch hạ giá mang cảnh báo phí chưa đo cho người duyệt', /CHƯA ĐO/.test(kh?.data?.warning || ''), kh?.data?.warning)
+            dung('E2. kế hoạch hạ giá mang cảnh báo "phí CHƯA ĐO, đang dùng phí KHAI" cho người duyệt', /CHƯA ĐO/.test(kh?.data?.warning || '') && /KHAI 20%/.test(kh?.data?.warning || ''), kh?.data?.warning)
             const st = await xayTrangThai(H.ctx)
-            dung('E2. trạng thái báo mô hình phí chưa đủ tin', st.status.feeModel?.trusted === false && /CHƯA ĐO/.test(st.status.feeModel?.warning || ''), JSON.stringify(st.status.feeModel))
+            const fm = st.status.feeModel
+            dung('E2. trạng thái: phí KHAI chưa đủ tin — declared, scope khai, câu nguồn phí ghi rõ, không còn "borrowed"',
+                fm?.trusted === false && /CHƯA ĐO/.test(fm?.warning || '') && fm?.declared === true && fm?.unknown === false && fm?.scope === 'khai' && !('borrowed' in fm)
+                && fm?.detail === 'Phí khai ở Kênh bán online — gian mới có 3/8 đơn đã đối soát, chưa đo được phí thật', JSON.stringify(fm))
             const nguoi = await thucThi(H.ctx, kh.id)
             dung('E2. người duyệt bấm thực thi thì hạ giá được (rào chỉ chặn máy tự chạy)', nguoi.status === 'succeeded' && ghiShopee().length === truoc + 2, JSON.stringify(nguoi.result))
         }
@@ -598,23 +609,23 @@ async function main() {
             H.st.loiChinhSach = null
         }
 
-        // ─── E5. Tool AI khi phí CHƯA đo ───────────────────────────────────────────────
+        // ─── E5. Tool AI khi phí KHAI, chưa đo (3 đơn, ô phí 20%) ─────────────────────────
         {
-            HIEN = taoCuaHang({ don: donSach().slice(0, 3) })
+            HIEN = taoCuaHang({ don: donSach().slice(0, 3), phiKhai: 20 })
             const H = HIEN
             H.themHang('X1', 100000); H.themListing('X1', 200000, '701')
             H.themHang('X2', 100000)
             H.themHang('X3', 100000); H.themListing('X3', 300000, '702', 'UNLIST')
             const truoc = ghiShopee().length
             const ha = await chay('shopee_update_price', { item_id: '701', gia_moi: 150000 })
-            dung('E5. phí chưa đo: AI HẠ giá (dù vẫn trên sàn tính được) bị từ chối, không gọi Shopee', ha.loi instanceof ToolError && /CHƯA ĐO/.test(ha.loi.message) && ghiShopee().length === truoc, ha.loi?.message)
+            dung('E5. phí khai chưa đo: AI HẠ giá (dù vẫn trên sàn tính được 133.400) bị từ chối, không gọi Shopee', ha.loi instanceof ToolError && /CHƯA ĐO/.test(ha.loi.message) && ghiShopee().length === truoc, ha.loi?.message)
             const tang = await chay('shopee_update_price', { item_id: '701', gia_moi: 260000 })
-            dung('E5. phí chưa đo: AI TĂNG giá vẫn được, kèm cảnh báo giá sàn có thể còn thấp', !tang.loi && goi.includes('update_price:701:260000') && /chưa đủ tin/.test(tang.kq?.canhBao || ''), tang.loi?.message)
+            dung('E5. phí khai chưa đo: AI TĂNG giá vẫn được, kèm cảnh báo giá sàn có thể còn thấp', !tang.loi && goi.includes('update_price:701:260000') && /chưa đủ tin/.test(tang.kq?.canhBao || ''), tang.loi?.message)
             H.listing.find(l => l.platformProductId === '701')!.price = 100000      // bản trong hệ thống cũ — Shopee thật đang 260.000
             const cu = await chay('shopee_update_price', { item_id: '701', gia_moi: 200000 })
             dung('E5. bản trong hệ thống cũ (100.000đ) còn Shopee đang 260.000đ: "tăng" lên 200.000đ thực ra là HẠ ⇒ từ chối', cu.loi instanceof ToolError && !goi.includes('update_price:701:200000'), cu.loi?.message)
             const hien = await chay('shopee_toggle_listing', { item_id: '702', an: false })
-            dung('E5. phí chưa đo: AI hiện lại hàng đang ẩn bị từ chối (mở bán lại = ghi giá đang để)', hien.loi instanceof ToolError && /CHƯA ĐO/.test(hien.loi.message) && !goi.includes('unlist:702:false'), hien.loi?.message)
+            dung('E5. phí khai chưa đo: AI hiện lại hàng đang ẩn bị từ chối (mở bán lại = ghi giá đang để)', hien.loi instanceof ToolError && /CHƯA ĐO/.test(hien.loi.message) && !goi.includes('unlist:702:false'), hien.loi?.message)
             const thu = await chay('shopee_create_listing', { sku: 'X2', category_id: 101, can_nang_gram: 300, chay_thu: true })
             dung('E5. chạy thử đăng: vẫn ra thân yêu cầu nhưng báo trước sẽ bị từ chối', !thu.loi && /CHƯA ĐO/.test(thu.kq.phanTichGia?.canhBaoPhi || ''), thu.loi?.message)
             const that = await chay('shopee_create_listing', { sku: 'X2', category_id: 101, can_nang_gram: 300 })
@@ -883,6 +894,85 @@ async function main() {
                 JSON.stringify({ san: c1?.pricing?.floor, phi: c1?.pricing?.fee?.rate, quaAff2, fa: st2.status.feeModel?.floorAffiliateRate }))
         }
 
+        // ─── E16. CHƯA BIẾT PHÍ sàn (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được") ─────────────
+        // Gian 3 đơn đối soát, ô «Phí sàn (%)» còn 6% mặc định (chưa ai khai). Trước: mượn số đo gian khác, không có thì tính theo
+        // 6% (phí thật 20–30%) — máy "nâng lên sàn" 112.400đ mà vẫn lỗ, tool AI báo lãi bịa. Giờ: KHÔNG giá nào tính / ghi được
+        // (như thiếu giá vốn), mọi đường đều nói lý do + đường khai phí; khai xong thì chạy lại như phí khai.
+        {
+            HIEN = taoCuaHang({ don: donSach().slice(0, 3) })
+            const H = HIEN
+            H.themHang('U1', 100000); H.themListing('U1', 100000, '1601')              // dưới sàn — trước đây máy TĂNG theo 6%
+            H.themHang('U2', 100000); H.themListing('U2', 300000, '1602')              // lãi cao, 14 ngày không bán — trước đây nháp HẠ
+            H.themHang('U3', 80000)                                                    // chưa đăng, có hồ sơ nhóm
+            H.themHang('U4', 100000); H.themListing('U4', 300000, '1604', 'UNLIST')    // đang ẩn
+            await luuHoSo(H.ctx, { scope: 'nhom', key: 'Điện', categoryId: 101, weightGram: 300 })
+            await luuCauHinh(H.ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 1000, automation: { publishNewProducts: true, reprice: true } } })
+            const t0 = goi.length, d0 = docGiaShopee
+
+            const st = await xayTrangThai(H.ctx)
+            const fm = st.status.feeModel
+            dung('E16. trạng thái: CHƯA BIẾT PHÍ — unknown, không declared, scope chua-biet, không đủ tin, câu nguồn phí ghi rõ, không còn "borrowed"',
+                fm?.unknown === true && fm?.declared === false && fm?.scope === 'chua-biet' && fm?.trusted === false && !('borrowed' in fm) && fm?.autoFromPrice === null
+                && fm?.detail === 'Chưa biết phí — gian mới có 3/8 đơn đã đối soát và chưa khai phí ở Kênh bán online', JSON.stringify(fm))
+            dung('E16. cảnh báo nói tên gian + số đơn + ĐƯỜNG BẤM khai phí (đúng nhãn trên kengi.vn)',
+                /^Chưa biết phí sàn của gian "Gian thử": mới có 3\/8 đơn đã đối soát/.test(fm?.warning || '')
+                && (fm?.warning || '').includes('Đơn Hàng Online → nút «Kênh bán hàng» → nút «Key» ở dòng của gian → ô «Phí sàn (%)» → Lưu'), fm?.warning)
+            const u1 = st.products.find((p: any) => p.sku === 'U1')
+            dung('E16. sản phẩm: không giá đề xuất / giá sàn, lý do "Chưa biết phí sàn", phí scope chua-biet + câu nguồn phí',
+                u1?.pricing?.price == null && u1?.pricing?.floor == null && /^Chưa biết phí sàn/.test(u1?.pricing?.reason || '') && !u1?.pricing?.autoBlocked
+                && u1?.pricing?.fee?.scope === 'chua-biet' && /^Chưa biết phí — gian mới có 3\/8/.test(u1?.pricing?.fee?.detail || ''), JSON.stringify(u1?.pricing))
+
+            // người lập kế hoạch: đổi giá / đăng mới / khuyến mãi
+            const khG = await nem(() => taoKeHoachGia(H.ctx, { sku: 'U1', price: 150000 }))
+            const khD = await nem(() => taoKeHoachDang(H.ctx, { sku: 'U3', categoryId: 101, weightGram: 300 }))
+            const bd = Math.floor(Date.now() / 1000) + 3600
+            const khK = await nem(() => taoKeHoachKhuyenMai(H.ctx, { name: 'KM thử', skus: ['U1', 'U2'], discountRate: 0.1, startTime: bd, endTime: bd + 7200, purchaseLimit: 2 }))
+            dung('E16. người lập kế hoạch đổi giá / đăng mới / khuyến mãi ⇒ đều từ chối "Chưa biết phí sàn", không lưu kế hoạch, không đọc giá Shopee',
+                khG instanceof ToolError && /^Chưa biết phí sàn của gian "Gian thử"/.test(khG.message)
+                && khD instanceof ToolError && /Chưa biết phí sàn/.test(khD.message)
+                && khK instanceof ToolError && /^Chưa biết phí sàn của gian "Gian thử"/.test(khK.message)
+                && H.kho._keHoach.length === 0 && docGiaShopee === d0 && goi.length === t0, [khG, khD, khK].map(e => e?.message || 'KHÔNG CHẶN').join(' | '))
+
+            // chu kỳ Tự động (đổi giá + đăng mới)
+            const kq = await chayChuKy(H.ctx)
+            const dongPhi = kq.results.filter((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || ''))
+            dung('E16. chu kỳ Tự động: KHÔNG ghi Shopee, không đọc giá Shopee, không lập kế hoạch; MỘT dòng "CHƯA BIẾT PHÍ" (đổi giá / đăng mới), giữ đường khai',
+                goi.length === t0 && docGiaShopee === d0 && H.kho._keHoach.length === 0 && dongPhi.length === 1 && dongPhi[0].action === 'cycle' && dongPhi[0].status === 'skipped'
+                && /chưa đổi giá \/ đăng mới mã nào/.test(dongPhi[0].message) && /«Phí sàn \(%\)»/.test(dongPhi[0].message)
+                && !kq.results.some((r: any) => r.action === 'price' || r.action === 'publish'), JSON.stringify(kq.results))
+
+            // tool AI
+            const tang = await chay('shopee_update_price', { item_id: '1601', gia_moi: 150000 })
+            const ha = await chay('shopee_update_price', { item_id: '1602', gia_moi: 280000 })
+            const hien = await chay('shopee_toggle_listing', { item_id: '1604', an: false })
+            const dangAI = await chay('shopee_create_listing', { sku: 'U3', category_id: 101, can_nang_gram: 300, gia: 200000 })
+            dung('E16. tool AI: TĂNG giá, HẠ giá, hiện lại hàng ẩn, đăng mới (kể cả tự đặt giá) ⇒ đều từ chối "Chưa biết phí sàn", không ghi Shopee',
+                [tang, ha, hien, dangAI].every(x => x.loi instanceof ToolError && /Chưa biết phí sàn/.test(x.loi.message)) && goi.length === t0,
+                [tang, ha, hien, dangAI].map(x => x.loi?.message || 'KHÔNG CHẶN').join(' | '))
+            const gy = await chay('shopee_suggest_price', { sku: 'U1', gia_thu: 150000 })
+            dung('E16. suggest_price: không giá đề xuất, tyLePct null (6% không phải phí), phạm vi CHƯA BIẾT PHÍ; giá thử chỉ nói bị chặn, không bịa lãi',
+                !gy.loi && gy.kq.hopLe === false && gy.kq.giaDeXuat === 0 && /^Chưa biết phí sàn/.test(gy.kq.lyDo || '') && gy.kq.mauPhi?.tyLePct === null
+                && /^CHƯA BIẾT PHÍ/.test(gy.kq.mauPhi?.phamVi || '') && /Chưa biết phí sàn/.test(gy.kq.giaThu?.biChan || '') && gy.kq.giaThu?.loiNhuan === undefined,
+                gy.loi?.message || JSON.stringify(gy.kq))
+            const soat = await chay('shopee_review_listings', { chi_van_de: true })
+            const r1 = soat.kq?.sanPham?.find((x: any) => x.sku === 'U1')
+            dung('E16. review_listings: đếm mã chưa biết phí + câu khai phí; không đưa lãi / biên / giá sàn tính theo 6%',
+                !soat.loi && soat.kq.chuaBietPhi === 2 && /^Chưa biết phí sàn của gian "Gian thử"/.test(soat.kq.canhBaoPhi || '') && soat.kq.duoiGiaSan === 0
+                && /^CHƯA BIẾT PHÍ SÀN/.test(r1?.vanDe?.[0] || '') && r1?.giaSan === undefined && r1?.laiMoiDon === undefined && r1?.bienPct === undefined,
+                soat.loi?.message || JSON.stringify(soat.kq))
+            const info = await chay('shopee_shop_info', {})
+            dung('E16. shop_info: canhBaoPhi kèm đường khai phí, tyLePct null', !info.loi && /«Phí sàn \(%\)»/.test(info.kq.canhBaoPhi || '') && info.kq.mauPhi?.tyLePct === null,
+                info.loi?.message || JSON.stringify(info.kq?.mauPhi))
+
+            // chủ shop khai phí sàn của gian ⇒ lượt sau chạy như phí khai: TĂNG tự làm, HẠ / đăng mới chờ duyệt
+            H.kenh.commissionRate = 20
+            const kq2 = await chayChuKy(H.ctx)
+            dung('E16. khai phí 20% xong ⇒ lượt sau máy TĂNG mã dưới sàn (133.400), hạ giá / đăng mới thành nháp chờ duyệt, hết dòng CHƯA BIẾT PHÍ',
+                goi.slice(t0).filter(g => /^(add_item|update_price|add_discount|unlist)/.test(g)).join() === 'update_price:1601:133400'
+                && kq2.results.some((r: any) => r.sku === 'U2' && r.status === 'draft') && kq2.results.some((r: any) => r.sku === 'U3' && r.status === 'draft')
+                && !kq2.results.some((r: any) => /CHƯA BIẾT PHÍ/.test(r.message || '')), JSON.stringify({ ghi: goi.slice(t0), r: kq2.results }))
+        }
+
         // ─── F. Bộ chọn hồ sơ đăng ────────────────────────────────────────────────────
         {
             HIEN = taoCuaHang({ don: donSach() })
@@ -901,6 +991,47 @@ async function main() {
             dung('F. từ khoá rỗng ⇒ không quét kho', (await timHangChoHoSo(H.ctx, { keyword: '  ' })).products.length === 0)
             const route = fs.readFileSync(path.join(__dirname, '../src/routes/shopeePilot.ts'), 'utf8')
             dung("F. route có thao tác 'product-search' và là thao tác ĐỌC", /'product-search': \{ ghi: false/.test(route))
+        }
+
+        // ─── G. Nguồn phí GHI RÕ (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được") ─────────────────
+        // tomTatMauPhi.detail = câu hiện THẲNG trên giao diện (trước chỉ nằm trong tooltip, điện thoại không rê chuột được);
+        // scope + detail là hợp đồng với FE (pilot-shopee/kieu.ts PhiNganh) — chữ phải đúng từng chữ.
+        {
+            const gian = uocLuongPhi(donSach(), 6, 'Gian thử')                     // 40 đơn ⇒ đo được, ô phí không dùng tới
+            const viDuDai = 'Ổ cắm điện thông minh Wifi 4 lỗ chống giật chịu tải 3500W kèm 2 cổng USB sạc nhanh'
+            const bangTen = { tenNganh: new Map([['101', 'Ổ cắm điện']]), viDuNganh: new Map([['101', { viDu: viDuDai, so: 3 }], ['102', { viDu: 'Phích cắm', so: 1 }]]) }
+            const nganh: MauPhi = { ...gian, nganh: '101' }
+            const tN = tomTatMauPhi(nganh, bangTen)
+            const vd = tN.detail.split(' — vd: ')[1] || ''
+            dung('G1. ngành: "Đo từ 40 đơn đã đối soát của ngành Ổ cắm điện — vd: …" (ví dụ ≤ 50 ký tự, cắt thì có dấu …)',
+                tN.scope === 'nganh' && tN.trusted === true && tN.detail.startsWith('Đo từ 40 đơn đã đối soát của ngành Ổ cắm điện — vd: ')
+                && vd.length <= 50 && vd.endsWith('…') && viDuDai.startsWith(vd.slice(0, -1)), JSON.stringify(tN))
+            dung('G1b. ví dụ ngắn ⇒ giữ nguyên; ngành chưa có tên / ví dụ ⇒ mã ngành, không " — vd:"',
+                tomTatMauPhi({ ...gian, nganh: '102' }, bangTen).detail === 'Đo từ 40 đơn đã đối soát của ngành 102 — vd: Phích cắm'
+                && tomTatMauPhi({ ...gian, nganh: '909' }, bangTen).detail === 'Đo từ 40 đơn đã đối soát của ngành 909'
+                && tomTatMauPhi({ ...gian, nganh: '909' }).detail === 'Đo từ 40 đơn đã đối soát của ngành 909')
+            const tG = tomTatMauPhi(gian)
+            dung('G2. cả gian đo được: "Đo từ 40 đơn đã đối soát của cả gian"', tG.scope === 'gian' && tG.trusted === true && tG.detail === 'Đo từ 40 đơn đã đối soát của cả gian', JSON.stringify(tG))
+            const tT = tomTatMauPhi({ ...gian, thayNganh: 'Bình giữ nhiệt (602)' })
+            dung('G3. ngành chưa đủ đơn: "Ngành … chưa đủ đơn để đo riêng — dùng phí đo từ 40 đơn của cả gian"',
+                tT.scope === 'thay-nganh' && tT.trusted === false && tT.detail === 'Ngành Bình giữ nhiệt (602) chưa đủ đơn để đo riêng — dùng phí đo từ 40 đơn của cả gian', JSON.stringify(tT))
+            const tR = tomTatMauPhi({ ...gian, chuaRoNganh: true })
+            dung('G4. chưa rõ ngành: "Chưa rõ ngành của sản phẩm — dùng phí đo từ 40 đơn của cả gian"',
+                tR.scope === 'thay-nganh' && tR.trusted === false && tR.detail === 'Chưa rõ ngành của sản phẩm — dùng phí đo từ 40 đơn của cả gian', JSON.stringify(tR))
+            const khai = uocLuongPhi(donSach().slice(0, 3), 20, 'Gian thử')
+            const tK = tomTatMauPhi(khai)
+            dung('G5. phí khai: "Phí khai ở Kênh bán online — gian mới có 3/8 đơn đã đối soát, chưa đo được phí thật"',
+                khai.khai === true && !khai.chuaBiet && tK.scope === 'khai' && tK.trusted === false && Math.abs(tK.rate - 0.2) < 1e-9
+                && tK.detail === 'Phí khai ở Kênh bán online — gian mới có 3/8 đơn đã đối soát, chưa đo được phí thật', JSON.stringify(tK))
+            const cb = uocLuongPhi(donSach().slice(0, 3), 6, 'Gian thử')
+            const tC = tomTatMauPhi(cb)
+            dung('G6. chưa biết phí: "Chưa biết phí — gian mới có 3/8 đơn đã đối soát và chưa khai phí ở Kênh bán online"',
+                cb.chuaBiet === true && !cb.khai && tC.scope === 'chua-biet' && tC.trusted === false
+                && tC.detail === 'Chưa biết phí — gian mới có 3/8 đơn đã đối soát và chưa khai phí ở Kênh bán online', JSON.stringify(tC))
+            dung('G7. thứ tự phạm vi: ngành → chưa biết → khai → thay ngành → cả gian',
+                tomTatMauPhi({ ...cb, thayNganh: 'X (1)' }).scope === 'chua-biet' && tomTatMauPhi({ ...khai, chuaRoNganh: true }).scope === 'khai'
+                && tomTatMauPhi({ ...gian, nganh: '101', thayNganh: 'X (1)' }).scope === 'nganh' && tomTatMauPhi({ ...cb, khai: true }).scope === 'chua-biet')
+            dung('G8. không mô hình nào còn cờ / phạm vi "muon"', ![gian, nganh, khai, cb].some(m => 'muon' in m) && ![tN, tG, tT, tR, tK, tC].some(t => (t.scope as string) === 'muon'))
         }
     } finally {
         ;(globalThis as any).fetch = fetchGoc

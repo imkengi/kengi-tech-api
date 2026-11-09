@@ -12,8 +12,11 @@
  *  — không gõ cứng biểu phí, vì biểu phí đổi theo ngành, theo gói Freeship/Voucher
  *  Xtra mà gian có tham gia hay không, và Shopee đổi biểu phí vài lần mỗi năm.
  *
- *  Gian mới chưa có đơn đối soát ⇒ rơi về OnlineChannel.commissionRate và NÓI RÕ
- *  là đang dùng số cấu hình (thường thấp hơn phí thật — mặc định 6%).
+ *  Gian chưa đủ SO_DON_TOI_THIEU đơn đối soát để đo (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể
+ *  mượn được") ⇒ KHÔNG mượn số đo của gian khác (Mall / thường, ngành hàng khác nhau ⇒ phí khác nhau), mà:
+ *   - chủ shop đã KHAI phí sàn của gian (OnlineChannel.commissionRate > 0 và khác PHI_KENH_MAC_DINH) ⇒ dùng số
+ *     khai, gắn `khai` và NÓI RÕ là số khai — người duyệt được, máy không tự đăng mới / hạ giá;
+ *   - chưa khai (vẫn mức mặc định 6% của schema, hoặc 0) ⇒ CHƯA BIẾT PHÍ (`chuaBiet`) — không tính giá.
  *
  *  HOA HỒNG AFFILIATE ĐO TỪNG ĐƠN (01/11/2026, OnlineOrder.affiliateFee = escrow
  *  order_ams_commission_fee, nằm TRONG platformFee): đủ SO_DON_TU_GHI đơn và ≥ 90% mẫu biết
@@ -38,6 +41,8 @@
  *
  *  ─── LUẬT AN TOÀN ─────────────────────────────────────────────────────────────
  *  - Thiếu giá vốn ⇒ KHÔNG tính giá (hopLe=false). Không biết vốn thì không biết lỗ.
+ *  - Chưa biết phí sàn của gian (`chuaBiet`, 09/11/2026) ⇒ KHÔNG tính giá (hopLe=false) — cùng lẽ: không biết
+ *    phí thì không biết lỗ. Không ai ghi được giá nào (người lẫn máy) tới khi khai phí hoặc đủ đơn để đo.
  *  - Giá dưới SÀN (biên tối thiểu, mặc định 5% — cùng ngưỡng NGUONG_LOI_NHUAN_THAP,
  *    không bao giờ < 0) ⇒ công cụ ghi giá phải từ chối. AI không được bán lỗ.
  * ═══════════════════════════════════════════════════════════════════════════════ */
@@ -87,12 +92,52 @@ export interface MauPhi {
     thayNganh?: string
     /** Gian đã đo ra phí từng ngành khác nhau mà sản phẩm CHƯA RÕ ngành trên sàn ⇒ đang dùng phí cả gian (cùng rào như thayNganh). */
     chuaRoNganh?: boolean
-    /** Số đo MƯỢN của gian khác cùng sàn (gian này chưa đủ đơn) — gian Mall và gian thường, ngành hàng khác nhau thì phí
-     *  khác nhau ("mall lại phí khác á") ⇒ máy không tự đăng / hạ giá theo số mượn. */
-    muon?: boolean
+    /** Phí KHAI (09/11/2026): gian chưa đủ SO_DON_TOI_THIEU đơn đối soát để đo, chủ shop đã khai phí sàn của gian ở kênh
+     *  (OnlineChannel.commissionRate > 0, khác PHI_KENH_MAC_DINH) ⇒ tyLe = số khai. Người duyệt từng kế hoạch được; máy KHÔNG
+     *  tự đăng mới / hạ giá (lyDoPhiChuaDuTin) — số khai không phải số đo. Chỉ có khi nguon = 'cau-hinh-kenh'. */
+    khai?: boolean
+    /** CHƯA BIẾT PHÍ (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): gian chưa đủ đơn đối soát để đo
+     *  VÀ chưa khai phí (commissionRate vẫn mặc định PHI_KENH_MAC_DINH, hoặc ≤ 0) ⇒ tinhGiaDeXuat không tính giá (hopLe=false),
+     *  không lệnh nào ghi được giá — như thiếu giá vốn. Không còn mượn số đo của gian khác cùng sàn: gian Mall và gian thường,
+     *  ngành hàng khác nhau thì phí khác nhau ("mall lại phí khác á"). Chỉ có khi nguon = 'cau-hinh-kenh'; tyLe vẫn là số cấu
+     *  hình nhưng KHÔNG được dùng để tính giá. */
+    chuaBiet?: boolean
 }
 
 export const SO_DON_TOI_THIEU = 8
+/** Mức phí sàn mặc định của kênh — khớp schema-store.prisma `OnlineChannel.commissionRate Float @default(6)` (và cột thêm bằng
+ *  /admin/migrate: DEFAULT 6). Gian còn đúng mức này là CHƯA AI KHAI phí (09/11/2026): 6% thấp xa phí sàn thật (~20–30%), tính
+ *  giá theo nó là bán lỗ mà tưởng lãi ⇒ coi là chưa biết phí (MauPhi.chuaBiet). Đổi default schema thì đổi cả hằng này. */
+export const PHI_KENH_MAC_DINH = 6
+/** Chỗ chủ shop khai phí sàn của gian — nhãn đúng như trên kengi.vn (dò ChannelManagerModal 09/11/2026: trang Đơn Hàng Online,
+ *  nút «Kênh bán hàng» mở hộp "Kênh Bán Hàng Online", nút «Key» ở dòng của gian mở chi tiết, ô «Phí sàn (%)» + Lưu ⇒ PUT
+ *  /api/online-orders/channels/:id/fee-config). Nói trong mọi lý do "chưa biết phí": chủ shop cần đường bấm, không cần lời khuyên. */
+export const DUONG_KHAI_PHI = 'Kênh bán online: Bán Hàng Online → Đơn Hàng Online → nút «Kênh bán hàng» → nút «Key» ở dòng của gian → ô «Phí sàn (%)» → Lưu'
+/** Bản gọn cho dòng kết quả chu kỳ (thông báo chủ shop cắt mỗi dòng ở 180 ký tự). */
+const DUONG_KHAI_PHI_GON = 'Đơn Hàng Online → «Kênh bán hàng» → «Key» → ô «Phí sàn (%)»'
+/** Chỉ nơi (không cả đường bấm) — câu về phí ĐÃ khai: chủ shop đã tìm ra chỗ đó một lần. */
+const NOI_KHAI_PHI = 'Kênh bán online (ô «Phí sàn (%)» của gian)'
+
+/** Lý do "chưa biết phí" — MỘT câu dùng chung cho kết quả tính giá, trạng thái Pilot, tool AI: nói vì sao + đường bấm khai. */
+export function lyDoChuaBietPhi(soDon?: number, tenGian?: string): string {
+    const n = Math.max(0, Math.round(Number(soDon) || 0))
+    const ten = String(tenGian || '').trim()
+    return `Chưa biết phí sàn của gian${ten ? ` "${ten}"` : ''}: mới có ${n}/${SO_DON_TOI_THIEU} đơn đã đối soát (chưa đủ để đo phí thật) ` +
+        `và chưa khai phí — không tính được giá, không ghi được giá nào. Khai phí sàn của gian ở ${DUONG_KHAI_PHI}.`
+}
+
+/**
+ * Dòng kết quả chu kỳ Pilot khi CẢ gian chưa biết phí (09/11/2026) — MỘT dòng cho cả lượt, không mỗi mã một dòng (chuông chủ
+ * shop không bị spam; khoá báo của lib/pilotBaoChuShop giữ nguyên qua các lượt ⇒ chỉ báo một lần). Chữ "CHƯA BIẾT PHÍ" là thứ
+ * canNguoi nhận ra. Đường bấm đi TRƯỚC số đơn: dòng dài bị cắt ở 180 ký tự thì mất phần đuôi chứ không mất cách sửa.
+ * `viec` = việc máy bỏ lượt này, vd "chưa đổi giá / đăng mới mã nào".
+ */
+export function dongChuKyChuaBietPhi(soDon: number | undefined, tenGian: string | undefined, viec: string): string {
+    const n = Math.max(0, Math.round(Number(soDon) || 0))
+    const ten = String(tenGian || '').trim()
+    return `CHƯA BIẾT PHÍ sàn của gian${ten ? ` "${ten}"` : ''} — khai ở ${DUONG_KHAI_PHI_GON}. ` +
+        `Gian mới có ${n}/${SO_DON_TOI_THIEU} đơn đã đối soát: ${viec}.`
+}
 const SO_DON_HOI_QUY = 15
 /** Máy (chu kỳ Tự động, tool AI) chỉ tự đăng mới / hạ giá khi phí đo từ ít nhất chừng này đơn, và sai số đo ×HE_SO_SAI_SO
  *  không vượt biên tối thiểu — xem lyDoPhiChuaDuTin. Dưới mức đó: kế hoạch chờ người duyệt (TĂNG giá vẫn tự làm). */
@@ -104,16 +149,17 @@ const phanTram = (r: number) => `${round2(r * 100)}%`
 /**
  * Ước lượng phí sàn từ đơn đã đối soát. Đủ đơn và giá trải rộng ⇒ hồi quy phí = a·giá + b
  * (tách được phí cố định/đơn). Không thì tỷ lệ tổng phí / tổng giá.
- * Dưới SO_DON_TOI_THIEU đơn ⇒ dùng tỷ lệ cấu hình của kênh.
+ * Dưới SO_DON_TOI_THIEU đơn ⇒ phí KHAI của kênh (`khai`) hoặc CHƯA BIẾT PHÍ (`chuaBiet`) — xem doMauPhi; `tenGian` chỉ
+ * để câu ghiChu nói rõ gian nào (09/11/2026).
  * Đơn biết hoa hồng affiliate (`aff`) ⇒ kèm `affiliate`; đủ SO_DON_TU_GHI đơn và ≥ 90% mẫu biết thì đo
  * phí trên phí − hoa hồng của chính những đơn đó (tách affiliate ra khỏi phí).
  */
-export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
+export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number, tenGian?: string): MauPhi {
     const ds = (dong || []).filter(d =>
         Number.isFinite(d.giaBan) && Number.isFinite(d.phi) && d.giaBan > 0 && d.phi >= 0 && d.phi < d.giaBan)
     // Hoa hồng nằm TRONG phí: dòng có hoa hồng > phí là số lệch (escrow đổi sau lúc đối soát) — coi như chưa biết
     const biet = ds.filter(d => d.aff != null && Number.isFinite(d.aff) && d.aff >= 0 && d.aff <= d.phi)
-    if (!biet.length) return doMauPhi(ds, tyLeCauHinhPct)
+    if (!biet.length) return doMauPhi(ds, tyLeCauHinhPct, tenGian)
     const affCua = (d: DongPhiDon) => Number(d.aff) || 0
     const aff: AffiliateDo = {
         // Tách khi đủ đơn VÀ gần trọn mẫu đã biết hoa hồng (đang bù dần thì chưa): tách trên một phần nhỏ của mẫu thì
@@ -125,8 +171,8 @@ export function uocLuongPhi(dong: DongPhiDon[], tyLeCauHinhPct: number): MauPhi 
         soDonCo: biet.filter(d => affCua(d) > 0).length,
     }
     const mau = aff.tachRieng
-        ? doMauPhi(biet.map(d => ({ giaBan: d.giaBan, phi: d.phi - affCua(d) })), tyLeCauHinhPct)
-        : doMauPhi(ds, tyLeCauHinhPct)
+        ? doMauPhi(biet.map(d => ({ giaBan: d.giaBan, phi: d.phi - affCua(d) })), tyLeCauHinhPct, tenGian)
+        : doMauPhi(ds, tyLeCauHinhPct, tenGian)
     return { ...mau, affiliate: aff, ghiChu: `${mau.ghiChu} ${ghiChuAffiliate(aff)}` }
 }
 
@@ -140,14 +186,25 @@ export function ghiChuAffiliate(a: AffiliateDo): string {
             `chưa đủ để tách, phí trên vẫn gộp hoa hồng trung bình; giá sàn tính hoa hồng ít nhất ${phanTram(a.tyLeMax)}.`
 }
 
-function doMauPhi(ds: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
+function doMauPhi(ds: DongPhiDon[], tyLeCauHinhPct: number, tenGian?: string): MauPhi {
     const cauHinh = Math.min(Math.max(Number(tyLeCauHinhPct) || 0, 0), 60) / 100
 
     if (ds.length < SO_DON_TOI_THIEU) {
+        /* 09/11/2026 (chủ shop: "xem phí phải ghi rõ ra không thể mượn được"): không đủ đơn của CHÍNH gian thì chỉ có số chủ
+         * shop tự khai cho gian này; còn mức mặc định 6% của schema (chưa ai đổi) hay 0 là CHƯA BIẾT PHÍ — 6% thấp xa phí
+         * thật ~20–30%, trước đây tính giá theo nó là giá sàn lỗ mà tưởng lãi. */
+        const r = Number(tyLeCauHinhPct)
+        const khai = Number.isFinite(r) && r > 0 && r !== PHI_KENH_MAC_DINH
+        const ten = String(tenGian || '').trim()
+        const khongMuon = 'Không mượn số đo của gian khác: gian Mall / gian thường, ngành hàng khác nhau thì phí khác nhau.'
+        if (!khai) {
+            return { tyLe: cauHinh, coDinh: 0, nguon: 'cau-hinh-kenh', soDon: ds.length, chuaBiet: true, ghiChu: `${lyDoChuaBietPhi(ds.length, ten)} ${khongMuon}` }
+        }
         return {
-            tyLe: cauHinh, coDinh: 0, nguon: 'cau-hinh-kenh', soDon: ds.length,
-            ghiChu: `Chưa đủ đơn đã đối soát (${ds.length}/${SO_DON_TOI_THIEU}) để đo phí thật — đang dùng tỷ lệ cấu hình của kênh ${round2(cauHinh * 100)}%. ` +
-                'Phí Shopee thật thường CAO hơn (phí cố định + phí thanh toán + Freeship/Voucher Xtra) — giá tính ra có thể lãi ít hơn dự kiến.',
+            tyLe: cauHinh, coDinh: 0, nguon: 'cau-hinh-kenh', soDon: ds.length, khai: true,
+            ghiChu: `Gian${ten ? ` "${ten}"` : ''} mới có ${ds.length}/${SO_DON_TOI_THIEU} đơn đã đối soát — CHƯA ĐO được phí thật, đang dùng phí KHAI ` +
+                `${round2(cauHinh * 100)}% ở ${NOI_KHAI_PHI}. Số khai không phải số đo: phí sàn thật gồm cả phí cố định, phí thanh toán, ` +
+                `Freeship/Voucher Xtra — giá tính ra có thể lãi ít hơn dự kiến. ${khongMuon}`,
         }
     }
 
@@ -198,8 +255,9 @@ function doMauPhi(ds: DongPhiDon[], tyLeCauHinhPct: number): MauPhi {
 export interface ThamSoGia {
     /** giá vốn 1 đơn vị bán */
     giaVon: number
-    /** mô hình phí (MauPhi) — có `affiliate` thì dùng hoa hồng đo được, xem tyLeAffiliate / tyLePhiKyVong */
-    phi: { tyLe: number; coDinh: number; affiliate?: AffiliateDo }
+    /** mô hình phí (MauPhi) — có `affiliate` thì dùng hoa hồng đo được, xem tyLeAffiliate / tyLePhiKyVong.
+     *  `chuaBiet` (MauPhi.chuaBiet, 09/11/2026) ⇒ không tính giá; `soDon` chỉ để lý do nói gian có bao nhiêu đơn đối soát. */
+    phi: { tyLe: number; coDinh: number; affiliate?: AffiliateDo; chuaBiet?: boolean; soDon?: number }
     /** biên lãi mục tiêu trên giá bán, % */
     bienLoiNhuanPct: number
     /** biên tối thiểu — dưới mức này là "giá sàn", công cụ ghi từ chối. Mặc định 5, không < 0 */
@@ -310,6 +368,9 @@ export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
     const hong = (lyDo: string): KetQuaGia => ({ hopLe: false, lyDo, giaDeXuat: 0, giaSan: 0, giaHoaVon: 0, duKien: null, duKienAffiliate: null, canhBao: [], thamSo })
 
     if (!(t.giaVon > 0)) return hong('Sản phẩm CHƯA CÓ GIÁ VỐN — không tính được lãi/lỗ nên không đề xuất giá. Cập nhật giá vốn trước.')
+    // Sau giá vốn (thiếu vốn là việc của TỪNG sản phẩm, phí là việc của cả gian — báo cái cần sửa ở sản phẩm trước).
+    // giaSan = 0 ⇒ chanGiaDuoiSan chặn MỌI lệnh ghi giá: đăng mới, đổi giá, khuyến mãi, người lẫn máy (09/11/2026).
+    if (t.phi.chuaBiet) return hong(lyDoChuaBietPhi(t.phi.soDon))
 
     const tp: ThamSoGia = { ...t, bienLoiNhuanPct: bienMucTieu, bienToiThieuPct: bienToiThieu }
     const hoaVon = giaDatBien(tp, 0, true)
@@ -365,8 +426,8 @@ export function chanGiaDuoiSan(gia: number, kq: KetQuaGia): string | null {
  * Phí sàn có đủ tin để MÁY tự đăng mới / hạ giá về mức này không (chu kỳ tự động, tool AI). null = được.
  * Người duyệt từng kế hoạch thì chỉ cảnh báo — đây là rào cho lúc không ai xem. Có lý do mà máy TĂNG giá
  * thì vẫn được (lãi mỗi đơn tăng theo giá) — doiGiaShopee soát chiều tăng với giá đọc thẳng từ Shopee.
- *  - Chưa đo được phí (rơi về % cấu hình kênh, mặc định 6% trong khi phí Shopee thật ~20–30%)
- *    ⇒ giá sàn tính ra thấp xa thực tế.
+ *  - Chưa đo được phí (09/11/2026): gian chưa khai phí ⇒ chưa biết phí (tinhGiaDeXuat đã không tính giá); gian đã
+ *    khai ⇒ số khai không phải số đo (phí Shopee thật ~20–30%, gồm phí cố định / phí thanh toán), giá sàn có thể lỗ.
  *  - Phí đo kiểu TỶ LỆ TRUNG BÌNH (không tách được phí cố định/đơn) mà giá thấp hơn giá trung bình các
  *    đơn đã đo: tỷ lệ trung bình = a + b/giáTB, hàng rẻ hơn giáTB chịu b/giá > b/giáTB ⇒ thiếu phí.
  *    Từ giáTB trở lên thì tỷ lệ trung bình chỉ có DƯ phí, nên an toàn.
@@ -381,12 +442,15 @@ export function chanGiaDuoiSan(gia: number, kq: KetQuaGia): string | null {
 export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5): string | null {
     const d = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
     if (phi.nguon === 'cau-hinh-kenh') {
+        // 09/11/2026: không còn nhánh "mượn số đo gian khác" — gian chưa đủ đơn chỉ có số KHAI hoặc chưa biết phí
+        if (phi.chuaBiet) return `${lyDoChuaBietPhi(phi.soDon)} Máy không tự đăng mới / hạ giá: không biết phí thì không biết lỗ.`
+        if (phi.khai) {
+            return `Phí sàn CHƯA ĐO được (${phi.soDon}/${SO_DON_TOI_THIEU} đơn đã đối soát) — đang dùng phí KHAI ${round2(phi.tyLe * 100)}% ở ` +
+                `${NOI_KHAI_PHI}; số khai không phải số đo (phí sàn thật thường 20–30%), giá sàn tính ra có thể vẫn lỗ. ` +
+                'Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
+        }
         return `Phí sàn CHƯA ĐO được (${phi.soDon}/${SO_DON_TOI_THIEU} đơn đã đối soát) — đang dùng ${round2(phi.tyLe * 100)}% cấu hình kênh, ` +
             'phí sàn thật thường 20–30%, giá sàn tính ra có thể vẫn lỗ. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
-    }
-    if (phi.muon) {
-        return 'Phí đang MƯỢN số đo của gian khác cùng sàn (gian này chưa đủ đơn đối soát) — gian Mall và gian thường, ngành hàng khác nhau ' +
-            'thì phí khác nhau. Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
     }
     if (phi.thayNganh) {
         return `Ngành của sản phẩm (${phi.thayNganh}) chưa đủ đơn đối soát để đo phí riêng — đang dùng phí trung bình cả gian, mà mỗi ngành ` +
