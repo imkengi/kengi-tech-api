@@ -21,6 +21,9 @@
  *    - (09/11/2026) bài HẸN đã giao cho Facebook được soát lại lần nữa TRƯỚC GIỜ LÊN ~1 tiếng (soatBaiHenSapLen, nhịp ngoài mỗi
  *      phút): mã không còn / gộp, tồn < mức tối thiểu, hay giá đổi mà chữ bài còn ghi giá cũ ⇒ RÚT (xoá bài hẹn chưa lên) + báo
  *      chủ shop; không rút được ⇒ báo KHẨN để xoá tay. Trước đây chỉ soát lúc giao — bài hẹn 3 ngày lên với giá / tồn cũ.
+ *    - (10/11/2026, FB-15) bài Pilot ĐÃ LÊN mà giá bán trong kho đổi ⇒ chu kỳ sửa dòng "Giá: …" Pilot viết trên bài (kế hoạch 'edit',
+ *      POST /{post-id} — Facebook chỉ cho sửa bài do chính app tạo). Đọc chữ SỐNG trước khi sửa; chữ không còn đúng dòng giá Pilot
+ *      viết (người đã sửa tay) ⇒ không đụng. Tồn ≤ 0 KHÔNG được ghi "hết hàng" lên bài (tồn ≤ 0 không chứng minh hết) — chỉ nêu.
  *    - mỗi ngày (giờ VN) tối đa postsPerDay bài — đếm cả bài Kengi khác đã hẹn — và các bài cách nhau ≥ minGapMinutes
  *    - từ CẤM trong hồ sơ thương hiệu (FbBrandProfile.bannedWords) ⇒ không lập kế hoạch
  *    - máy tự chạy KHÔNG tự trả lời: bình luận đã có người trả lời, bình luận không rõ người viết (token thiếu
@@ -104,7 +107,8 @@ export interface ChinhSachFbPilot {
     maxWritesPerDay: number
     /** trả lời bình luận tối đa mỗi chu kỳ */
     maxRepliesPerCycle: number
-    automation: { posts: boolean; replyPriceQuestions: boolean; hidePhoneComments: boolean }
+    /** editPrices (10/11/2026, FB-15): sửa dòng giá trên bài Pilot đã lên khi giá bán trong kho đổi — Xem trước ⇒ chỉ nháp để xem */
+    automation: { posts: boolean; replyPriceQuestions: boolean; hidePhoneComments: boolean; editPrices: boolean }
 }
 
 export const CHINH_SACH_FB_MAC_DINH: ChinhSachFbPilot = {
@@ -119,7 +123,7 @@ export const CHINH_SACH_FB_MAC_DINH: ChinhSachFbPilot = {
     hashtags: [],
     maxWritesPerDay: 30,
     maxRepliesPerCycle: 10,
-    automation: { posts: true, replyPriceQuestions: false, hidePhoneComments: false },
+    automation: { posts: true, replyPriceQuestions: false, hidePhoneComments: false, editPrices: true },
 }
 
 export const GIO_DANG_MAC_DINH = [9, 12, 20]
@@ -187,6 +191,7 @@ export function chuanHoaChinhSachFb(x: any): ChinhSachFbPilot {
             posts: bool(tu.posts, m.automation.posts),
             replyPriceQuestions: bool(tu.replyPriceQuestions, m.automation.replyPriceQuestions),
             hidePhoneComments: bool(tu.hidePhoneComments, m.automation.hidePhoneComments),
+            editPrices: bool(tu.editPrices, m.automation.editPrices),
         },
     }
 }
@@ -215,7 +220,8 @@ function cauHinhMacDinh(): CauHinhFbPilot {
 // ─── Kho lưu (kế hoạch, nhật ký ghi, cấu hình) ──────────────────────────────────
 
 /** 'unhide' (10/11/2026, FB-16): bỏ ẩn một bình luận — cùng đường kế hoạch → thực thi như 'hide'. */
-export type LoaiKeHoachFb = 'post' | 'reply' | 'hide' | 'unhide'
+/** 'edit' (10/11/2026, FB-15): sửa dòng giá Pilot viết trên MỘT bài đã lên — data.postId / giaCu / giaMoi. */
+export type LoaiKeHoachFb = 'post' | 'reply' | 'hide' | 'unhide' | 'edit'
 /** Kế hoạch gắn với MỘT bình luận (trả lời / ẩn / bỏ ẩn) — chu kỳ né bình luận đã có kế hoạch loại này. */
 export const LOAI_BINH_LUAN: LoaiKeHoachFb[] = ['reply', 'hide', 'unhide']
 export interface KeHoachFb {
@@ -257,6 +263,8 @@ export interface KhoFbPilot {
     /** (09/11/2026) Kế hoạch đăng bài 'succeeded' có bài HẸN ứng với các dòng FbScheduledPost này (result.scheduledPostId) — lượt
      *  soát bài sắp lên. KHÔNG tạo bảng hộ: cửa hàng chưa từng dùng Pilot thì bảng chưa có ⇒ []. */
     dsKeHoachBaiHen(scheduledPostIds: string[]): Promise<KeHoachFb[]>
+    /** (10/11/2026, FB-15) MỌI kế hoạch sửa giá ('edit', mọi trạng thái) của các bài này (data.postId), cũ trước — chuỗi sửa của bài. */
+    dsKeHoachSuaBai(postIds: string[]): Promise<KeHoachFb[]>
     /** (09/11/2026) Đổi trạng thái + kết quả NẾU kế hoạch còn y như `cu` (so cả result) — nguyên tử. Lượt soát bài hẹn dùng để
      *  giành / nhả / chốt một bài giữa nhiều bản máy (prod không có Redis): bản nào đổi được mới gọi Facebook. */
     doiKeHoachNeu(id: string, cu: { status: string; result: any }, moi: { status: string; result: any }): Promise<boolean>
@@ -406,6 +414,11 @@ export function khoSqlFb(prisma: any): KhoFbPilot {
             }
             return rs.map(hangKeHoach)
         },
+        async dsKeHoachSuaBai(ids) {
+            if (!ids.length) return []
+            return (await q(`SELECT ${COT_KH} FROM "FacebookPilotPlan" WHERE kind = 'edit' AND data::jsonb->>'postId' = ANY($1::text[])
+                               ORDER BY "createdAt" ASC, id ASC LIMIT 5000`, ids)).map(hangKeHoach)
+        },
         async doiKeHoachNeu(id, cu, moi) {
             return (await x(`UPDATE "FacebookPilotPlan" SET status = $4, result = $5, "updatedAt" = $6
                               WHERE id = $1 AND status = $2 AND result::jsonb IS NOT DISTINCT FROM $3::jsonb`,
@@ -479,6 +492,10 @@ export function khoBoNhoFb(): KhoFbPilot & { _keHoach: KeHoachFb[]; _nhatKy: Nha
         async dsKeHoachBaiHen(ids) {
             return sao(keHoach.filter(k => k.kind === 'post' && k.status === 'succeeded' && k.result?.scheduledPostId != null && ids.includes(String(k.result.scheduledPostId))))
         },
+        async dsKeHoachSuaBai(ids) {
+            return sao(keHoach.filter(k => k.kind === 'edit' && ids.includes(String(k.data?.postId)))
+                .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
+        },
         async doiKeHoachNeu(id, cu, moi) {
             const k = keHoach.find(x => x.id === id)
             if (!k || k.status !== cu.status || jsonChuan(k.result) !== jsonChuan(cu.result)) return false
@@ -502,6 +519,8 @@ export interface DichVuFb {
     listScheduledPosts(pageId: string): Promise<any[]>
     /** Xoá bài — Pilot CHỈ dùng để rút bài HẸN chưa lên của chính nó (soatBaiHenSapLen), sau khi thấy bài còn trong scheduled_posts. */
     deletePost(postId: string): Promise<{ success: boolean }>
+    /** (10/11/2026, FB-15) Sửa chữ bài ĐÃ LÊN — Pilot CHỈ dùng để thay dòng giá nó viết (suaGiaBai), sau khi đọc chữ sống. */
+    editPost(postId: string, message: string): Promise<{ success: boolean }>
 }
 
 export interface NgCanhFb {
@@ -997,7 +1016,9 @@ export async function huyKeHoachFb(ctx: NgCanhFb, id: string): Promise<KeHoachFb
     const k = await ctx.kho.layKeHoach(String(id || ''))
     const ai = `Người huỷ${ctx.nguoi ? ` (${String(ctx.nguoi).slice(0, 80)})` : ''}`
     const message = k && laNhapMay(k)
-        ? `${ai} — chu kỳ không đề xuất lại ${k.kind === 'post' ? 'mã này' : 'bình luận này'} trong 14 ngày.`
+        ? k.kind === 'edit'
+            ? `${ai} — chu kỳ không đề xuất lại lần sửa giá này trong 14 ngày (giá bán đổi tiếp thì đề xuất theo giá mới).`
+            : `${ai} — chu kỳ không đề xuất lại ${k.kind === 'post' ? 'mã này' : 'bình luận này'} trong 14 ngày.`
         : `${ai}.`
     if (!k || !(await ctx.kho.huyKeHoach(k.id, { message }))) throw new ToolError('Kế hoạch không còn là bản nháp — không huỷ được.')
     return (await ctx.kho.layKeHoach(k.id))!
@@ -1011,6 +1032,8 @@ const CHU_DA_KIEM: Record<string, [string, string]> = {
         'câu trả lời KHÔNG có trên Facebook — bình luận mở lại: bấm Trả lời ở tab Bình luận (máy không tự trả lời lại bình luận này)'],
     hide: ['bình luận ĐÃ ẩn', 'bình luận CHƯA ẩn — bấm Ẩn bình luận ở tab Bình luận nếu vẫn cần (máy không tự ẩn lại bình luận này)'],
     unhide: ['bình luận ĐÃ hiện lại', 'bình luận VẪN đang ẩn — bấm Bỏ ẩn ở tab Bình luận nếu vẫn cần'],
+    edit: ['bài ĐÃ ghi giá mới — máy coi như đã sửa',
+        'bài VẪN ghi giá cũ — chu kỳ sau máy lập lại kế hoạch sửa giá (Tự động: sửa luôn; Xem trước: chỉ lập nháp để xem)'],
 }
 
 /**
@@ -1083,7 +1106,7 @@ export async function xacNhanDaKiemFb(ctx: NgCanhFb, b: { planId: string; outcom
 }
 
 const TRANG_THAI_KE_HOACH = ['draft', 'running', 'uncertain', 'failed', 'succeeded', 'skipped', 'cancelled']
-const LOAI_KE_HOACH: string[] = ['post', ...LOAI_BINH_LUAN]
+const LOAI_KE_HOACH: string[] = ['post', ...LOAI_BINH_LUAN, 'edit']
 const mangChu = (v: any, hop: string[]) => [...new Set((Array.isArray(v) ? v : v == null || v === '' ? [] : [v]).map(String).filter(x => hop.includes(x)))]
 
 /** FB-16 (10/11/2026) — thao tác ĐỌC 'plans': kế hoạch lọc theo trạng thái / loại, lật trang bằng `before` (= `next` của trang trước,
@@ -1127,6 +1150,7 @@ export async function thucThiFb(ctx: NgCanhFb, planId: string, tuyChon: { tuDong
         else if (plan.kind === 'reply') ({ status, result } = await traLoiBinhLuan(ctx, plan, page, fb))
         else if (plan.kind === 'hide') result = await anBinhLuan(ctx, plan, fb, true)
         else if (plan.kind === 'unhide') result = await anBinhLuan(ctx, plan, fb, false)
+        else if (plan.kind === 'edit') ({ status, result } = await suaGiaBai(ctx, plan, fb))
         else throw new ToolError(`Loại kế hoạch lạ: ${plan.kind}`)
     } catch (e: any) {
         /* 09/11/2026 — phân loại theo MÃ lỗi Graph (services/platforms/facebook.loaiLoiFb). Trước đây mọi lỗi mang type
@@ -1235,6 +1259,46 @@ async function anBinhLuan(ctx: NgCanhFb, plan: KeHoachFb, fb: DichVuFb, an: bool
     await fb.hideComment(String(d.commentId), an)
     await ctx.kho.ghiNhatKy({ action: an ? 'hide' : 'unhide', status: 'succeeded', planId: plan.id, payload: { commentId: d.commentId }, response: { hidden: an } })
     return { hidden: an }
+}
+
+/**
+ * Thực thi kế hoạch 'edit' (FB-15): soát lại lúc THỰC THI — nháp có thể được duyệt sau một ngày:
+ *   - mã còn, chưa gộp, giá bán VẪN là giá kế hoạch định ghi (đổi tiếp ⇒ không sửa, chu kỳ sau lập theo giá mới)
+ *   - đọc chữ SỐNG của bài (GET /{post-id}), thay dòng "Giá: <giá cũ>" trên CHÍNH chữ đó — người sửa gì khác trên bài thì giữ nguyên
+ *   - chữ đã ghi giá mới ⇒ 'succeeded' không gọi sửa (không tốn lượt ghi); không còn dòng giá cũ ⇒ 'skipped' + thôi theo dõi bài
+ *     (còn giá cũ dạng khác ⇒ 'failed' cần người sửa tay) — Pilot không bao giờ ghi đè chữ người đã viết lại.
+ * Lỗi Graph đi chung đường phân loại của thucThiFb (mạng ⇒ 'uncertain', hạn mức ⇒ giữ nháp, #190 ⇒ token_expired…).
+ */
+async function suaGiaBai(ctx: NgCanhFb, plan: KeHoachFb, fb: DichVuFb): Promise<{ status: string; result: any }> {
+    const d = plan.data || {}
+    const postId = String(d.postId || '')
+    const giaCu = Math.round(Number(d.giaCu) || 0), giaKh = Math.round(Number(d.giaMoi) || 0)
+    if (!postId || !(giaCu > 0) || !(giaKh > 0)) throw new ToolError('Kế hoạch sửa giá thiếu mã bài / giá — huỷ đi, chu kỳ sau lập lại.')
+    const sp = await ctx.prisma.product.findUnique({ where: { id: String(d.productId || '') }, select: { id: true, sellingPrice: true, mergedIntoId: true } })
+    if (!sp) throw new ToolError('Mã hàng không còn trong kho — không sửa giá bài; sửa tay trên fanpage nếu cần.')
+    if (sp.mergedIntoId) throw new ToolError('Mã đã gộp vào mã khác — không sửa giá bài; sửa tay trên fanpage nếu cần.')
+    const giaNay = Math.round(Number(sp.sellingPrice) || 0)
+    if (Math.abs(giaNay - giaKh) >= 1) {
+        throw new ToolError(`Giá bán đã đổi tiếp thành ${vnd(giaNay)} từ lúc lập kế hoạch (định ghi ${vnd(giaKh)}) — không sửa; chu kỳ sau lập lại theo giá mới.`)
+    }
+    const tren = await fb.get(postId, { fields: 'id,message' })
+    const chu = typeof tren?.message === 'string' ? tren.message : ''
+    const moi = thayGiaTrongBai(chu, giaCu, giaKh)
+    if (moi === null) {
+        if (coDongGia(chu, giaKh)) {
+            return { status: 'succeeded', result: { postId, giaCu, giaMoi: giaKh, khongCanSua: true, messageMoi: chu.normalize('NFC').slice(0, 5000), message: `Bài trên Facebook đã ghi ${dongGiaBai(giaKh)} — không cần sửa.` } }
+        }
+        if (chuCoGia(chu, giaCu)) {
+            return { status: 'failed', result: { postId, boQuan: true, message: `Bài vẫn ghi giá cũ ${vnd(giaCu)} nhưng không đúng dòng "${dongGiaBai(giaCu)}" Pilot viết (đã viết lại?) — Pilot không sửa chữ người viết: sửa tay trên fanpage.` } }
+        }
+        return { status: 'skipped', result: { postId, boQuan: true, message: 'Chữ bài trên Facebook không còn giá cũ (đã sửa tay / bỏ dòng giá) — Pilot thôi theo dõi giá bài này.' } }
+    }
+    await fb.editPost(postId, moi)
+    await ctx.kho.ghiNhatKy({ action: 'edit', status: 'succeeded', planId: plan.id, payload: { sku: d.sku, postId, giaCu, giaMoi: giaKh }, response: { success: true } })
+    // dòng FbScheduledPost của bài (Fanpage Manager hiện chữ này) — phụ, hỏng không làm hỏng lần sửa đã xong
+    await ctx.prisma.fbScheduledPost.updateMany({ where: { fbPostId: postId }, data: { message: moi } })
+        .catch((e: any) => console.error('[FacebookPilot] sửa giá bài — ghi FbScheduledPost lỗi:', e?.message || e))
+    return { status: 'succeeded', result: { postId, giaCu, giaMoi: giaKh, messageMoi: moi.slice(0, 5000), message: 'Đã sửa dòng giá trên bài.' } }
 }
 
 // ─── Bình luận ──────────────────────────────────────────────────────────────────
@@ -1448,6 +1512,216 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
     return { comments, soBai: posts.length, thieuFrom, page: pageAnToan(page) }
 }
 
+// ─── Sửa giá bài đã lên (10/11/2026, FB-15) ─────────────────────────────────────
+
+/* Trước đây bài Pilot đã lên giữ giá lúc đăng mãi: giá kho đổi ⇒ khách đọc bài thấy giá cũ, hỏi / đặt theo giá cũ. Nay mỗi chu kỳ soát
+ * bài Pilot đã lên ≤ 30 ngày: giá bán trong kho ≠ giá bài đang ghi THEO PILOT (giá lúc đăng, hoặc giá lần sửa thành công cuối) ⇒ đọc
+ * chữ SỐNG (một lần /{page}/posts) ⇒ thay đúng dòng "Giá: <giá cũ>" Pilot viết:
+ *   - Tự động ⇒ sửa luôn (tính trần ghi / ngày, tối đa TRAN_SUA_MOI_CHU_KY bài mỗi chu kỳ, bài mới trước); hết lượt ghi ⇒ báo chủ shop,
+ *     nháp nằm chờ chu kỳ sau. Xem trước ⇒ nháp 'edit' CHỈ ĐỂ XEM (Xem trước không ghi gì lên Facebook, kể cả khi người bấm Thực thi).
+ *   - chữ đã ghi giá mới (người sửa tay) ⇒ ghi nhận, không gọi sửa; còn giá cũ mà không đúng dòng Pilot viết ⇒ báo người sửa tay; không
+ *     còn giá cũ ⇒ thôi theo dõi bài đó. Pilot KHÔNG ghi đè chữ người đã viết lại.
+ *   - KHÔNG gọi Facebook khi không bài nào lệch giá (chỉ đọc CSDL). Bài hẹn mới tới giờ < 30 phút thuộc phần soatBaiHenSapLen.
+ *   - Tồn ≤ 0 KHÔNG ghi "hết hàng" lên bài (tồn ≤ 0 không chứng minh hết — memory warehouse-stock-invariant): chỉ nêu trong kết quả.
+ * Chuỗi sửa của một bài = các kế hoạch 'edit' (data.postId). Khoá = bài + kế hoạch sửa thành công trước (hoặc 'goc') + giá mới + lượt
+ * ⇒ cùng một bước đổi giá không lập trùng; nháp máy hết hạn / tự huỷ ⇒ lượt sau lập lại (tối đa SUA_GIA_TOI_DA_LUOT); người huỷ ⇒
+ * nhớ 14 ngày; hỏng ⇒ 24 giờ sau thử lại; còn kế hoạch 'uncertain' ⇒ chờ người «Đã kiểm», không sửa tiếp bài đó. */
+const SUA_GIA_TRONG_MS = 30 * 86400_000
+const SUA_GIA_SAU_GIO_LEN_MS = 30 * 60_000
+const TRAN_SUA_MOI_CHU_KY = 10
+const SUA_GIA_TOI_DA_LUOT = 5
+const SUA_GIA_THU_LAI_MS = 24 * 3600_000
+/** taoKeHoachBai cho hẹn trước tối đa 28 ngày — đọc kế hoạch lùi thêm ngần này để không sót bài hẹn xa đã lên. */
+const HEN_TRUOC_TOI_DA_MS = 28 * 86400_000
+
+/** Dòng giá Pilot ghi trong bài (soanBai): "Giá: 26.000đ". */
+export const dongGiaBai = (gia: number) => `Giá: ${vnd(gia)}`
+const thoatRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** "Giá: 26.000đ" không dính chữ / số liền sau ("Giá: 26.000đồng" là chữ người viết, không phải dòng Pilot). */
+const reDongGia = (gia: number, co: string) => new RegExp(`${thoatRe(dongGiaBai(gia))}(?![\\p{L}\\d])`, co)
+/** Chữ bài (chuẩn hoá NFC) có dòng giá đúng khuôn Pilot cho `gia`. */
+export function coDongGia(chu: string, gia: number): boolean {
+    return Math.round(Number(gia) || 0) > 0 && reDongGia(gia, 'u').test(String(chu || '').normalize('NFC'))
+}
+/** Thay MỌI dòng "Giá: <giaCu>" đúng khuôn Pilot bằng "Giá: <giaMoi>" (chữ chuẩn hoá NFC). null = không có dòng nào để thay. */
+export function thayGiaTrongBai(chu: string, giaCu: number, giaMoi: number): string | null {
+    const s = String(chu || '').normalize('NFC')
+    if (!coDongGia(s, giaCu) || !(Math.round(Number(giaMoi) || 0) > 0)) return null
+    return s.replace(reDongGia(giaCu, 'gu'), () => dongGiaBai(giaMoi))
+}
+
+export interface GiaBaiTheoPilot {
+    /** giá bài đang ghi theo Pilot: giá lúc đăng, hoặc giá của lần sửa THÀNH CÔNG cuối */
+    gia: number
+    /** id kế hoạch sửa thành công cuối ('goc' = chưa sửa lần nào) — mắt xích của khoá kế hoạch sửa kế tiếp */
+    chuoi: string
+    /** có lần sửa kết luận thôi theo dõi bài (người viết lại giá / bỏ dòng giá) */
+    boQuan: boolean
+    /** kế hoạch sửa còn mở (nháp / đang chạy) */
+    mo: KeHoachFb[]
+    /** kế hoạch sửa chưa rõ kết quả — chờ người «Đã kiểm» */
+    chuaRo: KeHoachFb | null
+}
+/** Gộp chuỗi kế hoạch 'edit' của MỘT bài thành giá bài đang ghi theo Pilot. Thứ tự = thứ tự LẬP (createdAt): mỗi bài chỉ có
+ *  một lần sửa mở / chưa rõ tại một lúc (chu kỳ không lập lần sau khi lần trước chưa xong), nên lập sau = áp lên bài sau — kể cả
+ *  lần "chưa rõ" được người đánh dấu «Đã kiểm: CÓ» về sau (updatedAt mới nhưng vẫn là lần áp cuối). */
+export function giaBaiTheoPilot(bai: KeHoachFb, sua: KeHoachFb[]): GiaBaiTheoPilot {
+    let gia = Math.round(Number(bai.data?.price) || 0), chuoi = 'goc', luc = -Infinity
+    for (const e of sua) {
+        if (e.status !== 'succeeded' || !(e.createdAt >= luc)) continue
+        luc = e.createdAt; gia = Math.round(Number(e.data?.giaMoi) || 0); chuoi = e.id
+    }
+    return {
+        gia, chuoi,
+        boQuan: sua.some(e => e.result?.boQuan === true),
+        mo: sua.filter(e => e.status === 'draft' || e.status === 'running'),
+        chuaRo: sua.find(e => e.status === 'uncertain') || null,
+    }
+}
+
+interface ViecSuaGia { k: KeHoachFb; postId: string; len: number; sp: any; st: GiaBaiTheoPilot; giaMoi: number; luot: number; nhap: KeHoachFb | null }
+/** mã hàng không lặp (hai bài cùng mã), tối đa 5 mã */
+const dsMa = (ds: string[]) => { const m = [...new Set(ds)]; return `${m.slice(0, 5).join(', ')}${m.length > 5 ? ` và ${m.length - 5} mã khác` : ''}` }
+
+/** Bước soát giá bài đã lên của chu kỳ (khối chú thích ở trên). Đẩy dòng kết quả vào `o.results`; lỗi chung để người gọi bắt. */
+async function suaGiaBaiDaLen(ctx: NgCanhFb, o: {
+    page: any; tuDong: boolean; tienTo: string; now: number; results: any[]; xemTamDung: (p: any) => void; dangTamDung: () => boolean
+}): Promise<void> {
+    const { page, tuDong, tienTo, now, results } = o
+    const dsBai = new Map<string, { k: KeHoachFb; len: number }>()
+    for (const k of await ctx.kho.dsKeHoachBaiTu(now - SUA_GIA_TRONG_MS - HEN_TRUOC_TOI_DA_MS)) {
+        const d = k.data || {}, r = k.result || {}
+        if ((k.status !== 'succeeded' && k.status !== 'uncertain') || !r.postId || !d.productId || String(d.pageId || '') !== String(page.pageId)) continue
+        const hen = Number(d.scheduledAt) || 0
+        if (hen && hen > now - SUA_GIA_SAU_GIO_LEN_MS) continue // chưa lên / vừa lên — việc của soatBaiHenSapLen
+        const len = hen || k.createdAt
+        if (len < now - SUA_GIA_TRONG_MS) continue
+        if (!dsBai.has(String(r.postId))) dsBai.set(String(r.postId), { k, len })
+    }
+    if (!dsBai.size) return
+
+    const ids = [...new Set([...dsBai.values()].map(x => String(x.k.data.productId)))]
+    const spDs: any[] = await ctx.prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, sku: true, name: true, sellingPrice: true, stock: true, mergedIntoId: true } })
+    const spTheoId = new Map(spDs.map(s => [String(s.id), s]))
+    const suaTheoBai = new Map<string, KeHoachFb[]>()
+    for (const e of await ctx.kho.dsKeHoachSuaBai([...dsBai.keys()])) {
+        const id = String(e.data?.postId || '')
+        suaTheoBai.set(id, [...(suaTheoBai.get(id) || []), e])
+    }
+
+    const viec: ViecSuaGia[] = []
+    const hetTon: string[] = [], chuaRo: string[] = [], quaLuot: string[] = []
+    for (const [postId, { k, len }] of dsBai) {
+        const sp = spTheoId.get(String(k.data.productId))
+        if (!sp || sp.mergedIntoId) continue // mã mất / gộp: không biết giá đúng là giá nào — không sửa
+        if (!(Number(sp.stock) > 0)) hetTon.push(String(sp.sku))
+        const giaMoi = Math.round(Number(sp.sellingPrice) || 0)
+        const sua = suaTheoBai.get(postId) || []
+        const st = giaBaiTheoPilot(k, sua)
+        if (st.boQuan || !(st.gia > 0)) continue
+        if (st.mo.some(e => e.status === 'running')) continue // lượt khác đang sửa bài này
+        if (st.chuaRo) { chuaRo.push(String(sp.sku)); continue }
+        const lech = giaMoi > 0 && Math.abs(giaMoi - st.gia) >= 1
+        let nhap: KeHoachFb | null = null
+        for (const e of st.mo) {
+            if (!nhap && lech && Math.round(Number(e.data?.giaMoi) || 0) === giaMoi && String(e.data?.chuoi || '') === st.chuoi) { nhap = e; continue }
+            // nháp máy lỗi thời (giá đổi tiếp / trở về giá bài đang ghi / chuỗi đã đổi) ⇒ tự huỷ êm, lượt này lập theo giá hiện tại
+            if (laNhapMay(e)) await ctx.kho.huyKeHoach(e.id, { tuHuy: true, message: `Giá bán nay là ${vnd(giaMoi)} — nháp sửa giá cũ tự huỷ.` })
+        }
+        if (!lech) continue
+        if (nhap) { viec.push({ k, postId, len, sp, st, giaMoi, luot: 0, nhap }); continue }
+        const cung = sua.filter(e => String(e.data?.chuoi || '') === st.chuoi && Math.round(Number(e.data?.giaMoi) || 0) === giaMoi)
+        if (cung.some(e => e.status === 'cancelled' && !e.result?.tuHuy && now - e.updatedAt < NHO_NGUOI_HUY_MS)) continue // người huỷ = "đừng sửa"
+        if (cung.some(e => e.status === 'failed' && !e.result?.daKiem && now - e.updatedAt < SUA_GIA_THU_LAI_MS)) continue // vừa hỏng (đã báo)
+        // trần đếm lần HỎNG thật — nháp máy tự huỷ (hết hạn 3 ngày ở Xem trước, giá đổi tiếp) không phải lần thử
+        if (cung.filter(e => e.status === 'failed').length >= SUA_GIA_TOI_DA_LUOT) { quaLuot.push(String(sp.sku)); continue }
+        viec.push({ k, postId, len, sp, st, giaMoi, luot: cung.length + 1, nhap: null })
+    }
+
+    if (chuaRo.length) results.push({ action: 'edit', status: 'skipped', message: `${chuaRo.length} bài có lần sửa giá trước CHƯA RÕ kết quả (${dsMa(chuaRo)}) — mở bài kiểm rồi bấm «Đã kiểm» ở tab Nhật ký; máy không sửa tiếp bài đó.` })
+    if (quaLuot.length) results.push({ action: 'edit', status: 'skipped', ...(tuDong ? { canNguoi: true } : {}), message: `Sửa giá hỏng ${SUA_GIA_TOI_DA_LUOT} lần ở ${quaLuot.length} bài (${dsMa(quaLuot)}) — máy thôi thử; sửa tay dòng giá trên fanpage.` })
+    if (hetTon.length) {
+        results.push({ action: 'edit', status: 'skipped', message: `${hetTon.length} bài Pilot đã lên đang mời mua mà tồn kho ≤ 0 (${dsMa(hetTon)}) — tồn ≤ 0 chưa chắc là hết hàng nên Pilot KHÔNG ghi "hết hàng" lên bài; nếu hết thật, sửa hoặc ẩn bài trên fanpage.` })
+    }
+    if (!viec.length) return
+
+    // bài mới trước (khách còn đọc nhiều); phần dư để chu kỳ sau
+    const lam = viec.sort((a, b) => b.len - a.len).slice(0, TRAN_SUA_MOI_CHU_KY)
+    if (viec.length > lam.length) results.push({ action: 'edit', status: 'skipped', message: `Mỗi chu kỳ sửa giá tối đa ${TRAN_SUA_MOI_CHU_KY} bài — còn ${viec.length - lam.length} bài, chu kỳ sau sửa tiếp.` })
+    const fb = dichVu(ctx, page.accessToken)
+    let dsTren: any[] = []
+    if (lam.some(v => !v.nhap)) {
+        try {
+            const r = await fb.get(`${page.pageId}/posts`, { fields: 'id,message,permalink_url', limit: 100 })
+            dsTren = Array.isArray(r?.data) ? r.data : []
+        } catch (e: any) {
+            results.push({ action: 'edit', status: isRateLimitError(e) ? 'skipped' : 'failed', message: `Không đọc được bài trên fanpage để sửa giá (${lam.length} bài lệch giá kho): ${String(e?.message || e).slice(0, 300)}` })
+            return
+        }
+    }
+    const tren = new Map(dsTren.map(p => [String(p?.id), p]))
+    const khongThay: string[] = []
+    let hetLuot = false
+    for (const v of lam) {
+        if (o.dangTamDung()) break
+        const sku = String(v.sp.sku)
+        const ten = tenGon(v.sp.name || v.k.data?.name || sku)
+        const tg = ngayGioVN(v.len)
+        let p: KeHoachFb | null = v.nhap
+        if (!p) {
+            let bai = tren.get(v.postId)
+            // danh sách đủ 100 bài ⇒ bài cũ có thể nằm ngoài trang đầu: đọc lẻ
+            if (!bai && dsTren.length >= 100) bai = await fb.get(v.postId, { fields: 'id,message,permalink_url' }).catch(() => null)
+            if (!bai) { khongThay.push(sku); continue }
+            const chu = typeof bai.message === 'string' ? bai.message : ''
+            const data: any = {
+                pageId: page.pageId, pageName: page.name, postId: v.postId, postPlanId: v.k.id, productId: String(v.sp.id), sku, name: ten,
+                giaCu: v.st.gia, giaMoi: v.giaMoi, chuoi: v.st.chuoi, luot: v.luot, postedAt: v.len,
+                permalink: bai.permalink_url || null, dongCu: dongGiaBai(v.st.gia), dongMoi: dongGiaBai(v.giaMoi),
+            }
+            const khoa = `${tienTo}:edit:${v.postId}:${v.st.chuoi}:${v.giaMoi}:${v.luot}`
+            const moi = thayGiaTrongBai(chu, v.st.gia, v.giaMoi)
+            if (moi === null) {
+                // không có dòng giá cũ Pilot viết ⇒ KHÔNG lập lệnh sửa; ghi kết luận (không gọi Facebook, không tính lượt ghi)
+                const ketLuan = coDongGia(chu, v.giaMoi)
+                    ? { status: 'succeeded', result: { postId: v.postId, giaCu: v.st.gia, giaMoi: v.giaMoi, khongCanSua: true, messageMoi: chu.normalize('NFC').slice(0, 5000), message: `Bài trên Facebook đã ghi ${dongGiaBai(v.giaMoi)} (sửa tay) — Pilot không cần sửa.` } }
+                    : chuCoGia(chu, v.st.gia)
+                        ? { status: 'failed', result: { postId: v.postId, boQuan: true, message: `Bài vẫn ghi giá cũ ${vnd(v.st.gia)} nhưng không đúng dòng "${dongGiaBai(v.st.gia)}" Pilot viết — Pilot không sửa chữ người viết: sửa tay thành ${vnd(v.giaMoi)} trên fanpage.` } }
+                        : { status: 'skipped', result: { postId: v.postId, boQuan: true, message: 'Chữ bài trên Facebook không còn giá cũ (đã sửa tay / bỏ dòng giá) — Pilot thôi theo dõi giá bài này.' } }
+                const kl = await ctx.kho.taoKeHoach({ ...keHoachMoi('edit', data, khoa, ctx.nguoi, now), status: ketLuan.status, result: ketLuan.result })
+                results.push({ action: 'edit', status: kl.status, sku, planId: kl.id, message: `${ten} (bài ${tg}): ${kl.result?.message || ''}` })
+                continue
+            }
+            p = await ctx.kho.taoKeHoach(keHoachMoi('edit', { ...data, messageCu: chu.normalize('NFC').slice(0, 5000), messageMoi: moi.slice(0, 5000) }, khoa, ctx.nguoi, now))
+        }
+        // Xem trước KHÔNG ghi gì lên Facebook (thucThiFb trả executed:false, kể cả người bấm) ⇒ nháp chỉ để xem, không phải việc chờ
+        // duyệt; chỉ Tự động hết lượt ghi mới là việc cần người (bài công khai ghi giá cũ tới lượt sau)
+        let canNguoi = false
+        if (tuDong && p.status === 'draft' && laNhapMay(p) && !laNhapXemTruoc(p) && !hetLuot) {
+            try {
+                const r: any = await thucThiFb(ctx, p.id, { tuDong: true })
+                p = (r.plan || r) as KeHoachFb
+                o.xemTamDung(p)
+            } catch (e: any) {
+                if (!e?.hetLuotGhi) {
+                    results.push({ action: 'edit', status: 'failed', sku, planId: p.id, message: `${ten} (bài ${tg}): ${String(e?.message || e).slice(0, 300)}` })
+                    continue
+                }
+                hetLuot = true
+            }
+        }
+        if (tuDong && hetLuot && p.status === 'draft') canNguoi = true
+        const duoi = p.status !== 'draft' ? '' : !tuDong
+            ? ' — Xem trước: CHƯA sửa trên Facebook (bật Tự động để Pilot sửa; cần gấp thì sửa tay trên fanpage)'
+            : canNguoi ? ' — HẾT LƯỢT GHI hôm nay: bài còn ghi giá cũ tới lượt sau (nâng trần ghi trong chính sách hoặc sửa tay)' : ''
+        results.push({
+            action: 'edit', status: p.status, sku, planId: p.id, ...(canNguoi ? { canNguoi: true } : {}),
+            message: `${ten} (bài ${tg}): ${String(p.data?.dongCu || '')} → ${String(p.data?.dongMoi || '')}${p.result?.message ? ` — ${p.result.message}` : ''}${duoi}`,
+        })
+    }
+    if (khongThay.length) results.push({ action: 'edit', status: 'skipped', message: `${khongThay.length} bài lệch giá kho không thấy trên fanpage (${dsMa(khongThay)}) — đã xoá, hoặc chưa lên; bỏ qua.` })
+}
+
 // ─── Chu kỳ ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -1472,7 +1746,8 @@ async function donKeHoachMoFb(ctx: NgCanhFb, tuDong: boolean, results: any[], no
         if (k.status === 'running') {
             if (now - k.updatedAt > KET_THUC_THI_MS) {
                 const kiem = k.kind === 'post' ? 'mở fanpage kiểm bài đã lên chưa' : k.kind === 'reply' ? 'mở bài kiểm câu trả lời đã có chưa'
-                    : k.kind === 'unhide' ? 'mở bài kiểm bình luận đã hiện lại chưa' : 'mở bài kiểm bình luận đã ẩn chưa'
+                    : k.kind === 'edit' ? 'mở bài kiểm dòng giá đã đổi chưa'
+                        : k.kind === 'unhide' ? 'mở bài kiểm bình luận đã hiện lại chưa' : 'mở bài kiểm bình luận đã ẩn chưa'
                 const message = `Lượt thực thi dừng giữa chừng quá 1 giờ (máy chủ khởi động lại?) — không rõ Facebook đã nhận chưa: ${kiem}. Máy không tự làm lại.`
                 await ctx.kho.capNhatKeHoach(k.id, 'uncertain', { message })
                 results.push({ action: k.kind, status: 'uncertain', sku: k.data?.sku || null, planId: k.id, message })
@@ -1491,8 +1766,10 @@ async function donKeHoachMoFb(ctx: NgCanhFb, tuDong: boolean, results: any[], no
                 if (await ctx.kho.huyKeHoach(k.id, { message, tuHuy: true })) soHuy++
                 continue
             }
-            // nháp máy của lượt Tự động: bài (hụt lượt ghi / chưa kịp thực thi) hoặc việc Facebook từng báo "thử lại sau"
-            if (tuDong && !laNhapXemTruoc(k) && (k.kind === 'post' || k.result?.tamThoi)) thuLai.push(k)
+            // nháp máy của lượt Tự động: bài (hụt lượt ghi / chưa kịp thực thi) hoặc việc Facebook từng báo "thử lại sau".
+            // Nháp sửa giá ('edit') KHÔNG vào đây: bước soát giá bài (suaGiaBaiDaLen) tự xét lại theo giá HIỆN TẠI rồi mới thực thi
+            // (nháp lỗi thời bị huỷ êm thay vì thực thi để hỏng rồi báo chủ shop)
+            if (tuDong && !laNhapXemTruoc(k) && k.kind !== 'edit' && (k.kind === 'post' || k.result?.tamThoi)) thuLai.push(k)
         }
         themNe(ne, k)
     }
@@ -1535,6 +1812,16 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
             // hết lượt ghi hôm nay ⇒ nháp nằm chờ (quá giờ hẹn thì tự huỷ) — mục lên bài bên dưới tự báo hạn mức nếu còn lập bài
             if (e?.hetLuotGhi) break
             results.push({ action: k.kind, status: 'failed', sku: k.data?.sku || null, planId: k.id, message: String(e?.message || e).slice(0, 300) })
+        }
+    }
+
+    // FB-15 (10/11/2026): bài Pilot đã lên mà giá kho đổi ⇒ sửa dòng giá — TRƯỚC khi lập bài mới: giá sai trên bài công khai gấp hơn
+    // bài mới, mà trần ghi / ngày dùng chung
+    if (pol.automation.editPrices && !tamDung) {
+        try {
+            await suaGiaBaiDaLen(ctx, { page, tuDong, tienTo, now, results, xemTamDung, dangTamDung: () => !!tamDung })
+        } catch (e: any) {
+            results.push({ action: 'edit', status: 'failed', message: `Soát giá bài đã lên hỏng: ${String(e?.message || e).slice(0, 300)}` })
         }
     }
 
@@ -2085,6 +2372,14 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
      sách hẹn giờ và giờ lên còn cách ≥ 3 phút — không bao giờ xoá bài đã công khai.
    - Không rút được (token hỏng, thiếu quyền, Facebook không trả lời rõ, còn dưới 3 phút, bài đã lên) ⇒ thông báo KHẨN "vào fanpage
      xoá / sửa tay", kế hoạch chuyển "Cần kiểm tra". Facebook giới hạn lượt gọi ⇒ giữ nguyên, phút sau thử lại.
+   - Bài ĐÃ LÊN (trong 30 ngày) mà giá bán trong kho đổi ⇒ mỗi chu kỳ Pilot sửa dòng "Giá: …" nó viết trên bài sang giá mới (bật/tắt:
+     "Sửa giá trên bài đã đăng" trong chính sách). Tự động: sửa luôn, tính vào trần ghi ngày (hết lượt ⇒ báo chủ shop, lượt sau sửa
+     tiếp); Xem trước: chỉ lập nháp «Sửa giá bài đã đăng» để xem — chưa sửa gì trên Facebook. Pilot đọc chữ bài trên Facebook
+     trước khi sửa và chỉ thay đúng dòng giá: bài người đã sửa tay sang giá mới ⇒ ghi nhận, không sửa; người viết lại giá cũ theo
+     kiểu khác ⇒ báo sửa tay; bỏ hẳn giá ⇒ thôi theo dõi bài đó. Sửa hỏng 5 lần ⇒ máy thôi thử, báo sửa tay. Facebook chỉ cho sửa
+     bài do chính app tạo — bài đăng tay không đụng tới.
+   - Tồn kho ≤ 0 chưa chắc là hết hàng (phiếu nhập có thể chưa vào sổ) nên Pilot KHÔNG tự ghi "hết hàng" lên bài; kết quả chu kỳ chỉ
+     nêu các bài đang mời mua mà tồn ≤ 0 để chủ shop tự sửa / ẩn nếu hết thật.
 
 3. Bình luận
    - Tab Bình luận đọc bình luận mới trên 15 bài gần nhất, đánh dấu: hỏi giá / xin inbox, có số điện thoại, đã có người trả lời.

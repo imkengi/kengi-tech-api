@@ -148,6 +148,7 @@ export const NHAN_FACEBOOK: NhanCauHinh = {
     'policy.automation.posts': ['Tự lên bài sản phẩm', 'bat'],
     'policy.automation.replyPriceQuestions': ['Tự trả lời câu hỏi giá', 'bat'],
     'policy.automation.hidePhoneComments': ['Tự ẩn bình luận lộ số điện thoại', 'bat'],
+    'policy.automation.editPrices': ['Sửa giá trên bài đã đăng khi giá bán đổi', 'bat'],
     'policy.maxWritesPerDay': ['Thao tác ghi mỗi ngày', 'so'],
     'policy.postsPerDay': ['Bài sản phẩm mỗi ngày', 'so'],
     'policy.postHours': ['Khung giờ đăng', 'gio'],

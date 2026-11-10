@@ -427,6 +427,13 @@ export class FacebookService {
         return { success: true }
     }
 
+    /** Sửa chữ một bài ĐÃ ĐĂNG của page (POST /{page-post-id} message — tài liệu Pages API "Cập nhật bài viết", đọc 10/11/2026).
+     *  Facebook chỉ cho sửa bài DO CHÍNH APP tạo; ảnh / giờ đăng giữ nguyên. */
+    async editPost(postId: string, message: string): Promise<{ success: boolean }> {
+        await this.post(postId, { message })
+        return { success: true }
+    }
+
     /** Bài đã đăng gần đây (kèm số liệu tương tác) */
     async listPublishedPosts(pageId: string, limit = 25): Promise<any[]> {
         const data = await this.get(`${pageId}/posts`, {

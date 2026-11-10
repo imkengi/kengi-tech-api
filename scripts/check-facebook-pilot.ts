@@ -40,6 +40,12 @@
  *     ngày và NÓI RÕ); USER token ⇒ me/accounts lấy page token (MỘT fanpage / pageId gửi kèm; nhiều ⇒ FB_CHON_PAGE kèm {id,name}, không
  *     lộ token; USER token KHÔNG lưu); debug_token thử USER token trước rồi page token; lỗi rõ cho 0 fanpage / thiếu page token /
  *     thiếu pages_show_list / lệch pageId / token chết / khoảng trắng / token APP; route trả 400 kèm danh sách, không trả token.
+ * 18. (10/11/2026, lô 21: FB-15) sửa GIÁ trên bài Pilot đã lên (Facebook giả giữ chữ SỐNG từng bài): không lệch ⇒ 0 lời gọi; Tự động
+ *     ⇒ đọc danh sách MỘT lần, sửa đúng dòng "Giá: …" (chữ khác giữ nguyên), nối mắt xích lần sửa; Xem trước ⇒ nháp để xem, không ghi,
+ *     không thành việc cần người; giá về lại ⇒ nháp tự huỷ; người sửa tay sang giá mới ⇒ ghi nhận; viết lại kiểu khác / bỏ dòng giá
+ *     ⇒ thôi theo dõi; bài mất / hẹn chưa quá 30 phút / quá 30 ngày / fanpage khác ⇒ không đụng; tồn ≤ 0 ⇒ chỉ nêu, không ghi "hết
+ *     hàng"; hết lượt ghi ⇒ nháp + báo, lượt sau thực thi chính nháp đó; người huỷ ⇒ nhớ 14 ngày; hỏng ⇒ 24 giờ, 5 lần thì thôi;
+ *     chưa rõ ⇒ chờ «Đã kiểm»; giá đổi lúc thực thi ⇒ không sửa; nháp lỗi thời không bị thực thi lại; 10 bài / chu kỳ; câu SQL.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -49,7 +55,9 @@ import {
     xayTrangThaiFb, huyKeHoachFb, docGio, kiemKetNoiFb, CHINH_SACH_FB_MAC_DINH, type NgCanhFb, type DichVuFb,
     soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
     taoKeHoachBoAn, xacNhanDaKiemFb, dsKeHoachFb, khoSqlFb, HUONG_DAN_FB_PILOT,
+    dongGiaBai, coDongGia, thayGiaTrongBai, giaBaiTheoPilot,
 } from '../src/lib/facebookPilot'
+import { NHAN_FACEBOOK } from '../src/lib/pilotDoiCauHinh'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
 import { canNguoi } from '../src/lib/pilotBaoChuShop'
@@ -126,6 +134,7 @@ function datLai() {
     hoSo = { cta: 'Gọi 0909 000 111 hoặc inbox shop', hashtags: '["#kengi", "dụng cụ"]', bannedWords: '["rẻ nhất"]', bestHours: '[]', emojiLevel: 'vua', createdAt: new Date(0) }
     baiDaHen.length = 0
     henTrenFb.clear()
+    baiSong.clear(); baiSongBat = false; loiSua = null; loiDocBai = null; baiDay100 = false
     soTraLoi.length = 0
     pages.length = 0
     pages.push({ pageId: 'PG1', name: 'Kengi Fanpage', avatar: null, fanCount: 1200, status: 'active', tokenExpiresAt: new Date(NOW + 40 * 86400_000), webhookSubscribed: false, autoReplyEnabled: false, accessToken: 'TOKEN-BI-MAT-PG1', createdAt: new Date(0) })
@@ -175,14 +184,46 @@ const henTrenFb = new Map<string, { id: string; message: string; scheduledPublis
 let henFbBat = false
 let loiDsHen: any = null
 let loiXoa: any = null
+/* Phía FACEBOOK của bài ĐÃ LÊN (18 — sửa giá bài, FB-15): mỗi bài Pilot đăng được giữ chữ đã gửi; bộ kiểm tự sửa chữ để giả "chủ
+ * shop sửa tay trên Facebook", tự xoá để giả "bài đã xoá". baiSongBat = false (mặc định) ⇒ get trả baiTrenFb như cũ (mục 1–17).
+ * baiDay100 ⇒ danh sách /posts trả đủ 100 bài KHÁC (bài cần sửa nằm ngoài trang đầu). */
+const baiSong = new Map<string, { id: string; message: string; permalink_url: string }>()
+let baiSongBat = false
+let loiSua: any = null
+let loiDocBai: any = null
+let baiDay100 = false
 const fbGia = (token: string): DichVuFb => ({
-    get: async (p: string, params?: any) => { goiFb.push(['get', p, params, token]); return { data: baiTrenFb } },
+    get: async (p: string, params?: any) => {
+        goiFb.push(['get', p, params, token])
+        if (baiSongBat && !/comments/.test(String(params?.fields || ''))) {
+            if (p === 'PG1/posts') {
+                if (loiDocBai) throw loiDocBai
+                return {
+                    data: baiDay100
+                        ? Array.from({ length: 100 }, (_, i) => ({ id: `PG1_KHAC${i}`, message: 'bài khác', permalink_url: `https://www.facebook.com/PG1_KHAC${i}` }))
+                        : [...baiSong.values()].map(b => ({ ...b })),
+                }
+            }
+            if (/^PG1_\d+$/.test(p)) {
+                const b = baiSong.get(p)
+                if (!b) throw Object.assign(new Error('(#100) Object with ID does not exist'), { code: 100 })
+                return { ...b }
+            }
+        }
+        return { data: baiTrenFb }
+    },
     identifyToken: async () => ({ type: 'page', id: 'PG1', name: 'Kengi Fanpage' }),
     createOrSchedulePost: async (input: any) => {
         goiFb.push(['post', input]); if (loiDang) throw loiDang; soBai++
         const id = `PG1_${100 + soBai}`
         if (input.scheduledAtMs) henTrenFb.set(id, { id, message: input.message, scheduledPublishTime: Math.floor(input.scheduledAtMs / 1000) })
+        baiSong.set(id, { id, message: input.message, permalink_url: `https://www.facebook.com/${id}` })
         return { id }
+    },
+    editPost: async (id: string, msg: string) => {
+        goiFb.push(['edit', id, msg]); if (loiSua) throw loiSua
+        const b = baiSong.get(id); if (b) b.message = msg
+        return { success: true }
     },
     replyToComment: async (id: string, msg: string) => { goiFb.push(['reply', id, msg]); if (loiTraLoi) throw loiTraLoi; return { id: `r_${id}` } },
     hideComment: async (id: string, hidden = true) => { goiFb.push([hidden ? 'hide' : 'unhide', id]); return { success: true } },
@@ -1387,6 +1428,431 @@ async function main() {
             && /e instanceof LoiNoiToken\) return res\.status\(400\)\.json\(\{ \.\.\.e\.them, success: false, error: e\.message, code: e\.code \}\)/.test(than)
             && /trySubscribeWebhook\(prisma, pageId, kq\.pageToken\)/.test(than) && (than.match(/pageToken/g) || []).length === 2
             && !/accessToken: true/.test(than) && !/FB_NOT_PAGE_TOKEN|55 \* 86400_000/.test(than), than.slice(0, 120))
+    }
+
+    // ─── 18. Sửa giá bài đã lên (10/11/2026, lô 21: FB-15) ──────────────────────
+    {
+        // hàm thuần
+        dung('18-1. dòng giá: "Giá: 126.000đ" / "Giá: 26.000đồng" / "Giá: 26.000đ5" KHÔNG phải dòng 26.000đ Pilot viết',
+            thayGiaTrongBai('Giá: 126.000đ', 26000, 27000) === null && thayGiaTrongBai('x Giá: 26.000đồng', 26000, 27000) === null
+            && !coDongGia('Giá: 26.000đ5', 26000) && coDongGia('Giá: 26.000đ.', 26000))
+        const thay2 = thayGiaTrongBai('💰 Giá: 26.000đ\nCombo Giá: 26.000đ/cái.', 26000, 1027000)
+        dung('18-2. thay MỌI dòng đúng khuôn, giữ chữ quanh', thay2 === '💰 Giá: 1.027.000đ\nCombo Giá: 1.027.000đ/cái.', String(thay2))
+        dung('18-3. chữ dấu tách (NFD) vẫn nhận, trả chữ NFC', thayGiaTrongBai('🔹 Mũi khoan\nGiá: 26.000đ'.normalize('NFD'), 26000, 27000) === '🔹 Mũi khoan\nGiá: 27.000đ')
+        dung('18-4. giá mới ≤ 0 / chữ rỗng ⇒ không thay; khuôn dòng = "Giá: 26.000đ"',
+            thayGiaTrongBai('Giá: 26.000đ', 26000, 0) === null && thayGiaTrongBai('', 26000, 27000) === null && dongGiaBai(26000) === 'Giá: 26.000đ')
+        const ke = (id: string, status: string, giaMoi: number, luc: number, result: any = null): any => ({ id, kind: 'edit', status, data: { giaMoi }, result, createdAt: luc, updatedAt: 100 - luc })
+        const st = giaBaiTheoPilot({ data: { price: 26000 } } as any, [ke('a', 'succeeded', 27000, 1), ke('b', 'succeeded', 28000, 3), ke('c', 'cancelled', 29000, 4), ke('d', 'draft', 30000, 5), ke('f', 'uncertain', 31000, 6)])
+        const st0 = giaBaiTheoPilot({ data: { price: 26000 } } as any, [ke('g', 'skipped', 27000, 1, { boQuan: true })])
+        dung('18-5. giá bài theo Pilot = lần sửa THÀNH CÔNG lập sau cùng (theo createdAt, không theo updatedAt); nháp mở / chưa rõ tách riêng; chưa sửa ⇒ giá lúc đăng, mắt xích "goc"',
+            st.gia === 28000 && st.chuoi === 'b' && st.mo.map(k => k.id).join() === 'd' && st.chuaRo?.id === 'f' && !st.boQuan
+            && st0.gia === 26000 && st0.chuoi === 'goc' && st0.boQuan === true, JSON.stringify({ st, st0 }))
+        dung('18-6. chính sách: "Sửa giá trên bài đã đăng" mặc định BẬT, tắt được; sổ cấu hình có nhãn riêng',
+            CHINH_SACH_FB_MAC_DINH.automation.editPrices === true && chuanHoaChinhSachFb({}).automation.editPrices === true
+            && chuanHoaChinhSachFb({ automation: { editPrices: false } }).automation.editPrices === false
+            && (NHAN_FACEBOOK as any)['policy.automation.editPrices']?.[0] === 'Sửa giá trên bài đã đăng khi giá bán đổi')
+        dung('18-7. hướng dẫn: sửa giá bài đã đăng; Xem trước chỉ để xem; không tự ghi "hết hàng"',
+            /"Sửa giá trên bài đã đăng"/.test(HUONG_DAN_FB_PILOT) && /chưa sửa gì trên Facebook/.test(HUONG_DAN_FB_PILOT) && /KHÔNG tự ghi "hết hàng"/.test(HUONG_DAN_FB_PILOT))
+        batGraphGia(); goiGraph.length = 0; dapGraph = graphOn
+        try {
+            const r = await new FacebookService('TOKEN-GIA-18').editPost('PG1_9001', 'Giá: 27.000đ')
+            dung('18-8. FacebookService.editPost = POST /{post-id} (Graph sửa bài Trang)',
+                r.success === true && goiGraph.length === 1 && goiGraph[0].method === 'POST' && goiGraph[0].duong === 'PG1_9001', JSON.stringify(goiGraph))
+        } finally {
+            traFetch(); dapGraph = graphOn
+        }
+
+        // chu kỳ trên kho bộ nhớ + Facebook giả giữ chữ sống
+        datLai(); goiFb.length = 0; thongBao.length = 0; bayGio = NOW; baiSongBat = true
+        const P = 60_000
+        const sp = (id: string) => hang.find(h => h.id === id)!
+        const them = (id: string, sku: string, name: string, gia: number, ton: number) => hang.push({
+            id, sku, name, description: '', productType: 'goods', sellingPrice: gia, stock: ton, mergedIntoId: null, bundleId: null,
+            createdAt: new Date(NOW), images: [{ url: ANH(sku.toLowerCase()), isPrimary: true }],
+        })
+        them('p8', 'KEO', 'Kéo cắt tôn', 85000, 12); them('p9', 'DAY', 'Dây rút nhựa', 45000, 20); them('p10', 'BUT', 'Bút thử điện', 12000, 50)
+        them('p11', 'KIM', 'Kìm điện', 30000, 5); them('p12', 'THUOC', 'Thước cuộn', 40000, 7)
+        const kho = khoBoNhoFb()
+        const ctx = ngCanh(kho)
+        await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 200, automation: { posts: false, replyPriceQuestions: false, hidePhoneComments: false } } })
+        const dang = async (sku: string, scheduledAt?: number) => thucThiFb(ctx, (await taoKeHoachBai(ctx, scheduledAt ? { sku, scheduledAt } : { sku, publishNow: true })).id)
+        const chuKy = async () => { bayGio += 5 * P; goiFb.length = 0; return chayChuKyFb(ctx) }
+        const sua = (postId?: string) => kho._keHoach.filter(k => k.kind === 'edit' && (!postId || k.data?.postId === postId))
+        const lay = (id: string) => kho._keHoach.find(k => k.id === id)
+        const lenhSua = () => goiFb.filter(g => g[0] === 'edit')
+        const dongSua = (kq: any) => (kq?.results || []).filter((r: any) => r.action === 'edit')
+        const capHienTai = async () => luuCauHinhFb(ctx, { policy: { maxWritesPerDay: Math.max(1, await kho.demGhiTuLuc(dauNgayVN(bayGio))) } })
+        const moCap = async () => luuCauHinhFb(ctx, { policy: { maxWritesPerDay: 200 } })
+        const chu = (postId: string) => baiSong.get(postId)?.message || ''
+        const doiChu = (postId: string, cu: string | RegExp, moi: string) => { const b = baiSong.get(postId); if (b) b.message = b.message.replace(cu as any, moi) }
+        try {
+            const bK = await dang('KHOAN10'), bO = await dang('OC4')
+            const idK = String(bK.result?.postId), idO = String(bO.result?.postId)
+            const goc = chu(idK)
+            dung('18a0. bài Pilot đã lên mang dòng giá đúng khuôn', bK.status === 'succeeded' && coDongGia(goc, 26000) && coDongGia(chu(idO), 189000), goc)
+
+            let kq = await chuKy()
+            dung('18a. không bài nào lệch giá kho ⇒ chu kỳ KHÔNG gọi Facebook, không lập kế hoạch sửa',
+                goiFb.length === 0 && sua().length === 0 && dongSua(kq).length === 0, JSON.stringify(goiFb))
+
+            sp('p1').sellingPrice = 27000
+            kq = await chuKy()
+            const e1 = sua(idK)[0]
+            const docDs = goiFb.filter(g => g[0] === 'get' && g[1] === 'PG1/posts')
+            dung('18b. giá kho đổi (Tự động) ⇒ đọc danh sách bài MỘT lần, MỘT lệnh sửa: chỉ dòng giá đổi, chữ khác giữ nguyên',
+                docDs.length === 1 && docDs[0][2]?.fields === 'id,message,permalink_url' && docDs[0][2]?.limit === 100
+                && lenhSua().length === 1 && lenhSua()[0][1] === idK && lenhSua()[0][2] === goc.replace('Giá: 26.000đ', 'Giá: 27.000đ') && !lenhSua().some(g => g[1] === idO),
+                JSON.stringify(goiFb))
+            dung('18c. kế hoạch "edit" hoàn tất: giá cũ / mới, mắt xích "goc", lượt 1, khoá cycle:edit:<bài>:goc:27000:1, có link bài',
+                e1?.status === 'succeeded' && e1.data.giaCu === 26000 && e1.data.giaMoi === 27000 && e1.data.chuoi === 'goc' && e1.data.luot === 1
+                && e1.idempotencyKey === `cycle:edit:${idK}:goc:27000:1` && e1.data.permalink === `https://www.facebook.com/${idK}`, JSON.stringify(e1))
+            dung('18d. nhật ký "edit" (tính trần ghi); FbScheduledPost của bài mang chữ mới; dòng kết quả nêu Giá cũ → mới, không cần người',
+                kho._nhatKy.some(w => w.action === 'edit' && w.status === 'succeeded' && w.planId === e1?.id)
+                && baiDaHen.find(b => b.fbPostId === idK)?.message === chu(idK)
+                && dongSua(kq).some((r: any) => r.status === 'succeeded' && r.planId === e1?.id && /Giá: 26\.000đ → Giá: 27\.000đ/.test(r.message) && !canNguoi(r)),
+                JSON.stringify(dongSua(kq)))
+            kq = await chuKy()
+            dung('18e. chu kỳ sau cùng giá ⇒ KHÔNG gọi Facebook (giá bài theo Pilot đã là 27.000đ)', goiFb.length === 0 && sua().length === 1, JSON.stringify(goiFb))
+
+            sp('p1').sellingPrice = 28000
+            kq = await chuKy()
+            const e2 = sua(idK).find(k => k.data.giaMoi === 28000)
+            dung('18f. giá đổi tiếp ⇒ sửa từ dòng Pilot ghi lần trước (27.000đ → 28.000đ), mắt xích = lần sửa trước',
+                e2?.status === 'succeeded' && e2.data.giaCu === 27000 && e2.data.chuoi === e1?.id && lenhSua().length === 1
+                && /Giá: 28\.000đ/.test(lenhSua()[0][2]) && !/Giá: 2[67]\.000đ/.test(lenhSua()[0][2]), JSON.stringify(e2))
+
+            // Xem trước: chỉ để xem
+            await luuCauHinhFb(ctx, { executionMode: 'preview' })
+            sp('p1').sellingPrice = 29000
+            kq = await chuKy()
+            const x1 = sua(idK).find(k => k.data.giaMoi === 29000)
+            const dx = dongSua(kq).find((r: any) => r.planId === x1?.id)
+            dung('18g. Xem trước ⇒ nháp (khoá cycle:xem:edit:) mang chữ dự kiến, KHÔNG ghi Facebook; dòng nói "CHƯA sửa", không thành việc cần người',
+                x1?.status === 'draft' && String(x1.idempotencyKey).startsWith('cycle:xem:edit:') && ghiFb().length === 0
+                && x1.data.messageMoi === chu(idK).replace('Giá: 28.000đ', 'Giá: 29.000đ') && x1.data.messageCu === chu(idK)
+                && !!dx && /Xem trước: CHƯA sửa trên Facebook/.test(dx.message) && !canNguoi(dx), JSON.stringify(dx))
+            goiFb.length = 0
+            const tx = x1 ? await thucThiFb(ctx, x1.id) : null
+            dung('18h. Xem trước: bấm Thực thi nháp sửa giá ⇒ không gọi Facebook', tx?.executed === false && goiFb.length === 0)
+            kq = await chuKy()
+            dung('18i. Xem trước, chu kỳ sau cùng giá ⇒ giữ nháp cũ, KHÔNG gọi Facebook, không lập thêm',
+                goiFb.length === 0 && sua(idK).length === 3 && lay(String(x1?.id))?.status === 'draft', JSON.stringify(goiFb))
+            sp('p1').sellingPrice = 28000
+            kq = await chuKy()
+            dung('18j. giá trở về đúng giá bài đang ghi ⇒ nháp tự huỷ êm (tuHuy), không gọi Facebook',
+                lay(String(x1?.id))?.status === 'cancelled' && lay(String(x1?.id))?.result?.tuHuy === true && goiFb.length === 0 && sua(idK).length === 3)
+
+            await luuCauHinhFb(ctx, { executionMode: 'auto' })
+            sp('p1').sellingPrice = 29000
+            kq = await chuKy()
+            const e3 = sua(idK).find(k => k.data.giaMoi === 29000 && k.status === 'succeeded')
+            dung('18k. về Tự động ⇒ lập lại theo giá hiện tại (lượt 2: nháp Xem trước cùng bước đã tự huỷ) rồi sửa luôn',
+                e3?.data.luot === 2 && e3.idempotencyKey === `cycle:edit:${idK}:${e2?.id}:29000:2` && lenhSua().length === 1 && /Giá: 29\.000đ/.test(lenhSua()[0][2]), JSON.stringify(e3))
+
+            // người sửa tay trên Facebook
+            sp('p1').sellingPrice = 30000
+            doiChu(idK, 'Giá: 29.000đ', 'Giá: 30.000đ')
+            kq = await chuKy()
+            const e4 = sua(idK).find(k => k.data.giaMoi === 30000)
+            dung('18l. chủ shop đã tự sửa bài sang giá mới ⇒ ghi nhận "không cần sửa", KHÔNG gọi lệnh sửa, không tốn lượt ghi',
+                e4?.status === 'succeeded' && e4.result?.khongCanSua === true && lenhSua().length === 0 && !kho._nhatKy.some(w => w.planId === e4?.id), JSON.stringify(e4))
+            kq = await chuKy()
+            dung('18m. sau đó cùng giá ⇒ không gọi Facebook (giá bài theo Pilot = 30.000đ)', goiFb.length === 0, JSON.stringify(goiFb))
+            sp('p1').sellingPrice = 31000
+            doiChu(idK, /(💰 )?Giá: 30\.000đ/, 'Chỉ 30k thôi ạ')
+            kq = await chuKy()
+            const e5 = sua(idK).find(k => k.data.giaMoi === 31000)
+            const d5 = dongSua(kq).find((r: any) => r.planId === e5?.id)
+            dung('18n. người viết lại giá cũ kiểu khác ("30k") ⇒ KHÔNG sửa chữ người viết; "failed" cần người sửa tay',
+                e5?.status === 'failed' && e5.result?.boQuan === true && lenhSua().length === 0 && !!d5 && canNguoi(d5) && /sửa tay thành 31\.000đ/.test(d5.message), JSON.stringify(d5))
+            sp('p1').sellingPrice = 32000
+            kq = await chuKy()
+            dung('18o. bài đã thôi theo dõi ⇒ giá đổi tiếp cũng không gọi Facebook', goiFb.length === 0 && !sua(idK).some(k => k.data.giaMoi === 32000))
+            const bO2 = baiSong.get(idO)
+            if (bO2) bO2.message = bO2.message.split('\n').filter(l => !/Giá:/.test(l)).join('\n')
+            sp('p2').sellingPrice = 199000
+            kq = await chuKy()
+            const o1 = sua(idO)[0]
+            const dO = dongSua(kq).find((r: any) => r.planId === o1?.id)
+            dung('18p. bài không còn dòng giá (người bỏ) ⇒ "skipped", thôi theo dõi, không gọi lệnh sửa, không cần người',
+                o1?.status === 'skipped' && o1.result?.boQuan === true && lenhSua().length === 0 && !!dO && !canNguoi(dO), JSON.stringify(o1))
+
+            // bài mất / tồn ≤ 0
+            const idKeo = String((await dang('KEO')).result?.postId)
+            baiSong.delete(idKeo)
+            sp('p8').sellingPrice = 90000
+            kq = await chuKy()
+            dung('18q. bài lệch giá không còn trên fanpage ⇒ dòng "không thấy", không lập kế hoạch, không gọi lệnh sửa',
+                !sua(idKeo).length && lenhSua().length === 0 && dongSua(kq).some((r: any) => r.status === 'skipped' && /không thấy trên fanpage \(KEO\)/.test(r.message)), JSON.stringify(dongSua(kq)))
+            sp('p8').sellingPrice = 85000
+            const idDay = String((await dang('DAY')).result?.postId)
+            sp('p9').stock = 0
+            kq = await chuKy()
+            const dHet = dongSua(kq).find((r: any) => /tồn kho ≤ 0/.test(r.message))
+            dung('18r. tồn ≤ 0 ⇒ chỉ NÊU (chưa chắc hết hàng), không gọi Facebook, không cần người',
+                !!dHet && /\(DAY\)/.test(dHet.message) && /KHÔNG ghi "hết hàng"/.test(dHet.message) && !canNguoi(dHet) && goiFb.length === 0, JSON.stringify(dongSua(kq)))
+            sp('p9').sellingPrice = 49000
+            kq = await chuKy()
+            dung('18s. tồn ≤ 0 mà giá đổi ⇒ vẫn sửa GIÁ; chữ mới không có "hết hàng"',
+                lenhSua().length === 1 && lenhSua()[0][1] === idDay && /Giá: 49\.000đ/.test(lenhSua()[0][2]) && !/hết hàng/i.test(lenhSua()[0][2]), JSON.stringify(lenhSua()))
+            sp('p9').stock = 20
+
+            // phạm vi bài: hẹn vừa lên / quá 30 ngày / fanpage khác
+            const hen = bayGio + 20 * P
+            const idBut = String((await dang('BUT', hen)).result?.postId)
+            bayGio = hen + 5 * P // chuKy +5 phút ⇒ hen + 10 phút
+            sp('p10').sellingPrice = 13000
+            kq = await chuKy()
+            dung('18t. bài hẹn mới tới giờ < 30 phút ⇒ chưa đụng (việc của soát bài hẹn sắp lên)', goiFb.length === 0 && !sua(idBut).length, JSON.stringify(goiFb))
+            bayGio = hen + 26 * P // ⇒ hen + 31 phút
+            kq = await chuKy()
+            dung('18u. bài hẹn đã lên quá 30 phút ⇒ sửa giá như bài thường',
+                lenhSua().length === 1 && lenhSua()[0][1] === idBut && /Giá: 13\.000đ/.test(lenhSua()[0][2]), JSON.stringify(goiFb))
+            const bKim = await dang('KIM'); const idKim = String(bKim.result?.postId)
+            const kKim = lay(bKim.id)!
+            kKim.createdAt = bayGio - 31 * 86400_000
+            sp('p11').sellingPrice = 33000
+            kq = await chuKy()
+            dung('18v. bài lên quá 30 ngày ⇒ không sửa', goiFb.length === 0 && !sua(idKim).length, JSON.stringify(goiFb))
+            kKim.createdAt = bayGio - 29 * 86400_000
+            kq = await chuKy()
+            dung('18w. bài lên 29 ngày ⇒ vẫn sửa', lenhSua().length === 1 && lenhSua()[0][1] === idKim, JSON.stringify(goiFb))
+            const bTh = await dang('THUOC'); const idTh = String(bTh.result?.postId)
+            lay(bTh.id)!.data.pageId = 'PG2'
+            sp('p12').sellingPrice = 41000
+            kq = await chuKy()
+            dung('18x. bài của fanpage khác ⇒ không đụng', goiFb.length === 0 && !sua(idTh).length, JSON.stringify(goiFb))
+            lay(bTh.id)!.data.pageId = 'PG1'
+
+            // trần ghi / người huỷ
+            await capHienTai()
+            kq = await chuKy()
+            const h1 = sua(idTh)[0]
+            const dh = dongSua(kq).find((r: any) => r.planId === h1?.id)
+            dung('18y. hết lượt ghi hôm nay ⇒ nháp nằm chờ; dòng "HẾT LƯỢT GHI" là việc cần người; không gọi lệnh sửa',
+                h1?.status === 'draft' && lenhSua().length === 0 && !!dh && canNguoi(dh) && /HẾT LƯỢT GHI/.test(dh.message), JSON.stringify(dongSua(kq)))
+            await moCap()
+            kq = await chuKy()
+            dung('18z. lượt sau còn lượt ⇒ thực thi CHÍNH nháp đó (không đọc lại danh sách bài), sửa một lần',
+                lay(String(h1?.id))?.status === 'succeeded' && lenhSua().length === 1 && /Giá: 41\.000đ/.test(lenhSua()[0][2]) && !goiFb.some(g => g[1] === 'PG1/posts') && sua(idTh).length === 1,
+                JSON.stringify(goiFb))
+            await capHienTai()
+            sp('p12').sellingPrice = 42000
+            await chuKy()
+            const h2 = sua(idTh).find(k => k.data.giaMoi === 42000 && k.status === 'draft')
+            if (h2) await huyKeHoachFb(ctx, h2.id)
+            await moCap()
+            kq = await chuKy()
+            dung('18aa. người huỷ nháp sửa giá ⇒ chu kỳ không đề xuất lại bước giá đó (nhớ 14 ngày), không gọi Facebook',
+                !!h2 && lay(h2.id)?.status === 'cancelled' && goiFb.length === 0 && sua(idTh).filter(k => k.data.giaMoi === 42000).length === 1, JSON.stringify(goiFb))
+            sp('p12').sellingPrice = 43000
+            kq = await chuKy()
+            dung('18ab. giá đổi sang mức khác ⇒ đề xuất lại theo giá mới (41.000đ → 43.000đ)',
+                lenhSua().length === 1 && /Giá: 43\.000đ/.test(lenhSua()[0][2]) && !/Giá: 4[12]\.000đ/.test(lenhSua()[0][2]), JSON.stringify(lenhSua()))
+            sp('p12').sellingPrice = 41000
+            kq = await chuKy()
+            dung('18ab1. giá quay về mức cũ (41.000đ) sau khi bài đã ghi 43.000đ ⇒ sửa lại 43.000đ → 41.000đ (bước mới, khoá mới)',
+                lenhSua().length === 1 && /Giá: 41\.000đ/.test(lenhSua()[0][2]) && !/Giá: 43\.000đ/.test(lenhSua()[0][2])
+                && sua(idTh).filter(k => k.data.giaMoi === 41000 && k.status === 'succeeded').length === 2, JSON.stringify(lenhSua()))
+            const chuoiTh = giaBaiTheoPilot(lay(bTh.id)!, sua(idTh)).chuoi
+            for (let i = 0; i < 5; i++) {
+                kho._keHoach.push({
+                    id: `TUHUY-${i}`, kind: 'edit', status: 'cancelled', idempotencyKey: `cycle:edit:${idTh}:${chuoiTh}:44000:${i + 1}`,
+                    data: { pageId: 'PG1', postId: idTh, productId: 'p12', sku: 'THUOC', giaCu: 41000, giaMoi: 44000, chuoi: chuoiTh, luot: i + 1 },
+                    result: { tuHuy: true, message: 'Nháp máy tự huỷ.' }, createdBy: null, createdAt: bayGio - (10 - i) * P, updatedAt: Date.now(),
+                } as any)
+            }
+            sp('p12').sellingPrice = 44000
+            kq = await chuKy()
+            const t6 = sua(idTh).find(k => k.data.giaMoi === 44000 && k.status === 'succeeded')
+            dung('18ab2. 5 nháp máy TỰ huỷ (hết hạn / giá đổi) không phải 5 lần hỏng ⇒ vẫn lập lần 6 và sửa',
+                t6?.data.luot === 6 && lenhSua().length === 1 && /Giá: 44\.000đ/.test(lenhSua()[0][2]), JSON.stringify(dongSua(kq)))
+
+            // hỏng ⇒ 24 giờ; 5 lần thì thôi
+            loiSua = Object.assign(new Error('(#100) Invalid parameter'), { code: 100 })
+            sp('p10').sellingPrice = 14000
+            kq = await chuKy()
+            const f1 = sua(idBut).find(k => k.data.giaMoi === 14000)
+            dung('18ac. Facebook từ chối lệnh sửa ⇒ "failed" (việc cần người), chữ bài giữ nguyên',
+                f1?.status === 'failed' && lenhSua().length === 1 && dongSua(kq).some((r: any) => r.planId === f1?.id && canNguoi(r)) && /Giá: 13\.000đ/.test(chu(idBut)), JSON.stringify(f1?.result))
+            kq = await chuKy()
+            dung('18ad. vừa hỏng < 24 giờ ⇒ không thử lại, không gọi Facebook', goiFb.length === 0 && sua(idBut).filter(k => k.data.giaMoi === 14000).length === 1, JSON.stringify(goiFb))
+            const lui = () => { for (const k of kho._keHoach) if (k.kind === 'edit' && k.data?.postId === idBut && k.status === 'failed') k.updatedAt = bayGio - 25 * H }
+            for (let i = 0; i < 4; i++) { lui(); await chuKy() }
+            const hong = sua(idBut).filter(k => k.data.giaMoi === 14000)
+            dung('18ae. quá 24 giờ ⇒ thử lại, lượt tăng dần, khoá khác nhau',
+                hong.length === 5 && hong.every(k => k.status === 'failed') && new Set(hong.map(k => k.idempotencyKey)).size === 5 && hong.map(k => k.data.luot).join() === '1,2,3,4,5',
+                hong.map(k => `${k.data.luot}:${k.status}`).join())
+            lui()
+            kq = await chuKy()
+            const dq = dongSua(kq).find((r: any) => /hỏng 5 lần/.test(r.message))
+            dung('18af. hỏng 5 lần ⇒ máy thôi thử (không gọi Facebook), báo người sửa tay',
+                !!dq && canNguoi(dq) && /BUT/.test(dq.message) && goiFb.length === 0 && sua(idBut).filter(k => k.data.giaMoi === 14000).length === 5, JSON.stringify(dongSua(kq)))
+            loiSua = null
+            sp('p10').sellingPrice = 13000
+
+            // chưa rõ ⇒ chờ «Đã kiểm»
+            loiSua = new TypeError('fetch failed')
+            sp('p9').sellingPrice = 50000
+            kq = await chuKy()
+            loiSua = null
+            const u1 = sua(idDay).find(k => k.data.giaMoi === 50000)
+            dung('18ag. mất mạng giữa lệnh sửa ⇒ "uncertain" (không rõ Facebook đã sửa chưa), việc cần người',
+                u1?.status === 'uncertain' && dongSua(kq).some((r: any) => r.planId === u1?.id && canNguoi(r)), JSON.stringify(u1?.result))
+            sp('p9').sellingPrice = 51000
+            kq = await chuKy()
+            dung('18ah. còn lần sửa CHƯA RÕ ⇒ không sửa tiếp bài đó, nhắc «Đã kiểm», không gọi Facebook',
+                goiFb.length === 0 && !sua(idDay).some(k => k.data.giaMoi === 51000) && dongSua(kq).some((r: any) => /CHƯA RÕ/.test(r.message) && /\(DAY\)/.test(r.message)),
+                JSON.stringify(dongSua(kq)))
+            if (u1) await xacNhanDaKiemFb(ctx, { planId: u1.id, outcome: 'done' })
+            doiChu(idDay, 'Giá: 49.000đ', 'Giá: 50.000đ') // Facebook thật đã nhận lệnh sửa
+            kq = await chuKy()
+            const u2 = sua(idDay).find(k => k.data.giaMoi === 51000)
+            dung('18ai. «Đã kiểm: CÓ» ⇒ giá bài theo Pilot = 50.000đ, sửa tiếp 50.000đ → 51.000đ',
+                u2?.status === 'succeeded' && u2.data.giaCu === 50000 && u2.data.chuoi === u1?.id && lenhSua().length === 1 && /Giá: 51\.000đ/.test(lenhSua()[0][2]), JSON.stringify(u2))
+            loiSua = new TypeError('fetch failed')
+            sp('p9').sellingPrice = 52000
+            await chuKy()
+            loiSua = null
+            const u3 = sua(idDay).find(k => k.data.giaMoi === 52000)
+            const u3TruocKiem = u3?.status
+            if (u3) await xacNhanDaKiemFb(ctx, { planId: u3.id, outcome: 'not_done' })
+            kq = await chuKy()
+            const u4 = sua(idDay).filter(k => k.data.giaMoi === 52000)
+            dung('18aj. «Đã kiểm: KHÔNG» ⇒ lập lại NGAY (không chờ 24 giờ), lượt 2, sửa 51.000đ → 52.000đ',
+                u3TruocKiem === 'uncertain' && u4.length === 2 && u4[0].status === 'failed' && u4[1].status === 'succeeded' && u4[1].data.luot === 2 && u4[1].data.giaCu === 51000 && lenhSua().length === 1,
+                u4.map(k => `${k.data.luot}:${k.status}`).join())
+
+            // soát lại lúc THỰC THI
+            await capHienTai()
+            sp('p9').sellingPrice = 53000
+            await chuKy()
+            const g1 = sua(idDay).find(k => k.data.giaMoi === 53000 && k.status === 'draft')
+            await moCap()
+            sp('p9').sellingPrice = 54000
+            goiFb.length = 0
+            const tg1 = g1 ? await thucThiFb(ctx, g1.id) : null
+            dung('18ak. người bấm Thực thi nháp sửa giá mà giá bán đã đổi tiếp ⇒ "failed", KHÔNG gọi Facebook',
+                tg1?.status === 'failed' && /đã đổi tiếp thành 54\.000đ/.test(tg1.result?.message || '') && goiFb.length === 0, JSON.stringify(tg1?.result))
+            kq = await chuKy()
+            dung('18al. chu kỳ sau ⇒ lập theo giá hiện tại, sửa 52.000đ → 54.000đ',
+                lenhSua().length === 1 && /Giá: 54\.000đ/.test(lenhSua()[0][2]) && sua(idDay).some(k => k.data.giaMoi === 54000 && k.status === 'succeeded' && k.data.giaCu === 52000), JSON.stringify(lenhSua()))
+            await capHienTai()
+            sp('p9').sellingPrice = 55000
+            await chuKy()
+            const g2 = sua(idDay).find(k => k.data.giaMoi === 55000 && k.status === 'draft')
+            doiChu(idDay, 'Giá: 54.000đ', 'Giá: 55.000đ')
+            await moCap()
+            kq = await chuKy()
+            dung('18am. lúc thực thi bài đã ghi giá mới (người sửa tay) ⇒ hoàn tất "không cần sửa", KHÔNG gọi lệnh sửa',
+                !!g2 && lay(g2.id)?.status === 'succeeded' && lay(g2.id)?.result?.khongCanSua === true && lenhSua().length === 0, JSON.stringify(g2 && lay(g2.id)?.result))
+            await capHienTai()
+            sp('p9').sellingPrice = 56000
+            await chuKy()
+            const g3 = sua(idDay).find(k => k.data.giaMoi === 56000 && k.status === 'draft')
+            await moCap()
+            sp('p9').sellingPrice = 57000
+            kq = await chuKy()
+            dung('18an. nháp máy lỗi thời (giá đổi tiếp) ⇒ tự huỷ êm, KHÔNG bị thực thi lại theo giá cũ; sửa theo giá mới 55.000đ → 57.000đ',
+                !!g3 && lay(g3.id)?.status === 'cancelled' && lay(g3.id)?.result?.tuHuy === true && lenhSua().length === 1 && /Giá: 57\.000đ/.test(lenhSua()[0][2]) && !/56\.000/.test(lenhSua()[0][2]),
+                JSON.stringify({ g3: g3 && lay(g3.id), lenh: lenhSua() }))
+            loiSua = Object.assign(new Error('(#4) Application request limit reached'), { code: 4 })
+            sp('p9').sellingPrice = 57500
+            kq = await chuKy()
+            loiSua = null
+            const r1 = sua(idDay).find(k => k.data.giaMoi === 57500)
+            dung('18an2. Facebook giới hạn lượt gọi lúc sửa ⇒ giữ NHÁP (tamThoi), không phải việc cần người',
+                r1?.status === 'draft' && r1.result?.tamThoi === true && lenhSua().length === 1 && !dongSua(kq).some((r: any) => r.planId === r1?.id && canNguoi(r)), JSON.stringify(r1))
+            kq = await chuKy()
+            dung('18an3. chu kỳ sau cùng giá ⇒ thực thi lại CHÍNH nháp đó',
+                lay(String(r1?.id))?.status === 'succeeded' && lenhSua().length === 1 && /Giá: 57\.500đ/.test(lenhSua()[0][2]) && sua(idDay).filter(k => k.data.giaMoi === 57500).length === 1,
+                JSON.stringify(lenhSua()))
+            loiSua = Object.assign(new Error('(#4) Application request limit reached'), { code: 4 })
+            sp('p9').sellingPrice = 57800
+            await chuKy()
+            loiSua = null
+            const r2 = sua(idDay).find(k => k.data.giaMoi === 57800)
+            const r2Truoc = `${r2?.status}:${!!r2?.result?.tamThoi}`
+            sp('p9').sellingPrice = 57900
+            kq = await chuKy()
+            dung('18an4. nháp tamThoi lỗi thời (giá đổi tiếp) ⇒ tự huỷ êm, KHÔNG bị thực thi lại theo giá cũ; sửa 57.500đ → 57.900đ',
+                r2Truoc === 'draft:true' && lay(String(r2?.id))?.status === 'cancelled' && lay(String(r2?.id))?.result?.tuHuy === true
+                && lenhSua().length === 1 && /Giá: 57\.900đ/.test(lenhSua()[0][2]) && !/57\.800/.test(lenhSua()[0][2]), JSON.stringify({ r2Truoc, r2: r2 && lay(r2.id), lenh: lenhSua() }))
+            await capHienTai()
+            sp('p9').sellingPrice = 58000
+            await chuKy()
+            const g4 = sua(idDay).find(k => k.data.giaMoi === 58000 && k.status === 'draft')
+            // "đang chạy" so với đồng hồ GIẢ của chu kỳ (chuKy cộng 5 phút trước khi chạy) — không dùng Date.now()
+            if (g4) { const k = lay(g4.id)!; k.status = 'running'; k.updatedAt = bayGio + 5 * P }
+            await moCap()
+            sp('p9').sellingPrice = 58500
+            kq = await chuKy()
+            dung('18ao1. bài có lệnh sửa ĐANG chạy (lượt khác, < 1 giờ) ⇒ không lập / không gọi Facebook cho bài đó',
+                !!g4 && lay(g4.id)?.status === 'running' && goiFb.length === 0 && !sua(idDay).some(k => k.data.giaMoi === 58500), JSON.stringify({ goiFb, g4: g4 && lay(g4.id) }))
+            sp('p9').sellingPrice = 58000
+            if (g4) lay(g4.id)!.updatedAt = bayGio - 2 * H
+            kq = await chuKy()
+            dung('18ao. lệnh sửa kẹt "đang chạy" quá 1 giờ ⇒ "uncertain" + nhắc mở bài kiểm dòng giá; không sửa tiếp bài đó',
+                !!g4 && lay(g4.id)?.status === 'uncertain' && /dòng giá đã đổi chưa/.test(lay(g4.id)?.result?.message || '') && lenhSua().length === 0, JSON.stringify(g4 && lay(g4.id)))
+            if (g4) await xacNhanDaKiemFb(ctx, { planId: g4.id, outcome: 'not_done' })
+            kq = await chuKy()
+            dung('18ao2. kiểm KHÔNG ⇒ chu kỳ sau sửa 57.900đ → 58.000đ',
+                lenhSua().length === 1 && /Giá: 58\.000đ/.test(lenhSua()[0][2]) && !/57\.900/.test(lenhSua()[0][2]), JSON.stringify(lenhSua()))
+
+            // công tắc / đọc hỏng / 100 bài / 10 bài mỗi chu kỳ
+            await luuCauHinhFb(ctx, { policy: { automation: { editPrices: false } } })
+            sp('p12').sellingPrice = 47000
+            kq = await chuKy()
+            dung('18ap. tắt "Sửa giá trên bài đã đăng" ⇒ chu kỳ không soát giá bài, không gọi Facebook', goiFb.length === 0 && dongSua(kq).length === 0, JSON.stringify(goiFb))
+            dung('18aq. đổi công tắc ghi sổ cấu hình (nhãn riêng, không tính trần ghi)',
+                kho._nhatKy.some(w => w.action === 'config' && /Sửa giá trên bài đã đăng/.test(String(w.payload?.tomTat || ''))))
+            await luuCauHinhFb(ctx, { policy: { automation: { editPrices: true } } })
+            loiDocBai = Object.assign(new Error('(#4) Application request limit reached'), { code: 4 })
+            kq = await chuKy()
+            dung('18ar. đọc danh sách bài bị Facebook giới hạn ⇒ "skipped" (lượt sau đọc lại), không lập / không sửa',
+                dongSua(kq).some((r: any) => r.status === 'skipped' && /Không đọc được bài trên fanpage/.test(r.message)) && lenhSua().length === 0 && !sua(idTh).some(k => k.data.giaMoi === 47000),
+                JSON.stringify(dongSua(kq)))
+            loiDocBai = new Error('Lỗi lạ khi đọc')
+            kq = await chuKy()
+            dung('18as. đọc hỏng kiểu khác ⇒ "failed" (việc cần người)', dongSua(kq).some((r: any) => r.status === 'failed' && /Không đọc được bài/.test(r.message) && canNguoi(r)))
+            loiDocBai = null
+            baiDay100 = true
+            kq = await chuKy()
+            baiDay100 = false
+            dung('18at. danh sách đủ 100 bài mà không có bài cần sửa ⇒ đọc lẻ bài đó rồi sửa',
+                goiFb.some(g => g[0] === 'get' && g[1] === idTh && g[2]?.fields === 'id,message,permalink_url') && lenhSua().length === 1 && lenhSua()[0][1] === idTh && /Giá: 47\.000đ/.test(lenhSua()[0][2]),
+                JSON.stringify(goiFb.map(g => g.slice(0, 2))))
+            const loat: string[] = []
+            for (let i = 0; i < 11; i++) {
+                them(`pL${i}`, `LOAT${i}`, `Hàng loạt ${i}`, 10000 + i * 1000, 5)
+                bayGio += P
+                loat.push(String((await dang(`LOAT${i}`)).result?.postId))
+            }
+            for (let i = 0; i < 11; i++) sp(`pL${i}`).sellingPrice += 500
+            kq = await chuKy()
+            const daSua = new Set(lenhSua().map(g => g[1]))
+            dung('18au. mỗi chu kỳ sửa tối đa 10 bài, bài MỚI trước; phần dư báo để chu kỳ sau',
+                lenhSua().length === 10 && !daSua.has(loat[0]) && daSua.has(loat[10]) && dongSua(kq).some((r: any) => /tối đa 10 bài — còn 1 bài/.test(r.message)),
+                JSON.stringify(dongSua(kq).map((r: any) => r.message)))
+            kq = await chuKy()
+            dung('18av. chu kỳ sau sửa nốt bài còn lại', lenhSua().length === 1 && lenhSua()[0][1] === loat[0], JSON.stringify(lenhSua().map(g => g[1])))
+
+            const loc = await dsKeHoachFb(ctx, { kind: 'edit', limit: 100 })
+            dung('18aw. danh sách kế hoạch lọc được loại "edit"', loc.plans.length > 0 && loc.plans.every(k => k.kind === 'edit'))
+        } finally {
+            baiSongBat = false; loiSua = null; loiDocBai = null; baiDay100 = false
+        }
+        const lenhSql: { sql: string; v: any[] }[] = []
+        const pg: any = { $executeRawUnsafe: async () => 0, $queryRawUnsafe: async (sql: string, ...v: any[]) => { lenhSql.push({ sql, v }); return [] } }
+        const ks = khoSqlFb(pg)
+        const truocRong = lenhSql.length
+        const rong = await ks.dsKeHoachSuaBai([])
+        const sauRong = lenhSql.length
+        await ks.dsKeHoachSuaBai(['PG1_1', 'PG1_2'])
+        const lq = lenhSql[lenhSql.length - 1]
+        dung('18ax. SQL dsKeHoachSuaBai: kind = \'edit\', data->>postId = ANY($1::text[]), cũ trước; danh sách rỗng ⇒ không truy vấn',
+            rong.length === 0 && truocRong === sauRong && /kind = 'edit'/.test(lq?.sql || '') && /data::jsonb->>'postId' = ANY\(\$1::text\[\]\)/.test(lq?.sql || '')
+            && /ORDER BY "createdAt" ASC, id ASC/.test(lq?.sql || '') && JSON.stringify(lq?.v) === '[["PG1_1","PG1_2"]]', lq?.sql)
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)
