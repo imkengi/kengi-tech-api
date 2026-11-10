@@ -62,8 +62,9 @@ import {
     soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
     taoKeHoachBoAn, xacNhanDaKiemFb, dsKeHoachFb, khoSqlFb, HUONG_DAN_FB_PILOT,
     dongGiaBai, coDongGia, thayGiaTrongBai, giaBaiTheoPilot,
-    kichSomTheoBinhLuan, TRE_KICH_BL_MS, SAN_KICH_BL_MS, TRAN_TRANG_BL,
+    kichSomTheoBinhLuan, TRE_KICH_BL_MS, SAN_KICH_BL_MS, TRAN_TRANG_BL, vietLoiBaiFb,
 } from '../src/lib/facebookPilot'
+import { locLoiAi, vietLoiCoRao, MO_TA_TOI_THIEU, THAN_TOI_DA, SO_LAN_VIET, HUONG_DAN_VIET_LOI } from '../src/lib/facebookVietLoi'
 import { NHAN_FACEBOOK } from '../src/lib/pilotDoiCauHinh'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
@@ -2111,6 +2112,86 @@ async function main() {
         dung('19an. route trả lời nhận replyTo từ trang', /replyTo: typeof b\?\.replyTo === 'string' \? b\.replyTo : null/.test(nguonRt))
         dung('19ao. hướng dẫn nói rõ: đọc cả luồng, gửi vào gốc, kích sớm theo webhook',
             /trả lời trong luồng/.test(HUONG_DAN_FB_PILOT) && /bình luận gốc của luồng/.test(HUONG_DAN_FB_PILOT) && /vài phút/.test(HUONG_DAN_FB_PILOT))
+    }
+
+    // ─── AI. (10/11/2026, FB-14) AI viết lời bài — rào sự thật; chỉ soạn nháp, không ghi Facebook ────────────────────────────
+    {
+        datLai(); goiFb.length = 0; goiGraph.length = 0; bayGio = NOW
+        const TEN = 'Máy khoan pin 21V'
+        const MO_TA = 'Máy khoan pin 21V dùng cho khoan gỗ, khoan tường nhẹ và bắt vít trong nhà. Đầu kẹp 10mm, 2 cấp tốc độ, kèm 2 pin và hộp đựng. Thân máy bọc cao su chống trượt, bảo hành 6 tháng.'
+        const TOT = 'Chiếc máy khoan pin này hợp với việc sửa chữa trong nhà: khoan gỗ, khoan tường nhẹ hay bắt vít đều gọn. Đầu kẹp 10mm cùng 2 cấp tốc độ, thân bọc cao su chống trượt nên cầm chắc tay.'
+        const l = (than: string, tuCam: string[] = []) => locLoiAi(than, TEN, MO_TA, tuCam)
+        dung('AI1. lời chỉ dùng thông tin + con số có trong mô tả ⇒ QUA rào, chữ giữ nguyên', l(TOT).ok && l(TOT).than === TOT, JSON.stringify(l(TOT)))
+        dung('AI2. con số KHÔNG có trong tên / mô tả (công suất bịa) ⇒ loại, nêu đúng số',
+            !l(TOT + ' Công suất 800W mạnh mẽ.').ok && /không có trong tên \/ mô tả: 800$/.test(l(TOT + ' Công suất 800W mạnh mẽ.').lyDo), l(TOT + ' Công suất 800W mạnh mẽ.').lyDo)
+        const hua = l(TOT + ' Hàng chính hãng, miễn phí giao hàng toàn quốc.')
+        dung('AI3. lời hứa mô tả không ghi (chính hãng, miễn phí, giao hàng, toàn quốc) ⇒ loại, kể tên từng lời hứa',
+            !hua.ok && ['chính hãng', 'miễn phí', 'giao hàng', 'toàn quốc'].every(w => hua.lyDo.includes(w)), hua.lyDo)
+        dung('AI3b. … lời hứa mà mô tả CÓ ghi ("bảo hành 6 tháng") ⇒ được nhắc', l(TOT + ' Máy được bảo hành 6 tháng.').ok, l(TOT + ' Máy được bảo hành 6 tháng.').lyDo)
+        dung('AI3c. … nhưng đổi con số của lời hứa (bảo hành 12 tháng) ⇒ loại vì số', !l(TOT + ' Máy được bảo hành 12 tháng.').ok && /: 12$/.test(l(TOT + ' Máy được bảo hành 12 tháng.').lyDo))
+        const ngoai = ['Xem thêm tại https://shop.vn/khoan nhé.', 'Gọi 0909 123 456 để đặt.', 'Nhắn Zalo shop để được tư vấn.', 'Inbox ngay để nhận tư vấn.']
+        dung('AI4. đường dẫn / số điện thoại / Zalo / inbox ⇒ loại (câu kêu gọi là của khuôn bài)', ngoai.every(x => !l(`${TOT} ${x}`).ok && /đường dẫn/.test(l(`${TOT} ${x}`).lyDo)),
+            ngoai.map(x => l(`${TOT} ${x}`).lyDo).join(' | '))
+        dung('AI5. hashtag trong lời ⇒ loại; từ CẤM của thương hiệu ⇒ loại, nêu từ', !l(TOT + ' #maykhoan').ok && /hashtag/.test(l(TOT + ' #maykhoan').lyDo)
+            && !l(TOT, ['Chống Trượt']).ok && /từ CẤM của thương hiệu: chống trượt/.test(l(TOT, ['Chống Trượt']).lyDo) && l(TOT, ['', '  ']).ok)
+        dung('AI6. rỗng / quá ngắn / quá dài ⇒ loại', !l('').ok && !l('Máy khoan dùng tốt.').ok && /quá ngắn/.test(l('Máy khoan dùng tốt.').lyDo)
+            && !l('Máy khoan dùng trong nhà. '.repeat(40)).ok && new RegExp(`tối đa ${THAN_TOI_DA}`).test(l('Máy khoan dùng trong nhà. '.repeat(40)).lyDo))
+        dung('AI6b. bỏ dấu markdown, gom khoảng trắng trước khi xét', l(`**${TOT}**   `).ok && l(`**${TOT}**   `).than === TOT)
+
+        // gọi AI có rào: lần một bị loại ⇒ lần hai kèm lý do; hết lượt ⇒ ok:false, không ném
+        const deBai: string[] = []
+        const aiTheo = (ds: string[]) => { let i = 0; return async (d: string, h: string) => { deBai.push(d); if (h !== HUONG_DAN_VIET_LOI) throw new Error('sai lời dặn'); return ds[Math.min(i++, ds.length - 1)] } }
+        const r1 = await vietLoiCoRao(aiTheo([JSON.stringify({ than: TOT + ' Công suất 800W.' }), '```json\n' + JSON.stringify({ than: TOT }) + '\n```']), TEN, MO_TA)
+        dung('AI7. lần một bịa số ⇒ gọi lại ĐÚNG một lần, đề bài lần hai nói lý do bị loại; lần hai qua ⇒ dùng', r1.ok && r1.soLan === 2 && r1.than === TOT && deBai.length === 2
+            && !/bị loại/.test(deBai[0]) && /Lần viết trước bị loại vì: có con số không có trong tên \/ mô tả: 800/.test(deBai[1]) && deBai[0].includes(MO_TA), JSON.stringify({ r1, deBai }))
+        deBai.length = 0
+        const r2 = await vietLoiCoRao(aiTheo([JSON.stringify({ than: TOT + ' Hàng chính hãng.' })]), TEN, MO_TA)
+        dung(`AI8. ${SO_LAN_VIET} lần đều không qua ⇒ ok:false kèm lý do lần cuối, không gọi quá ${SO_LAN_VIET} lần`, !r2.ok && r2.soLan === SO_LAN_VIET && deBai.length === SO_LAN_VIET && /chính hãng/.test(r2.lyDo), JSON.stringify(r2))
+        deBai.length = 0
+        const r3 = await vietLoiCoRao(aiTheo(['xin lỗi, tôi không viết được']), TEN, MO_TA)
+        dung('AI8b. AI không trả JSON ⇒ ok:false "không trả đúng khuôn JSON"', !r3.ok && /khuôn JSON/.test(r3.lyDo), JSON.stringify(r3))
+
+        // qua Pilot: chỉ soạn, không ghi Facebook, không lập kế hoạch
+        hang.push({ id: 'pAi', sku: 'KHOAN21', name: TEN, description: `<p>${MO_TA}</p>`, productType: 'goods', sellingPrice: 890000, stock: 12, mergedIntoId: null, bundleId: null, createdAt: new Date(NOW), images: [{ url: ANH('khoan21'), isPrimary: true }] })
+        const kho = khoBoNhoFb()
+        const ctxAi = (ds: string[] | Error) => ({ ...ngCanh(kho), goiAi: ds instanceof Error ? (async () => { throw ds }) : aiTheo(ds) })
+        await luuCauHinhFb(ngCanh(kho), { pageId: pages[0]?.pageId, executionMode: 'auto' })
+        const soNk = kho._nhatKy.length
+        goiFb.length = 0; deBai.length = 0
+        const b = await vietLoiBaiFb(ctxAi([JSON.stringify({ than: TOT })]) as any, { sku: 'khoan21' })
+        const dongB = String(b.message).split('\n')
+        dung('AI9. bài trả về: khuôn giữ nguyên (dòng tên, dòng GIÁ THẬT từ kho, câu kêu gọi + hashtag của hồ sơ), đoạn giữa là lời AI; cờ aiDraft',
+            dongB[0] === `🔹 ${TEN}` && dongB[1] === '💰 Giá: 890.000đ' && b.message.includes(`\n\n${TOT}\n\n`) && b.message.includes('👉 Gọi 0909 000 111 hoặc inbox shop') && b.message.includes('#kengi')
+            && !b.message.includes('Đầu kẹp 10mm, 2 cấp tốc độ, kèm 2 pin') && b.body === TOT && b.aiDraft === true && b.attempts === 1, b.message)
+        dung('AI9b. … đề bài gửi AI là mô tả ĐÃ bỏ HTML, không kèm giá', deBai.length === 1 && deBai[0].includes(MO_TA) && !/<p>/.test(deBai[0]) && !/890/.test(deBai[0]), deBai[0])
+        dung('AI9c. … CHỈ SOẠN: 0 lời gọi Facebook, 0 kế hoạch, 0 dòng nhật ký ghi', goiFb.length === 0 && goiGraph.length === 0 && kho._keHoach.length === 0 && kho._nhatKy.length === soNk,
+            JSON.stringify({ fb: goiFb.length, g: goiGraph.length, kh: kho._keHoach.length }))
+        const eRao = await nem(() => vietLoiBaiFb(ctxAi([JSON.stringify({ than: TOT + ' Giảm giá 50% hôm nay.' })]) as any, { sku: 'KHOAN21' }))
+        dung('AI10. AI bịa khuyến mãi cả hai lần ⇒ ToolError "không qua rào sự thật" kèm lý do, nói bài giữ khuôn cũ', eRao instanceof ToolError && /2 lần đều không qua rào sự thật: /.test(eRao.message) && /giữ khuôn cũ/.test(eRao.message), eRao?.message)
+        deBai.length = 0
+        const eNgan = await nem(() => vietLoiBaiFb(ctxAi([JSON.stringify({ than: TOT })]) as any, { sku: 'OC4' }))
+        dung(`AI11. mô tả ngắn hơn ${MO_TA_TOI_THIEU} ký tự ⇒ từ chối TRƯỚC khi gọi AI (không có gì để viết ngoài bịa), chỉ đường thêm mô tả`,
+            eNgan instanceof ToolError && /quá ngắn \(23 ký tự/.test(eNgan.message) && /Ảnh & mô tả sản phẩm/.test(eNgan.message) && deBai.length === 0, eNgan?.message)
+        const eAi = await nem(() => vietLoiBaiFb(ctxAi(new Error('Gemini không soát được: gemini-3.8-flash: 429 quota')) as any, { sku: 'KHOAN21' }))
+        dung('AI12. gọi AI hỏng (hết hạn mức) ⇒ ToolError nói rõ lỗi AI, bài giữ khuôn cũ — không phải lỗi máy chủ 500', eAi instanceof ToolError && /AI chưa viết được lời \(Gemini không soát được/.test(eAi.message), eAi?.message)
+        const eMa = await nem(() => vietLoiBaiFb(ctxAi([JSON.stringify({ than: TOT })]) as any, { sku: 'KHONG-CO' }))
+        dung('AI12b. mã không có trong kho ⇒ ToolError', eMa instanceof ToolError && /Không thấy mã hàng/.test(eMa.message))
+
+        // lập kế hoạch từ nháp AI: cờ aiDraft vào sổ; bài không sửa chữ thì KHÔNG mang cờ
+        const kh = await taoKeHoachBai(ngCanh(kho), { sku: 'KHOAN21', message: b.message, aiDraft: true })
+        const khThuong = await taoKeHoachBai(ngCanh(khoBoNhoFb()), { sku: 'KHOAN21', aiDraft: true }).catch(async () => {
+            const k2 = khoBoNhoFb(); await luuCauHinhFb(ngCanh(k2), { pageId: pages[0]?.pageId }); return taoKeHoachBai(ngCanh(k2), { sku: 'KHOAN21', aiDraft: true })
+        })
+        dung('AI13. lập kế hoạch từ nháp AI ⇒ kế hoạch NHÁP mang aiDraft + edited; cờ aiDraft mà chữ là khuôn máy ⇒ không mang cờ',
+            kh.status === 'draft' && kh.data.aiDraft === true && kh.data.edited === true && kh.data.message === b.message && khThuong.data.aiDraft === undefined && khThuong.data.edited === false,
+            JSON.stringify({ a: kh.data.aiDraft, s: kh.status, t: khThuong.data }))
+        const nguonRoute = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'facebookPilot.ts'), 'utf8')
+        dung("AI14. route: 'ai-draft' là thao tác ghi: true (tốn hạn mức AI ⇒ chỉ quản lý / khoá ghi), 'post' chuyển cờ aiDraft",
+            /'ai-draft': \{ ghi: true, chay: \(ctx, b\) => vietLoiBaiFb\(ctx, \{ sku: String\(b\?\.sku \|\| ''\) \}\) \}/.test(nguonRoute) && /aiDraft: b\?\.aiDraft === true/.test(nguonRoute))
+        const nguonLib = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'facebookPilot.ts'), 'utf8')
+        const thanChuKy = nguonLib.slice(nguonLib.indexOf('export async function chayChuKyFb'), nguonLib.indexOf('export async function kiemKetNoiFb'))
+        dung('AI15. chu kỳ tự động KHÔNG gọi AI (AI chỉ soạn khi người bấm)', thanChuKy.length > 1000 && !/vietLoi|goiAi|goiGemini/.test(thanChuKy))
+        datLai()
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

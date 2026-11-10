@@ -21,7 +21,7 @@ import { lyDoChanPilot, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
 import { chanXemPilot } from '../lib/quyenXemPilot'
 import {
     khoSqlFb, xayTrangThaiFb, chayChuKyFb, thucThiFb, taoKeHoachBai, taoKeHoachTraLoi, taoKeHoachAn, taoKeHoachBoAn, huyKeHoachFb,
-    xacNhanDaKiemFb, dsKeHoachFb, docBinhLuan, kiemKetNoiFb, luuCauHinhFb, timHangFb, xemTruocBai, HUONG_DAN_FB_PILOT, type NgCanhFb,
+    xacNhanDaKiemFb, dsKeHoachFb, docBinhLuan, kiemKetNoiFb, luuCauHinhFb, timHangFb, xemTruocBai, vietLoiBaiFb, HUONG_DAN_FB_PILOT, type NgCanhFb,
 } from '../lib/facebookPilot'
 import {
     khoSqlAds, xayTrangThaiAds, chayChuKyAds, thucThiAds, taoKeHoachDay, taoKeHoachDung, taoKeHoachChayLai, taoKeHoachNganSach,
@@ -98,8 +98,12 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
         chay: (ctx, b) => taoKeHoachBai(ctx, {
             sku: String(b?.sku || ''), message: typeof b?.message === 'string' ? b.message : undefined,
             scheduledAt: b?.scheduledAt ?? null, publishNow: b?.publishNow === true, idempotencyKey: khoaWeb(b?.idempotencyKey),
+            aiDraft: b?.aiDraft === true,
         }),
     },
+    // FB-14 (10/11/2026): AI viết lại đoạn giới thiệu của bài, có rào sự thật — CHỈ soạn chữ cho form, không ghi Facebook.
+    // 'ghi: true' vì tốn hạn mức AI của cửa hàng ⇒ chỉ quản lý / khoá có quyền ghi.
+    'ai-draft': { ghi: true, chay: (ctx, b) => vietLoiBaiFb(ctx, { sku: String(b?.sku || '') }) },
     reply: {
         ghi: true,
         chay: (ctx, b) => taoKeHoachTraLoi(ctx, {

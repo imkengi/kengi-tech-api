@@ -34,6 +34,9 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
+import { vietLoiCoRao, MO_TA_TOI_THIEU, type GoiAi } from './facebookVietLoi'
+import { layKeyAi } from './keyAi'
+import { goiGemini } from './aiSoatNoiDung'
 import { TRANG_THAI_BAN } from './sucKhoeTaiChinhKhach'
 import { FacebookService, isRateLimitError, loaiLoiFb, quyenThieuFb, type SchedulePostInput } from '../services/platforms/facebook'
 import { baoChuShop, ketQuaDeBao, NHOM_PILOT, duongPilotCuaTieuDe } from './pilotBaoChuShop'
@@ -531,6 +534,8 @@ export interface NgCanhFb {
     taoFb?: (token: string) => DichVuFb
     /** đồng hồ giả cho bộ kiểm */
     bayGio?: () => number
+    /** AI giả cho bộ kiểm (FB-14); bỏ trống ⇒ Gemini bằng key AI của cửa hàng */
+    goiAi?: GoiAi
 }
 
 const luc = (ctx: NgCanhFb) => (ctx.bayGio ? ctx.bayGio() : Date.now())
@@ -631,11 +636,12 @@ export interface HangSoan { name: string; sellingPrice: number; description?: st
  * Bài đăng một mã hàng — CHỈ từ dữ liệu kho + hồ sơ thương hiệu, không thêm lời hứa nào (giao toàn quốc,
  * chính hãng, còn hàng…). Dòng đầu luôn là tên hàng: bình luận trên bài được nối về mã hàng nhờ dòng này.
  */
-export function soanBai(sp: HangSoan, pol: ChinhSachFbPilot, hoSo: any): { message: string; tuCam: string[] } {
+export function soanBai(sp: HangSoan, pol: ChinhSachFbPilot, hoSo: any, than?: string | null): { message: string; tuCam: string[] } {
     const emoji = String(hoSo?.emojiLevel || 'vua') !== 'khong'
     const dong: string[] = [`${emoji ? '🔹 ' : ''}${tenGon(sp.name)}`]
     if (pol.showPrice && Number(sp.sellingPrice) > 0) dong.push(`${emoji ? '💰 ' : ''}Giá: ${vnd(Number(sp.sellingPrice))}`)
-    const moTa = rutGon(boHtml(sp.description || ''), 400)
+    // than (10/11/2026, FB-14): đoạn giới thiệu AI viết ĐÃ qua rào (lib/facebookVietLoi) thế chỗ đoạn cắt từ mô tả — khuôn còn lại y nguyên
+    const moTa = String(than || '').trim() || rutGon(boHtml(sp.description || ''), 400)
     if (moTa) dong.push('', moTa)
     const cta = pol.cta || String(hoSo?.cta || '').replace(/\s+/g, ' ').trim() || CTA_MAC_DINH
     dong.push('', `${emoji ? '👉 ' : ''}${cta}`)
@@ -925,7 +931,7 @@ function keHoachMoi(kind: LoaiKeHoachFb, data: any, khoa: string | null | undefi
     return { id: crypto.randomUUID(), kind, status: 'draft', idempotencyKey: khoa ? String(khoa).slice(0, 200) : null, data, result: null, createdBy: nguoi ?? null, createdAt: now, updatedAt: now }
 }
 
-export interface DauVaoBai { sku: string; message?: string; scheduledAt?: number | string | null; publishNow?: boolean; idempotencyKey?: string }
+export interface DauVaoBai { sku: string; message?: string; scheduledAt?: number | string | null; publishNow?: boolean; idempotencyKey?: string; aiDraft?: boolean }
 
 /** Kế hoạch lên bài một mã hàng. Không chọn giờ ⇒ khung giờ trống gần nhất theo chính sách. */
 export async function taoKeHoachBai(ctx: NgCanhFb, b: DauVaoBai): Promise<KeHoachFb> {
@@ -966,6 +972,8 @@ export async function taoKeHoachBai(ctx: NgCanhFb, b: DauVaoBai): Promise<KeHoac
         pageId: page.pageId, pageName: page.name, productId: sp.id, sku: sp.sku, name: tenGon(sp.name),
         price: Number(sp.sellingPrice) || 0, stock: Number(sp.stock) || 0, message,
         mediaUrls: anhHopLe(sp.images || [], pol.maxImages), scheduledAt, edited: message !== tuSoan.message,
+        // FB-14: chữ bài bắt nguồn từ nháp AI (người đã đọc / sửa rồi mới lập) — ghi lại để sổ kế hoạch nói đúng nguồn
+        ...(b.aiDraft === true && message !== tuSoan.message ? { aiDraft: true } : {}),
         ...(canhBao.length ? { warnings: canhBao } : {}),
     }
     return ctx.kho.taoKeHoach(keHoachMoi('post', data, b.idempotencyKey, ctx.nguoi, now))
@@ -2172,6 +2180,41 @@ export async function xemTruocBai(ctx: NgCanhFb, b: { sku: string }): Promise<an
         message: bai.message, bannedWords: bai.tuCam, images: anhHopLe(sp.images || [], cfg.policy.maxImages),
         reason: lyDoKhongDang(sp, cfg.policy), nextSlot: slot ?? null,
     }
+}
+
+/**
+ * FB-14 (10/11/2026) — AI viết lại ĐOẠN GIỚI THIỆU của bài một mã, qua rào sự thật (lib/facebookVietLoi). CHỈ SOẠN: không ghi
+ * Facebook, không lập kế hoạch — form lên bài nhận chữ này cho người đọc / sửa rồi mới bấm lập. Không qua rào ⇒ ToolError kèm lý do.
+ */
+export async function vietLoiBaiFb(ctx: NgCanhFb, b: { sku: string }): Promise<any> {
+    const { cfg } = await canPage(ctx)
+    const sp = await motHang(ctx, b?.sku)
+    if (!sp) throw new ToolError(`Không thấy mã hàng "${b?.sku}" trong kho.`)
+    const ten = tenGon(sp.name)
+    const moTa = boHtml(sp.description || '')
+    if (moTa.length < MO_TA_TOI_THIEU) {
+        throw new ToolError(`Mô tả của mã ${sp.sku} quá ngắn (${moTa.length} ký tự, cần ≥ ${MO_TA_TOI_THIEU}) — AI không có gì để viết ngoài bịa. Thêm mô tả ở Ảnh & mô tả sản phẩm rồi thử lại.`)
+    }
+    const hoSo = await docHoSo(ctx.prisma)
+    const tuCam = jsonMang(hoSo?.bannedWords).map((w: any) => String(w))
+    let model = ''
+    const goiAi: GoiAi = ctx.goiAi || (async (deBai, huongDan) => {
+        const key = (await layKeyAi(ctx.prisma)).gemini
+        if (!key) throw new ToolError('Cửa hàng chưa có key AI (Gemini) — quản trị nhập ở Hệ Thống → Cài Đặt, tab «Trợ lý AI» rồi thử lại.')
+        const r = await goiGemini(key, deBai, huongDan)
+        model = r.model
+        return r.text
+    })
+    let kq: Awaited<ReturnType<typeof vietLoiCoRao>>
+    try { kq = await vietLoiCoRao(goiAi, ten, moTa, tuCam) } catch (e: any) {
+        if (e instanceof ToolError) throw e
+        throw new ToolError(`AI chưa viết được lời (${String(e?.message || e).slice(0, 200)}) — bài giữ khuôn cũ, thử lại sau.`)
+    }
+    if (!kq.ok) throw new ToolError(`AI viết ${kq.soLan} lần đều không qua rào sự thật: ${kq.lyDo}. Bài giữ khuôn cũ — bạn có thể tự sửa chữ.`)
+    const bai = soanBai(sp, cfg.policy, hoSo, kq.than)
+    // rào chót trên CẢ bài (khuôn + lời AI): từ cấm thì taoKeHoachBai cũng chặn, báo ngay ở đây cho khỏi lập hụt
+    if (bai.tuCam.length) throw new ToolError(`Bài có từ CẤM của thương hiệu: ${bai.tuCam.join(', ')} — sửa mô tả sản phẩm hoặc hồ sơ thương hiệu.`)
+    return { sku: sp.sku, message: bai.message, body: kq.than, attempts: kq.soLan, model: model || null, aiDraft: true }
 }
 
 // ─── Chạy theo lịch (gọi từ cron/aiAgentCron) ───────────────────────────────────
