@@ -20,8 +20,8 @@ import { ToolError } from '../lib/mcpTypes'
 import { lyDoChanPilot, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
 import { chanXemPilot } from '../lib/quyenXemPilot'
 import {
-    khoSqlFb, xayTrangThaiFb, chayChuKyFb, thucThiFb, taoKeHoachBai, taoKeHoachTraLoi, taoKeHoachAn, huyKeHoachFb,
-    docBinhLuan, kiemKetNoiFb, luuCauHinhFb, timHangFb, xemTruocBai, HUONG_DAN_FB_PILOT, type NgCanhFb,
+    khoSqlFb, xayTrangThaiFb, chayChuKyFb, thucThiFb, taoKeHoachBai, taoKeHoachTraLoi, taoKeHoachAn, taoKeHoachBoAn, huyKeHoachFb,
+    xacNhanDaKiemFb, dsKeHoachFb, docBinhLuan, kiemKetNoiFb, luuCauHinhFb, timHangFb, xemTruocBai, HUONG_DAN_FB_PILOT, type NgCanhFb,
 } from '../lib/facebookPilot'
 import {
     khoSqlAds, xayTrangThaiAds, chayChuKyAds, thucThiAds, taoKeHoachDay, taoKeHoachDung, taoKeHoachChayLai, taoKeHoachNganSach,
@@ -114,12 +114,24 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
             reason: b?.reason, idempotencyKey: khoaWeb(b?.idempotencyKey),
         }),
     },
+    // FB-16 (10/11/2026): bỏ ẩn bình luận — cùng đường kế hoạch → thực thi như 'hide'
+    unhide: {
+        ghi: true,
+        chay: (ctx, b) => taoKeHoachBoAn(ctx, {
+            commentId: String(b?.commentId || ''), postId: b?.postId, commentMsg: b?.commentMsg, fromName: b?.fromName,
+            reason: b?.reason, idempotencyKey: khoaWeb(b?.idempotencyKey),
+        }),
+    },
     cancel: { ghi: true, chay: (ctx, b) => huyKeHoachFb(ctx, String(b?.planId || '')) },
+    // FB-16: người đã mở fanpage kiểm kế hoạch "Chưa rõ kết quả" — outcome 'done' (Facebook CÓ) | 'not_done' (KHÔNG có). Không gọi Facebook.
+    resolve: { ghi: true, chay: (ctx, b) => xacNhanDaKiemFb(ctx, { planId: String(b?.planId || ''), outcome: String(b?.outcome || '') }) },
     config: { ghi: true, chay: (ctx, b) => luuCauHinhFb(ctx, b) },
     connection: { ghi: false, chay: ctx => kiemKetNoiFb(ctx) },
     comments: { ghi: false, chay: (ctx, b) => docBinhLuan(ctx, { soBai: b?.posts }) },
     'product-search': { ghi: false, chay: (ctx, b) => timHangFb(ctx, { keyword: String(b?.keyword || '') }) },
     preview: { ghi: false, chay: (ctx, b) => xemTruocBai(ctx, { sku: String(b?.sku || '') }) },
+    // FB-16: kế hoạch lọc theo trạng thái / loại + lật trang (before = next của trang trước / plansNext của /state)
+    plans: { ghi: false, chay: (ctx, b) => dsKeHoachFb(ctx, { status: b?.status, kind: b?.kind, before: b?.before, limit: b?.limit }) },
 }
 
 router.post('/:action', authMiddleware, chanChuaBat, chanXemFb, async (req: AuthRequest, res: Response) => {

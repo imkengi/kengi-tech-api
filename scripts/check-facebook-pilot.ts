@@ -31,6 +31,10 @@
  *     token từ /me (USER token ⇒ 'user' qua lỗi "node type (User)"; token chết ném nguyên); Insights chỉ xin chỉ số còn sống.
  * 15. (10/11/2026, FB-07 / FB-08 / FB-21) nhận "hỏi giá" hẹp lại (đánh giá / khen / chê / hỏi thông số / "bạn" không còn được trả lời
  *     giá); bài trùng tên nhiều mã hoặc mã Pilot đã đăng không còn bán ⇒ không gắn mã, không gợi ý giá; lịch giữ client suốt lượt.
+ * 16. (10/11/2026, FB-16) quản lý kế hoạch: lật trang theo con trỏ (createdAt, id) không lọt / lặp, lọc trạng thái / loại; /state trả
+ *     MỌI nháp + đếm; "Đã kiểm" kế hoạch chưa rõ — KHÔNG có ⇒ nhả mã + khung giờ + dòng bài hẹn / chỗ trong sổ trả lời (chỉ dòng
+ *     Pilot giữ dở), CÓ ⇒ giữ chặn, bài hẹn người đã kiểm thì lượt soát không xoá; không gọi Facebook, không tốn lượt ghi, CAS một
+ *     người thắng; bỏ ẩn đi đường kế hoạch → thực thi, chu kỳ không ẩn lại; token hỏng mang cờ loiToken; câu SQL thật của kho.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -39,6 +43,7 @@ import {
     cauTraLoiGia, timUngVienFb, taoKeHoachBai, thucThiFb, luuCauHinhFb, docBinhLuan, taoKeHoachTraLoi, chayChuKyFb, chayTheoLichFb,
     xayTrangThaiFb, huyKeHoachFb, docGio, kiemKetNoiFb, CHINH_SACH_FB_MAC_DINH, type NgCanhFb, type DichVuFb,
     soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
+    taoKeHoachBoAn, xacNhanDaKiemFb, dsKeHoachFb, khoSqlFb, HUONG_DAN_FB_PILOT,
 } from '../src/lib/facebookPilot'
 import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILOT, LOI_CHUA_BAT_PILOT } from '../src/lib/tienIchCuaHang'
@@ -74,10 +79,10 @@ function khopChuoi(v: any, f: any): boolean {
     if ('contains' in f) return (f.mode === 'insensitive' ? String(v).toLowerCase() : String(v)).includes(f.mode === 'insensitive' ? String(f.contains).toLowerCase() : f.contains)
     if ('in' in f) return f.in.includes(v)
     if ('not' in f) return v !== f.not
-    if ('gte' in f || 'gt' in f || 'lte' in f) {
+    if ('gte' in f || 'gt' in f || 'lte' in f || 'lt' in f) {
         const n = v instanceof Date ? v.getTime() : Number(v)
         const g = (x: any) => (x instanceof Date ? x.getTime() : Number(x))
-        return (f.gte === undefined || n >= g(f.gte)) && (f.gt === undefined || n > g(f.gt)) && (f.lte === undefined || n <= g(f.lte))
+        return (f.gte === undefined || n >= g(f.gte)) && (f.gt === undefined || n > g(f.gt)) && (f.lte === undefined || n <= g(f.lte)) && (f.lt === undefined || n < g(f.lt))
     }
     return true
 }
@@ -147,6 +152,8 @@ const prisma: any = {
         },
         update: async ({ where, data }: any) => { const r = soTraLoi.find(x => x.pageId === where.pageId_commentId.pageId && x.commentId === where.pageId_commentId.commentId); if (r) Object.assign(r, data); return r },
         delete: async ({ where }: any) => { const i = soTraLoi.findIndex(x => x.pageId === where.pageId_commentId.pageId && x.commentId === where.pageId_commentId.commentId); if (i >= 0) soTraLoi.splice(i, 1); return {} },
+        updateMany: async ({ where, data }: any) => { let count = 0; for (const r of soTraLoi) if (khop(r, where)) { Object.assign(r, data); count++ } return { count } },
+        deleteMany: async ({ where }: any) => { let count = 0; for (let i = soTraLoi.length - 1; i >= 0; i--) if (khop(soTraLoi[i], where)) { soTraLoi.splice(i, 1); count++ } return { count } },
     },
 }
 
@@ -172,7 +179,7 @@ const fbGia = (token: string): DichVuFb => ({
         return { id }
     },
     replyToComment: async (id: string, msg: string) => { goiFb.push(['reply', id, msg]); if (loiTraLoi) throw loiTraLoi; return { id: `r_${id}` } },
-    hideComment: async (id: string) => { goiFb.push(['hide', id]); return { success: true } },
+    hideComment: async (id: string, hidden = true) => { goiFb.push([hidden ? 'hide' : 'unhide', id]); return { success: true } },
     // lệnh ĐỌC ⇒ ghi 'get' (ghiFb() chỉ đếm lệnh ghi)
     listScheduledPosts: async (pageId: string) => {
         goiFb.push(['get', `${pageId}/scheduled_posts`, null, token]); if (loiDsHen) throw loiDsHen
@@ -464,14 +471,14 @@ async function main() {
         dung('10c. /admin/migrate tạo bảng Facebook Pilot', /for \(const sql of SQL_TAO_BANG_FB_PILOT\)/.test(doc('routes/admin.ts')))
         const rt = doc('routes/facebookPilot.ts')
         dung('10d. route chặn theo tiện ích facebook_pilot', /lyDoChanPilot\(req\.user\?\.storeCode, TIEN_ICH_FACEBOOK_PILOT\)/.test(rt))
-        const ghi = ['cycle', 'execute', 'post', 'reply', 'hide', 'cancel', 'config'].every(v => new RegExp(`(^|\\s|')${v}'?: \\{\\s*ghi: true`, 'm').test(rt))
+        const ghi = ['cycle', 'execute', 'post', 'reply', 'hide', 'unhide', 'cancel', 'resolve', 'config'].every(v => new RegExp(`(^|\\s|')${v}'?: \\{\\s*ghi: true`, 'm').test(rt))
         dung('10e. mọi thao tác ghi đánh dấu ghi: true (quản lý mới được)', ghi)
         // chỉ cần có mặt trong danh sách — thêm tiện ích khác (TikTok Pilot 02/11) không được làm đỏ ca này
         dung('10f. tiện ích chỉ-quản-trị có facebook_pilot', /TIEN_ICH_CHI_QUAN_TRI: readonly string\[\] = \[[^\]\n]*\bTIEN_ICH_FACEBOOK_PILOT\b[^\]\n]*\]/.test(doc('lib/tienIchCuaHang.ts')))
         // 09/11/2026: 'cycle:' là dấu "máy lập" (tự huỷ khi quá hạn, nhớ người huỷ) ⇒ lên bài / trả lời / ẩn từ web phải qua khoaWeb
         const khoiFb = rt.slice(rt.indexOf('const VIEC: Record'), rt.indexOf('const VIEC_ADS'))
-        dung('10g. post / reply / hide từ web đi qua khoaWeb (trình duyệt không giả được khoá "cycle:" của máy)',
-            (khoiFb.match(/idempotencyKey: khoaWeb\(b\?\.idempotencyKey\)/g) || []).length === 3 && !/idempotencyKey: b\?\.idempotencyKey/.test(khoiFb))
+        dung('10g. post / reply / hide / unhide từ web đi qua khoaWeb (trình duyệt không giả được khoá "cycle:" của máy)',
+            (khoiFb.match(/idempotencyKey: khoaWeb\(b\?\.idempotencyKey\)/g) || []).length === 4 && !/idempotencyKey: b\?\.idempotencyKey/.test(khoiFb))
         const svc = doc('services/platforms/facebook.ts')
         dung('10h. FacebookService: token hỏng theo MÃ (không theo type OAuthException), fetch có hẹn giờ',
             !/type === 'OAuthException'/.test(svc) && /signal: AbortSignal\.timeout\(ms\)/.test(svc) && /AbortSignal\.timeout\(CHO_DOC_MS\)/.test(svc))
@@ -1028,6 +1035,213 @@ async function main() {
         const khoi = cron.slice(cron.indexOf('FACEBOOK PILOT theo lịch'), cron.indexOf('ADS PILOT theo lịch'))
         dung('15j. lịch Facebook Pilot giữ client suốt lượt (giuClient … finally nha())',
             khoi.length > 0 && /const nha = giuClient\(store\.schema\)[\s\S]*chayTheoLichFb\([\s\S]*finally \{\s*nha\(\)/.test(khoi), khoi.slice(0, 200))
+    }
+
+    // ─── 16. Quản lý kế hoạch (10/11/2026, FB-16): lọc + lật trang, MỌI nháp, "Đã kiểm" cho kế hoạch chưa rõ, bỏ ẩn ───────────
+    {
+        datLai(); goiFb.length = 0; bayGio = NOW; loiDang = null; loiXoa = null; loiDsHen = null; henFbBat = true; thongBao.length = 0
+        const kh = (id: string, o: any = {}) => ({
+            id, kind: 'post', status: 'succeeded', idempotencyKey: `web:${id}`, data: { pageId: 'PG1' }, result: null, createdBy: 'chu@shop',
+            createdAt: NOW - H, updatedAt: NOW - H, ...o,
+        })
+
+        // a–d: lật trang theo con trỏ (createdAt, id) — hai kế hoạch CÙNG mili-giây không lọt / không lặp
+        {
+            const kho = khoBoNhoFb(); const ctx = ngCanh(kho)
+            kho._keHoach.push(kh('a', { createdAt: NOW - 1000 }), kh('b', { createdAt: NOW - 2000 }), kh('c', { createdAt: NOW - 2000 }),
+                kh('d', { createdAt: NOW - 3000, status: 'draft', kind: 'reply' }), kh('e', { createdAt: NOW - 4000, status: 'draft' }))
+            const thay: string[] = []
+            let truoc: string | null = null, soTrang = 0
+            do {
+                const r = await dsKeHoachFb(ctx, { limit: 2, before: truoc })
+                thay.push(...r.plans.map(p => p.id)); truoc = r.next; soTrang++
+            } while (truoc && soTrang < 10)
+            dung('16a. lật trang 2/lượt: đủ 5 kế hoạch, đúng thứ tự (mới trước; cùng mili-giây theo id), không lặp', thay.join(',') === 'a,c,b,d,e' && soTrang === 3, `${thay.join(',')} · ${soTrang} trang`)
+            const loc = await dsKeHoachFb(ctx, { status: 'draft', kind: ['reply'] })
+            const la = await dsKeHoachFb(ctx, { status: 'xyz', kind: 'abc' })
+            dung('16b. lọc trạng thái + loại; giá trị lọc lạ bị bỏ qua (không ném, không lọc rỗng)',
+                loc.plans.map(p => p.id).join(',') === 'd' && loc.next === null && la.plans.length === 5, `${loc.plans.map(p => p.id)} · ${la.plans.length}`)
+
+            for (let i = 0; i < 90; i++) kho._keHoach.push(kh(`m${String(i).padStart(2, '0')}`, { createdAt: NOW + i }))
+            const st = await xayTrangThaiFb(ctx)
+            dung('16c. /state: MỌI nháp (kể cả nháp cũ bị 80 kế hoạch mới đẩy khuất) + đếm theo trạng thái + con trỏ trang sau',
+                st.plans.length === 80 && !st.plans.some((p: any) => p.status === 'draft') && st.drafts.map((p: any) => p.id).join(',') === 'd,e'
+                && st.draftsTotal === 2 && st.planCounts.succeeded === 93 && st.planCounts.draft === 2 && typeof st.plansNext === 'string',
+                `${st.plans.length} · ${st.drafts.map((p: any) => p.id)} · ${JSON.stringify(st.planCounts)} · ${st.plansNext}`)
+            const sau = await dsKeHoachFb(ctx, { before: st.plansNext, limit: 100 })
+            const tron = new Set([...st.plans.map((p: any) => p.id), ...sau.plans.map(p => p.id)])
+            dung('16d. "Xem thêm" từ plansNext: phần còn lại, không trùng trang đầu, hết thì next = null',
+                sau.plans.length === 15 && tron.size === 95 && sau.next === null, `${sau.plans.length} · ${tron.size} · ${sau.next}`)
+        }
+
+        // e–g: "Đã kiểm" bài chưa rõ — KHÔNG có ⇒ nhả mã + khung giờ; CÓ ⇒ giữ chặn như bài đã đăng. Không gọi Facebook, không tốn lượt ghi.
+        {
+            const kho = khoBoNhoFb(); const ctx = ngCanh(kho)
+            await luuCauHinhFb(ctx, { executionMode: 'auto' })
+            const st0 = await xayTrangThaiFb(ctx)
+            const T0 = st0.slots[0]
+            const coMa = async (sku: string) => (await timUngVienFb(ctx, chuanHoaChinhSachFb({}), { lim: 30 })).ungVien.some(u => u.sku === sku)
+            kho._keHoach.push(
+                kh('u1', { status: 'uncertain', data: { pageId: 'PG1', productId: 'p1', sku: 'KHOAN10', scheduledAt: T0 }, result: { message: 'Không rõ Facebook đã nhận chưa (mất kết nối)' } }),
+                kh('u2', { status: 'uncertain', data: { pageId: 'PG1', productId: 'p2', sku: 'OC4', scheduledAt: T0 + 86400_000 }, result: { message: 'Không rõ Facebook đã nhận chưa' } }),
+            )
+            const st1 = await xayTrangThaiFb(ctx)
+            const chan1 = !(await coMa('KHOAN10')) && !st1.slots.includes(T0)
+            const ghi0 = await kho.demGhiTuLuc(dauNgayVN(NOW))
+            goiFb.length = 0
+            const r1 = await xacNhanDaKiemFb(ctx, { planId: 'u1', outcome: 'not_done' })
+            const st2 = await xayTrangThaiFb(ctx)
+            dung('16e. bài chưa rõ → "KHÔNG có trên fanpage": failed + daKiem, giữ lời cũ, mã lên bài lại được, khung giờ được nhả',
+                chan1 && r1.status === 'failed' && r1.result?.daKiem?.ketLuan === 'khong' && /KHÔNG có trên fanpage/.test(r1.result?.message)
+                && /mất kết nối/.test(r1.result?.messageTruoc) && (await coMa('KHOAN10')) && st2.slots.includes(T0),
+                `${chan1} · ${r1.status} · ${JSON.stringify(r1.result).slice(0, 200)}`)
+            dung('16f. đánh dấu đã kiểm KHÔNG gọi Facebook, KHÔNG tính trần ghi / ngày, nhưng có dòng nhật ký "resolve" ghi người kiểm',
+                ghiFb().length === 0 && (await kho.demGhiTuLuc(dauNgayVN(NOW))) === ghi0
+                && kho._nhatKy.some(w => w.action === 'resolve' && w.planId === 'u1' && w.payload?.ketLuan === 'khong' && w.payload?.actor === 'chu@shop'),
+                `${ghiFb().length} · ${JSON.stringify(kho._nhatKy.map(w => w.action))}`)
+            const r2 = await xacNhanDaKiemFb(ctx, { planId: 'u2', outcome: 'done' })
+            dung('16g. bài chưa rõ → "CÓ trên fanpage": succeeded, mã vẫn bị chặn như bài đã đăng',
+                r2.status === 'succeeded' && r2.result?.daKiem?.ketLuan === 'co' && !(await coMa('OC4')), `${r2.status} · ${await coMa('OC4')}`)
+
+            const loiLai = await nem(() => xacNhanDaKiemFb(ctx, { planId: 'u1', outcome: 'done' }))
+            kho._keHoach.push(kh('n1', { status: 'draft' }), kh('r1', { status: 'running', updatedAt: NOW - 5 * 60_000 }), kh('r2', { status: 'running', updatedAt: NOW - 2 * H, kind: 'hide', data: { pageId: 'PG1', commentId: 'CX' } }))
+            const loiNhap = await nem(() => xacNhanDaKiemFb(ctx, { planId: 'n1', outcome: 'done' }))
+            const loiChay = await nem(() => xacNhanDaKiemFb(ctx, { planId: 'r1', outcome: 'done' }))
+            const loiLoai = await nem(() => xacNhanDaKiemFb(ctx, { planId: 'u2', outcome: 'yes' }))
+            const r3 = await xacNhanDaKiemFb(ctx, { planId: 'r2', outcome: 'done' })
+            dung('16h. chỉ kế hoạch chưa rõ (hoặc kẹt "đang chạy" quá 1 giờ) mới đánh dấu được; kết quả lạ / đã kiểm rồi / đang chạy dở ⇒ báo lỗi',
+                loiLai instanceof ToolError && loiNhap instanceof ToolError && /đang thực thi/.test(String(loiChay?.message)) && loiLoai instanceof ToolError
+                && kho._keHoach.find(k => k.id === 'n1')?.status === 'draft' && kho._keHoach.find(k => k.id === 'r1')?.status === 'running'
+                && r3.status === 'succeeded' && /bình luận ĐÃ ẩn/.test(r3.result?.message),
+                [loiLai, loiNhap, loiChay, loiLoai].map(e => String(e?.message || e)).join(' | ') + ` · ${r3.status}`)
+
+            kho._keHoach.push(kh('u3', { status: 'uncertain', data: { pageId: 'PG1', productId: 'p5', sku: 'BUA' }, result: { message: 'x' } }))
+            const dua = await Promise.allSettled([xacNhanDaKiemFb(ctx, { planId: 'u3', outcome: 'done' }), xacNhanDaKiemFb(ctx, { planId: 'u3', outcome: 'not_done' })])
+            dung('16i. hai người bấm cùng lúc ⇒ đúng MỘT người chốt (CAS), một dòng nhật ký',
+                dua.filter(x => x.status === 'fulfilled').length === 1 && kho._nhatKy.filter(w => w.action === 'resolve' && w.planId === 'u3').length === 1,
+                dua.map(x => x.status === 'fulfilled' ? (x.value as any).status : String((x as any).reason?.message)).join(' | '))
+        }
+
+        // j–k: bài hẹn Pilot rút không được (uncertain + rutBai) — "CÓ" ⇒ lượt soát bài hẹn KHÔNG đụng lại; "KHÔNG có" ⇒ dòng bài hẹn hủy
+        {
+            const kho = khoBoNhoFb(); const ctx = ngCanh(kho)
+            await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { maxWritesPerDay: 100 } })
+            const soat = () => soatBaiHenSapLen(prisma, kho, { taoFb: fbGia, bayGio: () => bayGio })
+            const A = await thucThiFb(ctx, (await taoKeHoachBai(ctx, { sku: 'KHOAN10', scheduledAt: NOW + 40 * 60_000, idempotencyKey: 'web:kiem-A' })).id)
+            hang.find(h => h.id === 'p1')!.sellingPrice = 30000
+            loiXoa = Object.assign(new Error('(#200) Requires pages_manage_posts permission'), { code: 200 })
+            await soat()
+            const A1 = kho._keHoach.find(k => k.id === A.id)!
+            const truoc = A1.status === 'uncertain' && A1.result?.rutBai?.trangThai === 'can_nguoi'
+            const rA = await xacNhanDaKiemFb(ctx, { planId: A.id, outcome: 'done' })
+            loiXoa = null
+            const C = await thucThiFb(ctx, (await taoKeHoachBai(ctx, { sku: 'OC4', scheduledAt: NOW + 50 * 60_000, idempotencyKey: 'web:kiem-C' })).id)
+            hang.find(h => h.id === 'p2')!.sellingPrice = 199000
+            const xoaTruoc = lenhXoa().length
+            await soat()
+            const moi = lenhXoa().slice(xoaTruoc)
+            dung('16j. bài hẹn rút không được, người kiểm "CÓ" ⇒ succeeded giữ rutBai: lượt soát sau KHÔNG xoá bài đó (bài đối chứng vẫn bị rút)',
+                truoc && rA.status === 'succeeded' && rA.result?.rutBai?.trangThai === 'can_nguoi' && rA.result?.daKiem?.ketLuan === 'co' && JSON.stringify(moi) === JSON.stringify([C.result?.postId]),
+                `${truoc} · ${rA.status} · ${JSON.stringify(rA.result?.rutBai)} · xoá ${JSON.stringify(moi)} (A ${A.result?.postId}, C ${C.result?.postId})`)
+
+            baiDaHen.push(
+                { id: 'sp-D', pageId: 'PG1', fbPostId: 'PG1_D', message: 'x', scheduledAt: new Date(NOW + 2 * H), status: 'scheduled' },
+                { id: 'sp-E', pageId: 'PG1', fbPostId: 'PG1_E', message: 'x', scheduledAt: new Date(NOW - 2 * H), status: 'published' },
+            )
+            kho._keHoach.push(
+                kh('kD', { status: 'uncertain', data: { pageId: 'PG1', productId: 'p4', sku: 'TUI' }, result: { postId: 'PG1_D', published: false, scheduledPostId: 'sp-D', rutBai: { trangThai: 'khong_con_hen' }, message: 'Facebook không còn bài hẹn' } }),
+                kh('kE', { status: 'uncertain', data: { pageId: 'PG1', productId: 'p7', sku: 'TUA' }, result: { postId: 'PG1_E', published: false, scheduledPostId: 'sp-E', rutBai: { trangThai: 'da_len' }, message: 'Bài hẹn đã lên' } }),
+            )
+            await xacNhanDaKiemFb(ctx, { planId: 'kD', outcome: 'not_done' })
+            await xacNhanDaKiemFb(ctx, { planId: 'kE', outcome: 'not_done' })
+            const D = baiDaHen.find(b => b.id === 'sp-D'), E = baiDaHen.find(b => b.id === 'sp-E')
+            dung('16k. "KHÔNG có" ⇒ dòng bài hẹn CÒN "scheduled" của chính kế hoạch thành cancelled (ghi lý do); dòng đã "published" giữ nguyên',
+                D?.status === 'cancelled' && /Người kiểm/.test(String(D?.errorMessage)) && E?.status === 'published',
+                `${D?.status} ${D?.errorMessage} · ${E?.status}`)
+        }
+
+        // l–m: "Đã kiểm" câu trả lời — sổ tự trả lời chung với Fanpage Manager: chỉ nhả / chốt dòng Pilot giữ dở
+        {
+            const kho = khoBoNhoFb(); const ctx = ngCanh(kho)
+            await luuCauHinhFb(ctx, { executionMode: 'auto' })
+            const rep = (id: string, cmt: string) => kh(id, { kind: 'reply', status: 'uncertain', data: { pageId: 'PG1', commentId: cmt, postId: 'PG1_601', message: 'Dạ giá 26.000đ ạ', fromName: 'Khách' }, result: { message: 'Không rõ' } })
+            soTraLoi.push(
+                { pageId: 'PG1', commentId: 'C1', action: 'pilot_reply', success: false, errorMessage: 'không rõ đã gửi chưa' },
+                { pageId: 'PG1', commentId: 'C2', action: 'reply', success: true, ruleId: 'quy-tac-1' },
+                { pageId: 'PG1', commentId: 'C3', action: 'processing', success: false, createdAt: new Date(NOW - 5 * 60_000) },
+                { pageId: 'PG1', commentId: 'C4', action: 'processing', success: false, createdAt: new Date(NOW - 2 * H) },
+                { pageId: 'PG1', commentId: 'C5', action: 'pilot_reply', success: false, errorMessage: 'không rõ đã gửi chưa' },
+                // Pilot ĐÃ gửi thành công (máy chết trước khi chốt kế hoạch) — Facebook đã nhận, người bấm "KHÔNG có" cũng không xoá sổ
+                { pageId: 'PG1', commentId: 'C7', action: 'pilot_reply', success: true, replyText: 'Dạ giá 26.000đ ạ' },
+            )
+            kho._keHoach.push(rep('q1', 'C1'), rep('q2', 'C2'), rep('q3', 'C3'), rep('q4', 'C4'), rep('q5', 'C5'), rep('q6', 'C6'), rep('q7', 'C7'))
+            for (const id of ['q1', 'q2', 'q3', 'q4', 'q7']) await xacNhanDaKiemFb(ctx, { planId: id, outcome: 'not_done' })
+            const con = (c: string) => soTraLoi.find(r => r.commentId === c)
+            dung('16l. câu trả lời "KHÔNG có" ⇒ nhả dòng Pilot giữ dở (pilot_reply chưa thành, processing quá 1 giờ) — KHÔNG xoá dòng quy tắc đã trả lời, dòng processing đang chạy, dòng Pilot đã gửi thành công',
+                !con('C1') && con('C2')?.action === 'reply' && con('C3')?.action === 'processing' && !con('C4') && con('C7')?.success === true,
+                JSON.stringify(soTraLoi.map(r => `${r.commentId}:${r.action}`)))
+            await xacNhanDaKiemFb(ctx, { planId: 'q5', outcome: 'done' })
+            await xacNhanDaKiemFb(ctx, { planId: 'q6', outcome: 'done' })
+            dung('16m. câu trả lời "CÓ" ⇒ dòng sổ thành đã trả lời (không có dòng thì ghi mới) — quy tắc tự trả lời không trả lời lần hai',
+                con('C5')?.success === true && con('C5')?.action === 'pilot_reply' && con('C5')?.errorMessage === null
+                && con('C6')?.success === true && con('C6')?.replyText === 'Dạ giá 26.000đ ạ',
+                JSON.stringify([con('C5'), con('C6')]))
+        }
+
+        // n–p: bỏ ẩn bình luận — kế hoạch → thực thi như ẩn; có kế hoạch bỏ ẩn thì chu kỳ không tự ẩn lại
+        {
+            const kho = khoBoNhoFb(); const ctx = ngCanh(kho)
+            await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { automation: { posts: false, replyPriceQuestions: false, hidePhoneComments: true } } })
+            const p = await taoKeHoachBoAn(ctx, { commentId: 'H2', postId: 'PG1_501', commentMsg: 'gọi 0909 123 456', fromName: 'Khách', idempotencyKey: 'web:bo-an-1' })
+            goiFb.length = 0
+            const x = await thucThiFb(ctx, p.id)
+            dung('16n. bỏ ẩn: kế hoạch "unhide" → thực thi gọi hideComment(…, false) đúng một lần, nhật ký "unhide"',
+                p.kind === 'unhide' && p.data?.reason === 'Hiện lại bình luận' && x.status === 'succeeded' && x.result?.hidden === false
+                && JSON.stringify(ghiFb()) === '[["unhide","H2"]]' && kho._nhatKy.some(w => w.action === 'unhide' && w.planId === p.id),
+                `${p.kind} · ${x.status} · ${JSON.stringify(ghiFb())}`)
+
+            const bl = (id: string) => ({ id, message: 'Mình lấy 2 cái, gọi 0909 123 456 nhé', from: { id: `U_${id}`, name: 'Khách' }, created_time: new Date(NOW - H).toISOString(), comment_count: 0, is_hidden: false })
+            baiTrenFb = [{ id: 'PG1_501', message: '🔹 Mũi khoan lệch tâm 10mm\n💰 Giá: 26.000đ', comments: { data: [bl('H1'), bl('H2')] } }]
+            const ds = await docBinhLuan(ctx)
+            goiFb.length = 0
+            await chayChuKyFb(ctx)
+            const an = ghiFb().filter(g => g[0] === 'hide').map(g => g[1])
+            dung('16o. chu kỳ ẩn SĐT: ẩn bình luận chưa có kế hoạch (đối chứng H1), KHÔNG ẩn lại bình luận người đã bỏ ẩn (H2)',
+                JSON.stringify(an) === '["H1"]' && ds.comments.find(c => c.id === 'H2')?.plan?.kind === 'unhide', `${JSON.stringify(an)} · ${JSON.stringify(ds.comments.find(c => c.id === 'H2')?.plan)}`)
+
+            loiDang = Object.assign(new Error('Error validating access token'), { code: 190, isTokenError: true, fbtraceId: 'x' })
+            const b = await taoKeHoachBai(ctx, { sku: 'KHOAN10', scheduledAt: NOW + 5 * H, idempotencyKey: 'web:token-hong' })
+            const y = await thucThiFb(ctx, b.id)
+            loiDang = null; pages[0].status = 'active'
+            dung('16p. token fanpage hỏng ⇒ kết quả mang cờ loiToken (khối Chờ duyệt dừng loạt duyệt)', y.status === 'failed' && y.result?.loiToken === true, JSON.stringify(y.result))
+        }
+
+        // q–s: nối dây (soát mã nguồn + câu SQL thật của khoSqlFb)
+        {
+            const lenhSql: { sql: string; v: any[] }[] = []
+            const pg: any = { $executeRawUnsafe: async () => 0, $queryRawUnsafe: async (sql: string, ...v: any[]) => { lenhSql.push({ sql, v }); return [] } }
+            const ks = khoSqlFb(pg)
+            await ks.dsKeHoachLoc({ status: ['draft'], kind: ['reply', 'hide'], truoc: { createdAt: 5, id: 'x' }, lim: 3 })
+            const l1 = lenhSql[lenhSql.length - 1]
+            await ks.dsKeHoachLoc({ lim: 81 })
+            const l2 = lenhSql[lenhSql.length - 1]
+            await ks.demGhiTuLuc(0); const l3 = lenhSql[lenhSql.length - 1]
+            await ks.dsKeHoachBinhLuan(['c']); const l4 = lenhSql[lenhSql.length - 1]
+            const dem = await ks.demKeHoach()
+            dung('16q. SQL: lọc ANY($n::text[]) + con trỏ ("createdAt", id) + ORDER BY "createdAt" DESC, id DESC; trần ghi bỏ resolve; bình luận gồm unhide',
+                /status = ANY\(\$1::text\[\]\)/.test(l1.sql) && /kind = ANY\(\$2::text\[\]\)/.test(l1.sql)
+                && /\("createdAt" < \$3 OR \("createdAt" = \$3 AND id < \$4\)\)/.test(l1.sql) && /ORDER BY "createdAt" DESC, id DESC LIMIT \$5/.test(l1.sql)
+                && JSON.stringify(l1.v) === '[["draft"],["reply","hide"],5,"x",3]'
+                && !/WHERE/.test(l2.sql) && /LIMIT \$1$/.test(l2.sql.trim()) && JSON.stringify(l2.v) === '[81]'
+                && /action NOT IN \('config', 'resolve'\)/.test(l3.sql) && /kind IN \('reply', 'hide', 'unhide'\)/.test(l4.sql) && JSON.stringify(dem) === '{}',
+                [l1, l2, l3, l4].map(l => l.sql.replace(/\s+/g, ' ').slice(0, 160)).join(' ‖ '))
+            const rt = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'facebookPilot.ts'), 'utf8')
+            dung('16r. route: plans là thao tác ĐỌC; unhide / resolve là GHI (chỉ quản lý)',
+                /\bplans: \{ ghi: false/.test(rt) && /\bunhide: \{\s*ghi: true/.test(rt) && /\bresolve: \{ ghi: true/.test(rt))
+            dung('16s. hướng dẫn nói về Bỏ ẩn, Chờ duyệt, Đã kiểm, Xem thêm',
+                /«Bỏ ẩn»/.test(HUONG_DAN_FB_PILOT) && /«Chờ duyệt»/.test(HUONG_DAN_FB_PILOT) && /«Đã kiểm: CÓ trên\s+Facebook»/.test(HUONG_DAN_FB_PILOT) && /«Xem thêm»/.test(HUONG_DAN_FB_PILOT))
+        }
+        henFbBat = false
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)

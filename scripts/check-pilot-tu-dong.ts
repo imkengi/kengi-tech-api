@@ -1369,9 +1369,11 @@ async function main() {
 
         const thieuLoai = [['shopeePilot', 'ShopeePilotWrite'], ['tiktokPilot', 'TikTokPilotWrite'], ['facebookPilot', 'FacebookPilotWrite'], ['facebookAdsPilot', 'FacebookAdsPilotWrite']].filter(([f, bang]) => {
             const s = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', `${f}.ts`), 'utf8')
-            return !s.includes(`SELECT COUNT(*)::int AS n FROM "${bang}" WHERE "createdAt" >= $1 AND action <> 'config'`)
+            const dau = `SELECT COUNT(*)::int AS n FROM "${bang}" WHERE "createdAt" >= $1 AND `
+            // Facebook Pilot (lô 18, 10/11/2026) loại thêm dòng "resolve" — người đánh dấu "đã kiểm", không phải một lần ghi lên Facebook
+            return ![`${dau}action <> 'config'`, `${dau}action NOT IN ('config', 'resolve')`].some(x => s.includes(x))
         })
-        dung('R10. cả 4 kho SQL: đếm trần ghi / ngày loại dòng "config"', !thieuLoai.length, thieuLoai.join(', '))
+        dung('R10. cả 4 kho SQL: đếm trần ghi / ngày loại dòng "config" (Facebook Pilot: cả "resolve")', !thieuLoai.length, thieuLoai.join(', '))
     }
 
     // ─── S. (10/11/2026, TT-15) quyền XEM Pilot ────────────────────────────────────────────────────────────────────────
