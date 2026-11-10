@@ -544,8 +544,9 @@ async function khuyenMaiGian(ctx: NgCanhTikTok, ch: any, fb: DichVuTikTok, o: { 
     return kq
 }
 
-/** Câu "vì sao máy không tự hạ giá" khi chưa biết chắc mã nào dính khuyến mãi — null = biết chắc (hoặc không soát được vì dịch vụ cũ). */
-function lyDoKhuyenMaiChuaRo(km: KhuyenMaiGianTikTok | null | undefined): string | null {
+/** Câu "vì sao máy không tự hạ giá" khi chưa biết chắc mã nào dính khuyến mãi — null = biết chắc (hoặc không soát được vì dịch vụ cũ).
+ *  Nút «Đẩy giá lên sàn» (lib/dayGiaLenSan, lô 19) dùng chung câu này cho lời cảnh báo trong bản xem trước. */
+export function lyDoKhuyenMaiChuaRo(km: KhuyenMaiGianTikTok | null | undefined): string | null {
     if (!km) return null
     if (!km.ok) {
         return km.thieuGoi

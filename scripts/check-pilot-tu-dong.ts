@@ -35,7 +35,8 @@
  *       ⇒ bỏ qua có tên, không đẩy 0; phân loại sắp về 0 vào cầu dao; đọc hỏng ⇒ cách cũ + ghi chú; tồn sàn đọc SỐNG;
  *       chu kỳ Pilot đọc sàn MỘT lần (lượt thật dùng lại bản đọc của lượt chạy thử), nút tay đọc lại mỗi lượt
  *    P. nút "Đẩy giá lên sàn" (lib/dayGiaLenSan): mỗi listing soát GIÁ SÀN như Pilot (phí theo ngành, giá vốn, chính sách Pilot
- *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice
+ *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice. (10/11/2026, lô 19)
+ *       gian TikTok: mã trong khuyến mãi ĐANG / SẮP chạy ⇒ bỏ qua (nhóm khuyenMai); chưa rõ + có mã hạ ⇒ đẩy kèm cảnh báo
  *    R. (10/11/2026, X-14) sổ ĐỔI CẤU HÌNH 4 Pilot: ai đổi, đổi gì (cũ → mới), dòng 'config' không ăn trần ghi / ngày
  *    Q. (09/11/2026, SP-07) gian LỚN (709 listing): trước chu kỳ chỉ xét 300 mã `updatedAt` mới nhất ⇒ ~400 mã không bao giờ
  *       được định giá. Giờ: con trỏ xoay vòng theo mã Shopee — 3 chu kỳ phủ đủ 709 mã, không trùng không sót; đồng bộ lại (đổi
@@ -1192,6 +1193,118 @@ async function main() {
         const r8 = await dayGiaLenSan(g8.prisma, 'chP', { force: true, giaLap: { dichVu: s8.dichVu } })
         dung('P8. force chỉ bỏ bước "giá đã bằng" (PB ghi lại) — KHÔNG vượt rào giá sàn (PD, PV vẫn bỏ qua)',
             r8.ok && r8.data?.pushed === 2 && s8.goi.join() === 'gia:8003:150000,gia:8004:150000' && r8.data?.boQuaDuoiSan === 2, JSON.stringify({ data: r8.data, goi: s8.goi }))
+
+        // ─── P9–P16 (10/11/2026, lô 19): gian TikTok soát KHUYẾN MÃI — cùng bản đọc với TikTok Pilot (docKhuyenMaiGianTikTok) ───
+        // Giảm theo % tính trên giá gốc ⇒ đổi giá gốc là đổi luôn giá khuyến mãi. Nút đẩy CẢ GIAN ⇒ mã trong chương trình ĐANG /
+        // SẮP chạy bị BỎ QUA (nhóm khuyenMai); chưa rõ + có mã HẠ ⇒ vẫn đẩy (người bấm), bản xem trước cảnh báo.
+        const kenhT = (them: any = {}) => kenhP({ platform: 'tiktok', ...them })
+        /** TikTok giả CÓ API khuyến mãi: `ct` = chương trình (sp = mã sản phẩm TikTok), `hong` = activities/search ném lỗi này.
+         *  `doc` ghi lời gọi ĐỌC khuyến mãi; `goi` (của sanDayTay) ghi lời gọi GHI. */
+        const sanKm = (o: { ct?: { id: string; status: 'ONGOING' | 'NOT_START'; sp?: string[]; ten?: string; loai?: string; capGian?: boolean }[]; hong?: string }) => {
+            const s = sanDayTay(), doc: string[] = []
+            Object.assign(s.dichVu, {
+                searchPromotionActivities: async (status: string) => {
+                    doc.push(`km:${status}`)
+                    if (o.hong) throw new Error(o.hong)
+                    return {
+                        activities: (o.ct || []).filter(a => a.status === status).map(a => ({
+                            id: a.id, status: a.status, title: a.ten || 'Sale', activity_type: a.loai || 'DIRECT_DISCOUNT',
+                            product_level: a.capGian ? 'SHOP' : 'PRODUCT', begin_time: 1893456000, end_time: 1893542400,
+                        })),
+                        nextPageToken: '',
+                    }
+                },
+                getPromotionActivity: async (id: string) => {
+                    doc.push(`kmct:${id}`)
+                    const a = (o.ct || []).find(x => x.id === id)
+                    return a ? { id: a.id, status: a.status, product_level: a.capGian ? 'SHOP' : 'PRODUCT', products: (a.sp || []).map(x => ({ id: x })) } : {}
+                },
+            })
+            return { ...s, doc }
+        }
+        // TA trong chương trình ĐANG chạy, TB SẮP chạy, TC chỉ có giảm phí vận chuyển (không đụng giá), TD dưới giá sàn VÀ đang khuyến mãi
+        const ctKm = () => [
+            { id: 'a1', status: 'ONGOING' as const, sp: ['9001', '9004'], ten: 'Sale A' },
+            { id: 'a2', status: 'NOT_START' as const, sp: ['9002'], ten: 'Sale 11.11', loai: 'FLASHSALE' },
+            { id: 'a3', status: 'ONGOING' as const, sp: ['9003'], ten: 'Freeship', loai: 'SHIPPING_DISCOUNT' },
+        ]
+        const bonMaT = () => [mp('TA', '9001', 150000, 100000), mp('TB', '9002', 150000, 100000), mp('TC', '9003', 150000, 100000), mp('TD', '9004', 110000, 100000)]
+
+        const s9 = sanKm({ ct: ctKm() }), g9 = gianP(bonMaT(), { kenh: kenhT() })
+        const thu9 = await dayGiaLenSan(g9.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s9.dichVu } })
+        const d9 = thu9.data || {}
+        const vd9 = (sku: string) => (d9.viDuBoQua || []).find((x: any) => x.sku === sku)?.lyDo || ''
+        dung('P9. TikTok chạy thử: mã trong chương trình ĐANG (TA) / SẮP chạy (TB) ⇒ BỎ QUA nhóm khuyenMai (không tính vào "do giá sàn"); giảm phí vận chuyển không đụng giá (TC vẫn đổi); mã dưới sàn giữ lý do giá sàn; chỉ ĐỌC khuyến mãi, 0 lời gọi ghi',
+            thu9.ok && d9.seDay === 1 && d9.seBoQua === 3 && d9.boQuaDuoiSan === 1 && d9.demBoQua?.khuyenMai === 2 && d9.demBoQua?.duoiSan === 1
+            && /^Đang trong giảm giá theo % «Sale A»/.test(vd9('TA')) && /^Nằm trong flash sale «Sale 11\.11» \(sắp chạy từ/.test(vd9('TB')) && /tăng giá ảo/.test(vd9('TB'))
+            && /GIÁ SÀN/.test(vd9('TD')) && d9.viDuDoi?.length === 1 && d9.viDuDoi[0].sku === 'TC'
+            && JSON.stringify(d9.maKhuyenMai) === '["lp-TA","lp-TB"]' && !d9.canhBaoKhuyenMai && /chỉ ĐỌC khuyến mãi/.test(d9.ghiChu || '')
+            && s9.doc.join() === 'km:ONGOING,km:NOT_START,kmct:a1,kmct:a2' && s9.goi.length === 0 && g9.ghi.length === 0,
+            JSON.stringify({ d9, doc: s9.doc, goi: s9.goi, ghi: g9.ghi }))
+        const that9 = await dayGiaLenSan(g9.prisma, 'chP', { giaLap: { dichVu: s9.dichVu } })
+        dung('P10. chạy thật: CHỈ mã ngoài khuyến mãi được ghi (TC); TA / TB không gọi sàn; sổ đồng bộ ghi "khuyến mãi TikTok: để yên 2 mã" tách khỏi "rào giá sàn bỏ qua 1 mã"',
+            that9.ok && that9.data?.pushed === 1 && that9.data?.skipped === 3 && that9.data?.demBoQua?.khuyenMai === 2 && that9.data?.boQuaDuoiSan === 1 && !that9.data?.canhBaoKhuyenMai
+            && s9.goi.join() === 'gia:9003:150000:TC' && g9.ghi.filter(x => x.startsWith('sp:')).join() === 'sp:lp-TC'
+            && g9.ghi.some(x => /rào giá sàn bỏ qua 1 mã/.test(x) && /khuyến mãi TikTok: để yên 2 mã/.test(x)),
+            JSON.stringify({ data: that9.data, goi: s9.goi, ghi: g9.ghi }))
+
+        // TC tăng 140k → 150k, TE hạ 140k → 130k (vẫn trên giá sàn 127.200đ)
+        const s11 = sanKm({ hong: 'TikTok promotion/202309/activities/search: [105005] you should apply auth pkg for this api' })
+        const g11 = gianP([mp('TC', '9003', 150000, 100000), mp('TE', '9005', 130000, 100000)], { kenh: kenhT() })
+        const thu11 = await dayGiaLenSan(g11.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s11.dichVu } })
+        const that11 = await dayGiaLenSan(g11.prisma, 'chP', { giaLap: { dichVu: s11.dichVu } })
+        dung('P11. chưa đọc được khuyến mãi (thiếu gói quyền 105005) + có mã HẠ ⇒ VẪN đẩy (người bấm); bản xem trước cảnh báo kèm đường xin gói / cấp lại quyền; kết quả thật nhắc "đã HẠ"; sổ đồng bộ ghi chưa rõ',
+            thu11.ok && thu11.data?.seDay === 2 && /1 mã sắp HẠ giá/.test(thu11.data?.canhBaoKhuyenMai || '') && /Promotion Information/.test(thu11.data?.canhBaoKhuyenMai || '')
+            && /«Cấp lại quyền»/.test(thu11.data?.canhBaoKhuyenMai || '') && !thu11.data?.maKhuyenMai
+            && that11.ok && that11.data?.pushed === 2 && /1 mã đã HẠ giá/.test(that11.data?.canhBaoKhuyenMai || '')
+            && s11.goi.join() === 'gia:9003:150000:TC,gia:9005:130000:TE' && g11.ghi.some(x => /chưa rõ khuyến mãi .*1 mã đã hạ giá/.test(x)),
+            JSON.stringify({ thu: thu11.data, that: that11.data, goi: s11.goi, ghi: g11.ghi }))
+
+        const s12 = sanKm({ hong: 'socket hang up' }), g12 = gianP([mp('TC', '9003', 150000, 100000)], { kenh: kenhT() })
+        const thu12 = await dayGiaLenSan(g12.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s12.dichVu } })
+        dung('P12. đọc khuyến mãi hỏng nhưng chỉ có mã TĂNG giá ⇒ không cảnh báo (như luật người của TikTok Pilot), vẫn sẽ đổi',
+            thu12.ok && thu12.data?.seDay === 1 && !thu12.data?.canhBaoKhuyenMai && s12.doc.join() === 'km:ONGOING' && s12.goi.length === 0,
+            JSON.stringify({ d: thu12.data, doc: s12.doc }))
+
+        const s13 = sanKm({ ct: [{ id: 'g1', status: 'ONGOING', ten: 'Toàn shop -5%', capGian: true }] })
+        const g13 = gianP([mp('TE', '9005', 130000, 100000)], { kenh: kenhT() })
+        const thu13 = await dayGiaLenSan(g13.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s13.dichVu } })
+        dung('P13. chương trình TOÀN GIAN (không biết mã nào dính) + mã HẠ ⇒ không bỏ qua mã nào, cảnh báo nêu chương trình toàn shop (không nhắc xin gói quyền)',
+            thu13.ok && thu13.data?.seDay === 1 && !thu13.data?.demBoQua?.khuyenMai && /chương trình toàn shop: giảm giá theo % «Toàn shop -5%»/.test(thu13.data?.canhBaoKhuyenMai || '')
+            && !/Promotion Information/.test(thu13.data?.canhBaoKhuyenMai || ''), JSON.stringify(thu13.data))
+
+        // lượt thật đọc lại HỎNG ⇒ giữ đúng bản xem trước; đọc lại ĐƯỢC (chương trình đã hết) ⇒ bản đọc mới thắng danh sách cũ
+        const s14a = sanKm({ ct: ctKm() }), g14 = gianP([mp('TA', '9001', 150000, 100000), mp('TC', '9003', 150000, 100000)], { kenh: kenhT() })
+        const thu14 = await dayGiaLenSan(g14.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s14a.dichVu } })
+        const s14b = sanKm({ hong: 'Request timeout' })
+        const that14 = await dayGiaLenSan(g14.prisma, 'chP', { deYenKhuyenMai: thu14.data?.maKhuyenMai, giaLap: { dichVu: s14b.dichVu } })
+        const s14c = sanKm({ ct: [] }), g14c = gianP([mp('TA', '9001', 150000, 100000)], { kenh: kenhT() })
+        const that14c = await dayGiaLenSan(g14c.prisma, 'chP', { deYenKhuyenMai: ['lp-TA'], giaLap: { dichVu: s14c.dichVu } })
+        dung('P14. lượt thật đọc lại khuyến mãi HỎNG ⇒ vẫn để yên mã bản xem trước đã để yên (deYenKhuyenMai), mã khác vẫn đẩy; đọc lại được mà chương trình đã hết ⇒ đẩy',
+            JSON.stringify(thu14.data?.maKhuyenMai) === '["lp-TA"]' && that14.ok && that14.data?.pushed === 1 && s14b.goi.join() === 'gia:9003:150000:TC'
+            && that14.data?.demBoQua?.khuyenMai === 1 && /Bản xem trước thấy mã này/.test((that14.data?.viDuBoQua || []).find((x: any) => x.sku === 'TA')?.lyDo || '')
+            && that14c.ok && that14c.data?.pushed === 1 && s14c.goi.join() === 'gia:9001:150000:TA',
+            JSON.stringify({ thu: thu14.data, that: that14.data, goi: s14b.goi, that14c: that14c.data }))
+
+        const s15 = sanKm({ ct: ctKm() }), g15 = gianP([mp('TA', '9001', 150000, 100000)], { kenh: kenhT({ tokenExpiresAt: new Date(Date.now() + 60_000) }) })
+        const thu15 = await dayGiaLenSan(g15.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s15.dichVu } })
+        const doc15 = s15.doc.length
+        const that15 = await dayGiaLenSan(g15.prisma, 'chP', { giaLap: { dichVu: s15.dichVu } })
+        dung('P15. token TikTok sắp hết hạn: chạy thử KHÔNG đọc khuyến mãi (không làm mới token hộ) và nói rõ; lượt thật đọc ⇒ mã đang khuyến mãi để yên',
+            thu15.ok && thu15.data?.seDay === 1 && /Token TikTok sắp hết hạn/.test(thu15.data?.canhBaoKhuyenMai || '') && /chưa gọi sàn/.test(thu15.data?.ghiChu || '') && doc15 === 0
+            && that15.ok && that15.data?.pushed === 0 && that15.data?.demBoQua?.khuyenMai === 1 && s15.doc.join() === 'km:ONGOING,km:NOT_START,kmct:a1,kmct:a2' && s15.goi.length === 0,
+            JSON.stringify({ thu: thu15.data, that: that15.data, doc: s15.doc }))
+
+        // 22 mã dưới giá sàn + 1 mã khuyến mãi: 20 ví dụ đầu theo thứ tự listing sẽ toàn "dưới giá sàn" — rải đều thì mã khuyến mãi vẫn có mặt
+        const nhieu = Array.from({ length: 22 }, (_, i) => mp(`TX${i}`, String(9100 + i), 110000, 100000))
+        const s16 = sanKm({ ct: ctKm() }), g16 = gianP([...nhieu, mp('TA', '9001', 150000, 100000)], { kenh: kenhT() })
+        const thu16 = await dayGiaLenSan(g16.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s16.dichVu } })
+        const s16b = sanKm({ ct: ctKm() }), g16b = gianP([mp('TA', '9001', 150000, 100000)])
+        const thu16b = await dayGiaLenSan(g16b.prisma, 'chP', { dryRun: true, giaLap: { dichVu: s16b.dichVu } })
+        dung('P16. ví dụ bỏ qua RẢI theo nhóm (22 mã dưới sàn + 1 mã khuyến mãi ⇒ mã khuyến mãi có trong 20 ví dụ); gian Shopee không đọc khuyến mãi TikTok',
+            thu16.ok && thu16.data?.viDuBoQua?.length === 20 && thu16.data.viDuBoQua[1]?.sku === 'TA' && thu16.data?.boQuaDuoiSan === 22 && thu16.data?.demBoQua?.khuyenMai === 1
+            && thu16b.ok && thu16b.data?.seDay === 1 && s16b.doc.length === 0 && /chưa gọi sàn/.test(thu16b.data?.ghiChu || ''),
+            JSON.stringify({ vd: thu16.data?.viDuBoQua?.slice(0, 3), doc16b: s16b.doc }))
     }
 
     // ─── Q. SP-07 (09/11/2026): gian LỚN — soát xoay vòng, không mã nào bị bỏ mãi ────────────────────────────────

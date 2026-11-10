@@ -6294,7 +6294,7 @@ router.post('/channels/:id/push-stock', authMiddleware, requirePermission('onlin
 
 // POST /api/online-orders/channels/:id/push-price
 // Đẩy GIÁ BÁN local LÊN sàn (TikTok prices/update, Shopee update_price).
-// Map qua OnlineProduct giống push-stock. Body: { onlineProductIds?: string[], force?: boolean, dryRun?: boolean }
+// Map qua OnlineProduct giống push-stock. Body: { onlineProductIds?: string[], force?: boolean, dryRun?: boolean, deYenKhuyenMai?: string[] }
 // Quyền (09/11/2026): cặp của route ghi hàng xóm + quyền lẻ online_products.edit_price (xem push-stock).
 router.post('/channels/:id/push-price', authMiddleware, requirePermission('online_products.edit_price', 'online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
@@ -6306,6 +6306,8 @@ router.post('/channels/:id/push-price', authMiddleware, requirePermission('onlin
             onlineProductIds: Array.isArray(req.body?.onlineProductIds) ? req.body.onlineProductIds : undefined,
             // giữ đúng nghĩa cũ của route (truthy) — force chỉ bỏ bước "giá đã bằng", KHÔNG bỏ rào giá sàn
             force: !!req.body?.force,
+            // (lô 19) mã TikTok bản xem trước đã để yên vì khuyến mãi — lượt thật đọc lại hỏng thì vẫn để yên
+            deYenKhuyenMai: Array.isArray(req.body?.deYenKhuyenMai) ? req.body.deYenKhuyenMai.slice(0, 5000).map(String) : undefined,
         })
         if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi, ...(kq.data ? { data: kq.data } : {}) }); return }
         res.json({ success: true, data: kq.data })
