@@ -9,6 +9,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma } from '../lib/prisma'
 import { requireRole } from '../middleware/roleMiddleware'
 import { FacebookService, FbGraphError } from '../services/platforms/facebook'
+import { noiPageTokenDanTay, LoiNoiToken, type KetQuaNoiToken } from '../lib/noiPageToken'
 
 const router = Router()
 
@@ -164,9 +165,10 @@ router.post('/connect', authMiddleware, requireRole('admin', 'manager', 'superad
 /**
  * POST /api/fanpage/connect-page-token  { accessToken, pageId?, name? }
  *
- * Kết nối page bằng LONG-LIVED PAGE TOKEN dán tay (lấy ở Graph API Explorer →
- * Access Token Debugger → Extend). Đường này KHÔNG cần FB_APP_ID/FB_APP_SECRET,
- * nên dùng được ngay khi chưa có app Facebook riêng / chưa qua App Review.
+ * Kết nối page bằng token DÁN TAY — PAGE token, hoặc (từ 10/11/2026, lô 20) USER token: máy đọc me/accounts lấy page
+ * token của fanpage (nhiều fanpage ⇒ 400 FB_CHON_PAGE kèm `pages: [{ id, name }]`, gửi lại kèm pageId). Hạn token đọc
+ * thật bằng debug_token khi Facebook cho; không thì đoán 55 ngày và nói rõ. Lõi ở lib/noiPageToken.ts.
+ * Đường này KHÔNG cần FB_APP_ID/FB_APP_SECRET, nên dùng được ngay khi chưa có app Facebook riêng / chưa qua App Review.
  *
  * Trước đây form "Nhập token Fanpage" trên FE chỉ lưu localStorage → server
  * không có token nên lên lịch, auto-reply và các tool MCP fanpage đều thấy 0 page.
@@ -174,68 +176,16 @@ router.post('/connect', authMiddleware, requireRole('admin', 'manager', 'superad
 router.post('/connect-page-token', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const accessToken = String(req.body?.accessToken || '').trim()
-        if (!accessToken) return res.status(400).json({ success: false, error: 'Thiếu accessToken' })
-
-        // 1. Token có sống không + là PAGE token hay USER token
-        const svc = new FacebookService(accessToken)
-        let info: Awaited<ReturnType<FacebookService['identifyToken']>>
+        let kq: KetQuaNoiToken
         try {
-            info = await svc.identifyToken()
+            kq = await noiPageTokenDanTay({
+                prisma, accessToken: req.body?.accessToken, pageId: req.body?.pageId, name: req.body?.name, nguoi: req.user?.userId,
+            })
         } catch (e: any) {
-            return res.status(400).json({
-                success: false,
-                error: `Token không dùng được: ${e?.message || 'Facebook từ chối'}`,
-                code: 'FB_TOKEN_INVALID',
-            })
+            if (e instanceof LoiNoiToken) return res.status(400).json({ ...e.them, success: false, error: e.message, code: e.code })
+            throw e
         }
-        if (info.type && info.type !== 'page') {
-            return res.status(400).json({
-                success: false,
-                code: 'FB_NOT_PAGE_TOKEN',
-                error: `Đây là ${info.type === 'user' ? 'USER token' : `token loại "${info.type}"`}, không phải PAGE token. `
-                    + 'Vào Graph API Explorer → ô "Facebook App" chọn app → ô bên dưới CHỌN ĐÚNG PAGE (không để "User Token") rồi copy lại.',
-            })
-        }
-
-        // 2. Nếu client có gửi pageId thì phải khớp — tránh lưu nhầm token của page khác
-        const claimed = String(req.body?.pageId || '').trim()
-        if (claimed && claimed !== info.id) {
-            return res.status(400).json({
-                success: false,
-                error: `Page ID bạn nhập (${claimed}) không khớp với page của token (${info.id} — ${info.name || 'không rõ tên'}).`,
-            })
-        }
-
-        const pageId = info.id
-        const name = String(req.body?.name || '').trim() || info.name || `Page ${pageId}`
-
-        // 3. Kiểm tra token thật sự thao tác được, không chỉ đọc /me.
-        //    Token thiếu pages_read_engagement vẫn qua bước /me nhưng hỏng ở đây.
-        let quyenCanhBao: string | null = null
-        try {
-            await svc.listPublishedPosts(pageId, 1)
-        } catch (e: any) {
-            quyenCanhBao = `Token đọc được thông tin page nhưng KHÔNG đọc được bài viết (${e?.message || 'lỗi'}). `
-                + 'Thường do thiếu quyền pages_read_engagement — vẫn lưu, nhưng nhiều tính năng sẽ không chạy.'
-        }
-
-        // 4. Lưu. Page token dán tay ~60 ngày; không có FbUserToken nên cron KHÔNG tự
-        //    heal được → ghi hạn để cảnh báo trước khi chết.
-        const expires = new Date(Date.now() + 55 * 86400_000)
-        await prisma.fbPage.upsert({
-            where: { pageId },
-            create: {
-                pageId, name, category: info.category, avatar: info.picture,
-                fanCount: info.fanCount || 0, accessToken, tokenExpiresAt: expires,
-                status: 'active', connectedBy: req.user?.userId, lastSyncAt: new Date(),
-            },
-            update: {
-                name, category: info.category, avatar: info.picture,
-                fanCount: info.fanCount || 0, accessToken, tokenExpiresAt: expires,
-                status: 'active', lastSyncAt: new Date(),
-            },
-        })
+        const pageId = kq.pageId
 
         // Bật cờ registry để fanpageCron chạm tới store này
         if (req.user?.storeSchema) {
@@ -245,7 +195,7 @@ router.post('/connect-page-token', authMiddleware, requireRole('admin', 'manager
         // 5. Webhook (best-effort) — subscribe vào app mà token thuộc về
         let webhook = 'chưa bật'
         if (process.env.FB_WEBHOOK_VERIFY_TOKEN) {
-            webhook = (await trySubscribeWebhook(prisma, pageId, accessToken))
+            webhook = (await trySubscribeWebhook(prisma, pageId, kq.pageToken))
                 ? 'đã bật'
                 : 'không bật được (auto-reply sẽ chạy theo cron 5 phút/lần)'
         } else {
@@ -256,7 +206,8 @@ router.post('/connect-page-token', authMiddleware, requireRole('admin', 'manager
             where: { pageId },
             select: { pageId: true, name: true, category: true, avatar: true, fanCount: true, status: true, autoReplyEnabled: true, webhookSubscribed: true, tokenExpiresAt: true },
         })
-        res.json({ success: true, data: { page: saved, webhook, canhBao: quyenCanhBao } })
+        // KHÔNG trả token nào (kq.pageToken chỉ dùng bật webhook ở trên)
+        res.json({ success: true, data: { page: saved, webhook, canhBao: kq.canhBao, tuUserToken: kq.tuUserToken, hanThat: kq.hanThat } })
     } catch (err: any) {
         sendGraphError(res, err)
     }

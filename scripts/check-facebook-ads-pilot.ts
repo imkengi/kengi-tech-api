@@ -150,7 +150,8 @@ const loiGraph = (code: number, msg: string, subcode?: number) => Object.assign(
 const loiMang = () => new Error('fetch failed')
 function fbDatLai() {
     fb = {
-        me: { id: 'U1', name: 'Chủ Shop', metadata: { type: 'user' } },
+        // KHÔNG có `metadata`: Facebook thôi trả metadata=1 từ 19/05/2026 (Graph v25.0) — giả y vậy (10/11/2026, lô 20)
+        me: { id: 'U1', name: 'Chủ Shop' },
         debug: { scopes: ['ads_read', 'ads_management', 'pages_show_list', 'pages_read_engagement'], expires_at: Math.floor((NOW + 50 * NGAY) / 1000) } as any,
         perms: null as any,
         accounts: [{ id: 'act_111', account_id: '111', name: 'TK Kengi', account_status: 1, currency: 'VND', amount_spent: '0', balance: '0' }],
@@ -183,7 +184,7 @@ const taoFb = (token: string): DichVuAds => ({
         if (p === 'me') { nemNeuTiem('me'); return fb.me }
         if (p === 'debug_token') { if (fb.debug instanceof Error) throw fb.debug; return { data: fb.debug } }
         if (p === 'me/permissions') { if (!fb.perms || fb.perms instanceof Error) throw fb.perms || loiGraph(200, 'no'); return { data: fb.perms.map((x: string) => ({ permission: x, status: 'granted' })) } }
-        if (p === 'me/adaccounts') return { data: fb.accounts }
+        if (p === 'me/adaccounts') { nemNeuTiem('adaccounts'); return { data: fb.accounts } }
         if (/^act_\d+$/.test(p)) { nemNeuTiem('act'); const a = fb.accounts.find((x: any) => x.id === p); if (!a) throw loiGraph(100, 'Unsupported get request', 33); return a }
         if (/^act_\d+\/insights$/.test(p)) {
             nemNeuTiem('insights'); nemNeuTiem(`insights:${q.date_preset}`)
@@ -314,10 +315,28 @@ async function main() {
     {
         datLai(); goi = []
         const ctx = ngCanh()
-        fb.me = { id: 'PG1', name: 'Kengi Fanpage', metadata: { type: 'page' } }
+        // Page token như Facebook THẬT (10/11/2026, lô 20): /me đọc được id,name (không còn metadata); debug_token nói type 'PAGE' khi
+        // đọc được; cạnh chỉ USER có (permissions, adaccounts) ném #100 "… on node type (Page)"
+        const loiNodePage = (canh: string) => loiGraph(100, `(#100) Tried accessing nonexisting field (${canh}) on node type (Page)`)
+        fb.me = { id: 'PG1', name: 'Kengi Fanpage' }
+        fb.debug = { type: 'PAGE', scopes: ['pages_show_list', 'pages_manage_posts'], expires_at: 0 }
         const e1 = await nem(() => noiTokenAds(ctx, { accessToken: PAGE_TOKEN }))
-        dung('3a. page token bị từ chối (quảng cáo cần USER token), không lưu gì', e1 instanceof ToolError && /PAGE token/.test(e1.message) && tokens.length === 0, e1?.message)
-        fb.me = { id: 'U1', name: 'Chủ Shop', metadata: { type: 'user' } }
+        dung('3a. page token (debug_token: type PAGE) bị từ chối — câu "PAGE token", không lưu gì', e1 instanceof ToolError && /PAGE token/.test(e1.message) && tokens.length === 0, e1?.message)
+        dung('3a1. lời gọi /me KHÔNG còn gửi metadata (Facebook đã bỏ)', goi.some(g => g.p === 'me') && !goi.some(g => g.p === 'me' && g.q && 'metadata' in g.q), JSON.stringify(goi.filter(g => g.p === 'me').map(g => g.q)))
+        fb.debug = loiGraph(100, 'debug_token chỉ cho nhà phát triển app')
+        fb.perms = loiNodePage('permissions')
+        const e1b = await nem(() => noiTokenAds(ctx, { accessToken: PAGE_TOKEN }))
+        dung('3a2. debug_token không đọc được ⇒ me/permissions lỗi "node type (Page)" ⇒ vẫn nói đúng "PAGE token"', e1b instanceof ToolError && /PAGE token/.test(e1b.message) && tokens.length === 0, e1b?.message)
+        fb.perms = loiGraph(200, 'không đọc được quyền')
+        tiem('adaccounts', loiNodePage('adaccounts'))
+        const e1c = await nem(() => noiTokenAds(ctx, { accessToken: PAGE_TOKEN }))
+        dung('3a3. quyền cũng không đọc được ⇒ me/adaccounts lỗi "node type (Page)" ⇒ "PAGE token", không phải câu lỗi Graph thô', e1c instanceof ToolError && /PAGE token/.test(e1c.message) && !/nonexisting/.test(e1c.message) && tokens.length === 0, e1c?.message)
+        tiem('adaccounts', loiGraph(100, '(#100) Tried accessing nonexisting field (adaccounts) on node type (User)'))
+        fb.me = { id: 'U1', name: 'Chủ Shop' }
+        const e1d = await nem(() => noiTokenAds(ctx, { accessToken: USER_TOKEN }))
+        dung('3a4. lỗi node type KHÁC Page ⇒ không đổ cho "PAGE token", giữ câu đọc tài khoản hỏng', e1d instanceof ToolError && !/PAGE token/.test(e1d.message) && /không đọc được tài khoản quảng cáo/.test(e1d.message), e1d?.message)
+        fbDatLai()
+        fb.me = { id: 'U1', name: 'Chủ Shop' }
         fb.debug = { scopes: ['pages_show_list', 'pages_manage_posts'] }
         const e2 = await nem(() => noiTokenAds(ctx, { accessToken: USER_TOKEN }))
         dung('3b. token thiếu quyền quảng cáo bị từ chối', e2 instanceof ToolError && /thiếu quyền quảng cáo/.test(e2.message) && tokens.length === 0, e2?.message)
@@ -751,6 +770,17 @@ async function main() {
         const ins = kn3.buoc.find((b: any) => /Insights/.test(b.ten))
         dung('11l. kiểm kết nối tài khoản USD ⇒ bước tiền tệ hỏng, số chi ghi USD (không ghi "đ")',
             kn3.buoc.some((b: any) => /Tiền tệ/.test(b.ten) && !b.ok) && /USD$/.test(ins?.chiTiet || ''), ins?.chiTiet)
+        // 10/11/2026 (lô 20): phép "là USER token" cũ đọc me.metadata.type — Facebook đã bỏ metadata ⇒ luôn "đạt". Nay dò lỗi node type (Page).
+        dung('11m. kiểm kết nối bình thường (me/permissions lỗi quyền thường) ⇒ bước "USER token" đạt', kn.buoc.find((b: any) => /USER token/.test(b.ten))?.ok === true,
+            JSON.stringify(kn.buoc.find((b: any) => /USER token/.test(b.ten))))
+        datLai(); goi = []
+        const c5 = ngCanh()
+        await chuanBi(c5, 'approve')
+        fb.perms = loiGraph(100, '(#100) Tried accessing nonexisting field (permissions) on node type (Page)')
+        const kn4 = await kiemKetNoiAds(c5)
+        const bTok = kn4.buoc.find((b: any) => /USER token/.test(b.ten))
+        dung('11n. token lưu là page token (me/permissions lỗi "node type (Page)") ⇒ bước "USER token" HỎNG, nói "page token"; không gửi metadata',
+            !!bTok && !bTok.ok && /page token/.test(bTok.chiTiet) && !goi.some(g => g.p === 'me' && g.q && 'metadata' in g.q), JSON.stringify(bTok))
     }
 
     // ─── 12. Nối dây (soát mã nguồn) ───────────────────────────────────────────

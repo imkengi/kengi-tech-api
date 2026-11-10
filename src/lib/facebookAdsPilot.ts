@@ -1725,6 +1725,10 @@ export async function chayChuKyAds(ctx: NgCanhAds, o: { baoCaoNgayCu?: string | 
 
 // ─── Kết nối token ──────────────────────────────────────────────────────────────
 
+const LOI_PAGE_TOKEN_ADS = 'Đây là PAGE token (token của fanpage) — quảng cáo cần USER token: trong Graph API Explorer để ô "User or Page" là User Token, tick quyền ads_read + ads_management rồi Generate.'
+/** Graph trả lỗi #100 "Tried accessing nonexisting field (…) on node type (Page)" khi page token đọc cạnh chỉ USER có. */
+const laLoiNodePage = (e: any) => /node type \(Page\)/i.test(String(e?.message || ''))
+
 /**
  * Nối token quảng cáo (dán tay): kiểm là USER token, đọc quyền + hạn (debug_token, hỏng thì /me/permissions), đọc tài khoản
  * quảng cáo, rồi lưu FbUserToken kèm quyền. Không bao giờ trả token về.
@@ -1735,29 +1739,36 @@ export async function noiTokenAds(ctx: NgCanhAds, b: { accessToken: string }): P
     if (token.length < 20 || /\s/.test(token)) throw new ToolError('Dán token quảng cáo (một chuỗi liền, thường bắt đầu bằng EAA…).')
     const svc = dichVuAds(ctx, token)
     let me: any
-    try { me = await svc.get('me', { metadata: 1, fields: 'id,name' }) } catch (e: any) { throw new ToolError(`Token không dùng được: ${moTaLoi(e)}`) }
-    const loai = String(me?.metadata?.type || '').toLowerCase()
-    if (loai === 'page') {
-        throw new ToolError('Đây là PAGE token (token của fanpage) — quảng cáo cần USER token: trong Graph API Explorer để ô "User or Page" là User Token, tick quyền ads_read + ads_management rồi Generate.')
-    }
-    let scopes: string[] = [], hetHan: number | null = null, docDuocQuyen = false
+    // 10/11/2026 (lô 20): bỏ `metadata: 1` — Facebook thôi trả metadata từ 19/05/2026 (Graph v25.0) ⇒ me.metadata.type LUÔN rỗng,
+    // phép chặn PAGE token cũ là code chết (page token chỉ hỏng muộn ở bước đọc tài khoản, câu lỗi khó hiểu). Nay nhận ra page token
+    // qua debug_token (type 'PAGE') hoặc lỗi "… on node type (Page)" ở cạnh chỉ USER có (me/permissions, me/adaccounts).
+    try { me = await svc.get('me', { fields: 'id,name' }) } catch (e: any) { throw new ToolError(`Token không dùng được: ${moTaLoi(e)}`) }
+    let scopes: string[] = [], hetHan: number | null = null, docDuocQuyen = false, laPage = false
     try {
         const dbg = (await svc.get('debug_token', { input_token: token }))?.data || {}
+        if (String(dbg.type || '').toUpperCase() === 'PAGE') laPage = true
         if (Array.isArray(dbg.scopes)) { scopes = dbg.scopes.map(String); docDuocQuyen = true }
         if (Number(dbg.expires_at) > 0) hetHan = Number(dbg.expires_at) * 1000
     } catch { /* debug_token đòi token của nhà phát triển app — không được thì đọc /me/permissions */ }
+    if (laPage) throw new ToolError(LOI_PAGE_TOKEN_ADS)
     if (!docDuocQuyen) {
         try {
             const p = await svc.get('me/permissions')
             scopes = (p?.data || []).filter((x: any) => x?.status === 'granted').map((x: any) => String(x.permission))
             docDuocQuyen = true
-        } catch { /* system user token có thể không đọc được — để Facebook tự từ chối khi thiếu quyền */ }
+        } catch (e: any) {
+            if (laLoiNodePage(e)) throw new ToolError(LOI_PAGE_TOKEN_ADS)
+            /* system user token có thể không đọc được — để Facebook tự từ chối khi thiếu quyền */
+        }
     }
     if (docDuocQuyen && !scopes.includes('ads_management') && !scopes.includes('ads_read')) {
         throw new ToolError(`Token thiếu quyền quảng cáo (đang có: ${scopes.join(', ') || 'không quyền nào'}) — tick ads_read và ads_management rồi tạo lại token.`)
     }
     let ds: TaiKhoanAds[]
-    try { ds = await dsTaiKhoan(svc) } catch (e: any) { throw new ToolError(`Token không đọc được tài khoản quảng cáo: ${moTaLoi(e)}`) }
+    try { ds = await dsTaiKhoan(svc) } catch (e: any) {
+        if (laLoiNodePage(e)) throw new ToolError(LOI_PAGE_TOKEN_ADS)
+        throw new ToolError(`Token không đọc được tài khoản quảng cáo: ${moTaLoi(e)}`)
+    }
     if (!ds.length) throw new ToolError('Tài khoản Facebook của token này không quản lý tài khoản quảng cáo nào.')
 
     const fbUserId = String(me?.id || '')
@@ -1790,8 +1801,10 @@ export async function kiemKetNoiAds(ctx: NgCanhAds): Promise<any> {
         try { buoc.push({ ten, ok: true, chiTiet: await f() }) } catch (e: any) { buoc.push({ ten, ok: false, chiTiet: moTaLoi(e) }) }
     }
     await thu('Token là USER token còn dùng được', async () => {
-        const me = await svc.get('me', { metadata: 1, fields: 'id,name' })
-        if (String(me?.metadata?.type || '').toLowerCase() === 'page') throw new Error('Đây là page token, không chạy quảng cáo được.')
+        const me = await svc.get('me', { fields: 'id,name' })
+        // metadata=1 đã chết (19/05/2026) ⇒ page token lộ qua lỗi "node type (Page)" ở cạnh chỉ USER có; lỗi khác (thiếu quyền đọc
+        // danh sách quyền…) không nói gì về loại token ⇒ bỏ qua
+        try { await svc.get('me/permissions') } catch (e: any) { if (laLoiNodePage(e)) throw new Error('Đây là page token, không chạy quảng cáo được.') }
         return me?.name || String(me?.id || '')
     })
     buoc.push(tok.scopes.length

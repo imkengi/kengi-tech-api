@@ -2060,10 +2060,14 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
 
 1. Kết nối
    - Mở kengi.vn → Bán Hàng Online → Facebook Pilot (https://kengi.vn/pilot-facebook/), đăng nhập bằng tài khoản Kengi.
-   - Tab Kết nối: dán PAGE token (Graph API Explorer → chọn app → ô bên dưới chọn đúng PAGE, không để "User Token" → Generate;
-     rồi Access Token Debugger → Extend để được token ~60 ngày). Cần các quyền pages_show_list, pages_read_engagement,
-     pages_manage_posts, pages_manage_engagement, pages_read_user_content.
-   - Token dán tay không tự gia hạn: Pilot nhắc trước 7 ngày, dán token mới là xong.
+   - Tab Kết nối → «Dán token»: dán USER token đã gia hạn (cách bền nhất) hoặc PAGE token. Lấy USER token: Graph API Explorer →
+     chọn app → ô "User or Page" để User Token → tick pages_show_list, pages_read_engagement, pages_manage_posts,
+     pages_manage_engagement, pages_read_user_content → Generate (Facebook hỏi fanpage nào thì tick fanpage cần nối); rồi bấm ⓘ cạnh
+     token → Open in Access Token Tool → «Extend Access Token», chép token mới.
+   - Dán USER token: Kengi tự lấy page token của fanpage — page token lấy từ USER token đã gia hạn không hết hạn. Tài khoản quản lý
+     nhiều fanpage thì Kengi hỏi chọn fanpage. USER token KHÔNG được lưu.
+   - Kengi đọc hạn THẬT của token từ Facebook khi Facebook cho đọc; không đọc được thì tạm tính 55 ngày và nói rõ là tạm tính.
+     Token chỉ còn vài giờ (chép thẳng, chưa gia hạn) thì báo ngay lúc dán. Token có hạn: Pilot nhắc trước 7 ngày, dán token mới là xong.
    - Bấm "Kiểm tra kết nối": gọi chỉ đọc từng quyền (đọc bài, đọc người bình luận, bài đã hẹn giờ, hạn token).
 
 2. Bài đăng

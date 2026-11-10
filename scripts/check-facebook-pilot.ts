@@ -35,6 +35,11 @@
  *     MỌI nháp + đếm; "Đã kiểm" kế hoạch chưa rõ — KHÔNG có ⇒ nhả mã + khung giờ + dòng bài hẹn / chỗ trong sổ trả lời (chỉ dòng
  *     Pilot giữ dở), CÓ ⇒ giữ chặn, bài hẹn người đã kiểm thì lượt soát không xoá; không gọi Facebook, không tốn lượt ghi, CAS một
  *     người thắng; bỏ ẩn đi đường kế hoạch → thực thi, chu kỳ không ẩn lại; token hỏng mang cờ loiToken; câu SQL thật của kho.
+ * 17. (10/11/2026, lô 20: FB-06 / X-16) nối fanpage bằng token dán tay (lib/noiPageToken — FacebookService THẬT qua fetch giả):
+ *     hạn THẬT từ debug_token (0 ⇒ không hết hạn; còn < 24 giờ ⇒ vẫn lưu + cảnh báo gắt; đọc không được / is_valid=false ⇒ đoán 55
+ *     ngày và NÓI RÕ); USER token ⇒ me/accounts lấy page token (MỘT fanpage / pageId gửi kèm; nhiều ⇒ FB_CHON_PAGE kèm {id,name}, không
+ *     lộ token; USER token KHÔNG lưu); debug_token thử USER token trước rồi page token; lỗi rõ cho 0 fanpage / thiếu page token /
+ *     thiếu pages_show_list / lệch pageId / token chết / khoảng trắng / token APP; route trả 400 kèm danh sách, không trả token.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -50,6 +55,7 @@ import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_FACEBOOK_PILO
 import { canNguoi } from '../src/lib/pilotBaoChuShop'
 import { reconcilePage } from '../src/cron/fanpageCron'
 import { FacebookService } from '../src/services/platforms/facebook'
+import { noiPageTokenDanTay, LoiNoiToken } from '../src/lib/noiPageToken'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { ok ? dat++ : loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -195,7 +201,7 @@ const ghiFb = () => goiFb.filter(g => g[0] !== 'get')
 type DapGraph = { status: number; body: any } | { nem: 'het_gio' | 'mang' } | { html: number }
 let dapGraph: (method: string, duong: string) => DapGraph = () => ({ status: 200, body: {} })
 /** `tham` = tham số query của lời gọi (bỏ access_token) — 09/11/2026 mục 14 soát tham số gửi đi */
-const goiGraph: { method: string; duong: string; coHenGio: boolean; tham?: Record<string, string> }[] = []
+const goiGraph: { method: string; duong: string; coHenGio: boolean; tham?: Record<string, string>; token?: string }[] = []
 const fetchGoc = globalThis.fetch
 function batGraphGia() {
     globalThis.fetch = (async (input: any, init: any = {}) => {
@@ -204,7 +210,8 @@ function batGraphGia() {
         const method = String(init.method || 'GET').toUpperCase()
         const duong = url.pathname.replace(/^\/v\d+\.\d+\//, '')
         const tham = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'access_token'))
-        goiGraph.push({ method, duong, coHenGio: init.signal instanceof AbortSignal, tham })
+        // token = access_token của lời GET (mục 17 soát lời nào dùng token nào — ghi vào nhật ký giả, KHÔNG in ra)
+        goiGraph.push({ method, duong, coHenGio: init.signal instanceof AbortSignal, tham, token: url.searchParams.get('access_token') || undefined })
         const d = dapGraph(method, duong)
         // AbortSignal.timeout hết giờ ⇒ fetch ném DOMException tên 'TimeoutError' (giả lập thẳng, khỏi chờ 90 giây thật)
         if ('nem' in d) throw d.nem === 'het_gio' ? new DOMException('The operation was aborted due to timeout', 'TimeoutError') : new TypeError('fetch failed')
@@ -1242,6 +1249,144 @@ async function main() {
                 /«Bỏ ẩn»/.test(HUONG_DAN_FB_PILOT) && /«Chờ duyệt»/.test(HUONG_DAN_FB_PILOT) && /«Đã kiểm: CÓ trên\s+Facebook»/.test(HUONG_DAN_FB_PILOT) && /«Xem thêm»/.test(HUONG_DAN_FB_PILOT))
         }
         henFbBat = false
+    }
+
+    // ─── 17. Nối fanpage bằng token dán tay (10/11/2026, lô 20: FB-06 / X-16) — FacebookService THẬT qua fetch giả ───────────
+    {
+        const U = 'TOKEN-USER-GIA-17', PA = 'TOKEN-PAGE-GIA-17A', PB = 'TOKEN-PAGE-GIA-17B', APP = 'TOKEN-APP-GIA-17'
+        const trangA = { id: 'PGA', name: 'Trang A', category: 'Cửa hàng', fan_count: 50, access_token: PA, instagram_business_account: { id: 'IG1' } }
+        const trangB = { id: 'PGB', name: 'Trang B', category: 'Cửa hàng', fan_count: 7, access_token: PB }
+        let dsTrang: any[] = [trangA]
+        let loiAccounts: DapGraph | null = null
+        let loiBai: DapGraph | null = null
+        /** debug_token theo token GỌI (access_token); không có ⇒ lỗi "chỉ nhà phát triển app" như Facebook thật */
+        let dbg: Record<string, DapGraph> = {}
+        const KHONG_DOC_DBG = loiGraph(400, 100, '(#100) You must provide an app access token, or a user access token that is an owner or developer of the app')
+        const upserts: any[] = []
+        const prisma17 = { fbPage: { upsert: async (a: any) => { upserts.push(JSON.parse(JSON.stringify(a))); return {} } } }
+        const dap17 = (m: string, d: string): DapGraph => {
+            const g = goiGraph[goiGraph.length - 1]
+            const tk = g?.token || ''
+            const xinLoai = /category/.test(g?.tham?.fields || '')
+            if (m !== 'GET') return loiGraph(500, 1, 'bộ kiểm: mục 17 không được GHI')
+            if (d === 'me') {
+                if (tk === U) return xinLoai ? loiGraph(400, 100, '(#100) Tried accessing nonexisting field (category) on node type (User)') : { status: 200, body: { id: 'U17', name: 'Chủ shop' } }
+                if (tk === APP) return xinLoai ? loiGraph(400, 100, '(#100) Tried accessing nonexisting field (category) on node type (Application)') : { status: 200, body: { id: 'APP17', name: 'App' } }
+                if (tk === PA) return { status: 200, body: { id: 'PGA', name: 'Trang A', category: 'Cửa hàng', fan_count: 50 } }
+                if (tk === PB) return { status: 200, body: { id: 'PGB', name: 'Trang B', category: 'Cửa hàng', fan_count: 7 } }
+                return loiGraph(400, 190, 'Invalid OAuth access token - Cannot parse access token')
+            }
+            if (d === 'me/accounts') return tk !== U ? loiGraph(400, 100, '(#100) Tried accessing nonexisting field (accounts) on node type (Page)') : loiAccounts || { status: 200, body: { data: dsTrang } }
+            if (/^PG[AB]\/posts$/.test(d)) return loiBai || { status: 200, body: { data: [] } }
+            if (d === 'debug_token') return dbg[tk] || KHONG_DOC_DBG
+            return loiGraph(404, 803, `bộ kiểm: mục 17 không giả ${d}`)
+        }
+        const chay = async (tham: any) => {
+            upserts.length = 0; goiGraph.length = 0
+            try { return { kq: await noiPageTokenDanTay({ prisma: prisma17, bayGio: NOW, nguoi: 'u1', ...tham }) as any, loi: null as any } } catch (e: any) { return { kq: null as any, loi: e } }
+        }
+        const datLai17 = () => { dsTrang = [trangA]; loiAccounts = null; loiBai = null; dbg = {} }
+        const docDuoc = (expires_at: number, them: any = {}): DapGraph => ({ status: 200, body: { data: { type: 'PAGE', is_valid: true, expires_at, ...them } } })
+        const giay = (ms: number) => Math.floor(ms / 1000)
+        batGraphGia()
+        dapGraph = dap17
+        try {
+            datLai17(); dbg[PA] = docDuoc(0, { data_access_expires_at: giay(NOW + 80 * 86400_000) })
+            let r = await chay({ accessToken: PA })
+            const u0 = upserts[0]
+            dung('17a. PAGE token + debug_token expires_at 0 ⇒ lưu hạn null (không hết hạn), không cảnh báo, hạn THẬT; không đọc me/accounts',
+                !r.loi && r.kq.pageId === 'PGA' && !r.kq.tuUserToken && r.kq.hanThat === true && r.kq.hetHan === null && r.kq.canhBao === null
+                && u0?.create?.tokenExpiresAt === null && u0?.update?.tokenExpiresAt === null && u0?.create?.accessToken === PA && u0?.create?.connectedBy === 'u1'
+                && !goiGraph.some(g => g.duong === 'me/accounts') && goiGraph.some(g => g.duong === 'debug_token' && g.tham?.input_token === PA),
+                r.loi?.message || JSON.stringify(r.kq?.canhBao))
+
+            datLai17(); dbg[PA] = docDuoc(giay(NOW + 3 * H + 10 * 60_000))
+            r = await chay({ accessToken: PA })
+            dung('17b. token còn ~3 giờ ⇒ VẪN lưu đúng hạn đó + cảnh báo gắt "khoảng 3 giờ" kèm cách gia hạn',
+                !r.loi && r.kq.hanThat && Math.abs(r.kq.hetHan - (NOW + 3 * H + 10 * 60_000)) < 1000 && /khoảng 3 giờ/.test(r.kq.canhBao || '')
+                && /Extend Access Token/.test(r.kq.canhBao || '') && upserts[0]?.update?.tokenExpiresAt === new Date(r.kq.hetHan).toISOString(), r.loi?.message || r.kq?.canhBao)
+
+            datLai17(); const han50 = giay(NOW + 50 * 86400_000); dbg[PA] = docDuoc(han50)
+            r = await chay({ accessToken: PA })
+            dung('17c. token còn 50 ngày ⇒ ghi ĐÚNG hạn Facebook trả (không phải 55 ngày đoán), không cảnh báo',
+                !r.loi && r.kq.hetHan === han50 * 1000 && r.kq.canhBao === null && upserts[0]?.create?.tokenExpiresAt === new Date(han50 * 1000).toISOString(),
+                r.loi?.message || JSON.stringify(r.kq?.hetHan))
+
+            datLai17()
+            r = await chay({ accessToken: PA })
+            dung('17d. debug_token không đọc được ⇒ đoán 55 ngày như cũ, hanThat=false, cảnh báo NÓI RÕ là tạm tính',
+                !r.loi && r.kq.hanThat === false && r.kq.hetHan === NOW + 55 * 86400_000 && /tạm tính 55 ngày/.test(r.kq.canhBao || ''), r.loi?.message || r.kq?.canhBao)
+            datLai17(); dbg[PA] = { status: 200, body: { data: { is_valid: false, expires_at: 0 } } }
+            r = await chay({ accessToken: PA })
+            dung('17d2. debug_token is_valid=false ⇒ không tin expires_at 0 (không ghi "không hết hạn"), về đoán 55 ngày',
+                !r.loi && r.kq.hanThat === false && r.kq.hetHan === NOW + 55 * 86400_000, r.loi?.message || JSON.stringify(r.kq?.hetHan))
+
+            datLai17(); dbg[U] = docDuoc(0)
+            r = await chay({ accessToken: U })
+            const u1 = upserts[0]
+            const dbgGoi = goiGraph.filter(g => g.duong === 'debug_token')
+            dung('17e. USER token, MỘT fanpage ⇒ lưu PAGE token của fanpage (KHÔNG lưu USER token) + igUserId; đọc bài bằng page token; debug_token bằng USER token trước',
+                !r.loi && r.kq.tuUserToken === true && r.kq.pageId === 'PGA' && u1?.create?.accessToken === PA && u1?.update?.accessToken === PA
+                && !JSON.stringify(u1).includes(U) && u1?.create?.igUserId === 'IG1' && u1?.create?.name === 'Trang A' && u1?.create?.fanCount === 50
+                && goiGraph.some(g => g.duong === 'PGA/posts' && g.token === PA) && dbgGoi[0]?.token === U && dbgGoi[0]?.tham?.input_token === PA && r.kq.hetHan === null,
+                r.loi?.message || JSON.stringify(goiGraph.map(g => g.duong)))
+
+            datLai17(); dbg[PA] = docDuoc(giay(NOW + 2 * H))
+            r = await chay({ accessToken: U })
+            dung('17e2. debug_token bằng USER token hỏng ⇒ thử tiếp bằng page token, đọc được hạn ~2 giờ ⇒ cảnh báo',
+                !r.loi && r.kq.hanThat === true && goiGraph.filter(g => g.duong === 'debug_token').map(g => g.token === U ? 'U' : g.token === PA ? 'PA' : '?').join(',') === 'U,PA'
+                && /khoảng 2 giờ/.test(r.kq.canhBao || ''), r.loi?.message || r.kq?.canhBao)
+
+            datLai17(); dsTrang = [trangA, trangB]
+            r = await chay({ accessToken: U })
+            dung('17f. USER token quản lý 2 fanpage, không chọn ⇒ FB_CHON_PAGE kèm [{id,name}], KHÔNG lộ token nào, không lưu',
+                r.loi instanceof LoiNoiToken && r.loi.code === 'FB_CHON_PAGE' && JSON.stringify(r.loi.them) === '{"pages":[{"id":"PGA","name":"Trang A"},{"id":"PGB","name":"Trang B"}]}'
+                && ![U, PA, PB].some(t => (r.loi.message + JSON.stringify(r.loi.them)).includes(t)) && upserts.length === 0, `${r.loi?.code} ${r.loi?.message}`)
+            r = await chay({ accessToken: U, pageId: 'PGB' })
+            dung('17g. gửi lại kèm pageId PGB ⇒ lưu token của PGB (không có Instagram ⇒ không ghi đè igUserId)',
+                !r.loi && r.kq.pageId === 'PGB' && upserts[0]?.create?.accessToken === PB && !('igUserId' in (upserts[0]?.update || {})), r.loi?.message)
+            r = await chay({ accessToken: U, pageId: 'PGX' })
+            dung('17h. pageId không thuộc tài khoản ⇒ FB_PAGE_KHONG_THUOC, nêu tên fanpage thấy được, không lưu',
+                r.loi instanceof LoiNoiToken && r.loi.code === 'FB_PAGE_KHONG_THUOC' && /Trang A, Trang B/.test(r.loi.message) && upserts.length === 0, r.loi?.message)
+
+            datLai17(); dsTrang = []
+            r = await chay({ accessToken: U })
+            dung('17i. USER token không thấy fanpage nào ⇒ FB_KHONG_CO_PAGE (chỉ cách tick fanpage lúc Generate)',
+                r.loi?.code === 'FB_KHONG_CO_PAGE' && /pages_show_list/.test(r.loi?.message || '') && upserts.length === 0, r.loi?.message)
+            datLai17(); dsTrang = [{ ...trangA, access_token: undefined }]
+            r = await chay({ accessToken: U })
+            dung('17j. me/accounts không trả page token ⇒ FB_KHONG_CO_PAGE_TOKEN, không lưu', r.loi?.code === 'FB_KHONG_CO_PAGE_TOKEN' && upserts.length === 0, r.loi?.message)
+            datLai17(); loiAccounts = loiGraph(403, 200, '(#200) Requires pages_show_list permission')
+            r = await chay({ accessToken: U })
+            dung('17k. me/accounts lỗi (#200 thiếu pages_show_list) ⇒ FB_KHONG_DOC_DUOC_PAGE nêu quyền, không lưu',
+                r.loi?.code === 'FB_KHONG_DOC_DUOC_PAGE' && /pages_show_list/.test(r.loi?.message || '') && upserts.length === 0, r.loi?.message)
+
+            datLai17()
+            r = await chay({ accessToken: PA, pageId: 'PGB' })
+            dung('17l. PAGE token mà pageId gửi kèm khác ⇒ FB_PAGE_KHONG_KHOP, không lưu', r.loi?.code === 'FB_PAGE_KHONG_KHOP' && upserts.length === 0, r.loi?.message)
+            r = await chay({ accessToken: 'TOKEN-CHET-GIA-17' })
+            dung('17m. token chết (#190) ⇒ FB_TOKEN_INVALID, không lưu', r.loi?.code === 'FB_TOKEN_INVALID' && upserts.length === 0, r.loi?.message)
+            r = await chay({ accessToken: `${PA} ${PB}` })
+            dung('17m2. token lẫn khoảng trắng ⇒ FB_TOKEN_INVALID, KHÔNG gọi Facebook', r.loi?.code === 'FB_TOKEN_INVALID' && goiGraph.length === 0, r.loi?.message)
+            r = await chay({ accessToken: '   ' })
+            dung('17m3. token rỗng ⇒ FB_TOKEN_THIEU, không gọi Facebook', r.loi?.code === 'FB_TOKEN_THIEU' && goiGraph.length === 0, r.loi?.message)
+            r = await chay({ accessToken: APP })
+            dung('17m4. token của APP ⇒ FB_NOT_PAGE_TOKEN, không đọc me/accounts', r.loi?.code === 'FB_NOT_PAGE_TOKEN' && !goiGraph.some(g => g.duong === 'me/accounts'), r.loi?.message)
+
+            datLai17(); loiBai = loiGraph(403, 10, '(#10) This endpoint requires the pages_read_engagement permission'); dbg[PA] = docDuoc(0)
+            r = await chay({ accessToken: PA })
+            dung('17n. đọc bài hỏng (thiếu pages_read_engagement) ⇒ VẪN lưu, cảnh báo quyền', !r.loi && upserts.length === 1 && /pages_read_engagement/.test(r.kq.canhBao || ''), r.loi?.message || r.kq?.canhBao)
+        } finally {
+            traFetch()
+            dapGraph = graphOn
+        }
+        const rtF = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'fanpage.ts'), 'utf8').replace(/\r\n/g, '\n')
+        const than = rtF.slice(rtF.indexOf("router.post('/connect-page-token'"), rtF.indexOf("router.get('/pages'"))
+        dung('17o. route: lõi noiPageTokenDanTay; LoiNoiToken ⇒ 400, danh sách đi TRƯỚC success/error/code; webhook bằng kq.pageToken; trả về KHÔNG có token',
+            than.length > 0 && /noiPageTokenDanTay\(/.test(than)
+            && /e instanceof LoiNoiToken\) return res\.status\(400\)\.json\(\{ \.\.\.e\.them, success: false, error: e\.message, code: e\.code \}\)/.test(than)
+            && /trySubscribeWebhook\(prisma, pageId, kq\.pageToken\)/.test(than) && (than.match(/pageToken/g) || []).length === 2
+            && !/accessToken: true/.test(than) && !/FB_NOT_PAGE_TOKEN|55 \* 86400_000/.test(than), than.slice(0, 120))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)
