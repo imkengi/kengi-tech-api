@@ -22,6 +22,10 @@
  *     L2 trần ghi/ngày tính TRƯỚC vòng lặp ⇒ MỘT dòng 'skipped', không 'failed', không việc cần người, không nháp sót.
  *     L3 nghỉ 24 giờ tính từ lúc THỰC THI.   L4 đồng bộ danh mục lấy ngành mã mới, một mã lỗi không dừng lượt.
  *     L5 giá chủ shop sửa tay ⇒ để yên 7 ngày.   L6 TikTok khoá giá vì khuyến mãi ⇒ 'skipped' + nghỉ 24 giờ.
+ *  M. Lô 23 (10/11/2026, TT-17) — kế hoạch CÒN MỞ + lịch, trước chưa có ca nào:
+ *     M1 'running' quá 1 giờ ⇒ 'uncertain' (báo MỘT lần).   M2 nháp Xem trước: giữ khi còn Xem trước, sang Tự động ⇒ tự huỷ + lập lại.
+ *     M3 nháp máy lập quá 3 ngày ⇒ tự huỷ + lập lại.   M4 NGƯỜI huỷ ⇒ 14 ngày không đề xuất lại.   M5 nháp NGƯỜI lập: máy không huỷ.
+ *     M6 lịch: bản khác giành ⇒ 'bi-gianh'; chu kỳ gãy ⇒ 'loi' + vẫn hẹn lượt kế; tắt lịch ⇒ 'khong-dung'.
  *     L7 làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT dòng 'token', không ghi gì lượt đó.
  *  A. (10/11/2026, TT-02) hoa hồng affiliate TikTok đọc từ statement từng đơn: "0" thật ≠ không có trường (null); hoa hồng gộp
  *     trước thuế TNCN không cộng đôi; điều chỉnh bù trừ có dấu; mô hình phí tách affiliate, giá sàn theo hoa hồng cao nhất đo.
@@ -1354,6 +1358,157 @@ async function main() {
         dung('A10. 5 đơn liền không đọc được (token / hạn mức) ⇒ dừng kênh (≤ 6 lời gọi / 20 đơn, 0 ghi); lượt sau hỏi lại đúng các đơn CHƯA hỏi, đơn đã hỏng nghỉ 24 giờ',
             n2 === 0 && soHoi2 >= 5 && soHoi2 <= 6 && b2.ghi.length === 0 && n3 === 20 - soHoi2 && goiTT.length === 20 - soHoi2,
             JSON.stringify({ n2, soHoi2, n3, hoiLai: goiTT.length }))
+    }
+
+    // ─── M. Kế hoạch còn mở + lịch (lô 23, 10/11/2026, TT-17) ────────────────────────────────
+    {
+        const GIO = 3600_000, NGAY = 86400_000
+        const nhap = (kho: any, id?: string) => kho._keHoach.filter((k: any) => k.status === 'draft' && (!id || k.data?.itemId === id))
+        const cuaMa = (kho: any, id: string) => kho._keHoach.filter((k: any) => k.data?.itemId === id && Number(k.data?.price) > 0)
+        const dongCho = (kq: any) => kq.results.find((r: any) => /đang có nháp chờ duyệt \/ người vừa huỷ/.test(r.message || ''))?.message || ''
+
+        // M1 — máy chết giữa lượt ghi: kế hoạch kẹt 'running'
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho1 = khoBoNhoTikTok(() => bayGio)
+        const c1 = ngCanh(kho1)
+        await luuCauHinhTikTok(c1, { executionMode: 'auto' })
+        const k1 = await taoKeHoachGiaTikTok(c1, { itemId: '222', price: 150000 })
+        const o1 = kho1._keHoach.find(k => k.id === k1.id)!
+        o1.status = 'running'; o1.updatedAt = NOW
+        bayGio = NOW + 59 * 60_000
+        const kq1a = await chayChuKyTikTok(c1)
+        dung('M1a. "running" mới 59 phút ⇒ để yên (có thể bản khác đang ghi): vẫn "running", không dòng "uncertain"',
+            o1.status === 'running' && !kq1a.results.some((r: any) => r.status === 'uncertain'), JSON.stringify(kq1a.results))
+        bayGio = NOW + 61 * 60_000
+        const kq1b = await chayChuKyTikTok(c1)
+        const u1 = kq1b.results.filter((r: any) => r.status === 'uncertain')
+        dung('M1b. "running" quá 1 giờ ⇒ "uncertain" + MỘT dòng giá "uncertain" mang mã kế hoạch, mã hàng, câu "dừng giữa chừng … Kiểm trên Seller Center"',
+            o1.status === 'uncertain' && /dừng giữa chừng/.test(o1.result?.message || '') && u1.length === 1 && u1[0].action === 'price'
+            && u1[0].planId === k1.id && u1[0].sku === 'BINH' && /Kiểm trên Seller Center/.test(u1[0].message), JSON.stringify(u1))
+        dung('M1c. … máy KHÔNG tự ghi lại giá của kế hoạch kẹt (150.000 không bao giờ được gửi)', !ghiTT().some(g => g[2] === 150000), JSON.stringify(ghiTT()))
+        bayGio = NOW + 2 * GIO + 60_000
+        const kq1d = await chayChuKyTikTok(c1)
+        dung('M1d. lượt sau KHÔNG báo lại vụ đó', !kq1d.results.some((r: any) => r.status === 'uncertain') && o1.status === 'uncertain', JSON.stringify(kq1d.results))
+
+        // M2 — nháp của lượt Xem trước
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho2 = khoBoNhoTikTok(() => bayGio)
+        const c2 = ngCanh(kho2)
+        await chayChuKyTikTok(c2)
+        const xem = nhap(kho2).filter((k: any) => String(k.idempotencyKey).startsWith('cycle:xem:'))
+        dung('M2a. Xem trước: 2 nháp khoá "cycle:xem:" (OC4, BINH), không ghi TikTok', xem.length === 2 && nhap(kho2).length === 2 && ghiTT().length === 0, JSON.stringify(kho2._keHoach.map(k => [k.idempotencyKey, k.status])))
+        bayGio = NOW + GIO
+        const kq2b = await chayChuKyTikTok(c2)
+        dung('M2b. lượt Xem trước kế: GIỮ 2 nháp, không lập trùng, không dòng "Huỷ … nháp"; nói "2 sản phẩm đang có nháp chờ duyệt"',
+            nhap(kho2).length === 2 && xem.every((k: any) => k.status === 'draft') && cuaMa(kho2, '111').length === 1 && cuaMa(kho2, '222').length === 1
+            && !kq2b.results.some((r: any) => r.action === 'plan') && /^2 sản phẩm/.test(dongCho(kq2b)), JSON.stringify(kq2b.results))
+        await luuCauHinhTikTok(c2, { executionMode: 'auto' })
+        bayGio = NOW + 2 * GIO
+        const kq2c = await chayChuKyTikTok(c2)
+        const huy2 = kq2c.results.filter((r: any) => r.action === 'plan')
+        dung('M2c. sang Tự động ⇒ 2 nháp Xem trước TỰ HUỶ (tuHuy, "Nháp của lượt Xem trước …"), MỘT dòng "Huỷ 2 nháp cũ của máy"',
+            xem.every((k: any) => k.status === 'cancelled' && k.result?.tuHuy === true && /^Nháp của lượt Xem trước/.test(k.result?.message || ''))
+            && huy2.length === 1 && huy2[0].status === 'skipped' && /^Huỷ 2 nháp cũ của máy/.test(huy2[0].message), JSON.stringify(huy2))
+        const gia2 = Object.fromEntries(ghiTT().map(g => [g[1], g[2]]))
+        dung('M2d. … và NGAY lượt đó lập lại theo giá hiện tại rồi ghi (OC4 132.000, BINH 144.000) — máy tự huỷ không tính là "người vừa huỷ"',
+            gia2['111'] === 132000 && gia2['222'] === 144000 && ghiTT().length === 2 && nhap(kho2).length === 0 && !dongCho(kq2c), JSON.stringify(kq2c.results))
+
+        // máy tự huỷ mà lượt đó CHƯA lập lại được (đọc giá BINH hỏng) ⇒ lượt sau vẫn phải xét BINH — không né 14 ngày như người huỷ
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho2e = khoBoNhoTikTok(() => bayGio)
+        const c2e = ngCanh(kho2e)
+        await chayChuKyTikTok(c2e)
+        await luuCauHinhTikTok(c2e, { executionMode: 'auto' })
+        chiTiet['222'] = new Error('TikTok getProduct: [36009004] busy')
+        bayGio = NOW + GIO
+        await chayChuKyTikTok(c2e)
+        const sauHuy = cuaMa(kho2e, '222').map((k: any) => k.status).join(',')
+        chiTiet['222'] = giaTT(160000, 'sku222')
+        bayGio = NOW + 2 * GIO
+        await chayChuKyTikTok(c2e)
+        dung('M2e. nháp Xem trước của BINH tự huỷ đúng lượt đọc giá BINH hỏng (chưa lập lại) ⇒ lượt SAU vẫn xét và ghi BINH 144.000',
+            sauHuy === 'cancelled' && ghiTT().some(g => g[1] === '222' && g[2] === 144000), `${sauHuy} ${JSON.stringify(ghiTT())}`)
+
+        // M3 — nháp máy lập quá 3 ngày (vẫn Xem trước)
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho3 = khoBoNhoTikTok(() => bayGio)
+        const c3 = ngCanh(kho3)
+        await chayChuKyTikTok(c3)
+        const cu3 = nhap(kho3)
+        bayGio = NOW + 3 * NGAY - 60_000
+        const kq3a = await chayChuKyTikTok(c3)
+        dung('M3a. nháp máy lập 3 ngày KÉM 1 phút ⇒ còn giữ, không lập thêm', cu3.length === 2 && cu3.every((k: any) => k.status === 'draft') && nhap(kho3).length === 2
+            && !kq3a.results.some((r: any) => r.action === 'plan'), JSON.stringify(kq3a.results))
+        bayGio = NOW + 3 * NGAY + 60_000
+        const kq3b = await chayChuKyTikTok(c3)
+        const moi3 = nhap(kho3)
+        dung('M3b. quá 3 ngày ⇒ tự huỷ ("… quá 3 ngày chưa duyệt — tự huỷ.", tuHuy), dòng "Huỷ 2 nháp cũ"; lượt đó lập 2 nháp MỚI theo giá hiện tại; không ghi TikTok',
+            cu3.every((k: any) => k.status === 'cancelled' && k.result?.tuHuy === true && /quá 3 ngày chưa duyệt — tự huỷ\.$/.test(k.result?.message || ''))
+            && kq3b.results.some((r: any) => r.action === 'plan' && /^Huỷ 2 nháp cũ của máy/.test(r.message || ''))
+            && moi3.length === 2 && moi3.every((k: any) => !cu3.includes(k) && k.createdAt === bayGio) && ghiTT().length === 0, JSON.stringify(kq3b.results))
+
+        // M4 — NGƯỜI huỷ nháp ⇒ 14 ngày không đề xuất lại mã đó
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho4 = khoBoNhoTikTok(() => bayGio)
+        const c4 = ngCanh(kho4)
+        await chayChuKyTikTok(c4)
+        const binh4 = nhap(kho4, '222')[0]
+        await huyKeHoachTikTok(c4, binh4.id)
+        bayGio = NOW + NGAY
+        const kq4a = await chayChuKyTikTok(c4)
+        dung('M4a. người huỷ nháp BINH ⇒ hôm sau KHÔNG lập lại BINH (không có dấu tuHuy); dòng "2 sản phẩm đang có nháp chờ duyệt / người vừa huỷ"',
+            binh4.status === 'cancelled' && !binh4.result?.tuHuy && cuaMa(kho4, '222').length === 1 && /^2 sản phẩm/.test(dongCho(kq4a)), JSON.stringify(kq4a.results))
+        bayGio = NOW + 14 * NGAY - GIO
+        await chayChuKyTikTok(c4)
+        dung('M4b. 14 ngày KÉM 1 giờ: vẫn chưa đề xuất lại BINH', cuaMa(kho4, '222').length === 1, JSON.stringify(cuaMa(kho4, '222').map((k: any) => k.status)))
+        bayGio = NOW + 14 * NGAY + GIO
+        await chayChuKyTikTok(c4)
+        dung('M4c. quá 14 ngày ⇒ BINH được đề xuất lại (một nháp mới)', nhap(kho4, '222').length === 1 && cuaMa(kho4, '222').length === 2, JSON.stringify(cuaMa(kho4, '222').map((k: any) => k.status)))
+
+        // M5 — nháp NGƯỜI lập (không khoá "cycle:"): máy không bao giờ tự huỷ, mã đó để người quyết
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho5 = khoBoNhoTikTok(() => bayGio)
+        const c5 = ngCanh(kho5)
+        await luuCauHinhTikTok(c5, { executionMode: 'auto' })
+        const tay = await taoKeHoachGiaTikTok(c5, { itemId: '222', price: 150000 })
+        bayGio = NOW + 4 * NGAY
+        const kq5 = await chayChuKyTikTok(c5)
+        dung('M5. nháp người lập đã 4 ngày, chế độ Tự động ⇒ KHÔNG huỷ, KHÔNG đổi giá BINH (chờ người); OC4 vẫn tăng 132.000; "1 sản phẩm đang có nháp chờ duyệt"',
+            kho5._keHoach.find(k => k.id === tay.id)?.status === 'draft' && !ghiTT().some(g => g[1] === '222') && ghiTT().some(g => g[1] === '111' && g[2] === 132000)
+            && !kq5.results.some((r: any) => r.action === 'plan') && /^1 sản phẩm/.test(dongCho(kq5)), JSON.stringify(kq5.results))
+
+        // M6 — lịch: bản khác giành trước / chu kỳ gãy / tắt lịch
+        datLai(); datTikTok(); goi.length = 0; bayGio = NOW
+        const kho6 = khoBoNhoTikTok(() => bayGio)
+        const c6 = ngCanh(kho6)
+        const ngoai = { taoTikTok: ttGia, dayTon: dayTonGia, bayGio: () => bayGio }
+        await luuCauHinhTikTok(c6, { schedule: { enabled: true, intervalMinutes: 60 } })
+        bayGio = NOW + 61 * 60_000
+        const thua = await chayTheoLichTikTok(prisma, { ...kho6, gianhLich: async () => false } as any, ngoai)
+        const cf6a = await kho6.docCauHinh()
+        dung('M6a. bản máy chủ khác đã giành lượt ⇒ "bi-gianh": không chạy chu kỳ (0 lời gọi TikTok, 0 kế hoạch), không ghi kết quả',
+            thua === 'bi-gianh' && goi.length === 0 && kho6._keHoach.length === 0 && cf6a?.lastRunAt == null && cf6a?.nextRunAt === NOW + 60 * 60_000, `${thua} ${JSON.stringify(cf6a)}`)
+        kenh = kenh.filter(c => c.platform !== 'tiktok')   // gian TikTok bị gỡ ⇒ chu kỳ ném lỗi
+        const gay = await chayTheoLichTikTok(prisma, kho6, ngoai)
+        const cf6b = await kho6.docCauHinh()
+        dung('M6b. chu kỳ gãy ⇒ "loi": kết quả ok:false kèm lý do, VẪN ghi lúc chạy + hẹn lượt kế (+60 phút)',
+            gay === 'loi' && cf6b?.lastResult?.ok === false && !!cf6b?.lastResult?.message && cf6b?.lastRunAt === bayGio && cf6b?.nextRunAt === bayGio + 60 * 60_000, `${gay} ${JSON.stringify(cf6b)}`)
+        dung('M6c. … gọi lại ngay ⇒ "chua-toi" (lỗi không làm lịch quay liên tục)', (await chayTheoLichTikTok(prisma, kho6, ngoai)) === 'chua-toi')
+        datLai()
+        await luuCauHinhTikTok(c6, { schedule: { enabled: false } })
+        bayGio += 10 * GIO
+        const tat = await chayTheoLichTikTok(prisma, kho6, ngoai)
+        dung('M6d. tắt lịch ⇒ xoá hẹn, "khong-dung" dù đã quá giờ hẹn cũ', tat === 'khong-dung' && (await kho6.docCauHinh())?.nextRunAt === null, tat)
+        await luuCauHinhTikTok(c6, { schedule: { enabled: true } })
+        dung('M6e. bật lại ⇒ hẹn tính từ LÚC BẬT (+60 phút), không chạy bù ngay', (await kho6.docCauHinh())?.nextRunAt === bayGio + 60 * 60_000
+            && (await chayTheoLichTikTok(prisma, kho6, ngoai)) === 'chua-toi')
+        // cấu hình lệch (lịch TẮT mà còn sót giờ hẹn đã qua) ⇒ vẫn không chạy
+        const cf6f = (await kho6.docCauHinh())!
+        await kho6.luuCauHinh({ ...cf6f, schedule: { ...cf6f.schedule, enabled: false }, nextRunAt: bayGio - GIO })
+        const soGoi = goi.length
+        dung('M6f. lịch TẮT nhưng còn sót giờ hẹn đã qua ⇒ vẫn "khong-dung", không gọi TikTok',
+            (await chayTheoLichTikTok(prisma, kho6, ngoai)) === 'khong-dung' && goi.length === soGoi)
+        bayGio = NOW
     }
 
     // ─── 9. Nối dây (soát mã nguồn) ─────────────────────────────────────────────
