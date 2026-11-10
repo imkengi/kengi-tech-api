@@ -37,6 +37,9 @@
  *    P. nút "Đẩy giá lên sàn" (lib/dayGiaLenSan): mỗi listing soát GIÁ SÀN như Pilot (phí theo ngành, giá vốn, chính sách Pilot
  *       cùng sàn) — dưới sàn / thiếu giá vốn / chưa biết phí ⇒ bỏ qua có lý do, không gọi updatePrice. (10/11/2026, lô 19)
  *       gian TikTok: mã trong khuyến mãi ĐANG / SẮP chạy ⇒ bỏ qua (nhóm khuyenMai); chưa rõ + có mã hạ ⇒ đẩy kèm cảnh báo
+ *    W. (10/11/2026, X-19) đường DÙNG CHUNG của 4 Pilot — 10 kiểu hỏng mà đột biến cho thấy chưa ca nào canh: mốc 3 giờ / 24 giờ
+ *       của báo chủ shop, 'partial' và "CHƯA BIẾT PHÍ" là việc cần người, dấu việc mang gian + trạng thái và không phụ thuộc thứ tự,
+ *       hết việc rồi có việc lại vẫn giãn 3 giờ, sổ cấu hình coi null = vắng, đẩy tồn chu kỳ: chạy thử hỏng ⇒ không đẩy thật
  *    R. (10/11/2026, X-14) sổ ĐỔI CẤU HÌNH 4 Pilot: ai đổi, đổi gì (cũ → mới), dòng 'config' không ăn trần ghi / ngày
  *    Q. (09/11/2026, SP-07) gian LỚN (709 listing): trước chu kỳ chỉ xét 300 mã `updatedAt` mới nhất ⇒ ~400 mã không bao giờ
  *       được định giá. Giờ: con trỏ xoay vòng theo mã Shopee — 3 chu kỳ phủ đủ 709 mã, không trùng không sót; đồng bộ lại (đổi
@@ -1904,6 +1907,56 @@ async function main() {
             dongTk(v14).length === 1 && /invalid_acceess_token/.test(dongTk(v14)[0].message) && goi.length === 0
             && v14.results.some((r: any) => r.action === 'price' && r.status === 'skipped' && /^Không đổi giá lượt này — token Shopee/.test(r.message)), JSON.stringify(v14.results))
         traToken()
+    }
+
+    // ─── W. (10/11/2026, X-19) đường DÙNG CHUNG của 4 Pilot — các kiểu hỏng đột biến cho thấy chưa ca nào canh ───────────────
+    {
+        dung('W1. mốc báo chủ shop: việc mới giãn 3 giờ, việc y hệt nhắc lại sau 24 giờ (số tuyệt đối — các ca A chỉ so theo hằng)',
+            GIAN_CACH_BAO_MS === 3 * 3600_000 && NHAC_LAI_MS === 24 * 3600_000, `${GIAN_CACH_BAO_MS} ${NHAC_LAI_MS}`)
+        dung('W2. dòng "partial" (làm được một phần) là việc cần người; "succeeded" / "unchanged" / "preview" thì không',
+            canNguoi({ action: 'stock', status: 'partial', message: 'đẩy 3/5 mã' }) && !canNguoi({ action: 'stock', status: 'succeeded', message: 'đẩy 5 mã' })
+            && !canNguoi({ action: 'stock', status: 'unchanged', message: 'khớp kho' }) && !canNguoi({ action: 'stock', status: 'preview', message: 'sẽ đẩy 5 mã' }))
+        dung('W3. dòng bỏ qua mang chữ "CHƯA BIẾT PHÍ" là việc cần người kể cả khi thiếu cờ canNguoi; dòng bỏ qua thường thì không',
+            canNguoi({ action: 'price', status: 'skipped', message: 'CHƯA BIẾT PHÍ sàn của gian — khai phí ở Sửa chính sách' })
+            && !canNguoi({ action: 'price', status: 'skipped', message: 'Phí đã biết — không mã nào cần đổi' }))
+
+        const viecA = { action: 'price', channel: 'chA', sku: 'W1', status: 'failed', message: 'Shopee lỗi' }
+        const viecB = { action: 'stock', channel: 'chA', sku: '', status: 'skipped', canNguoi: true, message: 'CẦU DAO — không đẩy tồn' }
+        const k1 = viecCanNguoi([viecA, viecB]).khoa
+        dung('W4. dấu việc KHÔNG phụ thuộc thứ tự dòng (chu kỳ sau xếp khác ⇒ vẫn là việc cũ, không báo lại như việc mới)',
+            !!k1 && viecCanNguoi([viecB, viecA]).khoa === k1, k1)
+        dung('W5. dấu việc mang TRẠNG THÁI: cùng mã từ "failed" sang "uncertain" là việc khác',
+            viecCanNguoi([{ ...viecA, status: 'uncertain' }, viecB]).khoa !== k1)
+        dung('W6. dấu việc mang GIAN: cùng mã, cùng lỗi ở gian khác là việc khác',
+            viecCanNguoi([{ ...viecA, channel: 'chB' }, viecB]).khoa !== k1)
+
+        // hết việc rồi có việc lại: vẫn giãn 3 giờ tính từ tin ĐÃ GỬI gần nhất (việc chập chờn không thành mỗi lượt một tin)
+        const w0 = Date.now() + 100 * GIAN_CACH_BAO_MS
+        thongBao.length = 0
+        const kqCo = { ok: true, results: [viecA] }, kqHet = { ok: true, results: [{ action: 'price', status: 'succeeded', message: 'ok' }] }
+        const g1 = await baoChuShop(prisma, 'TikTok Pilot', kqCo, null, w0)
+        const g2 = await baoChuShop(prisma, 'TikTok Pilot', kqHet, g1, w0 + 60_000)
+        const g3 = await baoChuShop(prisma, 'TikTok Pilot', kqCo, g2, w0 + 120_000)
+        const soSau3 = thongBao.length
+        const g4 = await baoChuShop(prisma, 'TikTok Pilot', kqCo, g3, w0 + GIAN_CACH_BAO_MS + 1)
+        dung('W7. có việc → hết → có lại sau 2 phút ⇒ CHƯA báo lần hai (giữ mốc giờ tin đã gửi); đủ 3 giờ mới báo',
+            g1.luc === w0 && g2.khoa === '' && g2.luc === w0 && soSau3 === 1 && g3.khoa === '' && thongBao.length === 2 && g4.luc === w0 + GIAN_CACH_BAO_MS + 1,
+            JSON.stringify({ g2, g3, g4, n: [soSau3, thongBao.length] }))
+
+        const ds = soCauHinh({ pageId: null, policy: { cta: null, hashtags: null } }, { policy: { hashtags: [] } }, {})
+        dung('W8. so cấu hình: null lưu ↔ trường vắng / mảng rỗng gửi lại = KHÔNG đổi (không ghi dòng "trống → trống" vào sổ)', ds.length === 0, JSON.stringify(ds))
+
+        // đẩy tồn chu kỳ: lượt CHẠY THỬ hỏng ⇒ không bao giờ đẩy thật
+        for (const [ten, thu] of [['trả ok:false', async () => ({ ok: false, loi: 'đọc kho hỏng' })], ['ném lỗi', async () => { throw new Error('đọc kho hỏng') }]] as const) {
+            const goiD: any[] = []; let conL = 0, soG = 0
+            const r = await dayTonChuKy({
+                tuDong: true, san: 'TikTok', gian: 'T', conLuot: async () => { conL++ }, ghi: async () => { soG++ },
+                day: async (o: any) => { goiD.push(!!o.dryRun); if (o.dryRun) return (thu as any)(); return { ok: true, data: { pushed: 9 } } },
+            })
+            dung(`W9. đẩy tồn chu kỳ: chạy thử ${ten} ⇒ "failed" có lý do, KHÔNG gọi lượt đẩy thật, không ăn lượt ghi, là việc cần người`,
+                r.status === 'failed' && /^Không tính được tồn cần đẩy: đọc kho hỏng/.test(r.message) && goiD.length === 1 && goiD[0] === true && conL === 0 && soG === 0 && canNguoi(r),
+                JSON.stringify({ r, goiD, conL, soG }))
+        }
     }
 
     console.log(loi ? `❌ ${dat} đạt, ${loi} hỏng` : `✅ ${dat} đạt, 0 hỏng — Pilot tự động hoàn toàn: báo người, cầu dao, giá sống, nháp, nhiều gian, token Shopee, hết lượt ghi; đẩy tay: tồn Shopee, cầu dao chung, rào giá sàn`)
