@@ -105,6 +105,7 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
         chay: (ctx, b) => taoKeHoachTraLoi(ctx, {
             commentId: String(b?.commentId || ''), message: String(b?.message || ''), postId: b?.postId, commentMsg: b?.commentMsg,
             fromName: b?.fromName, productId: b?.productId, sku: b?.sku, price: b?.price, idempotencyKey: khoaWeb(b?.idempotencyKey),
+            replyTo: typeof b?.replyTo === 'string' ? b.replyTo : null,
         }),
     },
     hide: {

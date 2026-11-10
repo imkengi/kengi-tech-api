@@ -552,8 +552,12 @@ export async function docCauHinhFb(ctx: NgCanhFb): Promise<{ cfg: CauHinhFbPilot
         orderBy: { createdAt: 'asc' },
         select: { pageId: true, name: true, avatar: true, fanCount: true, status: true, tokenExpiresAt: true, webhookSubscribed: true, autoReplyEnabled: true, accessToken: true },
     })
-    const page = (cfg.pageId && pages.find(p => p.pageId === cfg.pageId)) || (pages.length === 1 ? pages[0] : null)
-    return { cfg, pages, page }
+    return { cfg, pages, page: chonTrangPilot(cfg, pages) }
+}
+
+/** Trang Pilot làm việc: trang đã chọn ở chính sách, chưa chọn thì trang DUY NHẤT đang nối. Một chỗ cho cả chu kỳ lẫn kích sớm. */
+export function chonTrangPilot<T extends { pageId: string }>(cfg: { pageId: string | null }, pages: T[]): T | null {
+    return (cfg.pageId && pages.find(p => p.pageId === cfg.pageId)) || (pages.length === 1 ? pages[0] : null)
 }
 
 async function canPage(ctx: NgCanhFb): Promise<{ cfg: CauHinhFbPilot; pages: any[]; page: any }> {
@@ -970,6 +974,8 @@ export async function taoKeHoachBai(ctx: NgCanhFb, b: DauVaoBai): Promise<KeHoac
 export interface DauVaoTraLoi {
     commentId: string; message: string; postId?: string | null; commentMsg?: string | null; fromName?: string | null
     productId?: string | null; sku?: string | null; price?: number | null; idempotencyKey?: string
+    /** bình luận nằm TRONG một luồng ⇒ câu trả lời gửi vào bình luận gốc của luồng (Facebook chỉ có hai tầng) */
+    replyTo?: string | null
 }
 
 export async function taoKeHoachTraLoi(ctx: NgCanhFb, b: DauVaoTraLoi): Promise<KeHoachFb> {
@@ -981,9 +987,12 @@ export async function taoKeHoachTraLoi(ctx: NgCanhFb, b: DauVaoTraLoi): Promise<
     if (!message) throw new ToolError('Nhập câu trả lời')
     const cam = tuCamTrong(message, await docHoSo(ctx.prisma))
     if (cam.length) throw new ToolError(`Câu trả lời có từ CẤM của thương hiệu: ${cam.join(', ')}.`)
+    const replyTo = String(b.replyTo || '').trim()
+    if (replyTo && !/^[A-Za-z0-9_]{1,80}$/.test(replyTo)) throw new ToolError('Mã bình luận gốc của luồng không hợp lệ')
     const data = {
         pageId: page.pageId, commentId, postId: b.postId || null, commentMsg: String(b.commentMsg || '').slice(0, 500),
         fromName: b.fromName ? String(b.fromName).slice(0, 100) : null, message,
+        ...(replyTo && replyTo !== commentId ? { replyTo } : {}),
         ...(b.productId ? { productId: String(b.productId), sku: b.sku || null, price: Number(b.price) || 0 } : {}),
     }
     return ctx.kho.taoKeHoach(keHoachMoi('reply', data, b.idempotencyKey, ctx.nguoi, now))
@@ -1242,7 +1251,8 @@ async function traLoiBinhLuan(ctx: NgCanhFb, plan: KeHoachFb, page: any, fb: Dic
         return { status: 'skipped', result }
     }
     try {
-        const r = await fb.replyToComment(String(d.commentId), String(d.message))
+        // sổ FbAutoReplyLog khoá theo bình luận ĐƯỢC trả lời (d.commentId); câu trả lời gửi vào gốc luồng nếu có
+        const r = await fb.replyToComment(String(d.replyTo || d.commentId), String(d.message))
         await ctx.prisma.fbAutoReplyLog.update({ where: khoa, data: { action: 'pilot_reply', replyText: String(d.message), success: true } }).catch(() => { })
         await ctx.kho.ghiNhatKy({ action: 'reply', status: 'succeeded', planId: plan.id, payload: { commentId: d.commentId }, response: { id: r?.id } })
         return { status: 'succeeded', result: { replyId: r?.id || null } }
@@ -1439,18 +1449,88 @@ export interface BinhLuanFb {
     suggestion: string | null
     handled: { action: string; success: boolean } | null
     plan: { id: string; kind: string; status: string } | null
+    /** bình luận TRẢ LỜI trong một luồng: mã bình luận nó trả lời (null = bình luận gốc dưới bài) — FB-09 */
+    parentId: string | null
+    parentFromName: string | null
+    /** gốc của luồng — câu trả lời của shop gửi vào đây (null = bình luận gốc, trả lời thẳng vào nó) */
+    replyTo: string | null
+    /** bình luận trong luồng mà shop ĐÃ có mặt (gốc là của fanpage, hoặc fanpage trả lời trước nó) ⇒ máy không tự trả lời */
+    shopDaVao: boolean
+    /** fanpage đã viết SAU bình luận này trong cùng luồng (người của shop trả lời tay trên Facebook) ⇒ coi như đã có shop lo */
+    shopTraLoi: boolean
 }
 
+const TRUONG_BL = 'id,message,from,created_time,is_hidden,comment_count'
+const TRUONG_BL_LUONG = `${TRUONG_BL},parent{id,from}`
+/** Bình luận cũ hơn mốc này máy không xử lý nữa — cũng là mốc dừng lật trang. */
+export const HAN_BINH_LUAN_MS = 3 * 86400_000
+/** Tối đa bấy nhiêu lời gọi ĐỌC THÊM trang bình luận trong một lượt (ngoài lời gọi đầu) — giữ hạn mức Facebook. */
+export const TRAN_TRANG_BL = 4
+
 /** Bình luận mới trên các bài gần nhất (đọc thẳng Facebook) kèm cờ + gợi ý trả lời bằng giá thật. */
-export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Promise<{ comments: BinhLuanFb[]; soBai: number; thieuFrom: number; page: any }> {
+/* FB-09 (10/11/2026): đọc CẢ bình luận trả lời trong luồng (filter=stream) — trước đây chỉ bình luận gốc, 25 cái mới nhất mỗi bài:
+ * khách hỏi giá / để số điện thoại bên trong một luồng thì máy không thấy. Mới nhất trước, 50 cái / bài; bài còn bình luận trong
+ * 3 ngày chưa đọc hết thì lật thêm trang (tối đa TRAN_TRANG_BL lời gọi / lượt). Facebook không nhận kiểu đọc luồng (lỗi không phải
+ * token / hạn mức / mạng, hoặc trả thứ tự cũ → mới) ⇒ đọc lại kiểu cũ và NÓI RA ở ghiChu — không âm thầm soát hẹp. */
+export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Promise<{ comments: BinhLuanFb[]; soBai: number; thieuFrom: number; page: any; luong: boolean; ghiChu: string[] }> {
     const { page } = await canPage(ctx)
     const fb = dichVu(ctx, page.accessToken)
+    const now = luc(ctx)
     const soBai = Math.floor(kep(o.soBai, 15, 1, 25))
-    const data = await fb.get(`${page.pageId}/posts`, {
-        fields: 'id,message,created_time,permalink_url,comments.order(reverse_chronological).limit(25){id,message,from,created_time,is_hidden,comment_count}',
+    const ghiChu: string[] = []
+    const docCu = () => fb.get(`${page.pageId}/posts`, {
+        fields: `id,message,created_time,permalink_url,comments.order(reverse_chronological).limit(25){${TRUONG_BL}}`,
         limit: soBai,
     })
+    const tg = (c: any) => Date.parse(c?.created_time) || 0
+    let luong = true
+    let data: any
+    try {
+        data = await fb.get(`${page.pageId}/posts`, {
+            fields: `id,message,created_time,permalink_url,comments.filter(stream).order(reverse_chronological).limit(50){${TRUONG_BL_LUONG}}`,
+            limit: soBai,
+        })
+    } catch (e: any) {
+        if (e?.isTokenError || isRateLimitError(e) || laLoiMang(e)) throw e
+        luong = false
+        ghiChu.push(`Facebook không cho đọc bình luận trong luồng (${String(e?.message || e).slice(0, 160)}) — lượt này chỉ soát bình luận gốc dưới bài (25 cái mới nhất mỗi bài).`)
+        data = await docCu()
+    }
+    // còn trang mà trang đầu xếp cũ → mới ⇒ Facebook bỏ qua thứ tự: bình luận MỚI nằm ở trang chưa đọc ⇒ không dùng được
+    if (luong && (data?.data || []).some((p: any) => {
+        const ds: any[] = p.comments?.data || []
+        return p.comments?.paging?.next && ds.length >= 2 && tg(ds[0]) < tg(ds[ds.length - 1])
+    })) {
+        luong = false
+        ghiChu.push('Facebook không trả bình luận trong luồng theo thứ tự mới nhất trước — lượt này chỉ soát bình luận gốc dưới bài (25 cái mới nhất mỗi bài).')
+        data = await docCu()
+    }
     const posts: any[] = data?.data || []
+
+    // Lật thêm trang cho bài còn bình luận trong hạn chưa đọc hết — bài mới trước, tối đa TRAN_TRANG_BL lời gọi
+    if (luong) {
+        let conGoi = TRAN_TRANG_BL
+        let boDo = 0
+        let hong = false
+        for (const p of posts) {
+            let pg = p.comments?.paging
+            let ds: any[] = p.comments?.data || []
+            while (!hong && pg?.next && pg?.cursors?.after && ds.length && now - Math.min(...ds.map(tg)) <= HAN_BINH_LUAN_MS) {
+                if (conGoi <= 0) { boDo++; break }
+                conGoi--
+                try {
+                    const them = await fb.get(`${p.id}/comments`, { filter: 'stream', order: 'reverse_chronological', limit: 50, after: pg.cursors.after, fields: TRUONG_BL_LUONG })
+                    ds = them?.data || []
+                    p.comments.data = [...(p.comments.data || []), ...ds]
+                    pg = them?.paging
+                } catch (e: any) {
+                    ghiChu.push(`Đọc thêm trang bình luận bị hỏng (${String(e?.message || e).slice(0, 160)}) — lượt này mới soát phần mới nhất của mỗi bài.`)
+                    hong = true
+                }
+            }
+        }
+        if (boDo) ghiChu.push(`${boDo} bài còn bình luận trong 3 ngày chưa đọc hết (mỗi lượt chỉ đọc thêm ${TRAN_TRANG_BL} trang) — phần cũ hơn của các bài đó chưa được soát.`)
+    }
 
     // Bài → mã hàng: bài Pilot đã đăng (mã bài trong kết quả kế hoạch), rồi dòng đầu = tên hàng
     const theoBai = new Map<string, string>()
@@ -1474,7 +1554,48 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
     }
 
     const tho: { c: any; p: any }[] = []
-    for (const p of posts) for (const c of p.comments?.data || []) tho.push({ c, p })
+    const daCo = new Set<string>()
+    for (const p of posts) for (const c of p.comments?.data || []) {
+        if (!c?.id || daCo.has(String(c.id))) continue      // lật trang có thể trả trùng khi có bình luận mới chen vào
+        daCo.add(String(c.id))
+        tho.push({ c, p })
+    }
+    // Luồng: gốc = bình luận không có parent; Facebook chỉ hai tầng nhưng vẫn leo tới gốc cho chắc
+    const theoId = new Map(tho.map(x => [String(x.c.id), x.c]))
+    const laPage = (f: any) => !!f?.id && String(f.id) === String(page.pageId)
+    const gocCua = (c: any): string => {
+        let x = c
+        for (let i = 0; i < 5 && x?.parent?.id; i++) {
+            const cha = theoId.get(String(x.parent.id))
+            if (!cha) return String(x.parent.id)
+            x = cha
+        }
+        return String(x.id)
+    }
+    const luongTheoGoc = new Map<string, any[]>()
+    for (const { c } of tho) {
+        const g = gocCua(c)
+        luongTheoGoc.set(g, [...(luongTheoGoc.get(g) || []), c])
+    }
+    const khacNguoi = (a: any, b: any) => String(a.id) !== String(b.id) && !(a.from?.id && b.from?.id && String(a.from.id) === String(b.from.id))
+    const soTraLoiCua = (c: any): number => {
+        if (!luong) return Number(c.comment_count) || 0
+        const g = gocCua(c)
+        const con = (luongTheoGoc.get(g) || []).filter(x => String(x.id) !== g)
+        if (!c.parent?.id) return con.filter(x => khacNguoi(x, c)).length + Math.max(0, (Number(c.comment_count) || 0) - con.length)
+        return con.filter(x => tg(x) > tg(c) && khacNguoi(x, c)).length
+    }
+    const shopDaVaoCua = (c: any): boolean => {
+        if (!c.parent?.id) return false
+        const g = gocCua(c)
+        if (laPage(theoId.get(g)?.from) || laPage(c.parent?.from)) return true
+        return (luongTheoGoc.get(g) || []).some(x => String(x.id) !== String(c.id) && laPage(x.from) && tg(x) <= tg(c))
+    }
+    const shopTraLoiCua = (c: any): boolean => {
+        if (!luong || laPage(c.from)) return false
+        const g = gocCua(c)
+        return (luongTheoGoc.get(g) || []).some(x => String(x.id) !== String(c.id) && String(x.id) !== g && laPage(x.from) && (!c.parent?.id || tg(x) > tg(c)))
+    }
     const ids = tho.map(x => String(x.c.id))
     const daXuLy: any[] = ids.length ? await ctx.prisma.fbAutoReplyLog.findMany({ where: { pageId: page.pageId, commentId: { in: ids } }, select: { commentId: true, action: true, success: true } }).catch(() => []) : []
     const soCu = new Map(daXuLy.map(r => [String(r.commentId), r]))
@@ -1498,7 +1619,7 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
         return {
             id: String(c.id), message: msg, fromName: c.from?.name || null, fromId: c.from?.id ? String(c.from.id) : null,
             fromPage: !!c.from?.id && String(c.from.id) === String(page.pageId),
-            createdTime: Date.parse(c.created_time) || 0, isHidden: !!c.is_hidden, replies: Number(c.comment_count) || 0,
+            createdTime: Date.parse(c.created_time) || 0, isHidden: !!c.is_hidden, replies: soTraLoiCua(c),
             postId: String(p.id), postTitle: dongDau(p.message).slice(0, 120), permalink: p.permalink_url || null,
             askPrice: hoiGia, complaint: laPhanNan(msg), hasPhone: coSoDienThoai(msg),
             product: s ? { productId: String(s.id), sku: s.sku, name: tenGon(s.name), price: Number(s.sellingPrice) || 0, stock: Number(s.stock) || 0 } : null,
@@ -1506,10 +1627,15 @@ export async function docBinhLuan(ctx: NgCanhFb, o: { soBai?: number } = {}): Pr
             suggestion: hoiGia && s && Number(s.sellingPrice) > 0 ? cauTraLoiGia(s) : null,
             handled: so ? { action: String(so.action), success: !!so.success } : null,
             plan: kh ? { id: kh.id, kind: kh.kind, status: kh.status } : null,
+            parentId: c.parent?.id ? String(c.parent.id) : null,
+            parentFromName: c.parent?.id ? (c.parent.from?.name || theoId.get(String(c.parent.id))?.from?.name || null) : null,
+            replyTo: c.parent?.id ? gocCua(c) : null,
+            shopDaVao: shopDaVaoCua(c),
+            shopTraLoi: shopTraLoiCua(c),
         }
     })
     comments.sort((a, b) => b.createdTime - a.createdTime)
-    return { comments, soBai: posts.length, thieuFrom, page: pageAnToan(page) }
+    return { comments, soBai: posts.length, thieuFrom, page: pageAnToan(page), luong, ghiChu }
 }
 
 // ─── Sửa giá bài đã lên (10/11/2026, FB-15) ─────────────────────────────────────
@@ -1876,7 +2002,7 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                 if (c.handled || c.plan || c.fromPage) continue
                 // nháp máy cho bình luận này bị NGƯỜI huỷ (14 ngày) ⇒ không đề xuất lại — kể cả khi vừa đổi Xem trước → Tự động
                 if (mo.binhLuan.has(c.id)) continue
-                if (now - c.createdTime > 3 * 86400_000) continue
+                if (now - c.createdTime > HAN_BINH_LUAN_MS) continue
                 if (pol.automation.hidePhoneComments && c.hasPhone && !c.isHidden && c.fromId) {
                     try {
                         let plan: any = await taoKeHoachAn(ctx, { commentId: c.id, postId: c.postId, commentMsg: c.message, fromName: c.fromName, reason: 'Bình luận lộ số điện thoại', idempotencyKey: `${tienTo}:hide:${c.id}` })
@@ -1890,16 +2016,19 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                     }
                 }
                 if (tamDung) break
-                if (pol.automation.replyPriceQuestions && c.askPrice && c.suggestion && c.product && soTraLoi < pol.maxRepliesPerCycle) {
+                // người của shop đã trả lời tay ngay trong luồng (sau bình luận này) ⇒ không soạn nháp đè lên
+                if (pol.automation.replyPriceQuestions && c.askPrice && c.suggestion && c.product && !c.shopTraLoi && soTraLoi < pol.maxRepliesPerCycle) {
                     // Máy chỉ TỰ GỬI khi chắc là khách, chưa ai trả lời, và tồn dương — còn lại để nháp chờ người duyệt
                     const choDuyet = !c.fromId ? 'không rõ người viết (token thiếu quyền đọc người bình luận)'
-                        : c.replies > 0 ? 'bình luận đã có người trả lời'
+                        : c.shopDaVao ? 'khách hỏi tiếp trong luồng shop đã trả lời — cần người đọc cả luồng'
+                            : c.replies > 0 ? 'bình luận đã có người trả lời'
                             : !(c.product.stock > 0) ? `tồn kho ${c.product.stock} — kiểm hàng trước khi trả lời`
                                 : null
                     try {
                         let plan: any = await taoKeHoachTraLoi(ctx, {
                             commentId: c.id, message: c.suggestion, postId: c.postId, commentMsg: c.message, fromName: c.fromName,
                             productId: c.product.productId, sku: c.product.sku, price: c.product.price, idempotencyKey: `${tienTo}:reply:${c.id}`,
+                            replyTo: c.replyTo,
                         })
                         if (tuDong && !choDuyet && plan.status === 'draft') plan = await thucThiFb(ctx, plan.id, { tuDong: true })
                         const p = plan.plan || plan
@@ -1915,7 +2044,8 @@ export async function chayChuKyFb(ctx: NgCanhFb): Promise<any> {
                     }
                 }
             }
-            if (!soTraLoi && !soAn) results.push({ action: 'comments', status: 'unchanged', message: `Soát ${bl.comments.length} bình luận trên ${bl.soBai} bài gần nhất: không có gì cần xử lý.` })
+            if (!soTraLoi && !soAn) results.push({ action: 'comments', status: 'unchanged', message: `Soát ${bl.comments.length} bình luận${bl.luong ? ' (cả trả lời trong luồng)' : ''} trên ${bl.soBai} bài gần nhất: không có gì cần xử lý.` })
+            for (const g of bl.ghiChu) results.push({ action: 'comments', status: 'skipped', message: g.slice(0, 400) })
             if (bl.thieuFrom && bl.thieuFrom === bl.comments.length) {
                 results.push({ action: 'comments', status: 'skipped', message: 'Token không đọc được người bình luận (thiếu quyền pages_read_user_content) — máy không tự trả lời / ẩn được, chỉ lập nháp.' })
             }
@@ -2083,6 +2213,48 @@ export async function chayTheoLichFb(prisma: any, kho?: KhoFbPilot, ngoai: Parti
     const bao = await baoChuShop(prisma, 'Facebook Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto'), truoc, now).catch(() => truoc)
     await k.ghiKetQuaLich(now, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
     return ketQua.ok ? 'da-chay' : 'loi'
+}
+
+// ─── Kích sớm khi có bình luận mới (10/11/2026, FB-09) ──────────────────────────────────────────
+
+/** Có bình luận mới ⇒ lượt theo lịch kế tiếp dời về sau bấy lâu (gom vài bình luận tới dồn vào một lượt). */
+export const TRE_KICH_BL_MS = 60_000
+/** Hai lượt chạy cách nhau ít nhất bấy lâu dù bình luận tới liên tục — giữ hạn mức Facebook, chặn vòng lặp webhook. */
+export const SAN_KICH_BL_MS = 10 * 60_000
+
+/**
+ * Webhook Facebook báo có bình luận mới trên `pageId` ⇒ kéo lượt chạy theo lịch về now + 1 phút, để khách hỏi giá không phải chờ
+ * hết một chu kỳ (mặc định 4 giờ). KHÔNG chạy gì ở đây và không gọi Facebook: chỉ dời "nextRunAt" bằng chính phép giành nguyên
+ * tử của lịch (gianhLich) — lượt chạy thật vẫn do nhịp cron làm, vẫn một bản máy một lượt.
+ * Chỉ kích khi chủ shop ĐÃ bật: lịch tự chạy + chế độ Tự động + (tự trả lời giá hoặc tự ẩn số điện thoại) + đúng fanpage của Pilot.
+ * Xem trước thì không kích (không có gì gửi đi, chỉ tốn lượt đọc).
+ */
+export async function kichSomTheoBinhLuan(prisma: any, pageId: string, o: { kho?: KhoFbPilot; bayGio?: () => number } = {}): Promise<'khong-dung' | 'sap-chay' | 'vua-chay' | 'bi-gianh' | 'da-kich' | 'loi'> {
+    try {
+        const now = o.bayGio ? o.bayGio() : Date.now()
+        if (!o.kho) {
+            // cửa hàng chưa từng mở Facebook Pilot ⇒ bảng chưa có: thôi, KHÔNG tạo bảng hộ (khoSqlFb sẽ tạo)
+            try {
+                const [r]: any[] = await prisma.$queryRawUnsafe(`SELECT "nextRunAt"::float8 AS "nextRunAt" FROM "FacebookPilotConfig" WHERE id = 'default'`)
+                if (!r || r.nextRunAt == null) return 'khong-dung'
+            } catch {
+                return 'khong-dung'
+            }
+        }
+        const k = o.kho || khoSqlFb(prisma)
+        const cfg = await k.docCauHinh()
+        if (!cfg || cfg.nextRunAt == null || !cfg.schedule?.enabled || cfg.executionMode !== 'auto') return 'khong-dung'
+        const tuDongHoa = cfg.policy?.automation
+        if (!tuDongHoa?.replyPriceQuestions && !tuDongHoa?.hidePhoneComments) return 'khong-dung'
+        const pages: { pageId: string }[] = await prisma.fbPage.findMany({ where: { status: { not: 'disconnected' } }, select: { pageId: true } })
+        if (chonTrangPilot(cfg, pages)?.pageId !== String(pageId)) return 'khong-dung'
+        if (cfg.nextRunAt <= now + TRE_KICH_BL_MS) return 'sap-chay'
+        const lanTruoc = Math.max(Number(cfg.lastRunAt) || 0, cfg.nextRunAt - cfg.schedule.intervalMinutes * 60_000)
+        if (lanTruoc > now - SAN_KICH_BL_MS) return 'vua-chay'
+        return (await k.gianhLich(cfg.nextRunAt, now + TRE_KICH_BL_MS)) ? 'da-kich' : 'bi-gianh'
+    } catch {
+        return 'loi'
+    }
 }
 
 // ─── Soát bài hẹn sắp lên (09/11/2026 — gọi từ cron/aiAgentCron mỗi nhịp phút) ──────────────────
@@ -2382,7 +2554,16 @@ Pilot lên bài sản phẩm cho fanpage và xử lý bình luận, dữ liệu 
      nêu các bài đang mời mua mà tồn ≤ 0 để chủ shop tự sửa / ẩn nếu hết thật.
 
 3. Bình luận
-   - Tab Bình luận đọc bình luận mới trên 15 bài gần nhất, đánh dấu: hỏi giá / xin inbox, có số điện thoại, đã có người trả lời.
+   - Tab Bình luận đọc bình luận mới trên 15 bài gần nhất — cả bình luận gốc lẫn câu trả lời trong luồng (khách hỏi giá bên dưới
+     bình luận của người khác cũng thấy) — đánh dấu: hỏi giá / xin inbox, có số điện thoại, đã có người trả lời.
+   - Trả lời một câu nằm trong luồng: Pilot gửi vào bình luận gốc của luồng đó (Facebook chỉ có hai tầng), sổ "mỗi bình luận một lần"
+     vẫn ghi theo đúng câu được trả lời. Máy chỉ TỰ gửi khi luồng chưa có shop và chưa ai trả lời sau câu hỏi; khách hỏi tiếp trong
+     luồng shop đã trả lời ⇒ lập nháp chờ người đọc cả luồng; fanpage đã trả lời tay rồi ⇒ không lập nháp.
+   - Bài còn bình luận trong 3 ngày chưa đọc hết thì Pilot đọc thêm trang (tối đa 4 trang mỗi lượt). Chưa đọc hết, hoặc Facebook
+     không cho đọc kiểu luồng (khi đó chỉ soát bình luận gốc), kết quả chu kỳ ghi rõ — không âm thầm soát thiếu.
+   - Đang bật lịch + chế độ Tự động + (tự trả lời giá hoặc tự ẩn số điện thoại) và fanpage đã bật nhận sự kiện (webhook): có bình
+     luận mới thì lượt chạy kế được kéo về sau vài phút thay vì chờ hết chu kỳ; hai lượt cách nhau ít nhất 10 phút. Chưa bật
+     webhook thì vẫn theo chu kỳ như cũ.
    - Bài do Pilot đăng (hoặc bài có dòng đầu là tên hàng) được nối về mã hàng ⇒ gợi ý câu trả lời bằng GIÁ THẬT trong kho.
      Tồn dương mới nói "có hàng"; tồn ≤ 0 không nói "hết hàng", chỉ mời khách nhắn tin.
    - Mỗi bình luận chỉ được trả lời MỘT lần — dùng chung sổ với Quy tắc tự trả lời của Fanpage Manager.

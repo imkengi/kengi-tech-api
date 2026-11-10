@@ -18,6 +18,8 @@ import { nhanPush, dangKyBoXuLyPush, xongPush, boPush, hoanPush } from '../servi
 import type { TinPush, KetQuaPush } from '../services/hopThuWebhook'
 import { giuKhoa, traKhoa } from '../lib/leaderLock'
 import { xuLyPushShopeeVideo } from '../lib/pushShopeeVideo'
+import { kichSomTheoBinhLuan } from '../lib/facebookPilot'
+import { docTienIch, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
 
 const router = Router()
 
@@ -1025,6 +1027,20 @@ router.post('/facebook', async (req: Request, res: Response) => {
             if (!resolved) {
                 console.log(`[FB Webhook] Không tìm thấy page ${pageId} (chưa kết nối)`)
                 continue
+            }
+            /* FB-09 (10/11/2026): khách bình luận ⇒ kéo lượt chạy theo lịch của Facebook Pilot về sớm (1 phút nữa), khỏi chờ hết chu kỳ.
+             * Chỉ cửa hàng BẬT tiện ích facebook_pilot mới đụng tới bảng Pilot; bình luận của chính fanpage không kích (chặn vòng lặp
+             * khi Pilot tự trả lời). Không gọi Facebook, không chạy gì ở đây — chỉ dời giờ hẹn; hỏng thì thôi, lịch thường vẫn chạy. */
+            if (commentChanges.some((c: any) => String(c.value?.from?.id || '') !== pageId)) {
+                try {
+                    const ch = await registryPrisma.store.findFirst({ where: { schema: resolved.schema }, select: { addOns: true } })
+                    if (ch && docTienIch(ch.addOns).includes(TIEN_ICH_FACEBOOK_PILOT)) {
+                        const kq = await kichSomTheoBinhLuan(resolved.storePrisma, pageId)
+                        if (kq === 'da-kich') console.log(`[FB Webhook] Facebook Pilot: kich som luot soat binh luan page=${pageId}`)
+                    }
+                } catch (e: any) {
+                    console.warn(`[FB Webhook] kich som Pilot hong page=${pageId}:`, e?.message)
+                }
             }
             if (!resolved.page.autoReplyEnabled) continue
 

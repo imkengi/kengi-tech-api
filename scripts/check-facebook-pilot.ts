@@ -46,6 +46,12 @@
  *     ⇒ thôi theo dõi; bài mất / hẹn chưa quá 30 phút / quá 30 ngày / fanpage khác ⇒ không đụng; tồn ≤ 0 ⇒ chỉ nêu, không ghi "hết
  *     hàng"; hết lượt ghi ⇒ nháp + báo, lượt sau thực thi chính nháp đó; người huỷ ⇒ nhớ 14 ngày; hỏng ⇒ 24 giờ, 5 lần thì thôi;
  *     chưa rõ ⇒ chờ «Đã kiểm»; giá đổi lúc thực thi ⇒ không sửa; nháp lỗi thời không bị thực thi lại; 10 bài / chu kỳ; câu SQL.
+ * 19. (10/11/2026, lô 22: FB-09) bình luận trong LUỒNG: đọc filter(stream) kèm parent; hỏi giá trong luồng chưa ai trả lời ⇒ trả lời
+ *     vào GỐC, sổ ghi theo bình luận được trả lời; shop đã vào luồng / người khác đã trả lời ⇒ nháp chờ duyệt; fanpage đã trả lời tay
+ *     ⇒ không lập nháp; số điện thoại trong luồng ⇒ ẩn. Facebook không nhận kiểu đọc luồng / bỏ qua thứ tự ⇒ đọc kiểu cũ + NÓI RA;
+ *     token / hạn mức ⇒ ném nguyên. Lật trang theo con trỏ tới hết 3 ngày, trần 4 lời gọi / lượt (vượt ⇒ nói ra), trùng tính một.
+ *     Kích sớm theo webhook (kichSomTheoBinhLuan): chỉ dời nextRunAt về +1 phút khi lịch bật + Tự động + có tự trả lời / tự ẩn + đúng
+ *     fanpage; sàn 10 phút; thua giành ⇒ thôi; hỏng ⇒ không ném; cửa hàng chưa mở Pilot ⇒ không tạo bảng. Nối dây webhook + route.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -56,6 +62,7 @@ import {
     soatBaiHenSapLen, chuCoGia, lyDoRutBai, sqlDemBaiHenSapLen, laThieuBang,
     taoKeHoachBoAn, xacNhanDaKiemFb, dsKeHoachFb, khoSqlFb, HUONG_DAN_FB_PILOT,
     dongGiaBai, coDongGia, thayGiaTrongBai, giaBaiTheoPilot,
+    kichSomTheoBinhLuan, TRE_KICH_BL_MS, SAN_KICH_BL_MS, TRAN_TRANG_BL,
 } from '../src/lib/facebookPilot'
 import { NHAN_FACEBOOK } from '../src/lib/pilotDoiCauHinh'
 import { ToolError } from '../src/lib/mcpTypes'
@@ -192,6 +199,14 @@ let baiSongBat = false
 let loiSua: any = null
 let loiDocBai: any = null
 let baiDay100 = false
+/* Phía FACEBOOK của bình luận trong LUỒNG (19 — FB-09). luongBat = false (mặc định) ⇒ get trả baiTrenFb như cũ.
+ * loiLuong: ném khi lời đọc xin filter(stream); baiCu: thứ trả về cho lời đọc KIỂU CŨ (không filter) — Facebook thật kiểu cũ chỉ trả
+ * bình luận gốc; trangThem: trang đọc thêm theo khoá "<mã bài>|<con trỏ after>"; loiTrangThem: ném ở lời đọc thêm trang. */
+let luongBat = false
+let loiLuong: any = null
+let baiCu: any[] | null = null
+const trangThem = new Map<string, any>()
+let loiTrangThem: any = null
 const fbGia = (token: string): DichVuFb => ({
     get: async (p: string, params?: any) => {
         goiFb.push(['get', p, params, token])
@@ -209,6 +224,13 @@ const fbGia = (token: string): DichVuFb => ({
                 if (!b) throw Object.assign(new Error('(#100) Object with ID does not exist'), { code: 100 })
                 return { ...b }
             }
+        }
+        if (luongBat) {
+            const m = /^(.+)\/comments$/.exec(p)
+            if (m) { if (loiTrangThem) throw loiTrangThem; return trangThem.get(`${m[1]}|${params?.after}`) || { data: [] } }
+            const xinLuong = /filter\(stream\)/.test(String(params?.fields || ''))
+            if (xinLuong && loiLuong) throw loiLuong
+            if (!xinLuong && baiCu) return { data: baiCu }
         }
         return { data: baiTrenFb }
     },
@@ -1853,6 +1875,242 @@ async function main() {
         dung('18ax. SQL dsKeHoachSuaBai: kind = \'edit\', data->>postId = ANY($1::text[]), cũ trước; danh sách rỗng ⇒ không truy vấn',
             rong.length === 0 && truocRong === sauRong && /kind = 'edit'/.test(lq?.sql || '') && /data::jsonb->>'postId' = ANY\(\$1::text\[\]\)/.test(lq?.sql || '')
             && /ORDER BY "createdAt" ASC, id ASC/.test(lq?.sql || '') && JSON.stringify(lq?.v) === '[["PG1_1","PG1_2"]]', lq?.sql)
+    }
+
+    // ─── 19. Bình luận trong LUỒNG + kích sớm theo webhook (10/11/2026, lô 22: FB-09) ─────────
+    {
+        datLai(); goiFb.length = 0; bayGio = NOW
+        const gio = (h: number) => new Date(NOW - h * H).toISOString()
+        const U = (n: number, ten: string) => ({ id: `U${n}`, name: ten })
+        const TRANG = { id: 'PG1', name: 'Kengi Fanpage' }
+        const BAI = '🔹 Mũi khoan lệch tâm 10mm\n💰 Giá: 26.000đ'
+        // Facebook trả luồng PHẲNG, mới nhất trước; bình luận trả lời mang parent{id,from}
+        const luong19 = () => [
+            { id: 'PG1_301', message: BAI, permalink_url: 'https://fb/301', comments: { data: [
+                { id: 'T4', message: 'lấy 1 cái, sđt 0909 123 456', from: U(5, 'Sáu'), created_time: gio(1), comment_count: 0, parent: { id: 'G3', from: U(4, 'Năm') } },
+                { id: 'G3', message: 'ok đó', from: U(4, 'Năm'), created_time: gio(2), comment_count: 1 },
+                { id: 'T3', message: 'giá sỉ bao nhiêu shop', from: U(3, 'Ba'), created_time: gio(3), comment_count: 0, parent: { id: 'G2', from: U(3, 'Ba') } },
+                { id: 'T1', message: 'giá bao nhiêu shop', from: U(2, 'Hai'), created_time: gio(4), comment_count: 0, parent: { id: 'G1', from: U(1, 'Một') } },
+                { id: 'G1', message: 'đẹp quá', from: U(1, 'Một'), created_time: gio(5), comment_count: 1 },
+                { id: 'T2', message: 'Dạ 26.000đ ạ', from: TRANG, created_time: gio(5.5), comment_count: 0, parent: { id: 'G2', from: U(3, 'Ba') } },
+                { id: 'G2', message: 'giá sao shop', from: U(3, 'Ba'), created_time: gio(6), comment_count: 2 },
+                { id: 'T5', message: 'giá nhiêu ạ', from: U(6, 'Bảy'), created_time: gio(7), comment_count: 0, parent: { id: 'G4', from: TRANG } },
+                { id: 'G4', message: 'Hàng mới về nha cả nhà', from: TRANG, created_time: gio(8), comment_count: 1 },
+                // luồng có gốc nằm NGOÀI phần đã đọc: T7 hỏi, T8 (người khác) trả lời sau
+                { id: 'T8', message: 'mình mua 26k đó bạn', from: U(9, 'Chín'), created_time: gio(9), comment_count: 0, parent: { id: 'GX', from: U(7, 'Tám') } },
+                { id: 'T7', message: 'giá bao nhiêu vậy', from: U(8, 'Mười'), created_time: gio(10), comment_count: 0, parent: { id: 'GX', from: U(7, 'Tám') } },
+            ] } },
+        ]
+        luongBat = true
+        try {
+            baiTrenFb = luong19()
+            const ctx = ngCanh()
+            await luuCauHinhFb(ctx, { executionMode: 'auto', policy: { maxRepliesPerCycle: 10, automation: { posts: false, replyPriceQuestions: true, hidePhoneComments: true } } })
+            const bl = await docBinhLuan(ctx)
+            const c = (id: string) => bl.comments.find(x => x.id === id)!
+            const docDau = goiFb.find(g => g[0] === 'get' && g[1] === 'PG1/posts')
+            dung('19a. đọc bài xin bình luận kiểu LUỒNG: filter(stream), mới nhất trước, 50 cái, kèm parent{id,from}',
+                /comments\.filter\(stream\)\.order\(reverse_chronological\)\.limit\(50\)\{[^}]*parent\{id,from\}\}/.test(String(docDau?.[2]?.fields)) && bl.luong === true && bl.ghiChu.length === 0, String(docDau?.[2]?.fields))
+            dung('19b. bình luận trả lời trong luồng: parentId, tên người được trả lời, replyTo = GỐC; bình luận gốc ⇒ cả ba null',
+                c('T1').parentId === 'G1' && c('T1').parentFromName === 'Một' && c('T1').replyTo === 'G1' && c('G1').parentId === null && c('G1').replyTo === null && c('G1').parentFromName === null, JSON.stringify(c('T1')))
+            dung('19c. shop đã vào luồng: fanpage trả lời TRƯỚC (T3), gốc là của fanpage (T5) ⇒ shopDaVao; luồng chưa có shop (T1, T4) ⇒ không',
+                c('T3').shopDaVao && c('T5').shopDaVao && !c('T1').shopDaVao && !c('T4').shopDaVao && !c('G2').shopDaVao)
+            dung('19d. fanpage đã trả lời tay SAU bình luận gốc (G2) ⇒ shopTraLoi; hỏi tiếp SAU câu của shop (T3) ⇒ không',
+                c('G2').shopTraLoi === true && c('T3').shopTraLoi === false && c('T1').shopTraLoi === false && c('T2').shopTraLoi === false)
+            dung('19e. "đã có người trả lời" trong luồng = người KHÁC viết SAU nó (T7 có T8; T1 chưa ai); gốc đếm con của người khác',
+                c('T7').replies === 1 && c('T8').replies === 0 && c('T1').replies === 0 && c('G1').replies === 1 && c('G2').replies === 1, `${c('T7').replies} ${c('T8').replies} ${c('T1').replies} ${c('G1').replies} ${c('G2').replies}`)
+            dung('19f. gốc nằm ngoài phần đã đọc ⇒ replyTo vẫn là mã gốc Facebook báo (GX)', c('T7').replyTo === 'GX' && c('T7').parentFromName === 'Tám')
+
+            goiFb.length = 0
+            const kq = await chayChuKyFb(ctx)
+            const traLoi = ghiFb().filter(g => g[0] === 'reply')
+            const an = ghiFb().filter(g => g[0] === 'hide').map(g => g[1])
+            dung('19g. Tự động: khách hỏi giá TRONG luồng chưa ai trả lời (T1) ⇒ trả lời, gửi vào GỐC của luồng (G1)',
+                traLoi.length === 1 && traLoi[0][1] === 'G1' && /26\.000đ/.test(traLoi[0][2]), JSON.stringify(traLoi))
+            dung('19h. sổ "mỗi bình luận một lần" ghi theo bình luận ĐƯỢC TRẢ LỜI (T1), không theo gốc (G1)',
+                soTraLoi.some(r => r.commentId === 'T1' && r.action === 'pilot_reply' && r.success === true) && !soTraLoi.some(r => r.commentId === 'G1'), JSON.stringify(soTraLoi))
+            const nhap = ctx.kho._keHoach.filter(k => k.kind === 'reply' && k.status === 'draft').map(k => String(k.data.commentId)).sort().join(',')
+            dung('19i. hỏi tiếp trong luồng shop đã vào (T3, T5) + đã có người khác trả lời (T7) ⇒ nháp CHỜ NGƯỜI DUYỆT, không tự gửi',
+                nhap === 'T3,T5,T7' && kq.results.filter((r: any) => r.action === 'reply' && r.canNguoi && /shop đã trả lời — cần người đọc cả luồng/.test(r.message)).length === 2,
+                `${nhap} · ${JSON.stringify(kq.results.filter((r: any) => r.action === 'reply').map((r: any) => r.message))}`)
+            dung('19j. bình luận gốc fanpage đã trả lời tay (G2) ⇒ KHÔNG lập cả nháp', !ctx.kho._keHoach.some(k => k.data?.commentId === 'G2'))
+            dung('19k. nháp trong luồng giữ replyTo = gốc (duyệt tay cũng gửi vào gốc)', ctx.kho._keHoach.find(k => k.data?.commentId === 'T3')?.data?.replyTo === 'G2' && ctx.kho._keHoach.find(k => k.data?.commentId === 'T5')?.data?.replyTo === 'G4')
+            dung('19l. số điện thoại lộ TRONG luồng (T4) ⇒ ẩn đúng bình luận đó', JSON.stringify(an) === '["T4"]', JSON.stringify(an))
+            goiFb.length = 0
+            const kq2 = await chayChuKyFb(ctx)
+            dung('19m. chạy lại: không trả lời / ẩn lặp; dòng "không có gì" nói rõ đã soát cả luồng', ghiFb().length === 0 && kq2.results.some((r: any) => r.action === 'comments' && /cả trả lời trong luồng/.test(r.message)), JSON.stringify(kq2.results))
+            // người duyệt nháp T3 ⇒ gửi vào gốc G2, sổ ghi T3
+            goiFb.length = 0
+            const kT3 = ctx.kho._keHoach.find(k => k.data?.commentId === 'T3')!
+            const tT3 = await thucThiFb(ctx, kT3.id)
+            dung('19n. người duyệt nháp trong luồng ⇒ gửi vào gốc (G2), sổ ghi T3', tT3.status === 'succeeded' && ghiFb().some(g => g[0] === 'reply' && g[1] === 'G2') && soTraLoi.some(r => r.commentId === 'T3'), `${tT3.status} ${JSON.stringify(ghiFb())}`)
+
+            // người bấm «Trả lời» trên trang: replyTo đi kèm; mã bậy ⇒ từ chối; replyTo trùng commentId ⇒ không lưu thừa
+            const tay = await taoKeHoachTraLoi(ctx, { commentId: 'T8', message: 'Dạ shop cảm ơn ạ', replyTo: 'GX' })
+            const tay2 = await taoKeHoachTraLoi(ctx, { commentId: 'G1', message: 'Dạ shop cảm ơn ạ', replyTo: 'G1' })
+            let loiMa = ''
+            try { await taoKeHoachTraLoi(ctx, { commentId: 'G3', message: 'Dạ', replyTo: 'G3/../me' }) } catch (e: any) { loiMa = String(e?.message) }
+            dung('19o. replyTo: lưu khi khác bình luận; trùng ⇒ bỏ; mã không hợp lệ ⇒ từ chối', tay.data.replyTo === 'GX' && tay2.data.replyTo === undefined && /Mã bình luận gốc của luồng không hợp lệ/.test(loiMa), `${tay.data.replyTo} ${tay2.data.replyTo} ${loiMa}`)
+
+            // ── Facebook không nhận kiểu đọc luồng ⇒ đọc kiểu cũ + NÓI RA ──
+            datLai(); goiFb.length = 0
+            const goc19 = () => [{ id: 'PG1_301', message: BAI, comments: { data: [
+                { id: 'G1', message: 'giá sao shop', from: U(1, 'Một'), created_time: gio(1), comment_count: 0 },
+                { id: 'G5', message: 'giá?', from: U(2, 'Hai'), created_time: gio(2), comment_count: 2 },
+            ] } }]
+            baiTrenFb = luong19(); baiCu = goc19()
+            loiLuong = Object.assign(new Error('(#100) Unknown fields: filter'), { code: 100 })
+            const ctxB = ngCanh()
+            await luuCauHinhFb(ctxB, { executionMode: 'auto', policy: { maxRepliesPerCycle: 10, automation: { posts: false, replyPriceQuestions: true, hidePhoneComments: true } } })
+            const blB = await docBinhLuan(ctxB)
+            const docB = goiFb.filter(g => g[0] === 'get' && g[1] === 'PG1/posts').map(g => String(g[2]?.fields))
+            dung('19p. Facebook từ chối đọc luồng (#100) ⇒ đọc lại kiểu cũ (không filter, 25 cái), luong = false, ghiChu NÓI RÕ chỉ soát bình luận gốc',
+                docB.length === 2 && !/filter\(stream\)/.test(docB[1]) && /limit\(25\)/.test(docB[1]) && blB.luong === false && blB.comments.length === 2
+                && blB.ghiChu.length === 1 && /không cho đọc bình luận trong luồng \(\(#100\) Unknown fields: filter\).*chỉ soát bình luận gốc/.test(blB.ghiChu[0]), JSON.stringify(blB.ghiChu))
+            dung('19q. đọc kiểu cũ: "đã có người trả lời" theo comment_count như trước', blB.comments.find(x => x.id === 'G5')!.replies === 2 && blB.comments.find(x => x.id === 'G1')!.replies === 0)
+            const kqB = await chayChuKyFb(ctxB)
+            dung('19r. chu kỳ vẫn làm việc trên bình luận gốc và ĐƯA ghi chú vào kết quả (không âm thầm soát hẹp)',
+                ghiFb().some(g => g[0] === 'reply' && g[1] === 'G1') && kqB.results.some((r: any) => r.action === 'comments' && r.status === 'skipped' && /chỉ soát bình luận gốc/.test(r.message)),
+                JSON.stringify(kqB.results.map((r: any) => `${r.action}:${r.status}`)))
+            for (const [ten, e] of [
+                ['token hỏng', Object.assign(new Error('(#190) token het han'), { code: 190, isTokenError: true })],
+                ['hạn mức', Object.assign(new Error('(#4) Application request limit reached'), { code: 4 })],
+            ] as [string, any][]) {
+                loiLuong = e; goiFb.length = 0
+                let nem: any = null
+                try { await docBinhLuan(ctxB) } catch (x) { nem = x }
+                dung(`19s. lỗi ${ten} khi đọc luồng ⇒ NÉM nguyên, không đọc lại kiểu cũ (khỏi tốn thêm lượt gọi)`, nem === e && goiFb.filter(g => g[0] === 'get' && g[1] === 'PG1/posts').length === 1, String(nem?.message))
+            }
+            loiLuong = null; baiCu = null
+
+            // ── Facebook bỏ qua thứ tự (cũ → mới) mà còn trang ⇒ không dùng được ──
+            datLai(); goiFb.length = 0
+            baiTrenFb = [{ id: 'PG1_301', message: BAI, comments: {
+                data: [
+                    { id: 'O1', message: 'giá?', from: U(1, 'Một'), created_time: gio(40), comment_count: 0 },
+                    { id: 'O2', message: 'giá?', from: U(2, 'Hai'), created_time: gio(30), comment_count: 0 },
+                ],
+                paging: { cursors: { after: 'SAU1' }, next: 'https://graph.facebook.com/next' },
+            } }]
+            baiCu = goc19()
+            const blC = await docBinhLuan(ngCanh())
+            dung('19t. trang đầu xếp cũ → mới mà còn trang sau ⇒ đọc lại kiểu cũ + ghi chú "không theo thứ tự mới nhất trước"; không lật trang',
+                blC.luong === false && blC.ghiChu.some(g => /không trả bình luận trong luồng theo thứ tự mới nhất trước/.test(g)) && !goiFb.some(g => g[0] === 'get' && /\/comments$/.test(g[1])) && blC.comments.map(x => x.id).sort().join(',') === 'G1,G5', JSON.stringify(blC.ghiChu))
+            baiCu = null
+
+            // ── Lật trang: bài còn bình luận trong 3 ngày chưa đọc hết ──
+            datLai(); goiFb.length = 0
+            const trang = (bai: string, tu: number, sau: string | null, soGioDau: number) => ({
+                data: [0, 1].map(i => ({ id: `${bai}_c${tu + i}`, message: 'giá?', from: U(100 + tu + i, 'K'), created_time: gio(soGioDau + i), comment_count: 0 })),
+                ...(sau ? { paging: { cursors: { after: sau }, next: 'https://graph.facebook.com/next' } } : {}),
+            })
+            baiTrenFb = [
+                { id: 'PG1_401', message: BAI, comments: trang('PG1_401', 0, 'A1', 1) },
+                { id: 'PG1_402', message: 'Bài cũ', comments: trang('PG1_402', 0, 'B1', 100) },      // bình luận cũ nhất đã quá 3 ngày ⇒ khỏi lật
+                { id: 'PG1_403', message: 'Bài không còn trang', comments: trang('PG1_403', 0, null, 1) },
+            ]
+            trangThem.set('PG1_401|A1', trang('PG1_401', 2, 'A2', 3))
+            trangThem.set('PG1_401|A2', { data: [{ id: 'PG1_401_c3', message: 'trùng', from: U(103, 'K'), created_time: gio(4), comment_count: 0 }, { id: 'PG1_401_c9', message: 'giá?', from: U(109, 'K'), created_time: gio(80), comment_count: 0 }], paging: { cursors: { after: 'A3' }, next: 'x' } })
+            const blD = await docBinhLuan(ngCanh())
+            const lat = goiFb.filter(g => g[0] === 'get' && /\/comments$/.test(g[1]))
+            dung('19u. lật trang đúng bài còn bình luận trong hạn: theo con trỏ after, filter=stream, dừng khi trang vừa đọc đã quá 3 ngày',
+                lat.length === 2 && lat.every(g => g[1] === 'PG1_401/comments' && g[2]?.filter === 'stream' && g[2]?.order === 'reverse_chronological' && /parent\{id,from\}/.test(g[2]?.fields))
+                && lat[0][2].after === 'A1' && lat[1][2].after === 'A2' && blD.ghiChu.length === 0, JSON.stringify(lat.map(g => [g[1], g[2]?.after])))
+            dung('19v. bình luận trang sau được gộp, cái trả TRÙNG chỉ tính một lần', blD.comments.filter(x => x.postId === 'PG1_401').map(x => x.id).sort().join(',') === 'PG1_401_c0,PG1_401_c1,PG1_401_c2,PG1_401_c3,PG1_401_c9')
+
+            // trần TRAN_TRANG_BL lời gọi đọc thêm / lượt — vượt thì NÓI RA
+            datLai(); goiFb.length = 0; trangThem.clear()
+            baiTrenFb = [1, 2].map(b => ({ id: `PG1_50${b}`, message: BAI, comments: trang(`PG1_50${b}`, 0, 'P0', 1) }))
+            for (const b of [1, 2]) for (let i = 0; i < 10; i++) trangThem.set(`PG1_50${b}|P${i}`, trang(`PG1_50${b}`, 2 + i * 2, `P${i + 1}`, 2))
+            const blE = await docBinhLuan(ngCanh())
+            const latE = goiFb.filter(g => g[0] === 'get' && /\/comments$/.test(g[1]))
+            dung(`19w. mỗi lượt đọc thêm tối đa ${TRAN_TRANG_BL} trang; còn dở ⇒ ghi chú đếm ĐỦ số bài chưa đọc hết (2)`,
+                latE.length === TRAN_TRANG_BL && blE.ghiChu.length === 1 && /^2 bài còn bình luận trong 3 ngày chưa đọc hết/.test(blE.ghiChu[0]), `${latE.length} ${JSON.stringify(blE.ghiChu)}`)
+
+            // đọc thêm trang hỏng ⇒ giữ phần đã đọc + nói ra, không lật tiếp bài khác
+            datLai(); goiFb.length = 0
+            baiTrenFb = [1, 2].map(b => ({ id: `PG1_50${b}`, message: BAI, comments: trang(`PG1_50${b}`, 0, 'P0', 1) }))      // docBinhLuan gộp trang vào chính đối tượng ⇒ dựng lại
+            loiTrangThem = Object.assign(new Error('(#1) Please reduce the amount of data'), { code: 1 })
+            const blF = await docBinhLuan(ngCanh())
+            dung('19x. đọc thêm trang hỏng ⇒ giữ phần mới nhất, ghi chú, dừng lật (một lời gọi hỏng, không thử bài kế)',
+                goiFb.filter(g => g[0] === 'get' && /\/comments$/.test(g[1])).length === 1 && blF.comments.length === 4 && blF.luong === true && blF.ghiChu.length === 1 && /Đọc thêm trang bình luận bị hỏng/.test(blF.ghiChu[0]), JSON.stringify(blF.ghiChu))
+            loiTrangThem = null; trangThem.clear()
+        } finally {
+            luongBat = false; loiLuong = null; loiTrangThem = null; baiCu = null; trangThem.clear()
+        }
+
+        // ── Kích sớm: webhook báo bình luận mới ⇒ dời lượt theo lịch về now + 1 phút ──
+        datLai(); goiFb.length = 0; bayGio = NOW; baiTrenFb = []
+        const kho = khoBoNhoFb()
+        const ctx = ngCanh(kho)
+        const kich = (pageId = 'PG1') => kichSomTheoBinhLuan(prisma, pageId, { kho, bayGio: () => bayGio })
+        const AUTO = { replyPriceQuestions: true, hidePhoneComments: false, posts: false }
+        dung('19y. chưa có cấu hình ⇒ không dùng', (await kich()) === 'khong-dung')
+        await luuCauHinhFb(ctx, { executionMode: 'auto', schedule: { enabled: true, intervalMinutes: 240 }, policy: { automation: AUTO } })
+        const hen0 = (await kho.docCauHinh())!.nextRunAt!
+        dung('19z. vừa bật lịch (coi như vừa chạy) ⇒ chưa kích trong 10 phút đầu', (await kich()) === 'vua-chay' && (await kho.docCauHinh())!.nextRunAt === hen0)
+        bayGio = NOW + SAN_KICH_BL_MS + 1000
+        dung('19aa. fanpage KHÁC fanpage của Pilot ⇒ không dùng', (await kich('PG_KHAC')) === 'khong-dung' && (await kho.docCauHinh())!.nextRunAt === hen0)
+        dung('19ab. đủ điều kiện ⇒ kích: lượt kế = bây giờ + 1 phút (không chạy gì, không gọi Facebook)',
+            (await kich()) === 'da-kich' && (await kho.docCauHinh())!.nextRunAt === bayGio + TRE_KICH_BL_MS && goiFb.length === 0, String((await kho.docCauHinh())!.nextRunAt))
+        dung('19ac. bình luận tới dồn ⇒ đã sắp chạy, không dời thêm', (await kich()) === 'sap-chay' && (await kho.docCauHinh())!.nextRunAt === bayGio + TRE_KICH_BL_MS)
+        const henKich = bayGio + TRE_KICH_BL_MS
+        bayGio = henKich + 1000
+        const rLich = await chayTheoLichFb(prisma, kho, { taoFb: fbGia, bayGio: () => bayGio })
+        const sauChay = (await kho.docCauHinh())!
+        dung('19ad. tới hẹn đã kích ⇒ lịch chạy thật, hẹn lượt kế theo nhịp cũ (240 phút)', rLich === 'da-chay' && sauChay.lastRunAt === bayGio && sauChay.nextRunAt === bayGio + 240 * 60_000, `${rLich} ${sauChay.nextRunAt}`)
+        bayGio += 5 * 60_000
+        dung('19ae. bình luận tới 5 phút sau lượt vừa chạy ⇒ không kích (sàn 10 phút — chặn vòng lặp webhook do chính câu trả lời của máy)', (await kich()) === 'vua-chay')
+        bayGio += 6 * 60_000
+        dung('19af. quá 10 phút ⇒ kích lại được', (await kich()) === 'da-kich')
+        // các điều kiện "chủ shop chưa bật" ⇒ không kích
+        const thu = async (ten: string, sua: any) => {
+            const k2 = khoBoNhoFb(); const c2 = ngCanh(k2)
+            await luuCauHinhFb(c2, { executionMode: 'auto', schedule: { enabled: true, intervalMinutes: 240 }, policy: { automation: AUTO }, ...sua })
+            const truoc = (await k2.docCauHinh())?.nextRunAt
+            const r = await kichSomTheoBinhLuan(prisma, 'PG1', { kho: k2, bayGio: () => NOW + H })
+            dung(`19ag. ${ten} ⇒ không kích`, r === 'khong-dung' && (await k2.docCauHinh())?.nextRunAt === truoc, r)
+        }
+        await thu('chế độ Xem trước', { executionMode: 'preview' })
+        await thu('lịch tắt', { schedule: { enabled: false, intervalMinutes: 240 } })
+        await thu('không bật tự trả lời giá lẫn tự ẩn số điện thoại', { policy: { automation: { replyPriceQuestions: false, hidePhoneComments: false, posts: true } } })
+        {
+            const k2 = khoBoNhoFb(); const c2 = ngCanh(k2)
+            await luuCauHinhFb(c2, { executionMode: 'auto', schedule: { enabled: true, intervalMinutes: 240 }, policy: { automation: { replyPriceQuestions: false, hidePhoneComments: true, posts: false } } })
+            dung('19ah. chỉ bật tự ẩn số điện thoại ⇒ vẫn kích', (await kichSomTheoBinhLuan(prisma, 'PG1', { kho: k2, bayGio: () => NOW + H })) === 'da-kich')
+            // hai webhook cùng lúc: bản thua phép giành ⇒ 'bi-gianh', hẹn không bị dời hai lần
+            const k3 = khoBoNhoFb(); const c3 = ngCanh(k3)
+            await luuCauHinhFb(c3, { executionMode: 'auto', schedule: { enabled: true, intervalMinutes: 240 }, policy: { automation: AUTO } })
+            const gianhGoc = k3.gianhLich.bind(k3)
+            let lanGianh = 0
+            k3.gianhLich = async (cu: number, moi: number) => { lanGianh++; if (lanGianh === 1) await gianhGoc(cu, moi + 5); return gianhGoc(cu, moi) }
+            dung('19ai. thua phép giành lịch (bản máy khác vừa dời) ⇒ "bi-gianh"', (await kichSomTheoBinhLuan(prisma, 'PG1', { kho: k3, bayGio: () => NOW + H })) === 'bi-gianh')
+            const kLoi: any = { docCauHinh: async () => { throw new Error('CSDL rớt') } }
+            dung('19aj. đọc cấu hình hỏng ⇒ "loi", KHÔNG ném (webhook vẫn phải trả 200)', (await kichSomTheoBinhLuan(prisma, 'PG1', { kho: kLoi })) === 'loi')
+        }
+        // không đưa kho ⇒ dò bảng bằng SQL thô TRƯỚC; cửa hàng chưa mở Pilot ⇒ không tạo bảng hộ
+        {
+            const lenh: string[] = []
+            const pgThieu: any = { $queryRawUnsafe: async (sql: string) => { lenh.push(sql); throw Object.assign(new Error('relation "FacebookPilotConfig" does not exist'), { code: 'P2010' }) }, $executeRawUnsafe: async (sql: string) => { lenh.push(sql); return 0 } }
+            const r1 = await kichSomTheoBinhLuan(pgThieu, 'PG1')
+            const pgRong: any = { $queryRawUnsafe: async (sql: string) => { lenh.push(sql); return [] }, $executeRawUnsafe: async (sql: string) => { lenh.push(sql); return 0 } }
+            const r2 = await kichSomTheoBinhLuan(pgRong, 'PG1')
+            dung('19ak. cửa hàng chưa mở Pilot (thiếu bảng / chưa có cấu hình) ⇒ không dùng, KHÔNG chạy lệnh tạo bảng nào',
+                r1 === 'khong-dung' && r2 === 'khong-dung' && lenh.length === 2 && lenh.every(s => /^SELECT "nextRunAt"/.test(s)) && !lenh.some(s => /CREATE|ALTER|INSERT|UPDATE/i.test(s)), JSON.stringify(lenh))
+        }
+
+        // ── Nối dây ──
+        const nguonWh = fs.readFileSync(path.join(__dirname, '../src/routes/webhooks.ts'), 'utf8')
+        const nguonRt = fs.readFileSync(path.join(__dirname, '../src/routes/facebookPilot.ts'), 'utf8')
+        const viTriKich = nguonWh.indexOf('kichSomTheoBinhLuan(resolved.storePrisma')
+        const viTriChan = nguonWh.indexOf('if (!resolved.page.autoReplyEnabled) continue')
+        dung('19al. webhook Facebook: kích sớm đặt TRƯỚC chốt autoReplyEnabled (Pilot không cần Quy tắc tự trả lời bật), chỉ khi có tiện ích',
+            viTriKich > 0 && viTriChan > viTriKich && /TIEN_ICH_FACEBOOK_PILOT/.test(nguonWh.slice(viTriKich - 1500, viTriKich)))
+        dung('19am. webhook: bình luận của CHÍNH fanpage không kích (câu trả lời của máy không tự gọi lượt mới)',
+            /from\?\.id \|\| ''\) !== pageId/.test(nguonWh.slice(viTriKich - 1500, viTriKich)), nguonWh.slice(viTriKich - 600, viTriKich).replace(/\s+/g, ' ').slice(0, 300))
+        dung('19an. route trả lời nhận replyTo từ trang', /replyTo: typeof b\?\.replyTo === 'string' \? b\.replyTo : null/.test(nguonRt))
+        dung('19ao. hướng dẫn nói rõ: đọc cả luồng, gửi vào gốc, kích sớm theo webhook',
+            /trả lời trong luồng/.test(HUONG_DAN_FB_PILOT) && /bình luận gốc của luồng/.test(HUONG_DAN_FB_PILOT) && /vài phút/.test(HUONG_DAN_FB_PILOT))
     }
 
     console.log(`\n${loi === 0 ? '✅' : '❌'} ${dat} đạt, ${loi} hỏng\n`)
