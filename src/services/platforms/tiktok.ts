@@ -573,6 +573,42 @@ export class TikTokService extends PlatformService {
         }
     }
 
+    // ─── Promotions (chỉ ĐỌC — TikTok Pilot né mã đang / sắp khuyến mãi, 10/11/2026, TT-04) ─────────────
+
+    /**
+     * One page of the shop's promotion activities — POST /promotion/202309/activities/search
+     * (scope seller.promotion.info). `status` takes ONE value (NOT_START | ONGOING | EXPIRED | DEACTIVATED);
+     * page_size ≤ 100; page_token "" = first page; next_page_token empty/missing = last page.
+     * Rows carry id, title, activity_type, status, begin_time/end_time (SECONDS), product_level — NO products
+     * (use getPromotionActivity). Coupons are not returned here (separate Search Coupon API).
+     * Error 105005 here = the app lacks the Promotion API package, not a dead token.
+     */
+    async searchPromotionActivities(status: string, pageToken = ''): Promise<{ activities: any[]; nextPageToken: string; total: number }> {
+        const bodyObj = { status, page_size: 100, page_token: pageToken }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl('/promotion/202309/activities/search', {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) throw new Error(`TikTok promotion/activities/search: [${data.code}] ${data.message || 'Unknown error'}`)
+        return {
+            activities: Array.isArray(data.data?.activities) ? data.data.activities : [],
+            nextPageToken: String(data.data?.next_page_token || ''),
+            total: Number(data.data?.total_count) || 0,
+        }
+    }
+
+    /**
+     * One promotion activity with its products — GET /promotion/202309/activities/{activity_id}.
+     * products[]: { id (product id), activity_price{amount,currency}, discount ("10" = 10% off, DIRECT_DISCOUNT +
+     * PRODUCT level only), skus[] (VARIATION level only), quantity_limit, ... }; product_level PRODUCT | VARIATION | SHOP.
+     */
+    async getPromotionActivity(activityId: string): Promise<any> {
+        const path = `/promotion/202309/activities/${encodeURIComponent(String(activityId))}`
+        const { url, headers } = this.buildUrl(path, {})
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) throw new Error(`TikTok promotion/activities/${activityId}: [${data.code}] ${data.message || 'Unknown error'}`)
+        return data.data || {}
+    }
+
     /**
      * Push inventory for one product — POST /product/202309/products/{id}/inventory/update.
      * TikTok needs the sku_id (not seller_sku); when the caller only knows the

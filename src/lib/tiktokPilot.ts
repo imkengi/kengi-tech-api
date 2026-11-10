@@ -27,8 +27,10 @@
  *    - TikTok khoá giá vì khuyến mãi ⇒ 'skipped' + nghỉ mã đó 24 giờ; làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT
  *      dòng action 'token' (lib/pilotBaoChuShop bắt), lượt đó dừng ghi lên TikTok
  *    - đồng bộ danh mục trong chu kỳ lấy luôn mã NGÀNH cho mã mới (một mã lỗi không dừng lượt)
- *  CHƯA làm: đăng sản phẩm mới lên TikTok, khuyến mãi — cần thử trên gian thật trước (ngành / thuộc tính / kho TikTok).
- *  Pilot CHƯA biết khuyến mãi SẮP chạy (không có API khuyến mãi đã kiểm trên gian thật) ⇒ hướng dẫn chủ shop tắt đổi giá trước đợt lớn.
+ *  Lô 17 (10/11/2026, TT-04): ĐỌC chương trình khuyến mãi của gian (promotion 202309, chỉ đọc) — mã trong chương trình ĐANG / SẮP
+ *    chạy ⇒ máy để yên giá cả hai chiều; chưa rõ (đọc hỏng / ứng dụng thiếu gói quyền 105005 / chương trình toàn gian) ⇒ máy không
+ *    tự HẠ giá (nháp chờ duyệt). Chiến dịch của SÀN và mã giảm giá không thấy qua API này — lớp phản ứng "TikTok khoá giá" vẫn giữ.
+ *  CHƯA làm: đăng sản phẩm mới lên TikTok, TẠO khuyến mãi — cần thử trên gian thật trước (ngành / thuộc tính / kho TikTok).
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import crypto from 'crypto'
@@ -338,6 +340,11 @@ export interface DichVuTikTok {
     timSanPhamTho?(): Promise<any[]>
     /** mã ngành của một sản phẩm (product detail.category_chains) — bổ sung ngành cho mã mới sau đồng bộ danh mục (09/11/2026) */
     fetchProductCategory?(productId: string): Promise<{ categoryId: string; categoryName: string } | null>
+    /** MỘT trang chương trình khuyến mãi của gian theo MỘT trạng thái (promotion/202309/activities/search — 10/11/2026, TT-04).
+     *  Dịch vụ thật luôn có; bộ kiểm cũ không giả ⇒ chu kỳ không soát khuyến mãi (hành vi trước lô 17). */
+    searchPromotionActivities?(status: string, pageToken?: string): Promise<{ activities: any[]; nextPageToken: string; total?: number }>
+    /** một chương trình kèm sản phẩm (products[].id) — promotion/202309/activities/{id} */
+    getPromotionActivity?(activityId: string): Promise<any>
     /** moDichVuTikTok ghi lý do khi làm mới token HỎNG (09/11/2026, TT-20) — lượt đó không ghi gì lên TikTok */
     loiLamMoiToken?: string | null
 }
@@ -418,11 +425,153 @@ export function cauUyQuyenLaiTikTok(tenGian: string | null | undefined, lyDo: st
 
 /** TikTok khoá giá vì đang khuyến mãi (09/11/2026, TT-04 một phần). Mã theo tài liệu THỨ CẤP, chưa xác nhận trên tài liệu chính
  *  thức: 12052038 "Product price locked due to ongoing promotion", 12019045 "price is locked" — nên bắt cả câu chữ. Không phải
- *  hỏng: sàn chặn đúng luật của nó ⇒ 'skipped' + nghỉ mã 24 giờ, không vào việc cần người. KHÔNG gọi API khuyến mãi nào. */
+ *  hỏng: sàn chặn đúng luật của nó ⇒ 'skipped' + nghỉ mã 24 giờ, không vào việc cần người. Đây là lớp PHẢN ỨNG — lớp đọc TRƯỚC
+ *  là docKhuyenMaiGianTikTok (lô 17); lớp này vẫn cần cho chiến dịch của SÀN (API khuyến mãi của người bán không thấy). */
 export function laLoiKhoaGiaKhuyenMai(e: any): boolean {
     const m = String(e?.message || e || '')
     return /\b(12052038|12019045)\b/.test(m) || /price\s+(is\s+)?locked|locked\s+due\s+to\s+(an?\s+)?(ongoing\s+)?promotion/i.test(m)
 }
+
+/* ─── Khuyến mãi của gian (10/11/2026, TT-04 — lô 17) ───────────────────────────────────────────────────────────────────
+ * Theo tài liệu CHÍNH THỨC (Partner Center, bản 202309): activities/search lọc MỘT trạng thái mỗi lần và KHÔNG trả sản phẩm ⇒
+ * đọc từng chương trình (GET activities/{id} → products[].id). Giảm theo % tính trên GIÁ GỐC ⇒ hạ giá gốc là hạ luôn giá khuyến
+ * mãi (có thể xuống dưới giá sàn); tăng ngay trước đợt giảm dính luật "tăng giá ảo" ⇒ mã nằm trong chương trình ĐANG / SẮP chạy:
+ * máy để yên giá CẢ HAI chiều (như Shopee Pilot). Giảm phí vận chuyển không đụng giá sản phẩm ⇒ bỏ qua.
+ * Chương trình cấp CẢ GIAN (product_level SHOP), đọc hỏng, quá nhiều chương trình ⇒ không biết mã nào dính ⇒ máy không tự HẠ giá
+ * (hạ thành nháp chờ người duyệt), tăng vẫn làm — hạ là chiều có thể kéo giá khách trả xuống dưới giá sàn.
+ * Không thấy được qua API này: chiến dịch của SÀN TikTok (đè cả flash sale) và mã giảm giá (coupon, API riêng) — lớp phản ứng
+ * laLoiKhoaGiaKhuyenMai ở trên vẫn giữ. 105005 ở đây = ứng dụng Kengi chưa có GÓI quyền khuyến mãi (Partner Center), KHÔNG phải
+ * token chết ⇒ bắt tại chỗ, không thành dòng 'token' dừng cả chu kỳ.
+ */
+const TRANG_THAI_KM = ['ONGOING', 'NOT_START']
+const LOAI_KM_KHONG_DUNG_GIA = new Set(['SHIPPING_DISCOUNT'])
+/** ≤ 300 chương trình mỗi trạng thái (100 / trang) */
+const TRAN_TRANG_KM = 3
+/** đọc chi tiết tối đa 40 chương trình mỗi lần — nhiều hơn ⇒ coi như chưa đọc được (không tự hạ giá) */
+const TRAN_DOC_KM = 40
+/** thực thi lẻ / duyệt loạt dùng lại bản đọc ≤ 5 phút — khỏi 2 + N lời gọi cho từng mã */
+export const TUOI_KM_MS = 5 * 60_000
+/** nghỉ giữa hai lần đọc chi tiết chương trình — hạn mức gọi API khuyến mãi của TikTok chưa rõ, đọc nhẹ tay */
+const NGHI_DOC_KM_MS = 120
+
+/** Một mã nằm trong chương trình: câu tả, đang chạy (ONGOING) hay mới sắp chạy (NOT_START), lúc kết thúc (ms, null = không rõ) */
+export interface KmSanPham { moTa: string; dangChay: boolean; den: number | null }
+
+export type KhuyenMaiGianTikTok =
+    /** theoSanPham: mã sản phẩm TikTok → chương trình; caGian: chương trình toàn gian; khongSoat: dịch vụ không có API (bộ kiểm cũ) */
+    | { ok: true; theoSanPham: Map<string, KmSanPham>; caGian: string[]; khongSoat?: boolean }
+    /** thieuGoi: TikTok trả 105005 — ứng dụng chưa có gói quyền khuyến mãi */
+    | { ok: false; lyDo: string; thieuGoi: boolean }
+
+const TEN_LOAI_KM: Record<string, string> = {
+    FIXED_PRICE: 'giảm giá đồng giá', DIRECT_DISCOUNT: 'giảm giá theo %', FLASHSALE: 'flash sale',
+    BUY_MORE_SAVE_MORE: 'mua nhiều giảm nhiều', GIFT_WITH_PURCHASE: 'quà tặng kèm', BUY_X_GET_Y: 'mua X tặng Y',
+}
+
+/** "flash sale «Sale 11.11» (sắp chạy từ 00:00 11/11)" — begin_time / end_time của TikTok tính bằng GIÂY */
+function moTaKhuyenMai(a: any): string {
+    const loai = TEN_LOAI_KM[String(a?.activity_type || '')] || 'khuyến mãi'
+    const ten = String(a?.title || '').trim().slice(0, 50)
+    const tu = Number(a?.begin_time) > 0 ? Number(a.begin_time) * 1000 : 0
+    const den = Number(a?.end_time) > 0 ? Number(a.end_time) * 1000 : 0
+    const khi = String(a?.status) === 'NOT_START' && tu ? `sắp chạy từ ${gioNgayVN(tu)}` : den ? `tới ${gioNgayVN(den)}` : 'đang chạy'
+    return `${loai}${ten ? ` «${ten}»` : ''} (${khi})`
+}
+
+/** Đọc chương trình ĐANG / SẮP chạy của gian. Không ném: lỗi nào cũng thành { ok: false } để người gọi chọn cách lùi. */
+export async function docKhuyenMaiGianTikTok(fb: DichVuTikTok): Promise<KhuyenMaiGianTikTok> {
+    if (typeof fb.searchPromotionActivities !== 'function' || typeof fb.getPromotionActivity !== 'function') {
+        return { ok: true, theoSanPham: new Map(), caGian: [], khongSoat: true }
+    }
+    try {
+        const ds: any[] = []
+        for (const trangThai of TRANG_THAI_KM) {
+            let token = ''
+            for (let trang = 0; ; trang++) {
+                if (trang >= TRAN_TRANG_KM) {
+                    return { ok: false, lyDo: `gian có hơn ${TRAN_TRANG_KM * 100} chương trình ${trangThai === 'ONGOING' ? 'đang' : 'sắp'} chạy`, thieuGoi: false }
+                }
+                const r = await fb.searchPromotionActivities(trangThai, token)
+                for (const a of r?.activities || []) if (a?.id != null && !LOAI_KM_KHONG_DUNG_GIA.has(String(a.activity_type))) ds.push(a)
+                token = String(r?.nextPageToken || '')
+                if (!token) break
+            }
+        }
+        const theoSanPham = new Map<string, KmSanPham>(), caGian: string[] = []
+        const docChiTiet = ds.filter(a => String(a.product_level) !== 'SHOP')
+        for (const a of ds) if (String(a.product_level) === 'SHOP') caGian.push(moTaKhuyenMai(a))
+        if (docChiTiet.length > TRAN_DOC_KM) {
+            return { ok: false, lyDo: `gian có ${docChiTiet.length} chương trình đang / sắp chạy — máy đọc tối đa ${TRAN_DOC_KM}`, thieuGoi: false }
+        }
+        for (let i = 0; i < docChiTiet.length; i++) {
+            const a = docChiTiet[i]
+            if (i > 0) await new Promise(r => setTimeout(r, NGHI_DOC_KM_MS))
+            const ct = (await fb.getPromotionActivity(String(a.id))) || {}
+            const ra = { ...a, ...ct, status: ct.status || a.status }
+            // vừa kết thúc / bị tắt giữa hai lần đọc ⇒ không còn giữ giá ai
+            if (!TRANG_THAI_KM.includes(String(ra.status))) continue
+            if (String(ra.product_level) === 'SHOP') { caGian.push(moTaKhuyenMai(ra)); continue }
+            const km: KmSanPham = { moTa: moTaKhuyenMai(ra), dangChay: String(ra.status) === 'ONGOING', den: Number(ra.end_time) > 0 ? Number(ra.end_time) * 1000 : null }
+            for (const p of Array.isArray(ct.products) ? ct.products : []) {
+                const id = p?.id != null ? String(p.id) : ''
+                // một mã trong nhiều chương trình: chương trình ĐANG chạy thắng chương trình sắp chạy
+                if (id && (!theoSanPham.has(id) || (km.dangChay && !theoSanPham.get(id)!.dangChay))) theoSanPham.set(id, km)
+            }
+        }
+        return { ok: true, theoSanPham, caGian }
+    } catch (e: any) {
+        const m = String(e?.message || e || 'không rõ')
+        return { ok: false, lyDo: m.slice(0, 200), thieuGoi: /\b105005\b|auth pkg/i.test(m) }
+    }
+}
+
+/** Bản đọc theo cửa hàng (prisma của cửa hàng được dùng lại giữa các yêu cầu — lib/prisma.getStorePrisma) rồi theo gian. Bộ kiểm:
+ *  mỗi ca một prisma giả ⇒ không lẫn bản đọc giữa các ca. Prod không Redis: mỗi bản máy chủ một bộ nhớ — chậm tối đa 5 phút. */
+const boNhoKhuyenMai = new WeakMap<object, Map<string, { luc: number; kq: KhuyenMaiGianTikTok }>>()
+
+/** Khuyến mãi của gian: chu kỳ đọc MỚI (`moi`) rồi để lại cho thực thi lẻ / duyệt loạt trong 5 phút — cả bản đọc HỎNG (thiếu gói
+ *  quyền là hỏng lâu dài: duyệt loạt 20 nháp khỏi 20 lần hỏi lại; bản hỏng chỉ khiến hạ giá thành nháp / thêm cảnh báo, không chặn). */
+async function khuyenMaiGian(ctx: NgCanhTikTok, ch: any, fb: DichVuTikTok, o: { moi?: boolean } = {}): Promise<KhuyenMaiGianTikTok> {
+    const now = luc(ctx)
+    const goc = ctx.prisma && typeof ctx.prisma === 'object' ? ctx.prisma : null
+    let bo = goc ? boNhoKhuyenMai.get(goc) : undefined
+    if (goc && !bo) { bo = new Map(); boNhoKhuyenMai.set(goc, bo) }
+    const cu = bo?.get(String(ch.id))
+    if (!o.moi && cu && now >= cu.luc && now - cu.luc < TUOI_KM_MS) return cu.kq
+    const kq = await docKhuyenMaiGianTikTok(fb)
+    if (kq.ok && kq.khongSoat) bo?.delete(String(ch.id))
+    else bo?.set(String(ch.id), { luc: now, kq })
+    return kq
+}
+
+/** Câu "vì sao máy không tự hạ giá" khi chưa biết chắc mã nào dính khuyến mãi — null = biết chắc (hoặc không soát được vì dịch vụ cũ). */
+function lyDoKhuyenMaiChuaRo(km: KhuyenMaiGianTikTok | null | undefined): string | null {
+    if (!km) return null
+    if (!km.ok) {
+        return km.thieuGoi
+            ? 'chưa đọc được khuyến mãi TikTok — ứng dụng Kengi chưa có gói quyền «Promotion Information» (TikTok trả 105005)'
+            : `chưa đọc được khuyến mãi TikTok (${km.lyDo})`
+    }
+    if (km.caGian.length) return `gian đang / sắp có chương trình toàn shop: ${km.caGian.slice(0, 2).join('; ')}${km.caGian.length > 2 ? ` (+${km.caGian.length - 2})` : ''}`
+    return null
+}
+
+/** Dòng kết quả chu kỳ khi TikTok trả 105005 — chủ shop không tự xin gói được: quản trị Kengi xin ở Partner Center, rồi uỷ quyền lại gian. */
+function cauThieuGoiKhuyenMai(gian: string, tuDong: boolean): string {
+    return `Chưa đọc được khuyến mãi của gian TikTok "${gian}" — ứng dụng Kengi chưa được TikTok cấp gói quyền «Promotion Information» (TikTok trả 105005). `
+        + 'Quản trị Kengi xin gói này ở TikTok Shop Partner Center; được duyệt thì uỷ quyền lại gian: Đơn Hàng Online → nút «Kênh bán hàng» → nút «Cấp lại quyền». '
+        + (tuDong ? 'Tới lúc đó máy không tự HẠ giá (hạ thành nháp chờ duyệt); tăng giá vẫn làm.' : 'Tới lúc đó nháp hạ giá ghi «chưa rõ khuyến mãi» — xem chương trình trên Seller Center trước khi duyệt.')
+}
+
+const cauDangKhuyenMai = (ct: KmSanPham) =>
+    `Mã nằm trong ${ct.moTa} — đổi giá gốc lúc này là đổi luôn giá khuyến mãi (tăng ngay trước đợt giảm còn dính luật "tăng giá ảo" của TikTok); Pilot để yên giá mã này tới khi chương trình kết thúc.`
+/** Người duyệt / lập tay một mã có chương trình SẮP chạy: được làm (như Shopee Pilot — chỉ chương trình đang chạy mới chặn người), kèm lời nhắc */
+const cauSapKhuyenMai = (ct: KmSanPham) =>
+    `Mã nằm trong ${ct.moTa} — tăng giá ngay trước đợt giảm dễ dính luật "tăng giá ảo" của TikTok; hạ giá gốc là hạ luôn giá khuyến mãi.`
+
+/** Mã đang nằm trong chương trình khuyến mãi — thực thi từ chối, kế hoạch thành 'skipped' + nghỉ như khi TikTok khoá giá (tới khi
+ *  chương trình kết thúc, tối đa 24 giờ; chu kỳ đọc lại thì theo bản đọc mới). */
+export class LoiDangKhuyenMai extends ToolError { constructor(readonly ct: KmSanPham) { super(cauDangKhuyenMai(ct)) } }
 
 async function dayTon(ctx: NgCanhTikTok, channelId: string, o: { dryRun?: boolean; docSanTruoc?: any }): Promise<KetQuaDayTonGon> {
     if (ctx.dayTon) return ctx.dayTon(ctx.prisma, channelId, o)
@@ -703,18 +852,32 @@ const NGHI_KHUYEN_MAI_MS = 24 * 3600_000
 const CUA_SO_GIA_PILOT_MS = 30 * 86400_000
 const gioNgayVN = (ms: number) => { const d = new Date(ms + 7 * 3600_000).toISOString(); return `${d.slice(11, 16)} ${d.slice(8, 10)}/${d.slice(5, 7)}` }
 
-interface DeYen { nguoiSua: Map<string, KeHoachTikTok>; khuyenMai: Map<string, KeHoachTikTok>; theoKhoa: Map<string, KeHoachTikTok> }
+/** khuyenMai: lần ghi bị chặn vì khuyến mãi (TikTok từ chối, hoặc máy đọc thấy chương trình lúc thực thi — result.nguon 'api');
+ *  dangKm: dòng GHI NHỚ chu kỳ để lại khi đọc thấy mã trong chương trình (data.khuyenMai) — cho trang + khi lượt sau đọc hỏng. */
+interface DeYen { nguoiSua: Map<string, KeHoachTikTok>; khuyenMai: Map<string, KeHoachTikTok>; dangKm: Map<string, KeHoachTikTok>; theoKhoa: Map<string, KeHoachTikTok> }
 
-/** Mã máy đang ĐỂ YÊN (09/11/2026): giá chủ shop vừa sửa tay (7 ngày từ lúc phát hiện) và mã TikTok vừa khoá giá vì khuyến mãi
- *  (24 giờ từ lần bị từ chối). Đọc dòng 'skipped' của sổ kế hoạch (bảng đã có — không đổi schema, không gọi TikTok). */
+/** Hết nghỉ vì khuyến mãi: 24 giờ từ lần bị chặn — sớm hơn nếu biết chương trình kết thúc trước đó (lô 17). */
+function hetNghiKhuyenMai(k: KeHoachTikTok): number {
+    const den = Number(k.result?.chuongTrinh?.den) || 0
+    return den > 0 ? Math.min(den, k.updatedAt + NGHI_KHUYEN_MAI_MS) : k.updatedAt + NGHI_KHUYEN_MAI_MS
+}
+/** Dòng ghi nhớ "mã trong chương trình": tới lúc chương trình kết thúc, tối đa 24 giờ từ lúc đọc (chu kỳ ghi lại mỗi ngày nếu còn). */
+function hetGhiNhoKhuyenMai(k: KeHoachTikTok): number {
+    const den = Number(k.data?.khuyenMai?.den) || 0
+    return den > 0 ? Math.min(den, k.createdAt + NGHI_KHUYEN_MAI_MS) : k.createdAt + NGHI_KHUYEN_MAI_MS
+}
+
+/** Mã máy đang ĐỂ YÊN (09/11/2026): giá chủ shop vừa sửa tay (7 ngày từ lúc phát hiện), mã vừa bị chặn ghi vì khuyến mãi và mã chu kỳ
+ *  đọc thấy trong chương trình (lô 17). Đọc dòng 'skipped' của sổ kế hoạch (bảng đã có — không đổi schema, không gọi TikTok). */
 async function maDangDeYen(ctx: NgCanhTikTok, now: number): Promise<DeYen> {
-    const ra: DeYen = { nguoiSua: new Map(), khuyenMai: new Map(), theoKhoa: new Map() }
+    const ra: DeYen = { nguoiSua: new Map(), khuyenMai: new Map(), dangKm: new Map(), theoKhoa: new Map() }
     for (const k of await ctx.kho.dsKeHoachTheoTrangThai(['skipped'], now - GIU_GIA_NGUOI_SUA_MS)) {   // mới nhất trước
         if (k.idempotencyKey) ra.theoKhoa.set(k.idempotencyKey, k)
         const id = k.data?.itemId ? String(k.data.itemId) : ''
         if (!id) continue
         if (k.data?.nguoiSua && k.createdAt + GIU_GIA_NGUOI_SUA_MS > now && !ra.nguoiSua.has(id)) ra.nguoiSua.set(id, k)
-        if (k.result?.khoaKhuyenMai && k.updatedAt + NGHI_KHUYEN_MAI_MS > now && !ra.khuyenMai.has(id)) ra.khuyenMai.set(id, k)
+        if (k.result?.khoaKhuyenMai && hetNghiKhuyenMai(k) > now && !ra.khuyenMai.has(id)) ra.khuyenMai.set(id, k)
+        if (k.data?.khuyenMai?.moTa && hetGhiNhoKhuyenMai(k) > now && !ra.dangKm.has(id)) ra.dangKm.set(id, k)
     }
     return ra
 }
@@ -723,8 +886,15 @@ async function maDangDeYen(ctx: NgCanhTikTok, now: number): Promise<DeYen> {
 function lyDoDeYen(d: DeYen, id: string, giaLuu: number): { reason: 'manual' | 'promo'; until: number; message: string } | null {
     const km = d.khuyenMai.get(id)
     if (km) {
-        const den = km.updatedAt + NGHI_KHUYEN_MAI_MS
-        return { reason: 'promo', until: den, message: `Đang khuyến mãi — TikTok khoá giá, chưa đổi được. Pilot nghỉ mã này tới ${gioNgayVN(den)}.` }
+        const den = hetNghiKhuyenMai(km)
+        // máy đọc thấy chương trình lúc thực thi (lô 17) — nói đúng chương trình, không phải "TikTok khoá giá"
+        const ct = km.result?.nguon === 'api' && km.result?.chuongTrinh?.moTa ? String(km.result.chuongTrinh.moTa) : null
+        return { reason: 'promo', until: den, message: ct ? `Có ${ct} — Pilot không đổi giá gốc, nghỉ mã này tới ${gioNgayVN(den)}.` : `Đang khuyến mãi — TikTok khoá giá, chưa đổi được. Pilot nghỉ mã này tới ${gioNgayVN(den)}.` }
+    }
+    const nho = d.dangKm.get(id)
+    if (nho) {
+        const den = hetGhiNhoKhuyenMai(nho)
+        return { reason: 'promo', until: den, message: `Có ${String(nho.data.khuyenMai.moTa)} — Pilot để yên giá gốc mã này (đọc lúc ${gioNgayVN(nho.createdAt)}).` }
     }
     const tay = d.nguoiSua.get(id)
     const n = tay?.data?.nguoiSua
@@ -768,8 +938,10 @@ function keHoachMoi(data: any, khoa: string | null | undefined, nguoi: string | 
 }
 
 /** Kế hoạch đổi giá MỘT sản phẩm (theo mã TikTok hoặc SKU). Giá dưới sàn / vượt biên độ / nhiều SKU / không đọc được giá đang bán
- *  ⇒ từ chối. `giaSong`: chu kỳ đã đọc lô giá sống ngay trước đó — khỏi đọc lại từng mã. */
-export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: string; sku?: string; price: number; idempotencyKey?: string; giaSong?: GiaSongTikTok }): Promise<KeHoachTikTok> {
+ *  ⇒ từ chối. `giaSong`: chu kỳ đã đọc lô giá sống ngay trước đó — khỏi đọc lại từng mã; chu kỳ cũng đã soát khuyến mãi cả lô và
+ *  truyền `promoWarning` (hạ giá khi chưa rõ khuyến mãi). Người / AI lập lẻ thì soát khuyến mãi ở đây (lô 17): chương trình ĐANG
+ *  chạy ⇒ từ chối; sắp chạy / chưa đọc được ⇒ ghi chú vào kế hoạch. */
+export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: string; sku?: string; price: number; idempotencyKey?: string; giaSong?: GiaSongTikTok; promoWarning?: string | null }): Promise<KeHoachTikTok> {
     const now = luc(ctx)
     const { cfg, ch } = await canGian(ctx)
     const gia = Math.round(num(b.price, 0))
@@ -785,10 +957,18 @@ export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: strin
     if (!kq.hopLe && !(kq.giaSan > 0)) throw new ToolError(mauPhi.chuaBiet ? lyDoChuaBietPhi(mauPhi.soDon, ch.name) : kq.lyDo || 'Không tính được giá sàn')
     // Giá đang bán + SKU: đọc THẲNG TikTok — hàng nhiều phân loại dừng ở đây. 09/11/2026 (TT-09): giá sống 0 / rỗng / đọc hỏng ⇒
     // TỪ CHỐI (trước rơi về giá lưu — cũ tới 2 giờ, có khi chính là số 0 — nên rào biên độ so với một giá không có thật)
-    const song = b.giaSong ? skuDuyTu(b.giaSong) : await docSkuDuy(await dichVu(ctx, ch), String(l.platformProductId))
+    const fb = b.giaSong ? null : await dichVu(ctx, ch)
+    const song = b.giaSong ? skuDuyTu(b.giaSong) : await docSkuDuy(fb!, String(l.platformProductId))
     const giaCu = song.gia
     const chan = chanGiaDuoiSan(gia, kq) || vuotBienDong(giaCu, gia, cfg.policy.maxPriceChangeRate, kq.giaSan)
     if (chan) throw new ToolError(chan)
+    let canhBaoKm: string | null = b.promoWarning || null
+    if (fb) {
+        const km = await khuyenMaiGian(ctx, ch, fb)
+        const ct = km.ok ? km.theoSanPham.get(String(l.platformProductId)) : undefined
+        if (ct?.dangChay) throw new ToolError(cauDangKhuyenMai(ct))
+        canhBaoKm = ct ? cauSapKhuyenMai(ct) : !(gia > giaCu) ? lyDoKhuyenMaiChuaRo(km) : null
+    }
     const dk = danhGiaGia(gia, ts), xau = danhGiaGia(gia, ts, true)
     const phiChuaTin = lyDoPhiChuaDuTin(gia, mauPhi, cfg.policy.minMarginRate * 100)
     return ctx.kho.taoKeHoach(keHoachMoi({
@@ -800,6 +980,8 @@ export async function taoKeHoachGiaTikTok(ctx: NgCanhTikTok, b: { itemId?: strin
             ...(kq.thamSo.phiAffiliatePct > 0 ? { affiliateProfit: xau.loiNhuan, affiliateMarginRate: xau.bienPct / 100 } : {}),
         },
         ...(phiChuaTin ? { feeWarning: phiChuaTin } : {}),
+        // khuyến mãi chưa rõ / sắp chạy (lô 17) — nháp máy mang trường này thì chờ người duyệt (donKeHoachMoTikTok không tự huỷ)
+        ...(canhBaoKm ? { promoWarning: canhBaoKm } : {}),
     }, b.idempotencyKey, ctx.nguoi, now))
 }
 
@@ -829,7 +1011,13 @@ export async function thucThiTikTok(ctx: NgCanhTikTok, planId: string, tuyChon: 
         await ctx.kho.ghiNhatKy({ action: 'price', status, planId: plan.id, payload: { sku: d.sku, itemId: d.itemId, price: d.price }, response: result })
     } catch (e: any) {
         const msg = String(e?.message || e).slice(0, 800)
-        if (laLoiKhoaGiaKhuyenMai(e)) {
+        if (e instanceof LoiDangKhuyenMai) {
+            /* lô 17 (TT-04): máy ĐỌC thấy mã trong chương trình ngay trước khi ghi — chưa gửi gì lên TikTok. 'skipped' như khi TikTok
+             * khoá giá (không vào việc cần người), nghỉ tới khi chương trình kết thúc (tối đa 24 giờ); `nguon: 'api'` để trang nói đúng
+             * chương trình và để chu kỳ đọc lại thì theo bản đọc mới (chương trình tắt sớm ⇒ khỏi chờ). */
+            status = 'skipped'
+            result = { khoaKhuyenMai: true, nguon: 'api', chuongTrinh: e.ct, message: msg }
+        } else if (laLoiKhoaGiaKhuyenMai(e)) {
             /* 09/11/2026 (TT-04): TikTok khoá giá vì đang khuyến mãi — sàn từ chối đúng luật của nó, không phải hỏng ⇒ 'skipped'
              * (không vào việc cần người); `khoaKhuyenMai` là mốc để chu kỳ nghỉ mã này 24 giờ (khỏi lượt nào cũng thử lại). */
             status = 'skipped'
@@ -864,6 +1052,14 @@ async function doiGiaTikTok(ctx: NgCanhTikTok, ch: any, d: any, pol: ChinhSachTi
     // giá 0 / rỗng / đọc hỏng ⇒ docSkuDuy ném (09/11/2026, TT-09): rào biên độ + chỉ-tăng dưới đây luôn so với giá DƯƠNG thật
     const song = await docSkuDuy(fb, String(l.platformProductId))
     if (d.skuId && String(d.skuId) !== song.skuId) throw new ToolError('SKU của sản phẩm trên TikTok đã đổi từ lúc lập kế hoạch — lập lại kế hoạch.')
+    /* KHUYẾN MÃI của gian (10/11/2026, TT-04 — lô 17), đọc TRƯỚC khi ghi (bản đọc ≤ 5 phút của chu kỳ / lần thực thi trước): mã trong
+     * chương trình ĐANG chạy ⇒ không ai đổi (giảm theo % tính trên giá gốc); SẮP chạy ⇒ máy không đổi, người duyệt thì được + lời
+     * nhắc (như Shopee Pilot). Chưa rõ (đọc hỏng / thiếu gói quyền / chương trình toàn gian) + HẠ giá ⇒ máy không làm, người được. */
+    const km = await khuyenMaiGian(ctx, ch, fb)
+    const ct = km.ok ? km.theoSanPham.get(String(l.platformProductId)) : undefined
+    if (ct && (ct.dangChay || tuDong)) throw new LoiDangKhuyenMai(ct)
+    const kmChuaRo = !ct && !(gia > song.gia) ? lyDoKhuyenMaiChuaRo(km) : null
+    if (kmChuaRo && tuDong) throw new ToolError(`Không tự hạ giá: ${kmChuaRo}`)
     const loiBien = vuotBienDong(song.gia, gia, pol.maxPriceChangeRate, kq.giaSan)
     if (loiBien) throw new ToolError(`Giá trên TikTok đã đổi từ lúc lập kế hoạch. ${loiBien}`)
     // Máy tự chạy + phí chưa đủ tin ⇒ chỉ được TĂNG giá (lãi mỗi đơn tăng theo giá, không bao giờ lỗ thêm)
@@ -872,9 +1068,14 @@ async function doiGiaTikTok(ctx: NgCanhTikTok, ch: any, d: any, pol: ChinhSachTi
     await fb.updatePrice(String(l.platformProductId), gia, song.skuId)
     await ctx.prisma.onlineProduct.update({ where: { id: l.id }, data: { price: gia } }).catch(() => { })
     console.log(`[TikTokPilot] ĐỔI GIÁ ${l.sku || l.platformProductId} (${ch.name}) ${song.gia} → ${gia}`)
+    const nhac = [
+        phiChuaTin && `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}`,
+        ct && cauSapKhuyenMai(ct),
+        kmChuaRo && `Chưa biết chắc mã có trong chương trình khuyến mãi không (${kmChuaRo}) — nếu có, giá khách trả giảm theo; xem trên Seller Center.`,
+    ].filter(Boolean).join(' · ')
     return {
         item_id: String(l.platformProductId), sku_id: song.skuId, old_price: song.gia, new_price: gia,
-        ...(phiChuaTin ? { warning: `Chỉ được TĂNG giá vì phí TikTok chưa đủ tin — giá sàn có thể còn thấp, xem lại trên TikTok Pilot. ${phiChuaTin}` } : {}),
+        ...(nhac ? { warning: nhac } : {}),
     }
 }
 
@@ -908,7 +1109,8 @@ async function donKeHoachMoTikTok(ctx: NgCanhTikTok, tuDong: boolean, results: a
         if (k.status !== 'draft') continue
         if (String(k.idempotencyKey || '').startsWith('cycle:')) {
             const quaHan = now - k.createdAt > HAN_NHAP_MS
-            const canDuyet = !!k.data?.feeWarning && !(Number(k.data?.price) > Number(k.data?.snapshot?.price))
+            // nháp HẠ giá chờ người: phí chưa đủ tin, hoặc chưa rõ khuyến mãi (lô 17) — máy không tự huỷ, người duyệt / huỷ / hết 3 ngày
+            const canDuyet = !!(k.data?.feeWarning || k.data?.promoWarning) && !(Number(k.data?.price) > Number(k.data?.snapshot?.price))
             if (quaHan || (tuDong && !canDuyet)) {
                 if (await ctx.kho.huyKeHoach(k.id)) {
                     // 09/11/2026: nháp Tự động còn lại = lượt trước chạm trần ghi / dừng giữa chừng (TT-10 giữ nháp) — không phải Xem trước
@@ -1105,8 +1307,13 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                 else results.push({ action: 'price', status: 'failed', message: `Không đọc được giá đang bán trên TikTok — chu kỳ không đổi giá mã nào (${String(e?.message || e).slice(0, 200)}).` })
             }
         }
-        const bo = { khongThay: 0, khongBan: 0, khongGia: 0, nguoiSua: 0, nguoiSuaDuoiSan: 0, khuyenMai: 0 }
+        const bo = { khongThay: 0, khongBan: 0, khongGia: 0, nguoiSua: 0, nguoiSuaDuoiSan: 0, khuyenMai: 0, dangKm: 0 }
         let denNguoiSua = 0
+        /* KHUYẾN MÃI của gian (10/11/2026, TT-04 — lô 17): đọc MỘT lần mỗi lượt, LƯỜI — chỉ khi có mã máy định đổi (gian không cần đổi
+         * gì thì khỏi 2 + N lời gọi). Bản đọc để lại 5 phút cho các lần thực thi ngay sau trong lượt. */
+        let km = undefined as KhuyenMaiGianTikTok | undefined   // không khởi tạo kiểu này thì TS thu hẹp về undefined (gán trong closure)
+        const docKm = async (): Promise<KhuyenMaiGianTikTok> => km ||= await khuyenMaiGian(ctx, ch, await dichVu(ctx, ch), { moi: true })
+        const vdKm: string[] = [], duoiSanKm: string[] = []
         const uv: { l: any; mauPhi: MauPhi; s: GiaSongTikTok; giaCu: number; quyet: { gia: number; lyDo: string }; uu: number }[] = []
         if (song) {
             // máy đổi giá cùng mã cách nhau ≥ 24 giờ tính từ lúc THỰC THI (09/11/2026, TT-11 — trước tính từ lúc LẬP nháp) — trừ mã
@@ -1154,26 +1361,54 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                     }
                 }
                 if (!quyet) continue
-                // TikTok vừa khoá giá mã này vì khuyến mãi (TT-04) ⇒ nghỉ 24 giờ: thử lại là lại bị từ chối, lại ăn một lượt ghi
-                if (deYen.khuyenMai.has(id)) { bo.khuyenMai++; continue }
+                // TikTok vừa khoá giá mã này vì khuyến mãi (TT-04) ⇒ nghỉ 24 giờ: thử lại là lại bị từ chối, lại ăn một lượt ghi. Đó thường
+                // là chiến dịch của SÀN — API khuyến mãi của người bán không thấy, nên bản đọc dưới đây không gỡ được lần nghỉ này
+                const nghi = deYen.khuyenMai.get(id)
+                if (nghi && nghi.result?.nguon !== 'api') { bo.khuyenMai++; continue }
+                // vừa đổi trong 24 giờ ⇒ để sau — xét TRƯỚC khi đọc khuyến mãi: mã đằng nào cũng không đổi lượt này thì khỏi hỏi TikTok
                 const uu = giaCu < kq.giaSan ? 0 : quyet.gia > giaCu ? 1 : 2
                 if (uu > 0 && vuaDoi.has(id)) { soVuaDoi++; continue }
+                /* Mã trong chương trình ĐANG / SẮP chạy ⇒ để yên giá CẢ HAI chiều (lô 17). Đọc hỏng ⇒ dựa dòng ghi nhớ ≤ 24 giờ của lượt
+                 * trước / lần thực thi vừa bị chặn: mã vừa thấy trong chương trình thì coi như còn (thà để yên một lượt còn hơn tăng giá
+                 * ngay trước đợt giảm). Đọc được mà mã không còn trong chương trình nào ⇒ hết nghỉ, xét như thường. */
+                const kmLuot = await docKm()
+                const ct: KmSanPham | undefined = kmLuot.ok ? kmLuot.theoSanPham.get(id)
+                    : (deYen.dangKm.get(id)?.data?.khuyenMai || nghi?.result?.chuongTrinh || undefined)
+                if (ct) {
+                    bo.dangKm++
+                    if (vdKm.length < 3) vdKm.push(`${l.sku || id}: ${ct.moTa}`)
+                    if (giaCu < kq.giaSan) duoiSanKm.push(`${l.sku || id} ${vnd(giaCu)} < sàn ${vnd(kq.giaSan)} — ${ct.moTa}`)
+                    // ghi nhớ MỘT dòng / mã / ngày (trang hiện "đang khuyến mãi"; lượt sau đọc hỏng thì dựa vào) — chỉ khi vừa đọc thấy
+                    const khoa = `skip:khuyen-mai:${id}:${ngayVN(now)}`
+                    if (kmLuot.ok && !deYen.theoKhoa.has(khoa)) {
+                        await ctx.kho.taoKeHoach(keHoachMoi({ itemId: id, sku: l.sku || null, name: l.name, khuyenMai: ct }, khoa, ctx.nguoi, now, 'skipped')).catch(() => { })
+                    }
+                    continue
+                }
+                if (nghi && !kmLuot.ok) { bo.khuyenMai++; continue }   // bị chặn lúc thực thi, lượt này đọc hỏng, không rõ chương trình ⇒ vẫn nghỉ
                 uv.push({ l, mauPhi, s, giaCu, quyet, uu })
             }
         }
         // đang dưới giá sàn (lỗ / sát lỗ qua affiliate) trước, rồi tăng, hạ giá sau cùng
         uv.sort((a, b) => a.uu - b.uu)
-        let soGhi = 0, soNhap = 0, soHoi = 0, hetLuot = false, i = 0
+        // chưa rõ mã nào dính khuyến mãi (đọc hỏng / thiếu gói quyền / chương trình toàn gian) ⇒ HẠ giá thành nháp chờ người (lô 17)
+        const kmChuaRo = lyDoKhuyenMaiChuaRo(km)
+        let soGhi = 0, soNhap = 0, soHoi = 0, soHaKm = 0, hetLuot = false, i = 0
         for (; i < uv.length; i++) {
             const u = uv[i]
             if (loiToken || soGhi >= tranGhi || soHoi >= tranGhi * 3 + TRAN_NHAP_MOI_CHU_KY) break
             const id = String(u.l.platformProductId)
-            // Phí chưa đủ tin ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
-            const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) : null
-            if (chuaTin && !(u.quyet.gia > u.giaCu) && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
+            const ha = !(u.quyet.gia > u.giaCu)
+            // Phí chưa đủ tin / chưa rõ khuyến mãi ⇒ máy KHÔNG tự HẠ giá: để nháp chờ người duyệt. TĂNG giá thì được.
+            const chuaTin = tuDong ? lyDoPhiChuaDuTin(u.quyet.gia, u.mauPhi, pol.minMarginRate * 100) || (ha ? kmChuaRo : null) : null
+            if (chuaTin && ha && soNhap >= TRAN_NHAP_MOI_CHU_KY) continue
             soHoi++
+            if (ha && kmChuaRo) soHaKm++
             try {
-                let plan: any = await taoKeHoachGiaTikTok(ctx, { itemId: id, price: u.quyet.gia, giaSong: u.s, idempotencyKey: `${tuDong ? 'cycle' : 'cycle:xem'}:price:${id}:${ngayVN(now)}:${u.quyet.gia}` })
+                let plan: any = await taoKeHoachGiaTikTok(ctx, {
+                    itemId: id, price: u.quyet.gia, giaSong: u.s, idempotencyKey: `${tuDong ? 'cycle' : 'cycle:xem'}:price:${id}:${ngayVN(now)}:${u.quyet.gia}`,
+                    ...(ha && kmChuaRo ? { promoWarning: kmChuaRo } : {}),
+                })
                 if (plan.status !== 'draft') continue   // cùng khoá trong ngày đã thực thi / hỏng — đã báo ở lượt đó
                 const choDuyet = chuaTin && !(u.quyet.gia > (Number(plan.data?.snapshot?.price) || u.giaCu)) ? chuaTin : null
                 if (tuDong && !choDuyet) {
@@ -1215,6 +1450,31 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                 + `${bo.nguoiSuaDuoiSan ? ` (trong đó ${bo.nguoiSuaDuoiSan} mã đang dưới giá sàn — xem lại giá trên Seller Center)` : ''}.` })
         }
         if (bo.khuyenMai) results.push({ action: 'price', status: 'skipped', message: `${bo.khuyenMai} mã đang khuyến mãi — TikTok khoá giá; Pilot nghỉ các mã này 24 giờ kể từ lần bị từ chối.` })
+        // mã DƯỚI GIÁ SÀN mà kẹt trong chương trình: máy không nâng được tới khi chương trình kết thúc ⇒ chủ shop phải biết. Dòng
+        // RIÊNG, việc nói trước: tin báo (lib/pilotBaoChuShop.viecCanNguoi) chỉ giữ 180 ký tự đầu mỗi dòng
+        if (duoiSanKm.length) {
+            results.push({
+                action: 'price', status: 'skipped', canNguoi: true,
+                message: `${duoiSanKm.length} mã DƯỚI GIÁ SÀN đang / sắp chạy khuyến mãi — máy không nâng giá được tới khi chương trình kết thúc: ${duoiSanKm.slice(0, 3).join('; ')}${duoiSanKm.length > 3 ? '; …' : ''}. Xem lại chương trình trên Seller Center.`,
+            })
+        }
+        if (bo.dangKm) {
+            results.push({
+                action: 'price', status: 'skipped',
+                message: `${bo.dangKm} mã đang / sắp chạy khuyến mãi của gian — Pilot để yên giá gốc (giảm theo % tính trên giá gốc; tăng ngay trước đợt giảm dính luật "tăng giá ảo"): ${vdKm.join('; ')}${bo.dangKm > vdKm.length ? '; …' : ''}.`,
+            })
+        }
+        if (kmChuaRo && km) {
+            const thieuGoi = !km.ok && km.thieuGoi
+            results.push({
+                // báo chủ shop khi việc thiếu gói quyền thật sự giữ lại lần hạ giá (nháp chờ duyệt) — không thì chỉ ghi dòng, khỏi nhắc mỗi ngày
+                action: 'price', status: 'skipped', ...(thieuGoi && tuDong && soHaKm ? { canNguoi: true } : {}),
+                message: thieuGoi ? cauThieuGoiKhuyenMai(ch.name, tuDong)
+                    : `${kmChuaRo[0].toUpperCase()}${kmChuaRo.slice(1)} — ` + (tuDong
+                        ? `máy chưa biết mã nào dính khuyến mãi nên không tự HẠ giá lượt này${soHaKm ? ` (${soHaKm} mã hạ giá thành nháp chờ duyệt)` : ''}; tăng giá vẫn làm.`
+                        : 'nháp hạ giá ghi «chưa rõ khuyến mãi» — xem chương trình trên Seller Center trước khi duyệt.'),
+            })
+        }
         const boQua = [bo.khongBan && `${bo.khongBan} không còn bán trên TikTok`, bo.khongGia && `${bo.khongGia} TikTok trả giá 0 / rỗng`,
             bo.khongThay && `${bo.khongThay} TikTok không trả sản phẩm`].filter(Boolean).join(', ')
         if (boQua) results.push({ action: 'price', status: 'skipped', message: `Bỏ qua theo giá đọc thẳng từ TikTok: ${boQua} — không đổi giá các mã này.` })
@@ -1232,7 +1492,7 @@ export async function chayChuKyTikTok(ctx0: NgCanhTikTok): Promise<any> {
                 })
             } else if (!soGhi && !soNhap && !soNhieuSku) {
                 // còn mã bị giữ / chưa biết phí / không đọc được giá thì không biết có cần đổi hay không — đừng nói "không mã nào cần đổi"
-                const chua = soChuaBietPhi || bo.nguoiSua || bo.khuyenMai || boQua
+                const chua = soChuaBietPhi || bo.nguoiSua || bo.khuyenMai || bo.dangKm || boQua
                 results.push({ action: 'price', status: 'unchanged', message: `Soát ${listing.length} sản phẩm đang bán: ${chua ? 'chưa đổi giá mã nào' : 'không mã nào cần đổi giá'}.` })
             } else if (soGhi >= tranGhi && con > 0) {
                 results.push({ action: 'price', status: 'skipped', message: `Mỗi chu kỳ đổi tối đa ${tranGhi} sản phẩm — còn ${con} sản phẩm chờ chu kỳ sau.` })
@@ -1277,6 +1537,20 @@ export async function kiemKetNoiTikTok(ctx: NgCanhTikTok): Promise<any> {
             return `Thực nhận ${vnd(s.settlementAmount)} · phí ${vnd(s.feeAmount)}${aff}`
         })
     } else buoc.push({ ten: 'Đối soát tài chính', ok: true, chiTiet: 'Chưa có đơn cũ hơn 7 ngày để thử.' })
+    // khuyến mãi của gian (lô 17) — đọc MỚI, làm mới luôn bản đọc chu kỳ / thực thi dùng chung
+    if (typeof fb.searchPromotionActivities === 'function' && typeof fb.getPromotionActivity === 'function') {
+        await thu('Khuyến mãi (promotion/activities)', async () => {
+            const km = await khuyenMaiGian(ctx, ch, fb, { moi: true })
+            if (!km.ok) {
+                throw new Error(km.thieuGoi
+                    ? 'Ứng dụng Kengi chưa được TikTok cấp gói quyền «Promotion Information» (TikTok trả 105005) — quản trị Kengi xin gói này ở TikTok Shop Partner Center, được duyệt thì uỷ quyền lại gian. Tới lúc đó máy không tự HẠ giá (hạ thành nháp chờ duyệt).'
+                    : `${lyDoKhuyenMaiChuaRo(km)} — lượt này máy không tự HẠ giá (hạ thành nháp chờ duyệt).`)
+            }
+            const dang = [...km.theoSanPham.values()].filter(x => x.dangChay).length
+            return `${km.theoSanPham.size} mã trong chương trình đang / sắp chạy (${dang} đang chạy) — Pilot để yên giá gốc các mã này`
+                + (km.caGian.length ? ` · ${km.caGian.length} chương trình toàn gian (${km.caGian.slice(0, 2).join('; ')}) — có nó thì máy không tự hạ giá` : '')
+        })
+    }
     const het = ch.tokenExpiresAt ? new Date(ch.tokenExpiresAt).getTime() : null
     buoc.push({
         ten: 'Token API', ok: !!ch.accessToken && !fb.loiLamMoiToken,
@@ -1401,10 +1675,15 @@ Pilot chạy trên máy chủ Kengi, dữ liệu lấy thẳng từ kho của c�
      "Cần uỷ quyền lại gian TikTok" — Đơn Hàng Online → nút «Kênh bán hàng» → nút «Cấp lại quyền» ở dòng của gian.
 
 6. Khuyến mãi
-   - TikTok khoá giá sản phẩm đang khuyến mãi: lần đổi giá bị từ chối được ghi "đang khuyến mãi — TikTok khoá giá" (không phải
-     lỗi), máy nghỉ mã đó 24 giờ.
-   - TikTok Pilot CHƯA biết khuyến mãi SẮP chạy — nên tắt Tự động đổi giá («Điều chỉnh giá bán» ở Sửa chính sách) trước đợt
-     khuyến mãi lớn.
+   - Mỗi chu kỳ Pilot ĐỌC chương trình khuyến mãi của gian (giảm giá, flash sale, mua nhiều giảm nhiều, quà tặng… — không tính giảm
+     phí vận chuyển). Mã nằm trong chương trình ĐANG hoặc SẮP chạy ⇒ máy để yên giá gốc cả hai chiều (giảm theo % tính trên giá gốc;
+     tăng ngay trước đợt giảm dính luật "tăng giá ảo"), chu kỳ báo "N mã đang / sắp chạy khuyến mãi"; mã dưới giá sàn mà kẹt trong
+     chương trình thì báo chủ shop. Người duyệt tay: chương trình đang chạy thì không đổi được; sắp chạy thì được, kèm lời nhắc.
+   - Chưa biết chắc mã nào dính khuyến mãi (đọc hỏng, gian có chương trình TOÀN SHOP, hoặc ứng dụng Kengi chưa được TikTok cấp gói
+     quyền «Promotion Information» — TikTok trả 105005, quản trị Kengi xin gói ở Partner Center rồi uỷ quyền lại gian) ⇒ máy KHÔNG
+     tự hạ giá: kế hoạch hạ thành nháp chờ duyệt; tăng giá vẫn làm.
+   - Chiến dịch do SÀN TikTok tổ chức và mã giảm giá (coupon) không đọc được qua API này: lần đổi giá bị TikTok từ chối được ghi
+     "đang khuyến mãi — TikTok khoá giá" (không phải lỗi), máy nghỉ mã đó 24 giờ.
 
 7. Chưa làm
    - Đăng sản phẩm mới lên TikTok và tạo khuyến mãi — cần thử trên gian thật trước (ngành hàng, thuộc tính, kho của TikTok).

@@ -959,6 +959,311 @@ async function main() {
         datLai()
     }
 
+    // ─── K. Lô 17 (10/11/2026, TT-04): ĐỌC khuyến mãi của gian TRƯỚC khi đổi giá ─────────────
+    // Dữ liệu gốc: OC4 (111) 120.000 DƯỚI sàn 127.200 ⇒ máy nâng 132.000; BINH (222) 160.000 ế 14 ngày ⇒ máy hạ 144.000.
+    // TikTok giả có API khuyến mãi (search theo MỘT trạng thái, lật trang bằng token; chi tiết mới có products). Mỗi ca một prisma
+    // riêng ⇒ bản đọc 5 phút (theo prisma của cửa hàng) không lẫn giữa các ca.
+    {
+        let kmTrang: Record<string, any[][]> = {}
+        let kmCT: Record<string, any> = {}
+        let loiKm: any = null
+        const goiKm: any[] = []
+        const ttKm = async (): Promise<DichVuTikTok> => ({
+            ...(await ttGia()),
+            searchPromotionActivities: async (status: string, pageToken = '') => {
+                goiKm.push(['search', status, pageToken])
+                if (loiKm) throw loiKm
+                const trang = kmTrang[status] || [[]]
+                const i = pageToken ? Number(pageToken) : 0
+                return { activities: trang[i] || [], nextPageToken: i + 1 < trang.length ? String(i + 1) : '', total: trang.flat().length }
+            },
+            getPromotionActivity: async (id: string) => { goiKm.push(['get', id]); const d = kmCT[id]; if (d instanceof Error) throw d; return d || {} },
+        })
+        const giay = (ms: number) => Math.floor(ms / 1000)
+        const hd = (id: string, loai: string, status: string, level = 'PRODUCT') => ({
+            id, title: `CT ${id}`, activity_type: loai, status, product_level: level,
+            begin_time: giay(status === 'NOT_START' ? NOW + 86400_000 : NOW - 3600_000), end_time: giay(NOW + 2 * 86400_000),
+        })
+        const datKm = (...ds: { a: any; sp?: string[] }[]) => {
+            kmTrang = {}; kmCT = {}
+            for (const { a, sp } of ds) {
+                (kmTrang[a.status] ||= [[]])[0].push(a)
+                kmCT[a.id] = { ...a, activity_id: a.id, products: (sp || []).map(id => ({ id, activity_price: { amount: '100000', currency: 'VND' } })) }
+            }
+        }
+        const ctxK = (kho = khoBoNhoTikTok(() => bayGio)) => ctxL(kho, { taoTikTok: ttKm, prisma: { ...prisma } } as any)
+        const moiCa = async (o: { auto?: boolean } = {}) => {
+            datLai(); datTikTok(); goi.length = 0; goiKm.length = 0; loiKm = null; bayGio = NOW; datKm(); giaSongTheoGhi = true
+            const ctx = ctxK()
+            if (o.auto !== false) await luuCauHinhTikTok(ctx, { executionMode: 'auto' })
+            return ctx
+        }
+        const dongKm = (kq: any) => kq.results.find((r: any) => /mã đang \/ sắp chạy khuyến mãi của gian/.test(r.message || ''))
+        const dongChuaRo = (kq: any) => kq.results.find((r: any) => /khuyến mãi/i.test(r.message || '') && /(Chưa đọc được|Gian đang \/ sắp có chương trình toàn shop)/.test(r.message || ''))
+        const lmGiay = (s: string) => JSON.stringify(s)
+
+        // K1 — chương trình ĐANG chạy (giảm %) chứa BINH ⇒ BINH để yên (cả hai chiều), OC4 vẫn nâng
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            const kq = await chayChuKyTikTok(ctx)
+            const d = dongKm(kq)
+            dung('K1a. mã trong chương trình ĐANG chạy ⇒ KHÔNG đổi giá (BINH 0 lời gọi ghi); mã khác vẫn đổi (OC4 nâng 132.000)',
+                ghiMa('222').length === 0 && ghiMa('111').length === 1 && ghiMa('111')[0][2] === 132000, JSON.stringify({ ghi: ghiTT(), r: kq.results }))
+            dung('K1b. MỘT dòng gộp "1 mã đang / sắp chạy khuyến mãi" nêu chương trình; BINH trên sàn ⇒ không vào việc cần người',
+                d?.status === 'skipped' && /^1 mã đang \/ sắp chạy khuyến mãi của gian/.test(d.message) && /BINH: giảm giá theo % «CT a1» \(tới /.test(d.message)
+                && !d.canNguoi && !viecCanNguoi(kq.results).dong.some(x => /khuyến mãi/.test(x)), lmGiay(d?.message))
+            dung('K1c. đọc đúng API: search ONGOING + NOT_START (mỗi trạng thái MỘT lần), chi tiết a1; không dòng "token", không dòng "chưa rõ"',
+                JSON.stringify(goiKm) === JSON.stringify([['search', 'ONGOING', ''], ['search', 'NOT_START', ''], ['get', 'a1']])
+                && !kq.results.some((r: any) => r.action === 'token') && !dongChuaRo(kq), JSON.stringify(goiKm))
+            const nho = ctx.kho._keHoach.filter(k => k.data?.khuyenMai)
+            const st = await xayTrangThaiTikTok(ctx)
+            const hold = st.products.find((p: any) => p.itemId === '222')?.hold
+            dung('K1d. ghi nhớ MỘT dòng "skipped" không giá (ẩn khỏi danh sách kế hoạch); trang hiện BINH "promo" kèm tên chương trình, tới 24 giờ sau lúc đọc (chương trình còn 2 ngày)',
+                nho.length === 1 && nho[0].status === 'skipped' && !(Number(nho[0].data?.price) > 0) && !st.plans.some((p: any) => p.data?.khuyenMai)
+                && hold?.reason === 'promo' && /^Có giảm giá theo % «CT a1» \(tới .+\) — Pilot để yên giá gốc/.test(hold.message) && hold.until === NOW + 86400_000,
+                JSON.stringify({ nho, hold }))
+            // lượt sau (1 giờ, cùng ngày): vẫn đọc MỚI, vẫn để yên, không thêm dòng ghi nhớ
+            bayGio = NOW + 3600_000
+            goiKm.length = 0
+            const kq2 = await chayChuKyTikTok(ctx)
+            dung('K1e. lượt sau cùng ngày: đọc lại (chu kỳ luôn đọc mới), BINH vẫn để yên, KHÔNG thêm dòng ghi nhớ',
+                goiKm.filter(g => g[0] === 'search').length === 2 && ghiMa('222').length === 0 && !!dongKm(kq2) && ctx.kho._keHoach.filter(k => k.data?.khuyenMai).length === 1,
+                JSON.stringify({ goiKm, r: kq2.results }))
+            // K14 — lượt sau nữa ĐỌC HỎNG: dựa dòng ghi nhớ ⇒ BINH vẫn để yên (không thành nháp hạ giá), dòng "chưa đọc được"
+            bayGio = NOW + 2 * 3600_000
+            loiKm = new TypeError('fetch failed')
+            const kq3 = await chayChuKyTikTok(ctx)
+            dung('K1f. đọc hỏng ⇒ mã vừa thấy trong chương trình (dòng ghi nhớ ≤ 24 giờ) VẪN để yên: không ghi, không nháp; dòng "chưa đọc được khuyến mãi"',
+                ghiMa('222').length === 0 && !ctx.kho._keHoach.some(k => k.data?.itemId === '222' && k.status === 'draft') && !!dongKm(kq3)
+                && /^Chưa đọc được khuyến mãi TikTok \(fetch failed\)/.test(dongChuaRo(kq3)?.message || ''), JSON.stringify(kq3.results))
+            loiKm = null
+        }
+
+        // K2 — chương trình SẮP chạy (flash sale) chứa OC4 đang DƯỚI GIÁ SÀN ⇒ không nâng, BÁO chủ shop; BINH hạ như thường
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('f1', 'FLASHSALE', 'NOT_START'), sp: ['111'] })
+            const kq = await chayChuKyTikTok(ctx)
+            const d = dongKm(kq)
+            dung('K2a. SẮP chạy cũng để yên (tăng ngay trước đợt giảm = "tăng giá ảo"): OC4 0 lời gọi ghi; BINH vẫn hạ 144.000',
+                ghiMa('111').length === 0 && ghiMa('222').length === 1 && ghiMa('222')[0][2] === 144000, JSON.stringify({ ghi: ghiTT(), r: kq.results }))
+            const duoi = kq.results.find((r: any) => /mã DƯỚI GIÁ SÀN đang \/ sắp chạy khuyến mãi/.test(r.message || ''))
+            const viec = viecCanNguoi(kq.results).dong
+            dung('K2b. mã DƯỚI GIÁ SÀN kẹt trong chương trình ⇒ dòng RIÊNG cần người, nêu giá đang bán + giá sàn + chương trình — lọt đủ vào tin báo (≤ 180 ký tự)',
+                duoi?.canNguoi === true && /^1 mã DƯỚI GIÁ SÀN đang \/ sắp chạy khuyến mãi — máy không nâng giá được/.test(duoi.message)
+                && viec.length === 1 && /OC4 120\.000đ < sàn 127\.200đ — flash sale «CT f1» \(sắp chạy từ \d\d:\d\d \d\d\/\d\d\)/.test(viec[0]), JSON.stringify({ duoi, viec }))
+            dung('K2c. dòng gộp "đang / sắp chạy" vẫn có (nêu chương trình), không cần người', /OC4: flash sale «CT f1» \(sắp chạy từ /.test(d?.message || '') && !d?.canNguoi, lmGiay(d?.message))
+        }
+
+        // K3 — giảm phí vận chuyển (kể cả toàn gian) không đụng giá sản phẩm ⇒ bỏ qua, không đọc chi tiết
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('s1', 'SHIPPING_DISCOUNT', 'ONGOING', 'SHOP') }, { a: hd('s2', 'SHIPPING_DISCOUNT', 'NOT_START') })
+            const kq = await chayChuKyTikTok(ctx)
+            dung('K3. giảm phí vận chuyển ⇒ bỏ qua: cả OC4 lẫn BINH đổi, không dòng khuyến mãi, không đọc chi tiết chương trình',
+                ghiMa('111').length === 1 && ghiMa('222').length === 1 && !dongKm(kq) && !dongChuaRo(kq) && !goiKm.some(g => g[0] === 'get'), JSON.stringify({ goiKm, r: kq.results }))
+        }
+
+        // K4 — ứng dụng THIẾU GÓI QUYỀN (105005 — trùng mã token nhưng ở API khuyến mãi là thiếu gói) ⇒ không dòng token; hạ thành nháp
+        {
+            const ctx = await moiCa()
+            loiKm = new Error('TikTok promotion/activities/search: [105005] you should apply auth pkg for this api')
+            const kq = await chayChuKyTikTok(ctx)
+            const binh = kq.results.find((r: any) => r.sku === 'BINH')
+            const nhap = ctx.kho._keHoach.find(k => k.data?.itemId === '222')
+            const dong = dongChuaRo(kq)
+            dung('K4a. 105005 ở API khuyến mãi ⇒ KHÔNG thành dòng "token", vẫn ghi lượt này: OC4 TĂNG (132.000) — tăng không cần biết khuyến mãi',
+                !kq.results.some((r: any) => r.action === 'token') && ghiMa('111').length === 1 && ghiMa('111')[0][2] === 132000, JSON.stringify(kq.results))
+            dung('K4b. HẠ giá BINH ⇒ nháp chờ duyệt (0 lời gọi ghi), dòng cần người "CHỜ NGƯỜI DUYỆT: … «Promotion Information»", nháp mang promoWarning',
+                ghiMa('222').length === 0 && nhap?.status === 'draft' && binh?.canNguoi === true && /CHỜ NGƯỜI DUYỆT: chưa đọc được khuyến mãi TikTok — ứng dụng Kengi chưa có gói quyền «Promotion Information»/.test(binh?.message || '')
+                && /«Promotion Information»/.test(nhap?.data?.promoWarning || ''), JSON.stringify({ binh, nhap }))
+            dung('K4c. MỘT dòng lý do: quản trị Kengi xin gói ở Partner Center rồi uỷ quyền lại gian (ĐƯỜNG BẤM «Cấp lại quyền»), cần người vì đã giữ lại lần hạ',
+                dong?.canNguoi === true && /^Chưa đọc được khuyến mãi của gian TikTok "Kengi TikTok"/.test(dong.message) && /Quản trị Kengi xin gói này ở TikTok Shop Partner Center/.test(dong.message)
+                && /nút «Cấp lại quyền»/.test(dong.message) && /máy không tự HẠ giá/.test(dong.message) && goiKm.length === 1, JSON.stringify({ dong, goiKm }))
+            // lượt sau: nháp chờ người KHÔNG bị máy tự huỷ (như nháp phí chưa đủ tin)
+            bayGio = NOW + 3600_000
+            const kq2 = await chayChuKyTikTok(ctx)
+            dung('K4d. lượt sau (Tự động): nháp hạ giá vì chưa rõ khuyến mãi được GIỮ chờ duyệt (không tự huỷ), mã đó tính "đang có nháp chờ duyệt"',
+                ctx.kho._keHoach.find(k => k.id === nhap?.id)?.status === 'draft' && kq2.results.some((r: any) => /^1 sản phẩm đang có nháp chờ duyệt/.test(r.message || '')),
+                JSON.stringify(kq2.results))
+            dung('K4e. … lượt đó không mã nào cần đọc khuyến mãi (OC4 vừa đổi, BINH có nháp) ⇒ KHÔNG hỏi TikTok lần nào', goiKm.length === 1, JSON.stringify(goiKm))
+            // dòng thiếu gói chỉ cần người khi thật sự giữ lại lần hạ — lượt chỉ có TĂNG thì chỉ ghi dòng (khỏi nhắc mỗi ngày)
+            const ctx3 = await moiCa()
+            listing = listing.filter(l => l.platformProductId !== '222')
+            loiKm = new Error('TikTok promotion/activities/search: [105005] you should apply auth pkg for this api')
+            const kq3 = await chayChuKyTikTok(ctx3)
+            const viec3 = kq3.results.filter((r: any) => /«Promotion Information»/.test(r.message || ''))
+            dung('K4f. thiếu gói + lượt chỉ có TĂNG (OC4 ghi): dòng thiếu gói vẫn ghi nhưng KHÔNG cần người',
+                ghiMa('111').length === 1 && viec3.length === 1 && !viec3[0].canNguoi && !viecCanNguoi(kq3.results).dong.length, JSON.stringify(kq3.results))
+            loiKm = null
+        }
+
+        // K5 — chương trình TOÀN GIAN (mua nhiều giảm nhiều cấp SHOP) ⇒ không biết mã nào dính ⇒ hạ thành nháp, tăng vẫn làm
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('b1', 'BUY_MORE_SAVE_MORE', 'ONGOING', 'SHOP') })
+            const kq = await chayChuKyTikTok(ctx)
+            dung('K5. chương trình toàn gian ⇒ OC4 tăng, BINH nháp chờ duyệt; dòng "Gian đang / sắp có chương trình toàn shop: mua nhiều giảm nhiều «CT b1»"; không đọc chi tiết (đã biết cấp SHOP)',
+                ghiMa('111').length === 1 && ghiMa('222').length === 0 && ctx.kho._keHoach.find(k => k.data?.itemId === '222')?.status === 'draft'
+                && /^Gian đang \/ sắp có chương trình toàn shop: mua nhiều giảm nhiều «CT b1»/.test(dongChuaRo(kq)?.message || '') && !goiKm.some(g => g[0] === 'get'),
+                JSON.stringify({ goiKm, r: kq.results }))
+        }
+
+        // K6 — lật trang: chương trình chứa BINH nằm ở TRANG 2; quá 3 trang / quá 40 chương trình ⇒ coi như chưa đọc được
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('p1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['999'] }, { a: hd('p2', 'FIXED_PRICE', 'ONGOING'), sp: ['222'] })
+            kmTrang.ONGOING = [[kmTrang.ONGOING[0][0]], [kmTrang.ONGOING[0][1]]]
+            const kq = await chayChuKyTikTok(ctx)
+            dung('K6a. chương trình ở trang 2 vẫn thấy (lật bằng next_page_token): BINH để yên, search ONGOING gọi 2 lần ("" rồi "1")',
+                ghiMa('222').length === 0 && /BINH: giảm giá đồng giá «CT p2»/.test(dongKm(kq)?.message || '')
+                && JSON.stringify(goiKm.filter(g => g[0] === 'search' && g[1] === 'ONGOING')) === JSON.stringify([['search', 'ONGOING', ''], ['search', 'ONGOING', '1']]),
+                JSON.stringify(goiKm))
+            const ctx2 = await moiCa()
+            kmTrang = { ONGOING: [[hd('q1', 'DIRECT_DISCOUNT', 'ONGOING')], [hd('q2', 'DIRECT_DISCOUNT', 'ONGOING')], [hd('q3', 'DIRECT_DISCOUNT', 'ONGOING')], [hd('q4', 'DIRECT_DISCOUNT', 'ONGOING')]] }
+            const kq2 = await chayChuKyTikTok(ctx2)
+            dung('K6b. quá 3 trang (> 300 chương trình) ⇒ dừng đọc (3 lời gọi), coi như chưa đọc được: BINH nháp, OC4 tăng',
+                goiKm.filter(g => g[0] === 'search').length === 3 && ghiMa('222').length === 0 && ghiMa('111').length === 1
+                && /^Chưa đọc được khuyến mãi TikTok \(gian có hơn 300 chương trình đang chạy\)/.test(dongChuaRo(kq2)?.message || ''), JSON.stringify({ goiKm, r: kq2.results }))
+            const ctx3 = await moiCa()
+            kmTrang = { ONGOING: [Array.from({ length: 41 }, (_, i) => hd(`m${i}`, 'DIRECT_DISCOUNT', 'ONGOING'))] }
+            const kq3 = await chayChuKyTikTok(ctx3)
+            dung('K6c. quá 40 chương trình cần đọc chi tiết ⇒ không đọc chi tiết nào, coi như chưa đọc được: BINH nháp',
+                !goiKm.some(g => g[0] === 'get') && ghiMa('222').length === 0 && /gian có 41 chương trình đang \/ sắp chạy — máy đọc tối đa 40/.test(dongChuaRo(kq3)?.message || ''),
+                JSON.stringify(kq3.results))
+        }
+
+        // K7 — chương trình vừa kết thúc giữa hai lần đọc (chi tiết trả EXPIRED) ⇒ không giữ giá ai; một mã trong nhiều chương trình ⇒ ĐANG chạy thắng
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('e1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            kmCT.e1.status = 'EXPIRED'
+            const kq = await chayChuKyTikTok(ctx)
+            dung('K7a. chi tiết trả EXPIRED ⇒ BINH xét như thường (hạ 144.000)', ghiMa('222').length === 1 && !dongKm(kq), JSON.stringify(kq.results))
+            const ctx2 = await moiCa({ auto: false })
+            // hai chương trình cùng chứa BINH, đều trả ở lượt search NOT_START; n2 vừa bắt đầu (chi tiết trả ONGOING) và đọc SAU n1
+            datKm({ a: hd('n1', 'FLASHSALE', 'NOT_START'), sp: ['222'] }, { a: hd('n2', 'DIRECT_DISCOUNT', 'NOT_START'), sp: ['222'] })
+            kmCT.n2.status = 'ONGOING'
+            const e = await nem(() => taoKeHoachGiaTikTok(ctx2, { itemId: '222', price: 150000 }))
+            dung('K7b. một mã trong cả chương trình sắp chạy lẫn đang chạy ⇒ coi là ĐANG chạy (dù đọc sau): người lập tay cũng bị từ chối',
+                e instanceof ToolError && /^Mã nằm trong giảm giá theo % «CT n2» \(tới /.test(e.message), String(e?.message))
+        }
+
+        // K8 — người lập / duyệt tay: chương trình ĐANG chạy ⇒ không đổi được; lần chặn lúc thực thi ⇒ 'skipped' + nghỉ, trang nói đúng chương trình
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            const e = await nem(() => taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 150000 }))
+            dung('K8a. lập tay mã trong chương trình ĐANG chạy ⇒ từ chối, nói chương trình + vì sao (giá khuyến mãi đổi theo, "tăng giá ảo")',
+                e instanceof ToolError && /^Mã nằm trong giảm giá theo % «CT a1» \(tới .+\) — đổi giá gốc lúc này là đổi luôn giá khuyến mãi/.test(e.message) && /tăng giá ảo/.test(e.message), String(e?.message))
+            datKm()
+            const ctxB = ctxK(ctx.kho)
+            const kh = await taoKeHoachGiaTikTok(ctxB, { itemId: '222', price: 150000 })   // lúc lập chưa có chương trình
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            bayGio = NOW + 6 * 60_000   // quá 5 phút ⇒ bản đọc lúc lập hết hạn, thực thi đọc lại
+            const x = await thucThiTikTok(ctxB, kh.id)
+            dung('K8b. chương trình bật SAU lúc lập ⇒ người bấm thực thi: "skipped" (không phải "failed"), khoaKhuyenMai + nguon api, 0 lời gọi ghi',
+                x.status === 'skipped' && x.result?.khoaKhuyenMai === true && x.result?.nguon === 'api' && x.result?.chuongTrinh?.dangChay === true
+                && /^Mã nằm trong giảm giá theo % «CT a1»/.test(x.result?.message || '') && ghiMa('222').length === 0, JSON.stringify(x.result))
+            const st = await xayTrangThaiTikTok(ctxB)
+            const hold = st.products.find((p: any) => p.itemId === '222')?.hold
+            dung('K8c. trang: BINH "promo" nói ĐÚNG chương trình ("Có giảm giá theo % «CT a1» … nghỉ mã này tới"), không nói "TikTok khoá giá"',
+                hold?.reason === 'promo' && /^Có giảm giá theo % «CT a1» .*Pilot không đổi giá gốc, nghỉ mã này tới/.test(hold.message) && !/khoá giá/.test(hold.message), JSON.stringify(hold))
+            // chu kỳ: còn chương trình ⇒ đếm "đang / sắp chạy khuyến mãi" (không phải "TikTok khoá giá"); chương trình tắt ⇒ hết nghỉ NGAY
+            bayGio = NOW + 3600_000
+            const kq = await chayChuKyTikTok(ctxB)
+            dung('K8d. chu kỳ khi chương trình còn: BINH đếm vào dòng "đang / sắp chạy khuyến mãi", không vào dòng "TikTok khoá giá"',
+                ghiMa('222').length === 0 && !!dongKm(kq) && !kq.results.some((r: any) => /TikTok khoá giá; Pilot nghỉ/.test(r.message || '')), JSON.stringify(kq.results))
+            datKm()
+            bayGio = NOW + 2 * 3600_000
+            const kq2 = await chayChuKyTikTok(ctxB)
+            dung('K8e. chương trình tắt sớm ⇒ bản đọc mới gỡ lần nghỉ (không chờ đủ 24 giờ): BINH hạ 144.000',
+                ghiMa('222').length === 1 && ghiMa('222')[0][2] === 144000, JSON.stringify({ ghi: ghiTT(), r: kq2.results }))
+        }
+
+        // K9 — chương trình SẮP chạy: người duyệt được (kèm lời nhắc, như Shopee Pilot); máy thì không
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('f1', 'FLASHSALE', 'NOT_START'), sp: ['222'] })
+            const kh = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 150000 })
+            dung('K9a. lập tay mã có chương trình SẮP chạy ⇒ được, kế hoạch ghi lời nhắc "tăng giá ảo" / hạ là hạ luôn giá khuyến mãi',
+                kh.status === 'draft' && /^Mã nằm trong flash sale «CT f1» \(sắp chạy từ /.test(kh.data?.promoWarning || ''), JSON.stringify(kh.data))
+            const x = await thucThiTikTok(ctx, kh.id)
+            dung('K9b. người bấm thực thi ⇒ ghi (succeeded), kết quả kèm lời nhắc chương trình sắp chạy', x.status === 'succeeded' && ghiMa('222').length === 1 && /flash sale «CT f1»/.test(x.result?.warning || ''), JSON.stringify(x.result))
+            const kh2 = await taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 130000 })
+            datKm({ a: hd('f1', 'FLASHSALE', 'NOT_START'), sp: ['222', '111'] })
+            bayGio = NOW + 6 * 60_000
+            const x2 = await thucThiTikTok(ctx, kh2.id, { tuDong: true })
+            dung('K9c. MÁY thực thi mã có chương trình sắp chạy ⇒ "skipped" + nghỉ, 0 lời gọi ghi', x2.status === 'skipped' && x2.result?.khoaKhuyenMai === true && ghiMa('111').length === 0, JSON.stringify(x2.result))
+        }
+
+        // K10 — đọc HỎNG lúc thực thi: máy không tự HẠ; người hạ được kèm lời nhắc; tăng thì không cần biết; bản đọc dùng lại 5 phút
+        {
+            const ctx = await moiCa()
+            loiKm = new Error('TikTok promotion/activities/search: [36009003] internal error')
+            const ha1 = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 150000 })
+            const ha2 = await taoKeHoachGiaTikTok(ctx, { itemId: '222', price: 152000 })
+            const tang = await taoKeHoachGiaTikTok(ctx, { itemId: '111', price: 130000 })
+            const xMay = await thucThiTikTok(ctx, ha1.id, { tuDong: true })
+            dung('K10a. máy thực thi HẠ giá khi đọc khuyến mãi hỏng ⇒ "failed" "Không tự hạ giá: chưa đọc được khuyến mãi TikTok", 0 lời gọi ghi',
+                xMay.status === 'failed' && /^Không tự hạ giá: chưa đọc được khuyến mãi TikTok \(TikTok promotion\/activities\/search: \[36009003\]/.test(xMay.result?.message || '') && ghiMa('222').length === 0,
+                JSON.stringify(xMay.result))
+            const xNguoi = await thucThiTikTok(ctx, ha2.id)
+            dung('K10b. người bấm HẠ khi đọc hỏng ⇒ ghi được, kèm lời nhắc "Chưa biết chắc mã có trong chương trình khuyến mãi không"',
+                xNguoi.status === 'succeeded' && ghiMa('222').length === 1 && /Chưa biết chắc mã có trong chương trình khuyến mãi không/.test(xNguoi.result?.warning || ''), JSON.stringify(xNguoi.result))
+            const xTang = await thucThiTikTok(ctx, tang.id, { tuDong: true })
+            dung('K10c. máy TĂNG giá khi đọc hỏng ⇒ vẫn ghi, không lời nhắc khuyến mãi', xTang.status === 'succeeded' && ghiMa('111').length === 1 && !/khuyến mãi/.test(xTang.result?.warning || ''), JSON.stringify(xTang.result))
+            dung('K10d. ba lần lập + ba lần thực thi trong 5 phút ⇒ chỉ MỘT lần hỏi TikTok (bản đọc hỏng cũng dùng lại — duyệt loạt khỏi hỏi lại từng mã)',
+                goiKm.length === 1, JSON.stringify(goiKm))
+            dung('K10e. kế hoạch hạ lập lúc đọc hỏng mang promoWarning; kế hoạch tăng thì không', /chưa đọc được khuyến mãi TikTok/.test(ha1.data?.promoWarning || '') && !tang.data?.promoWarning,
+                JSON.stringify([ha1.data?.promoWarning, tang.data?.promoWarning]))
+            loiKm = null
+        }
+
+        // K11 — Xem trước: mã trong chương trình không lên nháp; đọc hỏng ⇒ nháp hạ ghi «chưa rõ khuyến mãi»; gian không cần đổi gì ⇒ không đọc
+        {
+            const ctx = await moiCa({ auto: false })
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            const kq = await chayChuKyTikTok(ctx)
+            dung('K11a. Xem trước: mã trong chương trình KHÔNG lên nháp (BINH), mã khác lên nháp (OC4); 0 lời gọi ghi',
+                ghiTT().length === 0 && !ctx.kho._keHoach.some(k => k.data?.itemId === '222' && k.status === 'draft') && ctx.kho._keHoach.some(k => k.data?.itemId === '111' && k.status === 'draft') && !!dongKm(kq),
+                JSON.stringify(kq.results))
+            const ctx2 = await moiCa({ auto: false })
+            loiKm = new TypeError('fetch failed')
+            const kq2 = await chayChuKyTikTok(ctx2)
+            const nhap = ctx2.kho._keHoach.find(k => k.data?.itemId === '222')
+            dung('K11b. Xem trước + đọc hỏng: nháp hạ BINH mang promoWarning; dòng lý do nói «chưa rõ khuyến mãi» (không nói "máy không tự hạ"), không cần người',
+                nhap?.status === 'draft' && /chưa đọc được khuyến mãi TikTok/.test(nhap?.data?.promoWarning || '') && /nháp hạ giá ghi «chưa rõ khuyến mãi»/.test(dongChuaRo(kq2)?.message || '')
+                && !dongChuaRo(kq2)?.canNguoi, JSON.stringify(kq2.results))
+            loiKm = null
+            const ctx3 = await moiCa()
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] })
+            listing = listing.filter(l => ['444', '555'].includes(l.platformProductId))   // không mã nào máy định đổi
+            await chayChuKyTikTok(ctx3)
+            dung('K11c. gian không có mã nào máy định đổi ⇒ KHÔNG đọc API khuyến mãi (đọc lười)', goiKm.length === 0, JSON.stringify(goiKm))
+        }
+
+        // K12 — kiểm kết nối: bước Khuyến mãi (đọc được / thiếu gói quyền); dịch vụ cũ không có API ⇒ không thêm bước
+        {
+            const ctx = await moiCa()
+            datKm({ a: hd('a1', 'DIRECT_DISCOUNT', 'ONGOING'), sp: ['222'] }, { a: hd('f1', 'FLASHSALE', 'NOT_START'), sp: ['111'] }, { a: hd('b1', 'BUY_MORE_SAVE_MORE', 'NOT_START', 'SHOP') })
+            const kn = await kiemKetNoiTikTok(ctx)
+            const b = kn.buoc.find((x: any) => /^Khuyến mãi/.test(x.ten))
+            dung('K12a. kiểm kết nối: bước Khuyến mãi ĐẠT — 2 mã trong chương trình (1 đang chạy) + 1 chương trình toàn gian; 0 lời gọi ghi',
+                b?.ok === true && /^2 mã trong chương trình đang \/ sắp chạy \(1 đang chạy\)/.test(b.chiTiet) && /1 chương trình toàn gian/.test(b.chiTiet) && ghiTT().length === 0, JSON.stringify(b))
+            loiKm = new Error('TikTok promotion/activities/search: [105005] you should apply auth pkg for this api')
+            const kn2 = await kiemKetNoiTikTok(ctxK())
+            const b2 = kn2.buoc.find((x: any) => /^Khuyến mãi/.test(x.ten))
+            dung('K12b. thiếu gói quyền ⇒ bước Khuyến mãi KHÔNG đạt, nói «Promotion Information» + Partner Center + uỷ quyền lại',
+                b2?.ok === false && /«Promotion Information»/.test(b2.chiTiet) && /Partner Center/.test(b2.chiTiet) && /uỷ quyền lại gian/.test(b2.chiTiet), JSON.stringify(b2))
+            loiKm = null
+            const kn3 = await kiemKetNoiTikTok(ngCanh())
+            dung('K12c. dịch vụ không có API khuyến mãi (bộ kiểm cũ) ⇒ không thêm bước Khuyến mãi', !kn3.buoc.some((x: any) => /^Khuyến mãi/.test(x.ten)), JSON.stringify(kn3.buoc.map((x: any) => x.ten)))
+        }
+        datLai(); datTikTok(); bayGio = NOW
+    }
+
     // ─── A. Hoa hồng affiliate TikTok đo từng đơn (10/11/2026, TT-02) ─────────────
     // Statement THẬT (finance 202309, đo 10/11/2026): trường PHẲNG trên từng giao dịch, số là chuỗi, phí mang dấu ÂM; đơn
     // thường vẫn trả đủ 4 trường affiliate = "0". Trước: getOrderSettlement không đọc ⇒ affiliateFee NULL ⇒ mô hình phí
@@ -1066,8 +1371,11 @@ async function main() {
         const oo = doc('routes/onlineOrders.ts')
         dung('9g. nút Đồng bộ (Đơn online) lấy ngành bằng hàm chung boSungNganhTikTok — một mã lỗi không còn dừng cả lượt (09/11/2026)',
             /boSungNganhTikTok\(prisma, channel\.id, tkService/.test(oo) && !/break \/\/ rate-limit\/token lỗi/.test(oo))
-        dung('9h. hướng dẫn nói thật: Pilot CHƯA biết khuyến mãi SẮP chạy — tắt Tự động đổi giá trước đợt lớn (09/11/2026)',
-            /TikTok Pilot CHƯA biết khuyến mãi SẮP chạy — nên tắt Tự động đổi giá/.test(doc('lib/tiktokPilot.ts')))
+        // lô 17 (10/11/2026): Pilot ĐÃ đọc khuyến mãi — hướng dẫn hết câu "CHƯA biết", nói rõ phần API không thấy (chiến dịch sàn, coupon)
+        const tp = doc('lib/tiktokPilot.ts')
+        dung('9h. hướng dẫn nói thật: Pilot ĐỌC khuyến mãi của gian (để yên mã đang / sắp chạy, thiếu gói ⇒ không tự hạ); chiến dịch của SÀN không thấy; hết câu "CHƯA biết khuyến mãi SẮP chạy"',
+            /Mỗi chu kỳ Pilot ĐỌC chương trình khuyến mãi của gian/.test(tp) && /«Promotion Information»/.test(tp) && /Chiến dịch do SÀN TikTok tổ chức và mã giảm giá \(coupon\) không đọc được/.test(tp)
+            && !/CHƯA biết khuyến mãi SẮP chạy/.test(tp))
         const as = doc('cron/autoSync.ts')
         dung('9i. hoa hồng affiliate TikTok (10/11/2026, TT-02): vòng đối soát ghi aff từ statement, lượt bù nhận cả gian TikTok (statement, 2 luồng), nút "Lấy phí" ghi affiliateFee',
             /phi = s\.feeAmount; thucNhan = s\.settlementAmount; aff = s\.affiliateFee \?\? null/.test(as)
