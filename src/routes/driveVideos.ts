@@ -997,4 +997,85 @@ export async function tenVideoHoanTu(prisma: any, tuNgay: Date): Promise<string[
     return ten
 }
 
+// ═════════════════════════════════════════════════
+//  TẢI VIDEO ĐÓNG HÀNG / HÀNG HOÀN LÊN DRIVE CỦA CỬA HÀNG — cho app PC
+//
+//  Công cụ web quay video tải qua Apps Script (địa chỉ nhớ trong trình duyệt).
+//  App PC không có địa chỉ đó; cửa hàng đã KẾT NỐI DRIVE bằng tài khoản chủ shop
+//  (oauth ở trên) + có driveFolderId thì máy chủ mở hộ một PHIÊN tải nối tiếp
+//  rồi trả URL phiên — app PUT thẳng byte lên Google, không đi xuyên Cloud Run
+//  (thân yêu cầu trần 32MB). URL phiên chỉ ghi được ĐÚNG MỘT tệp đã khai tên,
+//  không lộ token.
+// ═════════════════════════════════════════════════
+
+/** Chỉ nhận đúng khuôn tên máy quay đặt: DON_<mã>[_<người>]_<ms>.webm / HOAN_<mã>_<ms>[_GD1|_GD2].webm */
+export function tenVideoDongHangHopLe(ten: unknown): ten is string {
+    if (typeof ten !== 'string' || ten.length > 180) return false
+    if (/[\\/:*?"<>|\u0000-\u001f]/.test(ten)) return false
+    return /^(DON|HOAN)_[^_\s][^\n]{0,140}_\d{10,14}(_GD[12])?\.webm$/.test(ten)
+}
+
+const TRAN_VIDEO_BYTE = 2 * 1024 * 1024 * 1024
+
+// POST /api/drive-videos/phien-tai-len { ten, co } → { uploadUrl }
+router.post('/phien-tai-len', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const ten = req.body?.ten
+        const co = Number(req.body?.co)
+        if (!tenVideoDongHangHopLe(ten)) return res.status(400).json({ success: false, error: 'Tên tệp video không đúng khuôn DON_… / HOAN_… .webm' })
+        if (!Number.isFinite(co) || co <= 0 || co > TRAN_VIDEO_BYTE) return res.status(400).json({ success: false, error: 'Cỡ tệp video không hợp lệ (tối đa 2GB)' })
+        const st = await (req.storePrisma as any).storeSettings
+            .findFirst({ select: { driveFolderId: true } as any })
+            .catch(() => null) as any
+        const thuMuc = String(st?.driveFolderId || '').trim()
+        if (!thuMuc) return res.status(409).json({ success: false, error: 'Cửa hàng chưa khai thư mục Google Drive chứa video (Cài đặt → Video đóng hàng)', code: 'CHUA_CO_THU_MUC' })
+        const { layTokenGhiDrive } = await import('../lib/driveOAuth')
+        const q = await layTokenGhiDrive(req.storePrisma)
+        // Service account không có dung lượng riêng ⇒ tệp nó tạo trong My Drive của chủ shop bị Google từ chối.
+        if (q.nguon !== 'chu-shop') return res.status(409).json({ success: false, error: 'Cửa hàng chưa kết nối Google Drive bằng tài khoản chủ shop (web kengi.vn → Video đóng hàng → Kết nối Drive)', code: 'CHUA_KET_NOI_DRIVE' })
+        const mo = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${q.token}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+                'X-Upload-Content-Type': 'video/webm',
+                'X-Upload-Content-Length': String(Math.trunc(co)),
+            },
+            body: JSON.stringify({ name: ten, parents: [thuMuc] }),
+        })
+        const uploadUrl = mo.headers.get('location')
+        if (!mo.ok || !uploadUrl) {
+            console.error('[drive-videos] mở phiên tải lên hỏng:', mo.status, (await mo.text().catch(() => '')).slice(0, 300))
+            return res.status(502).json({ success: false, error: `Google Drive từ chối mở phiên tải lên (HTTP ${mo.status}) — chủ shop thử kết nối lại Drive` })
+        }
+        res.json({ success: true, data: { uploadUrl } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/drive-videos/mo-chia-se { fileId } — mở "ai có link đều xem được" cho video vừa tải (để gửi khách / gửi sàn),
+// như bước setSharing của Apps Script. Chỉ đụng tệp ĐÚNG khuôn tên video và nằm ngay trong thư mục của cửa hàng.
+router.post('/mo-chia-se', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const fileId = String(req.body?.fileId || '')
+        if (!/^[A-Za-z0-9_-]{10,100}$/.test(fileId)) return res.status(400).json({ success: false, error: 'Thiếu mã tệp' })
+        const st = await (req.storePrisma as any).storeSettings
+            .findFirst({ select: { driveFolderId: true } as any })
+            .catch(() => null) as any
+        const thuMuc = String(st?.driveFolderId || '').trim()
+        if (!thuMuc) return res.status(409).json({ success: false, error: 'Cửa hàng chưa khai thư mục Google Drive' })
+        const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+        const { drive } = await getStoreDriveWriter(req.storePrisma)
+        const f = await drive.files.get({ fileId, fields: 'id,name,parents', supportsAllDrives: true })
+        if (!tenVideoDongHangHopLe(f.data?.name) || !(f.data?.parents || []).includes(thuMuc)) {
+            return res.status(403).json({ success: false, error: 'Tệp này không phải video đóng hàng của cửa hàng' })
+        }
+        await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' }, supportsAllDrives: true })
+        res.json({ success: true, data: { fileId } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 export default router
