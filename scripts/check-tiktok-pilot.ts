@@ -34,7 +34,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import {
     khoBoNhoTikTok, chuanHoaChinhSachTikTok, xayTrangThaiTikTok, taoKeHoachGiaTikTok, thucThiTikTok, chayChuKyTikTok,
-    luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
+    luuCauHinhTikTok, huyKeHoachTikTok, chayTheoLichTikTok, kiemKetNoiTikTok, moDichVuTikTok, LoiNhieuSku, type NgCanhTikTok, type DichVuTikTok,
     giaSkuTikTok, laLoiKhoaGiaKhuyenMai, laLoiTokenTikTok, boSungNganhTikTok,
 } from '../src/lib/tiktokPilot'
 import { TikTokService, hoaHongAffiliateTikTok } from '../src/services/platforms/tiktok'
@@ -892,6 +892,67 @@ async function main() {
         await chayChuKyTikTok(ctx)
         dung('L6f. sau 24 giờ ⇒ thử lại, ghi được', ghiMa('111').length === 2 && ghiMa('111')[1][2] === 132000, JSON.stringify(ghiTT()))
         bayGio = NOW; giaSongTheoGhi = false
+    }
+
+    // L8 (10/11/2026, X-13) — làm mới token hỏng vì BẢN KHÁC vừa làm mới ⇒ đọc lại kênh, dùng token đó; không báo "uỷ quyền lại" oan
+    {
+        const lamMoiGoc = TikTokService.prototype.refreshAccessToken
+        const fetchGoc = globalThis.fetch
+        let cheDo: 'hong' | 'duoc' = 'hong', soMang = 0
+        TikTokService.prototype.refreshAccessToken = async function () {
+            if (cheDo === 'hong') throw new Error('TikTok refresh error: [36004004] refresh token is invalid')
+            return { accessToken: 'tk-moi', refreshToken: 'rf-moi', expiresIn: 7200 } as any
+        }
+        globalThis.fetch = (async () => { soMang++; throw new Error('bộ kiểm: cấm gọi mạng') }) as any
+        try {
+            const dongKenh = (them: any = {}) => ({ id: 'k8', name: 'Gian L8', apiKey: 'a', apiSecret: 's', shopId: 'c', accessToken: 'tk-cu', refreshToken: 'rf-cu', tokenExpiresAt: new Date(Date.now() + 60_000), ...them })
+            const pz = (trongDb: any, ghi: any[] = []) => ({ onlineChannel: {
+                findUnique: async ({ where }: any) => { if (trongDb instanceof Error) throw trongDb; return where?.id === 'k8' ? trongDb : null },
+                update: async (a: any) => { ghi.push(a); return a.data },
+            } })
+            const tk = (s: any) => s.credentials?.accessToken
+
+            const ch1 = dongKenh()
+            const s1: any = await moDichVuTikTok(pz(dongKenh({ accessToken: 'tk-ban-khac', refreshToken: 'rf-ban-khac', tokenExpiresAt: new Date(Date.now() + 4 * 3600_000) })), ch1)
+            dung('L8a. làm mới hỏng nhưng CSDL có token KHÁC còn hạn ⇒ dùng token đó (cả refresh token), KHÔNG gắn lỗi làm mới, dòng kênh trong lượt mang token mới',
+                tk(s1) === 'tk-ban-khac' && s1.credentials?.refreshToken === 'rf-ban-khac' && !s1.loiLamMoiToken && ch1.accessToken === 'tk-ban-khac' && ch1.refreshToken === 'rf-ban-khac'
+                && new Date(ch1.tokenExpiresAt).getTime() > Date.now() + 3600_000, JSON.stringify({ tk: tk(s1), loi: s1.loiLamMoiToken, ch1 }))
+
+            const caHong: [string, any][] = [
+                ['CSDL vẫn token cũ (chưa ai làm mới; ô hạn trống)', dongKenh({ tokenExpiresAt: null })],
+                ['CSDL token khác nhưng sắp hết hạn (< 1 phút)', dongKenh({ accessToken: 'tk-cu-khac', tokenExpiresAt: new Date(Date.now() + 30_000) })],
+                ['CSDL không còn dòng kênh', null],
+                ['CSDL có dòng nhưng token trống', dongKenh({ accessToken: '', tokenExpiresAt: new Date(Date.now() + 4 * 3600_000) })],
+                ['đọc lại kênh hỏng', new Error('Connection terminated unexpectedly')],
+            ]
+            const sai: string[] = []
+            for (const [ten, db] of caHong) {
+                const ch = dongKenh()
+                const s: any = await moDichVuTikTok(pz(db), ch)
+                if (!(tk(s) === 'tk-cu' && /refresh token is invalid/.test(s.loiLamMoiToken || '') && ch.accessToken === 'tk-cu')) sai.push(`${ten}: ${tk(s)} / ${s.loiLamMoiToken}`)
+            }
+            dung('L8b. … các ca KHÔNG được mượn (token cũ, token khác sắp hết hạn, mất dòng kênh, token trống, đọc lại hỏng) ⇒ giữ lỗi làm mới — vẫn báo uỷ quyền lại', !sai.length, sai.join(' | '))
+
+            const chHan = dongKenh({ accessToken: 'tk-cu' })
+            const sHan: any = await moDichVuTikTok(pz(dongKenh({ accessToken: 'tk-khong-han', tokenExpiresAt: null })), chHan)
+            dung('L8c. token KHÁC mà ô hạn trống ⇒ vẫn dùng (không đọc được hạn ≠ đã hết hạn)', tk(sHan) === 'tk-khong-han' && !sHan.loiLamMoiToken)
+
+            cheDo = 'duoc'
+            const ghi: any[] = []
+            const ch4 = dongKenh()
+            const s4: any = await moDichVuTikTok(pz(dongKenh(), ghi), ch4)
+            const het4 = new Date(ch4.tokenExpiresAt).getTime()
+            dung('L8d. làm mới ĐƯỢC ⇒ ghi CSDL một lần và dòng kênh trong lượt mang token + hạn mới (mở lại dịch vụ bằng dòng này không làm mới lần hai)',
+                tk(s4) === 'tk-moi' && ghi.length === 1 && ghi[0].data.accessToken === 'tk-moi' && ghi[0].data.refreshToken === 'rf-moi' && ch4.accessToken === 'tk-moi' && ch4.refreshToken === 'rf-moi'
+                && Math.abs(het4 - (Date.now() + 7200_000)) < 5000 && new Date(ghi[0].data.tokenExpiresAt).getTime() === het4, JSON.stringify({ ghi, ch4 }))
+            cheDo = 'hong'   // mở lại bằng CÙNG dòng kênh: nếu còn làm mới thì hỏng và lộ ra
+            const s5: any = await moDichVuTikTok(pz(dongKenh()), ch4)
+            dung('L8e. … mở lại dịch vụ bằng dòng kênh đó ⇒ KHÔNG làm mới nữa, dùng token mới', tk(s5) === 'tk-moi' && !s5.loiLamMoiToken)
+            dung('L8f. cả mục: 0 lời gọi mạng thật', soMang === 0, String(soMang))
+        } finally {
+            TikTokService.prototype.refreshAccessToken = lamMoiGoc
+            globalThis.fetch = fetchGoc
+        }
     }
 
     // L7 (TT-20) — làm mới token hỏng / mã 105005·106011·106001 ⇒ MỘT dòng 'token', không ghi gì lượt đó

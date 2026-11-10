@@ -378,17 +378,33 @@ export async function moDichVuTikTok(prisma: any, ch: any): Promise<DichVuTikTok
             const t = await svc.refreshAccessToken()
             ;(svc as any).credentials.accessToken = t.accessToken
             ;(svc as any).credentials.refreshToken = t.refreshToken
+            const het = new Date(Date.now() + t.expiresIn * 1000)
             await prisma.onlineChannel.update({
                 where: { id: ch.id },
-                data: { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: new Date(Date.now() + t.expiresIn * 1000) },
+                data: { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: het },
             })
+            // cùng lượt mở lại dịch vụ bằng dòng kênh này thì khỏi làm mới lần hai bằng refresh token vừa bị thay
+            Object.assign(ch, { accessToken: t.accessToken, refreshToken: t.refreshToken, tokenExpiresAt: het })
         } catch (e: any) {
             /* 09/11/2026 (TT-20): trước chỉ console.warn rồi chạy tiếp bằng token sắp / đã hết hạn ⇒ mỗi lần ghi sau đó hỏng một
              * kiểu khó hiểu, không ai được bảo phải uỷ quyền lại. Giờ ghi lý do lên dịch vụ: chu kỳ ra MỘT dòng action 'token'
              * (lib/pilotBaoChuShop bắt) và không ghi gì lượt đó; thực thi tay từ chối với cùng câu chỉ đường. */
             const lyDo = String(e?.message || e || 'không rõ').slice(0, 300)
-            console.warn(`[TikTokPilot] làm mới token ${ch.name} hỏng:`, lyDo)
-            ;(svc as any).loiLamMoiToken = lyDo
+            /* 10/11/2026 (X-13 — như Shopee Pilot SP-13): làm mới token sàn KHÔNG có khoá chung; đồng bộ đơn, chat, đẩy tồn hay bản
+             * Cloud Run khác có thể VỪA làm mới ⇒ refresh token mình cầm đã bị thay, lần làm mới này hỏng dù gian vẫn uỷ quyền tốt.
+             * Trước: báo chủ shop "uỷ quyền lại" oan và bỏ cả lượt. Giờ đọc lại kênh: token KHÁC và còn hạn (> 1 phút) thì dùng nó. */
+            let moi: any = null
+            try { moi = await prisma.onlineChannel.findUnique({ where: { id: ch.id } }) } catch { moi = null }
+            const hetMoi = moi?.tokenExpiresAt ? new Date(moi.tokenExpiresAt).getTime() : 0
+            if (moi?.accessToken && moi.accessToken !== ch.accessToken && (!hetMoi || hetMoi > Date.now() + 60_000)) {
+                ;(svc as any).credentials.accessToken = moi.accessToken
+                ;(svc as any).credentials.refreshToken = moi.refreshToken || ''
+                Object.assign(ch, { accessToken: moi.accessToken, refreshToken: moi.refreshToken, tokenExpiresAt: moi.tokenExpiresAt })
+                console.log(`[TikTokPilot] làm mới token ${ch.name} hỏng (${lyDo}) — dùng token bản khác vừa làm mới`)
+            } else {
+                console.warn(`[TikTokPilot] làm mới token ${ch.name} hỏng:`, lyDo)
+                ;(svc as any).loiLamMoiToken = lyDo
+            }
         }
     }
     return svc as unknown as DichVuTikTok
