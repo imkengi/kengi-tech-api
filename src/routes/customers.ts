@@ -13,6 +13,7 @@ import { emitEntityEvent } from '../lib/webhookDispatch'
 import { tinhTronBo } from '../lib/diemSucKhoeKhach'
 import { COT_HOA_DON_KHACH } from '../lib/hoaDonKhach'
 import { traMst, LoiTraMst, boSungTuMst } from '../lib/traMst'
+import { docNgayPhieuThu, MA_PHIEU_THU_KV, maTuDongTraNoKV } from '../lib/phieuThuKiotViet'
 
 const router = Router()
 
@@ -675,10 +676,28 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
             label: string
             amount: number
             balance: number
+            /** 'kiotviet' = chứng từ đồng bộ từ KiotViet — huỷ bên KiotViet, không huỷ ở đây */
+            nguon?: 'kiotviet'
         }
 
         const history: DebtHistoryItem[] = []
         let ptCounter = 0 // Counter for PT (Phiếu Thu) codes
+
+        /* PHIẾU THU KIOTVIET THEO ĐÚNG NGÀY TRẢ (23/10/2026, lib/phieuThuKiotViet.ts).
+         * KiotViet phân bổ một phiếu thu (TT…) vào nhiều hoá đơn cũ; đồng bộ ghi từng phần thành
+         * Payment trên các hoá đơn đó, mà Payment KHÔNG có cột ngày — nên trước đây phần tiền nằm
+         * ở ngày HOÁ ĐƠN, gộp vào dòng "PT<số HĐ>". Mã nào đã biết ngày thật (bảng PhieuThuKV) thì
+         * gom mọi phần phân bổ của mã đó thành MỘT dòng đúng ngày, mang đúng mã KiotViet — khớp
+         * màn "Nợ cần thu từ khách" bên KiotViet. Chưa biết ngày thì hiện như cũ. Tổng không đổi. */
+        const maKV = new Set<string>()
+        for (const t of transactions) {
+            for (const p of t.payments) {
+                const ref = String(p.reference || '')
+                if (p.type !== 'credit' && MA_PHIEU_THU_KV.test(ref)) maKV.add(ref)
+            }
+        }
+        const ngayKV = await docNgayPhieuThu(prisma, [...maKV])
+        const theoMaKV = new Map<string, { amount: number; date: string }>()
 
         // Helper: generate PT code from receipt number or sequential
         const makePTCode = (receiptNumber?: string) => {
@@ -732,7 +751,16 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
                 p.type !== 'credit' &&
                 !(p.reference && p.reference.includes('Thanh toán nợ'))
             )
-            const saleReceived = salePayments.reduce((sum: number, p: any) => sum + p.amount, 0)
+            // Phần là phiếu thu KiotViet đã biết ngày ⇒ dồn về dòng của chính mã đó (xem khối trên)
+            const conLaiLucBan: any[] = []
+            for (const p of salePayments) {
+                const ngay = ngayKV.get(String(p.reference || ''))
+                if (!ngay) { conLaiLucBan.push(p); continue }
+                const g = theoMaKV.get(p.reference) ?? { amount: 0, date: ngay.toISOString() }
+                g.amount += p.amount
+                theoMaKV.set(p.reference, g)
+            }
+            const saleReceived = conLaiLucBan.reduce((sum: number, p: any) => sum + p.amount, 0)
             if (saleReceived > 0) {
                 history.push({
                     id: `${t.id}-receipt`,
@@ -765,6 +793,63 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
 
         // ❌ AuditLog source REMOVED — already covered by Payment records above
 
+        // Phiếu thu LÚC BÁN của KiotViet mang mã TTHD + số hoá đơn; giờ của nó có khi sớm hơn hoá đơn
+        // vài giây ⇒ đứng trước chính hoá đơn và làm dòng dư nợ âm giả. Kéo về đúng giờ hoá đơn — sắp xếp
+        // ổn định giữ dòng bán (đẩy vào trước) đứng trên.
+        const gioHoaDon = new Map<string, string>()
+        for (const t of transactions) if (t.status !== 'voided') gioHoaDon.set(String(t.receiptNumber), t.createdAt.toISOString())
+        for (const [ma, g] of theoMaKV) {
+            if (g.amount === 0) continue
+            const gioHd = ma.startsWith('TTHD') ? gioHoaDon.get(`HD${ma.slice(4)}`) : undefined
+            if (gioHd && new Date(g.date).getTime() < new Date(gioHd).getTime()) g.date = gioHd
+            history.push({
+                id: `kv-${ma}`,
+                code: ma,
+                date: g.date,
+                type: 'payment',
+                label: 'Phiếu thu',
+                amount: -g.amount,
+                balance: 0,
+                nguon: 'kiotviet',
+            })
+        }
+
+        /* PHIẾU TRẢ HÀNG ĐỒNG BỘ TỪ KIOTVIET (23/10/2026). syncReturns chỉ tạo ReturnOrder — không có
+         * DebtEntry, không đổi phiếu bán — nên trước đây lịch sử không có dòng này trong khi KiotViet trừ
+         * nó vào nợ. Đo /returns HUTI 23/10/2026: 100/100 phiếu gần nhất totalPayment = 0, tức trả hàng
+         * TRỪ THẲNG vào nợ. syncReturns ghi refundAmount = totalPayment khi KV CÓ trả tiền mặt (phần
+         * chênh trừ nợ), bằng tổng khi không trả — trường hợp trả hết bằng tiền mặt vì thế không phân
+         * biệt được với trừ nợ toàn bộ; dữ liệu thật chưa thấy ca đó.
+         * Phiếu trả TẠO TẠI KENGI (returns.ts) đã có DebtEntry 'return' — chỉ đọc phiếu 'Nhập từ KiotViet'
+         * để không đếm đôi. */
+        const traKV: any[] = await prisma.returnOrder.findMany({
+            where: {
+                reason: 'Nhập từ KiotViet',
+                status: 'refunded',
+                OR: [
+                    { transactionId: { in: transactions.map((t: any) => t.id) } },
+                    ...(customer.name ? [{ transactionId: null, customerName: customer.name }] : []),
+                ],
+            },
+            select: { id: true, code: true, totalRefund: true, refundAmount: true, createdAt: true },
+        })
+        for (const r of traKV) {
+            const tong = Number(r.totalRefund) || 0
+            const tienMat = Number(r.refundAmount) || 0
+            const truNo = tienMat > 0 && tienMat < tong ? tong - tienMat : tong
+            if (truNo <= 0) continue
+            history.push({
+                id: `kv-tra-${r.id}`,
+                code: r.code,
+                date: new Date(r.createdAt).toISOString(),
+                type: 'return',
+                label: 'Trả hàng',
+                amount: -truNo,
+                balance: 0,
+                nguon: 'kiotviet',
+            })
+        }
+
         // From DebtEntry records.
         // Các entry TỰ ĐỘNG sinh từ luồng hóa đơn (bán chịu POS, thu nợ theo HĐ,
         // trả hàng theo HĐ, hủy đơn, hủy phiếu thu) phải BỎ QUA ở đây — phía
@@ -783,6 +868,9 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
             let entryType: DebtHistoryItem['type'] = 'manual_payment'
             let entryLabel = 'Phiếu thu'
             let entryAmount = -e.amount
+            // Phiếu thu sổ quỹ KiotViet chưa gắn được hoá đơn: hiện ĐÚNG mã KiotViet thay cho số PT tự đặt
+            const maKVTraNo = e.type === 'payment' ? maTuDongTraNoKV(e.description) : null
+            if (maKVTraNo) entryCode = maKVTraNo
 
             if (e.type === 'debt') {
                 entryCode = 'GN'
@@ -806,6 +894,7 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
                 label: entryLabel,
                 amount: entryAmount,
                 balance: 0,
+                ...(maKVTraNo ? { nguon: 'kiotviet' as const } : {}),
             })
         }
 
@@ -957,11 +1046,25 @@ router.post('/:id/cancel-receipt', authMiddleware, requireRole('admin', 'manager
             res.status(400).json({ success: false, error: 'entryId required' })
             return
         }
+        /* Chứng từ ĐỒNG BỘ TỪ KIOTVIET (23/10/2026): huỷ ở đây chỉ làm Kengi lệch KiotViet — số dư khách
+         * lấy lại từ KiotViet ở lượt đồng bộ kế tiếp, còn phiếu thu đã xoá thì không về lại (đã có bản nối). */
+        const LOI_KV = 'Phiếu này đồng bộ từ KiotViet — hãy huỷ bên KiotViet, lượt đồng bộ sau Kengi tự cập nhật.'
+        if (entryId.startsWith('kv-')) {
+            res.status(400).json({ success: false, error: LOI_KV })
+            return
+        }
 
         const customer = await prisma.customer.findFirst({ where: { id: customerId } })
         if (!customer) {
             res.status(404).json({ success: false, error: 'Customer not found' })
             return
+        }
+        if (!entryId.endsWith('-receipt')) {
+            const dongNo = await prisma.debtEntry.findUnique({ where: { id: entryId }, select: { description: true } })
+            if (dongNo && maTuDongTraNoKV(dongNo.description)) {
+                res.status(400).json({ success: false, error: LOI_KV })
+                return
+            }
         }
 
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
@@ -1001,6 +1104,11 @@ router.post('/:id/cancel-receipt', authMiddleware, requireRole('admin', 'manager
                 p.type !== 'credit' &&
                 !(p.reference && p.reference.includes('Thanh toán nợ'))
             )
+            // Dòng PT gộp vẫn có thể chứa phiếu thu KiotViet chưa biết ngày — cũng không huỷ ở đây
+            if (saleReceipts.some(p => MA_PHIEU_THU_KV.test(String(p.reference || '')))) {
+                res.status(400).json({ success: false, error: LOI_KV })
+                return
+            }
             cancelledAmount = saleReceipts.reduce((s, p) => s + p.amount, 0)
             if (cancelledAmount <= 0) {
                 res.status(400).json({ success: false, error: 'Không có phiếu thu để hủy' })

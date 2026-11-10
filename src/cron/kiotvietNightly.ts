@@ -17,7 +17,10 @@ import { errMsg } from '../lib/errorResponse'
  *   ganTheKhoPhieuNhap) và tự chữa trôi tồn nếu webhook stock chết.
  * - invoices VÀO danh sách từ 28/08: webhook hoá đơn tự tắt ngầm lần nữa (im
  *   từ 09:07 26/08, chủ shop phát hiện thiếu HĐ) — webhook không tin được.
- *   cashflow vẫn ở ngoài: sổ quỹ đụng tiền, lên lịch phải là quyết định riêng.
+ * - cashflow (sổ quỹ) VÀO danh sách từ 23/10/2026 — chủ shop quyết sau khi thấy phiếu thu khách
+ *   trả nợ không về: KiotViet không có webhook phiếu thu, còn hoá đơn được phân bổ tiền thì không
+ *   đổi ngày nên cửa sổ 3 ngày theo ngày bán không bắt được. Chỉ cửa hàng bật đồng bộ hoá đơn.
+ *   Phiếu CHI về hàng CHỜ DUYỆT (pending) như đồng bộ tay — chủ shop đã được báo trước.
  * - Chứng từ quét cửa sổ 3 ngày (bù đêm hỏng vẫn không sót); danh mục thì bộ
  *   chạy LUÔN lấy trọn bộ, không dính fromDate (quy ước data-sync-gate).
  *
@@ -67,17 +70,19 @@ async function runForStore(schema: string, storeName: string): Promise<'ban' | v
     }
 
     const fromDate = new Date(Date.now() - LOOKBACK_DAYS * 86400_000)
+    // Sổ quỹ ĐỨNG CUỐI (sau hoá đơn) — phiếu thu đã gắn hoá đơn phải được biết trước khi sổ quỹ quyết định ghi riêng
+    const entities = cfg.syncInvoices ? [...ENTITIES, 'cashflow'] : ENTITIES
     const log = await sp.kiotVietSyncLog.create({
         data: {
-            entity: ENTITIES.join(','), mode: 'cron', dryRun: false,
+            entity: entities.join(','), mode: 'cron', dryRun: false,
             fromDate, toDate: null, status: 'running', startedAt: new Date(),
         },
     })
-    console.log(`[KVNightly] ${storeName}: bắt đầu ${ENTITIES.join(',')} (chứng từ từ ${fromDate.toISOString().slice(0, 10)})`)
+    console.log(`[KVNightly] ${storeName}: bắt đầu ${entities.join(',')} (chứng từ từ ${fromDate.toISOString().slice(0, 10)})`)
     try {
         // Lượt đầu (đêm 18→19/10) tự nhập 3 phiếu tháng 9 còn thiếu (PN003943, 13319698…448, PN003967 — 114,1tr)
         const phieuNhapTuNgay: Date | null = BAT_CUA_SO_PHIEU_NHAP ? new Date(Date.now() - LOOKBACK_PHIEU_NHAP_DAYS * 86400_000) : null
-        await runSync(sp, cfg, ENTITIES, fromDate, null, true, log.id, false, false, phieuNhapTuNgay)
+        await runSync(sp, cfg, entities, fromDate, null, true, log.id, false, false, phieuNhapTuNgay)
         console.log(`[KVNightly] ${storeName}: xong — chi tiết ở lịch sử đồng bộ (log ${log.id})`)
     } catch (e: any) {
         await sp.kiotVietSyncLog.update({

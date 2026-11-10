@@ -28,8 +28,9 @@ import crypto from 'crypto'
 import { createJournalEntriesForTransaction, reverseJournalEntriesForTransaction } from '../lib/autoJournal'
 import { postImportReceiptJournal, postReturnJournal, postExpenseJournal } from '../lib/autoJournalPurchase'
 import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
-import { KV } from './kiotviet'
+import { KV, kvDate } from './kiotviet'
 import { tongPhieuChuaTraTheoNcc, soDuDauKyTuKV } from '../lib/congNoNcc'
+import { dongNgayTuKV, ghiNgayPhieuThu, type DongNgayPhieuThu } from '../lib/phieuThuKiotViet'
 
 export interface SyncCounters {
     fetched: number
@@ -301,6 +302,38 @@ async function findMap(sp: any, entity: string, kvId: string | number): Promise<
         select: { localId: true },
     }).catch(() => null)
     return row?.localId || null
+}
+
+/** Bản nối đang được một lượt khác GIÀNH mà quá hạn này chưa ghi xong ⇒ coi như lượt đó đã chết. */
+const HAN_GIU_MAP_MS = 10 * 60_000
+
+/**
+ * GIÀNH QUYỀN GHI một chứng từ KiotViet TRƯỚC khi tạo bản ghi (23/10/2026).
+ *
+ * `findMap` rồi mới tạo là kiểm-rồi-làm: hai lượt chạy cùng lúc (webhook khách + nhịp 2 giờ +
+ * lượt đêm, trên 2–3 bản Cloud Run, prod KHÔNG có Redis để khoá) cùng thấy "chưa có" và cùng tạo
+ * ⇒ một phiếu thu thành hai dòng trả nợ. Khoá duy nhất (entity, kvId) của bảng nối thì chỉ cho
+ * MỘT lượt tạo được dòng giữ chỗ (localId rỗng); lượt kia nhận P2002 và bỏ qua.
+ * Dòng giữ chỗ quá HAN_GIU_MAP_MS mà vẫn rỗng = lượt kia chết giữa chừng ⇒ được giành lại, không
+ * để phiếu kẹt vĩnh viễn. Lỗi đọc/ghi khác NÉM ra — đây là chốt chống trùng, không được nuốt.
+ */
+async function giuMap(sp: any, entity: string, kvId: string): Promise<boolean> {
+    try {
+        await sp.kiotVietMap.create({ data: { entity, kvId, kvCode: kvId, localId: '', syncedAt: new Date() } })
+        return true
+    } catch (e: any) {
+        if (e?.code !== 'P2002') throw e
+    }
+    const r = await sp.kiotVietMap.updateMany({
+        where: { entity, kvId, localId: '', syncedAt: { lt: new Date(Date.now() - HAN_GIU_MAP_MS) } },
+        data: { syncedAt: new Date() },
+    })
+    return r.count === 1
+}
+
+/** Trả lại chỗ đã giành khi tạo bản ghi hỏng — lượt sau còn làm lại được. */
+async function nhaMap(sp: any, entity: string, kvId: string): Promise<void> {
+    await sp.kiotVietMap.deleteMany({ where: { entity, kvId, localId: '' } })
 }
 
 /**
@@ -999,6 +1032,20 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
         noteError(c, 'Chưa xác định được người dùng hệ thống để gán cho hoá đơn — bỏ qua toàn bộ')
         return
     }
+    /* NGÀY THẬT CỦA TỪNG PHIẾU THU (23/10/2026, lib/phieuThuKiotViet.ts). `payments[]` của hoá đơn
+     * mang `transDate`; Payment bên mình không có cột ngày, nên thiếu bước này lịch sử công nợ chỉ
+     * hiện được phiếu ở NGÀY HOÁ ĐƠN. Gom rồi ghi theo mẻ — lượt đêm có lúc quét cả nghìn hoá đơn.
+     * Ghi hỏng không chặn đồng bộ: đây là siêu dữ liệu hiển thị, tiền vẫn ở Payment. */
+    const ngayCho: DongNgayPhieuThu[] = []
+    const xaNgay = async () => {
+        if (!ngayCho.length) return
+        const lo = ngayCho.splice(0)
+        try {
+            await ghiNgayPhieuThu(sp, lo)
+        } catch (e: any) {
+            noteError(c, `Ghi ngày ${lo.length} phiếu thu: ${String(e?.message || e).slice(0, 120)} — lịch sử công nợ sẽ hiện các phiếu này ở ngày hoá đơn`)
+        }
+    }
     for (const kv of items) {
         c.fetched++
         beat(opts, c)
@@ -1058,7 +1105,12 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // trên nền hoá đơn đã có sẽ nhân đôi tiền y như cũ.
             for (const p of kvPayments) {
                 if (p?.code) opts.invoicePaymentCodes?.add(String(p.code))
+                if (opts.apply) {
+                    const d = dongNgayTuKV(p, 'hoa-don')
+                    if (d) ngayCho.push(d)
+                }
             }
+            if (ngayCho.length >= 200) await xaNgay()
 
             /* Đây là CHỐT CHỐNG TRÙNG. Nuốt lỗi đọc thành null ⇒ tưởng hoá đơn chưa có ⇒ tạo thêm
              * một phiếu nữa cho cùng mã KiotViet ⇒ doanh thu đếm đôi, đúng họ với vụ 40 tỷ NCC.
@@ -1180,7 +1232,6 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                      * tiền THẲNG TỪ bảng `Payment` ⇒ **tiền mặt trong sổ nhân đôi**.
                      * Ném ra là đúng: vòng ngoài đã có `catch` ghi `noteError(c, 'HĐ …')`, nên hỏng
                      * thì chỉ hoá đơn đó bị bỏ qua VÀ ĐƯỢC GHI LẠI, không im lặng. */
-                    await sp.payment.deleteMany({ where: { transactionId: existing.id } })
                     const rows = kvPayments
                         .filter((p: any) => Number(p?.status) !== 1 && (Number(p?.amount) || 0) > 0)
                         .map((p: any) => ({
@@ -1189,8 +1240,15 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                             amount: Number(p.amount) || 0,
                             reference: p?.code ? String(p.code) : null,
                         }))
-                    // Cùng lý do: tạo hỏng mà nuốt thì hoá đơn mất phiếu thu, sổ quỹ hụt tiền.
-                    if (rows.length) await sp.payment.createMany({ data: rows })
+                    /* XOÁ + TẠO trong MỘT giao dịch, khoá theo hoá đơn (23/10/2026). Webhook hoá đơn, lượt
+                     * kéo phiếu thu theo khách và lượt đêm có thể cùng dựng lại phiếu thu của MỘT hoá đơn trên
+                     * hai bản Cloud Run: xen kẽ "xoá, xoá, tạo, tạo" là phiếu thu nhân đôi. Khoá advisory bắt
+                     * hai lượt xếp hàng; tạo hỏng thì lệnh xoá lùi lại theo — hoá đơn không mất phiếu thu. */
+                    await sp.$transaction(async (tx: any) => {
+                        await tx.$queryRawUnsafe(`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext($1))`, `kv-payment:${existing.id}`)
+                        await tx.payment.deleteMany({ where: { transactionId: existing.id } })
+                        if (rows.length) await tx.payment.createMany({ data: rows })
+                    })
                     /**
                      * Phiếu thu từng nhập ĐỘC LẬP qua sổ quỹ (webhook sổ quỹ tới
                      * trước) nay gắn vào hoá đơn: xoá bản độc lập + map của nó,
@@ -1436,6 +1494,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             noteError(c, `HĐ ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
     }
+    await xaNgay()
 }
 
 // ─── PHIẾU NHẬP HÀNG ────────────────────────────────────────────────────────
@@ -1812,6 +1871,8 @@ export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: S
  * để tiền chỉ vào sổ sau khi người dùng soát.
  */
 export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    // Ngày thật của phiếu thu khách — xem cùng khối ở syncInvoices (lib/phieuThuKiotViet.ts)
+    const ngayCho: DongNgayPhieuThu[] = []
     for (const kv of items) {
         c.fetched++
         beat(opts, c)
@@ -1832,6 +1893,17 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             if (!dir) {
                 noteError(c, `Sổ quỹ ${code}: không xác định được thu hay chi — bỏ qua để khỏi lệch sổ`)
                 continue
+            }
+
+            /* Ghi ngày TRƯỚC mọi lối bỏ qua bên dưới: phiếu đã gắn hoá đơn (bị bỏ qua ngay sau đây)
+             * chính là loại cần ngày nhất — Payment trên hoá đơn không có cột ngày. */
+            if (opts.apply && dir === 'in' && String(kv?.partnerType || '').toUpperCase() === 'C') {
+                const d = dongNgayTuKV(kv, 'so-quy')
+                if (d) ngayCho.push(d)
+                if (ngayCho.length >= 200) {
+                    const lo = ngayCho.splice(0)
+                    await ghiNgayPhieuThu(sp, lo).catch((e: any) => noteError(c, `Ghi ngày ${lo.length} phiếu thu: ${String(e?.message || e).slice(0, 120)}`))
+                }
             }
 
             // PHIẾU THU CỦA HOÁ ĐƠN ĐÃ TÍNH RỒI — bỏ qua, nếu không cùng một
@@ -1887,23 +1959,49 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                         boQua(c, `Phiếu thu ${code}: đã tính vào hoá đơn — không ghi lần hai`)
                         continue
                     }
+                    /* BẢN NỐI KHÔNG PHẢI NGUỒN DUY NHẤT (23/10/2026): hoá đơn nhập bằng bản cũ mang phiếu
+                     * thu trên hoá đơn (Payment.reference = mã TT) mà chưa có bản nối 'invoicePayment' —
+                     * chỉ hỏi bản nối là ghi phiếu đó lần hai thành dòng trả nợ riêng. Hỏi thẳng bảng
+                     * Payment; lỗi đọc NÉM ra vì đây là chốt chống trùng. */
+                    const daTrenHoaDon = await sp.payment.findFirst({ where: { reference: code }, select: { transactionId: true } })
+                    if (daTrenHoaDon) {
+                        if (opts.apply) await saveMap(sp, 'invoicePayment', code, code, daTrenHoaDon.transactionId)
+                        boQua(c, `Phiếu thu ${code}: đã nằm trên hoá đơn — không ghi lần hai`)
+                        continue
+                    }
                     if (opts.apply) {
-                        const cus = await sp.customer.findUnique({
-                            where: { id: localCus }, select: { name: true, phone: true },
-                        }).catch(() => null)
-                        const created = await sp.debtEntry.create({
-                            data: {
-                                customerId: localCus,
-                                customerName: cus?.name || partner || 'Khách hàng',
-                                phone: cus?.phone || null,
-                                type: 'payment',
-                                amount,
-                                description: `Trả nợ — phiếu thu ${code} (KiotViet)`,
-                                balance: 0,
-                                createdAt: date,
-                            },
-                        })
-                        await saveMap(sp, 'debtPayment', code, code, created.id)
+                        // Giành chỗ trước rồi mới tạo — xem giuMap. Dòng trả nợ + bản nối đi chung MỘT giao dịch:
+                        // tạo xong mà nối hỏng thì lượt sau tưởng chưa có và ghi lần hai.
+                        if (!(await giuMap(sp, 'debtPayment', code))) {
+                            boQua(c, `Phiếu thu ${code}: lượt đồng bộ khác đang/đã ghi — không ghi lần hai`)
+                            continue
+                        }
+                        try {
+                            const cus = await sp.customer.findUnique({
+                                where: { id: localCus }, select: { name: true, phone: true },
+                            }).catch(() => null)
+                            await sp.$transaction(async (tx: any) => {
+                                const created = await tx.debtEntry.create({
+                                    data: {
+                                        customerId: localCus,
+                                        customerName: cus?.name || partner || 'Khách hàng',
+                                        phone: cus?.phone || null,
+                                        type: 'payment',
+                                        amount,
+                                        description: `Trả nợ — phiếu thu ${code} (KiotViet)`,
+                                        balance: 0,
+                                        createdAt: date,
+                                    },
+                                })
+                                await tx.kiotVietMap.update({
+                                    where: { entity_kvId: { entity: 'debtPayment', kvId: code } },
+                                    data: { localId: created.id, kvCode: code, syncedAt: new Date() },
+                                })
+                            })
+                        } catch (e) {
+                            await nhaMap(sp, 'debtPayment', code).catch(() => { /* hết hạn giữ chỗ thì lượt sau tự giành lại */ })
+                            throw e
+                        }
                         await lamTuoiNoKhach(sp, opts, kv.partnerId)
                         /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
@@ -1955,6 +2053,188 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             noteError(c, `Sổ quỹ ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
     }
+    if (ngayCho.length) {
+        await ghiNgayPhieuThu(sp, ngayCho).catch((e: any) =>
+            noteError(c, `Ghi ngày ${ngayCho.length} phiếu thu: ${String(e?.message || e).slice(0, 120)} — lịch sử công nợ sẽ hiện các phiếu này ở ngày hoá đơn`))
+    }
+}
+
+// ─── KÉO PHIẾU THU KHÁCH — GẮN ĐÚNG HOÁ ĐƠN KIOTVIET ĐÃ PHÂN BỔ (23/10/2026) ──
+
+export interface GioiHanKeoPhieuThu {
+    /** Tổng số hoá đơn được hỏi lại KiotViet trong một lượt. */
+    hoaDonToiDa?: number
+    /** Số hoá đơn còn nợ cũ nhất được hỏi cho MỘT khách. */
+    moiKhach?: number
+    /** Nghỉ giữa hai lần hỏi hoá đơn (ms) — cùng nhịp với fetchAllPages. */
+    nghiMs?: number
+    /** Mốc (ms epoch) phải thôi hỏi hoá đơn — lệnh kéo bù và nhịp cron chạy trong hạn request. */
+    hanChot?: number
+}
+
+export interface KetQuaKeoPhieuThu {
+    /** Phiếu thu KHÁCH hợp lệ trong mẻ */
+    phieuThuKhach: number
+    /** Phiếu chưa có mặt ở Kengi trước lượt này */
+    phieuLa: number
+    /** Số lần hỏi lại /invoices/code */
+    hoaDonHoiLai: number
+    /** Hoá đơn được dựng lại phiếu thu theo KiotViet */
+    hoaDonCapNhat: number
+    /** Mã vẫn không thấy trên hoá đơn nào ⇒ sổ quỹ ghi thành dòng trả nợ riêng, đúng ngày */
+    conLa: string[]
+    /** Chạm trần hoá đơn / hạn giờ — phần còn lại đi đường dòng trả nợ riêng */
+    hetNganSach: boolean
+}
+
+/** Hỏi một hoá đơn KiotViet theo mã — tách ra để bộ kiểm thay bằng bản giả. */
+export type LayHoaDonKV = (ma: string) => Promise<any | null>
+
+/**
+ * KÉO PHIẾU THU KHÁCH TỪ SỔ QUỸ KIOTVIET — dùng chung cho webhook khách, nhịp 2 giờ, lượt đêm,
+ * đồng bộ tay và lệnh kéo bù. `banGhi` = bản ghi /cashflow đã lấy về (mọi loại).
+ *
+ * Vì sao không chỉ syncCashflow: KiotViet PHÂN BỔ mỗi phiếu thu vào các hoá đơn còn nợ cũ nhất,
+ * và hoá đơn KHÔNG đổi `modifiedDate` khi được phân bổ (đo 23/10/2026) — không đường quét theo
+ * ngày nào bắt được. Chỉ ghi phiếu thành dòng trả nợ riêng thì lịch sử đúng nhưng hoá đơn cũ vẫn
+ * "còn nợ" ở Kengi trong khi KiotViet đã gạch (tuổi nợ, phiếu chưa trả hết đọc sai).
+ *
+ *  1. Phiếu thu khách nào CHƯA có mặt ở Kengi (không bản nối, không Payment.reference): hỏi lại
+ *     các hoá đơn CÒN NỢ cũ nhất của đúng khách đó, dừng khi đã thấy đủ chỗ phân bổ; nhánh cập
+ *     nhật của syncInvoices dựng lại Payment theo KiotViet (kèm ngày thật).
+ *  2. syncCashflow cho cả mẻ: phiếu đã gắn hoá đơn thì bỏ qua (chỉ ghi ngày); phiếu vẫn lạ ⇒ dòng
+ *     trả nợ đúng ngày như trước. Hoá đơn về sau mới được hỏi lại thì nhánh "buLai" của
+ *     syncInvoices tự xoá dòng trả nợ riêng — không đếm đôi.
+ * Không đụng Customer.debt: số dư vẫn chỉ lấy từ KiotViet (lamTuoiNoKhach).
+ */
+export async function keoPhieuThuKhach(
+    sp: any, opts: SyncOptions, banGhi: any[], c: SyncCounters,
+    gioiHan: GioiHanKeoPhieuThu = {}, layHoaDon?: LayHoaDonKV,
+): Promise<KetQuaKeoPhieuThu> {
+    const hoaDonToiDa = gioiHan.hoaDonToiDa ?? 60
+    const moiKhach = gioiHan.moiKhach ?? 15
+    const nghiMs = gioiHan.nghiMs ?? 120
+    const lay: LayHoaDonKV | null = layHoaDon ?? (opts.creds
+        ? (ma: string) => KV.raw(opts.creds, `/invoices/code/${encodeURIComponent(ma)}`, { includePayment: true })
+        : null)
+    const hetGio = () => !!gioiHan.hanChot && Date.now() > gioiHan.hanChot
+
+    const phieu = (banGhi || []).filter((kv: any) => kv?.code && kv?.partnerId != null
+        && Number(kv?.status) !== 1
+        && String(kv?.partnerType || '').toUpperCase() === 'C'
+        && cashflowDirection(kv) === 'in')
+    const kq: KetQuaKeoPhieuThu = { phieuThuKhach: phieu.length, phieuLa: 0, hoaDonHoiLai: 0, hoaDonCapNhat: 0, conLa: [], hetNganSach: false }
+
+    // Phiếu đã có mặt ở Kengi — hỏi theo LÔ, lỗi đọc NÉM ra (đây là bước quyết định có ghi hay không)
+    const ma = [...new Set(phieu.map((kv: any) => String(kv.code)))]
+    const daCo = new Set<string>(opts.invoicePaymentCodes ?? [])
+    for (let i = 0; i < ma.length; i += 500) {
+        const lo = ma.slice(i, i + 500)
+        const noi: any[] = await sp.kiotVietMap.findMany({
+            where: { entity: { in: ['invoicePayment', 'debtPayment'] }, kvId: { in: lo } },
+            select: { kvId: true, localId: true },
+        })
+        for (const r of noi) if (r.localId) daCo.add(String(r.kvId))
+        const tren: any[] = await sp.payment.findMany({ where: { reference: { in: lo } }, select: { reference: true } })
+        for (const r of tren) if (r.reference) daCo.add(String(r.reference))
+    }
+    const la = phieu.filter((kv: any) => !daCo.has(String(kv.code)))
+    kq.phieuLa = la.length
+
+    const theoKhach = new Map<string, any[]>()
+    for (const kv of la) {
+        const k = String(kv.partnerId)
+        if (!theoKhach.has(k)) theoKhach.set(k, [])
+        theoKhach.get(k)!.push(kv)
+    }
+    for (const [kvKhach, ds] of theoKhach) {
+        if (!lay) break
+        if (kq.hoaDonHoiLai >= hoaDonToiDa || hetGio()) { kq.hetNganSach = true; break }
+        const localKhach = await findMap(sp, 'customer', kvKhach)
+        if (!localKhach) continue   // khách chưa nối ⇒ sổ quỹ ghi phiếu thu chung như cũ
+        // Mã → số tiền chưa thấy được phân bổ
+        const conTim = new Map<string, number>(ds.map((kv: any) => [String(kv.code), Math.abs(Number(kv.amount) || 0)]))
+        const hoaDonNo: any[] = await sp.transaction.findMany({
+            where: { customerId: localKhach, status: 'partial' },
+            select: { id: true, receiptNumber: true },
+            orderBy: { createdAt: 'asc' },
+            take: moiKhach * 2,
+        })
+        // Chỉ hoá đơn đến từ KiotViet (có bản nối) — phiếu bán tạo tại Kengi thì KiotViet không biết
+        const noiHd: any[] = hoaDonNo.length
+            ? await sp.kiotVietMap.findMany({ where: { entity: 'invoice', localId: { in: hoaDonNo.map((h: any) => h.id) } }, select: { localId: true } })
+            : []
+        const tuKV = new Set(noiHd.map((r: any) => String(r.localId)))
+        const layVe: any[] = []
+        for (const hd of hoaDonNo.filter((h: any) => tuKV.has(String(h.id))).slice(0, moiKhach)) {
+            if (kq.hoaDonHoiLai >= hoaDonToiDa || hetGio()) { kq.hetNganSach = true; break }
+            kq.hoaDonHoiLai++
+            let kvHd: any = null
+            try {
+                kvHd = await lay(hd.receiptNumber)
+            } catch (e: any) {
+                noteError(c, `Hỏi lại HĐ ${hd.receiptNumber} để gắn phiếu thu mới: ${String(e?.message || e).slice(0, 120)}`)
+                continue
+            } finally {
+                if (nghiMs) await new Promise(r => setTimeout(r, nghiMs))
+            }
+            if (!kvHd?.code) continue
+            layVe.push(kvHd)
+            for (const p of Array.isArray(kvHd.payments) ? kvHd.payments : []) {
+                const m = String(p?.code || '')
+                if (!conTim.has(m) || Number(p?.status) === 1) continue
+                const con = conTim.get(m)! - (Number(p?.amount) || 0)
+                if (con <= 1) conTim.delete(m)
+                else conTim.set(m, con)
+            }
+            if (!conTim.size) break   // đã thấy đủ chỗ KiotViet phân bổ mọi phiếu lạ của khách này
+        }
+        if (layVe.length) {
+            const cHd = newCounters()
+            await syncInvoices(sp, layVe, { ...opts, rebuildLines: false, updateOnly: true }, cHd)
+            kq.hoaDonCapNhat += cHd.updated
+            for (const e of cHd.errors) if (!e.startsWith('bỏ qua')) noteError(c, e)
+        }
+    }
+
+    await syncCashflow(sp, banGhi, opts, c)
+    kq.conLa = la.map((kv: any) => String(kv.code)).filter(m => !opts.invoicePaymentCodes?.has(m))
+    noteSample(c, { phieuThu: kq.phieuThuKhach, la: kq.phieuLa, hoiLaiHoaDon: kq.hoaDonHoiLai, capNhatHoaDon: kq.hoaDonCapNhat, conLa: kq.conLa.length })
+    return kq
+}
+
+/**
+ * Khách vừa đổi bên KiotViet ⇒ kéo phiếu thu mới của ĐÚNG các khách đó. KiotViet KHÔNG có webhook
+ * cho phiếu thu: khách trả nợ thì nó chỉ bắn `customer.update` (đo nhật ký HUTI 23/10/2026).
+ * Một lần /cashflow cho `soNgay` gần nhất, lọc theo partnerId. null = không có phiếu nào của họ.
+ */
+export async function keoPhieuThuTheoKhach(
+    sp: any, opts: SyncOptions, kvKhachIds: (string | number)[], c: SyncCounters, soNgay = 2,
+): Promise<KetQuaKeoPhieuThu | null> {
+    const ids = new Set(kvKhachIds.map(x => String(x ?? '').trim()).filter(Boolean))
+    if (!ids.size || !opts.creds) return null
+    const bayGio = Date.now()
+    const { items } = await KV.cashflow(opts.creds, {
+        startDate: kvDate(new Date(bayGio - soNgay * 86400_000)),
+        endDate: kvDate(new Date(bayGio + 3600_000)),
+    }, { pageSize: 100, maxPages: 5 })
+    const cuaKhach = (items || []).filter((kv: any) => ids.has(String(kv?.partnerId ?? '')))
+    if (!cuaKhach.length) return null
+    return keoPhieuThuKhach(sp, opts, cuaKhach, c, { hoaDonToiDa: 15 })
+}
+
+const hangChoPhieuThu = new WeakMap<object, Promise<unknown>>()
+
+/**
+ * Mỗi cửa hàng MỘT hàng đợi trong tiến trình cho việc kéo phiếu thu: webhook khách dồn dập (cả
+ * chục khách trong một phút khi thu ngân nhập phiếu hàng loạt) và nhịp 2 giờ không chạy chồng nhau
+ * trên cùng hoá đơn. Giữa các bản Cloud Run thì chốt ở DB (giuMap + khoá advisory) lo.
+ */
+export function xepHangPhieuThu<T>(sp: any, viec: () => Promise<T>): Promise<T> {
+    const truoc = hangChoPhieuThu.get(sp) ?? Promise.resolve()
+    const sau = truoc.catch(() => { /* lượt trước hỏng đã tự ghi lỗi của nó */ }).then(viec)
+    hangChoPhieuThu.set(sp, sau.catch(() => { /* như trên */ }))
+    return sau
 }
 
 /**

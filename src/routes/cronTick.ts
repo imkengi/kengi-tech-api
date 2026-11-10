@@ -131,6 +131,15 @@ router.post('/tick', async (req: Request, res: Response) => {
             ra.khoTaiLieu = await nhipKhoTaiLieu(30_000)
         } catch (e: any) { ra.khoTaiLieu = 'loi: ' + (e?.message || e) }
     }
+    /* Phiếu thu KiotViet (23/10/2026): kéo sổ quỹ 2 ngày gần nhất, gắn phiếu thu khách vào đúng hoá đơn KV đã
+     * phân bổ. Xét ở phút 26 và 56; mỗi cửa hàng tối đa một lượt / 2 giờ (mốc trong KiotVietSyncLog). cron/phieuThuKiotViet.ts */
+    if (new Date().getUTCMinutes() % 30 === 26) {
+        try {
+            const { nhipPhieuThuKV } = await import('../cron/phieuThuKiotViet')
+            ra.phieuThuKV = await nhipPhieuThuKV(35_000)
+        } catch (e: any) { ra.phieuThuKV = 'loi: ' + (e?.message || e) }
+    }
+
     /* Một dòng mỗi nhịp (27/10/2026): RAM đầu → cuối nhịp + việc đăng video đã làm. Cloud Run từng giết máy chủ
      * vì vượt 512 MiB giữa nhịp lúc đang đẩy video lên Shopee — dòng này cho thấy nhịp nào làm RAM nhích bao nhiêu. */
     const ramCuoi = chupBoNho()

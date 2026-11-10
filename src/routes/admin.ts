@@ -2938,6 +2938,18 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                  * lib/phiSanGiuLai.ts. Đặt ĐẦU vòng: thẻ Lãi/Lỗ của MỌI cửa hàng JOIN
                  * bảng này (thiếu bảng thì nó lùi về câu cũ, nhưng cron chép phí sẽ
                  * không xoá đơn nào cho tới khi có bảng). */
+                /* NGÀY THẬT CỦA PHIẾU THU KIOTVIET (23/10/2026) — lib/phieuThuKiotViet.ts (DDL_PHIEU_THU_KV, giữ y hệt).
+                 * Lịch sử công nợ đọc bảng này để hiện mỗi mã TT một dòng đúng ngày; thiếu bảng thì hiện như cũ. */
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "PhieuThuKV" (
+                    "ma" TEXT NOT NULL PRIMARY KEY,
+                    "ngay" TIMESTAMP(3) NOT NULL,
+                    "soTien" DOUBLE PRECISION,
+                    "kvKhachId" TEXT,
+                    "nguon" TEXT NOT NULL,
+                    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`)
+
                 await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "PhiSanDon" (
                     "orderNumber" TEXT NOT NULL PRIMARY KEY,
                     "platform" TEXT,
@@ -11391,6 +11403,85 @@ router.get('/kiotviet-no-ncc', async (req: Request, res: Response) => {
  * số cũ" âm thầm. Đây là cách phân biệt "KiotViet cũng nói 0" với "Kengi cầm số
  * cũ" mà không phải mở KiotViet bằng tay.
  */
+/**
+ * KÉO BÙ PHIẾU THU KHÁCH TỪ KIOTVIET (23/10/2026)
+ * `POST /admin/kiotviet-phieu-thu?storeCode=HUTI&tu=2026-08-01&den=2026-08-31[&ghi=1][&chiNgay=1]`
+ *
+ * Trước 23/10 phiếu thu khách trả nợ chỉ về khi có người bấm đồng bộ tay có sổ quỹ, nên các quãng giữa
+ * hai lần bấm thiếu phiếu, và phiếu đã gắn hoá đơn thì thiếu NGÀY THẬT (lib/phieuThuKiotViet.ts). Lệnh
+ * này chạy đúng đường mới (keoPhieuThuKhach) trên một khoảng ngày.
+ *  - Chỉ đụng PHIẾU THU KHÁCH (partnerType C, tiền vào). Phiếu chi và thu khác của sổ quỹ không vào
+ *    đây — đường đó là lượt đêm / nhịp 2 giờ.
+ *  - Mặc định CHẠY THỬ: chỉ đếm, không ghi gì (kể cả ngày). `ghi=1` mới ghi.
+ *  - `chiNgay=1`: chỉ ghi ngày thật cho các mã — không tạo dòng trả nợ, không hỏi lại hoá đơn.
+ *  - Mỗi lần tối đa 93 ngày; hỏi lại hoá đơn dừng sau ~45 giây (phần còn lại thành dòng trả nợ riêng
+ *    đúng ngày — vẫn đúng lịch sử, hoá đơn gắn sau khi được hỏi lại).
+ */
+router.post('/kiotviet-phieu-thu', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const ngay = (s: string, cuoiNgay: boolean) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+            ? new Date(`${s}T${cuoiNgay ? '23:59:59.999' : '00:00:00.000'}+07:00`) : null
+        const tu = ngay(String(req.query.tu || ''), false)
+        const den = ngay(String(req.query.den || ''), true)
+        if (!tu || !den || den <= tu) { res.status(400).json({ success: false, error: 'Cần tu và den dạng YYYY-MM-DD (giờ VN), den sau tu' }); return }
+        if (den.getTime() - tu.getTime() > 93 * 86400_000) { res.status(400).json({ success: false, error: 'Mỗi lần tối đa 93 ngày' }); return }
+        const ghi = String(req.query.ghi || '') === '1'
+        const chiNgay = String(req.query.chiNgay || '') === '1'
+
+        const sp = getStorePrisma(store.schema) as any
+        const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } })
+        if (!cfg?.clientId || !cfg?.clientSecret || !cfg?.retailer) { res.status(400).json({ success: false, error: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+        const { buildOptions, credsOf } = await import('../services/kiotvietRunner')
+        const { KV, kvDate } = await import('../services/kiotviet')
+        const { keoPhieuThuKhach, newCounters, xepHangPhieuThu } = await import('../services/kiotvietSync')
+        const { dongNgayTuKV, ghiNgayPhieuThu } = await import('../lib/phieuThuKiotViet')
+
+        const batDau = new Date()
+        const opts = await buildOptions(sp, cfg, ghi)
+        opts.creds = credsOf(cfg)
+        opts.daTuoiNo = new Set<string>()
+        const { items, truncated } = await KV.cashflow(opts.creds, { startDate: kvDate(tu), endDate: kvDate(den) }, { pageSize: 100, maxPages: 60 })
+        // Phiếu thu khách: đo 06/08 + 23/10/2026 — mã TT/TTHD, partnerType C, amount DƯƠNG, status 0 (1 = huỷ)
+        const phieuKhach = (items || []).filter((kv: any) => String(kv?.partnerType || '').toUpperCase() === 'C'
+            && Number(kv?.amount) > 0 && Number(kv?.status) !== 1)
+        const cheDo = ghi ? 'GHI' : 'CHẠY THỬ — chưa ghi gì (thêm ghi=1)'
+
+        if (chiNgay) {
+            const dong = phieuKhach.map((kv: any) => dongNgayTuKV(kv, 'so-quy')).filter(Boolean) as any[]
+            const daGhi = ghi ? await ghiNgayPhieuThu(sp, dong) : 0
+            res.json({ success: true, cheDo, cuaHang: store.name, chiNgay: true, truncated, soPhieuThuKhach: phieuKhach.length, coNgay: dong.length, daGhi })
+            return
+        }
+
+        const c = newCounters()
+        const kq = await xepHangPhieuThu(sp, () => keoPhieuThuKhach(sp, opts, phieuKhach, c, { hoaDonToiDa: 150, hanChot: Date.now() + 45_000 }))
+        if (ghi) {
+            await sp.kiotVietSyncLog.create({
+                data: {
+                    entity: 'phieu-thu-bu', mode: 'manual', dryRun: false,
+                    status: c.failed ? 'partial' : 'success', fromDate: tu, toDate: den,
+                    fetched: c.fetched, created: c.created, updated: kq.hoaDonCapNhat, skipped: c.skipped, failed: c.failed,
+                    errors: c.errors.join('\n').slice(0, 2000) || null,
+                    details: JSON.stringify({ ...kq, mau: c.samples }).slice(0, 4000),
+                    startedAt: batDau, finishedAt: new Date(),
+                },
+            })
+        }
+        res.json({
+            success: true, cheDo, cuaHang: store.name, khoang: { tu, den }, truncated,
+            soBanGhiSoQuy: (items || []).length, ...kq,
+            dongTraNoRieng: c.created, boQua: c.skipped, loi: c.failed,
+            nhatKy: c.errors.slice(0, 20), mau: c.samples,
+            ghiChu: 'phieuLa = chưa có mặt ở Kengi; hoaDonCapNhat = hoá đơn được gắn phiếu theo KiotViet; dongTraNoRieng = phiếu không thấy trên hoá đơn nào, ghi thành dòng trả nợ đúng ngày.',
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: moTaLoi(err) })
+    }
+})
+
 router.get('/kiotviet-no-khach', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()

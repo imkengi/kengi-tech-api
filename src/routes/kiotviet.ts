@@ -27,6 +27,7 @@ import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../serv
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
     parseWebhookPayload, verifyWebhookSignature, donHoaDonKhach,
+    keoPhieuThuTheoKhach, xepHangPhieuThu, type SyncOptions,
 } from '../services/kiotvietSync'
 import { buildOptions, boDemTuyChon, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
 
@@ -166,6 +167,47 @@ router.post('/webhook/:storeCode/:token', async (req: Request, res: Response) =>
     }
 })
 
+/** Khách vừa được kéo phiếu thu lúc nào (theo gian hàng) — KiotViet hay bắn đôi customer.update cho một lần trả. */
+const daKeoPhieuThu = new Map<string, number>()
+
+/**
+ * Sau webhook khách: kéo phiếu thu 2 ngày gần nhất của đúng những khách trong payload. Chỉ ghi nhật
+ * ký khi có phiếu của họ (phần lớn customer.update là sửa hồ sơ — ghi hết là rác). Lỗi ghi vào
+ * nhật ký, không làm hỏng việc đồng bộ khách vừa xong.
+ */
+async function keoPhieuThuSauWebhookKhach(sp: any, opts: SyncOptions, data: any[]): Promise<void> {
+    const bayGio = Date.now()
+    const ids = (Array.isArray(data) ? data : [])
+        .map((d: any) => String(d?.id ?? d?.Id ?? '').trim())
+        .filter((id: string) => {
+            if (!id) return false
+            const k = `${opts.creds?.retailer || ''}:${id}`
+            if (bayGio - (daKeoPhieuThu.get(k) || 0) < 20_000) return false
+            daKeoPhieuThu.set(k, bayGio)
+            return true
+        })
+    if (daKeoPhieuThu.size > 5000) daKeoPhieuThu.clear()
+    if (!ids.length) return
+    const c = newCounters()
+    const started = new Date()
+    try {
+        const kq = await xepHangPhieuThu(sp, () => keoPhieuThuTheoKhach(sp, opts, ids, c))
+        if (!kq) return
+        await sp.kiotVietSyncLog.create({
+            data: {
+                entity: 'phieu-thu.khach', mode: 'webhook',
+                status: c.failed ? 'partial' : 'success',
+                fetched: c.fetched, created: c.created, updated: kq.hoaDonCapNhat, skipped: c.skipped, failed: c.failed,
+                errors: c.errors.join('\n').slice(0, 2000) || null,
+                details: JSON.stringify({ khachKiotViet: ids, ...kq, mau: c.samples }).slice(0, 4000),
+                startedAt: started, finishedAt: new Date(),
+            },
+        }).catch(() => { })
+    } catch (e: any) {
+        await logWebhook(sp, 'phieu-thu.khach', 'failed', 0, `Kéo phiếu thu sau webhook khách ${ids.join(',')}: ${moTaLoi(e)}`)
+    }
+}
+
 async function logWebhook(sp: any, entity: string, status: string, count: number, note: string) {
     await sp.kiotVietSyncLog.create({
         data: {
@@ -215,6 +257,10 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
             } else if (n.action.startsWith('customer')) {
                 if (!cfg.syncCustomers) continue
                 await syncCustomers(sp, n.data, opts, c)
+                /* KHÁCH VỪA ĐỔI có khi là VỪA TRẢ NỢ (23/10/2026): KiotViet KHÔNG có webhook phiếu thu —
+                 * khách trả nợ thì nó chỉ bắn customer.update (đo nhật ký HUTI). Kéo luôn phiếu thu mới
+                 * của đúng khách đó, gắn vào hoá đơn KiotViet đã phân bổ, không chờ lượt đêm. */
+                if (cfg.syncInvoices && !n.action.includes('delete')) await keoPhieuThuSauWebhookKhach(sp, opts, n.data)
             } else if (n.action.startsWith('supplier')) {
                 if (!cfg.syncSuppliers) continue
                 await syncSuppliers(sp, n.data, opts, c)

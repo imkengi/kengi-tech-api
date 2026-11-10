@@ -23,7 +23,7 @@ import { KV, kvDate, type KiotVietCreds } from './kiotviet'
 import { dongBoCayDanhMuc } from './kiotvietDanhMuc'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
-    syncPurchaseOrders, syncCashflow, syncReturns, type SyncOptions,
+    syncPurchaseOrders, syncReturns, keoPhieuThuKhach, xepHangPhieuThu, type SyncOptions,
 } from './kiotvietSync'
 
 /** Mất nhịp quá ngần này = coi như đợt chạy đã chết. */
@@ -454,7 +454,9 @@ export async function runSync(
                 }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'transDate', 'modifiedDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncCashflow(sp, filtered, opts, c)
+                /* Phiếu thu khách lạ ⇒ hỏi lại hoá đơn còn nợ để gắn đúng chỗ KiotViet đã phân bổ, rồi mới
+                 * ghi sổ quỹ (xem keoPhieuThuKhach, 23/10/2026). Cùng hàng đợi với webhook khách. */
+                await xepHangPhieuThu(sp, () => keoPhieuThuKhach(sp, opts, filtered, c, { hoaDonToiDa: 200 }))
             }
         } catch (e: any) {
             c.failed++
