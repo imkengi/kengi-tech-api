@@ -170,6 +170,7 @@ async function main() {
         ca('C5b chữ ký ghi đủ Ký bởi / Ngày ký (giờ VN) / Lý do / Nơi ký / Liên hệ, mỗi thứ một dòng', sd.displayText === 'Ký bởi: CÔNG TY A\nNgày ký: 11/11/2026 11:50:45\nLý do: Ký hợp đồng\nNơi ký: TP.HCM\nLiên hệ: 0900', JSON.stringify(sd.displayText))
         ca('C5c ngày đã ở displayText ⇒ tắt dòng ngày của MISA (không hiện hai lần)', sd.showSignedDate === false)
         ca('C5d tắt ngày / bỏ trống ⇒ không có dòng thừa', dongChuKy({ nguoiKy: 'A', noiKy: '', lyDo: '', lienHe: '', hienNgay: false }, T).join('|') === 'Ký bởi: A' && gioKyVN(Date.parse('2026-12-31T17:00:05Z')) === '01/01/2027 00:00:05')
+        ca('C6b con dấu vẽ sẵn (chiAnh) ⇒ renderingMode 2; chiAnh mà không có ảnh ⇒ vẫn 0', (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA', chiAnh: true }) as any).pdfDocs[0].signatureInfo.renderingMode === 2 && (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, chiAnh: true }) as any).pdfDocs[0].signatureInfo.renderingMode === 0)
         ca('C6 có ảnh chữ ký ⇒ renderingMode 1', (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA' }) as any).pdfDocs[0].signatureInfo.renderingMode === 1)
         ca('C7 băm thiếu digest ⇒ null (không ký mù)', docKetQuaBam({ pdfDocs: [{ documentId: 'x' }] }) === null && docKetQuaBam({ pdfDocs: [{ documentId: 'x', digest: 'D' }] })?.digest === 'D')
         const tk: any = thanKy('u', 'alias', { documentId: 'doc-1', digest: 'DIG' }, 'a.pdf', 'x')

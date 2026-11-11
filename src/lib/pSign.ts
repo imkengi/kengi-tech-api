@@ -229,7 +229,7 @@ export const chungThuGon = (c: ChungThuDayDu): ChungThu => {
 // ─── Ô chữ ký + thân băm ──────────────────────────────────────────────────────
 
 export interface ViTriKy { trang: number; x: number; y: number; rong: number; cao: number }
-export interface HienThiKy { nguoiKy: string; noiKy: string; lyDo: string; lienHe: string; hienNgay: boolean; anhChuKy?: string }
+export interface HienThiKy { nguoiKy: string; noiKy: string; lyDo: string; lienHe: string; hienNgay: boolean; anhChuKy?: string; /** ảnh là CẢ con dấu chữ ký do trang vẽ sẵn ⇒ MISA chỉ dán ảnh, không vẽ thêm chữ */ chiAnh?: boolean }
 
 const nguyen = (v: any) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : NaN)
 
@@ -276,7 +276,7 @@ export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string
             signatureInfo: {
                 textColor: 0,
                 // 0 chỉ diễn giải · 1 diễn giải + ảnh · 2 chỉ ảnh
-                renderingMode: coAnh ? 1 : 0,
+                renderingMode: coAnh ? (ht.chiAnh ? 2 : 1) : 0,
                 positionX: viTri.x,
                 positionY: viTri.y,
                 width: viTri.rong,
@@ -632,7 +632,7 @@ export async function batDauKy(sp: any, user: { userId: string; nguoi: string },
     const ht: HienThiKy = {
         nguoiKy: chuoi(yc.hienThi?.nguoiKy) || ct.chuThe || p.ten || p.taiKhoan,
         noiKy: chuoi(yc.hienThi?.noiKy), lyDo: chuoi(yc.hienThi?.lyDo) || 'Ký tài liệu', lienHe: chuoi(yc.hienThi?.lienHe),
-        hienNgay: yc.hienThi?.hienNgay !== false, anhChuKy: kiemAnh(yc.hienThi?.anhChuKy),
+        hienNgay: yc.hienThi?.hienNgay !== false, anhChuKy: kiemAnh(yc.hienThi?.anhChuKy), chiAnh: yc.hienThi?.chiAnh === true,
     }
     const documentId = crypto.randomUUID()
     // băm: tài liệu ghi chỉ cần ClientID + ClientSecret; gửi kèm token cũng không sao và đỡ một ca 401 lạ
