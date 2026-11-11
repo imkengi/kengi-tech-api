@@ -14260,4 +14260,76 @@ router.get('/do-chuyen-don', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * ĐẾM ĐƠN SHOPEE TRÊN SÀN so với KENGI — GET /admin/dem-don-san-thieu?storeCode=KENGISTORE&thang=2026-01[&kenh=<id>]
+ *
+ * Chủ shop 11/11/2026: "chưa kéo về hết đủ đơn á" (cần doanh thu cả năm để báo cáo; phiếu đơn sàn sớm nhất trong Kengi là 21/03/2026).
+ * ĐO trước khi kéo: hỏi sàn danh sách MÃ ĐƠN đặt trong một tháng (giờ VN) của từng gian Shopee, so với phiếu ONLINE-SPE-<mã> và
+ * đơn gốc SPE-<mã> đang có. Trả số đếm theo trạng thái sàn + vài mã mẫu — không trả thông tin khách.
+ * CHỈ ĐỌC với CSDL đơn / phiếu (không tạo đơn, không tạo phiếu, không trừ kho). moDichVuShopee có thể làm mới token của kênh như
+ * mọi lượt đồng bộ thường. Một tháng / lượt (hạn 200 giây); chạm hạn ⇒ `chamTran` = true, số của gian đó CHƯA đủ.
+ */
+router.get('/dem-don-san-thieu', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const thang = String(req.query.thang || '').trim()
+        const kenhLoc = String(req.query.kenh || '').trim()
+        if (!storeCode || !/^\d{4}-(0[1-9]|1[0-2])$/.test(thang)) { res.status(400).json({ success: false, error: 'cần storeCode và thang=YYYY-MM' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const [nam, th] = thang.split('-').map(Number) as [number, number]
+        // tháng theo giờ Việt Nam
+        const tu = new Date(Date.UTC(nam, th - 1, 1) - 7 * 3600_000)
+        const den = new Date(Math.min(Date.UTC(nam, th, 1) - 7 * 3600_000, Date.now()))
+        if (den <= tu) { res.status(400).json({ success: false, error: 'tháng chưa tới' }); return }
+
+        const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee', ...(kenhLoc ? { id: kenhLoc } : {}) }, orderBy: { name: 'asc' } })
+        const { moDichVuShopee } = await import('../lib/shopeeTuQuan')
+        const batDau = Date.now()
+        const ra: any[] = []
+        for (const ch of kenh) {
+            const dong: any = { kenhId: ch.id, ten: ch.name, trangThaiKenh: ch.status }
+            try {
+                if (!ch.accessToken) { dong.loi = 'kênh chưa có token'; ra.push(dong); continue }
+                const conLai = 200_000 - (Date.now() - batDau)
+                if (conLai < 15_000) { dong.loi = 'hết giờ trước khi tới gian này — gọi lại với &kenh=' + ch.id; dong.chamTran = true; ra.push(dong); continue }
+                const svc: any = await moDichVuShopee(sp, ch)
+                if (svc.loiLamMoiToken) { dong.loi = 'token: ' + String(svc.loiLamMoiToken).slice(0, 200); ra.push(dong); continue }
+                const { don, chamTran, dungO }: { don: { sn: string; status: string }[]; chamTran: boolean; dungO: string | null } = await svc.lietKeMaDonTheoNgayDat(tu, den, conLai - 10_000)
+                dong.chamTran = chamTran; if (dungO) dong.dungO = dungO
+                dong.trenSan = don.length
+                const dem = (ds: { status: string }[]) => { const m: Record<string, number> = {}; for (const d of ds) m[d.status || '?'] = (m[d.status || '?'] || 0) + 1; return m }
+                dong.trenSanTheoTrangThai = dem(don)
+                // so với Kengi theo lô 1.000 (pool prod = 1 ⇒ tuần tự)
+                const phieu = new Map<string, string>()
+                const donGoc = new Set<string>()
+                for (let i = 0; i < don.length; i += 1000) {
+                    const lo = don.slice(i, i + 1000).map(d => d.sn)
+                    for (const t of await sp.transaction.findMany({ where: { receiptNumber: { in: lo.map(s => 'ONLINE-SPE-' + s) } }, select: { receiptNumber: true, status: true } })) phieu.set(String(t.receiptNumber).slice(11), String(t.status))
+                    for (const o of await sp.onlineOrder.findMany({ where: { orderNumber: { in: lo.map(s => 'SPE-' + s) } }, select: { orderNumber: true } })) donGoc.add(String(o.orderNumber).slice(4))
+                }
+                const coPhieu = don.filter(d => phieu.has(d.sn))
+                const chiCoDon = don.filter(d => !phieu.has(d.sn) && donGoc.has(d.sn))
+                const thieu = don.filter(d => !phieu.has(d.sn) && !donGoc.has(d.sn))
+                dong.coPhieu = coPhieu.length
+                dong.phieuTheoTrangThai = (() => { const m: Record<string, number> = {}; for (const d of coPhieu) { const k = phieu.get(d.sn)!; m[k] = (m[k] || 0) + 1 } return m })()
+                // phiếu còn hiệu lực mà sàn nói ĐÃ HUỶ ⇒ doanh thu đang ghi thừa
+                dong.phieuHieuLucMaSanHuy = coPhieu.filter(d => d.status === 'CANCELLED' && ['completed', 'partial'].includes(phieu.get(d.sn)!)).length
+                dong.chiCoDonGocChuaLenPhieu = chiCoDon.length
+                dong.chiCoDonGocTheoTrangThai = dem(chiCoDon)
+                dong.thieuHan = thieu.length
+                dong.thieuTheoTrangThai = dem(thieu)
+                dong.mauThieu = thieu.filter(d => d.status === 'COMPLETED').slice(0, 5).map(d => d.sn)
+            } catch (e: any) {
+                dong.loi = String(e?.message || e).slice(0, 300)
+            }
+            ra.push(dong)
+        }
+        res.json({ success: true, data: { storeCode, thang, tu: tu.toISOString(), den: den.toISOString(), giay: Math.round((Date.now() - batDau) / 1000), kenh: ra } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 export default router

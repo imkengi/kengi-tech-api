@@ -1408,6 +1408,41 @@ export class ShopeeService extends PlatformService {
     /** Lấy TỔNG TIỀN HIỆN TẠI của nhiều đơn (tối đa 50/lượt) — Shopee trừ thẳng
      * khoản khách trả vào total_amount, nên so với tổng đã lưu là phát hiện được
      * trả hàng/hoàn tiền kể cả khi get_return_list im lặng. */
+    /**
+     * LIỆT KÊ MÃ ĐƠN theo NGÀY ĐẶT (create_time) — chỉ get_order_list, KHÔNG gọi chi tiết ⇒ rẻ, dùng để ĐẾM đơn trên sàn rồi so
+     * với Kengi (admin /dem-don-san-thieu, 11/11/2026). Tự chia khung 14 ngày (sàn chặn > 15), trang 100, cursor nguyên văn.
+     * Chạm trần trang / hết giờ ⇒ `chamTran` = true kèm mốc dừng — KHÔNG trả số thiếu như thể đủ.
+     */
+    async lietKeMaDonTheoNgayDat(since: Date, until: Date, hanMs = 200_000): Promise<{ don: { sn: string; status: string }[]; chamTran: boolean; dungO: string | null }> {
+        const path = '/api/v2/order/get_order_list'
+        const batDau = Date.now()
+        const tu = Math.floor(since.getTime() / 1000), den = Math.floor(until.getTime() / 1000)
+        const WINDOW = 14 * 86400
+        const don: { sn: string; status: string }[] = []
+        const thay = new Set<string>()
+        for (let a = tu; a < den; a += WINDOW) {
+            const b = Math.min(a + WINDOW, den)
+            let cursor = ''
+            for (let trang = 1; ; trang++) {
+                if (trang > 400 || Date.now() - batDau > hanMs) return { don, chamTran: true, dungO: new Date(a * 1000).toISOString() }
+                const url = this.apiUrl(path) +
+                    `&time_range_field=create_time&time_from=${a}&time_to=${b - 1}` +
+                    `&page_size=100&cursor=${encodeURIComponent(cursor)}&response_optional_fields=order_status`
+                const d = await this.httpGet(url)
+                if (d.error) throw new Error(`Shopee get_order_list: ${d.error} - ${d.message}`)
+                for (const o of (d.response?.order_list || [])) {
+                    const sn = String(o.order_sn || '')
+                    if (!sn || thay.has(sn)) continue
+                    thay.add(sn); don.push({ sn, status: String(o.order_status || '') })
+                }
+                if (!d.response?.more) break
+                cursor = String(d.response?.next_cursor || '')
+                if (!cursor) break
+            }
+        }
+        return { don, chamTran: false, dungO: null }
+    }
+
     async getOrderTotals(orderSns: string[]): Promise<Record<string, { total: number; status: string; updateTime?: Date }>> {
         const out: Record<string, { total: number; status: string; updateTime?: Date }> = {}
         for (let i = 0; i < orderSns.length; i += 50) {
