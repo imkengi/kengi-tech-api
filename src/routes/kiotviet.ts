@@ -775,6 +775,26 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /api/kiotviet/phieu-sua-don-huy {storeCode, apply?} ────────────────
+/**
+ * PHIẾU SỬA CHỮA ĐANG GẮN HOÁ ĐƠN ĐÃ HUỶ ⇒ chuyển sang bản ra lại cùng số gốc (11/11/2026, lib/chuyenPhieuSuaDonMoi.ts).
+ * Từ bản này đồng bộ tự chuyển mỗi khi bản ra lại về; lệnh này dọn các phiếu đã gắn sai TRƯỚC đó. MẶC ĐỊNH CHẠY THỬ.
+ * Không gọi KiotViet, chỉ sửa cột transactionId / soldReceiptNumber của phiếu sửa chữa.
+ */
+router.post('/phieu-sua-don-huy', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const apply = b.apply === true
+        const { chuyenPhieuSuaSangDonMoi } = await import('../lib/chuyenPhieuSuaDonMoi')
+        const kq = await chuyenPhieuSuaSangDonMoi(store.sp, { apply })
+        res.json({ success: true, data: { cheDo: apply ? 'ĐÃ CHUYỂN' : 'CHẠY THỬ — chưa ghi gì (thêm apply: true)', ...kq } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 // ─── POST /api/kiotviet/repair {storeCode, apply?} ──────────────────────────
 /**
  * DỌN DỮ LIỆU ĐÃ ĐỔ BẰNG BẢN CŨ CÓ LỖI.

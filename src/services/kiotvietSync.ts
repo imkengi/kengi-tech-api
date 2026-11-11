@@ -31,6 +31,7 @@ import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
 import { KV, kvDate } from './kiotviet'
 import { tongPhieuChuaTraTheoNcc, soDuDauKyTuKV } from '../lib/congNoNcc'
 import { dongNgayTuKV, ghiNgayPhieuThu, type DongNgayPhieuThu } from '../lib/phieuThuKiotViet'
+import { chuyenPhieuSuaSangDonMoi } from '../lib/chuyenPhieuSuaDonMoi'
 
 export interface SyncCounters {
     fetched: number
@@ -411,6 +412,10 @@ export async function lamTuoiNoKhach(sp: any, opts: SyncOptions, kvCustomerId: a
  * không được phá đợt đồng bộ.
  */
 async function ganPhieuSuaChuaKhiSync(sp: any, opts: SyncOptions, localCustomerId: any, txId: string, code: string, ngayDon: Date) {
+    /* 11/11/2026 — hoá đơn này là bản RA LẠI (HD….01, .02…) của một hoá đơn đã huỷ ⇒ phiếu sửa chữa đang gắn bản đã huỷ chuyển
+     * sang bản này (lib/chuyenPhieuSuaDonMoi.ts). Chạy TRƯỚC các rào bên dưới: chuyển là sửa một liên kết đã có, không phải gắn
+     * mới — không lệ thuộc tuổi đơn hay có mã khách. Lỗi nuốt tại chỗ như phần gắn: gắn hụt không được phá đợt đồng bộ. */
+    if (opts.apply && txId) await chuyenPhieuSuaSangDonMoi(sp, { txId, apply: true }).catch(() => { })
     if (!opts.apply || !localCustomerId || !txId) return
     try {
         const ngay = ngayDon && !isNaN(ngayDon.getTime()) ? ngayDon.getTime() : Date.now()
@@ -1071,6 +1076,8 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (daCo && daCo.status !== 'voided') {
                     if (opts.apply) {
                         await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
+                        // 11/11/2026: phiếu sửa chữa đang gắn hoá đơn vừa huỷ ⇒ chuyển sang bản ra lại nếu ĐÃ về (lib/chuyenPhieuSuaDonMoi.ts)
+                        await chuyenPhieuSuaSangDonMoi(sp, { donHuyId: daCo.id, apply: true }).catch(() => { })
                         /* SỔ: hoá đơn ĐÃ HUỶ (2) bên KiotViet phải rút khỏi 511/3331/632/131 — trước 14/10/2026 chỉ
                          * đổi trạng thái, đo HUTI: ~295 phiếu voided còn SALE- chưa đảo (T8–T10). CHỈ huỷ thật: "Đang
                          * xử lý" (3, đơn HDTTS) quay về hoàn thành ở lượt sau, đảo rồi không ghi lại được (SALE- là
