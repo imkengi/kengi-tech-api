@@ -10,7 +10,7 @@ process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'a'.repeat(
 
 import {
     LoiPSign, docTraVe, docDangNhap, docChungThu, tachDsChungThu, kiemViTri, kiemPdf, thanBam, docKetQuaBam, thanKy, docTrangThaiKy,
-    thanGan, docTepDaKy, cheMa, luuKetNoi, docKetNoi, xoaKetNoi, dangNhap, xacThucOtp, docPhien, dsChungThu, chungThuGon, batDauKy,
+    thanGan, docTepDaKy, cheMa, dongChuKy, gioKyVN, luuKetNoi, docKetNoi, xoaKetNoi, dangNhap, xacThucOtp, docPhien, dsChungThu, chungThuGon, batDauKy,
     hoiTrangThai, hoanTat, dsNhatKy, trangThai, PDF_TOI_DA,
 } from '../src/lib/pSign'
 
@@ -165,6 +165,11 @@ async function main() {
         const tb: any = thanBam(ct, 'doc-1', PDF, VI_TRI, { ...HIEN_THI, nguoiKy: 'A' })
         const si = tb.pdfDocs[0].signatureInfo
         ca('C5 thân băm đúng tên trường tài liệu', tb.certificate === CERT && tb.certificateChain.length === 1 && tb.pdfDocs[0].FileToSign === PDF && si.positionX === 380 && si.positionY === 60 && si.width === 180 && si.height === 70 && si.page === 1 && si.renderingMode === 0 && si.signatureDescription.signedBy === 'A' && /^kengi/.test(si.signatureName))
+        const T = Date.parse('2026-11-11T04:50:45Z')
+        const sd = (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, nguoiKy: 'CÔNG TY A', lienHe: '0900' }, T) as any).pdfDocs[0].signatureInfo.signatureDescription
+        ca('C5b chữ ký ghi đủ Ký bởi / Ngày ký (giờ VN) / Lý do / Nơi ký / Liên hệ, mỗi thứ một dòng', sd.displayText === 'Ký bởi: CÔNG TY A\nNgày ký: 11/11/2026 11:50:45\nLý do: Ký hợp đồng\nNơi ký: TP.HCM\nLiên hệ: 0900', JSON.stringify(sd.displayText))
+        ca('C5c ngày đã ở displayText ⇒ tắt dòng ngày của MISA (không hiện hai lần)', sd.showSignedDate === false)
+        ca('C5d tắt ngày / bỏ trống ⇒ không có dòng thừa', dongChuKy({ nguoiKy: 'A', noiKy: '', lyDo: '', lienHe: '', hienNgay: false }, T).join('|') === 'Ký bởi: A' && gioKyVN(Date.parse('2026-12-31T17:00:05Z')) === '01/01/2027 00:00:05')
         ca('C6 có ảnh chữ ký ⇒ renderingMode 1', (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA' }) as any).pdfDocs[0].signatureInfo.renderingMode === 1)
         ca('C7 băm thiếu digest ⇒ null (không ký mù)', docKetQuaBam({ pdfDocs: [{ documentId: 'x' }] }) === null && docKetQuaBam({ pdfDocs: [{ documentId: 'x', digest: 'D' }] })?.digest === 'D')
         const tk: any = thanKy('u', 'alias', { documentId: 'doc-1', digest: 'DIG' }, 'a.pdf', 'x')

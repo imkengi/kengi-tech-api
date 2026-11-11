@@ -244,8 +244,28 @@ export function kiemViTri(v: any): ViTriKy {
 
 const cat = (v: any, n: number) => chuoi(v).replace(/[\u0000-\u001f]/g, ' ').slice(0, n)
 
+/** dd/MM/yyyy HH:mm:ss theo giờ Việt Nam */
+export function gioKyVN(ms: number): string {
+    const d = new Date(ms + 7 * 3600_000)
+    const hai = (n: number) => String(n).padStart(2, '0')
+    return `${hai(d.getUTCDate())}/${hai(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${hai(d.getUTCHours())}:${hai(d.getUTCMinutes())}:${hai(d.getUTCSeconds())}`
+}
+
+/**
+ * Các dòng chữ trên chữ ký (chủ shop 11/11/2026: "sao chữ ký có mỗi như này" — ô chỉ có tên): Ký bởi / Ngày ký / Lý do / Nơi ký /
+ * Liên hệ. FE vẽ khung xem trước bằng ĐÚNG luật này (p-sign/kieu.ts dongChuKy) — sửa một bên phải sửa bên kia.
+ */
+export function dongChuKy(ht: HienThiKy, bayGio: number): string[] {
+    const d = [`Ký bởi: ${cat(ht.nguoiKy, 120)}`]
+    if (ht.hienNgay !== false) d.push(`Ngày ký: ${gioKyVN(bayGio)}`)
+    if (cat(ht.lyDo, 160)) d.push(`Lý do: ${cat(ht.lyDo, 160)}`)
+    if (cat(ht.noiKy, 80)) d.push(`Nơi ký: ${cat(ht.noiKy, 80)}`)
+    if (cat(ht.lienHe, 80)) d.push(`Liên hệ: ${cat(ht.lienHe, 80)}`)
+    return d
+}
+
 /** Thân POST /documents/hash — đúng tên trường của ví dụ trong tài liệu MISA */
-export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string, viTri: ViTriKy, ht: HienThiKy) {
+export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string, viTri: ViTriKy, ht: HienThiKy, bayGio = Date.now()) {
     const coAnh = !!ht.anhChuKy
     return {
         certificate: ct.certificate,
@@ -267,10 +287,13 @@ export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string
                 hashAlgorithm: 'SHA256',
                 signatureDescription: {
                     signedBy: cat(ht.nguoiKy, 120),
-                    showSignedDate: ht.hienNgay !== false,
+                    // ngày ký đã nằm trong displayText ⇒ tắt dòng ngày của MISA kẻo hiện hai lần
+                    showSignedDate: false,
                     location: cat(ht.noiKy, 80),
                     reason: cat(ht.lyDo, 160),
                     contact: cat(ht.lienHe, 80),
+                    // "Thông tin ký tự custom, xuống dòng bằng ký tự \n" (tài liệu MISA, mục SignatureDescription)
+                    displayText: dongChuKy(ht, bayGio).join('\n'),
                 },
                 page: viTri.trang,
                 // tên trường chữ ký trong PDF — phải khác nhau giữa các lần ký cùng một tệp
