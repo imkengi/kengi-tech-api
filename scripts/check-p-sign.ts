@@ -10,7 +10,7 @@ process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'a'.repeat(
 
 import {
     LoiPSign, docTraVe, docDangNhap, docChungThu, tachDsChungThu, kiemViTri, kiemPdf, thanBam, docKetQuaBam, thanKy, docTrangThaiKy,
-    thanGan, docTepDaKy, cheMa, dongChuKy, gioKyVN, luuKetNoi, docKetNoi, xoaKetNoi, dangNhap, xacThucOtp, docPhien, dsChungThu, chungThuGon, batDauKy,
+    thanGan, docTepDaKy, cheMa, dongChuKy, gioKyVN, oChoConDau, luuKetNoi, docKetNoi, xoaKetNoi, dangNhap, xacThucOtp, docPhien, dsChungThu, chungThuGon, batDauKy,
     hoiTrangThai, hoanTat, dsNhatKy, trangThai, PDF_TOI_DA,
 } from '../src/lib/pSign'
 
@@ -171,6 +171,18 @@ async function main() {
         ca('C5c ngày đã ở displayText ⇒ tắt dòng ngày của MISA (không hiện hai lần)', sd.showSignedDate === false)
         ca('C5d tắt ngày / bỏ trống ⇒ không có dòng thừa', dongChuKy({ nguoiKy: 'A', noiKy: '', lyDo: '', lienHe: '', hienNgay: false }, T).join('|') === 'Ký bởi: A' && gioKyVN(Date.parse('2026-12-31T17:00:05Z')) === '01/01/2027 00:00:05')
         ca('C6b con dấu vẽ sẵn (chiAnh) ⇒ renderingMode 2; chiAnh mà không có ảnh ⇒ vẫn 0', (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA', chiAnh: true }) as any).pdfDocs[0].signatureInfo.renderingMode === 2 && (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, chiAnh: true }) as any).pdfDocs[0].signatureInfo.renderingMode === 0)
+        {
+            // MISA chỉ dán ảnh vào nửa trái ô (đo 11/11/2026) ⇒ ô gửi đi rộng gấp đôi, nửa trái trừ lề = khung người dùng đặt
+            const sd = (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA', chiAnh: true }) as any).pdfDocs[0].signatureInfo
+            const nuaTrai = { x: sd.positionX + 2, y: sd.positionY + 2, rong: sd.width / 2 - 4, cao: sd.height - 4 }
+            ca('C6c con dấu vẽ sẵn: nửa trái của ô gửi MISA = đúng khung đã đặt', nuaTrai.x === VI_TRI.x && nuaTrai.y === VI_TRI.y && nuaTrai.rong === VI_TRI.rong && nuaTrai.cao === VI_TRI.cao, JSON.stringify(sd))
+            const hep = oChoConDau({ trang: 1, x: 50, y: 50, rong: 60, cao: 200 })
+            ca('C6d ô gửi đi LUÔN rộng hơn cao, kể cả khi ô đặt rất hẹp (MISA chia TRÁI / PHẢI, không chia trên / dưới)', sd.width > sd.height && hep.rong > hep.cao)
+            ca('C6e sát mép trái / đáy trang ⇒ không ra toạ độ âm', oChoConDau({ trang: 1, x: 0, y: 1, rong: 100, cao: 40 }).x === 0 && oChoConDau({ trang: 1, x: 0, y: 1, rong: 100, cao: 40 }).y === 0)
+            const thuong = (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA' }) as any).pdfDocs[0].signatureInfo
+            const chu = (thanBam(ct, 'd', PDF, VI_TRI, HIEN_THI) as any).pdfDocs[0].signatureInfo
+            ca('C6f kiểu chữ thường / ảnh + chữ: ô giữ nguyên, không nhân đôi', thuong.width === VI_TRI.rong && thuong.positionX === VI_TRI.x && chu.width === VI_TRI.rong && chu.height === VI_TRI.cao)
+        }
         ca('C6 có ảnh chữ ký ⇒ renderingMode 1', (thanBam(ct, 'd', PDF, VI_TRI, { ...HIEN_THI, anhChuKy: 'AAAA' }) as any).pdfDocs[0].signatureInfo.renderingMode === 1)
         ca('C7 băm thiếu digest ⇒ null (không ký mù)', docKetQuaBam({ pdfDocs: [{ documentId: 'x' }] }) === null && docKetQuaBam({ pdfDocs: [{ documentId: 'x', digest: 'D' }] })?.digest === 'D')
         const tk: any = thanKy('u', 'alias', { documentId: 'doc-1', digest: 'DIG' }, 'a.pdf', 'x')

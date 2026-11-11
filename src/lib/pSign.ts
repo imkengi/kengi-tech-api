@@ -264,9 +264,31 @@ export function dongChuKy(ht: HienThiKy, bayGio: number): string[] {
     return d
 }
 
+/** Lề trong ô chữ ký của MISA (point) — cùng con số với iText */
+const LE_O_MISA = 2
+
+/**
+ * Ô gửi MISA cho CON DẤU VẼ SẴN (renderingMode 2).
+ * ĐO 11/11/2026 trên tệp HUTI ký thật (ảnh chủ shop gửi trước / sau khi ký): MISA KHÔNG dán ảnh kín ô — ô rộng hơn cao thì ảnh chỉ
+ * được NỬA TRÁI (nửa phải dành cho chữ mô tả, để trống ở chế độ chỉ-ảnh), co cho vừa nửa đó và canh giữa theo chiều dọc ⇒ con dấu
+ * ra ~47% cỡ đã đặt, mép trái giữ nguyên. Đúng cách iText chia ô "ảnh + mô tả" (signatureRect = nửa trái trừ lề 2 point).
+ * ⇒ gửi ô rộng GẤP ĐÔI (+ lề) bắt đầu từ cùng mép trái: nửa trái của ô gửi đi = đúng khung người dùng đặt.
+ * Nửa phải có thể thò ra ngoài mép phải trang (chữ ký hay nằm góc dưới-phải) — phần đó rỗng, không vẽ gì.
+ */
+export function oChoConDau(viTri: ViTriKy): { x: number; y: number; rong: number; cao: number } {
+    return {
+        x: Math.max(0, viTri.x - LE_O_MISA),
+        y: Math.max(0, viTri.y - LE_O_MISA),
+        // ô người dùng đặt cao gấp đôi rộng trở lên thì nới thêm bề ngang: ô gửi đi PHẢI rộng hơn cao, kẻo MISA chia trên / dưới
+        rong: Math.max(2 * (viTri.rong + 2 * LE_O_MISA), viTri.cao + 2 * LE_O_MISA + 2),
+        cao: viTri.cao + 2 * LE_O_MISA,
+    }
+}
+
 /** Thân POST /documents/hash — đúng tên trường của ví dụ trong tài liệu MISA */
 export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string, viTri: ViTriKy, ht: HienThiKy, bayGio = Date.now()) {
     const coAnh = !!ht.anhChuKy
+    const o = coAnh && ht.chiAnh ? oChoConDau(viTri) : { x: viTri.x, y: viTri.y, rong: viTri.rong, cao: viTri.cao }
     return {
         certificate: ct.certificate,
         certificateChain: ct.chain,
@@ -277,10 +299,10 @@ export function thanBam(ct: ChungThuDayDu, documentId: string, pdfBase64: string
                 textColor: 0,
                 // 0 chỉ diễn giải · 1 diễn giải + ảnh · 2 chỉ ảnh
                 renderingMode: coAnh ? (ht.chiAnh ? 2 : 1) : 0,
-                positionX: viTri.x,
-                positionY: viTri.y,
-                width: viTri.rong,
-                height: viTri.cao,
+                positionX: o.x,
+                positionY: o.y,
+                width: o.rong,
+                height: o.cao,
                 fontSize: 8,
                 signatureImage: coAnh ? ht.anhChuKy : '',
                 fontData: '',
