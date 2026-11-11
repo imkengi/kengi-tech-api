@@ -27,7 +27,7 @@ import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../serv
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
     parseWebhookPayload, verifyWebhookSignature, donHoaDonKhach,
-    keoPhieuThuTheoKhach, xepHangPhieuThu, type SyncOptions,
+    keoPhieuThuTheoKhach, xepHangPhieuThu, taoBoGomKeoPhieuThu, type SyncOptions,
 } from '../services/kiotvietSync'
 import { buildOptions, boDemTuyChon, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
 
@@ -167,8 +167,8 @@ router.post('/webhook/:storeCode/:token', async (req: Request, res: Response) =>
     }
 })
 
-/** Khách vừa được kéo phiếu thu lúc nào (theo gian hàng) — KiotViet hay bắn đôi customer.update cho một lần trả. */
-const daKeoPhieuThu = new Map<string, number>()
+/** KiotViet hay bắn vài customer.update cho một lần trả — gom lại mà không làm rơi phiếu (services/kiotvietSync.taoBoGomKeoPhieuThu). */
+const boGomPhieuThu = taoBoGomKeoPhieuThu()
 
 /**
  * Sau webhook khách: kéo phiếu thu 2 ngày gần nhất của đúng những khách trong payload. Chỉ ghi nhật
@@ -176,22 +176,18 @@ const daKeoPhieuThu = new Map<string, number>()
  * nhật ký, không làm hỏng việc đồng bộ khách vừa xong.
  */
 async function keoPhieuThuSauWebhookKhach(sp: any, opts: SyncOptions, data: any[]): Promise<void> {
-    const bayGio = Date.now()
-    const ids = (Array.isArray(data) ? data : [])
-        .map((d: any) => String(d?.id ?? d?.Id ?? '').trim())
-        .filter((id: string) => {
-            if (!id) return false
-            const k = `${opts.creds?.retailer || ''}:${id}`
-            if (bayGio - (daKeoPhieuThu.get(k) || 0) < 20_000) return false
-            daKeoPhieuThu.set(k, bayGio)
-            return true
-        })
-    if (daKeoPhieuThu.size > 5000) daKeoPhieuThu.clear()
+    const tienTo = `${opts.creds?.retailer || ''}:`
+    const khoa = boGomPhieuThu.nhan((Array.isArray(data) ? data : [])
+        .map((d: any) => String(d?.id ?? d?.Id ?? '').trim()).filter(Boolean).map((id: string) => tienTo + id))
+    const ids = khoa.map(k => k.slice(tienTo.length))
     if (!ids.length) return
     const c = newCounters()
     const started = new Date()
     try {
-        const kq = await xepHangPhieuThu(sp, () => keoPhieuThuTheoKhach(sp, opts, ids, c))
+        const kq = await xepHangPhieuThu(sp, () => {
+            boGomPhieuThu.batDau(khoa)   // từ đây webhook tới thêm của các khách này được xếp một lượt MỚI sau lượt này
+            return keoPhieuThuTheoKhach(sp, opts, ids, c)
+        })
         if (!kq) return
         await sp.kiotVietSyncLog.create({
             data: {
@@ -204,6 +200,7 @@ async function keoPhieuThuSauWebhookKhach(sp: any, opts: SyncOptions, data: any[
             },
         }).catch(() => { })
     } catch (e: any) {
+        boGomPhieuThu.batDau(khoa)
         await logWebhook(sp, 'phieu-thu.khach', 'failed', 0, `Kéo phiếu thu sau webhook khách ${ids.join(',')}: ${moTaLoi(e)}`)
     }
 }

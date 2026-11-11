@@ -2230,6 +2230,35 @@ export async function keoPhieuThuTheoKhach(
     return keoPhieuThuKhach(sp, opts, cuaKhach, c, { hoaDonToiDa: 15 })
 }
 
+/**
+ * GOM WEBHOOK KHÁCH DỒN DẬP mà KHÔNG LÀM RƠI PHIẾU (11/11/2026).
+ *
+ * KiotViet bắn vài `customer.update` liền nhau cho một lần thu nợ. Bản 23/10 bỏ mọi webhook của cùng khách tới trong 20 giây
+ * sau lượt kéo trước. Đo HUTI 11/11/2026 (khách trả 30,4 triệu): thu ngân gõ nhầm số tiền (phiếu TT…489, huỷ ngay), nhập lại
+ * phiếu đúng TT…490 sau ~50 giây — ba webhook tới trong 14 giây; lượt kéo chạy theo webhook ĐẦU (lúc phiếu đúng chưa có), hai
+ * webhook sau bị bỏ ⇒ phiếu đúng không về, lịch sử công nợ thiếu phiếu thu tới nhịp 2 giờ kế.
+ *
+ * Luật mới: chỉ bỏ webhook khi khách đó ĐANG CÓ một lượt kéo XẾP HÀNG CHƯA CHẠY (lượt ấy chạy sau, sẽ thấy hết). Lượt đã BẮT
+ * ĐẦU chạy thì webhook tới thêm được xếp MỘT lượt nữa sau nó — không bao giờ có webhook nào tới sau lần đọc sổ quỹ cuối cùng mà
+ * không được đọc lại. Mỗi khách nhiều nhất một lượt đang chạy + một lượt chờ.
+ */
+export function taoBoGomKeoPhieuThu() {
+    const dangCho = new Set<string>()
+    return {
+        /** Khoá nào CẦN xếp một lượt kéo mới (và đánh dấu chúng đang chờ). */
+        nhan(khoa: string[]): string[] {
+            const can = [...new Set(khoa)].filter(k => k && !dangCho.has(k))
+            for (const k of can) dangCho.add(k)
+            return can
+        },
+        /** Gọi NGAY KHI lượt kéo bắt đầu chạy (trước khi đọc sổ quỹ). */
+        batDau(khoa: string[]): void {
+            for (const k of khoa) dangCho.delete(k)
+        },
+        get soDangCho() { return dangCho.size },
+    }
+}
+
 const hangChoPhieuThu = new WeakMap<object, Promise<unknown>>()
 
 /**

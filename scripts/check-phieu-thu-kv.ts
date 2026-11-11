@@ -273,6 +273,26 @@ async function main() {
     const kq7 = await keoPhieuThuKhach(k7, opts(), [soQuy('TT901', 10), soQuy('TT902', 20, 42)], newCounters(), { nghiMs: 0, hoaDonToiDa: 1 }, async (ma) => ({ ...(kvHoaDon[ma] ?? { id: 1, code: ma, status: 1, total: 50, customerId: 42 }), payments: [] }))
     ok('39. chạm trần hỏi hoá đơn → báo hetNganSach, phiếu còn lại vẫn có dòng trả nợ đúng ngày', kq7.hetNganSach && kq7.hoaDonHoiLai === 1 && k7._s.dongNo.length === 2, { kq7, dongNo: k7._s.dongNo.length })
 
+
+    // ─── Gom webhook khách dồn dập mà không làm rơi phiếu (11/11/2026) ───
+    {
+        const { taoBoGomKeoPhieuThu } = await import('../src/services/kiotvietSync')
+        const g = taoBoGomKeoPhieuThu()
+        const a1 = g.nhan(['r:1'])
+        const a2 = g.nhan(['r:1', 'r:2'])
+        ok('40. webhook đầu ⇒ xếp lượt kéo; webhook thứ hai của CÙNG khách khi lượt kia CHƯA chạy ⇒ không xếp thêm (khách khác vẫn xếp)',
+            JSON.stringify(a1) === '["r:1"]' && JSON.stringify(a2) === '["r:2"]' && g.soDangCho === 2)
+        g.batDau(['r:1'])
+        const a3 = g.nhan(['r:1'])
+        ok('41. lượt kéo ĐÃ BẮT ĐẦU chạy ⇒ webhook tới thêm của khách đó được xếp MỘT lượt mới (phiếu nhập lại sau lần đọc sổ quỹ không bị rơi)',
+            JSON.stringify(a3) === '["r:1"]')
+        ok('42. … và webhook thứ ba trong lúc lượt mới còn chờ ⇒ không xếp nữa; khoá rỗng / trùng trong một payload bị gộp',
+            g.nhan(['r:1']).length === 0 && JSON.stringify(g.nhan(['', 'r:9', 'r:9'])) === '["r:9"]')
+        const nguonRoute = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'routes', 'kiotviet.ts'), 'utf8')
+        ok('43. đường webhook: nhả khoá NGAY KHI lượt bắt đầu (trước khi đọc sổ quỹ) và không còn luật "bỏ trong 20 giây"',
+            /boGomPhieuThu\.batDau\(khoa\)[^\n]*\n\s+return keoPhieuThuTheoKhach\(sp, opts, ids, c\)/.test(nguonRoute.replace(/\r\n/g, '\n')) && !/20_000/.test(nguonRoute.slice(nguonRoute.indexOf('keoPhieuThuSauWebhookKhach'), nguonRoute.indexOf('async function logWebhook'))))
+    }
+
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)
 }
