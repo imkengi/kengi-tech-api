@@ -9,6 +9,7 @@ import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { moTaLoi } from '../lib/gomLoi'
 import { duocLenPhieu, TRANG_THAI_DUOC_LEN_PHIEU, TRANG_THAI_CHO_XAC_NHAN } from '../lib/donDuocXoa'
 import { dangTat } from '../lib/choXong'
+import { laDonKeoBu, GHI_CHU_KEO_BU } from '../lib/dauKeoBu'
 
 type StorePrisma = any
 
@@ -38,6 +39,11 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
      * chốt 09/09/2026: chưa xác nhận là Đặt hàng, xác nhận xong mới là Giao dịch.
      * Lượt đồng bộ sau thấy PROCESSED/SHIPPED… sẽ chuyển. Xem lib/donDuocXoa.ts. */
     if (!duocLenPhieu(order.status)) return false
+
+    /* ĐƠN KÉO BÙ (11/11/2026 — lib/dauKeoBu.ts): đơn cũ kéo về để đủ doanh thu, hàng đã rời kho từ lâu ⇒ lập phiếu doanh thu
+     * nhưng KHÔNG trừ kho, KHÔNG ghi thẻ kho, KHÔNG trừ kho mẹ, KHÔNG ghi bút toán. Đọc từ ghi chú của ĐƠN (dữ liệu), không từ
+     * tham số — cron đồng bộ gọi hàm này cho mọi đơn chưa có phiếu và phải ra cùng kết quả. */
+    const keoBu = laDonKeoBu((order as any).note)
 
     // Check if already converted (receipt exists with this order number)
     const existing = await prisma.transaction.findFirst({
@@ -322,6 +328,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             createdBy: systemUser.id,
             createdByName: 'Hệ thống',
             notes: `Đơn online ${order.platform || 'Shopee'} - ${order.orderNumber}`
+                + (keoBu ? ` — ${GHI_CHU_KEO_BU}` : '')
                 + (dongKhongKhop.length
                     ? ` — ⚠ ${dongKhongKhop.length} dòng chưa nối được hàng kho (${dongKhongKhop.slice(0, 5).join(', ')}${dongKhongKhop.length > 5 ? '…' : ''}): phiếu có ĐỦ doanh thu nhưng THIẾU giá vốn và không trừ kho phần này.`
                     : ''),
@@ -348,7 +355,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
      *     `san` vào để đơn Shopee ghi 131-SHOPEE chứ không rơi vào 131-SAN chung;
      *   · ngày bút toán lấy NGÀY ĐẶT ĐƠN TRÊN SÀN, không phải lúc chạy đồng bộ,
      *     nếu không đơn cũ dồn hết vào ngày sync. */
-    await thuGhiSo(`Đơn sàn ${order.orderNumber}`, () => createJournalEntriesForTransaction(
+    if (!keoBu) await thuGhiSo(`Đơn sàn ${order.orderNumber}`, () => createJournalEntriesForTransaction(
         prisma,
         { ...(donDaTao as any), createdAt: order.createdAt || (donDaTao as any).createdAt },
         {
@@ -364,7 +371,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     // atomic). count=0 nghĩa là đường kia đã trừ rồi → SKIP toàn bộ khối trừ kho.
     // Cờ này cũng là nguồn sự thật để reverseOnlineOrderEffects hoàn kho khi hủy.
     let deducted = 0
-    if (inventoryUpdates.length > 0) {
+    if (inventoryUpdates.length > 0 && !keoBu) {
         const claim = await prisma.onlineOrder.updateMany({
             where: { id: order.id, stockDeducted: false },
             data: { stockDeducted: true },
@@ -408,7 +415,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
      * Hai schema khác nhau ⇒ KHÔNG chung transaction: hàm tự chống trùng bằng cờ
      * `khoMeTruLuc`. Hỏng ở đây KHÔNG được làm hỏng việc lập phiếu — phiếu đã ghi,
      * ném lỗi ra là lượt sau chuyển lại và đẻ phiếu trùng. */
-    if (inventoryUpdates.length > 0) {
+    if (inventoryUpdates.length > 0 && !keoBu) {
         try {
             const { moKhoMe, truKhoMe } = await import('../lib/khoMe')
             const khoMe = await moKhoMe(prisma)

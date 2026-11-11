@@ -14332,4 +14332,40 @@ router.get('/dem-don-san-thieu', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * KÉO BÙ ĐƠN SHOPEE CŨ — POST /admin/keo-bu-don-san { storeCode, kenh, tu:'YYYY-MM-DD', den:'YYYY-MM-DD', apply?, gioiHan? }
+ *
+ * Chủ shop KENGISTORE 11/11/2026 chọn: kéo đơn cũ về thành PHIẾU THẬT nhưng KHÔNG TRỪ KHO (lib/dauKeoBu.ts, lib/keoBuDonSan.ts).
+ * MẶC ĐỊNH CHẠY THỬ (chỉ đọc): đếm đơn sàn đã hoàn thành mà Kengi chưa có, cộng tiền theo tháng, soát sơ SKU. `apply: true` mới
+ * ghi: tạo đơn gốc mang dấu kéo bù rồi lập phiếu doanh thu — không trừ kho, không thẻ kho, không bút toán, không thông báo.
+ * Ngày theo giờ Việt Nam, tính cả ngày `den`; khoảng tối đa 31 ngày / lượt. Hết ~200 giây thì dừng, trả `conLai` — gọi lại là chạy
+ * tiếp (đơn đã nhập bị loại ở bước so với Kengi). Một gian một lượt.
+ */
+router.post('/keo-bu-don-san', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const kenhId = String(b.kenh || '').trim()
+        const laNgay = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00Z'))
+        if (!storeCode || !kenhId || !laNgay(b.tu) || !laNgay(b.den) || b.den < b.tu) { res.status(400).json({ success: false, error: 'cần storeCode, kenh, tu, den (YYYY-MM-DD)' }); return }
+        const tu = new Date(Date.parse(b.tu + 'T00:00:00Z') - 7 * 3600_000)
+        const den = new Date(Math.min(Date.parse(b.den + 'T00:00:00Z') - 7 * 3600_000 + 86400_000, Date.now()))
+        if ((den.getTime() - tu.getTime()) / 86400_000 > 31.01) { res.status(400).json({ success: false, error: 'tối đa 31 ngày một lượt' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ch = await sp.onlineChannel.findFirst({ where: { id: kenhId, platform: 'shopee' } })
+        if (!ch) { res.status(404).json({ success: false, error: 'không thấy gian Shopee này' }); return }
+        const { moDichVuShopee } = await import('../lib/shopeeTuQuan')
+        const svc: any = await moDichVuShopee(sp, ch)
+        if (svc.loiLamMoiToken) { res.status(409).json({ success: false, error: 'token gian: ' + String(svc.loiLamMoiToken).slice(0, 200) }); return }
+        const { keoBuDonShopee } = await import('../lib/keoBuDonSan')
+        const kq = await keoBuDonShopee(sp, ch, svc, { tu, den, apply: b.apply === true, hanMs: 200_000, gioiHan: Math.min(5000, Math.max(1, Number(b.gioiHan) || 5000)) })
+        if (kq.apply) console.log(`[KeoBu] ${storeCode} ${ch.name} ${b.tu}→${b.den}: nhập ${kq.daNhap}, lên phiếu ${kq.lenPhieu}, không nối được hàng ${kq.khongNoiDuocHang}, lỗi ${kq.loi.length}, còn ${kq.conLai}`)
+        res.json({ success: true, data: { storeCode, kenh: ch.name, tu: b.tu, den: b.den, ...kq } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 export default router

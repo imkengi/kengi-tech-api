@@ -534,6 +534,19 @@ export class ShopeeService extends PlatformService {
         }
     }
 
+    /** Chi tiết NHIỀU đơn theo mã (≤ 50 / lượt) — cùng phép ánh xạ với fetchOrders. Dùng cho kéo bù đơn cũ (lib/keoBuDonSan.ts). */
+    async layChiTietNhieuDon(orderSns: string[]): Promise<PlatformOrder[]> {
+        if (!orderSns.length) return []
+        if (orderSns.length > 50) throw new Error('layChiTietNhieuDon: tối đa 50 đơn một lượt')
+        const url = this.apiUrl('/api/v2/order/get_order_detail') +
+            `&order_sn_list=${orderSns.join(',')}` +
+            `&response_optional_fields=buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,actual_shipping_fee,item_list,pay_time,ship_by_date,pickup_done_time,package_list,total_amount,order_chargeable_weight,tracking_no,shipping_carrier`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_order_detail: ${data.error} - ${data.message}`)
+        const instantIds = await this.getInstantChannelIdsSafe()
+        return (data.response?.order_list || []).map((d: any) => this.mapOrder(d, instantIds))
+    }
+
     async getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null> {
         const path = '/api/v2/order/get_order_detail'
         const url = this.apiUrl(path) +
