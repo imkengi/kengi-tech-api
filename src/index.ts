@@ -72,6 +72,7 @@ import kiotvietRoutes from './routes/kiotviet'
 import misaRoutes from './routes/misa'
 import misaDayRoutes from './routes/misaDay'
 import meInvoiceRoutes from './routes/meInvoice'
+import pSignRoutes from './routes/pSign'
 import zaloRoutes from './routes/zalo'
 import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
@@ -331,6 +332,8 @@ app.use('/api/misa', misaRoutes)
 app.use('/api/misa-day', misaDayRoutes)
 // MISA meInvoice (HĐĐT của MISA, khác AMIS): kết nối + soi hoá đơn kế toán đã xuất — gửi HĐ cho khách qua nhóm Zalo — 28/10/2026
 app.use('/api/meinvoice', meInvoiceRoutes)
+// P-Sign (11/11/2026): ký tài liệu PDF bằng chữ ký số từ xa MISA eSign — kengi.vn/p-sign
+app.use('/api/p-sign', pSignRoutes)
 // Nhóm Zalo ↔ khách + tin nhóm Zalo do n8n chuyển vào (thay Google Sheet) — 13/10/2026
 app.use('/api/zalo', zaloRoutes)
 app.use('/api/import-data', importDataRoutes)
