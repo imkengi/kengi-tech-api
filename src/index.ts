@@ -256,8 +256,10 @@ app.use('/api', apiLimiter)
 // ─── Request Logger (dev) ───────────────────────────────────────────────────
 // + đếm yêu cầu đang chạy cho bộ canh RAM (lib/canhBoNho.ts) — RAM vọt thì log có tên việc
 import { batDauYeuCau, duongGon } from './lib/canhBoNho'
+import { cheBiMatDuongDan } from './lib/cheDuongDan'
 app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.path} — origin: ${req.headers.origin || 'none'}`)
+    // cheBiMatDuongDan: token webhook / token tải tệp nằm trong đường dẫn KHÔNG được vào log (lib/cheDuongDan.ts)
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${cheBiMatDuongDan(req.path)} — origin: ${req.headers.origin || 'none'}`)
     res.on('close', batDauYeuCau(duongGon(req.method, req.path)))
     next()
 })
