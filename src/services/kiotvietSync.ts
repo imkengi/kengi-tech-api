@@ -2088,6 +2088,8 @@ export interface KetQuaKeoPhieuThu {
     hoaDonHoiLai: number
     /** Hoá đơn được dựng lại phiếu thu theo KiotViet */
     hoaDonCapNhat: number
+    /** Hoá đơn được gỡ phiếu thu ĐÃ HUỶ bên KiotViet mà Kengi còn giữ (12/11/2026) */
+    hoaDonGoPhieuHuy?: number
     /** Mã vẫn không thấy trên hoá đơn nào ⇒ sổ quỹ ghi thành dòng trả nợ riêng, đúng ngày */
     conLa: string[]
     /** Chạm trần hoá đơn / hạn giờ — phần còn lại đi đường dòng trả nợ riêng */
@@ -2200,6 +2202,56 @@ export async function keoPhieuThuKhach(
             const cHd = newCounters()
             await syncInvoices(sp, layVe, { ...opts, rebuildLines: false, updateOnly: true }, cHd)
             kq.hoaDonCapNhat += cHd.updated
+            for (const e of cHd.errors) if (!e.startsWith('bỏ qua')) noteError(c, e)
+        }
+    }
+
+    /* PHIẾU THU ĐÃ HUỶ BÊN KIOTVIET MÀ KENGI VẪN GIỮ TRÊN HOÁ ĐƠN (12/11/2026).
+     * Đo HUTI HD032073: thu ngân huỷ phiếu TTHD032073 (4.956.000) ⇒ KiotViet giữ hoá đơn "Hoàn thành", totalPayment 0,
+     * phiếu trong sổ quỹ status 1 "Đã hủy". Nhưng hoá đơn KHÔNG có modifiedDate và không bắn invoice.update ⇒ lượt đêm
+     * không kéo lại; còn đoạn trên chỉ tìm phiếu MỚI (bỏ status 1) ⇒ Kengi giữ phiếu ma mãi: sổ quỹ đếm tiền không có
+     * thật, đơn "đã thu đủ" trong khi khách còn nợ. Nay: mã huỷ nào còn nằm trên Payment ⇒ hỏi lại hoá đơn, CHỈ dựng lại
+     * khi chính hoá đơn KiotViet cũng ghi phiếu đó đã huỷ (đường dựng lại phiếu thu sẵn có của syncInvoices). */
+    const maHuy = [...new Set((banGhi || []).filter((kv: any) => kv?.code
+        && (Number(kv?.status) === 1 || /hủy|huỷ|cancel|void/i.test(String(kv?.statusValue || '')))
+        && String(kv?.partnerType || '').toUpperCase() === 'C'
+        && cashflowDirection(kv) === 'in').map((kv: any) => String(kv.code)))]
+    if (maHuy.length && lay) {
+        const conGiu: any[] = []
+        for (let i = 0; i < maHuy.length; i += 500) {
+            conGiu.push(...await sp.payment.findMany({ where: { reference: { in: maHuy.slice(i, i + 500) } }, select: { transactionId: true, reference: true } }))
+        }
+        const txIds = [...new Set(conGiu.map((p: any) => String(p.transactionId)).filter(Boolean))]
+        const noiHuy: any[] = txIds.length
+            ? await sp.kiotVietMap.findMany({ where: { entity: 'invoice', localId: { in: txIds } }, select: { localId: true } })
+            : []
+        const tuKVHuy = new Set(noiHuy.map((r: any) => String(r.localId)))
+        const layVeHuy: any[] = []
+        for (const id of txIds.filter(x => tuKVHuy.has(x))) {
+            if (kq.hoaDonHoiLai >= hoaDonToiDa || hetGio()) { kq.hetNganSach = true; break }
+            const hd = await sp.transaction.findUnique({ where: { id }, select: { receiptNumber: true } })
+            if (!hd?.receiptNumber) continue
+            kq.hoaDonHoiLai++
+            let kvHd: any = null
+            try {
+                kvHd = await lay(hd.receiptNumber)
+            } catch (e: any) {
+                noteError(c, `Hỏi lại HĐ ${hd.receiptNumber} để gỡ phiếu thu đã huỷ: ${String(e?.message || e).slice(0, 120)}`)
+                continue
+            } finally {
+                if (nghiMs) await new Promise(r => setTimeout(r, nghiMs))
+            }
+            if (!kvHd?.code) continue
+            const maGiu = new Set(conGiu.filter((p: any) => String(p.transactionId) === id).map((p: any) => String(p.reference)))
+            const hoaDonXacNhan = (Array.isArray(kvHd.payments) ? kvHd.payments : [])
+                .some((p: any) => maGiu.has(String(p?.code)) && Number(p?.status) === 1)
+            if (hoaDonXacNhan) layVeHuy.push(kvHd)
+        }
+        if (layVeHuy.length) {
+            const cHd = newCounters()
+            await syncInvoices(sp, layVeHuy, { ...opts, rebuildLines: false, updateOnly: true }, cHd)
+            kq.hoaDonCapNhat += cHd.updated
+            kq.hoaDonGoPhieuHuy = layVeHuy.length
             for (const e of cHd.errors) if (!e.startsWith('bỏ qua')) noteError(c, e)
         }
     }

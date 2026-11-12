@@ -273,6 +273,34 @@ async function main() {
     const kq7 = await keoPhieuThuKhach(k7, opts(), [soQuy('TT901', 10), soQuy('TT902', 20, 42)], newCounters(), { nghiMs: 0, hoaDonToiDa: 1 }, async (ma) => ({ ...(kvHoaDon[ma] ?? { id: 1, code: ma, status: 1, total: 50, customerId: 42 }), payments: [] }))
     ok('39. chạm trần hỏi hoá đơn → báo hetNganSach, phiếu còn lại vẫn có dòng trả nợ đúng ngày', kq7.hetNganSach && kq7.hoaDonHoiLai === 1 && k7._s.dongNo.length === 2, { kq7, dongNo: k7._s.dongNo.length })
 
+    // C8 (12/11/2026, HUTI HD032073): phiếu thu bị HUỶ bên KiotViet mà Kengi còn giữ trên hoá đơn ⇒ gỡ
+    const huy = (ma: string, tienPhieu: number) => ({ ...soQuy(ma, tienPhieu), status: 1, statusValue: 'Đã hủy' })
+    const datDaThu = () => [{ id: 'a1', receiptNumber: 'HD101', customerId: 'k1', status: 'completed', total: 1000, amountReceived: 1000, createdAt: t('2026-09-01T01:00:00Z') }]
+    const kvHuy = { HD101: { id: 9001, code: 'HD101', status: 1, total: 1000, totalPayment: 0, customerId: 41, payments: [{ code: 'TTHD101', amount: 1000, status: 1, statusValue: 'Đã hủy', method: 'Cash', transDate: '2026-10-20T09:00:00' }] } }
+    const k8 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q8', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
+    hoi.length = 0
+    const kq8 = await keoPhieuThuKhach(k8, opts(), [huy('TTHD101', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return (kvHuy as any)[ma] ?? null })
+    const a1Sau = k8._s.phieu.find((x: any) => x.id === 'a1')
+    ok('44. phiếu thu đã huỷ bên KiotViet còn nằm trên hoá đơn Kengi ⇒ hỏi lại hoá đơn, gỡ Payment, đơn về "partial" thu 0',
+        hoi.join() === 'HD101' && k8._s.tien.filter((p: any) => p.reference === 'TTHD101').length === 0 && a1Sau.amountReceived === 0 && a1Sau.status === 'partial' && kq8.hoaDonGoPhieuHuy === 1,
+        { hoi, tien: k8._s.tien, a1Sau, kq8 })
+    ok('45. phiếu huỷ KHÔNG bị ghi thành dòng trả nợ / không bị coi là phiếu lạ', k8._s.dongNo.length === 0 && kq8.phieuLa === 0)
+
+    const k9 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q9', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
+    const kvChuaHuy = { HD101: { ...kvHuy.HD101, totalPayment: 1000, payments: [{ ...kvHuy.HD101.payments[0], status: 0, statusValue: 'Đã thanh toán' }] } }
+    await keoPhieuThuKhach(k9, opts(), [huy('TTHD101', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => (kvChuaHuy as any)[ma] ?? null)
+    ok('46. sổ quỹ nói huỷ mà CHÍNH hoá đơn KiotViet vẫn ghi phiếu còn hiệu lực ⇒ KHÔNG đụng (để lượt sau)',
+        k9._s.tien.length === 1 && k9._s.phieu[0].amountReceived === 1000 && k9._s.phieu[0].status === 'completed')
+
+    const k10 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q10', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
+    hoi.length = 0
+    await keoPhieuThuKhach(k10, opts(), [huy('TT999', 500)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return null })
+    ok('47. phiếu huỷ mà Kengi không giữ ở đâu ⇒ không hỏi KiotViet, không đổi gì', hoi.length === 0 && k10._s.tien.length === 1)
+
+    const k11 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q11', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
+    await keoPhieuThuKhach(k11, opts(false), [huy('TTHD101', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => (kvHuy as any)[ma] ?? null)
+    ok('48. chạy thử ⇒ không gỡ gì', k11._s.tien.length === 1 && k11._s.phieu[0].amountReceived === 1000)
+
 
     // ─── Gom webhook khách dồn dập mà không làm rơi phiếu (11/11/2026) ───
     {
