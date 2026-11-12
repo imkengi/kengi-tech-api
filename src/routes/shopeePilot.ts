@@ -20,7 +20,8 @@ import { lyDoChanPilot } from '../lib/tienIchCuaHang'
 import { chanXemPilot } from '../lib/quyenXemPilot'
 import {
     khoSql, xayTrangThai, chayChuKy, thucThi, huyKeHoach, taoKeHoachGia, taoKeHoachDang, taoKeHoachKhuyenMai,
-    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, timNganh, timHangChoHoSo, HUONG_DAN_PILOT, type NgCanh,
+    tuyChonDang, thuocTinhNganh, kiemKetNoi, luuCauHinh, luuHoSo, xoaHoSo, luuLaiRieng, xoaLaiRieng, timNganh, timHangChoHoSo,
+    goiYAnhChoSku, HUONG_DAN_PILOT, type NgCanh,
 } from '../lib/shopeePilot'
 
 const router = Router()
@@ -101,10 +102,15 @@ const VIEC: Record<string, { ghi: boolean; chay: Viec }> = {
     connection: { ghi: false, chay: (ctx, b) => kiemKetNoi(ctx, { thuNapAnh: b?.uploadTest === true }) },
     'profile-save': { ghi: true, chay: (ctx, b) => luuHoSo(ctx, b?.profile || b) },
     'profile-delete': { ghi: true, chay: (ctx, b) => xoaHoSo(ctx, String(b?.id || '')) },
+    // lãi riêng theo nhóm hàng / mã hàng (12/11/2026) — { rule: { scope, key, targetMarginRate, minMarginRate }, oldScope?, oldKey? }
+    'margin-rule-save': { ghi: true, chay: (ctx, b) => luuLaiRieng(ctx, b) },
+    'margin-rule-delete': { ghi: true, chay: (ctx, b) => xoaLaiRieng(ctx, { scope: b?.scope, key: b?.key }) },
     'category-search': { ghi: false, chay: (ctx, b) => timNganh(ctx, { keyword: String(b?.keyword || '') }) },
     'product-search': { ghi: false, chay: (ctx, b) => timHangChoHoSo(ctx, { keyword: String(b?.keyword || '') }) },
     'listing-options': { ghi: false, chay: (ctx, b) => tuyChonDang(ctx, { sku: String(b?.sku || ''), tuKhoa: b?.keyword }) },
     'listing-attributes': { ghi: false, chay: (ctx, b) => thuocTinhNganh(ctx, { categoryId: Number(b?.categoryId) }) },
+    // ảnh cần chụp cho một mặt hàng kho (12/11/2026) — đọc thuần
+    'image-guide': { ghi: false, chay: (ctx, b) => goiYAnhChoSku(ctx, { sku: String(b?.sku || '') }) },
 }
 
 router.post('/:action', authMiddleware, chanChuaBat, chanXem, async (req: AuthRequest, res: Response) => {

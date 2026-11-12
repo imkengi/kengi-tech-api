@@ -125,6 +125,8 @@ export const NHAN_SHOPEE: NhanCauHinh = {
     'policy.automation.publishNewProducts': ['Tự đăng hàng mới có hồ sơ', 'bat'],
     'policy.automation.campaign.enabled': ['Nhắc tạo chương trình giảm giá', 'bat'],
     ...GIA_CHUNG,
+    // lib/shopeePilot.luuLaiRieng ghi MỘT quy tắc trước → sau dạng câu ("nhóm «Máy khoan»: lãi 25%, sàn 10%")
+    'policy.marginRules': ['Lãi riêng theo nhóm / mã hàng', 'chu'],
     'policy.maxDiscountRate': ['Giảm khuyến mãi tối đa', 'tyLe'],
     'policy.maxCampaignDays': ['Chương trình dài tối đa (ngày)', 'so'],
     'policy.promotionCooldownHoursAfterIncrease': ['Chờ sau khi tăng giá (giờ)', 'so'],

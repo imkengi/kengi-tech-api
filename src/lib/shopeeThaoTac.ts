@@ -14,6 +14,7 @@
 
 import { ToolError } from './mcpTypes'
 import { tinhGiaDeXuat, chanGiaDuoiSan, danhGiaGia, lyDoPhiChuaDuTin, type ThamSoGia } from './giaShopee'
+import { CHON_NHOM_CAY, COT_NHOM_SQL, nhomChaTuDong } from './laiRiengPilot'
 import {
     chonKenhShopee, moDichVuShopee, docMauPhiSanPham, timHangKho, lyDoKhongDangDuoc, tonBanDuoc,
     listingDaCo, taiAnh, thuTuAnh, chonKenhVanChuyen, dungThanAddItem, type ThuocTinhVao,
@@ -88,7 +89,8 @@ export async function gioiHanGia(svc: any, categoryId?: number): Promise<{ min?:
     }
 }
 
-export type VonListing = { giaVon: number; sku?: string; productId?: string; ten?: string; moTa?: string | null }
+/** nhomHang / nhomCha (12/11/2026): nhóm hàng kho + hai cấp cha — lãi riêng theo nhóm của Shopee Pilot (lib/laiRiengPilot). */
+export type VonListing = { giaVon: number; sku?: string; productId?: string; ten?: string; moTa?: string | null; nhomHang?: string | null; nhomCha?: string[] }
 
 /**
  * Giá vốn của MỘT đơn vị bán trên sàn cho từng listing — cùng chuỗi tra với dayTonLenSan:
@@ -102,7 +104,7 @@ export async function giaVonHangLoat(prisma: any, ds: { id: string; localProduct
     const thuong = (x: any) => String(x || '').trim().toLowerCase()
     const ids = [...new Set(ds.map(l => l.localProductId).filter(Boolean) as string[])]
     const skus = [...new Set(ds.map(l => thuong(l.sku)).filter(Boolean))]
-    const COT = `id, sku, name, description, "costPrice"::float8 AS "costPrice", "mergedIntoId", COALESCE("mergedRate", 1)::float8 AS "mergedRate"`
+    const COT = `id, sku, name, description, "costPrice"::float8 AS "costPrice", "mergedIntoId", COALESCE("mergedRate", 1)::float8 AS "mergedRate", ${COT_NHOM_SQL}`
     const hang: any[] = await prisma.$queryRawUnsafe(
         `SELECT ${COT} FROM "Product" WHERE id = ANY($1::text[]) OR LOWER(sku) = ANY($2::text[])`, ids, skus,
     ).catch(() => [])
@@ -134,7 +136,7 @@ export async function giaVonHangLoat(prisma: any, ds: { id: string; localProduct
             if (m) { p = theoId.get(m.productId); rate = Number(m.rate) || 1 }
         }
         if (p?.mergedIntoId) { rate *= Number(p.mergedRate) || 1; p = theoId.get(p.mergedIntoId) }
-        if (p) ra.set(l.id, { giaVon: (Number(p.costPrice) || 0) * rate, sku: p.sku, productId: p.id, ten: p.name, moTa: p.description })
+        if (p) ra.set(l.id, { giaVon: (Number(p.costPrice) || 0) * rate, sku: p.sku, productId: p.id, ten: p.name, moTa: p.description, nhomHang: p.nhomHang ?? null, nhomCha: nhomChaTuDong(p) })
     }
     return ra
 }
@@ -189,6 +191,8 @@ export const THIEU_MO_TA = 'mô tả (AI có thể tự viết từ thông tin t
 
 export interface UngVien {
     id: string; sku: string; ten: string; nhomHang?: string
+    /** hai cấp nhóm cha (gần trước) — lãi riêng theo nhóm cha (lib/laiRiengPilot) */
+    nhomCha?: string[]
     giaVon: number; giaBanLe: number; tonBanDuoc: number; nguonTon: string
     soAnh: number; doDaiMoTa: number; thieu: string[]
     moTa: string; anhDau: string | null
@@ -223,7 +227,7 @@ export async function timUngVien(prisma: any, channelId: string, o: { query?: st
         where,
         select: {
             id: true, sku: true, name: true, costPrice: true, sellingPrice: true, stock: true, description: true,
-            category: { select: { name: true } }, _count: { select: { images: true } },
+            category: CHON_NHOM_CAY, _count: { select: { images: true } },
             images: { select: { url: true }, orderBy: { isPrimary: 'desc' }, take: 1 },
         },
         orderBy: [{ stock: 'desc' }, { updatedAt: 'desc' }],
@@ -243,6 +247,7 @@ export async function timUngVien(prisma: any, channelId: string, o: { query?: st
         if (o.chiDuDieuKien && thieu.some(t => t !== THIEU_MO_TA)) continue
         ra.push({
             id: p.id, sku: p.sku, ten: p.name, nhomHang: p.category?.name,
+            nhomCha: [p.category?.parent?.name, p.category?.parent?.parent?.name].filter(Boolean),
             giaVon: p.costPrice, giaBanLe: p.sellingPrice, tonBanDuoc: ton.ton, nguonTon: ton.nguon,
             soAnh: p._count?.images || 0, doDaiMoTa, thieu,
             moTa: String(p.description || ''), anhDau: p.images?.[0]?.url || null,

@@ -39,11 +39,13 @@ import {
     num, chinhSachGia, gioiHanGia, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien,
 } from '../lib/shopeeThaoTac'
 import { docChinhSachPilot, nenGia, khoSql, doiGiaQuaPilot, anHienQuaPilot, dangQuaPilot, TRAN_AN_AI_MOI_NGAY, type NgCanh } from '../lib/shopeePilot'
+import { polCua, khoaListing, khoaHangKho, moTaLaiRieng, docDsLaiRieng } from '../lib/laiRiengPilot'
+import { tomTatAnh } from '../lib/goiYAnhSanPham'
 
 const NGAY = 86400_000
 
-/** Chính sách Shopee Pilot của cửa hàng làm nền giá cho tool — tham số AI chỉ được chặt hơn. */
-const nenPilot = async (prisma: any) => nenGia(await docChinhSachPilot(prisma))
+/* Chính sách Shopee Pilot của cửa hàng làm nền giá cho tool — tham số AI chỉ được chặt hơn. Lãi riêng theo nhóm / mã hàng
+ * (12/11/2026): nền tính cho TỪNG mặt hàng qua polCua — nhóm đặt sàn 20% thì tool không được tính theo sàn chung 5%. */
 
 /** Ngữ cảnh Shopee Pilot cho tool GHI (09/11/2026): cùng kho kế hoạch / sổ ghi / chính sách / chế độ với bảng điều khiển; người
  *  = 'ai:<nguồn>' để sổ ShopeePilotWrite và danh sách kế hoạch tách AI khỏi chủ shop; gian = gian AI chọn (tham số kenh). */
@@ -191,7 +193,12 @@ const CAC_TOOL: Tool[] = [
                 ...(kq.chamTran ? canhBaoCat(kq.soQuet, kq.soQuet, 'mặt hàng kho (đã quét)') : {}),
                 gian: ch.name, soListingDaCo: kq.soListingDaCo,
                 ...(kq.soListingDaCo === 0 ? { canhBaoDanhMuc: 'Gian chưa có listing nào trong hệ thống — nếu gian đã có sản phẩm trên Shopee, gọi shopee_sync_listings trước để tránh đăng trùng.' } : {}),
-                ungVien: kq.ungVien.map(({ moTa, anhDau, ...r }) => r),
+                // ảnh cần NGƯỜI chụp (12/11/2026): AI không tự tạo ảnh — báo chủ shop / nhân viên chụp theo danh sách, tải ở trang Thông tin sản phẩm
+                ungVien: kq.ungVien.map(({ moTa, anhDau, ...r }) => {
+                    const g = tomTatAnh({ ten: r.ten, nhomHang: r.nhomHang, nhomCha: r.nhomCha, soAnh: r.soAnh })
+                    return g.muc === 'du' ? r : { ...r, anhCanChup: { muc: g.muc, canThem: g.canThem, batBuoc: g.batBuoc } }
+                }),
+                ghiChuAnh: 'anhCanChup = ảnh NGƯỜI cần chụp trước khi đăng (không tạo ảnh bằng AI); ảnh tải lên ở kengi.vn → Thông tin sản phẩm. Trang đó hiện đủ danh sách cách chụp cho từng mặt hàng.',
             }
         },
     },
@@ -212,7 +219,8 @@ const CAC_TOOL: Tool[] = [
         run: async (a, { prisma }) => {
             const ch = await chonKenhShopee(prisma, a?.kenh)
             const p = await timHangKho(prisma, a.sku)
-            const cs = chinhSachGia(a, await nenPilot(prisma))
+            const polH = polCua(await docChinhSachPilot(prisma), khoaHangKho(p, a.sku))
+            const cs = chinhSachGia(a, nenGia(polH))
             const khac: any[] = await prisma.onlineProduct.findMany({
                 where: { OR: [{ localProductId: p.id }, { sku: { equals: p.sku, mode: 'insensitive' } }] },
                 select: { platform: true, price: true, status: true, channel: { select: { name: true } }, channelId: true, categoryId: true },
@@ -236,6 +244,7 @@ const CAC_TOOL: Tool[] = [
                     biChan: chanGiaDuoiSan(num(a.gia_thu, 0), kq) || lyDoPhiChuaDuTin(num(a.gia_thu, 0), mauPhi, cs.bienToiThieuPct),
                 }) : undefined,
                 chinhSach: cs,
+                ...(polH.laiRieng ? { laiRieng: `Áp lãi riêng ${moTaLaiRieng(polH.laiRieng)} (chủ shop khai ở Shopee Pilot) thay mức chung` } : {}),
                 mauPhi: tomTatPhi(mauPhi),
                 giaDangBanNoiKhac: khac.map(k => ({ gian: k.channel?.name, san: k.platform, gia: k.price, trangThai: k.status, laGianNay: k.channelId === ch.id })),
                 ghiChu: 'Lãi tính cho đơn 1 sản phẩm (phí cố định/đơn gánh trọn) — đơn nhiều món lãi cao hơn. Không gồm phí vận chuyển người mua trả.',
@@ -381,7 +390,8 @@ const CAC_TOOL: Tool[] = [
             const ch = await chonKenhShopee(prisma, a?.kenh)
             const lim = Math.min(Math.max(num(a?.limit, 30), 1), 100)
             const chiVanDe = a?.chi_van_de !== false
-            const cs = chinhSachGia(a, await nenPilot(prisma))
+            const pol = await docChinhSachPilot(prisma)
+            const cs = chinhSachGia(a, nenGia(pol))   // mức chung — từng listing tính lại theo lãi riêng của nó (csH)
             const bang = await docMauPhiTheoNganh(prisma, ch)   // từng listing soát theo phí NGÀNH của nó
             const mauPhi = bang.toanGian
             const TRAN = 300
@@ -418,12 +428,14 @@ const CAC_TOOL: Tool[] = [
                     if (ra.length < lim) ra.push({ itemId: l.platformProductId, sku: l.sku, ten: l.name, gia: l.price, tonSan: l.stock, daBan14, giaVon: Math.round(v.giaVon), vanDe: ['CHƯA BIẾT PHÍ SÀN — không tính được lãi / giá sàn, không đổi giá được'] })
                     continue
                 }
-                const ts: ThamSoGia = { giaVon: v.giaVon, phi: mp, ...cs }
+                const polH = polCua(pol, khoaListing(l, v))
+                const csH = polH.laiRieng ? chinhSachGia(a, nenGia(polH)) : cs
+                const ts: ThamSoGia = { giaVon: v.giaVon, phi: mp, ...csH }
                 const kq = tinhGiaDeXuat(ts)
                 const hien = danhGiaGia(l.price, ts)
                 const vanDe: string[] = []
                 if (kq.giaSan > 0 && l.price < kq.giaSan) { vanDe.push('DƯỚI GIÁ SÀN'); duoiSan++ }
-                else if (hien.bienPct < cs.bienLoiNhuanPct) vanDe.push('dưới biên mục tiêu')
+                else if (hien.bienPct < csH.bienLoiNhuanPct) vanDe.push('dưới biên mục tiêu')
                 if (daBan14 === 0 && l.stock > 0) vanDe.push('14 ngày không bán được')
                 if ((chiVanDe && !vanDe.length) || ra.length >= lim) continue
                 ra.push({
@@ -431,6 +443,7 @@ const CAC_TOOL: Tool[] = [
                     giaVon: Math.round(v.giaVon), laiMoiDon: hien.loiNhuan, bienPct: hien.bienPct,
                     giaSan: kq.giaSan, giaDeXuat: kq.hopLe ? kq.giaDeXuat : null, vanDe,
                     phiSanPct: Math.round(mp.tyLe * 10000) / 100, ...(mp.nganh ? { nganh: mp.nganh } : {}),
+                    ...(polH.laiRieng ? { laiRieng: moTaLaiRieng(polH.laiRieng) } : {}),
                 })
             }
             return {
@@ -440,6 +453,7 @@ const CAC_TOOL: Tool[] = [
                 ...(!daBan ? { canhBaoDaBan: 'KHÔNG đọc được số đã bán 14 ngày (lỗi đọc dữ liệu) — daBan14 để trống; đừng coi là "không bán được", đừng hạ giá theo lý do bán chậm.' } : {}),
                 ...(ra.length >= lim ? { ghiChuDanhSach: `Chỉ liệt kê ${lim} dòng đầu; các con số duoiGiaSan / thieuGiaVon${chuaBietPhi ? ' / chuaBietPhi' : ''} tính trên toàn bộ ${ds.length} listing đã đọc.` } : {}),
                 mauPhi: mauPhi.ghiChu, chinhSach: cs,
+                ...(pol.marginRules?.length ? { laiRieng: `Chủ shop khai lãi riêng theo nhóm / mã: ${docDsLaiRieng(pol.marginRules)} — giá sàn, giá đề xuất, "dưới biên mục tiêu" của các dòng đó đã tính theo quy tắc riêng (dòng có trường laiRieng), không theo chinhSach chung.` } : {}),
                 ghiChu: 'Số bán 14 ngày đếm từ đơn còn trong hệ thống (đơn hoàn tất cũ bị dọn sau ~18 ngày). Giảm giá chỉ khi còn trên giá sàn; tăng giá hàng bán chạy dưới mục tiêu trước.',
                 sanPham: ra,
             }

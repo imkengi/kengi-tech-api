@@ -17,6 +17,7 @@ import { ToolError } from './mcpTypes'
 import { uocLuongPhi, SO_DON_TU_GHI, SO_DON_TOI_THIEU, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
+import { CHON_NHOM_CAY } from './laiRiengPilot'
 import type { PlatformProduct } from '../services/platforms/base'
 
 // ─── Chọn gian + mở dịch vụ ─────────────────────────────────────────────────────
@@ -338,7 +339,8 @@ export async function timHangKho(prisma: any, sku: string): Promise<any> {
     if (!s) throw new ToolError('Thiếu sku')
     const p = await prisma.product.findFirst({
         where: { OR: [{ sku: { equals: s, mode: 'insensitive' } }, { id: s }, { barcode: s }] },
-        include: { images: true, category: { select: { name: true } } },
+        // nhóm + hai cấp cha: lãi riêng theo nhóm hàng của Shopee Pilot (lib/laiRiengPilot.khoaHangKho)
+        include: { images: true, category: CHON_NHOM_CAY },
     })
     if (!p) throw new ToolError(`Không tìm thấy hàng "${s}" trong kho — tra lại bằng search_products.`)
     return p

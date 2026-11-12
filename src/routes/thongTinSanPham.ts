@@ -21,6 +21,8 @@ import { cacheDel } from '../lib/cache'
 import { emitProductEvent } from '../lib/webhookDispatch'
 import { moTaLoi } from '../lib/gomLoi'
 import { nhanDangAnh, luuAnhSanPham, xoaAnhSanPham } from '../lib/anhSanPham'
+import { goiYAnh } from '../lib/goiYAnhSanPham'
+import { CHON_NHOM_CAY } from '../lib/laiRiengPilot'
 
 const router = Router()
 
@@ -135,7 +137,7 @@ router.get('/:id', authMiddleware, XEM, async (req: AuthRequest, res: Response) 
             select: {
                 id: true, name: true, sku: true, barcode: true, stock: true, baseUnit: true,
                 sellingPrice: true, description: true, updatedAt: true, mergedIntoId: true,
-                category: { select: { name: true } }, brand: { select: { name: true } },
+                category: CHON_NHOM_CAY, brand: { select: { name: true } },
                 images: { orderBy: THU_TU_ANH, select: { id: true, url: true, isPrimary: true } },
                 // Ảnh đang dùng trên sàn — chỉ để nhân viên nhận ra đúng món, không ghi vào kho ảnh
                 onlineProducts: {
@@ -145,12 +147,17 @@ router.get('/:id', authMiddleware, XEM, async (req: AuthRequest, res: Response) 
             },
         })
         if (!p) return res.status(404).json({ success: false, error: 'Không thấy sản phẩm' })
+        // ảnh nên chụp cho đúng loại hàng này (12/11/2026) — danh sách cho NGƯỜI chụp, không tạo ảnh AI
+        const goiYAnhSp = goiYAnh({
+            ten: p.name, nhomHang: p.category?.name, nhomCha: [p.category?.parent?.name, p.category?.parent?.parent?.name], soAnh: p.images?.length || 0,
+        })
         res.json({
             success: true,
             data: {
                 ...p, category: p.category?.name || null, brand: p.brand?.name || null,
                 anhTrenSan: p.onlineProducts, onlineProducts: undefined,
                 toiDaAnh: TOI_DA_ANH, toiDaKyTuMoTa: TOI_DA_KY_TU_MO_TA,
+                goiYAnh: goiYAnhSp,
             },
         })
     } catch (e) {

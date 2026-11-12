@@ -39,6 +39,7 @@ import { tinhGiaDeXuat, chanGiaDuoiSan, lyDoChuaBietPhi } from './giaShopee'
 import { docMauPhiTheoNganh } from './shopeeTuQuan'
 import { giaVonHangLoat } from './shopeeThaoTac'
 import { docChinhSachPilot, thamSoTinh } from './shopeePilot'
+import { polCua, khoaListing } from './laiRiengPilot'
 import { docChinhSachTikTok, docKhuyenMaiGianTikTok, lyDoKhuyenMaiChuaRo, type KmSanPham } from './tiktokPilot'
 import type { KetQuaDayTon } from './dayTonLenSan'
 
@@ -139,7 +140,8 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
          * từng mã) → chưa biết phí (việc của cả gian) → dưới giá sàn. */
         const giaVon = von.get(p.id)?.giaVon || 0
         const mp = bangPhi.chon(p.categoryId)
-        const kq = tinhGiaDeXuat(thamSoTinh(pol, giaVon, mp))
+        // giá sàn theo lãi riêng của mã / nhóm hàng (Shopee Pilot, 12/11/2026); chính sách TikTok chưa có quy tắc riêng ⇒ nguyên pol
+        const kq = tinhGiaDeXuat(thamSoTinh(polCua(pol, khoaListing(p, von.get(p.id))), giaVon, mp))
         const chan = chanGiaDuoiSan(targetPrice, kq)
         if (chan) {
             skipped++
