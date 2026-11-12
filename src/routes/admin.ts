@@ -11458,7 +11458,10 @@ router.post('/kiotviet-phieu-thu', async (req: Request, res: Response) => {
         }
 
         const c = newCounters()
-        const kq = await xepHangPhieuThu(sp, () => keoPhieuThuKhach(sp, opts, phieuKhach, c, { hoaDonToiDa: 150, hanChot: Date.now() + 45_000 }))
+        /* 12/11/2026: đưa CẢ phiếu thu khách ĐÃ HUỶ vào — keoPhieuThuKhach tự bỏ chúng ở phần "phiếu mới", nhưng dùng chúng
+         * để gỡ phiếu thu đã huỷ bên KiotViet mà Kengi còn giữ trên hoá đơn (nhịp 2 giờ chỉ quét 2 ngày gần nhất). */
+        const phieuKhachCaHuy = (items || []).filter((kv: any) => String(kv?.partnerType || '').toUpperCase() === 'C' && Number(kv?.amount) > 0)
+        const kq = await xepHangPhieuThu(sp, () => keoPhieuThuKhach(sp, opts, phieuKhachCaHuy, c, { hoaDonToiDa: 150, hanChot: Date.now() + 45_000 }))
         if (ghi) {
             await sp.kiotVietSyncLog.create({
                 data: {
