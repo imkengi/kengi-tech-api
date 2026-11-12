@@ -5,6 +5,7 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { chayTheoDot } from '../lib/poolGuard'
+import { docTheoLo, xepTheoNgayChungTu, tinhSoS2c, CHON_PHIEU_S2C, CHON_PHIEU_S2D, CHON_PHIEU_TON, CHON_HANG_DONG_NHAP } from '../lib/soHoKinhDoanh'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR, tienGiamGiaPhieu } from '../lib/autoJournal'
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
@@ -4030,19 +4031,15 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                 { transactionDate: null, createdAt: { gte: start, lte: end } },
             ]
         })
-        const [imports, sales] = await Promise.all([
-            // FIX 1: Lọc status completed — phiếu hủy/nháp không vào sổ
-            p.importReceipt.findMany({
-                where: { status: 'completed', createdAt: { gte: start, lte: end } },
-                include: { items: { include: { product: true } } },
-                orderBy: { createdAt: 'asc' }
-            }),
-            p.transaction.findMany({
-                where: { status: { in: ['completed', 'partial'] }, ...orDateFilter() },
-                include: { items: { include: { product: true } } },
-                orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }]
-            }),
-        ])
+        /* Cột hàng HẸP, phiếu bán đọc THEO LÔ, tuần tự — `product: true` cho cả năm làm sập máy
+         * chủ vì tràn heap (12/11/2026, xem lib/soHoKinhDoanh.ts). */
+        // FIX 1: Lọc status completed — phiếu hủy/nháp không vào sổ
+        const imports = await p.importReceipt.findMany({
+            where: { status: 'completed', createdAt: { gte: start, lte: end } },
+            include: { items: { include: { product: CHON_HANG_DONG_NHAP } } },
+            orderBy: { createdAt: 'asc' }
+        })
+        const sales = xepTheoNgayChungTu(await docTheoLo(p.transaction, { status: { in: ['completed', 'partial'] }, ...orDateFilter() }, CHON_PHIEU_S2D))
         // Phiếu bán nào ĐÃ XUẤT HOÁ ĐƠN ĐIỆN TỬ → để sổ S2d lọc "chỉ dòng đã có
         // hoá đơn" (đối chiếu với tồn kho thuế: chỉ chứng từ có hoá đơn mới tính).
         const hdSet = new Set<string>()
@@ -4134,15 +4131,13 @@ router.get('/hkd/s2-summary', authMiddleware, async (req: AuthRequest, res: Resp
         const orDate = (s: Date, e: Date): any => ({
             OR: [{ transactionDate: { gte: s, lte: e } }, { transactionDate: null, createdAt: { gte: s, lte: e } }]
         })
-        /* Bốn truy vấn này đều KÉO CẢ DÒNG HÀNG (include items + product) từ đầu
-         * lịch sử tới nay — nặng nhất trong cả file. Bắn cùng lúc là một lượt xem
-         * sổ S2 chiếm 4 kết nối trong pool chỉ 3-8 của cửa hàng. */
-        const [prevImports, prevSales, kyImports, kySales] = await chayTheoDot([
-            () => p.importReceipt.findMany({ where: { createdAt: { gte: veryOldStart, lte: dauKyEnd } }, include: { items: true } }),
-            () => p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(veryOldStart, dauKyEnd) }, include: { items: { include: { product: true } } } }),
-            () => p.importReceipt.findMany({ where: { createdAt: { gte: kyStart, lte: kyEnd } }, include: { items: true } }),
-            () => p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(kyStart, kyEnd) }, include: { items: { include: { product: true } } } }),
-        ], 2)
+        /* Bốn truy vấn này đều KÉO CẢ DÒNG HÀNG từ đầu lịch sử tới nay — nặng nhất trong cả
+         * file. Phiếu bán đọc THEO LÔ với cột hàng HẸP, tuần tự: `product: true` cho cả lịch sử
+         * làm tràn heap và sập máy chủ (12/11/2026, xem lib/soHoKinhDoanh.ts). */
+        const prevImports = await p.importReceipt.findMany({ where: { createdAt: { gte: veryOldStart, lte: dauKyEnd } }, include: { items: true } })
+        const prevSales = await docTheoLo(p.transaction, { status: { in: ['completed', 'partial'] }, ...orDate(veryOldStart, dauKyEnd) }, CHON_PHIEU_TON)
+        const kyImports = await p.importReceipt.findMany({ where: { createdAt: { gte: kyStart, lte: kyEnd } }, include: { items: true } })
+        const kySales = await docTheoLo(p.transaction, { status: { in: ['completed', 'partial'] }, ...orDate(kyStart, kyEnd) }, CHON_PHIEU_TON)
         // ImportReceiptItem key: productSku. TransactionItem key: sku
         const itemKey = (item: any) => item.productSku || item.sku || (item.productId ? item.productId.slice(-8).toUpperCase() : item.productName || '—')
         const ensure = (map: Record<string, any>, item: any) => {
@@ -4184,76 +4179,13 @@ router.get('/hkd/s3', authMiddleware, async (req: AuthRequest, res: Response) =>
         const month = req.query.month ? Number(req.query.month) : undefined
         const { start, end } = hkdDateRange(year, month)
         const txOrDate: any = { OR: [{ transactionDate: { gte: start, lte: end } }, { transactionDate: null, createdAt: { gte: start, lte: end } }] }
-        // Fetch transactions với items+product để tính COGS (giá vốn hàng bán)
-        const [txs, expenses] = await Promise.all([
-            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...txOrDate }, include: { items: { include: { product: true } } }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
-            p.expense.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { date: 'asc' } }),
-        ])
-        // Map expense category → nhóm chi phí hợp lý theo TT152/2025/TT-BTC (Điều 5)
-        const catToNhom = (cat: string): { nhom: string; label: string } => {
-            const c = (cat || '').toLowerCase()
-            if (c === 'a' || c.includes('purchase') || c.includes('hang') || c.includes('nvl') || c.includes('material') || c.includes('hàng hóa') || c.includes('nguyên liệu')) return { nhom: 'a', label: '(a) Nguyên liệu, vật liệu, hàng hóa' }
-            if (c === 'b' || c.includes('salary') || c.includes('luong') || c.includes('lương') || c.includes('bh') || c.includes('payroll') || c.includes('labor') || c.includes('nhân công')) return { nhom: 'b', label: '(b) Tiền lương, BHXH, phụ cấp' }
-            if (c === 'c' || c.includes('depreciation') || c.includes('khau_hao') || c.includes('khấu hao') || c.includes('tsđ') || c.includes('asset')) return { nhom: 'c', label: '(c) Khấu hao tài sản cố định' }
-            if (c === 'd' || c.includes('util') || c.includes('electric') || c.includes('dien') || c.includes('điện') || c.includes('nước') || c.includes('phone') || c.includes('internet') || c.includes('rent') || c.includes('thuê') || c.includes('ship') || c.includes('transport') || c.includes('vận chuyển') || c.includes('service') || c.includes('dịch vụ')) return { nhom: 'd', label: '(d) Dịch vụ mua ngoài' }
-            if (c === 'đ' || c.includes('interest') || c.includes('loan') || c.includes('lai') || c.includes('lãi') || c.includes('vay')) return { nhom: 'đ', label: '(đ) Lãi tiền vay' }
-            return { nhom: 'e', label: '(e) Chi phí khác' }
-        }
-
-        // Rows: mỗi dòng là 1 nghiệp vụ có doanhThu + chiPhi + loiNhuan + loaiChiPhi
-        const rows: any[] = []
-        // (1) Doanh thu + (2a) COGS — mỗi hóa đơn tạo 2 dòng: 1 dòng DT + 1 dòng giá vốn
-        for (const t of txs) {
-            const ngay = fmtDate(t.transactionDate || t.createdAt)
-            const soChungTu = t.receiptNumber || ''
-            const tenKH = t.customerName ? ' - ' + t.customerName : ''
-            // Dòng doanh thu
-            const dtBan = (t.subtotal || 0) - (t.discount || 0)
-            rows.push({ ngay, soChungTu, dienGiai: `Bán hàng${tenKH}`, doanhThu: dtBan, chiPhi: 0, loiNhuan: dtBan, nhom: '', loaiChiPhi: 'Doanh thu' })
-            // Dòng giá vốn hàng bán (COGS) = Σ quantity × costPrice của từng item
-            const cogs = (t.items || []).reduce((sum: number, item: any) => {
-                const gv = item.costPrice || item.product?.costPrice || 0
-                return sum + (item.quantity || 0) * gv
-            }, 0)
-            if (cogs > 0) {
-                rows.push({ ngay, soChungTu, dienGiai: `Giá vốn hàng bán${tenKH}`, doanhThu: 0, chiPhi: cogs, loiNhuan: -cogs, nhom: 'a', loaiChiPhi: '(a) Nguyên liệu, vật liệu, hàng hóa (COGS)' })
-            }
-        }
-        // (2b-e) Chi phí từ expense → phân nhóm tự động theo category
-        for (const e of expenses) {
-            const { nhom, label } = catToNhom(e.category || '')
-            // Parse số hóa đơn từ description: format "[INV-001] Nội dung" hoặc giữ nguyên
-            const hdMatch = (e.description || '').match(/^\[([^\]]+)\]\s*(.+)$/)
-            const soChungTu = hdMatch ? hdMatch[1] : `CP-${e.id.slice(-6)}`
-            const dienGiai = hdMatch ? hdMatch[2] : (e.description || e.category || 'Chi phí')
-            rows.push({ ngay: fmtDate(e.date), soChungTu, dienGiai, doanhThu: 0, chiPhi: e.amount || 0, loiNhuan: -(e.amount || 0), nhom, loaiChiPhi: label, expenseId: e.id })
-        }
-
-        rows.sort((a, b) => a.ngay.localeCompare(b.ngay))
-        rows.forEach((r, i) => r.stt = i + 1)
-
-        const tongDoanhThu = rows.reduce((s, r) => s + r.doanhThu, 0)
-        const tongChiPhi = rows.reduce((s, r) => s + r.chiPhi, 0)
-
-        // Tổng chi phí theo nhóm (a,b,c,d,đ,e) — để hiển thị đúng mẫu S2c-HKD
-        const nhomLabels: Record<string, string> = {
-            a: '(a) Nguyên liệu, vật liệu, hàng hóa',
-            b: '(b) Tiền lương, BHXH, phụ cấp',
-            c: '(c) Khấu hao tài sản cố định',
-            d: '(d) Dịch vụ mua ngoài',
-            'đ': '(đ) Lãi tiền vay',
-            e: '(e) Chi phí khác',
-        }
-        const chiPhiTheoNhom: Record<string, { label: string; soTien: number }> = {}
-        for (const [k, v] of Object.entries(nhomLabels)) chiPhiTheoNhom[k] = { label: v, soTien: 0 }
-        for (const r of rows) { if (r.nhom && chiPhiTheoNhom[r.nhom]) chiPhiTheoNhom[r.nhom].soTien += r.chiPhi }
-
-        const chenhLech = tongDoanhThu - tongChiPhi  // Dòng (3) = (1) − (2)
-        const summary = {
-            tongDoanhThu, tongChiPhi,
-            tongLoiNhuan: chenhLech, chenhLech,
-            chiPhiTheoNhom,
-        }
+        /* THEO LÔ + CỘT HẸP + TUẦN TỰ. Bản cũ đọc cả kỳ một lượt kèm NGUYÊN hàng Product cho từng
+         * dòng hàng ⇒ chọn "Cả năm" (và tab Quyết toán thuế) làm sập máy chủ vì tràn heap
+         * (12/11/2026, KENGISTORE ~25 nghìn phiếu). Xem lib/soHoKinhDoanh.ts. */
+        const txs = xepTheoNgayChungTu(await docTheoLo(p.transaction, { status: { in: ['completed', 'partial'] }, ...txOrDate }, CHON_PHIEU_S2C))
+        const expenses = await p.expense.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { date: 'asc' } })
+        // Mỗi phiếu bán: 1 dòng doanh thu + 1 dòng giá vốn; phiếu chi phân nhóm (a)…(e) theo TT152/2025
+        const { rows, summary } = tinhSoS2c(txs, expenses, fmtDate)
         res.json({ success: true, data: { rows, summary, year, month } })
     } catch (err) { console.error('GET /hkd/s3:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
