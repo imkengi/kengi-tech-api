@@ -22,6 +22,7 @@
  * Mẫu số của % = doanh thu (subtotal), cùng quy ước với thẻ % trên trang đơn.
  */
 import { computeOrderProfits } from './onlineOrderProfit'
+import { laDonKeoBu } from './dauKeoBu'
 
 export const NGUONG_LOI_NHUAN_THAP = Number(process.env.NGUONG_LOI_NHUAN_THAP || 5)
 
@@ -42,14 +43,17 @@ export async function canhBaoLoiNhuanThap(prisma: any, orderIds: string[]): Prom
     const ids = [...new Set((orderIds || []).filter(Boolean))]
     if (!ids.length) return ra
 
-    const orders: any[] = await prisma.onlineOrder.findMany({
+    /* ĐƠN KÉO BÙ (lib/dauKeoBu.ts) KHÔNG cảnh báo: đó là đơn cũ nhiều tháng trước kéo về cho đủ doanh thu — lãi tính theo giá vốn HÔM
+     * NAY là vô nghĩa, và cảnh báo một đơn đã giao từ tháng 1 thì chủ shop không làm gì được. Đo 12/11/2026: đối soát phí 576 đơn
+     * kéo bù ⇒ 156 đơn bị gắn nhãn lãi thấp + 2 push. Lọc ở JS (note thường null — NOT contains của SQL loại luôn dòng null). */
+    const orders: any[] = (await prisma.onlineOrder.findMany({
         where: { id: { in: ids }, netRevenue: { gt: 0 }, loiNhuanThapBaoLuc: null },
         select: {
-            id: true, orderNumber: true, platform: true, status: true,
+            id: true, orderNumber: true, platform: true, status: true, note: true,
             subtotal: true, total: true, shippingFee: true, platformFee: true, netRevenue: true,
             items: { select: { productId: true, sku: true, quantity: true } },
         },
-    })
+    })).filter((o: any) => !laDonKeoBu(o.note))
     ra.xet = orders.length
     if (!orders.length) return ra
 
