@@ -14354,15 +14354,63 @@ router.post('/keo-bu-don-san', async (req: Request, res: Response) => {
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp: any = getStorePrisma(store.schema)
-        const ch = await sp.onlineChannel.findFirst({ where: { id: kenhId, platform: 'shopee' } })
-        if (!ch) { res.status(404).json({ success: false, error: 'không thấy gian Shopee này' }); return }
-        const { moDichVuShopee } = await import('../lib/shopeeTuQuan')
-        const svc: any = await moDichVuShopee(sp, ch)
-        if (svc.loiLamMoiToken) { res.status(409).json({ success: false, error: 'token gian: ' + String(svc.loiLamMoiToken).slice(0, 200) }); return }
-        const { keoBuDonShopee } = await import('../lib/keoBuDonSan')
-        const kq = await keoBuDonShopee(sp, ch, svc, { tu, den, apply: b.apply === true, hanMs: 200_000, gioiHan: Math.min(5000, Math.max(1, Number(b.gioiHan) || 5000)) })
+        const ch = await sp.onlineChannel.findFirst({ where: { id: kenhId, platform: { in: ['shopee', 'tiktok'] } } })
+        if (!ch) { res.status(404).json({ success: false, error: 'không thấy gian Shopee / TikTok này' }); return }
+        const nguon = await moNguonDonSan(sp, ch)
+        if (typeof nguon === 'string') { res.status(409).json({ success: false, error: nguon }); return }
+        const { keoBuDonSan } = await import('../lib/keoBuDonSan')
+        const kq = await keoBuDonSan(sp, ch, nguon, { tu, den, apply: b.apply === true, hanMs: 200_000, gioiHan: Math.min(5000, Math.max(1, Number(b.gioiHan) || 5000)) })
         if (kq.apply) console.log(`[KeoBu] ${storeCode} ${ch.name} ${b.tu}→${b.den}: nhập ${kq.daNhap}, lên phiếu ${kq.lenPhieu}, không nối được hàng ${kq.khongNoiDuocHang}, lỗi ${kq.loi.length}, còn ${kq.conLai}`)
         res.json({ success: true, data: { storeCode, kenh: ch.name, tu: b.tu, den: b.den, ...kq } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/** Mở dịch vụ sàn của một gian thành nguồn đơn cho kéo bù; token hỏng ⇒ trả câu lỗi (chuỗi) */
+async function moNguonDonSan(sp: any, ch: any): Promise<import('../lib/keoBuDonSan').NguonDonSan | string> {
+    const { nguonShopee, nguonTikTok } = await import('../lib/keoBuDonSan')
+    if (ch.platform === 'shopee') {
+        const { moDichVuShopee } = await import('../lib/shopeeTuQuan')
+        const svc: any = await moDichVuShopee(sp, ch)
+        return svc.loiLamMoiToken ? 'token gian: ' + String(svc.loiLamMoiToken).slice(0, 200) : nguonShopee(svc)
+    }
+    const { moDichVuTikTok } = await import('../lib/tiktokPilot')
+    const svc: any = await moDichVuTikTok(sp, ch)
+    return svc.loiLamMoiToken ? 'token gian: ' + String(svc.loiLamMoiToken).slice(0, 200) : nguonTikTok(svc)
+}
+
+/**
+ * XỬ LÝ ĐƠN KẸT — POST /admin/xu-ly-don-ket { storeCode, kenh, truoc?: 'YYYY-MM-DD' (mặc định 2026-11-01), apply?, gioiHan? }
+ *
+ * Đơn ĐÃ CÓ trong Kengi, sàn đã hoàn thành, đặt trước mốc `truoc`, mà chưa lên phiếu vì dòng hàng không nối được hàng kho
+ * (lib/keoBuDonSan.xuLyDonKet). Gian Shopee: hỏi lại sàn chi tiết đơn để lấy mã phân loại rồi thay dòng hàng; mọi sàn: chép ánh xạ
+ * SKU sang sàn còn thiếu khi mã đó chỉ trỏ MỘT hàng kho. Đơn xử lý được gắn dấu kéo bù ⇒ phiếu doanh thu, KHÔNG trừ kho.
+ * MẶC ĐỊNH CHẠY THỬ (chỉ đọc CSDL). Hết ~200 giây thì dừng — gọi lại là chạy tiếp.
+ */
+router.post('/xu-ly-don-ket', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const kenhId = String(b.kenh || '').trim()
+        const truocChu = b.truoc === undefined ? '2026-11-01' : String(b.truoc)
+        if (!storeCode || !kenhId || !/^\d{4}-\d{2}-\d{2}$/.test(truocChu) || !Number.isFinite(Date.parse(truocChu + 'T00:00:00Z'))) { res.status(400).json({ success: false, error: 'cần storeCode, kenh, truoc (YYYY-MM-DD)' }); return }
+        const truoc = new Date(Date.parse(truocChu + 'T00:00:00Z') - 7 * 3600_000)
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ch = await sp.onlineChannel.findFirst({ where: { id: kenhId } })
+        if (!ch) { res.status(404).json({ success: false, error: 'không thấy gian này' }); return }
+        // chỉ Shopee cần hỏi lại sàn (dòng hàng bản cũ thiếu mã phân loại); sàn khác dùng dòng hàng đang lưu
+        let nguon: any = null
+        if (ch.platform === 'shopee') {
+            nguon = await moNguonDonSan(sp, ch)
+            if (typeof nguon === 'string') { res.status(409).json({ success: false, error: nguon }); return }
+        }
+        const { xuLyDonKet } = await import('../lib/keoBuDonSan')
+        const kq = await xuLyDonKet(sp, ch, nguon, { truoc, apply: b.apply === true, hanMs: 200_000, gioiHan: Math.min(5000, Math.max(1, Number(b.gioiHan) || 5000)) })
+        if (kq.apply) console.log(`[DonKet] ${storeCode} ${ch.name} (${ch.platform}): lên phiếu ${kq.lenPhieu}, vẫn kẹt ${kq.vanKet}, chép ánh xạ ${kq.anhXaChep.length}, lỗi ${kq.loi.length}`)
+        res.json({ success: true, data: { storeCode, kenh: ch.name, san: ch.platform, truoc: truocChu, ...kq } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message || String(err) })
     }

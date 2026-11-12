@@ -6,7 +6,7 @@
  * Chạy: npm run check:keo-bu-don
  */
 import { convertOnlineOrderToTransaction } from '../src/services/orderSync'
-import { keoBuDonShopee } from '../src/lib/keoBuDonSan'
+import { keoBuDonShopee, keoBuDonSan, nguonTikTok, xuLyDonKet, chepAnhXaCheoSan } from '../src/lib/keoBuDonSan'
 import { GHI_CHU_KEO_BU, laDonKeoBu } from '../src/lib/dauKeoBu'
 
 let dat = 0, hong = 0
@@ -32,7 +32,33 @@ function taoPrisma(donDau: any[] = []) {
         'product.findUnique': a => (a.where.id === SP.id ? { ...SP } : null),
         'product.findMany': a => (a?.select?.sku && !a.where ? [{ sku: SP.sku }] : [{ ...SP }]),
         'product.findFirst': () => ({ ...SP }),
-        'skuMapping.findMany': () => [{ platformSku: 'MAP-1' }],
+        'skuMapping.findMany': a => {
+            const eq = a?.where?.platformSku?.equals
+            return eq === undefined ? anhXa.map(m => ({ platformSku: m.platformSku })) : anhXa.filter(m => m.platformSku.toLowerCase() === String(eq).toLowerCase())
+        },
+        'skuMapping.findFirst': a => {
+            const eq = String(a?.where?.platformSku?.equals || '').toLowerCase()
+            const pf = (a?.where?.OR || []).map((x: any) => x.platform)
+            return anhXa.find(m => m.platformSku.toLowerCase() === eq && (pf.includes(m.platform) || (m.platform === null && pf.includes(null)))) || null
+        },
+        'skuMapping.create': a => { anhXa.push({ bundleId: null, ...a.data }); return a.data },
+        'onlineOrderItem.findMany': a => (don.get(a.where.onlineOrderId)?.items || []).map((i: any) => ({ sku: i.sku, productId: i.productId })),
+        'onlineOrderItem.deleteMany': a => { const d = don.get(a.where.onlineOrderId); const n = d?.items?.length || 0; if (d) d.items = []; return { count: n } },
+    }
+    const anhXa: any[] = [{ platformSku: 'MAP-1', platform: null, productId: 'p1', conversionRate: 1, bundleId: null }]
+    // onlineOrder.update có kèm items.create (làm mới dòng hàng)
+    rieng['onlineOrder.update'] = a => {
+        const d = don.get(a.where.id); if (!d) return {}
+        const { items, ...con } = a.data
+        Object.assign(d, con)
+        if (items?.create) d.items = items.create.map((x: any, i: number) => ({ id: d.id + '-m' + i, productId: null, ...x }))
+        return d
+    }
+    // tìm hàng kho theo SKU không phân biệt hoa thường (đường nối thứ hai của hàm lập phiếu)
+    rieng['product.findMany'] = a => {
+        if (a?.select?.sku && !a.where) return [{ sku: SP.sku }]
+        const eq = String(a?.where?.sku?.equals ?? a?.where?.OR?.[0]?.sku?.equals ?? '').toLowerCase()
+        return eq === SP.sku.toLowerCase() ? [{ ...SP }] : []
     }
     const model = (ten: string) => new Proxy({}, {
         get: (_t, p: string) => async (a: any) => {
@@ -51,13 +77,18 @@ function taoPrisma(donDau: any[] = []) {
         get: (t: any, p: string) => {
             if (p in t) return t[p]
             if (p === '$transaction') return async (f: any) => (typeof f === 'function' ? f(sp) : Promise.all(f))
-            if (p === '$queryRawUnsafe' || p === '$queryRaw') return async (...a: any[]) => { goi.push({ m: p, a }); return [] }
+            if (p === '$queryRawUnsafe' || p === '$queryRaw') return async (...a: any[]) => {
+                goi.push({ m: p, a })
+                // danh sách đơn kẹt của xuLyDonKet
+                if (/"externalStatus" = 'COMPLETED'/.test(String(a[0]))) return [...don.values()].filter(d => d.channelId === a[1] && d.externalStatus === 'COMPLETED' && +new Date(d.createdAt) < +a[2] && !phieu.some(x => x.receiptNumber === 'ONLINE-' + d.orderNumber)).map(d => ({ id: d.id, externalOrderId: d.externalOrderId, total: d.total }))
+                return []
+            }
             if (p === '$executeRawUnsafe' || p === '$executeRaw') return async (...a: any[]) => { goi.push({ m: p, a }); return 0 }
             if (p === 'then') return undefined
             return model(p)
         },
     })
-    return { sp, goi, don, phieu }
+    return { sp, goi, don, phieu, anhXa }
 }
 
 const donMau = (id: string, them: any = {}) => ({
@@ -138,7 +169,7 @@ async function main() {
         const kq2 = await keoBuDonShopee(sp, { id: 'k1', name: 'Gian' }, svc2, { ...O, apply: true })
         const moi = [...don.values()]
         ca('D5 ghi thật: nhập 2 đơn mang dấu kéo bù + cờ đã trừ kho', kq2.daNhap === 2 && moi.length === 2 && moi.every(d => laDonKeoBu(d.note) && d.stockDeducted === true && d.channelId === 'k1'), JSON.stringify(kq2))
-        ca('D6 ghi thật: lên phiếu ngay, không đụng kho / sổ', kq2.lenPhieu === 2 && phieu.length === 3 && ghiKho(goi).length === 0 && ghiSo(goi).length === 0, ghiKho(goi).concat(ghiSo(goi)).join(','))
+        ca('D6 ghi thật: đơn nối được hàng lên phiếu ngay, đơn SKU lạ đếm riêng (không giấu); không đụng kho / sổ', kq2.lenPhieu === 1 && kq2.khongNoiDuocHang === 1 && phieu.length === 2 && ghiKho(goi).length === 0 && ghiSo(goi).length === 0, ghiKho(goi).concat(ghiSo(goi)).join(','))
         ca('D7 phiếu cũ của Kengi không bị đụng', phieu[0].total === 1 && !goi.some(g => g.m === 'transaction.update' || g.m === 'transaction.updateMany'))
         const kq3 = await keoBuDonShopee(sp, { id: 'k1', name: 'Gian' }, taoSvc(), { ...O, apply: true })
         ca('D8 chạy lại: không nhập trùng', kq3.daNhap === 0 && kq3.thieu === 1 && don.size === 2, JSON.stringify({ n: kq3.daNhap, t: kq3.thieu }))
@@ -147,6 +178,50 @@ async function main() {
         const { sp } = taoPrisma()
         const kq = await keoBuDonShopee(sp, { id: 'k1', name: 'Gian' }, { lietKeMaDonTheoNgayDat: async () => ({ don: [{ sn: 'X', status: 'COMPLETED' }], chamTran: true }), layChiTietNhieuDon: async () => [] }, { ...O, apply: true })
         ca('D9 liệt kê chưa hết ⇒ dừng, không nhập phần dở', kq.chamTran && kq.daNhap === 0 && kq.loi.length === 1)
+    }
+    // ── E. TikTok: nguồn đơn liệt kê một lượt, mã phiếu ONLINE-TIK- ──
+    {
+        const { sp, phieu, don } = taoPrisma()
+        phieu.push({ id: 'cu', receiptNumber: 'ONLINE-TIK-900', status: 'completed', total: 1 })
+        const trang: any[][] = [[{ ...chiTiet('900'), orderNumber: 'TIK-900', platform: 'tiktok' }], [{ ...chiTiet('901'), orderNumber: 'TIK-901', platform: 'tiktok' }]]
+        let lan = 0
+        const svc = { fetchOrders: async (p: any) => { const r = { orders: trang[lan] || [], hasMore: lan < trang.length - 1, nextPageToken: lan < trang.length - 1 ? 'tk' + lan : undefined }; lan++; return p.status === 'COMPLETED' ? r : { orders: [], hasMore: false } } }
+        const kq = await keoBuDonSan(sp, { id: 'kt', name: 'TikTok' }, nguonTikTok(svc), { ...O, apply: true })
+        ca('E1 TikTok: lật hết trang, bỏ đơn đã có phiếu ONLINE-TIK-, nhập đơn thiếu', kq.trenSanHoanThanh === 2 && kq.daCoTrongKengi === 1 && kq.daNhap === 1 && kq.lenPhieu === 1 && phieu.some(p => p.receiptNumber === 'ONLINE-TIK-901') && [...don.values()][0]?.orderNumber === 'TIK-901', JSON.stringify(kq))
+    }
+    // ── F. đơn kẹt ──
+    {
+        // đơn Shopee bản cũ: dòng hàng không SKU; sàn giờ trả mã phân loại MX1
+        const cu = donMau('ket1', { channelId: 'k1', externalStatus: 'COMPLETED', khongKhopSku: true, total: 150_000, items: [{ id: 'x', productId: null, productName: 'Máy xay', sku: null, quantity: 1, unitPrice: 150_000, discount: 0, lineTotal: 150_000 }] })
+        const moiHon = donMau('ket2', { channelId: 'k1', externalStatus: 'COMPLETED', createdAt: new Date('2026-11-05T03:00:00Z'), items: [{ id: 'y', productId: null, productName: 'Máy xay', sku: null, quantity: 1, unitPrice: 1, discount: 0, lineTotal: 1 }] })
+        const { sp, goi, don, phieu } = taoPrisma([cu, moiHon])
+        const nguon = { tienTo: 'SPE-', lietKe: async () => ({ don: [], chamTran: false }), chiTiet: async (sns: string[]) => sns.map(s => chiTiet(s)) }
+        const TRUOC = new Date('2026-10-31T17:00:00Z')
+        const thu = await xuLyDonKet(sp, { id: 'k1', name: 'Gian', platform: 'shopee' }, nguon, { truoc: TRUOC, apply: false, hanMs: 60_000, gioiHan: 5000 })
+        ca('F1 chạy thử: chỉ đơn đặt TRƯỚC mốc, ước lên phiếu được, không ghi gì', thu.donKet === 1 && thu.uocLenPhieu === 1 && phieu.length === 0 && !goi.some(g => /\.(create|update|updateMany|deleteMany|upsert)$/.test(g.m)), JSON.stringify(thu))
+        const ghi = await xuLyDonKet(sp, { id: 'k1', name: 'Gian', platform: 'shopee' }, nguon, { truoc: TRUOC, apply: true, hanMs: 60_000, gioiHan: 5000 })
+        const d = don.get('ket1')
+        ca('F2 ghi thật: thay dòng hàng bằng bản có mã, gắn dấu kéo bù, lên phiếu', ghi.lamMoiDong === 1 && ghi.lenPhieu === 1 && ghi.tienLenPhieu === 150_000 && d.items[0].sku === 'MX1' && laDonKeoBu(d.note) && d.stockDeducted === true && phieu.length === 1 && laDonKeoBu(phieu[0].notes), JSON.stringify(ghi))
+        ca('F3 đơn kẹt lên phiếu KHÔNG đụng kho / sổ', ghiKho(goi).length === 0 && ghiSo(goi).length === 0, ghiKho(goi).concat(ghiSo(goi)).join(','))
+        ca('F4 đơn đặt SAU mốc không bị đụng', don.get('ket2').items[0].sku === null && !laDonKeoBu(don.get('ket2').note) && don.get('ket2').stockDeducted === false)
+    }
+    {
+        // sàn báo đơn không còn hoàn thành ⇒ bỏ qua, không lên phiếu
+        const { sp, phieu } = taoPrisma([donMau('ket3', { channelId: 'k1', externalStatus: 'COMPLETED', items: [{ id: 'z', productId: null, productName: 'X', sku: null, quantity: 1, unitPrice: 1, discount: 0, lineTotal: 1 }] })])
+        const nguon = { tienTo: 'SPE-', lietKe: async () => ({ don: [], chamTran: false }), chiTiet: async (sns: string[]) => sns.map(s => chiTiet(s, 'TO_RETURN')) }
+        const kq = await xuLyDonKet(sp, { id: 'k1', name: 'Gian', platform: 'shopee' }, nguon, { truoc: new Date('2026-10-31T17:00:00Z'), apply: true, hanMs: 60_000, gioiHan: 5000 })
+        ca('F5 sàn nói đơn đang trả hàng ⇒ bỏ qua', kq.boQuaKhongConHoanThanh === 1 && kq.lenPhieu === 0 && phieu.length === 0)
+    }
+    {
+        // ánh xạ chéo sàn
+        const { sp, anhXa } = taoPrisma()
+        anhXa.push({ platformSku: 'Ct24plus', platform: 'tiktok', productId: 'p1', conversionRate: 1, bundleId: null })
+        anhXa.push({ platformSku: 'HAI-NOI', platform: 'tiktok', productId: 'p1', conversionRate: 1, bundleId: null }, { platformSku: 'hai-noi', platform: 'lazada', productId: 'p2', conversionRate: 1, bundleId: null })
+        anhXa.push({ platformSku: 'COMBO', platform: 'tiktok', productId: 'p1', conversionRate: 1, bundleId: 'b1' })
+        const thu = await chepAnhXaCheoSan(sp, 'shopee', ['CT24PLUS', 'HAI-NOI', 'COMBO', 'MAP-1', 'KHONG-CO'], false)
+        ca('G1 chỉ chép mã mà mọi ánh xạ cùng trỏ MỘT hàng kho (không combo, chưa có ở sàn này / ánh xạ chung)', thu.length === 1 && /^CT24PLUS \(shopee\) → MX1$/.test(thu[0]) && anhXa.length === 5, JSON.stringify(thu))
+        await chepAnhXaCheoSan(sp, 'shopee', ['CT24PLUS'], true)
+        ca('G2 ghi thật tạo đúng một ánh xạ; chạy lại không tạo thêm', anhXa.filter(m => m.platform === 'shopee').length === 1 && (await chepAnhXaCheoSan(sp, 'shopee', ['CT24PLUS'], true)).length === 0 && anhXa.length === 6)
     }
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
