@@ -113,6 +113,7 @@ async function main() {
         ca('B1 đơn thường lên phiếu', ok && phieu.length === 1 && phieu[0].total === 200_000)
         ca('B2 đơn thường CÓ ghi thẻ kho + giành cờ đã trừ kho', goi.some(g => g.m === 'inventoryTransaction.create') && don.get('thuong1').stockDeducted === true, ghiKho(goi).join(','))
         ca('B3 phiếu đơn thường không mang dấu kéo bù', !laDonKeoBu(phieu[0].notes))
+        ca('B4 phiếu đơn thường KHÔNG bị ép ngày tạo (để CSDL đặt now())', phieu[0].createdAt === undefined)
     }
     // ── C. đơn KÉO BÙ ──
     {
@@ -120,6 +121,7 @@ async function main() {
         const ok = await convertOnlineOrderToTransaction(sp, 'bu1')
         const p = phieu[0]
         ca('C1 đơn kéo bù lên phiếu doanh thu đủ tiền, đúng ngày đặt', ok && p?.total === 200_000 && p?.status === 'completed' && p?.channel === 'online' && p?.receiptNumber === 'ONLINE-SPE-BU1' && +new Date(p.transactionDate) === +new Date('2026-01-15T03:00:00Z'))
+        ca('C1b NGÀY TẠO phiếu kéo bù = ngày đặt đơn (không dồn về hôm kéo)', +new Date(p?.createdAt) === +new Date('2026-01-15T03:00:00Z'))
         ca('C2 phiếu có dòng hàng nối hàng kho (để báo cáo theo mặt hàng)', p?.items?.length === 1 && p.items[0].productId === 'p1' && p.items[0].baseQuantity === 2)
         ca('C3 KHÔNG ghi gì vào kho / thẻ kho', ghiKho(goi).length === 0, ghiKho(goi).join(','))
         ca('C4 KHÔNG ghi bút toán', ghiSo(goi).length === 0 && !goi.some(g => g.m.startsWith('journalEntry.')), goi.filter(g => g.m.startsWith('journal')).map(g => g.m).join(','))

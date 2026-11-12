@@ -14367,6 +14367,32 @@ router.post('/keo-bu-don-san', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * SỬA NGÀY TẠO PHIẾU KÉO BÙ — POST /admin/sua-ngay-phieu-keo-bu { storeCode, apply? }
+ * Phiếu kéo bù lập 11–12/11/2026 có transactionDate đúng ngày đặt đơn nhưng createdAt = lúc kéo ⇒ màn xếp theo ngày tạo dồn hết về
+ * hôm kéo (chủ shop 12/11: "đơn ngày nào gán ngày đó chứ"). Đặt createdAt = transactionDate cho phiếu mang dấu kéo bù. CHỈ đổi cột
+ * ngày tạo của phiếu; không đụng tiền, kho, dòng hàng. MẶC ĐỊNH CHẠY THỬ (đếm). Chạy lại ra 0.
+ */
+router.post('/sua-ngay-phieu-keo-bu', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const store = storeCode ? await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } }) : null
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { DAU_KEO_BU } = await import('../lib/dauKeoBu')
+        const DK = `"notes" LIKE $1 AND "receiptNumber" LIKE 'ONLINE-%' AND "transactionDate" IS NOT NULL AND "createdAt" <> "transactionDate"`
+        const dem: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS "canSua", MIN("createdAt") AS "taoSomNhat", MAX("createdAt") AS "taoMuonNhat", MIN("transactionDate") AS "banSomNhat", MAX("transactionDate") AS "banMuonNhat" FROM "Transaction" WHERE ${DK}`, `%${DAU_KEO_BU}%`)
+        let daSua = 0
+        if (b.apply === true) daSua = Number(await sp.$executeRawUnsafe(`UPDATE "Transaction" SET "createdAt" = "transactionDate" WHERE ${DK}`, `%${DAU_KEO_BU}%`))
+        const con: any[] = await sp.$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM "Transaction" WHERE ${DK}`, `%${DAU_KEO_BU}%`)
+        res.json({ success: true, data: { storeCode, apply: b.apply === true, ...dem[0], daSua, conLai: Number(con[0]?.n || 0) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 /** Mở dịch vụ sàn của một gian thành nguồn đơn cho kéo bù; token hỏng ⇒ trả câu lỗi (chuỗi) */
 async function moNguonDonSan(sp: any, ch: any): Promise<import('../lib/keoBuDonSan').NguonDonSan | string> {
     const { nguonShopee, nguonTikTok } = await import('../lib/keoBuDonSan')

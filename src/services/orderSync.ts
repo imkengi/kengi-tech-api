@@ -333,6 +333,10 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
                     ? ` — ⚠ ${dongKhongKhop.length} dòng chưa nối được hàng kho (${dongKhongKhop.slice(0, 5).join(', ')}${dongKhongKhop.length > 5 ? '…' : ''}): phiếu có ĐỦ doanh thu nhưng THIẾU giá vốn và không trừ kho phần này.`
                     : ''),
             transactionDate: order.createdAt,
+            /* ĐƠN KÉO BÙ: ngày TẠO phiếu cũng là ngày đặt đơn. Chủ shop 12/11/2026: "đơn ngày nào gán ngày đó chứ, sao lại kéo về ngày
+             * hôm nay" — nhiều màn (Giao dịch, doanh số hôm nay, thẻ Lãi/Lỗ) xếp / cắt kỳ theo createdAt, để mặc định now() là 7.003
+             * phiếu cũ dồn hết vào ngày kéo. Đơn thường giữ now(): phiếu lập khi đơn được xác nhận, lệch ngày đặt vài giờ là đúng. */
+            ...(keoBu && order.createdAt ? { createdAt: order.createdAt } : {}),
             items: {
                 create: transactionItems,
             },
