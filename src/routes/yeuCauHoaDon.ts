@@ -22,7 +22,7 @@ import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { traMst, LoiTraMst } from '../lib/traMst'
 import {
     ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau, KENH_THEO_TIEN_TO,
-    donTuPhieu, maPhieuUngVien,
+    donTuPhieu, maPhieuUngVien, hoaDonCoDanhTinh, quyetDinhGui, emailNhanHoaDon,
 } from '../lib/yeuCauHoaDon'
 
 const router = Router()
@@ -107,7 +107,7 @@ async function timDon(ungVien: string[]) {
             orderBy: { createdAt: 'desc' },
             select: {
                 id: true, invoiceNumber: true, invoiceSymbol: true, issuedAt: true, createdAt: true,
-                buyerTaxCode: true, invoiceType: true, replacesInvoiceId: true, transactionId: true,
+                buyerTaxCode: true, buyerName: true, buyerAddress: true, invoiceType: true, replacesInvoiceId: true, transactionId: true,
             },
         }).catch(() => null) : null
         return { ch, o, tx, hd }
@@ -182,7 +182,7 @@ router.post('/tra-cuu', gioiHanTraCuu, async (req: Request, res: Response) => {
                     ? { daXuat: true, so: hd.invoiceNumber || '', kyHieu: hd.invoiceSymbol || '', ngay: ngayVN(hd.issuedAt || hd.createdAt), coMst: !!hd.buyerTaxCode, thayThe: hd.invoiceType === 'REPLACEMENT' }
                     : { daXuat: false },
                 yeuCau: vbi && (vbi.taxCode || vbi.name || vbi.email)
-                    ? { loai: vbi.loai || (vbi.taxCode ? 'cong_ty' : 'ca_nhan'), mst: cheMst(vbi.taxCode || ''), email: cheEmail(vbi.email || ''), luc: ngayVN(vbi.luc), tuKhach: vbi.nguon === 'khach-web' }
+                    ? { loai: vbi.loai || (vbi.taxCode ? 'cong_ty' : 'ca_nhan'), mst: cheMst(vbi.taxCode || ''), email: cheEmail(vbi.email || ''), luc: ngayVN(vbi.luc), tuKhach: vbi.nguon === 'khach-web', choDuyet: !!vbi.choDuyet }
                     : null,
                 lyDoChuaGui: lyDoChuaGui(trangThai),
             },
@@ -231,36 +231,62 @@ router.post('/gui', gioiHanGui, async (req: Request, res: Response) => {
             })
         }
 
-        // Gửi lại y hệt (bấm hai lần, tải lại trang) ⇒ không ghi lại, không báo nhân viên lần hai
+        /* 12/11/2026 — mã đơn coi như CÔNG KHAI (in trên tem kiện) ⇒ form này ai cũng gửi được. Bản cũ GHI ĐÈ vatBuyerInfo
+         * (trừ khi y hệt bản khách-web trước) rồi 20:30 cron tự xuất HĐĐT thật theo MST người lạ khai. Nay (lib quyetDinhGui):
+         * phiếu đã có thông tin ⇒ KHÔNG ghi đè, chỉ báo nhân viên; có MST ⇒ ghi kèm cờ choDuyet, cron bỏ qua tới khi
+         * nhân viên bấm Lưu ở hàng chờ HĐ; cá nhân không MST ⇒ như cũ. */
         const cu = docThongTin(tx.vatBuyerInfo)
-        const khoa = (x: any) => JSON.stringify([x?.loai, x?.name, x?.taxCode, x?.address, x?.email, x?.nationalId])
-        const trung = !!cu && cu.nguon === 'khach-web' && khoa(cu) === khoa(kq.info)
-        if (!trung) {
-            await ch.prisma.transaction.update({ where: { id: tx.id }, data: { vatBuyerInfo: JSON.stringify(kq.info) } })
+        const qd = quyetDinhGui(cu, kq.info, !!hd)
+        if (qd.ghi) {
+            const ghi = qd.choDuyet ? { ...kq.info, choDuyet: true } : kq.info
+            await ch.prisma.transaction.update({ where: { id: tx.id }, data: { vatBuyerInfo: JSON.stringify(ghi) } })
         }
 
-        if (hd) {
-            if (!trung) {
-                const tin = await ch.prisma.notification.create({
-                    data: {
-                        type: 'einvoice',
-                        title: `🧾 Khách gửi thông tin xuất HĐ qua kengi.vn/hoadon — đơn ${o.orderNumber} cần HĐ THAY THẾ`,
-                        message: (`Đơn đã xuất HĐ ${hd.invoiceSymbol || ''} ${hd.invoiceNumber || ''}`.trim()
-                            + `${hd.buyerTaxCode ? ` (MST ${hd.buyerTaxCode})` : ' (bán lẻ, không MST)'}. Khách gửi: ${kq.info.name}`
-                            + `${kq.info.taxCode ? ` — MST ${kq.info.taxCode}` : ''} — email ${kq.info.email}. `
-                            + `Mở chi tiết đơn (Đơn hàng online), bấm "Xuất HĐ thay thế với thông tin này" — đã điền sẵn.`).slice(0, 500),
-                    },
-                }).catch(() => null)
-                if (tin) {
-                    const { sendPushToStore } = await import('./notifications')
-                    sendPushToStore(ch.prisma, tin.title, tin.message, { id: tin.id, type: 'einvoice' }).catch(() => { })
-                }
+        if (qd.bao) {
+            const khachGui = `Khách gửi: ${kq.info.name}${kq.info.taxCode ? ` — MST ${kq.info.taxCode}` : ''}`
+                + `${kq.info.address ? ` — ${kq.info.address}` : ''}${kq.info.nationalId ? ` — CCCD ${kq.info.nationalId}` : ''} — email ${kq.info.email}. `
+            const tin = await ch.prisma.notification.create({
+                data: {
+                    type: 'einvoice',
+                    title: qd.bao === 'thay_the'
+                        ? `🧾 Khách gửi thông tin xuất HĐ qua kengi.vn/hoadon — đơn ${o.orderNumber} cần HĐ THAY THẾ`
+                        : qd.bao === 'can_duyet'
+                            ? `🧾 CẦN DUYỆT thông tin HĐ có MST gửi qua kengi.vn/hoadon — đơn ${o.orderNumber}`
+                            : `🧾 Có người gửi thông tin HĐ KHÁC bản đã có — đơn ${o.orderNumber} (CHƯA ghi đè)`,
+                    message: (qd.bao === 'thay_the'
+                        ? `Đơn đã xuất HĐ ${hd?.invoiceSymbol || ''} ${hd?.invoiceNumber || ''}`.trim()
+                            + `${hd?.buyerTaxCode ? ` (MST ${hd.buyerTaxCode})` : ' (bán lẻ, không MST)'}. ${khachGui}`
+                            + `Ai có mã đơn cũng gửi được form ⇒ xác minh đúng người mua rồi mở chi tiết đơn (Đơn hàng online), bấm "Xuất HĐ thay thế với thông tin này" — đã điền sẵn.`
+                        : qd.bao === 'can_duyet'
+                            ? `${khachGui}Hệ thống KHÔNG tự xuất đơn này: ai có mã đơn (in trên tem kiện) cũng gửi được form. `
+                                + `Xác minh đúng người mua rồi mở Hoá đơn điện tử → phiếu ONLINE-${o.orderNumber} → bấm "Lưu — TỰ XUẤT khi giao xong".`
+                            : `${khachGui}Phiếu đã có thông tin người mua khác nên hệ thống KHÔNG ghi đè (ai có mã đơn cũng gửi được form). `
+                                + `Nếu đúng là người mua đổi thông tin thì sửa tay ở Hoá đơn điện tử → phiếu ONLINE-${o.orderNumber}.`).slice(0, 500),
+                },
+            }).catch(() => null)
+            if (tin) {
+                const { sendPushToStore } = await import('./notifications')
+                sendPushToStore(ch.prisma, tin.title, tin.message, { id: tin.id, type: 'einvoice' }).catch(() => { })
             }
+        }
+
+        if (qd.ketQua === 'can_thay_the') {
             return res.json({
                 success: true,
                 data: {
                     ketQua: 'can_thay_the',
-                    thongDiep: `Đơn này đã xuất hoá đơn${hd.buyerTaxCode ? '' : ' bán lẻ'} trước đó. Cửa hàng đã nhận thông tin của bạn và sẽ lập hoá đơn THAY THẾ, gửi về ${kq.info.email} trong 1–2 ngày làm việc.`,
+                    thongDiep: `Đơn này đã xuất hoá đơn${hd?.buyerTaxCode ? '' : ' bán lẻ'} trước đó. Cửa hàng đã nhận thông tin của bạn và sẽ lập hoá đơn THAY THẾ, gửi về ${kq.info.email} trong 1–2 ngày làm việc.`,
+                },
+            })
+        }
+        if (qd.ketQua === 'cho_duyet' || qd.ketQua === 'da_co_ban_khac') {
+            return res.json({
+                success: true,
+                data: {
+                    ketQua: 'cho_xu_ly',
+                    thongDiep: qd.ketQua === 'cho_duyet'
+                        ? `Đã ghi nhận. Cửa hàng sẽ kiểm tra thông tin rồi xuất hoá đơn, gửi về ${kq.info.email} trong 1–3 ngày làm việc.`
+                        : `Đơn này đã có thông tin xuất hoá đơn từ trước. Cửa hàng đã nhận thông tin bạn gửi, sẽ kiểm tra và liên hệ qua ${kq.info.email}.`,
                 },
             })
         }
@@ -300,6 +326,10 @@ router.post('/tra-mst', gioiHanMst, async (req: Request, res: Response) => {
     }
 })
 
+/** HĐ đã nhờ VNPT gửi email qua trang này — chống dội thư hộp thư người mua (người cầm mã đổi IP để vượt giới hạn
+ *  lượt). Nhớ trong MỘT bản Cloud Run (prod ≤3 bản, không Redis) ⇒ tệ nhất vài thư / 30 phút, chấp nhận được. */
+const daGuiEmailHd = new Map<string, number>()
+
 // POST /tai-hoa-don — { maDon } ⇒ bản HOÁ ĐƠN THẬT (PDF có QR + chữ ký) từ cổng VNPT — chứng từ mua hàng để bảo hành
 router.post('/tai-hoa-don', gioiHanTai, async (req: Request, res: Response) => {
     try {
@@ -316,6 +346,33 @@ router.post('/tai-hoa-don', gioiHanTai, async (req: Request, res: Response) => {
         const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
         // Cùng luật với GET /einvoice/:id/vnpt-file: HĐ thay thế phát hành với Fkey "<id gốc>R"
         const fkey = hd.invoiceType === 'REPLACEMENT' && hd.replacesInvoiceId ? vnptFkey(`${hd.replacesInvoiceId}R`) : vnptFkey(hd.transactionId)
+
+        /* 12/11/2026 — mã đơn coi như CÔNG KHAI (in trên tem kiện, nằm trong các bộ dữ liệu vận đơn bị rao bán) ⇒ HĐ mang
+         * tên / MST / địa chỉ / email người mua thì KHÔNG trả thẳng cho người cầm mã: nhờ VNPT gửi về email người mua đã
+         * khai trước lúc xuất (lib emailNhanHoaDon). HĐ bán lẻ không danh tính (tên che *, "khách lẻ") vẫn tải thẳng. */
+        const vbi = docThongTin(f.tx?.vatBuyerInfo)
+        if (hoaDonCoDanhTinh(hd, vbi)) {
+            const email = emailNhanHoaDon(hd, vbi)
+            if (!email) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Hoá đơn này ghi thông tin người mua nên không tải trực tiếp bằng mã đơn được. Vui lòng nhắn cửa hàng kèm mã đơn để nhận bản hoá đơn qua email.',
+                })
+            }
+            const truoc = daGuiEmailHd.get(hd.id)
+            if (truoc && Date.now() - truoc < 30 * 60_000) {
+                return res.json({ success: false, error: `Hoá đơn này ghi thông tin người mua nên được gửi về email ${cheEmail(email)} thay vì tải trực tiếp — đã gửi trong 30 phút qua, vui lòng kiểm tra hộp thư (cả thư rác).` })
+            }
+            const mail = await new VnptProvider().sendInvoiceEmail(cfg, fkey, email)
+            if (!mail.success) {
+                console.error('[yeu-cau-hoa-don/tai-hoa-don] gửi email HĐ lỗi:', String(mail.errorMessage || '').slice(0, 200))
+                return res.status(502).json({ success: false, error: 'Chưa gửi được hoá đơn về email — vui lòng thử lại sau ít phút hoặc nhắn cửa hàng.' })
+            }
+            daGuiEmailHd.set(hd.id, Date.now())
+            if (daGuiEmailHd.size > 5000) daGuiEmailHd.clear()
+            return res.json({ success: false, error: `Hoá đơn này ghi thông tin người mua nên được gửi về email ${cheEmail(email)} thay vì tải trực tiếp — vui lòng kiểm tra hộp thư (cả thư rác).`, data: { daGuiEmail: true } })
+        }
+
         const file = await new VnptProvider().downloadInvoice(cfg, fkey)
         const ten = `HoaDon-${hd.invoiceSymbol || ''}${hd.invoiceNumber || ''}`.replace(/[^A-Za-z0-9_-]/g, '') || 'HoaDon'
         if (file.kind === 'pdf' && file.base64) {

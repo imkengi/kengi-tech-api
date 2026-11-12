@@ -277,12 +277,18 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
     const daThay = new Set<string>()
     const ungVienKhoa = ungVienKhoaTho.filter(x => (daThay.has(x.key) ? false : (daThay.add(x.key), true)))
 
+    /* 12/11/2026 — ba nhánh dưới từng "xử lý mà KHÔNG kiểm": ai biết shop_id (công khai trên trang gian hàng) bỏ header
+     * Authorization là đẩy được push giả (đổi trạng thái đơn, kích đồng bộ). Đo nhật ký 30 ngày (13/10→12/11): 0 lần đi
+     * ba nhánh này — push thật của Shopee luôn có chữ ký ⇒ chặn hết, không mất push thật nào. */
     if (ungVienKhoa.length === 0) {
-        console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
+        console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — BỎ push`)
+        return boPush(`kênh ${channel.name} chưa có khoá kiểm chữ ký`)
     } else if (!signature) {
-        console.warn(`[Shopee Webhook] Không có header Authorization (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
+        console.warn(`[Shopee Webhook] Không có header Authorization (shop_id=${shopId}) — BỎ push`)
+        return boPush('push không có chữ ký')
     } else if (!rawBody) {
-        console.warn(`[Shopee Webhook] Không đọc được thân thô — xử lý mà KHÔNG kiểm`)
+        console.warn(`[Shopee Webhook] Không đọc được thân thô — BỎ push (không kiểm được chữ ký)`)
+        return boPush('không đọc được thân thô để kiểm chữ ký')
     } else {
         /* Thử thêm URL thay thế: Shopee ký theo URL KHAI TRONG CONSOLE, còn ta ghép
          * từ host thật. App khác có thể khai kengi.vn (302 sang api) hay lệch dấu

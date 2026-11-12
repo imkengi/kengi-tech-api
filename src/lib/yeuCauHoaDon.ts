@@ -113,6 +113,80 @@ export function cheEmail(e: string): string {
     return u && d ? `${u[0]}***@${d}` : ''
 }
 
+/* ── BẢO MẬT (12/11/2026 — chủ shop duyệt sau tin Sapo lộ dữ liệu đơn) ────────────────────────────────────────────
+ * Mã đơn sàn in trên tem dán ngoài kiện và nằm trong chính loại dữ liệu vận đơn đang bị rao bán ⇒ coi như CÔNG KHAI.
+ * Nên CHỈ bằng mã đơn thì: (1) không tải thẳng được hoá đơn mang danh tính người mua — chỉ gửi về email đã khai;
+ * (2) không ghi đè được thông tin người mua đã có trên phiếu; (3) thông tin có MST phải chờ nhân viên duyệt rồi mới xuất
+ * (trước đó người lạ khai MST của mình là 20:30 cron tự xuất HĐĐT thật — gom HĐ đầu vào bằng đơn của người khác). */
+
+/** Tên người mua kiểu bán lẻ chung chung — KHÔNG phải danh tính. Đo KENGISTORE 12/11/2026: 11.831/11.900 HĐ đã xuất ghi
+ *  "Bán cho người tiêu dùng (…)", 38 "Khách TikTok"; ~31 tờ còn lại có MST / tên thật. */
+const TEN_CHUNG = /^(bán cho người tiêu dùng|ban cho nguoi tieu dung|khách (lẻ|hàng lẻ|vãng lai|tiktok|shopee|lazada)|khach (le|hang le|vang lai|tiktok|shopee|lazada)|người mua không lấy (hoá|hóa) đơn|nguoi mua khong lay hoa don)/i
+
+const CO_CHU = (x: any, k: string) => !!String(x?.[k] ?? '').trim()
+
+/** Hoá đơn đã xuất có mang danh tính người mua không: khách đã gửi thông tin (vatBuyerInfo), có MST, tên KHÔNG chung chung,
+ *  hay có địa chỉ. Có ⇒ trang công khai chỉ được GỬI EMAIL, không trả PDF. Tên/địa chỉ bị sàn che (`*`) thì không tính. */
+export function hoaDonCoDanhTinh(
+    hd: { buyerTaxCode?: string | null; buyerName?: string | null; buyerAddress?: string | null } | null | undefined,
+    vbi: any,
+): boolean {
+    if (vbi && typeof vbi === 'object' && ['name', 'taxCode', 'address', 'email', 'nationalId'].some(k => CO_CHU(vbi, k))) return true
+    if (!hd) return false
+    if (CO_CHU(hd, 'buyerTaxCode')) return true
+    const ten = String(hd.buyerName ?? '').normalize('NFC').trim()
+    if (ten && !ten.includes('*') && !TEN_CHUNG.test(ten)) return true
+    const dc = String(hd.buyerAddress ?? '').trim()
+    return !!dc && !dc.includes('*')
+}
+
+export type KetQuaGui = 'trung' | 'cho_xuat' | 'cho_duyet' | 'can_thay_the' | 'da_co_ban_khac'
+export interface QuyetDinhGui {
+    /** ghi Transaction.vatBuyerInfo không */
+    ghi: boolean
+    /** ghi kèm cờ `choDuyet` ⇒ cron 20:30 KHÔNG tự xuất; nhân viên bấm Lưu ở hàng chờ HĐ (PUT …/buyer ghi lại không cờ) = duyệt */
+    choDuyet: boolean
+    /** báo nhân viên loại nào (null = không báo) */
+    bao: null | 'khac_ban_cu' | 'can_duyet' | 'thay_the'
+    ketQua: KetQuaGui
+}
+
+/** So nội dung, KHÔNG so `loai` (nhân viên lưu tay không có khoá này) */
+const khoaThongTin = (x: any) => JSON.stringify(['name', 'taxCode', 'address', 'email', 'nationalId'].map(k => String(x?.[k] ?? '').trim().toLowerCase()))
+
+/** Khách gửi thông tin xuất HĐ qua trang công khai thì làm gì. `cu` = vatBuyerInfo đang có trên phiếu (đã parse, hoặc null). */
+export function quyetDinhGui(cu: any, moi: ThongTinNguoiMua, daXuatHd: boolean): QuyetDinhGui {
+    const coCu = !!cu && typeof cu === 'object' && ['name', 'taxCode', 'address', 'email', 'nationalId'].some(k => CO_CHU(cu, k))
+    if (coCu && khoaThongTin(cu) === khoaThongTin(moi)) {
+        // Gửi lại y hệt (bấm hai lần, tải lại trang) ⇒ không ghi, không báo nhân viên lần hai
+        return { ghi: false, choDuyet: !!cu.choDuyet, bao: null, ketQua: daXuatHd ? 'can_thay_the' : cu.choDuyet ? 'cho_duyet' : 'trung' }
+    }
+    // Phiếu đã có thông tin người mua (khách thật gửi trước, nhân viên nhập, hay lấy từ Shopee) ⇒ KHÔNG ghi đè
+    if (coCu) return { ghi: false, choDuyet: false, bao: 'khac_ban_cu', ketQua: 'da_co_ban_khac' }
+    // Đã xuất HĐ ⇒ chỉ còn đường thay thế, nhân viên tự bấm (đã là cửa duyệt)
+    if (daXuatHd) return { ghi: true, choDuyet: false, bao: 'thay_the', ketQua: 'can_thay_the' }
+    if (CO_CHU(moi, 'taxCode')) return { ghi: true, choDuyet: true, bao: 'can_duyet', ketQua: 'cho_duyet' }
+    return { ghi: true, choDuyet: false, bao: null, ketQua: 'cho_xuat' }
+}
+
+/** Email được phép nhận bản HĐ CÓ DANH TÍNH thay cho tải thẳng (POST /tai-hoa-don). Chỉ tin email người mua khai
+ *  TRƯỚC lúc xuất HĐ (nhân viên ghi, hoặc form web gửi trước mốc xuất): đơn đã xuất mà chưa có vatBuyerInfo thì form
+ *  /gui vẫn ghi được (để điền sẵn HĐ thay thế) ⇒ email người lạ khai SAU mốc xuất không được nhận bản HĐ mang tên
+ *  người mua thật. Không chứng minh được thứ tự (thiếu lúc gửi / thiếu mốc xuất) ⇒ null — thà bắt khách nhắn cửa hàng. */
+export function emailNhanHoaDon(
+    hd: { issuedAt?: Date | string | null; createdAt?: Date | string | null } | null | undefined, vbi: any,
+): string | null {
+    const email = String(vbi?.email ?? '').trim()
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null
+    if (vbi?.nguon === 'khach-web') {
+        const gui = Date.parse(String(vbi?.luc ?? ''))
+        const mocRaw = hd?.issuedAt || hd?.createdAt
+        const moc = mocRaw ? new Date(mocRaw as any).getTime() : NaN
+        if (!Number.isFinite(gui) || !Number.isFinite(moc) || gui > moc) return null
+    }
+    return email
+}
+
 /** 'dd/mm/yyyy' theo giờ VN (máy chủ lưu UTC) */
 export function ngayVN(d: any): string {
     if (!d) return ''

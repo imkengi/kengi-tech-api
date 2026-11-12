@@ -77,8 +77,30 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
                 (kq.loi.length ? ` | lỗi: ${kq.loi.slice(0, 2).join('; ')}` : ''))
         } catch (e: any) { console.warn(`[EInvoiceQueue] ${storeName}: hỏi thông tin HĐ Shopee hỏng —`, e?.message || e) }
     }
-    const rows = clean.filter((r: any) => r.hasBuyerInfo
-        || (autoFrom && new Date(r.deliveredAt || r.orderDate) >= autoFrom))
+    /* 12/11/2026 — thông tin HĐ CÓ MST gửi qua trang công khai kengi.vn/hoadon mang cờ choDuyet (routes/yeuCauHoaDon): ai
+     * cầm mã đơn (in trên tem kiện) cũng gửi được form ⇒ KHÔNG tự xuất HĐĐT thật theo MST người lạ khai, kể cả khi bật
+     * tự xuất toàn cục. Nhân viên xác minh rồi bấm Lưu ở hàng chờ HĐ (PUT …/buyer ghi lại vatBuyerInfo ⇒ mất cờ) thì đêm
+     * sau mới xuất. Đọc cờ hỏng ⇒ đêm nay để lại MỌI phiếu có vatBuyerInfo — thà xuất muộn một đêm còn hơn xuất HĐ
+     * thật cho người lạ. */
+    let choDuyet = new Set<string>()
+    let docCoHong = false
+    const idsCoTt = clean.filter((r: any) => r.hasBuyerInfo).map((r: any) => String(r.id))
+    if (idsCoTt.length) {
+        try {
+            const ds: any[] = await (prisma as any).transaction.findMany({
+                where: { id: { in: idsCoTt }, vatBuyerInfo: { contains: '"choDuyet":true' } }, select: { id: true },
+            })
+            choDuyet = new Set(ds.map((x: any) => String(x.id)))
+        } catch (e: any) {
+            docCoHong = true
+            console.warn(`[EInvoiceQueue] ${storeName}: đọc cờ chờ duyệt hỏng — đêm nay để lại ${idsCoTt.length} phiếu có thông tin người mua:`, e?.message || e)
+        }
+    }
+    if (choDuyet.size) console.log(`[EInvoiceQueue] ${storeName}: để lại ${choDuyet.size} phiếu thông tin HĐ có MST gửi qua kengi.vn/hoadon — chờ nhân viên duyệt`)
+    const rows = clean.filter((r: any) => {
+        if (r.hasBuyerInfo && (docCoHong || choDuyet.has(String(r.id)))) return false
+        return r.hasBuyerInfo || (autoFrom && new Date(r.deliveredAt || r.orderDate) >= autoFrom)
+    })
     if (rows.length === 0) return
 
     let issued = 0, failed = 0

@@ -1,23 +1,16 @@
 substitutions:
+  # ⛔ 12/11/2026: repo này CÔNG KHAI — KHÔNG đặt bí mật ở đây (substitution, --set-env-vars). Mật khẩu CSDL,
+  # token studio, khoá proxy Shopee, FB verify token từng nằm chữ thường ở đây ⇒ lộ nhiều tháng, đã xoay hết và
+  # chuyển sang Secret Manager (--set-secrets bên dưới). Đổi giá trị = thêm version cho secret rồi deploy lại.
   _REGION: asia-southeast1
   _SERVICE_NAME: kengi-tech-api
   _CLOUD_SQL_INSTANCE: kengi-tech:asia-southeast1:kengi-tech-db
-  _DB_NAME: kengi_tech
-  _DB_USER: postgres
   # DẤU ẤN BẢN DEPLOY (20/08/2026): lệnh deploy local truyền vào từ git của MÁY đang deploy.
   # Sự cố tối 20/08: prod chạy ảnh cũ hơn cây mã mà không có cách nào biết trong một lần gọi.
   # `sach` = cây sạch, `ban` = có sửa chưa commit (đúng thứ cần biết khi hai cây đè nhau).
   _GIT_SHA: khong-ro
   _GIT_TRANG_THAI: khong-ro
-  _DB_PASSWORD: KengiTech2026%40
   _REDIS_URL: ""
-  # Token tĩnh cho Kengi Stream studio — CHỈ dành cho script/cron, KHÔNG đưa vào
-  # FE bundle (browser đăng nhập bằng tài khoản hệ thống, xem routes/livestream.ts).
-  # Token cũ ks_9a0b... đã bị bake vào bundle công khai nên phải xoay.
-  _LIVESTREAM_TOKEN: ks_e5fa256dd45dbdf7288514121fd976cafa57b856d7e4a982
-  # Proxy chuyển tiếp câm để egress Shopee đi qua IP tĩnh Tino (đã whitelist),
-  # né source_ip_undeclared của Cloud Run (IP động). Xem shopee-forward.php.
-  _SHOPEE_FORWARD_SECRET: eb15f8a9ec6e6d4b241f8f525fec29c5552c9a826e113952
   # Đăng nhập Super Admin Panel (kengi.vn/admin) — so SERVER-SIDE ở POST /admin/login,
   # KHÔNG bake vào bundle FE. Xem routes/admin.ts.
   _ADMIN_PANEL_USER: superadmin
@@ -25,11 +18,10 @@ substitutions:
   # Lấy ở developers.facebook.com → App → Settings → Basic.
   #  - _FB_APP_ID / _FB_APP_SECRET: thiếu thì POST /api/fanpage/connect trả 500,
   #    KHÔNG đổi được short-lived token → long-lived (cả app tê liệt).
-  #  - _FB_WEBHOOK_VERIFY_TOKEN: chuỗi tự đặt, phải khớp ô "Verify token" khi
-  #    cấu hình Webhooks trong FB App (callback https://api.kengi.vn/api/webhooks/facebook).
+  #  - FB_WEBHOOK_VERIFY_TOKEN (Secret Manager open-retail-fb-verify-token): chuỗi tự đặt, phải khớp ô
+  #    "Verify token" khi cấu hình Webhooks trong FB App (callback https://api.kengi.vn/api/webhooks/facebook).
   _FB_APP_ID: ""
   _FB_APP_SECRET: ""
-  _FB_WEBHOOK_VERIFY_TOKEN: 368333bd84ccb3dbde261bd50366490f56e63b13cfaaac20
   # Google OAuth cho "Kết nối Google Drive" (dọn video đóng hàng tự động).
   # Vì sao cần: file trong My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù
   # có quyền Editor vẫn bị Google chặn, nên phải chạy dưới danh nghĩa chủ shop.
@@ -149,7 +141,7 @@ steps:
       # đừng nâng số này một mình.
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN},GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID},TAROT_GOOGLE_CLIENT_ID=${_TAROT_GOOGLE_CLIENT_ID},PUBLIC_API_URL=https://api.kengi.vn,PUBLIC_WEB_URL=https://kengi.vn,BUILD_GIT_SHA=${_GIT_SHA},BUILD_GIT_TRANG_THAI=${_GIT_TRANG_THAI},BUILD_ID=$BUILD_ID
+        NODE_ENV=production,CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID},TAROT_GOOGLE_CLIENT_ID=${_TAROT_GOOGLE_CLIENT_ID},PUBLIC_API_URL=https://api.kengi.vn,PUBLIC_WEB_URL=https://kengi.vn,BUILD_GIT_SHA=${_GIT_SHA},BUILD_GIT_TRANG_THAI=${_GIT_TRANG_THAI},BUILD_ID=$BUILD_ID
       # ⚠ --set-secrets GHI ĐÈ TOÀN BỘ danh sách secret của service, không cộng
       # thêm. Phải liệt kê ĐỦ MỌI khoá, thiếu cái nào là revision mới mất cái đó.
       # (Đã dính 06/08/2026: chỉ khai GOOGLE_OAUTH_CLIENT_SECRET → mất luôn
@@ -157,10 +149,14 @@ steps:
       # 29/09/2026: mật khẩu trang kengi.vn/admin (ADMIN_PANEL_PASS) chuyển từ substitution
       # chữ thường trong file này sang Secret Manager `open-retail-admin-panel-pass` (chủ shop
       # đổi mật khẩu cùng lúc). Đổi mật khẩu = thêm version mới cho secret rồi deploy lại.
+      # 12/11/2026: DATABASE_URL (URL đủ, socket /cloudsql/…), LIVESTREAM_STUDIO_TOKEN, SHOPEE_FORWARD_SECRET (phải khớp
+      # $SECRET trong shopee-forward*.php trên Tino — đổi khoá thì đổi CẢ HAI, PHP nhận tạm hai khoá lúc chuyển),
+      # FB_WEBHOOK_VERIFY_TOKEN chuyển từ chữ thường sang đây (repo công khai — khoá cũ đã xoay).
+      # ⚠ Revision TRƯỚC kengi-tech-api-02113 mang mật khẩu CSDL cũ ⇒ KHÔNG lùi traffic về đó được.
       # ⚠ Thêm/bớt secret ở dòng dưới phải giữ ĐỦ các mục cũ — --set-secrets ghi đè cả danh sách.
       - '--set-secrets'
       - >-
-        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,MARKETING_VAULT_KEY=marketing-vault-key:latest,ADMIN_PANEL_PASS=open-retail-admin-panel-pass:latest
+        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,MARKETING_VAULT_KEY=marketing-vault-key:latest,ADMIN_PANEL_PASS=open-retail-admin-panel-pass:latest,DATABASE_URL=open-retail-database-url:latest,LIVESTREAM_STUDIO_TOKEN=open-retail-livestream-token:latest,SHOPEE_FORWARD_SECRET=open-retail-shopee-forward-secret:latest,FB_WEBHOOK_VERIFY_TOKEN=open-retail-fb-verify-token:latest
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather

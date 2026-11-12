@@ -2184,11 +2184,30 @@ router.post('/queue/run', einvoiceAuth, requireRole('admin', 'manager'), async (
             const all = await findInvoiceQueue(prisma, { from, to, limit: Math.min(Number(b.limit) || 100, 300) })
             rows = all.filter((r: any) => !r.hasReturn) // đơn hoàn không xuất theo lô
         }
+        /* 12/11/2026 — phiếu mang cờ choDuyet (thông tin HĐ có MST gửi qua trang công khai kengi.vn/hoadon, chưa ai xác
+         * minh — routes/yeuCauHoaDon) KHÔNG xuất theo LÔ: nhân viên mở phiếu ở hàng chờ, xác minh rồi bấm Lưu (mất cờ)
+         * hoặc xuất lẻ đúng phiếu đó. Cùng luật với cron 20:30 (cron/einvoiceQueue). */
+        let choDuyetBoQua: string[] = []
+        if (rows.length > 1) {
+            const cd: any[] = await prisma.transaction.findMany({
+                where: { id: { in: rows.map((r: any) => String(r.id)) }, vatBuyerInfo: { contains: '"choDuyet":true' } },
+                select: { id: true, receiptNumber: true },
+            })
+            if (cd.length) {
+                const bo = new Set(cd.map((x: any) => String(x.id)))
+                rows = rows.filter((r: any) => !bo.has(String(r.id)))
+                choDuyetBoQua = cd.map((x: any) => String(x.receiptNumber || x.id))
+            }
+        }
         // Thông tin người mua nhập tay chỉ áp cho XUẤT LẺ 1 phiếu (không áp cho lô).
         const buyerBody = (Array.isArray(b.transactionIds) && b.transactionIds.length === 1 && b.buyer)
             ? b.buyer : {}
         let issued = 0, failed = 0, stockSkipped = 0
         const errors: string[] = []
+        if (choDuyetBoQua.length) {
+            errors.push(`Để lại ${choDuyetBoQua.length} phiếu CHỜ DUYỆT thông tin MST khách gửi qua kengi.vn/hoadon (xác minh rồi bấm Lưu từng phiếu): `
+                + `${choDuyetBoQua.slice(0, 5).join(', ')}${choDuyetBoQua.length > 5 ? '…' : ''}`)
+        }
         const stockDetails: string[] = []
         for (const r of rows) {
             try {
@@ -2212,7 +2231,7 @@ router.post('/queue/run', einvoiceAuth, requireRole('admin', 'manager'), async (
                 failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${e?.message || e}`)
             }
         }
-        res.json({ success: true, data: { candidates: rows.length, issued, failed, stockSkipped, stockDetails, errors } })
+        res.json({ success: true, data: { candidates: rows.length, issued, failed, stockSkipped, stockDetails, errors, choDuyetBoQua } })
     } catch (err: any) {
         console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })

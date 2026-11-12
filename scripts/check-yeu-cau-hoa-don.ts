@@ -5,7 +5,10 @@
  * chặn trước khi hỏi CSDL; thông tin HĐ thiếu / sai bị từ chối với câu nói rõ; ghi đúng khoá đường xuất HĐ đang đọc
  * (name/taxCode/address/email/nationalId); trạng thái đơn nói đúng với khách; che MST / email khi nhắc lại.
  */
-import { ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau, donTuPhieu, maPhieuUngVien } from '../src/lib/yeuCauHoaDon'
+import {
+    ungVienMaDon, kiemYeuCau, trangThaiDonKhach, cheMst, cheEmail, ngayVN, cuaHangNhanYeuCau, donTuPhieu, maPhieuUngVien,
+    hoaDonCoDanhTinh, quyetDinhGui, emailNhanHoaDon,
+} from '../src/lib/yeuCauHoaDon'
 
 let loi = 0
 const dung = (ten: string, ok: boolean, chiTiet?: unknown) => {
@@ -82,6 +85,52 @@ const dt = donTuPhieu({ receiptNumber: 'ONLINE-TIK-586612345678901234', status: 
 dung('không ghi chú ⇒ sàn theo tiền tố; thiếu transactionDate ⇒ createdAt; không dòng hàng; không gian hàng',
     dt.platform === 'tiktok' && ngayVN(dt.createdAt) === '01/08/2026' && dt.items.length === 0 && dt.channelName === null && dt.total === 0, dt)
 dung('mã phiếu ứng viên = ONLINE- + từng mã đơn', bang(maPhieuUngVien(['SPE-X', 'TIK-X']), ['ONLINE-SPE-X', 'ONLINE-TIK-X']))
+
+// 6. 12/11/2026 — mã đơn coi như CÔNG KHAI (in trên tem kiện) ⇒ HĐ có danh tính không trả thẳng; form /gui không ghi đè, MST chờ duyệt
+dung('HĐ bán lẻ tên chung / tên che * / địa chỉ che ⇒ KHÔNG danh tính (vẫn tải thẳng)',
+    !hoaDonCoDanhTinh({ buyerName: 'Khách lẻ', buyerTaxCode: '', buyerAddress: '' }, null)
+    && !hoaDonCoDanhTinh({ buyerName: 'Người mua không lấy hoá đơn' }, null)
+    && !hoaDonCoDanhTinh({ buyerName: 'Bán cho người tiêu dùng' }, {})
+    && !hoaDonCoDanhTinh({ buyerName: 'khach tiktok' }, null)
+    && !hoaDonCoDanhTinh({ buyerName: 'N****n V*n A', buyerAddress: '***, Phường 1, Quận 3' }, null)
+    && !hoaDonCoDanhTinh(null, null) && !hoaDonCoDanhTinh(undefined, { name: '  ' }))
+dung('HĐ có MST / tên thật / địa chỉ rõ / phiếu có thông tin người mua ⇒ CÓ danh tính',
+    hoaDonCoDanhTinh({ buyerName: 'Khách lẻ', buyerTaxCode: '0312345678' }, null)
+    && hoaDonCoDanhTinh({ buyerName: 'Nguyễn Văn A' }, null)
+    && hoaDonCoDanhTinh({ buyerName: '', buyerAddress: '12 Lê Lợi, Q1' }, null)
+    && hoaDonCoDanhTinh({ buyerName: 'Khách lẻ' }, { email: 'a@b.vn' })
+    && hoaDonCoDanhTinh(null, { nationalId: '079123456789' }))
+
+const tt = (x: any) => ({ loai: 'ca_nhan', name: '', taxCode: '', address: '', email: 'k@kh.vn', nationalId: '', nguon: 'khach-web', luc: '2026-11-12T01:00:00.000Z', ...x }) as any
+const caNhan = tt({ name: 'Nguyễn Văn A', address: '1 Lê Lợi' })
+const coMst = tt({ loai: 'cong_ty', name: 'Công ty TNHH X', taxCode: '0312345678', address: '2 Lê Lợi', email: 'kt@x.vn' })
+dung('phiếu chưa có gì + cá nhân, chưa xuất ⇒ ghi, tự xuất như cũ, không báo',
+    bang(quyetDinhGui(null, caNhan, false), { ghi: true, choDuyet: false, bao: null, ketQua: 'cho_xuat' }))
+dung('phiếu chưa có gì + CÓ MST, chưa xuất ⇒ ghi kèm cờ chờ duyệt + báo nhân viên duyệt',
+    bang(quyetDinhGui(null, coMst, false), { ghi: true, choDuyet: true, bao: 'can_duyet', ketQua: 'cho_duyet' }))
+dung('phiếu ĐÃ có thông tin (nhân viên / Shopee / người khác) + khác ⇒ KHÔNG ghi đè, chỉ báo',
+    bang(quyetDinhGui({ name: 'Công ty Y', taxCode: '0109999999', email: 'y@y.vn' }, coMst, false), { ghi: false, choDuyet: false, bao: 'khac_ban_cu', ketQua: 'da_co_ban_khac' })
+    && bang(quyetDinhGui({ name: 'Công ty Y' }, caNhan, true), { ghi: false, choDuyet: false, bao: 'khac_ban_cu', ketQua: 'da_co_ban_khac' }))
+dung('gửi lại y hệt (bấm 2 lần) ⇒ không ghi, không báo lần hai; giữ trạng thái chờ duyệt',
+    bang(quyetDinhGui({ ...coMst, choDuyet: true }, coMst, false), { ghi: false, choDuyet: true, bao: null, ketQua: 'cho_duyet' })
+    && bang(quyetDinhGui(caNhan, { ...caNhan, luc: 'khác giờ' }, false), { ghi: false, choDuyet: false, bao: null, ketQua: 'trung' })
+    && quyetDinhGui({ ...caNhan, email: 'K@KH.VN ' }, caNhan, false).ghi === false)
+dung('đã xuất HĐ + phiếu chưa có thông tin ⇒ ghi (điền sẵn HĐ thay thế) + báo nhân viên, KHÔNG chờ duyệt (không đường tự xuất)',
+    bang(quyetDinhGui(null, coMst, true), { ghi: true, choDuyet: false, bao: 'thay_the', ketQua: 'can_thay_the' }))
+dung('phiếu có vatBuyerInfo rỗng các trường ⇒ coi như chưa có',
+    quyetDinhGui({ name: ' ', email: '' }, caNhan, false).ketQua === 'cho_xuat')
+
+const hdXuat = { issuedAt: '2026-11-10T13:30:00Z', createdAt: '2026-11-10T13:30:00Z' }
+dung('email nhận HĐ: nhân viên ghi (không nguon) ⇒ tin; web gửi TRƯỚC mốc xuất ⇒ tin',
+    emailNhanHoaDon(hdXuat, { name: 'A', email: 'kt@x.vn' }) === 'kt@x.vn'
+    && emailNhanHoaDon(hdXuat, { email: 'kt@x.vn', nguon: 'khach-web', luc: '2026-11-09T02:00:00Z' }) === 'kt@x.vn'
+    && emailNhanHoaDon({ issuedAt: null, createdAt: new Date('2026-11-10T13:30:00Z') }, { email: 'kt@x.vn', nguon: 'khach-web', luc: '2026-11-09T02:00:00Z' }) === 'kt@x.vn')
+dung('email nhận HĐ: web gửi SAU mốc xuất (người cầm mã đơn) / thiếu giờ gửi / thiếu mốc / email sai / không email ⇒ null',
+    emailNhanHoaDon(hdXuat, { email: 'la@ke.vn', nguon: 'khach-web', luc: '2026-11-12T02:00:00Z' }) === null
+    && emailNhanHoaDon(hdXuat, { email: 'la@ke.vn', nguon: 'khach-web' }) === null
+    && emailNhanHoaDon({}, { email: 'la@ke.vn', nguon: 'khach-web', luc: '2026-11-09T02:00:00Z' }) === null
+    && emailNhanHoaDon(hdXuat, { email: 'khong-phai-email' }) === null
+    && emailNhanHoaDon(hdXuat, { name: 'A' }) === null && emailNhanHoaDon(hdXuat, null) === null)
 
 console.log(loi ? `\n✗ ${loi} ca SAI` : '\n✓ Tất cả ca đều đúng')
 process.exit(loi ? 1 : 0)
