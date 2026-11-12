@@ -1209,7 +1209,17 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     }
                 }
 
-                if (!Object.keys(data).length && !dongMoi) {
+                /* TỔNG KHỚP MÀ DÒNG PHIẾU THU VẪN SAI (12/11/2026). Đo HUTI: 8/9 hoá đơn có phiếu thu đã huỷ bên KiotViet vẫn
+                 * giữ dòng Payment mang mã huỷ trong khi amountReceived đã đúng ⇒ "không có gì đổi" ⇒ không bao giờ dựng lại,
+                 * sổ quỹ (tính từ bảng Payment) đếm tiền không có thật. CHỈ coi là lệch khi Kengi còn giữ dòng mang ĐÚNG mã
+                 * mà chính hoá đơn KiotViet ghi "Đã hủy" — không đụng các khác biệt khác. */
+                const maHuyTrenHD = new Set(kvPayments.filter((p: any) => p?.code && Number(p?.status) === 1).map((p: any) => String(p.code)))
+                let conGiuPhieuHuy = false
+                if (maHuyTrenHD.size) {
+                    const tienDangCo: any[] = await sp.payment.findMany({ where: { transactionId: existing.id }, select: { reference: true } })
+                    conGiuPhieuHuy = tienDangCo.some((r: any) => r?.reference && maHuyTrenHD.has(String(r.reference)))
+                }
+                if (!Object.keys(data).length && !dongMoi && !conGiuPhieuHuy) {
                     boQua(c, `HĐ ${code}: đã có trong sổ và không có gì đổi`)
                     continue
                 }

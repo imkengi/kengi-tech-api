@@ -60,7 +60,8 @@ function khoGia(goc: {
             update: async ({ where, data }: any) => { const t = s.phieu.find(x => x.id === where.id); Object.assign(t, data); return t },
         },
         payment: {
-            findMany: async ({ where }: any) => s.tien.filter(p => where.reference.in.includes(p.reference)),
+            findMany: async ({ where }: any) => s.tien.filter(p => (where.transactionId === undefined || p.transactionId === where.transactionId)
+                && (!where.reference?.in || where.reference.in.includes(p.reference))),
             findFirst: async ({ where }: any) => s.tien.find(p => p.reference === where.reference) ?? null,
             deleteMany: async ({ where }: any) => { const n = s.tien.length; s.tien = s.tien.filter(p => p.transactionId !== where.transactionId); return { count: n - s.tien.length } },
             createMany: async ({ data }: any) => { for (const d of data) s.tien.push({ id: id('pay'), ...d }); return { count: data.length } },
@@ -300,6 +301,15 @@ async function main() {
     const k11 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q11', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
     await keoPhieuThuKhach(k11, opts(false), [huy('TTHD101', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => (kvHuy as any)[ma] ?? null)
     ok('48. chạy thử ⇒ không gỡ gì', k11._s.tien.length === 1 && k11._s.phieu[0].amountReceived === 1000)
+
+    // C9: tổng ĐÃ khớp (huỷ TT…489 rồi thu lại TT…490 cùng số) nhưng Kengi còn giữ dòng mang mã huỷ ⇒ vẫn phải dựng lại
+    const kvThuLai = { HD101: { ...kvHuy.HD101, totalPayment: 1000, payments: [kvHuy.HD101.payments[0], { code: 'TT490', amount: 1000, status: 0, method: 'Cash', transDate: '2026-10-20T09:01:00' }] } }
+    const k12 = khoGia({ khach: [{ ...KH, debt: 0 }], phieu: datDaThu(), noi: noiGoc(), tien: [{ id: 'q12', transactionId: 'a1', type: 'cash', amount: 1000, reference: 'TTHD101' }] })
+    const kq12 = await keoPhieuThuKhach(k12, opts(), [huy('TTHD101', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => (kvThuLai as any)[ma] ?? null)
+    const tien12 = k12._s.tien.filter((p: any) => p.transactionId === 'a1')
+    ok('49. tổng đã khớp nhưng còn dòng mang mã huỷ ⇒ dựng lại: chỉ còn TT490, đơn vẫn đủ tiền',
+        tien12.length === 1 && tien12[0].reference === 'TT490' && k12._s.phieu[0].amountReceived === 1000 && k12._s.phieu[0].status === 'completed' && kq12.hoaDonCapNhat === 1,
+        { tien12, kq12 })
 
 
     // ─── Gom webhook khách dồn dập mà không làm rơi phiếu (11/11/2026) ───
