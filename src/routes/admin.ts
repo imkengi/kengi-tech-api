@@ -24,6 +24,7 @@ import { SQL_TAO_BANG_ADS_PILOT } from '../lib/facebookAdsPilot'
 import { SQL_TAO_BANG_TIKTOK_PILOT } from '../lib/tiktokPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 import { CHON_NHAN_VIEN_AN_TOAN } from '../lib/nhanVienAnToan'
+import { docThongTinPhapLy, luuThongTinPhapLy, chuanHoaThongTin } from '../lib/thongTinPhapLy'
 
 const router = Router()
 
@@ -14439,6 +14440,26 @@ router.post('/xu-ly-don-ket', async (req: Request, res: Response) => {
         res.json({ success: true, data: { storeCode, kenh: ch.name, san: ch.platform, truoc: truocChu, ...kq } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+
+// ─── Thông tin pháp lý của đơn vị vận hành (lib/thongTinPhapLy.ts, 12/11/2026) ───
+// Chủ shop tự điền ở tab "Pháp lý"; trang /dieu-khoan, /chinh-sach-bao-mat đọc qua GET /api/thong-tin-phap-ly.
+router.get('/thong-tin-phap-ly', async (_req: Request, res: Response) => {
+    try {
+        res.json({ success: true, data: await docThongTinPhapLy() })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: moTaLoi(err) })
+    }
+})
+router.put('/thong-tin-phap-ly', async (req: Request, res: Response) => {
+    const c = chuanHoaThongTin(req.body)
+    if (!c.ok) { res.status(400).json({ success: false, error: c.loi }); return }
+    try {
+        res.json({ success: true, data: await luuThongTinPhapLy(c.gt) })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: moTaLoi(err) })
     }
 })
 

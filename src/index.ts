@@ -438,6 +438,18 @@ import { moTaLoi } from './lib/gomLoi'
 app.use('/api/tarot', tarotRoutes)
 
 // ─── Health check ───────────────────────────────────────────────────────────
+// Thông tin pháp lý của đơn vị vận hành — CÔNG KHAI, chỉ đọc (trang /dieu-khoan, /chinh-sach-bao-mat). Sửa: /api/admin/thong-tin-phap-ly
+app.get('/api/thong-tin-phap-ly', async (_req, res) => {
+    try {
+        const { docThongTinPhapLy } = await import('./lib/thongTinPhapLy')
+        res.set('Cache-Control', 'public, max-age=300')
+        res.json({ success: true, data: await docThongTinPhapLy() })
+    } catch (err: any) {
+        console.error('[thong-tin-phap-ly]', err?.message || err)
+        res.status(500).json({ success: false, error: 'Không đọc được thông tin pháp lý' })
+    }
+})
+
 app.get('/api/health', async (_req, res) => {
     const cache = await cacheHealth()
     const ws = getWebSocketStats()
