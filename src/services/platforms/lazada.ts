@@ -418,10 +418,150 @@ export class LazadaService extends PlatformService {
         return { items, tong, ...(catTai ? { catTai } : {}) }
     }
 
+    /*
+     * ĐO 13/11/2026 trên gian thật (KENGISTORE, GetProducts filter=all, 72 mã / 89 SKU — /admin/lazada-sp-tho):
+     *  - Mã: `status` "Active" 71, "Suspended" 1 (mã bị Lazada khoá — kèm subStatus / rejectReason). SKU: `Status` "active" 89.
+     *  - Tồn mỗi SKU: quantity = Available = multiWarehouseInventories[].quantity = totalQuantity = sellableQuantity (tổng 4959),
+     *    occupyQuantity / withholdQuantity = 0 ở mọi SKU. options=1 thêm `sellableStock` (= các số trên), occupiedStock,
+     *    withholdingStock, preorderStock, dropshippingStock, fulfilmentStock (đều 0) — tài liệu ghi ReservedStock / RtsStock … là SAI tên.
+     *    Mọi SKU đúng MỘT kho ("dropshipping").
+     *  - Giá: `price` + `special_price` (58/89 SKU), KHÔNG có special_from / to_time. Đơn thật SHD8300 bán 935.000 = special_price
+     *    (price 1.250.000) ⇒ special_price là giá khách đang trả.
+     *  - Phân loại: `saleProp` {color_family: "Pink"} (khoá đó chép thêm ra ngoài SKU: color_family, Variation, "CÔNG SUẤT"…).
+     */
+
+    /** Kho của một SKU — mảng rỗng khi Lazada không trả. */
+    static khoCuaSku(s: any): any[] {
+        return Array.isArray(s?.multiWarehouseInventories) ? s.multiWarehouseInventories.filter(Boolean) : []
+    }
+
+    /**
+     * Tồn ĐANG BÁN (sellable) của MỘT SKU — đúng con số UpdateSellableQuantity ghi. Thứ tự: `sellableStock` (options=1) →
+     * `sellableQuantity` của kho duy nhất → tổng `sellableQuantity` các kho → `Available` → `quantity`. Đo 13/11 các số này bằng
+     * nhau; khi có đơn giữ hàng (occupy) thì `quantity` (TỔNG) sẽ lớn hơn — nên nó đứng cuối. Không trường nào ⇒ 0.
+     */
+    static tonDangBanSku(s: any): number {
+        const so = (v: any) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null)
+        const khos = LazadaService.khoCuaSku(s)
+        const tuKho = khos.length ? khos.map(k => so(k?.sellableQuantity)) : []
+        const ung = [
+            so(s?.sellableStock),
+            tuKho.length === 1 ? tuKho[0] : null,
+            tuKho.length > 1 && tuKho.every(x => x !== null) ? tuKho.reduce((t: number, x) => t + (x as number), 0) : null,
+            so(s?.Available),
+            so(s?.quantity),
+        ]
+        const v = ung.find(x => x !== null)
+        return Math.max(0, Math.floor(v ?? 0))
+    }
+
+    /** Tên phân loại: giá trị `saleProp` ("Pink" / "Pink / 1L"), không có thì SellerSku / SkuId. */
+    static tenPhanLoaiSku(s: any): string {
+        const sp = s?.saleProp && typeof s.saleProp === 'object' ? Object.values(s.saleProp) : []
+        const ten = sp.map(v => String(v ?? '').trim()).filter(Boolean).join(' / ')
+        return ten || String(s?.SellerSku ?? s?.SkuId ?? '').trim()
+    }
+
+    /** Giá khách đang trả của một SKU: special_price khi có và thấp hơn price (đo 13/11: đơn thật bán đúng special_price). */
+    static giaDangBanSku(s: any): number {
+        const goc = Number(s?.price) || 0
+        const km = Number(s?.special_price) || 0
+        return km > 0 && (goc <= 0 || km < goc) ? km : goc
+    }
+
+    /** Trạng thái mã → bộ chữ chung của bảng sản phẩm sàn (NORMAL / UNLIST / DELETED / BANNED). Giá trị lạ giữ NGUYÊN. */
+    static trangThaiMa(st: any): string {
+        const goc = String(st ?? '').trim()
+        const map: Record<string, string> = { active: 'NORMAL', inactive: 'UNLIST', deleted: 'DELETED', suspended: 'BANNED' }
+        return map[goc.toLowerCase()] || goc || 'NORMAL'
+    }
+
+    /** Một mã GetProducts → một dòng danh mục (OnlineProduct): mỗi listing một dòng, SKU đại diện = SKU đầu, tồn = Σ mọi SKU. */
+    static chuyenSanPham(it: any): PlatformProduct | null {
+        const id = String(it?.item_id ?? '').trim()
+        if (!id) return null
+        const skus: any[] = Array.isArray(it?.skus) ? it.skus.filter(Boolean) : []
+        const dau = skus[0]
+        const anh = [
+            ...(Array.isArray(it?.images) ? it.images : []),
+            ...(Array.isArray(dau?.Images) ? dau.Images : []),
+        ].find((x: any) => typeof x === 'string' && x.trim())
+        const sku = String(dau?.SellerSku ?? '').trim()
+        return {
+            platformProductId: id,
+            name: String(it?.attributes?.name || it?.attributes?.name_en || sku || id).trim(),
+            ...(sku ? { sku } : {}),
+            price: dau ? LazadaService.giaDangBanSku(dau) : 0,
+            stock: skus.reduce((t: number, s: any) => t + LazadaService.tonDangBanSku(s), 0),
+            status: LazadaService.trangThaiMa(it?.status),
+            ...(anh ? { imageUrl: anh } : {}),
+            ...(it?.primary_category != null && String(it.primary_category).trim() ? { categoryId: String(it.primary_category) } : {}),
+        }
+    }
+
+    // ─── Tồn kho ─────────────────────────────────────────────────────────────────
+
+    /** Thoát ký tự cho nội dung thẻ XML — SellerSku do người bán tự đặt, có thể mang & < > " '. */
+    static xmlThoat(s: any): string {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+    }
+
+    /**
+     * `payload` XML của UpdateSellableQuantity cho MỘT SKU (tài liệu /product/stock/sellable/update, đọc 13/11/2026: mỗi
+     * <Sku> mang ItemId / SkuId / SellerSku + SellableQuantity; tối đa 50 SKU một lần — ở đây cố ý một SKU một lần để lỗi
+     * của SKU nào nằm đúng dòng của SKU đó, giống Shopee / TikTok trong lõi đẩy tồn). Số âm / lẻ ⇒ làm tròn xuống, sàn 0.
+     */
+    static xmlTonMotSku(o: { itemId?: string; skuId?: string; sellerSku?: string; soLuong: number }): string {
+        const the = (ten: string, v: any) => (v === undefined || v === null || String(v).trim() === ''
+            ? '' : `<${ten}>${LazadaService.xmlThoat(String(v).trim())}</${ten}>`)
+        return '<Request><Product><Skus><Sku>'
+            + the('ItemId', o.itemId) + the('SkuId', o.skuId) + the('SellerSku', o.sellerSku)
+            + `<SellableQuantity>${Math.max(0, Math.floor(Number(o.soLuong) || 0))}</SellableQuantity>`
+            + '</Sku></Skus></Product></Request>'
+    }
+
+    /**
+     * Đẩy tồn ĐANG BÁN (sellable) của MỘT SKU — UpdateSellableQuantity. Chữ ký giống TikTok (mã sàn, số, sku_id?, seller_sku?)
+     * để lõi đẩy tồn (lib/dayTonLenSan.ts) gọi chung một kiểu.
+     *
+     * ⚠ GHI SÀN THẬT. Chỉ lõi đẩy tồn gọi (nút "Đẩy tồn kho lên sàn" → chạy thử → "Đẩy thật"; /admin/day-ton-thu).
+     * Thiếu cả SkuId lẫn SellerSku thì KHÔNG gọi — không biết SKU nào thì không đẩy. Lỗi Lazada (kể cả `detail` từng SKU)
+     * ném NGUYÊN VĂN để người bấm đọc được.
+     */
+    async updateStock(itemId: string, stock: number, skuId?: string, sellerSku?: string): Promise<void> {
+        if (!String(skuId ?? '').trim() && !String(sellerSku ?? '').trim()) {
+            throw new Error(`Lazada: mã ${itemId} thiếu cả SkuId lẫn SellerSku — không biết đẩy vào SKU nào, KHÔNG đẩy`)
+        }
+        const payload = LazadaService.xmlTonMotSku({ itemId, skuId, sellerSku, soLuong: stock })
+        const data = await this.httpGet(this.buildUrl('/product/stock/sellable/update', { payload }))
+        if (data.code !== '0' && data.code !== 0) {
+            const chiTiet = Array.isArray(data.detail)
+                ? data.detail.map((d: any) => [d?.seller_sku || d?.SellerSku, d?.field, d?.message].filter(Boolean).join(' ')).filter(Boolean).join('; ')
+                : ''
+            const loi = `[${data.code}] ${data.message || data.error_message || 'không rõ'}${chiTiet ? ` — ${chiTiet}` : ''}`
+            if (LazadaService.isChannelAuthError(data.code, data.message)) throw new Error(`Lazada từ chối kênh: ${loi}`)
+            throw new Error(`Lazada sellable/update: ${loi}`)
+        }
+    }
+
+    /**
+     * Danh mục gian (13/11/2026 — trước đây TODO trả rỗng nên nút Đồng bộ chưa từng kéo sản phẩm Lazada). Cả gian, không lọc
+     * ngày; lỗi Lazada NÉM nguyên văn (chỗ gọi ghi vào lỗi đồng bộ), không trả nửa danh mục như thể đủ. Chống trùng theo item_id.
+     * Chỉ ĐỌC sàn; ghi vào Kengi qua `luuDanhMucSan` (upsert theo kênh + mã, không bao giờ xoá, giữ liên kết mã kho đã gán).
+     */
     async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
-        // TODO: Implement Lazada product sync
-        console.log('[Lazada] fetchProducts not yet implemented')
-        return { products: [], total: 0 }
+        const { items, tong, catTai } = await this.docSanPhamTho()
+        if (catTai) console.warn(`[Lazada] fetchProducts: ${catTai}`)
+        const daCo = new Set<string>()
+        const products: PlatformProduct[] = []
+        for (const it of items) {
+            const p = LazadaService.chuyenSanPham(it)
+            if (!p || daCo.has(p.platformProductId)) continue
+            daCo.add(p.platformProductId)
+            products.push(p)
+        }
+        return { products, total: tong || products.length }
     }
 
     // ─── Mappers ─────────────────────────────────────────────────────────────────

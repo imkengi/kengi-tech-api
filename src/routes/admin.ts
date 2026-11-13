@@ -7533,6 +7533,8 @@ router.get('/do-phan-loai-shopee', async (req: Request, res: Response) => {
  *     đẩy cả kênh là việc của nút trên web, nơi chủ shop tự chịu trách nhiệm.
  *   · Tối đa 5 listing một lượt. Đây là bộ THỬ, không phải bộ đẩy hàng loạt.
  *   · Không có `apply` thì CHẠY THỬ (dryRun): tính y hệt nhưng không gọi sàn.
+ *   · `caKenhChayThu: true` (13/11/2026, khi nối Lazada): CHẠY THỬ cả kênh — đúng bảng xem trước chủ shop thấy khi bấm nút
+ *     (cầu dao, số mã về 0, ghi chú đọc sàn). Chỉ ĐỌC sàn, không ghi gì; đi cùng `apply` là bị từ chối.
  */
 router.post('/day-ton-thu', async (req: Request, res: Response) => {
     try {
@@ -7540,8 +7542,12 @@ router.post('/day-ton-thu', async (req: Request, res: Response) => {
         const channelId = String(req.body?.channelId || '').trim()
         const ids: string[] = Array.isArray(req.body?.onlineProductIds) ? req.body.onlineProductIds.map(String) : []
         const apply = req.body?.apply === true
+        const caKenhChayThu = req.body?.caKenhChayThu === true
         if (!storeCode || !channelId) { res.status(400).json({ success: false, error: 'Cần storeCode và channelId' }); return }
-        if (ids.length === 0) { res.status(400).json({ success: false, error: 'Cần onlineProductIds — bộ này KHÔNG đẩy cả kênh' }); return }
+        if (caKenhChayThu && (apply || ids.length > 0)) {
+            res.status(400).json({ success: false, error: 'caKenhChayThu chỉ để CHẠY THỬ cả kênh — không đi cùng apply / onlineProductIds' }); return
+        }
+        if (!caKenhChayThu && ids.length === 0) { res.status(400).json({ success: false, error: 'Cần onlineProductIds — bộ này KHÔNG đẩy cả kênh' }); return }
         if (ids.length > 5) { res.status(400).json({ success: false, error: 'Tối đa 5 listing một lượt — đây là bộ THỬ' }); return }
 
         const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { code: true, schema: true } })
@@ -7555,8 +7561,9 @@ router.post('/day-ton-thu', async (req: Request, res: Response) => {
         })
 
         const { dayTonLenSan } = await import('../lib/dayTonLenSan')
-        const kq = await dayTonLenSan(sp, channelId, { onlineProductIds: ids, force: true, dryRun: !apply })
-        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi }); return }
+        // cả kênh: force false — y như nút trên web (mã đã bằng số trên sàn thì "giữ nguyên"), để bảng khớp cái chủ shop thấy
+        const kq = await dayTonLenSan(sp, channelId, { onlineProductIds: ids, force: !caKenhChayThu, dryRun: !apply })
+        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi, ...(kq.data ? { data: kq.data } : {}) }); return }
 
         const sau: any[] = await sp.onlineProduct.findMany({
             where: { id: { in: ids } },
@@ -7573,7 +7580,9 @@ router.post('/day-ton-thu', async (req: Request, res: Response) => {
                 yNghia: apply
                     ? 'So `truoc.tonGhiNhan` với `sau.tonGhiNhan`: đổi số VÀ `dongBoLuc` mới = sàn đã nhận. '
                       + 'failed>0 thì đọc `ketQua.errors` — đó là câu NGUYÊN VĂN của sàn.'
-                    : 'CHẠY THỬ — chưa gọi sàn. Gửi lại kèm {"apply":true} để đẩy thật.',
+                    : caKenhChayThu
+                        ? 'CHẠY THỬ CẢ KÊNH — chỉ đọc sàn, chưa ghi gì. Đẩy thật cả kênh là nút "Đẩy tồn kho lên sàn" trên web (người bấm chịu trách nhiệm).'
+                        : 'CHẠY THỬ — chưa gọi sàn. Gửi lại kèm {"apply":true} để đẩy thật.',
             },
         })
     } catch (err: any) {
@@ -11740,37 +11749,49 @@ router.get('/online-live-check', async (req: Request, res: Response) => {
  * số SKU mỗi mã, số kho mỗi SKU, mọi trường dạng tồn (tên + số dòng có + tổng + vài giá trị), và `n` mã mẫu đã cắt mô tả /
  * ảnh. Danh mục sản phẩm của chính gian hàng — không có dữ liệu khách. Token hết hạn ⇒ trả nguyên lỗi Lazada, KHÔNG làm mới.
  */
+/** Mở kênh Lazada của một cửa hàng cho hai route admin Lazada bên dưới. Không lộ khoá ra ngoài (kenhAnToan); KHÔNG làm mới
+ *  token (token hết hạn ⇒ Lazada trả lỗi, route trả nguyên văn). `loi` có ⇒ route trả luôn. */
+async function moKenhLazada(storeCode: string, channelId: string): Promise<
+    { loi: { http: number; body: any } } | { loi?: undefined; sp: any; ch: any; kenhAnToan: any[]; svc: any }
+> {
+    if (!storeCode) return { loi: { http: 400, body: { success: false, error: 'Thiếu storeCode' } } }
+    const store = await prisma.store.findFirst({
+        where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+    })
+    if (!store) return { loi: { http: 404, body: { success: false, error: 'Không thấy cửa hàng' } } }
+    const sp: any = getStorePrisma(store.schema)
+    const kenhs: any[] = await sp.onlineChannel.findMany({ where: { platform: 'lazada' } })
+    const kenhAnToan = kenhs.map(k => ({
+        id: k.id, ten: k.name, trangThai: k.status, coToken: !!k.accessToken, tokenHetHan: k.tokenExpiresAt ?? null,
+    }))
+    const coToken = kenhs.filter(k => k.accessToken)
+    const ch = channelId ? kenhs.find(k => k.id === channelId) : (coToken.length === 1 ? coToken[0] : null)
+    if (!ch) {
+        return {
+            loi: {
+                http: 400, body: {
+                    success: false, kenh: kenhAnToan,
+                    error: kenhs.length === 0 ? 'Cửa hàng không có kênh Lazada'
+                        : channelId ? 'Không thấy kênh này' : 'Có nhiều / không có kênh Lazada đã nối — truyền channelId',
+                },
+            },
+        }
+    }
+    if (!ch.accessToken) return { loi: { http: 400, body: { success: false, kenh: kenhAnToan, error: 'Kênh chưa có access token' } } }
+    const { getPlatformService } = await import('../services/platforms')
+    const svc: any = getPlatformService('lazada', {
+        apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+        accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+        shopId: ch.shopId || undefined,
+    } as any)
+    return { sp, ch, kenhAnToan, svc }
+}
+
 router.get('/lazada-sp-tho', async (req: Request, res: Response) => {
     try {
-        const storeCode = String(req.query.storeCode || '').trim()
-        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
-        const store = await prisma.store.findFirst({
-            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
-        })
-        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
-        const sp: any = getStorePrisma(store.schema)
-        const kenhs: any[] = await sp.onlineChannel.findMany({ where: { platform: 'lazada' } })
-        const kenhAnToan = kenhs.map(k => ({
-            id: k.id, ten: k.name, trangThai: k.status, coToken: !!k.accessToken, tokenHetHan: k.tokenExpiresAt ?? null,
-        }))
-        const muon = String(req.query.channelId || '').trim()
-        const coToken = kenhs.filter(k => k.accessToken)
-        const ch = muon ? kenhs.find(k => k.id === muon) : (coToken.length === 1 ? coToken[0] : null)
-        if (!ch) {
-            return res.status(400).json({
-                success: false, kenh: kenhAnToan,
-                error: kenhs.length === 0 ? 'Cửa hàng không có kênh Lazada'
-                    : muon ? 'Không thấy kênh này' : 'Có nhiều / không có kênh Lazada đã nối — truyền channelId',
-            })
-        }
-        if (!ch.accessToken) return res.status(400).json({ success: false, kenh: kenhAnToan, error: 'Kênh chưa có access token' })
-
-        const { getPlatformService } = await import('../services/platforms')
-        const svc: any = getPlatformService('lazada', {
-            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
-            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
-            shopId: ch.shopId || undefined,
-        } as any)
+        const mo = await moKenhLazada(String(req.query.storeCode || '').trim(), String(req.query.channelId || '').trim())
+        if (mo.loi) return res.status(mo.loi.http).json(mo.loi.body)
+        const { ch, kenhAnToan, svc } = mo
         const tatCa = String(req.query.tatCa || '') === '1'
         const doc = await svc.docSanPhamTho({ options1: String(req.query.options || '') === '1', toiDaTrang: tatCa ? undefined : 1 })
         const items: any[] = doc.items || []
@@ -11837,6 +11858,79 @@ router.get('/lazada-sp-tho', async (req: Request, res: Response) => {
         })
     } catch (err: any) {
         // lỗi Lazada nguyên văn — người vận hành cần đọc được ("chặn IP", "token hết hạn"…)
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
+ * POST /admin/lazada-keo-danh-muc  { storeCode, channelId?, apply?: true } — KÉO danh mục Lazada vào bảng sản phẩm sàn (13/11/2026).
+ *
+ * Cùng đường nút "Đồng bộ" của kênh gọi (fetchProducts → luuDanhMucSan) — chỉ ĐỌC sàn. Không `apply` ⇒ CHẠY THỬ: đếm sẽ tạo / sẽ
+ * cập nhật, không ghi gì. `apply` ⇒ upsert theo (kênh, item_id): KHÔNG xoá dòng nào, giữ nguyên liên kết mã kho đã gán, ghi
+ * SyncLog. Nghiệm thu bằng số: số dòng của kênh sau khi ghi phải bằng total_products Lazada báo (gian không có dòng cũ đã gỡ).
+ * `khopMaKho` = mã có SellerSku (SKU đầu) trùng mã hàng kho / bảng ánh xạ — đúng thứ lõi đẩy tồn tra (traHangKho).
+ */
+router.post('/lazada-keo-danh-muc', async (req: Request, res: Response) => {
+    try {
+        const apply = req.body?.apply === true
+        const mo = await moKenhLazada(String(req.body?.storeCode || '').trim(), String(req.body?.channelId || '').trim())
+        if (mo.loi) return res.status(mo.loi.http).json(mo.loi.body)
+        const { sp, ch, kenhAnToan, svc } = mo
+
+        const { products, total } = await svc.fetchProducts() as { products: any[]; total: number }
+        const daCo: any[] = await sp.onlineProduct.findMany({ where: { channelId: ch.id }, select: { platformProductId: true, localProductId: true } })
+        const coSan = new Set(daCo.map(x => String(x.platformProductId)))
+        const trenSan = new Set(products.map(p => String(p.platformProductId)))
+        const seTao = products.filter(p => !coSan.has(String(p.platformProductId))).length
+        const trangThai: Record<string, number> = {}
+        for (const p of products) trangThai[p.status] = (trangThai[p.status] || 0) + 1
+        const skus = [...new Set(products.map(p => String(p.sku || '').trim()).filter(Boolean))]
+        const khoTrung: any[] = skus.length ? await sp.product.findMany({ where: { sku: { in: skus } }, select: { sku: true } }) : []
+        // bảng ánh xạ so KHÔNG phân biệt hoa thường (như traHangKho) — đọc cả bảng (nhỏ) rồi so trong máy
+        let loiAnhXa = ''
+        const anhXa: any[] = skus.length
+            ? await sp.skuMapping.findMany({ select: { platformSku: true } }).catch((e: any) => { loiAnhXa = String(e?.message || e).slice(0, 160); return [] })
+            : []
+        const khoKhop = new Set(khoTrung.map(x => String(x.sku)))
+        const anhXaKhop = new Set(anhXa.map(x => String(x.platformSku ?? '').trim().toLowerCase()).filter(Boolean))
+        const khopMaKho = products.filter(p => p.sku && (khoKhop.has(String(p.sku)) || anhXaKhop.has(String(p.sku).toLowerCase()))).length
+        const tom = {
+            kenh: kenhAnToan, kenhDoc: ch.id,
+            lazadaBao: total, docDuoc: products.length,
+            seTao, seCapNhat: products.length - seTao,
+            dongCuKhongConTrenSan: daCo.filter(x => !trenSan.has(String(x.platformProductId))).length,
+            trangThai, coSku: products.filter(p => p.sku).length, khopMaKho,
+            ...(loiAnhXa ? { loiDocBangAnhXa: loiAnhXa } : {}),
+            tongTonTrenSan: products.reduce((t, p) => t + (Number(p.stock) || 0), 0),
+        }
+        if (!apply) {
+            return res.json({
+                success: true,
+                data: { chayThu: true, ...tom, mau: products.slice(0, 5), yNghia: 'CHẠY THỬ — chưa ghi gì. Gửi lại kèm {"apply":true} để ghi danh mục.' },
+            })
+        }
+
+        const { luuDanhMucSan } = await import('../lib/shopeeTuQuan')
+        const daGhi = await luuDanhMucSan(sp, { id: ch.id, platform: 'lazada' }, products)
+        const soDongSau = await sp.onlineProduct.count({ where: { channelId: ch.id } })
+        await sp.syncLog.create({
+            data: {
+                channelId: ch.id, action: 'sync_products', status: 'success', ordersCount: daGhi,
+                details: `Kéo danh mục Lazada (admin): ghi ${daGhi} mã — tạo ${tom.seTao}, cập nhật ${tom.seCapNhat}; Lazada báo ${total}; kênh còn ${soDongSau} dòng`,
+            },
+        }).catch(() => { })
+        res.json({
+            success: true,
+            data: {
+                chayThu: false, ...tom, daGhi, soDongSau,
+                khop: soDongSau === total,
+                yNghia: soDongSau === total
+                    ? 'Số dòng của kênh = số mã Lazada báo.'
+                    : `Số dòng của kênh (${soDongSau}) ≠ Lazada báo (${total}) — dòng cũ không còn trên sàn: ${tom.dongCuKhongConTrenSan} (không tự xoá).`,
+            },
+        })
+    } catch (err: any) {
+        // lỗi Lazada nguyên văn
         res.status(500).json({ success: false, error: err?.message || String(err) })
     }
 })

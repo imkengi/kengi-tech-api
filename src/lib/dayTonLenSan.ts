@@ -30,9 +30,14 @@
 //  một dòng: tra kho theo SKU của phân loại, đẩy đúng model_id / sku_id. Phân loại không
 //  tra ra mã kho thì BỎ QUA và liệt kê — không bao giờ đẩy 0 cho thứ không biết là gì.
 //  Đọc hỏng ⇒ listing đó rơi về cách cũ, có ghi chú.
+//
+//  LAZADA (13/11/2026, chủ shop duyệt "kéo sản phẩm + đẩy tồn"): lượt 0 đọc GetProducts cả gian (SkuId, SellerSku, tồn đang
+//  bán từng SKU), lượt 2 ghi UpdateSellableQuantity từng SKU. KHÔNG có cách cũ: đọc hỏng / listing không thấy trên sàn ⇒ bỏ
+//  qua, nói lý do (DocSan.batBuocDoc). SKU nằm ở nhiều kho Lazada ⇒ bỏ qua (đo 13/11: mọi SKU một kho). Cùng cầu dao.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { getPlatformService } from '../services/platforms'
+import { LazadaService } from '../services/platforms/lazada'
 import { tonSanPham } from './flashSaleKiemGia'
 import type { KhoMe } from './khoMe'
 
@@ -127,17 +132,23 @@ async function dayTonShopee(service: any, p: any, local: any, targetStock: numbe
     await service.updateStock(p.platformProductId, targetStock, modelId)
 }
 
-/** Một phân loại đọc SỐNG trên sàn — Shopee model / TikTok SKU. `id` = model_id / sku_id. */
-interface PhanLoaiSan { id: string; sku: string; ten: string; ton: number }
+/** Một phân loại đọc SỐNG trên sàn — Shopee model / TikTok SKU / Lazada SKU. `id` = model_id / sku_id / SkuId.
+ *  `chan` (Lazada, 13/11/2026): lý do KHÔNG được đẩy phân loại này (vd SKU nằm ở nhiều kho Lazada) — lượt 1 bỏ qua, ghi lý do. */
+interface PhanLoaiSan { id: string; sku: string; ten: string; ton: number; chan?: string }
 
 /** Lượt 0. Listing không có mặt ở cả hai bảng ⇒ đi cách cũ: tồn sàn = số lưu lần đồng bộ cuối, Shopee thử đẩy trơn rồi mới
- *  hỏi phân loại (dayTonShopee), TikTok ghép SKU theo seller_sku đã lưu. */
+ *  hỏi phân loại (dayTonShopee), TikTok ghép SKU theo seller_sku đã lưu. LAZADA KHÔNG có cách cũ (13/11/2026): không đọc ra
+ *  thì không đẩy — xem `batBuocDoc`. */
 interface DocSan {
-    /** listing CÓ PHÂN LOẠI (Shopee has_model; TikTok ≥ 2 SKU) — mã sàn → mọi phân loại */
+    /** listing CÓ PHÂN LOẠI (Shopee has_model; TikTok / Lazada ≥ 2 SKU) — mã sàn → mọi phân loại */
     phanLoai: Map<string, PhanLoaiSan[]>
-    /** listing một SKU — mã sàn → tồn đang bán (+ sku_id TikTok: lúc ghi khỏi hỏi product detail) */
-    don: Map<string, { ton: number; skuId?: string }>
+    /** listing một SKU — mã sàn → tồn đang bán (+ sku_id TikTok / SkuId Lazada: lúc ghi khỏi hỏi lại; + SellerSku Lazada
+     *  đọc sống; + `chan` như PhanLoaiSan) */
+    don: Map<string, { ton: number; skuId?: string; sku?: string; chan?: string }>
     ghiChu: string[]
+    /** Lazada: listing KHÔNG có trong hai bảng trên thì BỎ QUA (không rơi về cách cũ) — đẩy Lazada mới viết 13/11/2026, chưa
+     *  có "lần đồng bộ cuối" đáng tin để so, và hàng nhiều SKU đi cách cũ là đẩy nhầm tồn một SKU lên cả listing. */
+    batBuocDoc?: boolean
 }
 
 /** Mỗi lượt đọc get_model_list cho tối đa chừng này listing có phân loại (mỗi listing một lời gọi); phần dư đi cách cũ. */
@@ -155,9 +166,51 @@ const tenPhanLoaiTikTok = (s: any) =>
  * nói ra trong ghiChu — KHÔNG chặn cả lượt: cách cũ vẫn đẩy đúng hàng một phân loại.
  */
 async function docPhanLoaiSan(service: any, platform: string, ds: any[], nghi: (ms: number) => Promise<void>): Promise<DocSan> {
-    const kq: DocSan = { phanLoai: new Map(), don: new Map(), ghiChu: [] }
+    const kq: DocSan = { phanLoai: new Map(), don: new Map(), ghiChu: [], ...(platform === 'lazada' ? { batBuocDoc: true } : {}) }
     if (!ds.length) return kq
     const loi = (e: any) => String(e?.message || e).slice(0, 160)
+
+    if (platform === 'lazada') {
+        /* Lazada (13/11/2026): GetProducts cả gian (50 mã / lời gọi, mỗi mã mang đủ skus[]). Đọc hỏng ⇒ KHÔNG đẩy mã nào
+         * (batBuocDoc) — lỗi Lazada nguyên văn vào ghi chú. Đọc được ⇒ mỗi SKU: SkuId + SellerSku + tồn đang bán; SKU nằm ở
+         * nhiều kho Lazada thì chặn (UpdateSellableQuantity khi đó đòi mã kho — không đoán kho). */
+        const khongDay = 'không đẩy mã Lazada nào (thiếu tồn đang bán để so và mã SKU để ghi)'
+        if (typeof service.docSanPhamTho !== 'function') { kq.ghiChu.push(`Không đọc được danh mục Lazada — ${khongDay}.`); return kq }
+        let doc: { items: any[]; catTai?: string }
+        try { doc = await service.docSanPhamTho() } catch (e: any) {
+            kq.ghiChu.push(`Không đọc được danh mục Lazada (${loi(e)}) — ${khongDay}.`)
+            return kq
+        }
+        const can = new Set(ds.map(p => String(p.platformProductId)))
+        const nhieuKho: string[] = []
+        for (const r of doc.items || []) {
+            const id = String(r?.item_id ?? '')
+            if (!can.has(id)) continue
+            const skus: PhanLoaiSan[] = (Array.isArray(r.skus) ? r.skus : []).map((s: any) => {
+                const soKho = LazadaService.khoCuaSku(s).length
+                const chan = soKho > 1 ? `SKU nằm ở ${soKho} kho Lazada — chưa hỗ trợ đẩy theo từng kho, không đoán kho` : undefined
+                if (chan) nhieuKho.push(String(s?.SellerSku ?? s?.SkuId ?? id))
+                return {
+                    id: String(s?.SkuId ?? ''), sku: String(s?.SellerSku ?? '').trim(), ten: LazadaService.tenPhanLoaiSku(s),
+                    ton: LazadaService.tonDangBanSku(s), ...(chan ? { chan } : {}),
+                }
+            }).filter((s: PhanLoaiSan) => s.id || s.sku)
+            if (skus.length > 1) kq.phanLoai.set(id, skus)
+            else if (skus.length === 1) {
+                const s = skus[0]!
+                kq.don.set(id, { ton: s.ton, ...(s.id ? { skuId: s.id } : {}), ...(s.sku ? { sku: s.sku } : {}), ...(s.chan ? { chan: s.chan } : {}) })
+            }
+        }
+        const khongThay = ds.filter(p => !kq.phanLoai.has(String(p.platformProductId)) && !kq.don.has(String(p.platformProductId)))
+        if (khongThay.length) {
+            kq.ghiChu.push(`${khongThay.length} mã có trong Kengi nhưng KHÔNG thấy trên Lazada lúc đọc (đã xoá / chưa duyệt / ${doc.catTai ? doc.catTai : 'chưa đồng bộ lại danh mục'})`
+                + ` — giữ nguyên, không đẩy: ${khongThay.slice(0, 5).map(p => p.sku || p.platformProductId).join(', ')}${khongThay.length > 5 ? '…' : ''}.`)
+        }
+        if (nhieuKho.length) {
+            kq.ghiChu.push(`${nhieuKho.length} SKU nằm ở nhiều kho Lazada — chưa hỗ trợ đẩy theo từng kho, giữ nguyên: ${nhieuKho.slice(0, 5).join(', ')}${nhieuKho.length > 5 ? '…' : ''}.`)
+        }
+        return kq
+    }
 
     if (platform === 'tiktok') {
         const cachCu = 'tồn sàn theo lần đồng bộ cuối, hàng nhiều SKU chỉ đẩy SKU đã lưu (SKU đầu)'
@@ -278,7 +331,8 @@ export function cauDaoTon(bang: any[]): string | null {
 export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDayTon = {}): Promise<KetQuaDayTon> {
     const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
     if (!channel) return { http: 404, ok: false, loi: 'Kênh không tồn tại' }
-    if (!['shopee', 'tiktok'].includes(channel.platform)) {
+    // Lazada từ 13/11/2026 (UpdateSellableQuantity, từng SKU) — chỉ qua nút tay / admin; chưa có Pilot Lazada nào gọi lõi này
+    if (!['shopee', 'tiktok', 'lazada'].includes(channel.platform)) {
         return { http: 400, ok: false, loi: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy tồn kho` }
     }
     if (!channel.accessToken) return { http: 400, ok: false, loi: 'Kênh chưa kết nối API (thiếu access token)' }
@@ -341,7 +395,10 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
     const docSan: DocSan = !chayThu && ts.docSanTruoc
         ? ts.docSanTruoc
         : boDocViToken
-            ? { phanLoai: new Map(), don: new Map(), ghiChu: ['Token sàn sắp hết hạn — chạy thử không làm mới token nên chưa đọc phân loại / tồn đang bán trên sàn; lượt chạy thật làm mới token rồi đọc.'] }
+            ? {
+                phanLoai: new Map(), don: new Map(), ...(channel.platform === 'lazada' ? { batBuocDoc: true } : {}),
+                ghiChu: ['Token sàn sắp hết hạn — chạy thử không làm mới token nên chưa đọc phân loại / tồn đang bán trên sàn; lượt chạy thật làm mới token rồi đọc.'],
+            }
             : await docPhanLoaiSan(service, channel.platform, onlineProducts, nghi)
 
     /** Tồn nguồn của một hàng kho. KHO MẸ — cửa hàng mượn tồn của cửa hàng khác thì đẩy TỒN BÊN ĐÓ: tồn mẹ − ĐƠN TREO bên
@@ -358,7 +415,7 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
     /* LƯỢT 1 — tính tồn cần đẩy cho MỌI listing (mọi phân loại), CHƯA ghi gì lên sàn. Chạy thử và chạy thật dùng CHUNG lượt
      * này (một bản tính ⇒ bảng xem trước đúng bằng thứ sẽ đẩy). `dong` là dòng bảng chạy thử — cầu dao đọc trên đủ mọi dòng,
      * không cắt; mỗi phân loại một dòng nên phân loại sắp về 0 cũng vào cầu dao. */
-    const keHoach: { p: any; local: any; targetStock: number; dong: any; phanLoai?: PhanLoaiSan; skuId?: string }[] = []
+    const keHoach: { p: any; local: any; targetStock: number; dong: any; phanLoai?: PhanLoaiSan; skuId?: string; sellerSku?: string }[] = []
     const boQuaPhanLoai: string[] = []
     let soListingPhanLoai = 0
     for (const p of onlineProducts) {
@@ -369,6 +426,8 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
             const skuListing = [chuanSku(p.sku), chuanSku(p.localProduct?.sku)].filter(Boolean)
             for (const m of ds) {
                 const nhan = `${p.sku || maSan} / ${m.ten || m.sku || m.id}`
+                // Sàn không cho đẩy phân loại này (Lazada: SKU nhiều kho) ⇒ bỏ qua, nói lý do — không đoán
+                if (m.chan) { skipped++; boQuaPhanLoai.push(`${nhan}: ${m.chan}`); continue }
                 /* Phân loại mang đúng SKU của listing (hoặc listing chỉ MỘT phân loại) ⇒ tra như listing, link sẵn trước — y như
                  * cách cũ đẩy phân loại khớp. Phân loại khác tra theo SKU CỦA NÓ; không ra mã kho thì bỏ qua, không đoán. */
                 const nhuListing = ds.length === 1 || (!!m.sku && skuListing.includes(chuanSku(m.sku)))
@@ -405,6 +464,12 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
             continue
         }
 
+        // tồn ĐANG BÁN đọc sống ở lượt 0 (đọc hỏng ⇒ số lưu lần đồng bộ cuối, như trước)
+        const song = docSan.don.get(maSan)
+        /* Lazada (13/11/2026): không đọc ra listing này trên sàn ⇒ KHÔNG đẩy (không có cách cũ — xem DocSan.batBuocDoc); sàn không
+         * cho đẩy (SKU nhiều kho) ⇒ bỏ qua. Lý do đã nằm trong ghi chú đọc sàn (docSan) mà bảng chạy thử hiện ra. */
+        if ((docSan.batBuocDoc && !song) || song?.chan) { skipped++; continue }
+
         const tra = await traHangKho(prisma, p.sku, p.localProduct)
         if (!tra) { skipped++; continue }
         const { local, rate } = tra
@@ -415,15 +480,13 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
             continue
         }
 
-        // tồn ĐANG BÁN đọc sống ở lượt 0 (đọc hỏng ⇒ số lưu lần đồng bộ cuối, như trước)
-        const song = docSan.don.get(maSan)
         const tonSan = song ? song.ton : p.stock
         // Tồn theo ĐƠN VỊ BÁN trên sàn: 26 cái = 2 vỉ (không phải 26 vỉ)
         const targetStock = Math.max(0, Math.floor(nguon.ton / (rate > 0 ? rate : 1)))
         const boQua = !force && tonSan === targetStock
         if (boQua) skipped++
         keHoach.push({
-            p, local, targetStock, ...(song?.skuId ? { skuId: song.skuId } : {}),
+            p, local, targetStock, ...(song?.skuId ? { skuId: song.skuId } : {}), ...(song?.sku ? { sellerSku: song.sku } : {}),
             dong: {
                 sku: p.sku || local.sku, tenSan: String(p.name || '').slice(0, 40),
                 tonDangTrenSan: tonSan, seDay: targetStock,
@@ -493,12 +556,15 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
      * lượt 0. Listing một SKU: Shopee như cũ (thử trơn → hỏi phân loại); TikTok mang sẵn sku_id thì khỏi hỏi product detail. */
     /** listing có phân loại → phân loại đã ghi thành công → số vừa ghi; cộng lại thành tồn TỔNG của listing ở cuối lượt */
     const daGhiPhanLoai = new Map<string, { p: any; daGhi: Map<string, number> }>()
-    for (const { p, local, targetStock, dong, phanLoai, skuId } of keHoach) {
+    for (const { p, local, targetStock, dong, phanLoai, skuId, sellerSku } of keHoach) {
         if (dong.boQua) continue
 
         try {
             if (phanLoai) {
-                await service.updateStock(p.platformProductId, targetStock, channel.platform === 'shopee' ? Number(phanLoai.id) : phanLoai.id)
+                if (channel.platform === 'shopee') await service.updateStock(p.platformProductId, targetStock, Number(phanLoai.id))
+                // Lazada: SkuId + SellerSku đọc sống ở lượt 0 (UpdateSellableQuantity nhận cả hai, thiếu một vẫn khớp được)
+                else if (channel.platform === 'lazada') await service.updateStock(p.platformProductId, targetStock, phanLoai.id || undefined, phanLoai.sku || undefined)
+                else await service.updateStock(p.platformProductId, targetStock, phanLoai.id)
                 const maSan = String(p.platformProductId)
                 const x = daGhiPhanLoai.get(maSan) || { p, daGhi: new Map<string, number>() }
                 x.daGhi.set(phanLoai.id, targetStock)
@@ -507,7 +573,8 @@ export async function dayTonLenSan(prisma: any, channelId: string, ts: ThamSoDay
                 if (channel.platform === 'shopee') {
                     await dayTonShopee(service, p, local, targetStock)
                 } else {
-                    await service.updateStock(p.platformProductId, targetStock, skuId, p.sku || undefined)
+                    // Lazada: SellerSku đọc sống ở lượt 0 trước SKU đã lưu (TikTok không có sellerSku sống ⇒ như cũ)
+                    await service.updateStock(p.platformProductId, targetStock, skuId, sellerSku || p.sku || undefined)
                 }
                 await prisma.onlineProduct.update({
                     where: { id: p.id },
