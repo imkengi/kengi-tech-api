@@ -371,6 +371,53 @@ export class LazadaService extends PlatformService {
         }
     }
 
+    // ─── Products ────────────────────────────────────────────────────────────────
+
+    /** GetProducts chỉ cho lật trang bằng offset tới 10.000 (tài liệu /products/get, đọc 13/11/2026). */
+    static readonly OFFSET_TOI_DA = 10_000
+    static readonly MA_MOI_TRANG = 50
+
+    /**
+     * DANH MỤC THÔ của gian — GET /products/get (GetProducts), filter=all, 50 mã/trang, lật bằng offset.
+     *
+     * Tài liệu (đọc 13/11/2026): `limit` tối đa 50; `offset` ghi "deprecated", tối đa 10.000; `options=1` trả thêm
+     * ReservedStock / RtsStock / PendingStock / RealTimeStock / FulfillmentBySellable. Danh mục LUÔN lấy trọn bộ, không lọc
+     * ngày (lọc ngày lên danh mục thì mã lâu không sửa sẽ không về). Mỗi dòng giữ NGUYÊN như Lazada trả (item_id,
+     * attributes, skus[] …) — mọi phép chiếu (danh mục, tồn từng SKU) đọc từ cùng các dòng này.
+     *
+     * Hỏng giữa chừng thì NÉM kèm lỗi nguyên văn của Lazada — không trả nửa danh mục như thể đủ. `catTai` nói rõ khi chưa
+     * đọc hết (chạm trần offset, hoặc người gọi giới hạn số trang).
+     */
+    async docSanPhamTho(o: { options1?: boolean; toiDaTrang?: number } = {}): Promise<{ items: any[]; tong: number; catTai?: string }> {
+        const moiTrang = LazadaService.MA_MOI_TRANG
+        const toiDaTrang = Math.max(1, o.toiDaTrang ?? Math.floor(LazadaService.OFFSET_TOI_DA / moiTrang) + 1)
+        const items: any[] = []
+        let tong = 0
+        let het = false
+        for (let trang = 0; trang < toiDaTrang; trang++) {
+            const offset = trang * moiTrang
+            if (offset > LazadaService.OFFSET_TOI_DA) break
+            const url = this.buildUrl('/products/get', {
+                filter: 'all', offset: String(offset), limit: String(moiTrang),
+                ...(o.options1 ? { options: '1' } : {}),
+            })
+            const data = await this.httpGet(url)
+            if (data.code !== '0' && data.code !== 0) {
+                const detail = `[${data.code}] ${data.message || data.error_message || 'không rõ'}`
+                if (LazadaService.isChannelAuthError(data.code, data.message)) throw new Error(`Lazada từ chối kênh: ${detail}`)
+                throw new Error(`Lazada products/get (offset ${offset}): ${detail}`)
+            }
+            const ds: any[] = Array.isArray(data.data?.products) ? data.data.products : []
+            tong = Number(data.data?.total_products) || tong
+            items.push(...ds)
+            if (ds.length < moiTrang || (tong > 0 && items.length >= tong)) { het = true; break }
+        }
+        const catTai = het ? undefined
+            : `mới đọc ${items.length}${tong ? `/${tong}` : ''} mã (${items.length >= LazadaService.OFFSET_TOI_DA
+                ? `Lazada chỉ cho lật trang tới offset ${LazadaService.OFFSET_TOI_DA}` : 'giới hạn số trang của lượt đọc'})`
+        return { items, tong, ...(catTai ? { catTai } : {}) }
+    }
+
     async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
         // TODO: Implement Lazada product sync
         console.log('[Lazada] fetchProducts not yet implemented')

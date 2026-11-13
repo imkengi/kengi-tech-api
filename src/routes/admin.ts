@@ -11729,6 +11729,119 @@ router.get('/online-live-check', async (req: Request, res: Response) => {
 })
 
 /**
+ * GET /admin/lazada-sp-tho?storeCode=&channelId=&tatCa=1&options=1&n=3 — CHỈ ĐỌC, không ghi gì (cả token).
+ *
+ * Vì sao có (13/11/2026, chủ shop duyệt làm "kéo sản phẩm + đẩy tồn" cho Lazada): fetchProducts của Lazada chưa từng
+ * chạy (TODO trống), nên chưa ai thấy GetProducts thật của gian trả gì. Tài liệu chỉ có MỘT ví dụ (`quantity`,
+ * `Available`, `SellerSku`, `SkuId`, `special_price` …) — trường tồn ĐANG BÁN, bảng trạng thái mã / SKU, tên phân loại,
+ * nhiều kho hay một kho đều phải NHÌN dữ liệu thật trước khi map, không đoán (giống /admin/lazada-raw cho đơn).
+ *
+ * Trả: kênh Lazada của cửa hàng (không lộ khoá), tổng mã, khoá có mặt ở mã / SKU / attributes (đếm), phân bố trạng thái,
+ * số SKU mỗi mã, số kho mỗi SKU, mọi trường dạng tồn (tên + số dòng có + tổng + vài giá trị), và `n` mã mẫu đã cắt mô tả /
+ * ảnh. Danh mục sản phẩm của chính gian hàng — không có dữ liệu khách. Token hết hạn ⇒ trả nguyên lỗi Lazada, KHÔNG làm mới.
+ */
+router.get('/lazada-sp-tho', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const kenhs: any[] = await sp.onlineChannel.findMany({ where: { platform: 'lazada' } })
+        const kenhAnToan = kenhs.map(k => ({
+            id: k.id, ten: k.name, trangThai: k.status, coToken: !!k.accessToken, tokenHetHan: k.tokenExpiresAt ?? null,
+        }))
+        const muon = String(req.query.channelId || '').trim()
+        const coToken = kenhs.filter(k => k.accessToken)
+        const ch = muon ? kenhs.find(k => k.id === muon) : (coToken.length === 1 ? coToken[0] : null)
+        if (!ch) {
+            return res.status(400).json({
+                success: false, kenh: kenhAnToan,
+                error: kenhs.length === 0 ? 'Cửa hàng không có kênh Lazada'
+                    : muon ? 'Không thấy kênh này' : 'Có nhiều / không có kênh Lazada đã nối — truyền channelId',
+            })
+        }
+        if (!ch.accessToken) return res.status(400).json({ success: false, kenh: kenhAnToan, error: 'Kênh chưa có access token' })
+
+        const { getPlatformService } = await import('../services/platforms')
+        const svc: any = getPlatformService('lazada', {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        } as any)
+        const tatCa = String(req.query.tatCa || '') === '1'
+        const doc = await svc.docSanPhamTho({ options1: String(req.query.options || '') === '1', toiDaTrang: tatCa ? undefined : 1 })
+        const items: any[] = doc.items || []
+
+        const dem = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) || 0) + 1)
+        const raObj = (m: Map<string, number>) => Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]))
+        const khoaItem = new Map<string, number>(), khoaSku = new Map<string, number>(), khoaAttr = new Map<string, number>()
+        const khoaKho = new Map<string, number>()
+        const ttItem = new Map<string, number>(), ttSku = new Map<string, number>()
+        const soSku = new Map<string, number>(), soKho = new Map<string, number>()
+        // mọi trường trông như TỒN, kể cả trong từng kho: tên → { co, tong, viDu }
+        const TON = /quantity|stock|available|sellable|reserved|occupy|withhold|pending|rts/i
+        const truongTon = new Map<string, { co: number; tong: number; viDu: any[] }>()
+        const ghiTon = (ten: string, v: any) => {
+            const x = truongTon.get(ten) || { co: 0, tong: 0, viDu: [] }
+            x.co++
+            const n = Number(v)
+            if (Number.isFinite(n)) x.tong += n
+            if (x.viDu.length < 6) x.viDu.push(v)
+            truongTon.set(ten, x)
+        }
+        for (const it of items) {
+            Object.keys(it || {}).forEach(k => dem(khoaItem, k))
+            Object.keys(it?.attributes || {}).forEach(k => dem(khoaAttr, k))
+            dem(ttItem, String(it?.status ?? '(trống)'))
+            const skus: any[] = Array.isArray(it?.skus) ? it.skus : []
+            dem(soSku, skus.length >= 4 ? '4+' : String(skus.length))
+            for (const s of skus) {
+                Object.keys(s || {}).forEach(k => dem(khoaSku, k))
+                dem(ttSku, String(s?.Status ?? s?.status ?? '(trống)'))
+                for (const [k, v] of Object.entries(s || {})) {
+                    if (TON.test(k) && (v === null || typeof v !== 'object')) ghiTon(k, v)
+                }
+                const khos: any[] = Array.isArray(s?.multiWarehouseInventories) ? s.multiWarehouseInventories : []
+                dem(soKho, String(khos.length))
+                for (const kho of khos) {
+                    Object.keys(kho || {}).forEach(k => dem(khoaKho, k))
+                    for (const [k, v] of Object.entries(kho || {})) {
+                        if (TON.test(k) && (v === null || typeof v !== 'object')) ghiTon(`multiWarehouseInventories[].${k}`, v)
+                    }
+                }
+            }
+        }
+        const n = Math.min(Math.max(Number(req.query.n) || 3, 0), 10)
+        const catMau = (it: any) => {
+            const { description, short_description, ...attr } = it?.attributes || {}
+            return {
+                ...it,
+                attributes: Object.fromEntries(Object.entries(attr).map(([k, v]) => [k, typeof v === 'string' ? v.slice(0, 80) : v])),
+                images: Array.isArray(it?.images) ? it.images.slice(0, 1) : (typeof it?.images === 'string' ? it.images.slice(0, 120) : it?.images),
+                skus: (Array.isArray(it?.skus) ? it.skus : []).slice(0, 4).map((s: any) => ({
+                    ...s, Images: Array.isArray(s?.Images) ? s.Images.filter(Boolean).slice(0, 1) : s?.Images,
+                })),
+            }
+        }
+        res.json({
+            success: true,
+            kenh: kenhAnToan, kenhDoc: ch.id,
+            tong: doc.tong, soDoc: items.length, ...(doc.catTai ? { catTai: doc.catTai } : {}),
+            khoaItem: raObj(khoaItem), khoaSku: raObj(khoaSku), khoaAttributes: raObj(khoaAttr), khoaMoiKho: raObj(khoaKho),
+            phanBo: { trangThaiMa: raObj(ttItem), trangThaiSku: raObj(ttSku), soSkuMoiMa: raObj(soSku), soKhoMoiSku: raObj(soKho) },
+            truongTon: Object.fromEntries(truongTon),
+            mau: items.slice(0, n).map(catMau),
+        })
+    } catch (err: any) {
+        // lỗi Lazada nguyên văn — người vận hành cần đọc được ("chặn IP", "token hết hạn"…)
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
  * GET /admin/lazada-raw?storeCode=&orderNumber=  — CHỈ ĐỌC, không ghi.
  *
  * Vì sao có (22/08/2026): 44/52 đơn Lazada của KENGISTORE mang externalStatus
