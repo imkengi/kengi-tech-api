@@ -9,6 +9,7 @@ import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction, tienGiamGiaPhieu } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock, laDichVu } from '../lib/warehouseHelper'
+import { chuyenDangMoCuaDon, maChuyenTuHeader, maDichVuTrongDon, traHangLenXe, truSoBanChuyen, type DongLenXe } from '../lib/donBanTrenXe'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -925,6 +926,16 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
+        /* CẬP NHẬT PHIẾU NGAY TRÊN XE (14/11/2026): phiếu gốc là đơn của ĐÚNG chuyến POS đang bán (x-sales-trip-id), chuyến
+         * còn mở ⇒ hàng hoá phiếu gốc lên lại XE + trừ số bán / doanh thu chuyến (như nút Huỷ trên xe), thay vì cộng vào
+         * kho cửa hàng trong khi phiếu mới lại trừ kho xe ⇒ chuyến đếm đơn hai lần. Ngoài chế độ bán trên xe ⇒ như cũ. */
+        const chuyenPhieuGoc = revisionSource && isVanSale
+            ? await chuyenDangMoCuaDon(prisma, revisionSource, salesTripId ? String(salesTripId) : null)
+            : null
+        const maDichVuPhieuGoc = chuyenPhieuGoc
+            ? await maDichVuTrongDon(prisma, ((revisionSource?.items || []) as any[]).map((d: any) => d.productId))
+            : new Set<string>()
+
         // ── Checkout ATOMIC ──────────────────────────────────────────────────────
         // Tạo đơn + items + payments + trừ Product.stock + WarehouseStock + van-sale
         // + công nợ khách + DebtEntry + bút toán: cùng sống chết trong 1 transaction.
@@ -980,9 +991,31 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                             // Nợ còn treo của phiếu gốc: xoá như nút Huỷ (phiếu mới ghi nợ lại phần của nó ở dưới)
                             await xoaNoPhieuHuyDoSua(tx, revisionSource)
                             const khoGoc = await getOrCreateDefaultWarehouse(tx as any, revisionSource.branchId || null)
+                            const dongLenXeGoc: DongLenXe[] = []
                             for (const dong of (revisionSource.items || []) as any[]) {
                                 const traLai = dong.baseQuantity > 0 ? dong.baseQuantity : dong.quantity
                                 if (!dong.productId || !(traLai > 0)) continue
+                                if (chuyenPhieuGoc && !maDichVuPhieuGoc.has(String(dong.productId))) {
+                                    // Hàng hoá phiếu gốc lên lại XE (như Huỷ trên xe) — phiếu mới trừ kho xe lại ở khối dưới.
+                                    dongLenXeGoc.push({ productId: dong.productId, productName: dong.productName, sku: dong.sku, soLuong: traLai })
+                                    await tx.inventoryTransaction.create({
+                                        data: {
+                                            type: 'adjustment',
+                                            productId: dong.productId,
+                                            productName: dong.productName,
+                                            productSku: dong.sku || '',
+                                            quantity: traLai,
+                                            reason: `Cập nhật phiếu - ${revisionSource.receiptNumber} → ${receiptNumber}`,
+                                            note: `Hàng lên lại xe (chuyến ${chuyenPhieuGoc.code}) do cập nhật giao dịch ${revisionSource.receiptNumber}`,
+                                            referenceId: revisionSource.receiptNumber,
+                                            referenceType: 'revision',
+                                            unitPrice: dong.unitPrice || 0,
+                                            userId: req.user!.userId,
+                                            userName: user?.name || 'Admin',
+                                        },
+                                    })
+                                    continue
+                                }
                                 await tx.product.updateMany({
                                     where: { id: dong.productId },
                                     data: { stock: { increment: traLai } },
@@ -1004,6 +1037,20 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                                         unitPrice: dong.unitPrice || 0,
                                         userId: req.user!.userId,
                                         userName: user?.name || 'Admin',
+                                    },
+                                })
+                            }
+                            if (chuyenPhieuGoc) {
+                                await traHangLenXe(tx, chuyenPhieuGoc, dongLenXeGoc, revisionSource.total, {
+                                    action: 'void',
+                                    notes: `Cập nhật phiếu trên xe: ${revisionSource.receiptNumber} → ${receiptNumber} (phiếu gốc: ${dongLenXeGoc.reduce((s, d) => s + d.soLuong, 0)} sp lên lại xe, ${Math.round(revisionSource.total || 0).toLocaleString('vi-VN')}đ)`,
+                                    userId: req.user!.userId,
+                                    userName: req.user?.email || null,
+                                    metadata: {
+                                        transactionId: revisionSource.id,
+                                        receiptNumber: revisionSource.receiptNumber,
+                                        total: revisionSource.total,
+                                        capNhatThanh: receiptNumber,
                                     },
                                 })
                             }
@@ -1431,6 +1478,12 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
         const voidWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         const stockEmits: any[] = []
 
+        /* HUỶ NGAY TRÊN XE (14/11/2026): POS đang bán trên xe (gửi x-sales-trip-id) huỷ một đơn của ĐÚNG chuyến đó, chuyến
+         * còn mở ⇒ hàng hoá lên lại XE + trừ số bán / doanh thu của chuyến. Không có mã chuyến (huỷ ở cửa hàng) ⇒ như cũ.
+         * Dịch vụ luôn hoàn đường quầy. Xem lib/donBanTrenXe.ts. */
+        const chuyenXe = await chuyenDangMoCuaDon(prisma, existing as any, maChuyenTuHeader(req.headers))
+        const maDichVu = chuyenXe ? await maDichVuTrongDon(prisma, existing.items.map(i => i.productId)) : new Set<string>()
+
         // ATOMIC (#8): đổi status + hoàn kho + WarehouseStock + ledger + công nợ cùng
         // sống chết trong 1 transaction — crash giữa chừng không để lệch tồn vs công nợ.
         const transaction = await prisma.$transaction(async (tx: any) => {
@@ -1441,8 +1494,26 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
             })
 
             // Hoàn kho theo ĐƠN VỊ GỐC (baseQuantity; cũ=0 → fallback quantity).
+            const dongLenXe: DongLenXe[] = []
             for (const item of t.items) {
                 const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
+                if (chuyenXe && !maDichVu.has(String(item.productId))) {
+                    // Hàng hoá của đơn xe: nằm lại TRÊN XE — không cộng tồn bán được / kho chính (traHangLenXe cộng kho xe,
+                    // đóng chuyến mới đưa phần còn trên xe về kho). Thẻ kho vẫn ghi +SL để khớp dòng 'sale' -SL lúc bán.
+                    const sp = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
+                    dongLenXe.push({ productId: item.productId, productName: item.productName, sku: item.sku, soLuong: restoreQty })
+                    await tx.inventoryTransaction.create({
+                        data: {
+                            type: 'adjustment', productId: item.productId, productName: item.productName,
+                            productSku: item.sku, quantity: restoreQty,
+                            reason: `Hủy đơn - ${existing.receiptNumber}`, note: `Hàng lên lại xe (chuyến ${chuyenXe.code}) do hủy giao dịch ${existing.receiptNumber}`,
+                            referenceId: existing.receiptNumber, referenceType: 'void',
+                            unitPrice: item.unitPrice || 0, costPriceAfter: sp?.costPrice ?? 0,
+                            userId: req.user!.userId, userName: user?.name || 'Admin',
+                        },
+                    })
+                    continue
+                }
                 const updatedProduct = await tx.product.update({
                     where: { id: item.productId },
                     data: { stock: { increment: restoreQty } },
@@ -1459,6 +1530,18 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
                         userId: req.user!.userId, userName: user?.name || 'Admin',
                     },
                 })
+            }
+
+            if (chuyenXe) {
+                // Cùng giao dịch CSDL với việc đổi trạng thái: kho xe + số bán / doanh thu chuyến sống chết cùng đơn huỷ.
+                const { soLuong } = await traHangLenXe(tx, chuyenXe, dongLenXe, existing.total, {
+                    action: 'void',
+                    notes: `Huỷ đơn trên xe: ${existing.receiptNumber} (${dongLenXe.reduce((s, d) => s + d.soLuong, 0)} sp lên lại xe, ${Math.round(existing.total || 0).toLocaleString('vi-VN')}đ)`,
+                    userId: req.user!.userId,
+                    userName: req.user?.email || null,
+                    metadata: { transactionId: existing.id, receiptNumber: existing.receiptNumber, total: existing.total },
+                })
+                console.log(`🚚 Huỷ ${existing.receiptNumber} trên chuyến ${chuyenXe.code}: ${soLuong} sp lên lại xe`)
             }
 
             // Revert customer stats + outstanding debt of this sale
@@ -1890,11 +1973,42 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // Hoàn theo ĐƠN VỊ GỐC: trả một phần hoàn tỷ lệ baseQuantity × (qtyTrả/quantity);
         // bản ghi cũ baseQuantity=0 → fallback qty. Hoàn cả kho mặc định chi nhánh.
         const returnWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
+        /* TRẢ HÀNG NGAY TRÊN XE (14/11/2026): POS đang bán trên xe (gửi x-sales-trip-id), đơn thuộc ĐÚNG chuyến đó, chuyến
+         * còn mở ⇒ khách trả hàng cho tài xế: hàng hoá lên lại XE (không về kho cửa hàng), chuyến trừ số bán + doanh thu
+         * theo tiền hoàn. Trả ở cửa hàng (không mã chuyến) ⇒ như cũ. Dịch vụ luôn hoàn đường quầy. lib/donBanTrenXe.ts */
+        const chuyenXe = await chuyenDangMoCuaDon(prisma, existing as any, maChuyenTuHeader(req.headers))
+        const maDichVu = chuyenXe ? await maDichVuTrongDon(prisma, itemsToReturn.map(i => i.productId)) : new Set<string>()
+        const dongLenXe: DongLenXe[] = []
         for (const item of itemsToReturn) {
             const qty = traDong.get(item.id) || 0
             const baseRestore = (item as any).baseQuantity > 0 && item.quantity > 0
                 ? Math.round((item as any).baseQuantity * (qty / item.quantity))
                 : qty
+            if (chuyenXe && !maDichVu.has(String(item.productId))) {
+                // Hàng lên lại XE: cộng kho xe, KHÔNG cộng Product.stock / kho chính (đóng chuyến mới đưa về kho), không
+                // phát stock.changed (tồn bán được không đổi). Thẻ kho vẫn ghi như mọi lần trả.
+                await updateWarehouseStock(prisma as any, chuyenXe.warehouseId, item.productId, baseRestore)
+                dongLenXe.push({ productId: item.productId, productName: item.productName, sku: item.sku, soLuong: baseRestore })
+                const sp = await prisma.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
+                await prisma.inventoryTransaction.create({
+                    data: {
+                        type: 'return',
+                        productId: item.productId,
+                        productName: item.productName,
+                        productSku: item.sku,
+                        quantity: baseRestore,
+                        reason: `Trả hàng - ${returnCode} (${existing.receiptNumber})`,
+                        note: `Hàng lên lại xe (chuyến ${chuyenXe.code}) — ${reason || `trả hàng giao dịch ${existing.receiptNumber}`}`,
+                        referenceId: returnCode,
+                        referenceType: 'return',
+                        unitPrice: item.unitPrice || 0,
+                        costPriceAfter: sp?.costPrice ?? 0,
+                        userId: req.user!.userId,
+                        userName: user?.name || 'Admin',
+                    },
+                })
+                continue
+            }
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
                 data: { stock: { increment: baseRestore } },
@@ -1927,6 +2041,9 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
             })
         }
 
+        // Phần tiền hoàn đã trừ vào NỢ của khách — chuyến xe cần để biết phần nào tài xế hoàn bằng tiền mặt
+        let giamNoKhiTra = 0
+
         // Revert customer stats + debt if applicable
         if (existing.customerId) {
             const updateData: any = {
@@ -1952,6 +2069,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
                 returnDebtReduction = Math.min(outstanding, returnTotal, Math.max(0, returnCustomer?.debt ?? 0))
                 if (returnDebtReduction > 0) updateData.debt = { decrement: returnDebtReduction }
             }
+            giamNoKhiTra = returnDebtReduction
 
             await prisma.customer.update({
                 where: { id: existing.customerId },
@@ -1980,6 +2098,29 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
         cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
         cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
+        if (chuyenXe) {
+            /* Chuyến trừ số bán + doanh thu (tiền hoàn) và ghi nhật ký 'return' — bảng tổng kết chuyến trừ phần hoàn KHÔNG
+             * trừ vào nợ khỏi tiền mặt phải nộp. KHÔNG ném lỗi ra ngoài: phiếu RT-, tồn, công nợ đã ghi xong ở trên; 500 lúc
+             * này làm POS báo lỗi rồi thu ngân bấm lại (xem ghi chú returnOrder ở cuối hàm). Hỏng thì ghi ERROR để còn sửa tay. */
+            try {
+                await prisma.$transaction(async (tx: any) => truSoBanChuyen(tx, chuyenXe, dongLenXe, returnTotal, {
+                    action: 'return',
+                    notes: `Trả hàng trên xe: ${existing.receiptNumber} → ${returnCode} (${dongLenXe.reduce((s, d) => s + d.soLuong, 0)} sp lên lại xe, hoàn ${Math.round(returnTotal || 0).toLocaleString('vi-VN')}đ)`,
+                    userId: req.user!.userId,
+                    userName: req.user?.email || null,
+                    metadata: {
+                        transactionId: existing.id,
+                        receiptNumber: existing.receiptNumber,
+                        returnCode,
+                        refund: returnTotal,
+                        debtReduction: giamNoKhiTra,
+                    },
+                }))
+            } catch (e: any) {
+                console.error(`[tra-hang-tren-xe] Trừ số bán chuyến ${chuyenXe.code} HỎNG cho ${existing.receiptNumber} (${returnCode}) — hàng đã lên xe nhưng chuyến còn tính số bán/doanh thu cũ:`, moTaLoi(e))
+            }
+        }
+
         console.log(`↩️ Transaction ${existing.receiptNumber} returned as ${returnCode} — ${itemsToReturn.length} items`)
 
         // Publish realtime event

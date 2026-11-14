@@ -16,6 +16,18 @@
  *   - Không chất dịch vụ lên xe (tạo chuyến + /load) — "còn lại" khi dỡ hàng (chất − bán) luôn = hàng thật trên xe.
  *   - Hàng hoá giữ NGUYÊN chốt: bán vượt số trên xe vẫn bị chặn, kể cả khi cửa hàng cho bán âm kho.
  *
+ * Nhóm F–J (cùng ngày): HUỶ / TRẢ / CẬP NHẬT PHIẾU một đơn bán trên xe NGAY TRÊN XE (lib/donBanTrenXe.ts). Trước đây cả
+ * ba luôn hoàn về Product.stock + kho chính và không đụng chuyến ⇒ kho cửa hàng có hàng chưa về, kho xe thiếu (bán lại
+ * món vừa huỷ bị chặn "chỉ còn 0 trên xe"; cập nhật phiếu đơn xe đã bán hết bị 409), chuyến còn tính số bán, doanh thu,
+ * tiền mặt phải nộp của đơn đã huỷ / phần đã trả. Quy ước:
+ *   - POS ở chế độ bán trên xe gửi x-sales-trip-id; đơn thuộc ĐÚNG chuyến đó (nhật ký 'sale') và chuyến còn mở ⇒ hàng
+ *     hoá lên lại kho XE (Product.stock + kho chính không đổi), SalesTripItem.soldQty / totalSold giảm, totalRevenue
+ *     giảm tổng đơn (huỷ, cập nhật) hoặc tiền hoàn (trả); nhật ký 'void' / 'return'. Dịch vụ vẫn hoàn đường quầy.
+ *   - Bảng tổng kết: đơn huỷ trên xe ra khỏi danh sách + tiền mặt phải nộp; tiền hoàn khi trả trên xe (phần KHÔNG trừ
+ *     vào nợ, kẹp trong tiền mặt đã thu của đơn) trừ khỏi tiền mặt phải nộp.
+ *   - Không mã chuyến / chuyến khác / chuyến đã đóng / đơn quầy ⇒ GIỮ NHƯ CŨ (hàng đã rời xe, về cửa hàng; tài xế vẫn
+ *     nộp đủ tiền đã thu — trừ số bán lúc này là đối soát ra "thiếu hàng" oan cho tài xế).
+ *
  * Không DB: chạy middleware (bỏ authMiddleware, gắn sẵn req.user) + handler THẬT với storePrisma giả CÓ TRẠNG THÁI
  * (Product.stock, WarehouseStock từng kho, SalesTrip/SalesTripItem, phiếu, thẻ kho, nhật ký chuyến). $transaction
  * chụp trạng thái rồi TRẢ LẠI khi ném lỗi — như Postgres rollback — nên ca "bị chặn" soát được cả "không đổi gì".
@@ -54,6 +66,7 @@ type Db = {
     don: Map<string, any>
     theKho: any[]
     nhatKy: any[]
+    kh: Map<string, any>
     choBanAm: boolean
     soPhieu: number
     soMa: number
@@ -79,6 +92,7 @@ function taoDb(choBanAm = false): Db {
         don: new Map(),
         theKho: [],
         nhatKy: [],
+        kh: new Map([['kh1', { id: 'kh1', name: 'Tạp hoá Cô Ba', phone: '0900000001', debt: 0, totalPurchases: 0, totalOrders: 0 }]]),
         choBanAm,
         soPhieu: 0,
         soMa: 0,
@@ -100,6 +114,14 @@ const apDung = (dich: any, data: Record<string, any>) => {
     }
 }
 const khongThay = () => Object.assign(new Error('Record to update not found.'), { code: 'P2025' })
+/** where của SalesTripLog: tripId, action (chuỗi hoặc { in }), metadata: { contains } */
+const khopNhatKy = (l: any, w: any = {}) => {
+    if (w.tripId !== undefined && l.tripId !== w.tripId) return false
+    if (typeof w.action === 'string' && l.action !== w.action) return false
+    if (Array.isArray(w.action?.in) && !w.action.in.includes(l.action)) return false
+    if (w.metadata?.contains !== undefined && !String(l.metadata || '').includes(w.metadata.contains)) return false
+    return true
+}
 
 function taoPrismaGia(db: Db) {
     const goi: string[] = []
@@ -134,11 +156,25 @@ function taoPrismaGia(db: Db) {
                 return structuredClone(don)
             },
             findUnique: (a) => (db.don.has(a.where.id) ? structuredClone(db.don.get(a.where.id)) : null),
+            // Chỉ tra theo danh sách id (bảng tổng kết chuyến) — mọi lời gọi khác giữ mặc định rỗng như trước
+            findMany: (a) => {
+                const ids: string[] | undefined = a?.where?.id?.in
+                if (!ids) return []
+                return [...db.don.values()].filter((d) => ids.includes(d.id)).map((d) => structuredClone(d))
+            },
             update: (a) => {
                 const d = db.don.get(a.where.id)
                 if (!d) throw khongThay()
                 apDung(d, a.data)
                 return structuredClone(d)
+            },
+            // Cập nhật phiếu giành quyền huỷ phiếu gốc: { id, status: { not: 'voided' } }
+            updateMany: (a) => {
+                const d = db.don.get(a.where.id)
+                if (!d) return { count: 0 }
+                if (a.where.status?.not !== undefined && d.status === a.where.status.not) return { count: 0 }
+                apDung(d, a.data)
+                return { count: 1 }
             },
         },
         product: {
@@ -210,6 +246,18 @@ function taoPrismaGia(db: Db) {
                 apDung(t, a.data)
                 return chuyenRa(t)
             },
+            // Trừ có kẹp: { id, totalSold|totalRevenue: { gte } } — không thoả ⇒ count 0 (nơi gọi tự đặt về 0)
+            updateMany: (a) => {
+                const w = a?.where || {}
+                const t = db.chuyen.get(w.id)
+                if (!t) return { count: 0 }
+                for (const f of ['totalSold', 'totalRevenue']) {
+                    if (w[f]?.gte !== undefined && !(Number(t[f]) >= w[f].gte)) return { count: 0 }
+                }
+                if (w.status?.in && !w.status.in.includes(t.status)) return { count: 0 }
+                apDung(t, a.data)
+                return { count: 1 }
+            },
         },
         salesTripItem: {
             upsert: (a) => {
@@ -227,8 +275,25 @@ function taoPrismaGia(db: Db) {
                 apDung(d, a.data)
                 return { ...d }
             },
+            updateMany: (a) => {
+                const w = a?.where || {}
+                let n = 0
+                for (const d of db.dongChuyen.values()) {
+                    if (w.tripId !== undefined && d.tripId !== w.tripId) continue
+                    if (w.productId !== undefined && d.productId !== w.productId) continue
+                    if (w.soldQty?.gte !== undefined && !(Number(d.soldQty) >= w.soldQty.gte)) continue
+                    if (typeof w.returnedQty === 'number' && Number(d.returnedQty) !== w.returnedQty) continue
+                    apDung(d, a.data)
+                    n++
+                }
+                return { count: n }
+            },
         },
-        salesTripLog: { create: (a) => { db.nhatKy.push({ ...a.data }); return a.data } },
+        salesTripLog: {
+            create: (a) => { db.nhatKy.push({ ...a.data, createdAt: new Date() }); return a.data },
+            findFirst: (a) => db.nhatKy.find((l) => khopNhatKy(l, a?.where)) ?? null,
+            findMany: (a) => db.nhatKy.filter((l) => khopNhatKy(l, a?.where)).map((l) => ({ ...l })),
+        },
         stockTransfer: { create: (a) => ({ id: 'ck1', ...a.data }) },
         vehicle: {
             findFirst: () => ({ id: 'xe1', code: 'XE01', name: 'Xe tải nhỏ', licensePlate: '51C-12345', status: 'available', branchId: CN }),
@@ -238,7 +303,23 @@ function taoPrismaGia(db: Db) {
         journalEntry: { findMany: () => [] },
         auditLog: { create: () => ({}) },
         webhookEndpoint: { findMany: () => [] },
-        customer: { findUnique: () => null },
+        // Khách có trạng thái (công nợ) — ca trả hàng của đơn ghi nợ trên xe
+        customer: {
+            findUnique: (a) => (db.kh.has(a.where.id) ? { ...db.kh.get(a.where.id) } : null),
+            update: (a) => {
+                const k = db.kh.get(a.where.id)
+                if (!k) throw khongThay()
+                apDung(k, a.data)
+                return { ...k }
+            },
+            updateMany: (a) => {
+                const k = db.kh.get(a.where.id)
+                if (!k) return { count: 0 }
+                apDung(k, a.data)
+                return { count: 1 }
+            },
+        },
+        debtEntry: { create: (a) => ({ id: 'no1', ...a.data }) },
     }
 
     const nhan = (a: any) => {
@@ -267,7 +348,7 @@ function taoPrismaGia(db: Db) {
         $queryRawUnsafe: async (sql: string) => (/nextval/.test(sql) ? [{ n: ++db.soMa }] : /is_called/.test(sql) ? [{ is_called: true }] : []),
         $queryRaw: async () => [],
     }
-    const chup = () => structuredClone({ sp: db.sp, ton: db.ton, chuyen: db.chuyen, dongChuyen: db.dongChuyen, don: db.don, theKho: db.theKho, nhatKy: db.nhatKy })
+    const chup = () => structuredClone({ sp: db.sp, ton: db.ton, chuyen: db.chuyen, dongChuyen: db.dongChuyen, don: db.don, theKho: db.theKho, nhatKy: db.nhatKy, kh: db.kh })
     const prisma: any = new Proxy({}, {
         get: (_m, ten: string) => {
             if (ten === 'then') return undefined
@@ -336,6 +417,33 @@ const ghiBanChuyen = (db: Db, items: any[]) => chay(salesTripsRouter, 'post', '/
 const chatThem = (db: Db, items: any[]) => chay(salesTripsRouter, 'put', '/:id/load', db, { params: { id: CHUYEN }, body: { items } })
 const doHang = (db: Db, items: any[]) => chay(salesTripsRouter, 'put', '/:id/unload', db, { params: { id: CHUYEN }, body: { items } })
 const taoChuyen = (db: Db, items: any[]) => chay(salesTripsRouter, 'post', '/', db, { body: { vehicleId: 'xe1', items } })
+// Chế độ bán trên xe: POS gửi kèm kho xe + chuyến cho cả huỷ / trả (apiClient.ts) và cập nhật phiếu (POST /transactions)
+const HDR_XE = { 'x-warehouse-id': KHO_XE, 'x-sales-trip-id': CHUYEN }
+const huyTrenXe = (db: Db, id: string, maChuyen = CHUYEN) => chay(transactionsRouter, 'put', '/:id/void', db, {
+    params: { id }, headers: { 'x-warehouse-id': KHO_XE, 'x-sales-trip-id': maChuyen },
+})
+const traHang = (db: Db, id: string, returnItems: any[], trenXe = true) => chay(transactionsRouter, 'put', '/:id/return', db, {
+    params: { id }, headers: trenXe ? HDR_XE : {}, body: { reason: 'Khách đổi ý', returnItems },
+})
+const capNhatPhieu = (db: Db, goc: string, lines: any[], trenXe = true) => chay(transactionsRouter, 'post', '/', db, {
+    headers: trenXe ? HDR_XE : {},
+    body: thanDon(lines, { revisionOfId: goc, ...(trenXe ? { warehouseId: KHO_XE } : {}) }),
+})
+/** Bán GHI NỢ trên xe cho khách kh1: thu trước `thu` tiền mặt, phần còn lại nợ. */
+const banNoTrenXe = (db: Db, lines: any[], thu: number) => {
+    const tien = lines.reduce((s, l) => s + l.lineTotal, 0)
+    return chay(transactionsRouter, 'post', '/', db, {
+        headers: HDR_XE,
+        body: {
+            ...thanDon(lines, { warehouseId: KHO_XE }),
+            customerId: 'kh1', customerName: 'Tạp hoá Cô Ba', status: 'partial', amountReceived: thu,
+            payments: [{ type: 'cash', amount: thu }, { type: 'credit', amount: tien - thu }],
+        },
+    })
+}
+const tongKet = (db: Db) => chay(salesTripsRouter, 'get', '/:id/summary', db, { params: { id: CHUYEN } })
+const nhatKyChuyen = (db: Db, action: string) => db.nhatKy.filter((l) => l.tripId === CHUYEN && l.action === action)
+const idDon = (r: { than: any }) => String(r.than?.data?.id)
 
 const tonSp = (db: Db, id: string) => db.sp.get(id)!.stock
 const tonKho = (db: Db, kho: string, id: string) => db.ton.get(`${kho}|${id}`)
@@ -515,6 +623,174 @@ async function main() {
         dung('[E3 phải cho] dỡ đúng 2 còn lại ⇒ 200; kho xe 0; tồn + kho chính 50 → 52; dòng chuyến chất 3',
             e3.ma === 200 && tonKho(db, KHO_XE, 'p1') === 0 && tonSp(db, 'p1') === 52 && tonKho(db, KHO_CHINH, 'p1') === 52 && dongCh(db, 'p1').loadedQty === 3,
             { ma: e3.ma, loi: e3.loiCua, ...anh(db) })
+    }
+
+    // ═══ F. HUỶ ĐƠN XE NGAY TRÊN XE — PUT /api/transactions/:id/void + x-sales-trip-id ═════════════════════════
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000), dong(s1, 1, 15000)])
+        const h = await huyTrenXe(db, idDon(b))
+        dung('[F1 phải cho] huỷ đơn xe (2 hàng + dịch vụ) ngay trên xe ⇒ 200', b.ma === 201 && h.ma === 200, { ban: b.ma, huy: h.ma, loi: h.loiCua })
+        dung('[F1] hàng lên lại XE: kho xe 3 → 5; Product.stock + kho chính GIỮ 50 (trước đây 52 — hàng chưa về cửa hàng)',
+            tonKho(db, KHO_XE, 'p1') === 5 && tonSp(db, 'p1') === 50 && tonKho(db, KHO_CHINH, 'p1') === 50, anh(db))
+        dung('[F1] dịch vụ hoàn đường quầy: Product.stock + kho chính −1 → 0', tonSp(db, 's1') === 0 && tonKho(db, KHO_CHINH, 's1') === 0, anh(db))
+        dung('[F1] chuyến: số bán 2 → 0, totalSold 2 → 0, totalRevenue 27.000 → 0',
+            dongCh(db, 'p1').soldQty === 0 && ch(db).totalSold === 0 && ch(db).totalRevenue === 0, ch(db))
+        const v = nhatKyChuyen(db, 'void')[0]
+        dung('[F1] nhật ký chuyến "void" mang transactionId của đơn huỷ', !!v && JSON.parse(v.metadata || '{}').transactionId === idDon(b), v)
+        dung('[F1] thẻ kho hàng hoá: bán −2 rồi huỷ +2 ghi "lên lại xe" (đóng chuyến đưa hàng trên xe về kho thì khớp tồn)',
+            db.theKho.filter((t) => t.productId === 'p1').map((t) => `${t.type}:${t.quantity}`).join(',') === 'sale:-2,adjustment:2'
+            && /lên lại xe/.test(db.theKho.find((t) => t.productId === 'p1' && t.type === 'adjustment')?.note || ''), db.theKho)
+        const lai = await banTrenXe(db, [dong(p1, 5, 6000)])
+        dung('[F2 phải cho] bán lại ngay trong chuyến cả 5 chai (gồm 2 chai vừa huỷ) ⇒ 201 (trước đây 409 "chỉ còn 3 trên xe")',
+            lai.ma === 201 && tonKho(db, KHO_XE, 'p1') === 0 && dongCh(db, 'p1').soldQty === 5, { ma: lai.ma, loi: lai.loiCua, ...anh(db) })
+    }
+
+    // ═══ G. KHÁCH TRẢ HÀNG NGAY TRÊN XE — PUT /api/transactions/:id/return + x-sales-trip-id ════════════════════
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 3, 6000), dong(s1, 1, 15000)])
+        const t = await traHang(db, idDon(b), [{ productId: 'p1', quantity: 1 }])
+        dung('[G1 phải cho] khách trả 1 chai ngay trên xe ⇒ 200', b.ma === 201 && t.ma === 200, { ban: b.ma, tra: t.ma, loi: t.loiCua })
+        dung('[G1] chai trả lên lại XE: kho xe 2 → 3; Product.stock + kho chính GIỮ 50',
+            tonKho(db, KHO_XE, 'p1') === 3 && tonSp(db, 'p1') === 50 && tonKho(db, KHO_CHINH, 'p1') === 50, anh(db))
+        dung('[G1] chuyến: số bán 3 → 2, totalSold 3 → 2, totalRevenue 33.000 → 27.000 (trừ tiền hoàn 6.000)',
+            dongCh(db, 'p1').soldQty === 2 && ch(db).totalSold === 2 && ch(db).totalRevenue === 27000, ch(db))
+        const r1 = nhatKyChuyen(db, 'return')[0]
+        const m1 = r1 ? JSON.parse(r1.metadata || '{}') : {}
+        dung('[G1] nhật ký "return": đúng đơn, có mã phiếu trả, hoàn 6.000, trừ nợ 0',
+            m1.transactionId === idDon(b) && /^RT-/.test(String(m1.returnCode)) && m1.refund === 6000 && m1.debtReduction === 0, r1)
+        dung('[G1] thẻ kho trả +1 ghi "lên lại xe"',
+            db.theKho.some((x) => x.productId === 'p1' && x.type === 'return' && x.quantity === 1 && /lên lại xe/.test(String(x.note))), db.theKho)
+        const t2 = await traHang(db, idDon(b), [{ productId: 's1', quantity: 1 }])
+        dung('[G2 phải cho] trả DỊCH VỤ trên xe ⇒ 200; dịch vụ hoàn đường quầy (−1 → 0), không đụng kho xe',
+            t2.ma === 200 && tonSp(db, 's1') === 0 && tonKho(db, KHO_CHINH, 's1') === 0 && !dungKhoXe(t2.goi, 's1'), { ma: t2.ma, loi: t2.loiCua, ...anh(db) })
+        dung('[G2] chuyến: totalSold giữ 2 (dịch vụ không đếm), totalRevenue 27.000 → 12.000', ch(db).totalSold === 2 && ch(db).totalRevenue === 12000, ch(db))
+    }
+    {
+        // Đơn GHI NỢ trên xe (thu 5.000 tiền mặt, nợ 7.000) — khách trả 1 chai: tiền hoàn 6.000 trừ hết vào nợ
+        const db = taoDb()
+        const b = await banNoTrenXe(db, [dong(p1, 2, 6000)], 5000)
+        const t = await traHang(db, idDon(b), [{ productId: 'p1', quantity: 1 }])
+        const m = JSON.parse(nhatKyChuyen(db, 'return')[0]?.metadata || '{}')
+        dung('[G3 phải cho] trả hàng của đơn ghi nợ trên xe ⇒ 200; nợ khách 7.000 → 1.000; nhật ký ghi trừ nợ 6.000',
+            b.ma === 201 && t.ma === 200 && db.kh.get('kh1').debt === 1000 && m.refund === 6000 && m.debtReduction === 6000,
+            { ban: b.ma, tra: t.ma, loi: t.loiCua, no: db.kh.get('kh1').debt, m })
+        const s = await tongKet(db)
+        dung('[G3] tổng kết: tiền mặt phải nộp GIỮ 5.000 — hoàn đã trừ vào nợ, tài xế không trả tiền mặt',
+            s.ma === 200 && s.than?.data?.totals?.expectedCash === 5000, s.than?.data?.totals)
+    }
+
+    // ═══ H. CẬP NHẬT PHIẾU ĐƠN XE NGAY TRÊN XE — POST /api/transactions (revisionOfId) + x-sales-trip-id ════════
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)])
+        const c = await capNhatPhieu(db, idDon(b), [dong(p1, 3, 6000)])
+        dung('[H1 phải cho] cập nhật phiếu xe 2 → 3 chai ngay trên xe ⇒ 201, phiếu gốc "voided"',
+            b.ma === 201 && c.ma === 201 && db.don.get(idDon(b))?.status === 'voided', { ban: b.ma, ma: c.ma, loi: c.loiCua })
+        dung('[H1] kho xe 5 − 2 + 2 − 3 = 2; Product.stock + kho chính GIỮ 50 (trước đây 52 — phiếu gốc hoàn nhầm về cửa hàng)',
+            tonKho(db, KHO_XE, 'p1') === 2 && tonSp(db, 'p1') === 50 && tonKho(db, KHO_CHINH, 'p1') === 50, anh(db))
+        dung('[H1] chuyến chỉ đếm phiếu MỚI: số bán 3, totalSold 3, totalRevenue 18.000 (trước đây 5 / 30.000 — đếm hai lần)',
+            dongCh(db, 'p1').soldQty === 3 && ch(db).totalSold === 3 && ch(db).totalRevenue === 18000, ch(db))
+        dung('[H1] nhật ký: sale (gốc) → void (gốc) → sale (mới)', db.nhatKy.map((l) => l.action).join(',') === 'sale,void,sale', db.nhatKy.map((l) => l.action))
+        const s = await tongKet(db)
+        const gc = (s.than?.data?.ghiChu || []).join(' | ')
+        dung('[H1] tổng kết: chỉ phiếu mới (1 đơn, nộp 18.000); ghi chú gọi đúng là "phiếu đã cập nhật", không phải "đơn đã huỷ"',
+            s.than?.data?.totals?.transactionCount === 1 && s.than?.data?.totals?.expectedCash === 18000
+            && /1 phiếu đã cập nhật ngay trên xe/.test(gc) && !/đã huỷ ngay trên xe/.test(gc), { tk: s.than?.data?.totals, gc })
+    }
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 5, 6000)])
+        const c = await capNhatPhieu(db, idDon(b), [dong(p1, 4, 6000)])
+        dung('[H2 phải cho] bán hết 5 chai trên xe rồi cập nhật phiếu thành 4 ⇒ 201 (trước đây 409 "chỉ còn 0 trên xe")',
+            b.ma === 201 && c.ma === 201 && tonKho(db, KHO_XE, 'p1') === 1 && ch(db).totalSold === 4, { ban: b.ma, ma: c.ma, loi: c.loiCua, ...anh(db) })
+    }
+
+    // ═══ I. BẢNG TỔNG KẾT CHUYẾN — GET /api/sales-trips/:id/summary ═════════════════════════════════════════════
+    {
+        const db = taoDb()
+        const a = await banTrenXe(db, [dong(p1, 1, 6000)]) // tiền mặt 6.000 — sẽ huỷ trên xe
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)]) // tiền mặt 12.000 — khách trả 1 chai trên xe
+        const c = await chay(transactionsRouter, 'post', '/', db, { // dịch vụ 15.000, khách CHUYỂN KHOẢN
+            headers: HDR_XE,
+            body: { ...thanDon([dong(s1, 1, 15000)], { warehouseId: KHO_XE }), payments: [{ type: 'transfer', amount: 15000 }] },
+        })
+        const h = await huyTrenXe(db, idDon(a))
+        const t = await traHang(db, idDon(b), [{ productId: 'p1', quantity: 1 }])
+        const s = await tongKet(db)
+        const tk = s.than?.data?.totals || {}
+        const ds = (s.than?.data?.transactions || []).map((x: any) => x.id).sort().join(',')
+        dung('[I1] tổng kết: đơn huỷ trên xe ra khỏi danh sách (còn 2 đơn)',
+            [a.ma, b.ma, c.ma].every((m) => m === 201) && h.ma === 200 && t.ma === 200 && s.ma === 200
+            && tk.transactionCount === 2 && ds === [idDon(b), idDon(c)].sort().join(','), { ma: [a.ma, b.ma, c.ma, h.ma, t.ma, s.ma], tk, ds })
+        dung('[I1] tiền mặt phải nộp = 12.000 − 6.000 hoàn = 6.000 (đơn huỷ không tính, đơn chuyển khoản 0) — trước đây 18.000',
+            tk.expectedCash === 6000, tk)
+        dung('[I1] doanh thu chuyến 33.000 − 6.000 (huỷ) − 6.000 (hoàn) = 21.000; hàng đã bán 1 + 2 − 1 − 1 = 1',
+            tk.revenue === 21000 && tk.itemsSold === 1, tk)
+        const gc = (s.than?.data?.ghiChu || []).join(' | ')
+        dung('[I1] ghi chú nói rõ: 1 đơn huỷ trên xe + đã trừ 6.000đ hoàn tiền mặt', /1 đơn đã huỷ ngay trên xe/.test(gc) && /6\.000đ hoàn tiền mặt/.test(gc), gc)
+    }
+    {
+        const db = taoDb()
+        const a = await banTrenXe(db, [dong(p1, 1, 6000)])
+        await huyTrenXe(db, idDon(a))
+        const tk = (await tongKet(db)).than?.data?.totals || {}
+        dung('[I2] mọi đơn đều huỷ trên xe ⇒ phải nộp 0đ (không phải null "chưa tính được"), 0 đơn, doanh thu 0',
+            tk.expectedCash === 0 && tk.transactionCount === 0 && tk.revenue === 0, tk)
+    }
+
+    // ═══ J. NGOÀI CHẾ ĐỘ BÁN TRÊN XE / KHÔNG KHỚP CHUYẾN ⇒ GIỮ NHƯ CŨ ═════════════════════════════════════════
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)])
+        const h = await huyDon(db, idDon(b))
+        dung('[J1 giữ như cũ] huỷ đơn xe Ở CỬA HÀNG (không mã chuyến) ⇒ hàng về cửa hàng 50 → 52, kho xe giữ 3, chuyến giữ 2 / 12.000, không nhật ký "void"',
+            h.ma === 200 && tonSp(db, 'p1') === 52 && tonKho(db, KHO_CHINH, 'p1') === 52 && tonKho(db, KHO_XE, 'p1') === 3
+            && dongCh(db, 'p1').soldQty === 2 && ch(db).totalSold === 2 && ch(db).totalRevenue === 12000 && nhatKyChuyen(db, 'void').length === 0,
+            { ma: h.ma, loi: h.loiCua, ...anh(db), chuyen: ch(db) })
+        const tk = (await tongKet(db)).than?.data?.totals || {}
+        dung('[J1] tổng kết vẫn tính nộp 12.000: tài xế đã thu tiền đó, cửa hàng tự hoàn cho khách', tk.expectedCash === 12000 && tk.transactionCount === 1, tk)
+    }
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)])
+        const h = await huyTrenXe(db, idDon(b), 'chuyen-khac')
+        dung('[J2 giữ như cũ] mã chuyến KHÁC chuyến đã bán ⇒ hàng về cửa hàng, chuyến không đổi',
+            h.ma === 200 && tonSp(db, 'p1') === 52 && tonKho(db, KHO_XE, 'p1') === 3 && ch(db).totalSold === 2, { ma: h.ma, loi: h.loiCua, ...anh(db) })
+    }
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)])
+        ch(db).status = 'closed'
+        const h = await huyTrenXe(db, idDon(b))
+        dung('[J3 giữ như cũ] chuyến ĐÃ ĐÓNG (xe đã dỡ hàng) ⇒ hàng về cửa hàng, chuyến không đổi',
+            h.ma === 200 && tonSp(db, 'p1') === 52 && tonKho(db, KHO_XE, 'p1') === 3 && ch(db).totalSold === 2 && nhatKyChuyen(db, 'void').length === 0,
+            { ma: h.ma, loi: h.loiCua, ...anh(db) })
+    }
+    {
+        const db = taoDb()
+        const b = await banQuay(db, [dong(p1, 2, 6000)])
+        const h = await huyTrenXe(db, idDon(b))
+        dung('[J4 giữ như cũ] POS đang ở chế độ xe huỷ một ĐƠN QUẦY ⇒ hoàn cửa hàng 48 → 50, kho xe 5, chuyến 0',
+            b.ma === 201 && h.ma === 200 && tonSp(db, 'p1') === 50 && tonKho(db, KHO_XE, 'p1') === 5 && ch(db).totalSold === 0,
+            { ma: h.ma, loi: h.loiCua, ...anh(db) })
+    }
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 3, 6000)])
+        const t = await traHang(db, idDon(b), [{ productId: 'p1', quantity: 1 }], false)
+        dung('[J5 giữ như cũ] khách trả hàng Ở CỬA HÀNG ⇒ về cửa hàng 50 → 51, kho xe 2, chuyến giữ 3 / 18.000',
+            b.ma === 201 && t.ma === 200 && tonSp(db, 'p1') === 51 && tonKho(db, KHO_XE, 'p1') === 2 && dongCh(db, 'p1').soldQty === 3 && ch(db).totalRevenue === 18000,
+            { ma: t.ma, loi: t.loiCua, ...anh(db), chuyen: ch(db) })
+    }
+    {
+        const db = taoDb()
+        const b = await banTrenXe(db, [dong(p1, 2, 6000)])
+        const c = await capNhatPhieu(db, idDon(b), [dong(p1, 2, 7000)], false)
+        dung('[J6 giữ như cũ] cập nhật phiếu xe Ở CỬA HÀNG ⇒ phiếu gốc hoàn cửa hàng, phiếu mới bán quầy (50 + 2 − 2), kho xe 3, chuyến giữ 2',
+            b.ma === 201 && c.ma === 201 && tonSp(db, 'p1') === 50 && tonKho(db, KHO_XE, 'p1') === 3 && ch(db).totalSold === 2 && nhatKyChuyen(db, 'void').length === 0,
+            { ma: c.ma, loi: c.loiCua, ...anh(db) })
     }
 
     console.log(`\n${tong - loi}/${tong} ca đạt${loi ? ` — ${loi} HỎNG` : ''}`)

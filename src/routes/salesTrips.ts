@@ -274,6 +274,10 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 //     thẳng trên POS trước đây không ghi log này, nên chuyến cũ sẽ có danh sách
 //     rỗng — trả kèm ghiChu nói rõ, thay vì để người dùng tưởng chuyến không bán
 //     được đơn nào.
+//  4. Đơn huỷ / cập nhật / khách trả hàng NGAY TRÊN XE (nhật ký 'void' / 'return',
+//     14/11/2026 — lib/donBanTrenXe.ts) ra khỏi danh sách đơn và tiền mặt phải
+//     nộp. Huỷ / trả ở cửa hàng không ghi nhật ký chuyến nên vẫn tính: tài xế đã
+//     thu số tiền đó.
 // ═════════════════════════════════════════════════════════════════════════════
 router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -313,24 +317,41 @@ router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Respons
         }
 
         // ── Đơn đã bán trong chuyến ─────────────────────────────────────────
+        /* 'void' / 'return' = đơn bị huỷ / khách trả hàng NGAY TRÊN XE (POS ở chế độ bán trên xe — lib/donBanTrenXe.ts,
+         * 14/11/2026): tài xế không giữ tiền của đơn đã huỷ, và đã hoàn tiền mặt cho khách phần trả. Huỷ / trả ở cửa hàng
+         * KHÔNG ghi nhật ký chuyến ⇒ không trừ: tài xế đã thu tiền đó, cửa hàng tự hoàn cho khách. */
         const logs = await prisma.salesTripLog.findMany({
-            where: { tripId: trip.id, action: 'sale' },
-            select: { metadata: true, createdAt: true },
+            where: { tripId: trip.id, action: { in: ['sale', 'void', 'return'] } },
+            select: { action: true, metadata: true, createdAt: true },
             orderBy: { createdAt: 'desc' },
-            take: 200,
+            take: 500,
         })
         const idDon: string[] = []
+        const huyTrenXe = new Set<string>()
+        let soCapNhatTrenXe = 0 // trong huyTrenXe: phiếu gốc bị thay bằng phiếu cập nhật (metadata.capNhatThanh)
+        // id đơn → tiền hoàn khi trả trên xe mà KHÔNG trừ vào nợ của khách (phần tài xế trả lại bằng tiền)
+        const hoanTrenXe = new Map<string, number>()
         for (const l of logs) {
             try {
                 const m = JSON.parse(String(l.metadata || '{}'))
-                if (m?.transactionId) idDon.push(String(m.transactionId))
+                const id = m?.transactionId ? String(m.transactionId) : ''
+                if (!id) continue
+                const loai = String(l.action || 'sale')
+                if (loai === 'void') {
+                    if (!huyTrenXe.has(id) && m.capNhatThanh) soCapNhatTrenXe++
+                    huyTrenXe.add(id)
+                } else if (loai === 'return') {
+                    const hoan = Math.max(0, (Number(m.refund) || 0) - (Number(m.debtReduction) || 0))
+                    hoanTrenXe.set(id, (hoanTrenXe.get(id) || 0) + hoan)
+                } else idDon.push(id)
             } catch { /* log cũ có metadata không phải JSON — bỏ qua, không chặn */ }
         }
+        const idConHieuLuc = [...new Set(idDon)].filter(id => !huyTrenXe.has(id))
 
         let donHang: any[] = []
-        if (idDon.length > 0) {
+        if (idConHieuLuc.length > 0) {
             donHang = await prisma.transaction.findMany({
-                where: { id: { in: idDon } },
+                where: { id: { in: idConHieuLuc } },
                 select: { id: true, receiptNumber: true, total: true, createdAt: true, payments: { select: { type: true, amount: true } } },
                 orderBy: { createdAt: 'desc' },
             })
@@ -338,15 +359,34 @@ router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Respons
 
         /* Tiền mặt phải nộp = phần thu bằng tiền mặt của các đơn thuộc chuyến.
          * Không lấy tổng doanh thu: khách chuyển khoản thì tiền không qua tay
-         * nhân viên bán, tính vào đây là bắt họ nộp phần mình chưa từng cầm. */
+         * nhân viên bán, tính vào đây là bắt họ nộp phần mình chưa từng cầm.
+         * Trừ phần tiền hoàn khi khách trả hàng trên xe — kẹp trong số tiền mặt
+         * đã thu của chính đơn đó: khách trả bằng chuyển khoản thì hoàn cũng
+         * không đi từ túi tài xế. */
         let tienMatPhaiNop = 0
+        let tienHoanTrenXe = 0
         for (const d of donHang) {
+            let tienMatDon = 0
             for (const p of (d.payments || [])) {
                 const loai = String(p.type || '').toLowerCase()
-                if (loai === 'cash' || loai === 'tien-mat' || loai === '') tienMatPhaiNop += Number(p.amount) || 0
+                if (loai === 'cash' || loai === 'tien-mat' || loai === '') tienMatDon += Number(p.amount) || 0
             }
+            const hoan = Math.min(tienMatDon, hoanTrenXe.get(String(d.id)) || 0)
+            tienHoanTrenXe += hoan
+            tienMatPhaiNop += tienMatDon - hoan
         }
-        const truyDuocDon = donHang.length > 0
+        const soHuyTrenXe = huyTrenXe.size - soCapNhatTrenXe
+        if (soHuyTrenXe > 0) {
+            ghiChu.push(`${soHuyTrenXe} đơn đã huỷ ngay trên xe — không tính vào danh sách đơn và tiền mặt phải nộp; hàng của các đơn đó đã lên lại xe.`)
+        }
+        if (soCapNhatTrenXe > 0) {
+            ghiChu.push(`${soCapNhatTrenXe} phiếu đã cập nhật ngay trên xe — chỉ tính phiếu mới; phiếu cũ không vào danh sách đơn và tiền mặt phải nộp.`)
+        }
+        if (tienHoanTrenXe > 0) {
+            ghiChu.push(`Đã trừ ${Math.round(tienHoanTrenXe).toLocaleString('vi-VN')}đ hoàn tiền mặt cho khách trả hàng ngay trên xe khỏi tiền mặt phải nộp.`)
+        }
+        // Mọi đơn có vết đều đã huỷ trên xe ⇒ vẫn truy được: phải nộp 0đ, không phải "chưa tính được"
+        const truyDuocDon = donHang.length > 0 || (idDon.length > 0 && idConHieuLuc.length === 0)
         if (!truyDuocDon && (Number(trip.totalRevenue) || 0) > 0) {
             ghiChu.push('Chuyến này chưa có vết từng đơn nên chưa liệt kê được danh sách hoá đơn và chưa tính được tiền mặt phải nộp. Doanh thu tổng vẫn đúng.')
         }
