@@ -16,10 +16,21 @@ import { ganAnhDongHang } from '../lib/anhDongHang'
 import { tinhViecCanLam } from '../lib/viecCanLam'
 import { postExpenseJournal } from '../lib/autoJournalPurchase'
 import { timPhieuTrungSoHoaDon } from './importReceipts'
+import { ngayVN as ngayTheoGioVN, khoangNgayVN } from '../lib/vnTime'
 
 const num = (v: any, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d)
 const gioiHan = (v: any, mac = 20, tran = 100) => Math.min(Math.max(num(v, mac), 1), tran)
-const ngayVN = (d: any) => (d ? new Date(d).toISOString().slice(0, 10) : null)
+/** Ngày theo GIỜ VN ('YYYY-MM-DD'), trống ⇒ null. Máy chủ chạy UTC nên bản cũ cắt thẳng toISOString(): việc lúc 0h–7h sáng
+ *  rơi về hôm trước, còn mốc lưu 00:00 giờ VN (hạn trả theo quy tắc NCC) thì LUÔN lùi một ngày (soát 14/11/2026).
+ *  Web hiện ngày theo giờ máy người xem (VN) — đổi ở đây để AI nói đúng ngày web đang hiện. */
+const ngayVN = (d: any) => (d ? ngayTheoGioVN(new Date(d)) : null)
+/** Số ngày LỊCH giữa hai ngày 'YYYY-MM-DD' — so ngày chứ không so mốc giờ, nên hạn lưu 00:00 UTC hay 00:00 VN đều ra một số. */
+const soNgayLich = (tu: string, den: string) => Math.round((Date.parse(den) - Date.parse(tu)) / 86400_000)
+/** Ngày của một phiếu bán: `ngayBan` = NGÀY BÁN (transactionDate — đơn KiotViet/nhập lịch sử) nếu có, không thì ngày ghi
+ *  dòng — đúng ngày trang Giao dịch trên web đang hiện (transactions.ts trả transactionDate ?? createdAt). */
+const ngayCuaPhieu = ({ transactionDate, ...t }: any) => ({
+    ...t, createdAt: ngayVN(t.createdAt), ngayBan: ngayVN(transactionDate || t.createdAt),
+})
 /** Tiền của một phiếu bán theo quy ước chung (transactions.ts, debts.ts): Transaction KHÔNG có cột paidAmount/debtAmount —
  *  đơn ghi nợ là 'partial', nợ = total − amountReceived; đơn 'completed' đã thu đủ; huỷ/trả thì không còn nợ. */
 const tienCuaPhieu = (t: any) => {
@@ -252,8 +263,11 @@ export const OPS_TOOLS: Tool[] = [
         },
         run: async (a, { prisma }) => {
             const truoc = num(a.days_ahead, 7)
-            const moc = new Date(); moc.setDate(moc.getDate() + truoc + 1); moc.setHours(0, 0, 0, 0)
-            const homNay = new Date(); homNay.setHours(0, 0, 0, 0)
+            /* Theo NGÀY VN, không theo giờ máy: setHours(0) trên Cloud Run (UTC) là 07:00 sáng VN ⇒ từ 0h–7h sáng số ngày quá hạn
+             * hụt một ngày, và hạn rơi đúng ngày cuối cửa sổ (lưu 00:00 UTC) bị cắt mất (soát 14/11/2026). */
+            const homNay = ngayTheoGioVN()
+            // mốc trên = 00:00 giờ VN của ngày (hôm nay + truoc + 1) ⇒ lấy mọi hạn có NGÀY VN ≤ hôm nay + truoc
+            const moc = khoangNgayVN(new Date(Date.now() + (truoc + 1) * 86400_000)).tu
             const ds = await prisma.importReceipt.findMany({
                 where: {
                     dueDate: { not: null, lt: moc },
@@ -266,11 +280,12 @@ export const OPS_TOOLS: Tool[] = [
             })
             const rows = ds.map((r: any) => {
                 const conNo = Math.max(0, (r.totalCost || 0) - (r.paidAmount || 0))
-                const quaHan = r.dueDate ? Math.floor((homNay.getTime() - new Date(r.dueDate).getTime()) / 86400_000) : 0
+                const han = ngayVN(r.dueDate)
+                const quaHan = han ? soNgayLich(han, homNay) : 0
                 return {
                     phieu: r.code, nhaCungCap: r.supplierName,
                     tongTien: r.totalCost, daTra: r.paidAmount, conNo,
-                    hanTra: ngayVN(r.dueDate),
+                    hanTra: han,
                     soNgayQuaHan: quaHan > 0 ? quaHan : 0,
                     dieuKhoan: r.paymentTerm || null,
                 }
@@ -333,7 +348,7 @@ export const OPS_TOOLS: Tool[] = [
                 where: { customerId: kh.id },
                 orderBy: { createdAt: 'desc' },
                 take: tranKQ,
-                select: { receiptNumber: true, total: true, amountReceived: true, status: true, createdAt: true },
+                select: { receiptNumber: true, total: true, amountReceived: true, status: true, createdAt: true, transactionDate: true },
             })
             return {
                 ...canhBaoCat(don.length, tranKQ, 'đơn gần đây'),
@@ -341,7 +356,7 @@ export const OPS_TOOLS: Tool[] = [
                     id: kh.id, ma: kh.code, ten: kh.name, dienThoai: kh.phone,
                     duNo: kh.debt, tongChiTieu: kh.totalPurchases, hangThanhVien: (kh as any).tier ?? null,
                 },
-                donGanNhat: don.map((t: any) => ({ ...tienCuaPhieu(t), createdAt: ngayVN(t.createdAt) })),
+                donGanNhat: don.map((t: any) => ngayCuaPhieu(tienCuaPhieu(t))),
             }
         },
     },
@@ -349,12 +364,12 @@ export const OPS_TOOLS: Tool[] = [
     // ─── Đơn hàng ────────────────────────────────────────────────────────────
     {
         name: 'list_transactions',
-        description: 'Danh sách đơn bán (POS + online đã ghi nhận) theo khoảng ngày / trạng thái. Đơn ghi nợ có status "partial" — VẪN là bán thật, đừng bỏ ra khi tính doanh thu.',
+        description: 'Danh sách đơn bán (POS + online đã ghi nhận) theo khoảng NGÀY BÁN / trạng thái — mỗi đơn có ngayBan (ngày bán, như web hiện) và createdAt (ngày ghi sổ). Đơn ghi nợ có status "partial" — VẪN là bán thật, đừng bỏ ra khi tính doanh thu.',
         inputSchema: {
             type: 'object',
             properties: {
-                from: { type: 'string', description: 'Từ ngày YYYY-MM-DD' },
-                to: { type: 'string', description: 'Đến ngày YYYY-MM-DD' },
+                from: { type: 'string', description: 'Từ ngày bán YYYY-MM-DD' },
+                to: { type: 'string', description: 'Đến ngày bán YYYY-MM-DD' },
                 status: { type: 'string', description: 'completed | partial | voided | cancelled' },
                 con_no: { type: 'boolean', description: 'true = chỉ đơn còn nợ tiền' },
                 limit: { type: 'number', description: 'Mặc định 20, tối đa 100' },
@@ -363,9 +378,13 @@ export const OPS_TOOLS: Tool[] = [
         run: async (a, { prisma }) => {
             const where: any = {}
             if (a.from || a.to) {
-                where.createdAt = {}
-                if (a.from) where.createdAt.gte = new Date(`${String(a.from).slice(0, 10)}T00:00:00+07:00`)
-                if (a.to) where.createdAt.lte = new Date(`${String(a.to).slice(0, 10)}T23:59:59+07:00`)
+                /* Lọc theo NGÀY BÁN như sales_report / revenue_by_day (mcp.ts): createdAt của đơn nhập từ KiotViet là ngày CHẠY
+                 * NHẬP — lọc theo nó thì AI báo tháng 4 có doanh thu mà liệt kê đơn tháng 4 lại trống (soát 14/11/2026).
+                 * Prisma không có COALESCE trong where ⇒ OR: ưu tiên transactionDate, dòng chưa có mới xét createdAt. */
+                const khoang: any = {}
+                if (a.from) khoang.gte = new Date(`${String(a.from).slice(0, 10)}T00:00:00+07:00`)
+                if (a.to) khoang.lte = new Date(`${String(a.to).slice(0, 10)}T23:59:59+07:00`)
+                where.OR = [{ transactionDate: khoang }, { transactionDate: null, createdAt: khoang }]
             }
             if (a.status) where.status = String(a.status)
             // còn nợ = đơn ghi nợ ('partial'); số nợ tính từ total − amountReceived (không có cột debtAmount)
@@ -374,7 +393,7 @@ export const OPS_TOOLS: Tool[] = [
                 where, orderBy: { createdAt: 'desc' }, take: gioiHan(a.limit),
                 select: {
                     id: true, receiptNumber: true, customerName: true, total: true, amountReceived: true,
-                    status: true, vatStatus: true, createdAt: true, createdByName: true,
+                    status: true, vatStatus: true, createdAt: true, transactionDate: true, createdByName: true,
                 },
             })
             const ds = ds0.map(tienCuaPhieu).filter((t: any) => !a.con_no || t.debtAmount > 0)
@@ -383,7 +402,7 @@ export const OPS_TOOLS: Tool[] = [
                 soDon: ds.length,
                 tongTien: ds.reduce((s: number, t: any) => s + (t.total || 0), 0),
                 tongConNo: ds.reduce((s: number, t: any) => s + (t.debtAmount || 0), 0),
-                don: ds.map((t: any) => ({ ...t, createdAt: ngayVN(t.createdAt) })),
+                don: ds.map(ngayCuaPhieu),
             }
         },
     },
