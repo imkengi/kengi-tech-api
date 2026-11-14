@@ -565,12 +565,42 @@ export class LazadaService extends PlatformService {
      * của SKU nào nằm đúng dòng của SKU đó, giống Shopee / TikTok trong lõi đẩy tồn). Số âm / lẻ ⇒ làm tròn xuống, sàn 0.
      */
     static xmlTonMotSku(o: { itemId?: string; skuId?: string; sellerSku?: string; soLuong: number }): string {
-        const the = (ten: string, v: any) => (v === undefined || v === null || String(v).trim() === ''
-            ? '' : `<${ten}>${LazadaService.xmlThoat(String(v).trim())}</${ten}>`)
         return '<Request><Product><Skus><Sku>'
-            + the('ItemId', o.itemId) + the('SkuId', o.skuId) + the('SellerSku', o.sellerSku)
+            + LazadaService.theMaSku(o)
             + `<SellableQuantity>${Math.max(0, Math.floor(Number(o.soLuong) || 0))}</SellableQuantity>`
             + '</Sku></Skus></Product></Request>'
+    }
+
+    /** Ba thẻ nhận diện MỘT SKU (ItemId / SkuId / SellerSku) — thẻ rỗng thì bỏ hẳn, không gửi rỗng. */
+    private static theMaSku(o: { itemId?: string; skuId?: string; sellerSku?: string }): string {
+        const the = (ten: string, v: any) => (v === undefined || v === null || String(v).trim() === ''
+            ? '' : `<${ten}>${LazadaService.xmlThoat(String(v).trim())}</${ten}>`)
+        return the('ItemId', o.itemId) + the('SkuId', o.skuId) + the('SellerSku', o.sellerSku)
+    }
+
+    /**
+     * `payload` XML của UpdatePriceQuantity cho MỘT SKU — CHỈ thẻ <Price> (giá gốc). Tài liệu /product/price_quantity/update
+     * (đọc 14/11/2026): mỗi <Sku> mang ItemId / SkuId / SellerSku + Price / SalePrice / SaleStartDate / SaleEndDate / Quantity,
+     * trường nào không gửi thì không đổi; ≤ 50 SKU một lần. Cố ý KHÔNG gửi:
+     *  - Quantity — đổi giá không được đụng tồn (tồn đi đường riêng UpdateSellableQuantity, có cầu dao);
+     *  - SalePrice / ngày khuyến mãi — tài liệu không nói SalePrice có bắt buộc kèm ngày không, cũng không nói cách XOÁ giá
+     *    khuyến mãi ⇒ không đoán (lõi đẩy giá để yên SKU đang có special_price).
+     * VND không có phần lẻ ⇒ số nguyên (lỗi 4104 "price precision" của Lazada). Giá ≤ 0 ⇒ ném, không gửi.
+     */
+    static xmlGiaMotSku(o: { itemId?: string; skuId?: string; sellerSku?: string; gia: number }): string {
+        const gia = Math.round(Number(o.gia))
+        if (!Number.isFinite(gia) || gia <= 0) throw new Error(`Lazada: giá không hợp lệ (${o.gia}) — KHÔNG gửi`)
+        return '<Request><Product><Skus><Sku>' + LazadaService.theMaSku(o) + `<Price>${gia}</Price>` + '</Sku></Skus></Product></Request>'
+    }
+
+    /** Câu lỗi NGUYÊN VĂN của một lời gọi GHI (kèm `detail` từng SKU khi Lazada trả) — lỗi kênh (token) gắn nhãn riêng. */
+    private static loiGhi(data: any, api: string): Error {
+        const chiTiet = Array.isArray(data?.detail)
+            ? data.detail.map((d: any) => [d?.seller_sku || d?.SellerSku, d?.field, d?.message].filter(Boolean).join(' ')).filter(Boolean).join('; ')
+            : ''
+        const loi = `[${data?.code}] ${data?.message || data?.error_message || 'không rõ'}${chiTiet ? ` — ${chiTiet}` : ''}`
+        if (LazadaService.isChannelAuthError(data?.code, data?.message)) return new Error(`Lazada từ chối kênh: ${loi}`)
+        return new Error(`Lazada ${api}: ${loi}`)
     }
 
     /**
@@ -587,14 +617,25 @@ export class LazadaService extends PlatformService {
         }
         const payload = LazadaService.xmlTonMotSku({ itemId, skuId, sellerSku, soLuong: stock })
         const data = await this.httpGet(this.buildUrl('/product/stock/sellable/update', { payload }))
-        if (data.code !== '0' && data.code !== 0) {
-            const chiTiet = Array.isArray(data.detail)
-                ? data.detail.map((d: any) => [d?.seller_sku || d?.SellerSku, d?.field, d?.message].filter(Boolean).join(' ')).filter(Boolean).join('; ')
-                : ''
-            const loi = `[${data.code}] ${data.message || data.error_message || 'không rõ'}${chiTiet ? ` — ${chiTiet}` : ''}`
-            if (LazadaService.isChannelAuthError(data.code, data.message)) throw new Error(`Lazada từ chối kênh: ${loi}`)
-            throw new Error(`Lazada sellable/update: ${loi}`)
+        if (data.code !== '0' && data.code !== 0) throw LazadaService.loiGhi(data, 'sellable/update')
+    }
+
+    /**
+     * Đổi GIÁ GỐC (Price) của MỘT SKU — UpdatePriceQuantity (14/11/2026, chủ shop duyệt "đổi giá Lazada"). Chữ ký giống TikTok
+     * (mã sàn, giá, sku_id?, seller_sku?) để lõi đẩy giá (lib/dayGiaLenSan.ts) gọi chung một kiểu.
+     *
+     * ⚠ GHI SÀN THẬT. Chỉ lõi đẩy giá gọi (nút "Đẩy giá lên sàn" → chạy thử → "Đẩy thật"). Lõi đã soát rào giá sàn và để yên
+     * SKU đang có giá khuyến mãi TRƯỚC khi tới đây. Thiếu cả SkuId lẫn SellerSku thì KHÔNG gọi. Tài liệu ghi phương thức POST
+     * (UpdateSellableQuantity ở trên đi GET) — tham số đã ký nằm trên URL như mọi lời gọi Lazada khác, thân rỗng. Lỗi Lazada
+     * (kể cả `detail` từng SKU) ném NGUYÊN VĂN.
+     */
+    async updatePrice(itemId: string, price: number, skuId?: string, sellerSku?: string): Promise<void> {
+        if (!String(skuId ?? '').trim() && !String(sellerSku ?? '').trim()) {
+            throw new Error(`Lazada: mã ${itemId} thiếu cả SkuId lẫn SellerSku — không biết đổi giá SKU nào, KHÔNG gửi`)
         }
+        const payload = LazadaService.xmlGiaMotSku({ itemId, skuId, sellerSku, gia: price })
+        const data = await this.httpPost(this.buildUrl('/product/price_quantity/update', { payload }), {})
+        if (data.code !== '0' && data.code !== 0) throw LazadaService.loiGhi(data, 'price_quantity/update')
     }
 
     /**

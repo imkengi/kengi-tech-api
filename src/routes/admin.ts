@@ -7608,6 +7608,33 @@ router.post('/day-ton-thu', async (req: Request, res: Response) => {
 })
 
 /**
+ * ĐẨY GIÁ — CHỈ CHẠY THỬ — POST /admin/day-gia-thu {storeCode, channelId}
+ *
+ * 14/11/2026 (chủ shop duyệt "đổi giá Lazada"): xem trước nút "Đẩy giá lên sàn" của MỘT kênh y như chủ shop bấm trên web
+ * (lib/dayGiaLenSan, dryRun cứng) — Lazada đọc GetProducts cả gian (chỉ đọc), rào giá sàn từng SKU. KHÔNG có cửa chạy thật
+ * ở đây: đổi giá thật là nút trên web, người bấm chịu trách nhiệm. Không làm mới token (chạy thử không bao giờ làm mới).
+ */
+router.post('/day-gia-thu', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.body?.storeCode || '').trim()
+        const channelId = String(req.body?.channelId || '').trim()
+        if (!storeCode || !channelId) { res.status(400).json({ success: false, error: 'Cần storeCode và channelId' }); return }
+        if (req.body?.apply !== undefined || req.body?.dryRun === false) {
+            res.status(400).json({ success: false, error: 'Bộ này CHỈ chạy thử — đổi giá thật là nút "Đẩy giá lên sàn" trên web' }); return
+        }
+        const store = await prisma.store.findFirst({ where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { code: true, schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: `Không thấy cửa hàng ${storeCode}` }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { dayGiaLenSan } = await import('../lib/dayGiaLenSan')
+        const kq = await dayGiaLenSan(sp, channelId, { dryRun: true })
+        if (!kq.ok) { res.status(kq.http).json({ success: false, error: kq.loi, ...(kq.data ? { data: kq.data } : {}) }); return }
+        res.json({ success: true, data: { cuaHang: store.code, chayThu: true, ketQua: kq.data } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 400) })
+    }
+})
+
+/**
  * THÔNG TIN CÔNG TY IN LÊN PHIẾU — GET /admin/do-thong-tin-cong-ty
  *
  * 11/09/2026: chủ shop in thử, tên ra "Open Retail", địa chỉ/điện thoại/MST trống.

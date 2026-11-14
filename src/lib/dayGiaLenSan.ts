@@ -26,9 +26,21 @@
 //  gian) mà có mã sắp HẠ ⇒ vẫn đẩy (người bấm, như luật người của Pilot) kèm `canhBaoKhuyenMai` trong bản xem trước.
 //  Chạy thử cũng ĐỌC khuyến mãi (chỉ đọc) — trừ khi token sắp hết hạn: chạy thử không làm mới token, nói rõ.
 //
+//  LAZADA (14/11/2026, chủ shop duyệt "đổi giá Lazada" — bước 2 sau phí thật, TRƯỚC Lazada Pilot): một listing Lazada
+//  (OnlineProduct) là một MÃ, có thể nhiều SKU (phân loại) mỗi SKU một giá + một mã kho ⇒ lập kế hoạch THEO SKU, đọc SỐNG
+//  GetProducts cả gian ở mỗi lượt (chạy thử lẫn thật) — đọc hỏng / mã không thấy trên sàn ⇒ KHÔNG đổi (không có "cách cũ"
+//  theo giá lưu, như đẩy tồn Lazada). Mỗi SKU: giá bán lẻ của mã kho trùng SellerSku (SKU đại diện dùng mã kho đã nối),
+//  giá vốn + phí ngành của mã + rào giá sàn như trên. Giá khách đang trả = special_price khi thấp hơn price (đo 13/11:
+//  đơn thật bán đúng special_price) ⇒ SKU CÓ special_price thì ĐỂ YÊN (nhóm 'khuyenMai'): đổi Price không đổi giá khách trả,
+//  có thể bật lại một giá khuyến mãi đang tắt, hoặc bị Lazada chặn (4119); tài liệu UpdatePriceQuantity không nói cách gỡ
+//  giá khuyến mãi ⇒ không đoán. Ghi: UpdatePriceQuantity MỘT SKU một lời gọi, CHỈ thẻ <Price> (không Quantity / SalePrice).
+//  Lazada chưa có Pilot ⇒ chính sách giá MẶC ĐỊNH (không mượn chính sách Pilot sàn khác).
+//
 //  Kết quả (data):
 //   - chạy thử: { chayThu, seDay, seBoQua, boQuaDuoiSan, demBoQua, viDuBoQua, viDuDoi, [chuaBietPhi], [canhBaoKhuyenMai], ghiChu }
 //   - chạy thật: { pushed, skipped, failed, errors, boQuaDuoiSan, demBoQua, viDuBoQua, [chuaBietPhi], [canhBaoKhuyenMai] }
+//   - Lazada thêm (cả hai lượt): [docSan] (ghi chú đọc sàn: đọc hỏng, mã không thấy, SKU chưa nối kho), chinhSach (câu nói
+//     rào giá sàn theo chính sách nào). Đếm theo SKU — "mã" trên giao diện là một SKU.
 //   seBoQua / skipped = MỌI mã không ghi (giá đã bằng, chưa nối kho, không có giá bán lẻ, rào giá sàn, khuyến mãi);
 //   boQuaDuoiSan = phần do rào giá sàn (KHÔNG gồm khuyến mãi — đếm riêng ở demBoQua.khuyenMai), chia nhóm ở demBoQua;
 //   viDuBoQua ≤ 20 { sku, gia, lyDo } rải đều theo nhóm.
@@ -38,10 +50,12 @@ import { getPlatformService } from '../services/platforms'
 import { tinhGiaDeXuat, chanGiaDuoiSan, lyDoChuaBietPhi } from './giaShopee'
 import { docMauPhiTheoNganh } from './shopeeTuQuan'
 import { giaVonHangLoat } from './shopeeThaoTac'
-import { docChinhSachPilot, thamSoTinh } from './shopeePilot'
+import { docChinhSachPilot, thamSoTinh, chuanHoaChinhSach } from './shopeePilot'
 import { polCua, khoaListing } from './laiRiengPilot'
 import { docChinhSachTikTok, docKhuyenMaiGianTikTok, lyDoKhuyenMaiChuaRo, type KmSanPham } from './tiktokPilot'
 import type { KetQuaDayTon } from './dayTonLenSan'
+import type { MauPhi, KetQuaGia } from './giaShopee'
+import { LazadaService } from '../services/platforms/lazada'
 
 export interface ThamSoDayGia {
     dryRun?: boolean
@@ -77,12 +91,118 @@ function viDuRaiDeu<T extends { nhom: string }>(ds: T[], n: number): T[] {
     return ra
 }
 
+/** Nhóm của một lý do rào giá sàn — thứ tự theo tinhGiaDeXuat: thiếu giá vốn → chưa biết phí → dưới giá sàn → khác. */
+const nhomRao = (giaVon: number, mp: MauPhi, kq: KetQuaGia, gia: number): NhomBoQuaGia =>
+    !(giaVon > 0) ? 'thieuVon' : mp.chuaBiet ? 'chuaBietPhi' : kq.giaSan > 0 && gia < kq.giaSan ? 'duoiSan' : 'khac'
+
+/** Một dòng sẽ ghi. `sku` = nhãn cho người đọc (Lazada: SellerSku của SKU). Lazada: `giaCu` = giá khách đang trả đọc SỐNG,
+ *  `lz` = SKU cần ghi (`daiDien` = SKU đại diện của listing — ghi xong mới cập nhật OnlineProduct.price). */
+interface DongKeHoach { p: any; targetPrice: number; sku: string; giaCu?: number; lz?: { skuId?: string; sellerSku?: string; daiDien: boolean } }
+interface DongBoQua { id: string; sku: string; gia: number; lyDo: string; nhom: NhomBoQuaGia }
+
+const vnd = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
+/** ≤ 5 ví dụ + "…" cho một câu ghi chú */
+const vaiVd = (ds: string[]) => `${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''}`
+
+/** SKU Lazada có special_price ⇒ để yên — lý do theo đúng tình trạng giá khuyến mãi (đang bật / đang tắt). */
+function lyDoKhuyenMaiLazada(km: number, goc: number): string {
+    const xem = 'Kengi chưa ghi giá khuyến mãi Lazada (tài liệu Lazada không nói cách đặt / gỡ giá khuyến mãi) — để yên; đổi ở Lazada Seller Center.'
+    return goc > 0 && km < goc
+        ? `Đang có giá khuyến mãi ${vnd(km)} (giá gốc ${vnd(goc)}) — khách trả giá khuyến mãi, đổi giá gốc không đổi giá khách trả. ${xem}`
+        : `Có giá khuyến mãi ${vnd(km)} đang tắt (không thấp hơn giá gốc ${vnd(goc)}) — nâng giá gốc lên trên mức này là bật lại giá khuyến mãi, Lazada cũng có thể từ chối. ${xem}`
+}
+
+/**
+ * LAZADA — lập kế hoạch đổi giá THEO SKU (14/11/2026). Đọc SỐNG GetProducts cả gian (chỉ đọc, cả lượt chạy thử): đọc hỏng ⇒
+ * không SKU nào vào kế hoạch, lỗi Lazada nguyên văn vào `docSan`; mã Kengi không thấy trên sàn ⇒ bỏ qua, nói ra. Mỗi SKU:
+ *  1. giá bán lẻ = mã kho đã nối (chỉ SKU đại diện: listing một SKU, hoặc SellerSku = SKU lưu của listing) → mã kho TRÙNG SellerSku;
+ *     không có / giá lẻ ≤ 0 ⇒ bỏ qua (ghi chú "chưa nối kho");
+ *  2. giá khách đang trả (giaDangBanSku) = giá cần đẩy ⇒ giữ nguyên (trừ force);
+ *  3. rào giá sàn: giá vốn của chính SKU (giaVonHangLoat), phí theo ngành của mã, chính sách `pol`;
+ *  4. SKU có special_price ⇒ để yên (nhóm 'khuyenMai').
+ * `skipped` đếm mã không thấy trên sàn (mỗi mã một) + SKU bị bỏ ở bước 1–4.
+ */
+async function lapKeHoachLazada(prisma: any, service: any, onlineProducts: any[], o: { force: boolean; pol: Parameters<typeof thamSoTinh>[0]; bangPhi: Awaited<ReturnType<typeof docMauPhiTheoNganh>> }): Promise<{ keHoach: DongKeHoach[]; boQua: DongBoQua[]; skipped: number; docSan: string[] }> {
+    const keHoach: DongKeHoach[] = [], boQua: DongBoQua[] = [], docSan: string[] = []
+    let skipped = 0
+    if (!onlineProducts.length) return { keHoach, boQua, skipped, docSan }
+
+    const khongGhi = 'không đổi giá mã Lazada nào (thiếu giá đang bán để so và mã SKU để ghi)'
+    let doc: { items: any[]; catTai?: string }
+    try {
+        if (typeof service.docSanPhamTho !== 'function') throw new Error('dịch vụ sàn không đọc được danh mục')
+        doc = await service.docSanPhamTho()
+    } catch (e: any) {
+        docSan.push(`Không đọc được danh mục Lazada (${String(e?.message || e).slice(0, 160)}) — ${khongGhi}.`)
+        return { keHoach, boQua, skipped: onlineProducts.length, docSan }
+    }
+    const theoMa = new Map<string, any>()
+    for (const it of doc.items || []) {
+        const id = String(it?.item_id ?? '').trim()
+        if (id && !theoMa.has(id)) theoMa.set(id, it)
+    }
+
+    const khongThay: string[] = [], chuaNoi: string[] = []
+    const dong: { p: any; s: any; skuId: string; sellerSku: string; daiDien: boolean; khoa: string }[] = []
+    for (const p of onlineProducts) {
+        const it = theoMa.get(String(p.platformProductId))
+        if (!it) { skipped++; khongThay.push(String(p.sku || p.platformProductId)); continue }
+        const skus: any[] = (Array.isArray(it.skus) ? it.skus : []).filter(Boolean)
+        const skuLuu = String(p.sku || '').trim().toLowerCase()
+        for (const s of skus) {
+            const sellerSku = String(s?.SellerSku ?? '').trim(), skuId = String(s?.SkuId ?? '').trim()
+            if (!sellerSku && !skuId) { skipped++; chuaNoi.push(`${p.sku || p.platformProductId} (SKU không mã)`); continue }
+            const daiDien = skus.length === 1 || (!!skuLuu && sellerSku.toLowerCase() === skuLuu)
+            dong.push({ p, s, skuId, sellerSku, daiDien, khoa: `${p.id}#${skuId || sellerSku}` })
+        }
+    }
+    // Giá vốn MỘT lô cho mọi SKU (cùng chuỗi tra: mã đã nối → cùng SKU → ánh xạ × hệ số → mã đã gộp)
+    const von = await giaVonHangLoat(prisma, dong.map(d => ({ id: d.khoa, localProductId: d.daiDien ? d.p.localProductId ?? null : null, sku: d.sellerSku })))
+
+    for (const d of dong) {
+        const nhan = d.sellerSku || d.skuId
+        let local: any = d.daiDien && d.p.localProduct ? d.p.localProduct : null
+        if (!local && d.sellerSku) {
+            local = await prisma.product.findFirst({ where: { sku: d.sellerSku }, select: { id: true, sku: true, sellingPrice: true } })
+        }
+        if (!local || !(Number(local.sellingPrice) > 0)) { skipped++; chuaNoi.push(nhan); continue }
+        const targetPrice = Math.round(Number(local.sellingPrice))
+        const giaCu = LazadaService.giaDangBanSku(d.s)
+        if (!o.force && giaCu === targetPrice) { skipped++; continue }
+
+        const v = von.get(d.khoa)
+        const giaVon = v?.giaVon || 0
+        const mp = o.bangPhi.chon(d.p.categoryId)
+        const kq = tinhGiaDeXuat(thamSoTinh(polCua(o.pol, khoaListing({ sku: d.sellerSku }, v)), giaVon, mp))
+        const chan = chanGiaDuoiSan(targetPrice, kq)
+        if (chan) { skipped++; boQua.push({ id: d.p.id, sku: nhan, gia: targetPrice, lyDo: chan, nhom: nhomRao(giaVon, mp, kq, targetPrice) }); continue }
+
+        const km = Number(d.s?.special_price) || 0
+        if (km > 0) {
+            skipped++
+            boQua.push({ id: d.p.id, sku: nhan, gia: targetPrice, lyDo: lyDoKhuyenMaiLazada(km, Number(d.s?.price) || 0), nhom: 'khuyenMai' })
+            continue
+        }
+        keHoach.push({ p: d.p, targetPrice, sku: nhan, giaCu, lz: { ...(d.skuId ? { skuId: d.skuId } : {}), ...(d.sellerSku ? { sellerSku: d.sellerSku } : {}), daiDien: d.daiDien } })
+    }
+
+    if (khongThay.length) {
+        docSan.push(`${khongThay.length} mã có trong Kengi nhưng KHÔNG thấy trên Lazada lúc đọc (đã xoá / chưa duyệt / ${doc.catTai ? doc.catTai : 'chưa đồng bộ lại danh mục'}) — giữ nguyên, không đổi giá: ${vaiVd(khongThay)}.`)
+    }
+    if (chuaNoi.length) {
+        docSan.push(`${chuaNoi.length} SKU chưa có giá bán lẻ để đẩy (không có mã kho Kengi trùng SellerSku, hoặc mã kho chưa có giá bán lẻ) — giữ nguyên: ${vaiVd(chuaNoi)}.`)
+    }
+    return { keHoach, boQua, skipped, docSan }
+}
+
 export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDayGia = {}): Promise<KetQuaDayTon> {
     const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
     if (!channel) return { http: 404, ok: false, loi: 'Kênh không tồn tại' }
-    if (!['shopee', 'tiktok'].includes(channel.platform)) {
+    // Lazada từ 14/11/2026 (UpdatePriceQuantity từng SKU, chỉ giá gốc) — chỉ qua nút tay / admin chạy thử; chưa có Pilot Lazada
+    if (!['shopee', 'tiktok', 'lazada'].includes(channel.platform)) {
         return { http: 400, ok: false, loi: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy giá` }
     }
+    const laLazada = channel.platform === 'lazada'
     if (!channel.accessToken) return { http: 400, ok: false, loi: 'Kênh chưa kết nối API (thiếu access token)' }
 
     const giaLap = ts.giaLap
@@ -98,7 +218,10 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
      * không ghi giá nào: rơi về mặc định có thể LỎNG hơn biên chủ shop đã đặt. */
     let pol: Parameters<typeof thamSoTinh>[0]
     try {
-        pol = channel.platform === 'tiktok' ? await docChinhSachTikTok(prisma) : await docChinhSachPilot(prisma)
+        pol = channel.platform === 'tiktok' ? await docChinhSachTikTok(prisma)
+            // Lazada chưa có Pilot ⇒ mặc định (lãi mục tiêu 15%, tối thiểu 5%) — không mượn chính sách Pilot của sàn khác
+            : laLazada ? chuanHoaChinhSach({})
+            : await docChinhSachPilot(prisma)
     } catch (e: any) {
         return { http: 503, ok: false, loi: String(e?.message || e) }
     }
@@ -116,40 +239,50 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
 
     // Phí theo ngành đọc MỘT lần cho cả lượt (mỗi listing chọn ngành của nó); giá vốn gom lô (≤ 4 truy vấn dù bao nhiêu listing).
     const bangPhi = await docMauPhiTheoNganh(prisma, channel)
-    const von = await giaVonHangLoat(prisma, onlineProducts)
 
     let pushed = 0, skipped = 0, failed = 0
     const errors: string[] = []
-    const boQua: { id: string; sku: string; gia: number; lyDo: string; nhom: NhomBoQuaGia }[] = []
-    let keHoach: { p: any; targetPrice: number; sku: string }[] = []
+    const boQua: DongBoQua[] = []
+    let keHoach: DongKeHoach[] = []
+    /** Lazada: ghi chú đọc sàn (đọc hỏng / mã không thấy / SKU chưa nối kho) — hai sàn kia không đọc sàn ở bước này */
+    const docSan: string[] = []
 
-    for (const p of onlineProducts) {
-        let local = p.localProduct
-        if (!local && p.sku) {
-            local = await prisma.product.findFirst({
-                where: { sku: p.sku },
-                select: { id: true, sku: true, sellingPrice: true },
-            })
+    if (laLazada) {
+        // Lazada lập kế hoạch THEO SKU từ bản đọc sống (giá vốn gom lô theo SKU bên trong)
+        const lz = await lapKeHoachLazada(prisma, service, onlineProducts, { force, pol, bangPhi })
+        keHoach = lz.keHoach
+        boQua.push(...lz.boQua)
+        docSan.push(...lz.docSan)
+        skipped = lz.skipped
+    } else {
+        const von = await giaVonHangLoat(prisma, onlineProducts)
+        for (const p of onlineProducts) {
+            let local = p.localProduct
+            if (!local && p.sku) {
+                local = await prisma.product.findFirst({
+                    where: { sku: p.sku },
+                    select: { id: true, sku: true, sellingPrice: true },
+                })
+            }
+            if (!local || !(local.sellingPrice > 0)) { skipped++; continue }
+
+            const targetPrice = local.sellingPrice
+            if (!force && p.price === targetPrice) { skipped++; continue }
+
+            /* RÀO GIÁ SÀN — trước khi có bất kỳ lời gọi sàn nào. Thứ tự lý do theo tinhGiaDeXuat: thiếu giá vốn (việc của
+             * từng mã) → chưa biết phí (việc của cả gian) → dưới giá sàn. */
+            const giaVon = von.get(p.id)?.giaVon || 0
+            const mp = bangPhi.chon(p.categoryId)
+            // giá sàn theo lãi riêng của mã / nhóm hàng (Shopee Pilot, 12/11/2026); chính sách TikTok chưa có quy tắc riêng ⇒ nguyên pol
+            const kq = tinhGiaDeXuat(thamSoTinh(polCua(pol, khoaListing(p, von.get(p.id))), giaVon, mp))
+            const chan = chanGiaDuoiSan(targetPrice, kq)
+            if (chan) {
+                skipped++
+                boQua.push({ id: p.id, sku: p.sku || local.sku || p.platformProductId, gia: targetPrice, lyDo: chan, nhom: nhomRao(giaVon, mp, kq, targetPrice) })
+                continue
+            }
+            keHoach.push({ p, targetPrice, sku: p.sku || local.sku || p.platformProductId })
         }
-        if (!local || !(local.sellingPrice > 0)) { skipped++; continue }
-
-        const targetPrice = local.sellingPrice
-        if (!force && p.price === targetPrice) { skipped++; continue }
-
-        /* RÀO GIÁ SÀN — trước khi có bất kỳ lời gọi sàn nào. Thứ tự lý do theo tinhGiaDeXuat: thiếu giá vốn (việc của
-         * từng mã) → chưa biết phí (việc của cả gian) → dưới giá sàn. */
-        const giaVon = von.get(p.id)?.giaVon || 0
-        const mp = bangPhi.chon(p.categoryId)
-        // giá sàn theo lãi riêng của mã / nhóm hàng (Shopee Pilot, 12/11/2026); chính sách TikTok chưa có quy tắc riêng ⇒ nguyên pol
-        const kq = tinhGiaDeXuat(thamSoTinh(polCua(pol, khoaListing(p, von.get(p.id))), giaVon, mp))
-        const chan = chanGiaDuoiSan(targetPrice, kq)
-        if (chan) {
-            skipped++
-            const nhom: NhomBoQuaGia = !(giaVon > 0) ? 'thieuVon' : mp.chuaBiet ? 'chuaBietPhi' : kq.giaSan > 0 && targetPrice < kq.giaSan ? 'duoiSan' : 'khac'
-            boQua.push({ id: p.id, sku: p.sku || local.sku || p.platformProductId, gia: targetPrice, lyDo: chan, nhom })
-            continue
-        }
-        keHoach.push({ p, targetPrice, sku: p.sku || local.sku || p.platformProductId })
     }
 
     /* Token làm mới chỉ khi chạy thật (đệm 5 phút) — chạy thử đúng nghĩa "chưa ghi gì", kể cả token. Làm mới TRƯỚC khi đọc
@@ -200,8 +333,10 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
             }
         }
     }
-    /** mã HẠ giá so với giá đang lưu — giá lưu 0 / rỗng (chưa biết) tính là có thể hạ */
-    const laHa = (k: { p: any; targetPrice: number }) => { const cu = Number(k.p.price) || 0; return !(cu > 0) || k.targetPrice < cu }
+    /** giá trước khi đổi: Lazada = giá khách đang trả đọc SỐNG của chính SKU; hai sàn kia = giá đang lưu của listing */
+    const giaTruoc = (k: DongKeHoach) => Number(k.giaCu ?? k.p.price) || 0
+    /** mã HẠ giá so với giá trước — giá 0 / rỗng (chưa biết) tính là có thể hạ */
+    const laHa = (k: DongKeHoach) => { const cu = giaTruoc(k); return !(cu > 0) || k.targetPrice < cu }
     /** chưa biết chắc mã nào dính khuyến mãi + có mã hạ giá ⇒ nhắc (người bấm vẫn đẩy được — luật người của TikTok Pilot) */
     const cauChuaRo = (soHa: number, daDay: boolean) => !kmChuaRo || !(soHa > 0) ? null
         : `Chưa biết chắc mã nào đang / sắp khuyến mãi: ${kmChuaRo.lyDo}. ${soHa} mã ${daDay ? 'đã' : 'sắp'} HẠ giá — mã nào nằm trong chương trình giảm theo % thì giá khách trả giảm theo, có thể dưới giá sàn. ${daDay ? 'Xem lại chương trình trên TikTok Seller Center.' : 'Xem chương trình trên TikTok Seller Center trước khi đẩy.'}`
@@ -219,24 +354,33 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
         demBoQua,
         viDuBoQua: viDuRaiDeu(boQua, 20).map(({ sku, gia, lyDo }) => ({ sku, gia, lyDo })),
         ...(chuaBietPhi ? { chuaBietPhi } : {}),
+        // Lazada: ghi chú đọc sàn + rào giá sàn theo chính sách nào (giao diện hiện thẳng, không giấu trong tooltip)
+        ...(docSan.length ? { docSan } : {}),
+        ...(laLazada ? {
+            chinhSach: `Lazada chưa có Pilot — giá sàn tính theo chính sách MẶC ĐỊNH: lãi tối thiểu ${Math.round(pol.minMarginRate * 100)}%, `
+                + 'chưa tính đóng gói / quảng cáo / affiliate / thuế GTGT. Chỉ đổi GIÁ GỐC từng SKU; SKU đang có giá khuyến mãi để yên.',
+        } : {}),
     }
 
     if (chayThu) {
         // HẠ giá mạnh nhất lên đầu — giá lẻ POS thường thấp hơn giá sàn đang để; người bấm cần thấy trước mã nào sắp giảm nhiều
         const tyLe = (d: { giaCu: number; giaMoi: number }) => (d.giaCu > 0 ? d.giaMoi / d.giaCu : 1)
-        const viDuDoi = keHoach.map(k => ({ sku: k.p.sku || k.p.platformProductId, giaCu: Number(k.p.price) || 0, giaMoi: k.targetPrice }))
+        const viDuDoi = keHoach.map(k => ({ sku: k.lz ? k.sku : (k.p.sku || k.p.platformProductId), giaCu: giaTruoc(k), giaMoi: k.targetPrice }))
             .sort((a, b) => tyLe(a) - tyLe(b)).slice(0, 20)
-        // id listing để yên vì khuyến mãi — giao diện gửi lại khi bấm "Đẩy thật" (deYenKhuyenMai)
-        const maKhuyenMai = boQua.filter(b => b.nhom === 'khuyenMai').map(b => b.id)
+        // id listing để yên vì khuyến mãi TikTok — giao diện gửi lại khi bấm "Đẩy thật" (deYenKhuyenMai). Lazada không cần:
+        // lượt thật đọc lại sàn, đọc hỏng thì không đổi gì
+        const maKhuyenMai = channel.platform === 'tiktok' ? boQua.filter(b => b.nhom === 'khuyenMai').map(b => b.id) : []
         return {
             http: 200, ok: true,
             data: {
                 chayThu: true, seDay: keHoach.length, seBoQua: skipped, ...chung, viDuDoi,
                 ...(canhBaoKhuyenMai ? { canhBaoKhuyenMai } : {}),
                 ...(maKhuyenMai.length ? { maKhuyenMai } : {}),
-                ghiChu: docKhuyenMai
-                    ? 'CHẠY THỬ — chỉ ĐỌC khuyến mãi của gian trên TikTok, chưa ghi gì. Bỏ dryRun để chạy thật.'
-                    : 'CHẠY THỬ — chưa gọi sàn, chưa ghi gì. Bỏ dryRun để chạy thật.',
+                ghiChu: laLazada
+                    ? 'CHẠY THỬ — chỉ ĐỌC danh mục Lazada (GetProducts), chưa ghi gì. Bỏ dryRun để chạy thật.'
+                    : docKhuyenMai
+                        ? 'CHẠY THỬ — chỉ ĐỌC khuyến mãi của gian trên TikTok, chưa ghi gì. Bỏ dryRun để chạy thật.'
+                        : 'CHẠY THỬ — chưa gọi sàn, chưa ghi gì. Bỏ dryRun để chạy thật.',
             },
         }
     }
@@ -248,19 +392,25 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
         try {
             if (channel.platform === 'shopee') {
                 await service.updatePrice(p.platformProductId, targetPrice)
+            } else if (k.lz) {
+                // Lazada: đúng SKU đọc sống ở bước lập kế hoạch (SkuId + SellerSku), chỉ giá gốc
+                await service.updatePrice(p.platformProductId, targetPrice, k.lz.skuId, k.lz.sellerSku)
             } else {
                 await service.updatePrice(p.platformProductId, targetPrice, undefined, p.sku || undefined)
             }
-            await prisma.onlineProduct.update({
-                where: { id: p.id },
-                data: { price: targetPrice, syncedAt: new Date() },
-            })
+            // Lazada: giá lưu của listing là giá SKU đại diện — SKU khác đổi xong không có chỗ lưu riêng, lần đồng bộ sau đọc lại
+            if (!k.lz || k.lz.daiDien) {
+                await prisma.onlineProduct.update({
+                    where: { id: p.id },
+                    data: { price: targetPrice, syncedAt: new Date() },
+                })
+            }
             pushed++
             if (ha) daHa++
         } catch (e: any) {
             failed++
-            errors.push(`${p.sku || p.platformProductId}: ${e.message}`)
-            console.error(`[push-price] ${channel.name} ${p.platformProductId}:`, e.message)
+            errors.push(`${k.lz ? k.sku : (p.sku || p.platformProductId)}: ${e.message}`)
+            console.error(`[push-price] ${channel.name} ${p.platformProductId}${k.lz ? ` ${k.sku}` : ''}:`, e.message)
         }
 
         // Giãn nhịp giữa hai lời gọi sàn để không chạm trần tần suất (sàn giả của bộ kiểm không có trần)
@@ -275,8 +425,9 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
             status: failed > 0 ? 'partial' : 'success',
             details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}`
                 + (chung.boQuaDuoiSan ? ` | rào giá sàn bỏ qua ${chung.boQuaDuoiSan} mã (dưới sàn ${demBoQua.duoiSan}, thiếu giá vốn ${demBoQua.thieuVon}, chưa biết phí ${demBoQua.chuaBietPhi})` : '')
-                + (demBoQua.khuyenMai ? ` | khuyến mãi TikTok: để yên ${demBoQua.khuyenMai} mã` : '')
+                + (demBoQua.khuyenMai ? (laLazada ? ` | giá khuyến mãi Lazada: để yên ${demBoQua.khuyenMai} SKU` : ` | khuyến mãi TikTok: để yên ${demBoQua.khuyenMai} mã`) : '')
                 + (canhBaoThat && kmChuaRo ? ` | chưa rõ khuyến mãi (${kmChuaRo.lyDo.slice(0, 120)}), ${daHa} mã đã hạ giá` : '')
+                + (docSan.length ? ` | đọc sàn: ${docSan.join(' ').slice(0, 300)}` : '')
                 + (errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''),
             ordersCount: pushed,
         },
