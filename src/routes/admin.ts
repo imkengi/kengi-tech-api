@@ -11863,6 +11863,114 @@ router.get('/lazada-sp-tho', async (req: Request, res: Response) => {
 })
 
 /**
+ * GET /admin/lazada-phi-tho?storeCode=&channelId=&tu=YYYY-MM-DD&den=YYYY-MM-DD&maDon=&loai=&n=5&tatCa=1 — CHỈ ĐỌC, không ghi gì.
+ *
+ * Vì sao có (14/11/2026, chủ shop duyệt "lấy phí thật của đơn Lazada" — bước 1 trước Lazada Pilot): Kengi chưa từng đọc phí
+ * sàn của đơn Lazada (vòng đối soát phí chỉ Shopee escrow / TikTok settlement). Nguồn phí theo đơn là QueryTransactionDetails;
+ * tài liệu chỉ có MỘT dòng ví dụ ("amount": "-0.62", "transaction_type": "Payment Fee"…) — bảng loại giao dịch, dấu tiền,
+ * khoản nào là doanh thu / phí / vận chuyển, ngày cuối có tính hay không đều phải NHÌN dữ liệu thật trước khi map.
+ *
+ * Trả: kênh (không lộ khoá), số dòng, khoá có mặt (đếm), phân bố transaction_type / fee_name / fee_type / paid_status…,
+ * tiền theo loại (Σ, số dòng âm / dương), gom theo đơn kèm ĐỐI CHIẾU đơn Kengi cùng kênh (tổng tiền, phí ship, trạng thái —
+ * không có dữ liệu khách), khoảng ngày giao dịch thật, `n` dòng mẫu (`tatCa=1` = mọi dòng). Mặc định 30 ngày tới hôm nay
+ * (giờ VN). Token hết hạn ⇒ trả nguyên lỗi Lazada, KHÔNG làm mới.
+ */
+router.get('/lazada-phi-tho', async (req: Request, res: Response) => {
+    try {
+        const mo = await moKenhLazada(String(req.query.storeCode || '').trim(), String(req.query.channelId || '').trim())
+        if (mo.loi) return res.status(mo.loi.http).json(mo.loi.body)
+        const { sp, ch, kenhAnToan, svc } = mo
+        const ngayVN = (ms: number) => new Date(ms + 7 * 3600_000).toISOString().slice(0, 10)
+        const den = String(req.query.den || '').trim() || ngayVN(Date.now())
+        const tu = String(req.query.tu || '').trim() || ngayVN(Date.parse(`${den}T00:00:00Z`) - 30 * 86400_000)
+        const maDon = String(req.query.maDon || '').trim() || undefined
+        const loai = String(req.query.loai || '').trim() || undefined
+        const doc = await svc.docGiaoDichTaiChinh({ tu, den, maDon, loai })
+        const dong: any[] = doc.dong || []
+
+        const dem = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) || 0) + 1)
+        const raObj = (m: Map<string, number>, toiDa = 60) => Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, toiDa))
+        const so = (v: any): number | null => {
+            if (v === null || v === undefined || v === '') return null
+            const n = Number(String(v).replace(/,/g, ''))
+            return Number.isFinite(n) ? n : null
+        }
+        const khoa = new Map<string, number>()
+        const PHAN_BO = ['transaction_type', 'fee_name', 'fee_type', 'paid_status', 'shipment_type', 'orderItem_status',
+            'WHT_included_in_amount', 'shipping_provider', 'statement', 'details', 'comment']
+        const phanBo: Record<string, Map<string, number>> = Object.fromEntries(PHAN_BO.map(k => [k, new Map<string, number>()]))
+        // tiền theo cặp (transaction_type | fee_name | fee_type)
+        const tienTheoLoai = new Map<string, { dong: number; am: number; duong: number; khong: number; tong: number; viDu: any[] }>()
+        const amountLa = new Map<string, number>()   // kiểu dữ liệu của amount
+        const theoDon = new Map<string, { dong: number; tong: number; loai: Record<string, number>; ngay: Set<string> }>()
+        const ngayGD = new Map<string, number>()
+        for (const d of dong) {
+            Object.keys(d || {}).forEach(k => dem(khoa, k))
+            for (const k of PHAN_BO) dem(phanBo[k], d?.[k] == null ? '(không có)' : String(d[k]).slice(0, 60))
+            dem(amountLa, typeof d?.amount)
+            const a = so(d?.amount)
+            const cap = `${d?.transaction_type ?? '?'} | ${d?.fee_name ?? '?'} | ${d?.fee_type ?? '?'}`
+            const x = tienTheoLoai.get(cap) || { dong: 0, am: 0, duong: 0, khong: 0, tong: 0, viDu: [] }
+            x.dong++
+            if (a === null) x.khong++
+            else { x.tong += a; if (a < 0) x.am++; else if (a > 0) x.duong++; else x.khong++ }
+            if (x.viDu.length < 3) x.viDu.push(d?.amount)
+            tienTheoLoai.set(cap, x)
+            dem(ngayGD, String(d?.transaction_date ?? '(không có)'))
+            const ma = String(d?.order_no ?? '').trim() || '(không có order_no)'
+            const g = theoDon.get(ma) || { dong: 0, tong: 0, loai: {}, ngay: new Set<string>() }
+            g.dong++
+            if (a !== null) {
+                g.tong += a
+                const ten = String(d?.transaction_type ?? d?.fee_name ?? '?')
+                g.loai[ten] = Math.round(((g.loai[ten] || 0) + a) * 100) / 100
+            }
+            g.ngay.add(String(d?.transaction_date ?? ''))
+            theoDon.set(ma, g)
+        }
+
+        // ĐỐI CHIẾU đơn Kengi cùng kênh — externalOrderId của đơn Lazada = String(order_id) (lazada.ts mapOrder)
+        const maDons = [...theoDon.keys()].filter(m => /^\d+$/.test(m))
+        const donKengi: any[] = maDons.length ? await sp.onlineOrder.findMany({
+            where: { channelId: ch.id, externalOrderId: { in: maDons } },
+            select: {
+                externalOrderId: true, status: true, total: true, subtotal: true, shippingFee: true, discount: true,
+                platformFee: true, netRevenue: true, createdAt: true,
+            },
+        }) : []
+        const theoMa = new Map(donKengi.map(o => [String(o.externalOrderId), o]))
+        const doiChieu = [...theoDon.entries()].slice(0, 40).map(([ma, g]) => {
+            const o = theoMa.get(ma)
+            return {
+                order_no: ma, soDong: g.dong, tongLazada: Math.round(g.tong * 100) / 100, theoLoai: g.loai, ngayGD: [...g.ngay],
+                kengi: o ? {
+                    trangThai: o.status, total: o.total, subtotal: o.subtotal, shippingFee: o.shippingFee, discount: o.discount,
+                    platformFee: o.platformFee, netRevenue: o.netRevenue, taoLuc: o.createdAt,
+                } : null,
+            }
+        })
+        const n = Math.min(Math.max(Number(req.query.n) || 5, 0), 50)
+        res.json({
+            success: true,
+            kenh: kenhAnToan, kenhDoc: ch.id, khoang: { tu, den }, ...(maDon ? { maDon } : {}), ...(loai ? { loai } : {}),
+            soDong: dong.length, ...(doc.catTai ? { catTai: doc.catTai } : {}),
+            khoa: raObj(khoa),
+            kieuAmount: raObj(amountLa),
+            phanBo: Object.fromEntries(PHAN_BO.map(k => [k, raObj(phanBo[k])])),
+            tienTheoLoai: Object.fromEntries([...tienTheoLoai.entries()].sort((a, b) => b[1].dong - a[1].dong)
+                .map(([k, v]) => [k, { ...v, tong: Math.round(v.tong * 100) / 100 }])),
+            ngayGiaoDich: raObj(ngayGD, 200),
+            don: { soDon: theoDon.size, coTrongKengi: donKengi.length, khongCoTrongKengi: maDons.length - donKengi.length },
+            doiChieu,
+            mau: String(req.query.tatCa || '') === '1' ? dong : dong.slice(0, n),
+        })
+    } catch (err: any) {
+        // lỗi Lazada nguyên văn — người vận hành cần đọc được ("chặn IP", "token hết hạn", "thiếu quyền API"…)
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
  * POST /admin/lazada-keo-danh-muc  { storeCode, channelId?, apply?: true } — KÉO danh mục Lazada vào bảng sản phẩm sàn (13/11/2026).
  *
  * Cùng đường nút "Đồng bộ" của kênh gọi (fetchProducts → luuDanhMucSan) — chỉ ĐỌC sàn. Không `apply` ⇒ CHẠY THỬ: đếm sẽ tạo / sẽ

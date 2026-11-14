@@ -371,6 +371,58 @@ export class LazadaService extends PlatformService {
         }
     }
 
+    // ─── Tài chính ───────────────────────────────────────────────────────────────
+
+    /** QueryTransactionDetails: tối đa 500 dòng mỗi lần hỏi; end_time − start_time phải < 180 ngày (lỗi 1000012). Tài liệu đọc 14/11/2026. */
+    static readonly GD_MOI_TRANG = 500
+    static readonly GD_KHOANG_NGAY_TOI_DA = 179
+
+    /**
+     * GIAO DỊCH TÀI CHÍNH THÔ — GET /finance/transaction/details/get (QueryTransactionDetails).
+     *
+     * Tài liệu (đọc 14/11/2026): `start_time` / `end_time` BẮT BUỘC, dạng YYYY-MM-DD (ví dụ "2021-01-01"), khoảng < 180 ngày;
+     * lọc tuỳ chọn `trade_order_id` (mã đơn), `trade_order_line_id` (mã dòng hàng), `trans_type` (mã loại giao dịch);
+     * `limit` tối đa 500, lật trang bằng `offset`. Mỗi dòng (theo ví dụ của tài liệu): order_no, orderItem_no, amount (CHUỖI có
+     * dấu, ví dụ "-0.62"), transaction_type ("Payment Fee"), fee_name, fee_type ("13"), paid_status ("Not paid"),
+     * transaction_date ("17 May 2016"), statement, WHT_amount, VAT_in_amount, transaction_number…
+     *
+     * Trả NGUYÊN các dòng Lazada đưa — chưa map gì: tên trường, dấu tiền, bảng loại giao dịch đều phải ĐO trên dữ liệu thật
+     * trước khi dùng (cổng chỉ đọc /admin/lazada-phi-tho). Hỏng giữa chừng thì NÉM kèm lỗi nguyên văn — không trả nửa
+     * danh sách như thể đủ. `catTai` nói rõ khi chưa đọc hết vì giới hạn số trang của lượt đọc.
+     */
+    async docGiaoDichTaiChinh(o: { tu: string; den: string; maDon?: string; maDong?: string; loai?: string; toiDaTrang?: number }): Promise<{ dong: any[]; catTai?: string }> {
+        const ngay = /^\d{4}-\d{2}-\d{2}$/
+        if (!ngay.test(o.tu) || !ngay.test(o.den)) throw new Error(`Lazada giao dịch tài chính: ngày phải dạng YYYY-MM-DD (nhận "${o.tu}" → "${o.den}")`)
+        const soNgay = Math.round((Date.parse(`${o.den}T00:00:00Z`) - Date.parse(`${o.tu}T00:00:00Z`)) / 86400_000)
+        if (!(soNgay >= 0) || soNgay > LazadaService.GD_KHOANG_NGAY_TOI_DA) {
+            throw new Error(`Lazada giao dịch tài chính: khoảng ${o.tu} → ${o.den} là ${soNgay} ngày — Lazada chỉ nhận 0…${LazadaService.GD_KHOANG_NGAY_TOI_DA}`)
+        }
+        const moiTrang = LazadaService.GD_MOI_TRANG
+        const toiDaTrang = Math.max(1, o.toiDaTrang ?? 40)
+        const dong: any[] = []
+        let het = false
+        for (let trang = 0; trang < toiDaTrang; trang++) {
+            const offset = trang * moiTrang
+            const url = this.buildUrl('/finance/transaction/details/get', {
+                start_time: o.tu, end_time: o.den, offset: String(offset), limit: String(moiTrang),
+                ...(o.maDon ? { trade_order_id: o.maDon } : {}),
+                ...(o.maDong ? { trade_order_line_id: o.maDong } : {}),
+                ...(o.loai ? { trans_type: o.loai } : {}),
+            })
+            const data = await this.httpGet(url)
+            if (data.code !== '0' && data.code !== 0) {
+                const detail = `[${data.code}] ${data.message || data.error_message || 'không rõ'}`
+                if (LazadaService.isChannelAuthError(data.code, data.message)) throw new Error(`Lazada từ chối kênh: ${detail}`)
+                throw new Error(`Lazada finance/transaction/details/get (${o.tu} → ${o.den}, offset ${offset}): ${detail}`)
+            }
+            const ds: any[] = Array.isArray(data.data) ? data.data : []
+            dong.push(...ds)
+            if (ds.length < moiTrang) { het = true; break }
+        }
+        const catTai = het ? undefined : `mới đọc ${dong.length} dòng (giới hạn ${toiDaTrang} trang của lượt đọc)`
+        return { dong, ...(catTai ? { catTai } : {}) }
+    }
+
     // ─── Products ────────────────────────────────────────────────────────────────
 
     /** GetProducts chỉ cho lật trang bằng offset tới 10.000 (tài liệu /products/get, đọc 13/11/2026). */
