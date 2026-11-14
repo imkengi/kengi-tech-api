@@ -28,8 +28,11 @@ const nem = (fn: () => any) => { try { fn(); return false } catch (e) { return e
 
 const GOC = path.resolve(__dirname, '..')
 const LIB_BE = path.join(GOC, 'src', 'lib', 'giamTruGiaCanh.ts')
-/** Số giảm trừ viết cứng: 11_000_000 · 4_400_000 · 15_500_000 · 6_200_000 (có/không gạch dưới) hoặc dạng 11e6. */
-const SO_CUNG = /(?<![\w.])(?:11_?000_?000|4_?400_?000|15_?500_?000|6_?200_?000|11e6|4\.4e6|15\.5e6|6\.2e6)(?![\w.])/
+/** Số giảm trừ viết cứng: 11_000_000 · 4_400_000 · 15_500_000 · 6_200_000 (có/không gạch dưới), dạng 11e6, hoặc
+ *  CHỮ trên giao diện "11.000.000" (FE từng in cứng "Bản thân: 11.000.000đ/tháng" cạnh phép tính). */
+const SO_CUNG = /(?<![\w.])(?:11_?000_?000|4_?400_?000|15_?500_?000|6_?200_?000|11\.000\.000|4\.400\.000|15\.500\.000|6\.200\.000|11e6|4\.4e6|15\.5e6|6\.2e6)(?![\w.])/
+/** Dòng chú thích (//, /*, *) được nhắc số cũ để giải thích lịch sử — không phải phép tính. */
+const DONG_CHU_THICH = /^\s*(\/\/|\/\*|\*)/
 
 function quetThuMuc(goc: string, duoi: RegExp, boQua: (p: string) => boolean): string[] {
     const ra: string[] = []
@@ -45,13 +48,15 @@ function quetThuMuc(goc: string, duoi: RegExp, boQua: (p: string) => boolean): s
     return ra
 }
 
-/** Dòng chứa số giảm trừ viết cứng (bỏ qua file nguồn sự thật + dòng đánh dấu `giamtru-ok`). */
+/** Dòng chứa số giảm trừ viết cứng (bỏ qua file nguồn sự thật, dòng chú thích, dòng đánh dấu `giamtru-ok`). */
 function timSoCung(tep: string[], tepNguon: string): string[] {
     const ra: string[] = []
     for (const f of tep) {
         if (path.resolve(f) === path.resolve(tepNguon)) continue
         const dong = fs.readFileSync(f, 'utf8').split('\n')
-        dong.forEach((d, i) => { if (SO_CUNG.test(d) && !/giamtru-ok/.test(d)) ra.push(`${path.relative(GOC, f)}:${i + 1}: ${d.trim().slice(0, 120)}`) })
+        dong.forEach((d, i) => {
+            if (SO_CUNG.test(d) && !DONG_CHU_THICH.test(d) && !/giamtru-ok/.test(d)) ra.push(`${path.relative(GOC, f)}:${i + 1}: ${d.trim().slice(0, 120)}`)
+        })
     }
     return ra
 }
@@ -211,7 +216,8 @@ async function main() {
                 .map(m => [Number(m[1]), Number(m[2].replace(/_/g, '')), Number(m[3].replace(/_/g, ''))])
             const dongBe = BANG_MUC_GIAM_TRU.map(m => [m.tuNam, m.banThanThang, m.nguoiPhuThuocThang])
             ok('7a. bảng mức FE trùng từng dòng với BE', JSON.stringify(dongFe) === JSON.stringify(dongBe), { fe: dongFe, be: dongBe })
-            const tepFe = quetThuMuc(path.join(fe, 'src'), /\.(ts|tsx)$/, p => /[\\/](node_modules|\.next|out)([\\/]|$)/.test(p))
+            // mockData: số liệu mẫu (vd doanh thu 6.200.000) trùng số ngẫu nhiên, không tính thuế
+            const tepFe = quetThuMuc(path.join(fe, 'src'), /\.(ts|tsx)$/, p => /[\\/](node_modules|\.next|out|mockData)([\\/]|$)/.test(p))
             const cungFe = timSoCung(tepFe, libFe)
             ok(`7b. FE không viết cứng số giảm trừ ngoài lib/giamTruGiaCanh — quét ${tepFe.length} file`, tepFe.length > 100 && cungFe.length === 0, cungFe)
         }
