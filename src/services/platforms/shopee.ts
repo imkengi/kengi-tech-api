@@ -1,9 +1,9 @@
-import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
+import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
 import { guiJsonKemBase64, CHO_BASE64 } from '../../lib/khoiVideo'
 // flashSaleKiemGia không import gì ⇒ không vòng import
-import { tonSanPham } from '../../lib/flashSaleKiemGia'
+import { tonNguoiBan } from '../../lib/flashSaleKiemGia'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE OPEN PLATFORM v2.0
@@ -581,68 +581,82 @@ export class ShopeeService extends PlatformService {
 
     // ── Products ─────────────────────────────────────────────────────────────────
 
-    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+    /** Thời gian tối đa cho phần đọc phân loại của MỘT lượt đồng bộ danh mục (route /sync kéo đơn trước, Cloud Run cắt ở 300s). */
+    static readonly HAN_DOC_PHAN_LOAI_MS = 45_000
+    /** Số lời gọi get_model_list chạy cùng lúc — đi qua proxy Tino (hosting dùng chung), đừng bắn dồn. */
+    static readonly LUONG_DOC_PHAN_LOAI = 3
+    /** Trần an toàn số mã đọc mỗi lượt (get_item_list phân trang 50). Chạm trần thì NÓI RA trong canhBao, không cắt ngầm. */
+    static readonly TRAN_MA_DANH_MUC = 5000
+
+    /**
+     * Danh mục sản phẩm ĐANG BÁN (item_status=NORMAL) của gian — nguồn của OnlineProduct (lib/shopeeTuQuan.luuDanhMucSan).
+     *
+     * TỒN (14/11/2026, đo 3 gian KENGISTORE — 510 listing):
+     *  · Hàng KHÔNG phân loại: tonNguoiBan(base_info) = Σ seller_stock + shopee_stock. Lịch sử: trước 09/11 đọc current_stock /
+     *    normal_stock (trường API CŨ, v2 không trả) ⇒ MỌI listing lưu 0; 09/11 chuyển sang tonSanPham (summary trước) — nhưng
+     *    trong khung flash sale của shop summary chỉ còn số SUẤT flash sale (xem flashSaleKiemGia.tonNguoiBan).
+     *  · Hàng CÓ phân loại (has_model — 198/510, Kengi Electric 89/100): get_item_base_info KHÔNG có khoá stock_info_v2 lẫn
+     *    price_info ⇒ trước đây lưu tồn 0 cho cả 198, trong đó 110 listing còn hàng thật (tổng 27.245 cái; Bóng Đèn Led Bulb
+     *    6 phân loại sống 1.959). Giờ cộng tồn từng phân loại: get_model_list MỖI listing một lời gọi, chạy song song
+     *    LUONG_DOC_PHAN_LOAI, trong hạn hanDocPhanLoaiMs. Đọc hỏng / hết giờ ⇒ stock = null (CHƯA BIẾT): bên ghi giữ số cũ,
+     *    KHÔNG ghi 0 — và canhBao nói rõ bao nhiêu mã.
+     * GIÁ hàng có phân loại VẪN là 0, CỐ Ý: nhiều nơi đang đọc "giá 0 = có phân loại" (màn Shopee Pilot coPhanLoai, công cụ AI
+     * shopee_review_listings bỏ qua, chatbot "tuỳ phân loại" + link, chọn mã đổi giá…). Muốn lưu giá thật phải có cờ phân loại
+     * riêng trước, kẻo các nơi đó coi hàng nhiều giá là hàng một giá.
+     * LỖI: lời gọi ĐẦU TIÊN hỏng ⇒ ném nguyên văn (đừng trả danh mục rỗng như thể gian trống); hỏng giữa chừng ⇒ giữ phần đã đọc
+     * + canhBao (trước: `break` im lặng rồi báo đồng bộ xong).
+     */
+    async fetchProducts(tuyChon: { hanDocPhanLoaiMs?: number } = {}): Promise<DanhMucSan> {
         const allProducts: PlatformProduct[] = []
+        const coPhanLoai: PlatformProduct[] = []
+        const canhBao: string[] = []
+        let khongPhanLoaiChuaBiet = 0
         let offset = 0
         const pageSize = 50
         let hasMore = true
+        let tongShopee: number | null = null
 
-        while (hasMore && offset < 5000) { // Safety: max 5000 products
-            // Step 1: Get item IDs
-            const listPath = '/api/v2/product/get_item_list'
-            const listUrl = this.apiUrl(listPath) +
-                `&offset=${offset}&page_size=${pageSize}&item_status=NORMAL`
-
-            const listData = await this.httpGet(listUrl)
-            if (listData.error) {
-                console.error(`[Shopee Products] get_item_list error:`, listData.error, listData.message)
+        while (hasMore) {
+            if (offset >= ShopeeService.TRAN_MA_DANH_MUC) {
+                canhBao.push(`Dừng ở ${offset} mã (trần an toàn mỗi lượt) — Shopee báo ${tongShopee ?? '?'} mã đang bán, phần sau chưa đọc.`)
+                break
+            }
+            let listData: any, detailData: any
+            try {
+                listData = await this.httpGet(this.apiUrl('/api/v2/product/get_item_list') +
+                    `&offset=${offset}&page_size=${pageSize}&item_status=NORMAL`)
+                if (listData?.error) throw new Error(`Shopee get_item_list: ${listData.error} - ${listData.message}`)
+                if (tongShopee == null && listData.response?.total_count != null) tongShopee = Number(listData.response.total_count)
+                const itemIds = (listData.response?.item || []).map((i: any) => i.item_id)
+                if (itemIds.length === 0) break
+                detailData = await this.httpGet(this.apiUrl('/api/v2/product/get_item_base_info') + `&item_id_list=${itemIds.join(',')}`)
+                if (detailData?.error) throw new Error(`Shopee get_item_base_info: ${detailData.error} - ${detailData.message}`)
+            } catch (e: any) {
+                // chưa đọc được mã nào ⇒ lỗi thật, ném cho bên gọi hiện ra (lỗi token đi đường "uỷ quyền lại" của nó)
+                if (!allProducts.length) throw e
+                canhBao.push(`Dừng giữa chừng sau ${allProducts.length} mã: ${moTaLoi(e)} — các mã chưa đọc giữ số đã lưu.`)
+                console.error(`[Shopee Products] dừng giữa chừng sau ${allProducts.length} mã:`, moTaLoi(e))
                 break
             }
 
-            const itemList = listData.response?.item || []
-            if (itemList.length === 0) break
-
-            // Step 2: Get item details in batch (max 50 per call)
-            const itemIds = itemList.map((i: any) => i.item_id)
-            const detailPath = '/api/v2/product/get_item_base_info'
-            const detailUrl = this.apiUrl(detailPath) +
-                `&item_id_list=${itemIds.join(',')}`
-
-            const detailData = await this.httpGet(detailUrl)
-            if (detailData.error) {
-                console.error(`[Shopee Products] get_item_base_info error:`, detailData.error, detailData.message)
-                break
-            }
-
-            const details = detailData.response?.item_list || []
-            for (const d of details) {
-                // Get best price: model price > item price
+            for (const d of detailData.response?.item_list || []) {
                 let price = 0
-                if (d.price_info) {
-                    price = d.price_info[0]?.current_price || d.price_info[0]?.original_price || 0
-                }
-                /* Tồn bán được — đọc như flashSaleKiemGia.tonSanPham (09/11/2026): summary_info.total_available_stock →
-                 * Σ seller_stock → current/normal_stock. Trước chỉ đọc current_stock / normal_stock — trường của bản API CŨ,
-                 * get_item_base_info giờ không trả ⇒ OnlineProduct.stock = 0 ở MỌI listing Shopee (đo prod 15/10, 20/10):
-                 * bảng chạy thử "Đẩy tồn" thấy sàn đang 0 nên cầu dao (mã đang có hàng sẽ về 0) không bao giờ nhảy.
-                 * Hàng CÓ PHÂN LOẠI (has_model): base_info không mang tồn từng phân loại ⇒ vẫn ra 0 như cũ. KHÔNG gọi
-                 * get_model_list cho cả danh mục để lấy số đó: 709 listing là 709 lời gọi thừa, chạm trần tần suất Shopee. */
-                const stock = tonSanPham(d)
-
-                const imageUrl = d.image?.image_url_list?.[0] || ''
-                const sku = d.item_sku || ''
-
-                allProducts.push({
+                if (d.price_info) price = d.price_info[0]?.current_price || d.price_info[0]?.original_price || 0
+                const sp: PlatformProduct = {
                     platformProductId: String(d.item_id),
                     name: d.item_name || 'Unnamed',
-                    sku: sku || undefined,
+                    sku: d.item_sku || undefined,
                     price,
-                    stock,
+                    // có phân loại: chưa biết cho tới khi cộng xong từng phân loại (congTonPhanLoai)
+                    stock: d.has_model ? null : tonNguoiBan(d),
                     status: d.item_status || 'NORMAL',
-                    imageUrl,
+                    imageUrl: d.image?.image_url_list?.[0] || '',
                     // get_item_base_info trả sẵn category_id — lưu để map hoa hồng theo ngành
                     categoryId: d.category_id ? String(d.category_id) : undefined,
-                })
+                }
+                allProducts.push(sp)
+                if (d.has_model) coPhanLoai.push(sp)
+                else if (sp.stock == null) khongPhanLoaiChuaBiet++
             }
 
             hasMore = listData.response?.has_next_page || false
@@ -650,8 +664,59 @@ export class ShopeeService extends PlatformService {
             console.log(`[Shopee Products] Fetched ${allProducts.length} products (offset=${offset}, hasMore=${hasMore})`)
         }
 
-        console.log(`[Shopee Products] Total: ${allProducts.length} products synced`)
-        return { products: allProducts, total: allProducts.length }
+        if (coPhanLoai.length) {
+            const han = Math.max(0, tuyChon.hanDocPhanLoaiMs ?? ShopeeService.HAN_DOC_PHAN_LOAI_MS)
+            canhBao.push(...await this.congTonPhanLoai(coPhanLoai, han))
+        }
+        if (khongPhanLoaiChuaBiet) {
+            canhBao.push(`${khongPhanLoaiChuaBiet} mã không phân loại Shopee không trả trường tồn — giữ tồn đã lưu (mã mới: tạm 0).`)
+        }
+
+        console.log(`[Shopee Products] Total: ${allProducts.length}/${tongShopee ?? '?'} products, ${coPhanLoai.length} có phân loại`
+            + `${canhBao.length ? ` — ${canhBao.join(' | ')}` : ''}`)
+        return { products: allProducts, total: tongShopee ?? allProducts.length, ...(canhBao.length ? { canhBao } : {}) }
+    }
+
+    /**
+     * Hàng CÓ PHÂN LOẠI: stock = Σ tonNguoiBan từng phân loại (get_model_list). Ghi thẳng vào `ds[i].stock`; mã đọc hỏng / chưa
+     * tới lượt khi hết hạn giờ thì để null. Trả các câu cảnh báo. Thứ tự đọc XÁO NGẪU NHIÊN: lượt nào hết giờ thì phần chưa đọc
+     * là phần ngẫu nhiên — vài lượt là phủ hết; đọc theo thứ tự cố định thì đuôi danh sách không bao giờ tới lượt.
+     */
+    private async congTonPhanLoai(ds: PlatformProduct[], hanMs: number): Promise<string[]> {
+        const batDau = Date.now()
+        const hang = [...ds]
+        for (let i = hang.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[hang[i], hang[j]] = [hang[j]!, hang[i]!]
+        }
+        let viTri = 0, daDoc = 0, hong = 0, loiDau = ''
+        const tho = async () => {
+            while (viTri < hang.length && Date.now() - batDau < hanMs) {
+                const sp = hang[viTri++]!
+                try {
+                    const ms = await this.getModelList(Number(sp.platformProductId))
+                    const ton = ms.map(m => m.tonNguoiBan)
+                    if (!ms.length) throw new Error('get_model_list trả rỗng cho mã có phân loại')
+                    if (ton.some(t => t == null)) throw new Error('phân loại không mang trường tồn')
+                    sp.stock = ton.reduce((a: number, b) => a + (b as number), 0)
+                    daDoc++
+                } catch (e: any) {
+                    hong++
+                    loiDau ||= moTaLoi(e).slice(0, 160)
+                }
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(ShopeeService.LUONG_DOC_PHAN_LOAI, hang.length) }, tho))
+
+        const ra: string[] = []
+        if (hong) ra.push(`Không đọc được phân loại của ${hong}/${hang.length} mã (${loiDau}) — giữ tồn đã lưu.`)
+        const chuaToi = hang.length - daDoc - hong
+        if (chuaToi > 0) {
+            ra.push(`Hết ${Math.round(hanMs / 1000)}s đọc phân loại: ${chuaToi}/${hang.length} mã có phân loại chưa tới lượt — giữ tồn đã lưu, lần đồng bộ sau đọc tiếp.`)
+        }
+        console.log(`[Shopee Products] phân loại: đọc ${daDoc}/${hang.length} mã trong ${Math.round((Date.now() - batDau) / 1000)}s`
+            + `${hong ? `, hỏng ${hong}` : ''}${chuaToi > 0 ? `, chưa tới lượt ${chuaToi}` : ''}`)
+        return ra
     }
 
     // ─── Mappers ─────────────────────────────────────────────────────────────────
@@ -2026,7 +2091,7 @@ export class ShopeeService extends PlatformService {
      * Model list của 1 item (để build models[] cho add items — mỗi model cần
      * input_promo_price + stock riêng). Item không phân loại → mảng rỗng.
      */
-    async getModelList(itemId: number): Promise<{ model_id: number; price: number; giaHienTai: number; stock: number; name: string; sku: string }[]> {
+    async getModelList(itemId: number): Promise<{ model_id: number; price: number; giaHienTai: number; stock: number; tonNguoiBan: number | null; name: string; sku: string }[]> {
         const url = `${this.apiUrl('/api/v2/product/get_model_list')}&item_id=${itemId}`
         const data = await this.httpGet(url)
         if (data.error) throw new Error(`Shopee get_model_list: ${data.error} - ${data.message}`)
@@ -2045,6 +2110,9 @@ export class ShopeeService extends PlatformService {
             // GIÁ ĐANG BÁN (đã gồm khuyến mãi đang chạy) — flash sale kiểu "giá đang bán − 1đ" (chủ shop 15/10/2026)
             giaHienTai: m.price_info?.[0]?.current_price ?? m.price_info?.[0]?.original_price ?? 0,
             stock: m.stock_info_v2?.seller_stock?.[0]?.stock ?? m.stock_info?.[0]?.current_stock ?? 0,
+            /* Tồn TRÊN SÀN của phân loại cho đồng bộ danh mục (14/11/2026): Σ kho người bán + kho Shopee, null = phân loại
+             * không mang trường tồn nào (đọc hỏng, KHÔNG phải 0). `stock` ở trên giữ nguyên cho flash sale / lõi đẩy tồn. */
+            tonNguoiBan: tonNguoiBan(m),
         }))
     }
 

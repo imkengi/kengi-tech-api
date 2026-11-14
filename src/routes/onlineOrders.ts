@@ -4028,12 +4028,19 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
 
         // ── PRODUCT SYNC ────────────────────────────────────────────────────────
         let productsSynced = 0
+        let canhBaoSanPham: string[] = []
         try {
             console.log(`[Sync] Starting product catalog sync for channel ${channel.name}...`)
-            const { products } = await service.fetchProducts()
+            /* Shopee đọc tồn TỪNG listing có phân loại (get_model_list — 14/11/2026) ⇒ chỉ cho phần đó dùng thời gian CÒN LẠI của
+             * request: Cloud Run cắt ở 300s, kéo đơn đã có thể ăn tới DEADLINE_MS. Chừa ~40s cho get_item_list/base_info + ghi bảng.
+             * Hết giờ thì mã chưa đọc giữ tồn cũ và có cảnh báo, không 504. */
+            const conLaiMs = 300_000 - 40_000 - (Date.now() - startedAt)
+            const { products, canhBao } = await service.fetchProducts({ hanDocPhanLoaiMs: Math.max(0, Math.min(ShopeeService.HAN_DOC_PHAN_LOAI_MS, conLaiMs)) })
             // Dùng chung với tool MCP shopee_sync_listings (lib/shopeeTuQuan) — một đường ghi duy nhất
             productsSynced = await luuDanhMucSan(prisma, channel, products)
-            console.log(`[Sync] Product catalog: ${productsSynced} products synced`)
+            canhBaoSanPham = canhBao || []
+            for (const c of canhBaoSanPham) errors.push(`Đồng bộ sản phẩm: ${c}`)
+            console.log(`[Sync] Product catalog: ${productsSynced} products synced${canhBaoSanPham.length ? ` — ${canhBaoSanPham.join(' | ')}` : ''}`)
 
             // ── TikTok: enrich mã ngành hàng (nền, sau khi trả response) ──────────
             // products/search KHÔNG trả category → đọc từ product detail, CHỈ cho SP
@@ -4065,6 +4072,8 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             data: {
                 imported, updated, statusRefreshed, productsSynced,
                 errors: errors.length, total: allOrders.length, converted, hoaDonKhach,
+                // nguyên văn: tồn chưa đọc được / dừng giữa chừng khi kéo danh mục (mã đó giữ tồn cũ) — 14/11/2026
+                ...(canhBaoSanPham.length ? { canhBaoSanPham } : {}),
                 // Dừng giữa chừng (hết giờ, hoặc sàn chặn) → báo rõ LÝ DO để
                 // người dùng biết bấm tiếp hay ngồi chờ
                 partial: !!stoppedAt,

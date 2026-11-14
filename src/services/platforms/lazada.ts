@@ -1,4 +1,4 @@
-import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
+import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
 
@@ -643,7 +643,7 @@ export class LazadaService extends PlatformService {
      * ngày; lỗi Lazada NÉM nguyên văn (chỗ gọi ghi vào lỗi đồng bộ), không trả nửa danh mục như thể đủ. Chống trùng theo item_id.
      * Chỉ ĐỌC sàn; ghi vào Kengi qua `luuDanhMucSan` (upsert theo kênh + mã, không bao giờ xoá, giữ liên kết mã kho đã gán).
      */
-    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+    async fetchProducts(): Promise<DanhMucSan> {
         const { items, tong, catTai } = await this.docSanPhamTho()
         if (catTai) console.warn(`[Lazada] fetchProducts: ${catTai}`)
         const daCo = new Set<string>()

@@ -57,11 +57,20 @@ export interface PlatformProduct {
     name: string
     sku?: string
     price: number
-    stock: number
+    /** Tồn trên sàn. null = CHƯA BIẾT (đọc hỏng / hết giờ đọc) ⇒ bên ghi GIỮ số đã lưu, không ghi 0 (14/11/2026). */
+    stock: number | null
     status: string
     imageUrl?: string
     categoryId?: string   // mã ngành hàng trên sàn (nếu API trả sẵn trong list)
     categoryName?: string // chuỗi tên ngành (nếu có)
+}
+
+/** Danh mục kéo từ sàn. `canhBao`: đọc thiếu / dừng giữa chừng / tồn chưa biết — bên gọi PHẢI hiện ra, đừng báo "xong" trơn. */
+export interface DanhMucSan {
+    products: PlatformProduct[]
+    /** Tổng sàn báo (Shopee: total_count của get_item_list); không có thì bằng số đọc được */
+    total: number
+    canhBao?: string[]
 }
 
 export interface TokenResponse {
@@ -131,8 +140,8 @@ export abstract class PlatformService {
         timeRangeField?: 'update_time' | 'create_time'
     }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string }>
 
-    /** Fetch product catalog from platform */
-    abstract fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }>
+    /** Fetch product catalog from platform. `hanDocPhanLoaiMs`: thời gian tối đa cho phần đọc từng phân loại (Shopee). */
+    abstract fetchProducts(tuyChon?: { hanDocPhanLoaiMs?: number }): Promise<DanhMucSan>
 
     /** Get single order details */
     abstract getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null>

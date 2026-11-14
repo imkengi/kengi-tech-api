@@ -142,5 +142,31 @@ export function tonSanPham(x: any): number {
     return so(s?.current_stock ?? s?.normal_stock)
 }
 
+/**
+ * Tồn TRÊN SÀN của MỘT sản phẩm (không phân loại) hoặc MỘT phân loại — số lưu vào OnlineProduct.stock khi đồng bộ danh mục.
+ * Σ seller_stock (kho người bán) + Σ shopee_stock (kho Shopee), bỏ ô `if_saleable: false`; không có hai mảng đó mới lùi về
+ * summary_info.total_available_stock, rồi current/normal_stock (trường bản API cũ). Không có trường tồn nào ⇒ null = CHƯA BIẾT
+ * (bên gọi giữ số cũ, KHÔNG ghi 0 — "đọc không được" ≠ "hết hàng").
+ *
+ * Vì sao không dùng tonSanPham (summary trước) — đo 14/11/2026, 3 gian KENGISTORE: mã đang trong Flash Sale của shop thì
+ * total_available_stock = SỐ SUẤT FLASH SALE còn lại, không phải tồn: Kìm Rút Rive seller 73 / available 1 (reserved 1), Bình
+ * Xịt Tưới 3 phân loại seller 139+125+106 / available 1+1+1. Shopee giữ tồn campaign ngay khi thêm mã (60 phút trước giờ chạy,
+ * 1 suất/mã) ⇒ đồng bộ rơi vào khung đó là lưu "tồn 1" cho hàng còn hàng trăm cái. 18/510 listing lệch kiểu này lúc đo, ngoài
+ * ra hai cách ra cùng số. tonSanPham vẫn đúng cho việc của nó (bộ hẹn giờ flash sale, lượt đọc sống của lõi đẩy tồn).
+ */
+export function tonNguoiBan(x: any): number | null {
+    const s = x?.stock_info_v2
+    if (s && typeof s === 'object') {
+        const kho = [s.seller_stock, s.shopee_stock].filter(Array.isArray).flat()
+        if (kho.length) return kho.filter((k: any) => k?.if_saleable !== false).reduce((t: number, k: any) => t + Math.max(0, so(k?.stock)), 0)
+        if (s.summary_info?.total_available_stock != null) return so(s.summary_info.total_available_stock)
+        const cu = s.current_stock ?? s.normal_stock
+        if (cu != null) return so(cu)
+    }
+    // phân loại kiểu cũ: stock_info là MẢNG [{ current_stock, normal_stock }]
+    const v1 = Array.isArray(x?.stock_info) ? x.stock_info.filter((k: any) => k && (k.current_stock ?? k.normal_stock) != null) : []
+    return v1.length ? v1.reduce((t: number, k: any) => t + so(k.current_stock ?? k.normal_stock), 0) : null
+}
+
 /** % giảm so với giá gốc, làm tròn 1 chữ số (1.2 nghĩa là 1,2%). */
 export const phanTramGiam = (giaGoc: number, giaFlash: number) => giaGoc > 0 ? Math.round((1 - giaFlash / giaGoc) * 1000) / 10 : 0

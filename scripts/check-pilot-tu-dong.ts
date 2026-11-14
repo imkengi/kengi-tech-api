@@ -24,7 +24,9 @@
  *       còn 6% mặc định ⇒ chu kỳ Shopee / TikTok không ghi gì, MỘT dòng lý do kèm đường khai phí, lịch báo chủ shop đúng một
  *       lần; khai phí xong thì chạy lại. (D, H, I: "phí chưa đủ tin" giờ là gian ĐÃ khai phí 20% mà chưa đủ đơn để đo.)
  *    M. (09/11/2026) tồn Shopee đọc ĐÚNG: fetchProducts đọc summary_info / seller_stock — trước đọc trường của bản API cũ nên
- *       lưu 0 ở MỌI listing ⇒ bảng đẩy tồn thấy sàn đang 0, cầu dao không bao giờ nhảy
+ *       lưu 0 ở MỌI listing ⇒ bảng đẩy tồn thấy sàn đang 0, cầu dao không bao giờ nhảy. 14/11/2026: kho người bán THẮNG
+ *       summary (mã trong flash sale thì summary = số suất còn lại), có phân loại cộng từng phân loại, không trường tồn nào
+ *       ⇒ null = CHƯA BIẾT (giữ số đã lưu) — ca chi tiết ở check:ton-danh-muc
  *    N. cầu dao CHUNG trong lõi đẩy tồn (lib/dayTonLenSan — nút tay, /admin/day-ton-thu, Pilot): đếm trên TOÀN BỘ listing (không
  *       chỉ 300 dòng bảng chạy thử); chạy thật mà nhảy ⇒ 409, 0 lời gọi sàn; chỉ người bấm nút tay vượt được (chapNhanVeKhong
  *       + veKhongDaXem: đồng ý gắn với con số đã xem — thiếu số hoặc số mã về 0 tăng lên ⇒ vẫn 409);
@@ -867,9 +869,12 @@ async function main() {
         dung('H4. Facebook theo lịch gãy (mất fanpage) ⇒ báo ngay', kq === 'loi' && thongBao.length === 1 && /Facebook Pilot: chu kỳ tự động bị lỗi/.test(thongBao[0].title), JSON.stringify({ kq, thongBao }))
     }
 
-    // ─── M. Tồn Shopee đọc ĐÚNG (09/11/2026) ─────────────────────────────────────
+    // ─── M. Tồn Shopee đọc ĐÚNG (09/11/2026, sửa 14/11/2026) ─────────────────────
     // fetchProducts đọc stock_info_v2.current_stock / normal_stock — trường của bản API cũ, get_item_base_info giờ không trả ⇒
     // OnlineProduct.stock = 0 ở mọi listing Shopee. Gọi bản THẬT của fetchProducts với httpGet giả (không ra mạng).
+    // 14/11/2026 (đo 3 gian KENGISTORE): mã đang trong flash sale của shop thì summary_info chỉ còn SỐ SUẤT flash sale (Kìm Rút
+    // Rive kho người bán 73 / summary 1) ⇒ kho người bán thắng summary; hàng có phân loại trước lưu 0 (198 listing, 110 thật ra
+    // còn hàng) ⇒ cộng tồn từng phân loại qua get_model_list; không trường tồn nào ⇒ null = CHƯA BIẾT, bên ghi giữ số cũ.
     {
         const svc: any = new ShopeeService({ apiKey: '1', apiSecret: 's', accessToken: 'tM', shopId: '7' } as any)
         const goiHttp: string[] = []
@@ -877,22 +882,27 @@ async function main() {
         const ds = [
             sp(1, { stock_info_v2: { summary_info: { total_available_stock: 7 }, seller_stock: [{ stock: 99 }] } }),
             sp(2, { stock_info_v2: { seller_stock: [{ location_id: 'VNZ', stock: 3 }, { stock: 4 }] } }),
-            sp(3, { has_model: true }),                                    // có phân loại: base_info không mang tồn từng phân loại
-            sp(4, { stock_info_v2: {} }),
+            sp(3, { has_model: true }),                                    // có phân loại: base_info không mang tồn ⇒ get_model_list
+            sp(4, { stock_info_v2: {} }),                                  // không trường tồn nào ⇒ CHƯA BIẾT, không phải 0
             sp(5, { stock_info_v2: { current_stock: 5 } }),                // phản hồi kiểu cũ vẫn đọc được
         ]
         svc.httpGet = async (url: string) => {
-            if (url.includes('/product/get_item_list')) { goiHttp.push('list'); return { response: { item: ds.map(d => ({ item_id: d.item_id })), has_next_page: false } } }
+            if (url.includes('/product/get_item_list')) { goiHttp.push('list'); return { response: { item: ds.map(d => ({ item_id: d.item_id })), has_next_page: false, total_count: ds.length } } }
             if (url.includes('/product/get_item_base_info')) { goiHttp.push('base'); return { response: { item_list: ds } } }
+            if (url.includes('/product/get_model_list') && /[?&]item_id=3(&|$)/.test(url)) {
+                goiHttp.push('model')
+                return { response: { model: [{ model_id: 31, stock_info_v2: { seller_stock: [{ stock: 2 }] } }, { model_id: 32, stock_info_v2: { seller_stock: [{ stock: 6 }] } }] } }
+            }
             goiHttp.push(url.split('?')[0]!)
             throw new Error('bộ kiểm: lời gọi Shopee ngoài dự kiến')
         }
         const r = await fetchProductsGoc.call(svc)
-        const ton: Record<string, number> = Object.fromEntries(r.products.map((x: any) => [x.platformProductId, x.stock]))
-        dung('M1. fetchProducts: summary_info.total_available_stock ⇒ đúng tồn (7), thắng seller_stock', ton['1'] === 7, JSON.stringify(ton))
+        const ton: Record<string, number | null> = Object.fromEntries(r.products.map((x: any) => [x.platformProductId, x.stock]))
+        dung('M1. fetchProducts: kho người bán (99) THẮNG summary_info (7) — mã trong flash sale thì summary chỉ còn số suất (đo 14/11/2026)', ton['1'] === 99, JSON.stringify(ton))
         dung('M2. fetchProducts: chỉ có seller_stock ⇒ cộng các kho (3 + 4 = 7)', ton['2'] === 7, JSON.stringify(ton))
-        dung('M3. fetchProducts: có phân loại / không có gì ⇒ 0 như cũ (không bịa tồn), KHÔNG hỏi get_model_list (đúng 2 lời gọi); current_stock kiểu cũ vẫn đọc',
-            ton['3'] === 0 && ton['4'] === 0 && ton['5'] === 5 && goiHttp.join() === 'list,base', JSON.stringify({ ton, goiHttp }))
+        dung('M3. fetchProducts: có phân loại ⇒ cộng tồn từng phân loại (2 + 6 = 8, đúng MỘT get_model_list); không trường tồn nào ⇒ null (CHƯA BIẾT, không phải 0) kèm cảnh báo; current_stock kiểu cũ vẫn đọc',
+            ton['3'] === 8 && ton['4'] === null && ton['5'] === 5 && goiHttp.join() === 'list,base,model'
+            && (r.canhBao || []).some((c: string) => /không trả trường tồn/.test(c)), JSON.stringify({ ton, goiHttp, canhBao: r.canhBao }))
     }
 
     // ─── N. Cầu dao CHUNG trong lõi đẩy tồn (09/11/2026) ─────────────────────────

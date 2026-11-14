@@ -165,9 +165,13 @@ const CAC_TOOL: Tool[] = [
         run: async (a, { prisma }) => {
             const ch = await chonKenhShopee(prisma, a?.kenh)
             const svc = await moDichVuShopee(prisma, ch)
-            const { products } = await svc.fetchProducts()
+            const { products, canhBao } = await svc.fetchProducts()
             const n = await luuDanhMucSan(prisma, ch, products)
-            return { gian: ch.name, daDongBo: n, ghiChu: 'Chỉ kéo sản phẩm trạng thái NORMAL (đang bán); sản phẩm đã ẩn không có trong danh sách.' }
+            return {
+                gian: ch.name, daDongBo: n, ghiChu: 'Chỉ kéo sản phẩm trạng thái NORMAL (đang bán); sản phẩm đã ẩn không có trong danh sách.',
+                // mã chưa đọc được tồn giữ số cũ — AI phải thấy để không coi đó là số mới
+                ...(canhBao?.length ? { canhBao } : {}),
+            }
         },
     },
     {

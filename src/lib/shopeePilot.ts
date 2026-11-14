@@ -1960,10 +1960,12 @@ async function lamMoiDanhMuc(ctx: NgCanh, ch: any, baoToken: (lyDo: string, e?: 
     const t = moi?.syncedAt ? new Date(moi.syncedAt).getTime() : 0
     if (Date.now() - t < TUOI_DANH_MUC_MS) return null
     try {
-        const { products } = await (await dichVuCuaLuot(ctx, ch)).fetchProducts()
+        const { products, canhBao } = await (await dichVuCuaLuot(ctx, ch)).fetchProducts()
         if (!products?.length) return { action: 'catalog', status: 'failed', message: 'Shopee trả danh mục rỗng — giữ bản cũ (kiểm token / quyền API của gian).' }
         const n = await luuDanhMucSan(ctx.prisma, ch, products)
-        return { action: 'catalog', status: 'succeeded', message: `Đồng bộ lại ${n} sản phẩm đang bán từ Shopee (bản trước: ${t ? gioVN(t) : 'chưa có'}).` }
+        // tồn chưa đọc được / dừng giữa chừng (mã đó giữ số cũ) — nói ra, đừng báo xong trơn (14/11/2026)
+        const them = canhBao?.length ? ` ${canhBao.join(' ')}` : ''
+        return { action: 'catalog', status: 'succeeded', message: `Đồng bộ lại ${n} sản phẩm đang bán từ Shopee (bản trước: ${t ? gioVN(t) : 'chưa có'}).${them}` }
     } catch (e: any) {
         if (laLoiTokenShopee(e)) { baoToken(String(e?.message || e), e); return null }
         return { action: 'catalog', status: 'failed', message: `Không đồng bộ được danh mục từ Shopee: ${String(e?.message || e).slice(0, 200)}` }

@@ -1,4 +1,4 @@
-import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
+import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TIKTOK SHOP API v202309
@@ -526,7 +526,7 @@ export class TikTokService extends PlatformService {
      * Pull the product catalog — POST /product/202309/products/search
      * (page_token cursor, max 100/page). Stock = sum of every SKU's inventory.
      */
-    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+    async fetchProducts(): Promise<DanhMucSan> {
         const products: PlatformProduct[] = []
 
         for (const p of await this.timSanPhamTho()) {

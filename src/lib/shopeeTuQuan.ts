@@ -543,10 +543,13 @@ export function dungThanAddItem(v: DauVaoAddItem): Record<string, any> {
 
 // ─── Danh mục listing của gian ──────────────────────────────────────────────────
 
-/** Lưu danh mục sản phẩm kéo từ sàn vào OnlineProduct — dùng chung với nút Đồng bộ trên web. */
+/** Lưu danh mục sản phẩm kéo từ sàn vào OnlineProduct — dùng chung với nút Đồng bộ trên web.
+ *  `stock` null = sàn chưa cho biết tồn (đọc phân loại hỏng / hết giờ — 14/11/2026): dòng đã có GIỮ NGUYÊN tồn cũ, dòng mới
+ *  nhận mặc định 0 của cột (NOT NULL). Đừng đổi null thành 0 ở bên gọi — đó đúng là lỗi "đọc không được ⇒ hết hàng". */
 export async function luuDanhMucSan(prisma: any, channel: { id: string; platform: string }, products: PlatformProduct[]): Promise<number> {
     let n = 0
     for (const p of products) {
+        const ton = p.stock == null ? {} : { stock: p.stock }
         await prisma.onlineProduct.upsert({
             where: { channelId_platformProductId: { channelId: channel.id, platformProductId: p.platformProductId } },
             create: {
@@ -556,7 +559,7 @@ export async function luuDanhMucSan(prisma: any, channel: { id: string; platform
                 name: p.name,
                 sku: p.sku || null,
                 price: p.price,
-                stock: p.stock,
+                ...ton,
                 status: p.status || 'NORMAL',
                 imageUrl: p.imageUrl || null,
                 categoryId: p.categoryId || null,
@@ -567,7 +570,7 @@ export async function luuDanhMucSan(prisma: any, channel: { id: string; platform
                 name: p.name,
                 sku: p.sku || null,
                 price: p.price,
-                stock: p.stock,
+                ...ton,
                 status: p.status || 'NORMAL',
                 imageUrl: p.imageUrl || null,
                 // Chỉ ghi đè ngành khi list API có trả (Shopee) — TikTok search không
