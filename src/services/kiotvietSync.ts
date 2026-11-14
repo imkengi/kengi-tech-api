@@ -134,6 +134,31 @@ export async function dungDongHoaDon(sp: any, kv: any): Promise<{ lines: any[]; 
 export const laMaDaXoaKV = (sku: string) => /\{DEL\d*\}/i.test(String(sku || ''))
 
 /**
+ * LÝ DO KHÔNG TẠO một chứng từ còn thiếu mã hàng SAU KHI đã kéo mã (14/11/2026). Trước đây hoá đơn / phiếu nhập vẫn được tạo
+ * với các dòng còn lại — tổng theo KiotViet, dòng thiếu ⇒ thẻ kho thiếu dòng nhập/xuất, giá vốn thiếu, bút toán 156/331 theo
+ * tổng mà không có dòng nào chống lưng; và phiếu đã có thì lượt sau chỉ đi nhánh cập nhật thanh toán ⇒ thiếu VĨNH VIỄN.
+ * Nay chứng từ đó KHÔNG được tạo, ghi lỗi có lý do, lượt sau làm lại. Mã đã XOÁ bên KiotViet ({DEL}) thì kéo không bao giờ
+ * được (keoMaThieu cố ý bỏ qua) ⇒ nói thẳng cách gỡ. Vừa 200 ký tự của noteError: cắt bớt DANH SÁCH MÃ, không cắt lý do.
+ * `chayThu`: chạy thử chỉ báo trước điều lượt chạy thật CHẮC CHẮN gặp (mã {DEL}).
+ */
+export function lyDoChuaDuMa(nhan: string, thieu: { sku: string; kvProductId?: string | null }[], chayThu = false): string {
+    const ma = thieu.map(t => t.sku || (t.kvProductId ? `#${t.kvProductId}` : '?'))
+    const soXoa = thieu.filter(t => laMaDaXoaKV(t.sku)).length
+    const viSao = soXoa && soXoa === thieu.length
+        ? 'mã đã XOÁ bên KiotViet — khôi phục mã bên đó rồi đồng bộ lại'
+        : soXoa
+            ? `${soXoa} mã đã XOÁ bên KiotViet (khôi phục rồi đồng bộ lại), mã còn lại kéo chưa được`
+            : 'kéo mã từ KiotViet chưa được — lượt sau làm lại'
+    const dau = `${nhan}: ${chayThu ? 'chạy thật sẽ KHÔNG TẠO' : 'CHƯA TẠO'} (không tạo phiếu thiếu dòng) — thiếu ${thieu.length} mã`
+    const ghep = (ds: string) => `${dau} (${ds}): ${viSao}`
+    for (const n of [3, 2, 1]) {
+        const s = ghep(ma.slice(0, n).join(', ') + (ma.length > n ? '…' : ''))
+        if (s.length <= 200) return s
+    }
+    return ghep(`${String(ma[0] ?? '').slice(0, 20)}…`).slice(0, 200)
+}
+
+/**
  * KÉO NGAY các mã hàng chứng từ đang thiếu (18/10/2026). Hoá đơn / phiếu nhập về qua webhook mà hàng chưa sang Kengi (lượt
  * kéo mã mới chỉ chạy 0h) thì trước đây dòng đó rơi luôn. Nay hỏi KiotViet đúng mã đó (`/products/{id}` hoặc
  * `/products/code/{mã}`) rồi đi đường TẠO MỚI của syncProducts (chiTaoMoi — hàng đã có tuyệt đối không đụng, chỉ nối bảng
@@ -297,11 +322,20 @@ export function firstPhone(raw: any): string {
 
 // ─── Bản đồ id KiotViet ↔ id Kengi ──────────────────────────────────────────
 
+/**
+ * id Kengi đã nối với một id KiotViet; chưa nối ⇒ null. LỖI ĐỌC NÉM RA (14/11/2026).
+ *
+ * Bản cũ `.catch(() => null)` biến "đọc hỏng" thành "chưa nối" — mà CSDL prod chập chờn thật (nhật ký HUTI 09/10–12/11:
+ * "Transaction not found", "Can't reach database server", "Timed out fetching a new connection", pool 1). Hệ quả không tự lành:
+ * hoá đơn tạo KHÔNG gắn khách, phiếu nhập KHÔNG gắn NCC (nhánh "đã có" không bao giờ gắn lại); sổ quỹ tưởng phiếu thu của hoá
+ * đơn là phiếu lạ ⇒ ghi tiền lần hai; hàng / khách / NCC tưởng chưa nối ⇒ tạo BẢN SAO rồi nối bảng mã sang bản sao.
+ * Mọi chỗ gọi đều nằm trong try/catch của TỪNG chứng từ ⇒ chứng từ đó hỏng, có ghi lý do, lượt sau làm lại.
+ */
 async function findMap(sp: any, entity: string, kvId: string | number): Promise<string | null> {
     const row = await sp.kiotVietMap.findUnique({
         where: { entity_kvId: { entity, kvId: String(kvId) } },
         select: { localId: true },
-    }).catch(() => null)
+    })
     return row?.localId || null
 }
 
@@ -570,15 +604,19 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
             // Dịch vụ / combo của KiotViet: productType 1=combo, 2=hàng thường, 3=dịch vụ
             const productType = Number(kv?.productType) === 3 ? 'service' : 'goods'
 
+            /* ĐỌC HỎNG ≠ CHƯA CÓ (14/11/2026). Ba câu tra này từng `.catch(() => null)` ⇒ CSDL chập một nhịp là "chưa có" ⇒ TẠO
+             * hàng mới: hàng nối qua bảng mã mà SKU bên Kengi đã khác thì không vấp khoá SKU ⇒ ra BẢN SAO, rồi saveMap nối bảng mã
+             * sang bản sao. Lượt kéo mã thiếu của hoá đơn / phiếu nhập (keoMaThieu) đi đúng đường này. Nay lỗi lan ra: mã đó ghi
+             * lỗi, lượt sau làm lại (scripts/check-kv-chua-du-ma-khong-tao.ts). */
             let localId = await findMap(sp, 'product', kvId)
             let existing = localId
-                ? await sp.product.findUnique({ where: { id: localId } }).catch(() => null)
+                ? await sp.product.findUnique({ where: { id: localId } })
                 : null
             if (!existing) {
-                existing = await sp.product.findUnique({ where: { sku: code } }).catch(() => null)
+                existing = await sp.product.findUnique({ where: { sku: code } })
             }
             if (!existing && kv?.barCode) {
-                existing = await sp.product.findFirst({ where: { barcode: String(kv.barCode) } }).catch(() => null)
+                existing = await sp.product.findFirst({ where: { barcode: String(kv.barCode) } })
             }
 
             // Tồn: cộng onHand của các chi nhánh được chọn (không chọn = cộng hết)
@@ -818,10 +856,11 @@ export async function donHoaDonKhach(sp: any, items: any[], opts: { apply: boole
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
             const phone = firstPhone(kv?.contactNumber)
+            // Đọc hỏng ≠ không thấy khách (14/11/2026): lỗi đọc rơi xuống `kq.loi`, không đếm lẫn vào "không thấy khách".
             const localId = kvId ? await findMap(sp, 'customer', kvId) : null
-            let kh = localId ? await sp.customer.findUnique({ where: { id: localId } }).catch(() => null) : null
-            if (!kh && code) kh = await sp.customer.findUnique({ where: { code } }).catch(() => null)
-            if (!kh && phone) kh = await sp.customer.findFirst({ where: { phone } }).catch(() => null)
+            let kh = localId ? await sp.customer.findUnique({ where: { id: localId } }) : null
+            if (!kh && code) kh = await sp.customer.findUnique({ where: { code } })
+            if (!kh && phone) kh = await sp.customer.findFirst({ where: { phone } })
             if (!kh) { kq.khongThayKhach++; continue }
             const data = hoaDonCanGhi(kh, tuKV, opts.ghiDe)
             if (!Object.keys(data).length) { kq.daDu++; continue }
@@ -851,16 +890,19 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
 
             const phone = firstPhone(kv?.contactNumber)
 
+            /* Đọc hỏng ≠ chưa có (14/11/2026): ba câu tra từng `.catch(() => null)` ⇒ CSDL chập một nhịp là TẠO khách mới — khách
+             * đã nối theo SĐT / mã Kengi khác thì không vấp khoá mã ⇒ KHÁCH TRÙNG mang luôn công nợ KiotViet (tổng nợ đếm đôi).
+             * Nay lỗi lan ra: khách đó ghi lỗi, lượt sau làm lại. */
             let localId = await findMap(sp, 'customer', kvId)
             let existing = localId
-                ? await sp.customer.findUnique({ where: { id: localId } }).catch(() => null)
+                ? await sp.customer.findUnique({ where: { id: localId } })
                 : null
             if (!existing && code) {
-                existing = await sp.customer.findUnique({ where: { code } }).catch(() => null)
+                existing = await sp.customer.findUnique({ where: { code } })
             }
             // Trùng số điện thoại = cùng một người → gộp, KHÔNG đẻ khách trùng
             if (!existing && phone) {
-                existing = await sp.customer.findFirst({ where: { phone } }).catch(() => null)
+                existing = await sp.customer.findFirst({ where: { phone } })
             }
 
             // CÔNG NỢ lấy từ KiotViet — hệ thống đang là nguồn gốc dữ liệu.
@@ -948,12 +990,15 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
             const name = String(kv?.name || '').trim()
             if (!kvId || !name) { c.skipped++; continue }
 
+            /* Đọc hỏng ≠ chưa có (14/11/2026): hai câu tra từng `.catch(() => null)` ⇒ CSDL chập một nhịp là đi nhánh TẠO —
+             * NCC đã nối dưới mã Kengi khác thì thành NCC TRÙNG mang luôn công nợ phải trả KiotViet. Nay lỗi lan ra: NCC đó
+             * ghi lỗi, lượt sau làm lại. */
             let localId = await findMap(sp, 'supplier', kvId)
             let existing = localId
-                ? await sp.supplier.findUnique({ where: { id: localId } }).catch(() => null)
+                ? await sp.supplier.findUnique({ where: { id: localId } })
                 : null
             if (!existing && code) {
-                existing = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
+                existing = await sp.supplier.findUnique({ where: { code } })
             }
 
             // CÔNG NỢ PHẢI TRẢ + tổng đã mua, lấy từ KiotViet (nguồn gốc dữ liệu).
@@ -1315,7 +1360,9 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // CHẠY THỬ: hàng hoá chưa được tạo (chạy thử không ghi gì) nên mọi
             // dòng đều "không tìm thấy". Báo lỗi ở đây là báo oan — chạy thật
             // đồng bộ hàng hoá trước thì có đủ (dính 06/08/2026: 24462 lỗi ảo).
+            // TRỪ mã đã XOÁ bên KiotViet ({DEL}): chạy thật chắc chắn không kéo được ⇒ báo trước đúng như chạy thật sẽ ghi.
             if (!opts.apply) {
+                if (thieu.some(t => laMaDaXoaKV(t.sku))) { noteError(c, lyDoChuaDuMa(`HĐ ${code}`, thieu, true)); continue }
                 if (missing.length && c.errors.length < 3) {
                     c.errors.push(`Chạy thử: ${missing.length} mã hàng của HĐ ${code} chưa có bên Kengi — chạy thật sẽ có sau khi đồng bộ hàng hoá`)
                 }
@@ -1323,8 +1370,12 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 noteSample(c, { code, tong: Number(kv?.total) || 0, soDong: details.length, hanhDong: 'sẽ tạo' })
                 continue
             }
+            /* ĐÃ KÉO MÀ VẪN THIẾU MÃ ⇒ KHÔNG TẠO (14/11/2026). Bản cũ ghi lỗi rồi VẪN tạo hoá đơn với các dòng còn lại (tổng theo
+             * KiotViet) — dòng thiếu mất vĩnh viễn vì lượt sau thấy "đã có" chỉ cập nhật thanh toán (HUTI: 32 HĐ / 45,3tr rơi dòng
+             * vì mã {DEL}). Không tạo thì lượt sau (webhook / đêm, cửa sổ 3 ngày) làm lại khi mã đã về. */
             if (missing.length) {
-                noteError(c, `HĐ ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ hàng hoá trước`)
+                noteError(c, lyDoChuaDuMa(`HĐ ${code}`, thieu))
+                continue
             }
             if (!lines.length) {
                 boQua(c, `HĐ ${code}: không dựng được dòng hàng nào` +
@@ -1711,8 +1762,23 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             if (missing.length && opts.apply && (await keoMaThieu(sp, opts, thieu, c)) > 0) {
                 ({ lines, missing, thieu } = await dungDongPhieuNhap(sp, kv))
             }
+            /* KHÔNG TẠO PHIẾU NHẬP THIẾU DÒNG (14/11/2026). Bản cũ ghi lỗi rồi VẪN tạo phiếu với tổng KiotViet + các dòng còn lại
+             * (kể cả 0 dòng): bút toán Nợ 156 / Có 331 đủ tổng mà thẻ kho thiếu dòng nhập, giá vốn hàng thiếu không cập nhật — và
+             * phiếu đã có thì lượt sau chỉ cập nhật thanh toán ⇒ thiếu VĨNH VIỄN (HUTI PN004025 rơi dòng SKK 320 cái). Nay: còn
+             * thiếu mã sau khi kéo, hay KiotViet không trả dòng nào ⇒ không tạo, ghi lỗi có lý do; lượt đêm (cửa sổ 45 ngày theo
+             * ngày nhập) làm lại. Chạy thử: mã thường thì chưa kéo được (chạy thử không ghi) — chỉ báo trước mã {DEL}. */
+            if (!lines.length && !missing.length) {
+                noteError(c, `Phiếu nhập ${code}: CHƯA TẠO — KiotViet không trả dòng hàng nào dựng được (tổng ${Math.round(Number(kv?.total) || 0)}); không tạo phiếu rỗng`)
+                continue
+            }
             if (missing.length) {
-                noteError(c, `Phiếu nhập ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ Hàng hoá trước`)
+                if (opts.apply || thieu.some(t => laMaDaXoaKV(t.sku))) {
+                    noteError(c, lyDoChuaDuMa(`Phiếu nhập ${code}`, thieu, !opts.apply))
+                    continue
+                }
+                if (c.errors.length < 3) {
+                    c.errors.push(`Chạy thử: ${missing.length} mã hàng của phiếu nhập ${code} chưa có bên Kengi — chạy thật sẽ kéo mã rồi mới tạo`)
+                }
             }
 
             const total = Number(kv?.total) || 0
@@ -1804,9 +1870,10 @@ export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: S
             if (kv?.invoiceId) {
                 transactionId = await findMap(sp, 'invoice', kv.invoiceId)
                 if (transactionId) {
+                    // Lỗi đọc ném ra (14/11/2026): nuốt là phiếu trả ghi VĨNH VIỄN "KV#…" thay số hoá đơn gốc (phiếu trả chỉ tạo một lần)
                     const tx = await sp.transaction.findUnique({
                         where: { id: transactionId }, select: { receiptNumber: true },
-                    }).catch(() => null)
+                    })
                     if (tx?.receiptNumber) originalInvoice = tx.receiptNumber
                 }
             }
