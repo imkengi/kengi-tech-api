@@ -4494,6 +4494,23 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleLine_maHang_idx" ON "MisaSaleLine"("maHang")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleLine_productId_idx" ON "MisaSaleLine"("productId")`)
 
+                /* ĐẶC ĐIỂM SẢN PHẨM AI rút từ mô tả (14/11/2026, lib/dacDiemSanPham.ts) — bảng RIÊNG, không thêm cột Product */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "DacDiemSanPham" (
+                        "id" TEXT NOT NULL,
+                        "productId" TEXT NOT NULL,
+                        "dacDiem" TEXT NOT NULL,
+                        "bamMoTa" TEXT NOT NULL,
+                        "nguon" TEXT NOT NULL,
+                        "model" TEXT,
+                        "nguoiSua" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "DacDiemSanPham_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DacDiemSanPham_productId_key" ON "DacDiemSanPham"("productId")`)
+
                 /**
                  * GỠ INDEX HÀM đã thử ngày 18/08/2026 — CHÚNG LÀM CHẬM HẲN.
                  * Ý định: giúp các join LOWER(TRIM(sku)). Thực tế planner chuyển

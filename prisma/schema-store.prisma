@@ -4117,6 +4117,25 @@ model SanMediaNoiDung {
   updatedAt  DateTime @updatedAt
 }
 
+/// ĐẶC ĐIỂM SẢN PHẨM (14/11/2026) — bảng thông số AI rút từ mô tả (lib/dacDiemSanPham.ts), người sửa / duyệt ở trang
+/// Thông tin sản phẩm. Bảng RIÊNG, KHÔNG thêm cột vào Product: thêm cột Product là mọi câu đọc Product không select ở
+/// cửa hàng chưa migrate gãy P2022. Một dòng mỗi mã; không khoá ngoại (như SanMediaNoiDung).
+model DacDiemSanPham {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  /// JSON {v, ds:[{ten, giaTri, trich}], canhBao, boLoc, quaTran}
+  dacDiem   String
+  /// băm mô tả lúc rút / duyệt — khác băm mô tả hiện tại ⇒ mô tả đã đổi sau đó
+  bamMoTa   String
+  /// 'ai' = AI rút, chưa ai duyệt; 'nguoi' = người đã lưu (sửa / duyệt)
+  nguon     String
+  model     String?
+  /// email người bấm (token không mang tên)
+  nguoiSua  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// LỊCH TỰ TẠO VIDEO từ sản phẩm (14/10/2026) — một dòng mỗi cửa hàng (id 'mac-dinh'). Video chỉ dựng được trên
 /// trình duyệt (WebCodecs + giọng đọc ở máy shop), nên máy chủ giữ lịch + chọn việc, còn một tab kengi.vn được chỉ
 /// định làm "máy dựng" nhận việc khi tới giờ. giuCho* = chỗ giữ chống hai máy cùng làm (so-và-ghi trên dòng này).

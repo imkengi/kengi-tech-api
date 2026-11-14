@@ -12,6 +12,7 @@
  *  `product_info`, không nằm trong họ `products.*`.
  *
  *  Ảnh lưu ở lib/anhSanPham.ts (bucket công khai), không ghi đĩa Cloud Run.
+ *  ĐẶC ĐIỂM (14/11/2026): AI rút từ mô tả đang lưu, người sửa / duyệt — lib/dacDiemSanPham.ts.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 import { Router, Response, NextFunction } from 'express'
 import multer from 'multer'
@@ -23,6 +24,9 @@ import { moTaLoi } from '../lib/gomLoi'
 import { nhanDangAnh, luuAnhSanPham, xoaAnhSanPham } from '../lib/anhSanPham'
 import { goiYAnh } from '../lib/goiYAnhSanPham'
 import { CHON_NHOM_CAY } from '../lib/laiRiengPilot'
+import { docDacDiem, docDacDiemNhieuMa, rutDacDiemBangAi, luuDacDiemNguoi, LoiDacDiem } from '../lib/dacDiemSanPham'
+import { LoiAiSoat } from '../lib/aiSoatNoiDung'
+import { layKeyAi } from '../lib/keyAi'
 
 const router = Router()
 
@@ -111,6 +115,8 @@ router.get('/', authMiddleware, XEM, async (req: AuthRequest, res: Response) => 
                 _count: { select: { images: true } },
             },
         })
+        // đặc điểm AI rút từ mô tả (14/11/2026): số dòng + nguồn mỗi mã — nhãn trên danh sách, nút rút hàng loạt cho mã chưa có
+        const dd = await docDacDiemNhieuMa(prisma, rows.map(p => ({ id: p.id, moTa: p.description })))
         const items = rows.map(p => {
             const moTa = String(p.description || '').trim()
             return {
@@ -118,10 +124,11 @@ router.get('/', authMiddleware, XEM, async (req: AuthRequest, res: Response) => 
                 baseUnit: p.baseUnit, sellingPrice: p.sellingPrice, category: p.category?.name || null,
                 anh: p.images[0]?.url || null, soAnh: p._count.images,
                 moTa: moTa.slice(0, 140), doDaiMoTa: moTa.length,
+                dacDiem: dd.theoMa.get(p.id) || null,
                 updatedAt: p.updatedAt,
             }
         })
-        res.json({ success: true, data: { items, tong: dem[loc] ?? dem['can-bo-sung'], dem, trang, so } })
+        res.json({ success: true, data: { items, tong: dem[loc] ?? dem['can-bo-sung'], dem, trang, so, dacDiemSanSang: dd.sanSang } })
     } catch (e) {
         console.error('[thong-tin-san-pham] list:', e)
         res.status(500).json({ success: false, error: moTaLoi(e) })
@@ -151,6 +158,9 @@ router.get('/:id', authMiddleware, XEM, async (req: AuthRequest, res: Response) 
         const goiYAnhSp = goiYAnh({
             ten: p.name, nhomHang: p.category?.name, nhomCha: [p.category?.parent?.name, p.category?.parent?.parent?.name], soAnh: p.images?.length || 0,
         })
+        // đặc điểm AI rút từ mô tả (14/11/2026) — bảng riêng; chưa migrate ⇒ dacDiemSanSang false (trang không tự gọi AI)
+        const dd = await docDacDiem(prisma, p.id, p.description)
+        const keyAi = await layKeyAi(prisma)
         res.json({
             success: true,
             data: {
@@ -158,6 +168,7 @@ router.get('/:id', authMiddleware, XEM, async (req: AuthRequest, res: Response) 
                 anhTrenSan: p.onlineProducts, onlineProducts: undefined,
                 toiDaAnh: TOI_DA_ANH, toiDaKyTuMoTa: TOI_DA_KY_TU_MO_TA,
                 goiYAnh: goiYAnhSp,
+                dacDiem: dd.dacDiem, dacDiemSanSang: dd.sanSang, coKeyAi: !!(keyAi.gemini || keyAi.deepseek),
             },
         })
     } catch (e) {
@@ -188,6 +199,51 @@ router.put('/:id/mo-ta', authMiddleware, SUA, async (req: AuthRequest, res: Resp
     } catch (e) {
         console.error('[thong-tin-san-pham] mo-ta:', e)
         res.status(500).json({ success: false, error: moTaLoi(e) })
+    }
+})
+
+// ─── ĐẶC ĐIỂM SẢN PHẨM (14/11/2026) — lib/dacDiemSanPham.ts ─────────────────
+function traLoiDacDiem(res: Response, e: any, viec: string) {
+    if (e instanceof LoiDacDiem) {
+        return res.status(e.status).json({ success: false, error: e.message, ...(e.khongCoKey ? { khongCoKey: true } : {}) })
+    }
+    // Lỗi của AI (Google / DeepSeek) hiện NGUYÊN VĂN cho người bấm — không phải chi tiết nội bộ
+    if (e instanceof LoiAiSoat) {
+        return res.status(e.tamThoi ? 503 : 502).json({ success: false, error: `AI chưa đọc được mô tả — ${e.message}${e.tamThoi ? ' (thử lại sau ít phút)' : ''}` })
+    }
+    console.error(`[thong-tin-san-pham] ${viec}:`, e)
+    res.status(500).json({ success: false, error: moTaLoi(e) })
+}
+
+//  POST /:id/dac-diem/ai — AI rút đặc điểm từ mô tả ĐANG LƯU rồi lưu (nguồn 'ai')
+//  body { ghiDe?: true — thay bản người đã duyệt; lamMoi?: true — rút lại dù mô tả không đổi }
+router.post('/:id/dac-diem/ai', authMiddleware, SUA, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const p = await prisma.product.findFirst({
+            where: { id: String(req.params.id) },
+            select: { id: true, name: true, description: true, brand: { select: { name: true } }, category: { select: { name: true } } },
+        })
+        if (!p) return res.status(404).json({ success: false, error: 'Không thấy sản phẩm' })
+        const dd = await rutDacDiemBangAi(prisma,
+            { id: p.id, ten: p.name, moTa: p.description, thuongHieu: p.brand?.name, nhom: p.category?.name },
+            { ghiDe: req.body?.ghiDe === true, lamMoi: req.body?.lamMoi === true, nguoiSua: req.user?.email })
+        res.json({ success: true, data: dd })
+    } catch (e) {
+        traLoiDacDiem(res, e, 'dac-diem ai')
+    }
+})
+
+//  PUT /:id/dac-diem — người sửa / duyệt: body { dacDiem: [{ ten, giaTri }] } (rỗng = mã này không có đặc điểm nào)
+router.put('/:id/dac-diem', authMiddleware, SUA, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const p = await prisma.product.findFirst({ where: { id: String(req.params.id) }, select: { id: true, description: true } })
+        if (!p) return res.status(404).json({ success: false, error: 'Không thấy sản phẩm' })
+        const dd = await luuDacDiemNguoi(prisma, { id: p.id, moTa: p.description }, req.body?.dacDiem, req.user?.email)
+        res.json({ success: true, data: dd })
+    } catch (e) {
+        traLoiDacDiem(res, e, 'dac-diem luu')
     }
 })
 
