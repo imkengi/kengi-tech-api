@@ -15,7 +15,7 @@ import {
     PauseSalesTripSchema,
     ResumeSalesTripSchema,
 } from '../schemas'
-import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock, laDichVu } from '../lib/warehouseHelper'
 
 // Trừ hàng bán được (Product.stock + kho main) CÓ GUARD gte chống tồn âm do race.
 // Ném TripConflictError nếu tồn không đủ tại thời điểm ghi. delta là số dương (qty xuất).
@@ -168,9 +168,15 @@ async function nextTransferCode(tx: any): Promise<string> {
 async function loadProducts(prisma: any, productIds: string[]) {
     const products = await prisma.product.findMany({
         where: { id: { in: productIds } },
-        select: { id: true, name: true, sku: true, stock: true, sellingPrice: true },
+        select: { id: true, name: true, sku: true, stock: true, sellingPrice: true, productType: true },
     })
     return new Map<string, any>(products.map((p: any) => [p.id, p]))
+}
+
+/* DỊCH VỤ không chất lên xe (14/11/2026). Mọi đường bán trên xe bỏ dịch vụ khỏi kho xe và SalesTripItem; nếu
+ * vẫn cho chất thì phần "chất" của dịch vụ nằm lì trên xe (bán không trừ) và đối soát báo thiếu hụt oan. */
+function loiChatDichVu(p: any): string {
+    return `"${p.name}" là dịch vụ — không chất lên xe. Dịch vụ bán thẳng trên POS khi đang chạy chuyến, không cần có hàng trên xe.`
 }
 
 // ─── Helper: scope filter (own trip for non-managers) ─────────────────────────
@@ -300,7 +306,7 @@ router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Respons
             }
         })
         if (items.some((i: any) => i.revenue > 0)) {
-            ghiChu.push('Doanh thu từng mặt hàng tính theo đơn giá gần nhất của chuyến — nếu trong chuyến có bán nhiều mức giá thì con số này là xấp xỉ. Doanh thu tổng lấy từ tiền thật của đơn nên vẫn chính xác.')
+            ghiChu.push('Doanh thu từng mặt hàng tính theo đơn giá gần nhất của chuyến — nếu trong chuyến có bán nhiều mức giá thì con số này là xấp xỉ. Doanh thu tổng lấy từ tiền thật của đơn (gồm cả dịch vụ — dịch vụ không nằm trên xe nên không có dòng mặt hàng) nên vẫn chính xác.')
         }
         if (!daDemHang) {
             ghiChu.push('Chuyến chưa đối soát nên chưa tính thiếu hụt — hàng chưa bán vẫn đang nằm trên xe, không phải mất.')
@@ -435,6 +441,7 @@ router.post(
             for (const it of inputItems) {
                 const p = productMap.get(it.productId)
                 if (!p) return res.status(400).json({ success: false, error: `Sản phẩm không tồn tại: ${it.productId}` })
+                if (laDichVu(p)) return res.status(400).json({ success: false, error: loiChatDichVu(p) })
                 if ((p.stock || 0) < it.quantity) {
                     return res.status(400).json({
                         success: false,
@@ -590,6 +597,7 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
             for (const it of items) {
                 const p = productMap.get(it.productId)
                 if (!p) return res.status(400).json({ success: false, error: `Sản phẩm không tồn tại: ${it.productId}` })
+                if (laDichVu(p)) return res.status(400).json({ success: false, error: loiChatDichVu(p) })
                 if ((p.stock || 0) < it.quantity) {
                     return res.status(400).json({
                         success: false,
@@ -737,6 +745,9 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
         }
 
         // Validate every product is on the trip and has enough remaining (loadedQty - soldQty).
+        // loadedQty/soldQty chỉ đếm HÀNG HOÁ: dịch vụ không chất lên xe (chặn ở tạo chuyến + /load) và mọi đường bán
+        // trên xe bỏ dịch vụ khỏi soldQty (14/11/2026) ⇒ "còn lại" = hàng thật còn trên xe. Dịch vụ không có dòng
+        // chuyến nên rơi vào "không có trong chuyến" bên dưới.
         const tripItemMap = new Map<string, any>(trip.items.map((ti: any) => [ti.productId, ti]))
         for (const it of items) {
             const ti = tripItemMap.get(it.productId)
@@ -999,7 +1010,8 @@ router.get('/:id/logs', authMiddleware, async (req: AuthRequest, res: Response) 
 
 // ═════════════════════════════════════════════════════════════════════════════
 // POST /api/sales-trips/:id/sales — record sales from the vehicle (active only)
-// Decrements WarehouseStock on the vehicle warehouse, increments soldQty.
+// Decrements WarehouseStock on the vehicle warehouse, increments soldQty — GOODS only;
+// service lines only add to trip revenue (không có trên xe).
 // ═════════════════════════════════════════════════════════════════════════════
 router.post(
     '/:id/sales',
@@ -1027,14 +1039,23 @@ router.post(
                 })
             }
 
-            // Validate vehicle warehouse stock for each item
+            /* DỊCH VỤ không nằm trên xe (14/11/2026): không soát / không trừ kho xe, không vào SalesTripItem — trước đây
+             * mọi dòng đều phải có đủ trên kho xe nên bán dịch vụ bị 400 "Trên xe không đủ". Doanh thu chuyến VẪN cộng
+             * tiền dịch vụ; totalSold chỉ đếm hàng hoá (cùng quy ước với POS bán trên xe và chuyển đơn sang xe).
+             * Endpoint này không lập hoá đơn, không đụng Product.stock ⇒ dịch vụ ở đây chỉ còn phần tiền. */
             const productIds = items.map(i => i.productId)
-            const stocks = await prisma.warehouseStock.findMany({
-                where: { warehouseId: trip.warehouseId, productId: { in: productIds } },
-            })
+            const spMap = await loadProducts(prisma, productIds)
+            const hangHoa = items.filter(it => !laDichVu(spMap.get(it.productId)))
+
+            // Validate vehicle warehouse stock for each GOODS item
+            const stocks = hangHoa.length > 0
+                ? await prisma.warehouseStock.findMany({
+                    where: { warehouseId: trip.warehouseId, productId: { in: hangHoa.map(i => i.productId) } },
+                })
+                : []
             const stockMap = new Map<string, any>(stocks.map((s: any) => [s.productId, s]))
 
-            for (const it of items) {
+            for (const it of hangHoa) {
                 const stk = stockMap.get(it.productId)
                 if (!stk || (stk.quantity || 0) < it.quantity) {
                     return res.status(400).json({
@@ -1044,18 +1065,20 @@ router.post(
                 }
             }
 
-            // Compute revenue from items (use provided unitPrice; fall back to trip item unitPrice)
+            // Compute revenue from items (use provided unitPrice; fall back to trip item unitPrice).
+            // Dịch vụ không có dòng chuyến ⇒ lùi về giá bán của sản phẩm.
             const tripItemMap = new Map<string, any>(trip.items.map((ti: any) => [ti.productId, ti]))
             let revenueDelta = 0
             for (const it of items) {
                 const ti = tripItemMap.get(it.productId)
-                const price = it.unitPrice ?? ti?.unitPrice ?? 0
+                const sp = spMap.get(it.productId)
+                const price = it.unitPrice ?? ti?.unitPrice ?? (laDichVu(sp) ? sp?.sellingPrice : 0) ?? 0
                 revenueDelta += price * it.quantity
             }
-            const totalSoldDelta = items.reduce((s, it) => s + it.quantity, 0)
+            const totalSoldDelta = hangHoa.reduce((s, it) => s + it.quantity, 0)
 
             const updated = await prisma.$transaction(async (tx: any) => {
-                for (const it of items) {
+                for (const it of hangHoa) {
                     const stk = stockMap.get(it.productId)
                     // Decrement vehicle warehouse stock
                     await tx.warehouseStock.update({
@@ -1082,7 +1105,10 @@ router.post(
 
                 // Log sale action
                 await logTripAction(tx, trip.id, 'sale', req.user!.userId, req.user?.email || null, notes || null, {
-                    items: items.map(it => ({ productId: it.productId, quantity: it.quantity })),
+                    items: items.map(it => ({
+                        productId: it.productId, quantity: it.quantity,
+                        ...(laDichVu(spMap.get(it.productId)) ? { dichVu: true } : {}),
+                    })),
                     totalSold: totalSoldDelta,
                     revenue: revenueDelta,
                 })

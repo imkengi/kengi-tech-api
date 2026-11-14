@@ -8,7 +8,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction, tienGiamGiaPhieu } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
-import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock, laDichVu } from '../lib/warehouseHelper'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -851,6 +851,11 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
                 defaultWarehouseId = wh?.id || null
             }
+        } else if (itemsWithConversion.some((i: any) => laDichVu(productMap.get(i.productId)))) {
+            /* Đơn bán trên xe CÓ DỊCH VỤ: dòng dịch vụ đi đường quầy (xem vòng trừ kho bên dưới) ⇒ cần kho chính của
+             * chi nhánh. KHÔNG dùng warehouseId gửi kèm: POS gửi đúng kho XE ở đó. */
+            const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
+            defaultWarehouseId = wh?.id || null
         }
 
         // Normalize applied promotions list once so we can both persist it on the
@@ -1013,15 +1018,22 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     }
 
                     // Trừ kho + ghi thẻ kho theo ĐƠN VỊ GỐC (baseQuantity).
-                    // Van sale: Product.stock đã trừ lúc chất hàng lên xe — chỉ trừ kho xe.
+                    // Van sale: hàng hoá đã trừ Product.stock lúc chất lên xe — chỉ trừ kho xe (khối dưới);
+                    // dịch vụ không có trên xe ⇒ đi đường quầy như đơn thường.
                     for (const item of itemsWithConversion) {
                         let productAfter: { costPrice: number } | null = null
                         // DỊCH VỤ không có tồn thật (danh sách tồn, báo cáo kho, POS web đều bỏ productType 'service')
                         // ⇒ không chặn "hết hàng" kể cả khi cửa hàng TẮT bán âm kho. Trước đây: cửa hàng tắt bán âm
                         // bán "Dịch vụ gói quà" (tồn 0) bị 409 "chỉ còn 0 trong kho" — POS web lẫn app máy tính.
                         // Vẫn trừ + ghi thẻ như cửa hàng cho bán âm (huỷ/trả phiếu cộng lại khớp số đã trừ).
-                        const khongChanTon = allowNegativeStock || productMap.get(item.productId)?.productType === 'service'
-                        if (isVanSale) {
+                        const dichVu = laDichVu(productMap.get(item.productId))
+                        const khongChanTon = allowNegativeStock || dichVu
+                        /* Dòng đi ĐƯỜNG QUẦY (trừ Product.stock + kho chính): mọi dòng của đơn thường, và dòng DỊCH VỤ
+                         * của đơn bán trên xe (14/11/2026) — dịch vụ không chất lên xe nên trước đây đơn xe có dịch vụ
+                         * bị 409 "chỉ còn 0 trên xe". Huỷ / trả / cập nhật phiếu (kể cả đơn xe) đều hoàn về Product.stock
+                         * + kho chính ⇒ dịch vụ trừ đúng chỗ đó thì huỷ cộng lại mới khớp, không đẻ tồn ma. */
+                        const truTonBan = !isVanSale || dichVu
+                        if (!truTonBan) {
                             productAfter = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
                         } else if (khongChanTon) {
                             productAfter = await tx.product.update({
@@ -1041,8 +1053,8 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                             productAfter = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
                         }
 
-                        // Kho mặc định đi lock-step với Product.stock
-                        if (defaultWarehouseId) {
+                        // Kho mặc định đi lock-step với Product.stock (đơn xe: chỉ dòng dịch vụ có kho chính)
+                        if (truTonBan && defaultWarehouseId) {
                             if (khongChanTon) {
                                 await updateWarehouseStock(tx as any, defaultWarehouseId, item.productId, -item.baseQuantity)
                             } else {
@@ -1087,7 +1099,12 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     // Van-sales: trừ kho xe (guard chống âm — không bán quá số trên xe)
                     // + cộng dồn SalesTripItem/SalesTrip. Lỗi thật phải rollback cả đơn.
                     if (isVanSale) {
-                        for (const item of itemsWithConversion) {
+                        /* Chỉ HÀNG HOÁ nằm trên xe. Dịch vụ (đã trừ đường quầy ở trên) KHÔNG trừ kho xe và KHÔNG vào
+                         * SalesTripItem: đối soát chuyến tính thiếu hụt = chất − bán − trả theo từng mặt hàng trên xe,
+                         * một dòng dịch vụ "chất 0, bán n" chỉ làm rối bảng đối soát. */
+                        const hangTrenXe = itemsWithConversion.filter((i: any) => !laDichVu(productMap.get(i.productId)))
+                        const soDongDichVu = itemsWithConversion.length - hangTrenXe.length
+                        for (const item of hangTrenXe) {
                             const dec = await (tx as any).warehouseStock.updateMany({
                                 where: { warehouseId: String(vanWarehouseId), productId: item.productId, quantity: { gte: item.baseQuantity } },
                                 data: { quantity: { decrement: item.baseQuantity } },
@@ -1101,9 +1118,13 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                         }
 
                         if (salesTripId) {
-                            const totalBaseQty = itemsWithConversion.reduce((s: number, i: any) => s + i.baseQuantity, 0)
+                            /* SalesTrip.totalSold = số ĐƠN VỊ HÀNG HOÁ (đơn vị gốc) đã bán — cùng thước với totalLoaded và
+                             * Σ SalesTripItem.soldQty; dịch vụ KHÔNG tính. totalRevenue thì cộng TRỌN tiền đơn, kể cả dịch
+                             * vụ — đó là tiền thật nhân viên thu trong chuyến. Cùng quy ước ở /:id/convert-to-van và
+                             * POST /sales-trips/:id/sales. */
+                            const totalBaseQty = hangTrenXe.reduce((s: number, i: any) => s + i.baseQuantity, 0)
 
-                            for (const item of itemsWithConversion) {
+                            for (const item of hangTrenXe) {
                                 await (tx as any).salesTripItem.upsert({
                                     where: { tripId_productId: { tripId: String(salesTripId), productId: item.productId } },
                                     update: { soldQty: { increment: item.baseQuantity } },
@@ -1140,7 +1161,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                                 data: {
                                     tripId: String(salesTripId),
                                     action: 'sale',
-                                    notes: `Bán tại chuyến: ${created.receiptNumber} (${totalBaseQty} sp, ${Math.round(created.total || 0).toLocaleString('vi-VN')}đ)`,
+                                    notes: `Bán tại chuyến: ${created.receiptNumber} (${totalBaseQty} sp${soDongDichVu ? ` + ${soDongDichVu} dịch vụ` : ''}, ${Math.round(created.total || 0).toLocaleString('vi-VN')}đ)`,
                                     userId: req.user!.userId,
                                     userName: req.user?.email || null,
                                     metadata: JSON.stringify({
@@ -1321,10 +1342,12 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     if (cust) invPayload = { ...invPayload, customerCode: cust.code, customerPhone: cust.phone, customerEmail: cust.email }
                 }
                 emitEntityEvent(prisma, 'invoice.created', invPayload, req.user?.storeSchema).catch(() => { })
-                // stock.changed — van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
-                if (!isVanSale) {
+                // stock.changed — chỉ dòng ĐÃ ĐỔI Product.stock: đơn thường mọi dòng; đơn xe chỉ dòng dịch vụ
+                // (hàng hoá trên xe đã trừ Product.stock lúc chất xe).
+                const dongDoiTon = itemsWithConversion.filter((i: any) => !isVanSale || laDichVu(productMap.get(i.productId)))
+                if (dongDoiTon.length > 0) {
                     const deltaByProduct = new Map<string, { delta: number; sku?: string; name?: string }>()
-                    for (const item of itemsWithConversion) {
+                    for (const item of dongDoiTon) {
                         const cur = deltaByProduct.get(item.productId) || { delta: 0, sku: item.sku || item.productSku, name: item.productName }
                         cur.delta += item.baseQuantity
                         deltaByProduct.set(item.productId, cur)
@@ -2381,7 +2404,7 @@ router.get('/:id/van-trips', authMiddleware, requirePermission('transactions.con
  *
  * Nên hàng bán trên xe mà ghi thành đơn thường thì tồn bán được bị trừ HAI LẦN
  * (một lần lúc chất lên xe, một lần lúc bán) còn hàng trên xe thì vẫn nằm đó.
- * Chuyển đơn phải làm đúng ba việc:
+ * Chuyển đơn phải làm đúng ba việc (cho dòng HÀNG HOÁ; dòng DỊCH VỤ để nguyên — không có trên xe):
  *   1. Trả n về tồn bán được (Product.stock + kho main) — gỡ lần trừ thừa
  *   2. Trừ n trên kho xe — nơi hàng thật sự đi ra
  *   3. Cộng vào SalesTripItem.soldQty + tổng chuyến để đối soát khớp
@@ -2433,10 +2456,23 @@ router.post('/:id/convert-to-van', authMiddleware, requirePermission('transactio
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } })
         // Bản ghi cũ chưa có baseQuantity thì lùi về quantity (xem ghi chú ở model)
         const soLuong = (it: any) => Math.round(Number(it.baseQuantity) || Number(it.quantity) || 0)
-        const tongSoLuong = transaction.items.reduce((s, it: any) => s + soLuong(it), 0)
+
+        /* DỊCH VỤ không chất lên xe (14/11/2026). Đơn thường đã trừ dòng dịch vụ đúng đường quầy (Product.stock + kho
+         * chính) — y như một đơn xe có dịch vụ — nên để NGUYÊN: không trừ kho xe (trước đây 409 "chỉ còn 0 trên xe"),
+         * không hoàn tồn bán được, không ghi thẻ 'adjustment', không vào SalesTripItem. Huỷ đơn sau này cộng lại đúng
+         * chỗ đã trừ. TransactionItem không mang productType ⇒ tra Product theo id. */
+        const maSp = [...new Set(transaction.items.map((it: any) => String(it.productId || '')).filter(Boolean))]
+        const loaiSp = maSp.length > 0
+            ? await prisma.product.findMany({ where: { id: { in: maSp } }, select: { id: true, productType: true } })
+            : []
+        const maDichVu = new Set(loaiSp.filter((p: any) => laDichVu(p)).map((p: any) => String(p.id)))
+        const hangHoa = (transaction.items as any[]).filter(it => !maDichVu.has(String(it.productId)))
+        const dongDichVu = (transaction.items as any[]).filter(it => maDichVu.has(String(it.productId)))
+        // totalSold của chuyến: chỉ ĐƠN VỊ HÀNG HOÁ — cùng quy ước với POST / (đơn bán trên xe)
+        const tongSoLuong = hangHoa.reduce((s: number, it: any) => s + soLuong(it), 0)
 
         const ketQua = await prisma.$transaction(async (tx: any) => {
-            for (const item of transaction.items as any[]) {
+            for (const item of hangHoa) {
                 const qty = soLuong(item)
                 if (qty <= 0) continue
 
@@ -2502,14 +2538,15 @@ router.post('/:id/convert-to-van', authMiddleware, requirePermission('transactio
             await tx.salesTripLog.create({
                 data: {
                     tripId, action: 'sale',
-                    notes: `Chuyển đơn ${transaction.receiptNumber} sang chuyến (${tongSoLuong} sp, ${Math.round(transaction.total || 0).toLocaleString('vi-VN')}đ)`,
+                    notes: `Chuyển đơn ${transaction.receiptNumber} sang chuyến (${tongSoLuong} sp${dongDichVu.length ? ` + ${dongDichVu.length} dịch vụ` : ''}, ${Math.round(transaction.total || 0).toLocaleString('vi-VN')}đ)`,
                     userId: req.user!.userId,
                     userName: user?.name || 'Admin',
                     metadata: JSON.stringify({
                         transactionId: txId,
                         receiptNumber: transaction.receiptNumber,
                         total: transaction.total,
-                        items: transaction.items.map((i: any) => ({ sku: i.sku, qty: soLuong(i) })),
+                        items: hangHoa.map((i: any) => ({ sku: i.sku, qty: soLuong(i) })),
+                        ...(dongDichVu.length ? { dichVu: dongDichVu.map((i: any) => ({ sku: i.sku, qty: soLuong(i) })) } : {}),
                     }),
                 },
             })

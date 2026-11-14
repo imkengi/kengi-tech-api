@@ -7,6 +7,15 @@ import { emitStockChanged, webhooksActive } from './webhookDispatch'
 
 type AnyPrisma = any
 
+/* DỊCH VỤ (Product.productType 'service') KHÔNG có tồn thật — danh sách tồn, báo cáo kho, POS web đều bỏ qua.
+ * Một chỗ cho phép thử này ở mảng kho:
+ *   - bán ở quầy: không chặn "hết hàng" (78736a5);
+ *   - bán trên xe (POS gửi x-warehouse-id, chuyển đơn sang xe, POST /sales-trips/:id/sales): KHÔNG trừ kho xe,
+ *     KHÔNG vào SalesTripItem; không chất dịch vụ lên xe (14/11/2026). */
+export function laDichVu(p: { productType?: string | null } | null | undefined): boolean {
+    return p?.productType === 'service'
+}
+
 // Find (or lazily create) the branch's default "main" warehouse. Robust cho
 // scale nhiều store/chi nhánh — tránh 2 vấn đề đã gặp trong prod:
 //  (1) Boot migration seed kho với mã theo TÊN SCHEMA + branchId=null, còn hàm này
