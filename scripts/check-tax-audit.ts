@@ -578,6 +578,45 @@ async function main() {
             !co(h, 'tncn-thieu-khau-tru'), h.canhBao.map((c: any) => c.code).join(','))
     }
 
+    // ── 20b. Ngưỡng giảm trừ theo NĂM KỲ TÍNH THUẾ (14/11/2026 — bản cũ cứng 11tr mọi năm) ──
+    //  2026: 15,5tr (NQ 110/2025/UBTVQH15); 2025 trở về trước: 11tr; kỳ T12 chưa rõ ngày trả ⇒ lấy mức
+    //  CAO hơn của năm sau (lương T12/2025 trả T1/2026 thuộc kỳ 2026) — thà im còn hơn tố oan.
+    {
+        const kyThang = (nam: number, thang: number): KhoangKy => {
+            const mm = String(thang).padStart(2, '0')
+            const cuoi = new Date(Date.UTC(nam, thang, 0)).getUTCDate()
+            return {
+                from: `${nam}-${mm}-01`, to: `${nam}-${mm}-${cuoi}`,
+                start: new Date(Date.UTC(nam, thang - 1, 1)), end: new Date(Date.UTC(nam, thang, 1)),
+                maKy: `${nam}-${mm}`, nhan: `tháng ${thang}/${nam}`,
+            }
+        }
+        const soat = async (nam: number, thang: number, gross: number) => {
+            const k = khoSach()
+            k.payrollPeriods = [{ id: 'pk', month: thang, year: nam, status: 'paid', totalGross: gross }]
+            k.payrollEntries = [{ periodId: 'pk', employeeId: 'nv1', employeeName: 'Nguyễn A', grossSalary: gross, totalInsuranceEmployee: Math.round(gross * 0.105), pitAmount: 0, dependents: 0 }]
+            k.employees = [{ id: 'nv1', name: 'Nguyễn A', taxCode: '81' }]
+            const ky = nam === 2026 && thang === 8 ? KY : kyThang(nam, thang)
+            return kiemTraThue(fakePrisma(k), ky)
+        }
+        // 16tr − BH 1,68tr = 14,32tr: trên mức cũ 11tr nhưng DƯỚI mức 2026 15,5tr
+        const h26Duoi = await soat(2026, 8, 16_000_000)
+        kiemTra('Kỳ 8/2026: 14,32tr sau BH < giảm trừ 15,5tr ⇒ KHÔNG báo thiếu khấu trừ (mức cũ 11tr từng tố oan)',
+            !co(h26Duoi, 'tncn-thieu-khau-tru'), h26Duoi.canhBao.map((c: any) => c.code).join(','))
+        const h26Tren = await soat(2026, 8, 20_000_000)
+        kiemTra('Kỳ 8/2026: 17,9tr sau BH > 15,5tr mà không khấu trừ ⇒ PHẢI báo',
+            co(h26Tren, 'tncn-thieu-khau-tru'), h26Tren.canhBao.map((c: any) => c.code).join(','))
+        const h25 = await soat(2025, 11, 14_000_000)
+        kiemTra('Kỳ 11/2025: 12,53tr sau BH > mức 2025 là 11tr mà không khấu trừ ⇒ PHẢI báo',
+            co(h25, 'tncn-thieu-khau-tru'), h25.canhBao.map((c: any) => c.code).join(','))
+        const h25T12 = await soat(2025, 12, 14_000_000)
+        kiemTra('Kỳ 12/2025: chưa rõ trả trong 2025 hay T1/2026 ⇒ ngưỡng 15,5tr ⇒ 12,53tr KHÔNG bị báo',
+            !co(h25T12, 'tncn-thieu-khau-tru'), h25T12.canhBao.map((c: any) => c.code).join(','))
+        const h25T12Cao = await soat(2025, 12, 20_000_000)
+        kiemTra('Kỳ 12/2025: 17,9tr vượt cả mức 2026 mà không khấu trừ ⇒ VẪN báo',
+            co(h25T12Cao, 'tncn-thieu-khau-tru'), h25T12Cao.canhBao.map((c: any) => c.code).join(','))
+    }
+
     // ── 21. Lao động thiếu mã số thuế ──────────────────────────────────────
     {
         const k = khoSach()

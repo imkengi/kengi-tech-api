@@ -15,6 +15,8 @@
  *     truy điều gì thì mới trả lời trúng.
  */
 
+import { giamTruThangToiDa } from './giamTruGiaCanh'
+
 export type MucSanSang = 'an-toan' | 'can-chuan-bi' | 'nguy-hiem' | 'khong-du-lieu'
 
 export interface CauHoiThanhTra {
@@ -475,11 +477,20 @@ export async function moPhongThanhTra(
     const dongLuong: any[] = kyTrong.length
         ? await an(() => prisma.payrollEntry.findMany({
             where: { periodId: { in: kyTrong.map(k => k.id) } },
-            select: { employeeName: true, grossSalary: true, pitAmount: true, totalInsuranceEmployee: true },
+            select: { periodId: true, employeeName: true, grossSalary: true, pitAmount: true, totalInsuranceEmployee: true },
         }), [])
         : []
     const tongLuong = r0(dongLuong.reduce((s, e) => s + (e.grossSalary || 0), 0))
     const tongTncn = r0(dongLuong.reduce((s, e) => s + (e.pitAmount || 0), 0))
+    /* Ngưỡng "thu nhập bình quân cao" = giảm trừ bản thân của TỪNG lượt lương theo năm kỳ tính thuế
+     * (14/11/2026 — bản cũ cứng 11tr cho mọi năm). Lượt không rõ kỳ ⇒ không tính được ngưỡng ⇒ không gợi ý. */
+    const kyLuongTheoId = new Map<string, any>(kyTrong.map(k => [k.id, k]))
+    let nguongBanThan: number | null = 0
+    for (const e of dongLuong) {
+        const k = kyLuongTheoId.get(e.periodId)
+        if (!k || nguongBanThan === null) { nguongBanThan = null; break }
+        nguongBanThan += giamTruThangToiDa({ nam: k.year, thang: k.month }, 0).banThan
+    }
     const coBh = dongLuong.filter(e => (e.totalInsuranceEmployee || 0) > 0).length
 
     them({
@@ -511,7 +522,7 @@ export async function moPhongThanhTra(
                 : `Không khấu trừ đồng TNCN nào (tổng thu nhập ${vnd(tongLuong)}đ) — hợp lý nếu mọi người đều dưới ngưỡng chịu thuế sau giảm trừ.`,
         muc: dongLuong.length === 0 ? 'khong-du-lieu' : 'an-toan',
         chungTu: ['Bảng lương chi tiết', 'Tờ khai khấu trừ TNCN', 'Chứng từ nộp thuế TNCN', 'Đăng ký người phụ thuộc'],
-        canLam: dongLuong.length > 0 && tongTncn === 0 && tongLuong > 11_000_000 * dongLuong.length
+        canLam: dongLuong.length > 0 && tongTncn === 0 && nguongBanThan !== null && tongLuong > nguongBanThan
             ? 'Thu nhập bình quân cao mà không khấu trừ đồng nào — kiểm tra lại phần giảm trừ gia cảnh và hồ sơ người phụ thuộc.'
             : undefined,
         soLieu: { tncn: tongTncn },

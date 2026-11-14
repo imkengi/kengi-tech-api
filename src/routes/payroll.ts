@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg, guiLoi } from '../lib/errorResponse'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
+import { giamTruThang, mucGiamTruGiaCanh, namKyTinhThueLuong } from '../lib/giamTruGiaCanh'
 
 const router = Router()
 
@@ -174,12 +175,12 @@ router.put('/bulk-status', authMiddleware, async (req: AuthRequest, res: Respons
 //
 //  PIT (thuế TNCN) — biểu thuế lũy tiến từng phần:
 //    0-5M:5% 5-10M:10% 10-18M:15% 18-32M:20% 32-52M:25% 52-80M:30% >80M:35%
-//  Giảm trừ: bản thân 11.000.000đ; mỗi người phụ thuộc 4.400.000đ.
+//  Giảm trừ gia cảnh theo NĂM KỲ TÍNH THUẾ — lib/giamTruGiaCanh (14/11/2026): kỳ ≤ 2025 bản thân
+//  11.000.000đ + 4.400.000đ/người phụ thuộc; từ kỳ 2026 là 15.500.000đ + 6.200.000đ. Năm kỳ tính thuế
+//  = năm của kỳ lương, trừ khi tính lương có gửi `ngayTraLuong` (lương T12 trả tháng 1 năm sau ⇒ năm sau).
 //  BHXH/BHYT/BHTN: người LĐ 8%/1.5%/1%; người SDLĐ 17.5%/3%/1%.
 // ═════════════════════════════════════════════════════════════════════════════
 
-const PERSONAL_DEDUCTION = 11_000_000
-const DEPENDENT_DEDUCTION = 4_400_000
 const BHXH_EMP = 0.08, BHYT_EMP = 0.015, BHTN_EMP = 0.01
 const BHXH_ER = 0.175, BHYT_ER = 0.03, BHTN_ER = 0.01
 const pround = (v: any) => Math.round(Number(v) || 0)
@@ -285,7 +286,8 @@ function computePIT(base: number): number {
 }
 
 // Compute a full payroll entry for one employee in a period.
-function computeEntry(emp: any, opts: { workDays?: number; standardDays?: number; allowances?: number; overtimePay?: number; notes?: string }) {
+// `namKyTinhThue` quyết định mức giảm trừ gia cảnh — xem namKyTinhThueLuong ở lib/giamTruGiaCanh.
+export function computeEntry(emp: any, opts: { namKyTinhThue: number; workDays?: number; standardDays?: number; allowances?: number; overtimePay?: number; notes?: string }) {
     const standardDays = Number(opts.standardDays) || 26
     const workDays = opts.workDays != null ? Number(opts.workDays) : standardDays
     const baseSalaryFull = Number(emp.baseSalary) || 0
@@ -307,8 +309,9 @@ function computeEntry(emp: any, opts: { workDays?: number; standardDays?: number
 
     const taxableIncome = Math.max(0, grossSalary - totalInsuranceEmployee) // thu nhập chịu thuế
     const dependents = Number(emp.dependents) || 0
-    const personalDeduction = PERSONAL_DEDUCTION
-    const dependentDeduction = DEPENDENT_DEDUCTION * dependents
+    const giamTru = giamTruThang(opts.namKyTinhThue, dependents)
+    const personalDeduction = giamTru.banThan
+    const dependentDeduction = giamTru.nguoiPhuThuoc
     const assessableIncome = Math.max(0, taxableIncome - personalDeduction - dependentDeduction) // thu nhập tính thuế
     const pitAmount = computePIT(assessableIncome)
     const netSalary = grossSalary - totalInsuranceEmployee - pitAmount
@@ -541,7 +544,9 @@ router.delete('/periods/:id', authMiddleware, requireRole('admin', 'manager', 's
 })
 
 // POST /api/payroll/periods/:id/calculate — auto-calc entries for active employees
-// Body: { standardDays?, overrides?: { [employeeId]: { workDays, allowances, overtimePay, notes } } }
+// Body: { standardDays?, ngayTraLuong?: 'YYYY-MM-DD', overrides?: { [employeeId]: { workDays, allowances, overtimePay, notes } } }
+// `ngayTraLuong` (tuỳ chọn): ngày THỰC TRẢ lương — quyết định năm kỳ tính thuế ⇒ mức giảm trừ gia cảnh
+// (lương T12/2025 trả 09/01/2026 dùng mức 2026). Không gửi ⇒ năm của kỳ lương.
 router.post('/periods/:id/calculate', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         await ensurePayrollTables(req)
@@ -551,6 +556,13 @@ router.post('/periods/:id/calculate', authMiddleware, requireRole('admin', 'mana
         if (!period) return res.status(404).json({ success: false, error: 'Không tìm thấy kỳ lương' })
         if (period.status !== 'draft') return res.status(400).json({ success: false, error: `Chỉ tính được kỳ lương nháp. Trạng thái: ${period.status}` })
         const b = req.body || {}
+        let namKyTinhThue: number
+        try {
+            namKyTinhThue = namKyTinhThueLuong({ nam: Number(period.year), ngayTra: b.ngayTraLuong })
+            mucGiamTruGiaCanh(namKyTinhThue)
+        } catch (e: any) {
+            return res.status(400).json({ success: false, error: e.message })
+        }
         const standardDays = Number(b.standardDays) || 26
         const overrides = b.overrides || {}
         const employees = await prisma.employee.findMany({ where: { status: 'active', ...getBranchFilter(req) } })
@@ -565,12 +577,14 @@ router.post('/periods/:id/calculate', authMiddleware, requireRole('admin', 'mana
         const created: any[] = []
         for (const emp of employees) {
             const ov = overrides[emp.id] || {}
-            const computed = computeEntry(emp, { workDays: ov.workDays, standardDays, allowances: ov.allowances, overtimePay: ov.overtimePay, notes: ov.notes })
+            const computed = computeEntry(emp, { namKyTinhThue, workDays: ov.workDays, standardDays, allowances: ov.allowances, overtimePay: ov.overtimePay, notes: ov.notes })
             const entry = await prisma.payrollEntry.create({ data: { periodId: id, ...computed } })
             created.push(entry)
         }
         const period2 = await recalcPeriodTotals(prisma, id)
-        res.json({ success: true, data: { period: period2, entries: created, count: created.length } })
+        const muc = mucGiamTruGiaCanh(namKyTinhThue)
+        const giamTru = { namKyTinhThue, banThanThang: muc.banThanThang, nguoiPhuThuocThang: muc.nguoiPhuThuocThang, canCu: muc.canCu }
+        res.json({ success: true, data: { period: period2, entries: created, count: created.length, giamTru } })
     } catch (err: any) {
         console.error('POST /payroll/periods/:id/calculate error:', err)
         guiLoi(res, err)

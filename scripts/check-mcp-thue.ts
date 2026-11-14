@@ -223,9 +223,18 @@ async function main() {
         ok('4a. tự tính từ bảng lương: 2 nhân viên, nguồn "tự tính"', kq.tongHop?.soNhanVien === 2 && /tự tính/.test(kq.nguon), kq.tongHop)
         ok('4b. người lệch nhiều nhất lên đầu (An)', kq.nhanVien?.[0]?.ten === 'An', kq.nhanVien?.map((n: any) => n.ten))
         ok('4c. năm 2025 dùng mức cũ là ĐÚNG ⇒ không cảnh báo', !('canhBaoMucGiamTru' in kq))
+        /* 14/11/2026: bộ tính đã theo năm (lib/giamTruGiaCanh) ⇒ năm 2026 TÍNH bằng mức mới, không còn
+         * "cảnh báo bộ tính dùng mức cũ". An 12 × 30tr: 2025 trừ 132tr ⇒ 228tr ⇒ 25,8tr; 2026 trừ 186tr ⇒ 174tr ⇒ 17,1tr. */
         const kq26: any = await tool('tax_pit').run({ year: 2026 }, ctx(p(records)))
-        ok('4d. năm 2026 mà bộ tính còn mức cũ ⇒ CẢNH BÁO nêu mức mới 15.500.000đ / 6.200.000đ (NQ 110/2025)',
-            typeof kq26.canhBaoMucGiamTru === 'string' && /15\.500\.000/.test(kq26.canhBaoMucGiamTru) && /6\.200\.000/.test(kq26.canhBaoMucGiamTru) && /110\/2025/.test(kq26.canhBaoMucGiamTru), kq26.canhBaoMucGiamTru)
+        ok('4d. năm 2026 tính THẲNG bằng mức mới 15.500.000đ / 6.200.000đ (NQ 110/2025) ⇒ thuế An 17,1tr (2025: 25,8tr), không cảnh báo',
+            !('canhBaoMucGiamTru' in kq26) && kq26.giamTruTheoLuat?.banThanMoiThang === 15_500_000 && kq26.giamTruTheoLuat?.moiNguoiPhuThuocMoiThang === 6_200_000
+            && /110\/2025/.test(kq26.giamTruTheoLuat?.canCu) && kq26.tongHop?.thuePhaiNop === 17_100_000 && kq.tongHop?.thuePhaiNop === 25_800_000,
+            { canhBao: kq26.canhBaoMucGiamTru, gt: kq26.giamTruTheoLuat, thue26: kq26.tongHop?.thuePhaiNop, thue25: kq.tongHop?.thuePhaiNop })
+        const luu26 = { id: 'd26', status: 'draft', notes: JSON.stringify({ __pit: true, employees: [{ employeeId: 'x', employeeCode: null, name: 'Chi', department: null, monthsWorked: 12, totalIncome: 360_000_000, totalInsurance: 0, selfDeduction: 132_000_000, dependentDeduction: 0, deductions: 132_000_000, taxableIncome: 228_000_000, taxAmount: 25_800_000, pitWithheld: 0, balanceDue: 25_800_000 }] }) }
+        const kqLuu26: any = await tool('tax_pit').run({ year: 2026 }, ctx(p([], luu26)))
+        ok('4d2. bản quyết toán 2026 ĐÃ LƯU khi còn mức 11tr ⇒ CẢNH BÁO nêu 11.000.000 vs 15.500.000 / 6.200.000 (NQ 110/2025), số bản lưu giữ nguyên',
+            typeof kqLuu26.canhBaoMucGiamTru === 'string' && /11\.000\.000/.test(kqLuu26.canhBaoMucGiamTru) && /15\.500\.000/.test(kqLuu26.canhBaoMucGiamTru)
+            && /6\.200\.000/.test(kqLuu26.canhBaoMucGiamTru) && /110\/2025/.test(kqLuu26.canhBaoMucGiamTru) && kqLuu26.tongHop?.thuePhaiNop === 25_800_000, kqLuu26.canhBaoMucGiamTru)
         const saved = { id: 'd1', status: 'submitted', notes: JSON.stringify({ __pit: true, employees: [{ employeeId: 'x', employeeCode: null, name: 'Chi', department: null, monthsWorked: 12, totalIncome: 1, totalInsurance: 0, selfDeduction: 0, dependentDeduction: 0, deductions: 0, taxableIncome: 1, taxAmount: 0, pitWithheld: 0, balanceDue: 0 }], summary: { totalEmployees: 1, totalIncome: 1, totalDeductions: 0, totalTaxableIncome: 1, totalTax: 0, totalWithheld: 0, totalBalanceDue: 0 } }) }
         const kqLuu: any = await tool('tax_pit').run({ year: 2025 }, ctx(p([], saved)))
         ok('4e. có bản quyết toán đã lưu ⇒ đọc bản đó + trạng thái', /đã lưu/.test(kqLuu.nguon) && kqLuu.trangThaiBanDaLuu === 'submitted' && kqLuu.nhanVien?.[0]?.ten === 'Chi', kqLuu)

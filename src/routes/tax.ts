@@ -25,7 +25,8 @@ const rongNeuChuaCoBang = (e: any): any[] => {
     throw e
 }
 import { tienThueDaNop, dieuKienButToanNopThue, ghiChuNguonDaNop } from '../lib/taxPaidLedger'
-import { PIT_FORM_TYPE, aggregatePitByEmployee, pitSummary, parsePitNotes, docQuyetToanTncn, type PitEmployeeBreakdown } from '../lib/quyetToanTncn'
+import { PIT_FORM_TYPE, pitSummary, parsePitNotes, docQuyetToanTncn, tinhQuyetToanTuBangLuong, type PitEmployeeBreakdown } from '../lib/quyetToanTncn'
+import { giamTruThang, mucGiamTruGiaCanh } from '../lib/giamTruGiaCanh'
 import { docLichNghiaVu, soDuThuePhaiNop } from '../lib/lichNghiaVuThue'
 
 const router = Router()
@@ -2413,6 +2414,9 @@ router.get('/payroll-accounting', authMiddleware, async (req: AuthRequest, res: 
         const prisma = req.storePrisma!
         const year = Number(req.query.year) || new Date().getFullYear()
         const month = Number(req.query.month) || new Date().getMonth() + 1
+        /* Giảm trừ gia cảnh theo NĂM của kỳ lương (14/11/2026) — bản cũ trừ cứng 11tr / 4,4tr cho mọi năm. */
+        let muc: ReturnType<typeof mucGiamTruGiaCanh>
+        try { muc = mucGiamTruGiaCanh(year) } catch (e: any) { return res.status(400).json({ success: false, error: e.message }) }
 
         const records = await prisma.payrollRecord.findMany({
             where: { year, month },
@@ -2427,7 +2431,7 @@ router.get('/payroll-accounting', authMiddleware, async (req: AuthRequest, res: 
             bhxh: r.bhxh_emp,
             bhyt: r.bhyt_emp,
             bhtn: r.bhtn_emp,
-            taxableIncome: (r.actualGross || r.grossSalary) - r.bhxh_emp - r.bhyt_emp - r.bhtn_emp - 11000000 - (r.dependents * 4400000),
+            taxableIncome: (r.actualGross || r.grossSalary) - r.bhxh_emp - r.bhyt_emp - r.bhtn_emp - giamTruThang(year, r.dependents).tong,
             pitAmount: r.pit,
             netSalary: r.netSalary,
         }))
@@ -2442,7 +2446,8 @@ router.get('/payroll-accounting', authMiddleware, async (req: AuthRequest, res: 
             headcount: rows.length,
         }
 
-        res.json({ success: true, data: { rows, summary } })
+        const giamTru = { namKyTinhThue: muc.namKyTinhThue, banThanThang: muc.banThanThang, nguoiPhuThuocThang: muc.nguoiPhuThuocThang, canCu: muc.canCu }
+        res.json({ success: true, data: { rows, summary, giamTru } })
     } catch (err) { console.error('GET /payroll-accounting error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
@@ -5687,24 +5692,12 @@ router.get('/cit-declaration/appendix/pl01-2', authMiddleware, async (req: AuthR
 // Tính thuế TNCN cuối năm: lib/quyetToanTncn.ts (dùng chung với công cụ AI tax_pit).
 
 // GET /api/tax/pit-settlement/calculate?year=2024
-// Tính thuế TNCN năm từ PayrollRecord (không lưu).
+// Tính thuế TNCN năm từ PayrollRecord (không lưu). Mức giảm trừ theo năm quyết toán (lib/giamTruGiaCanh).
 router.get('/pit-settlement/calculate', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const year = Number(req.query.year) || new Date().getFullYear()
-        const records = await prisma.payrollRecord.findMany({
-            where: { year },
-            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
-        })
-        const employees = aggregatePitByEmployee(records)
-        res.json({
-            success: true,
-            data: {
-                year,
-                summary: pitSummary(employees),
-                employees,
-            },
-        })
+        res.json({ success: true, data: await tinhQuyetToanTuBangLuong(prisma, year) })
     } catch (err) {
         console.error('GET /pit-settlement/calculate error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

@@ -15,6 +15,7 @@
  */
 
 import { mocChuaXong } from './taxCalendar'
+import { giamTruThangToiDa } from './giamTruGiaCanh'
 
 export type MucRuiRo = 'cao' | 'vua' | 'thap'
 
@@ -1199,14 +1200,20 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy, opts?: { homNay?: s
         if (ky.length > 0) {
             const dsEntry = await prisma.payrollEntry.findMany({
                 where: { periodId: { in: ky.map((p: any) => p.id) } },
-                select: { employeeId: true, employeeName: true, grossSalary: true, taxableIncome: true, pitAmount: true, totalInsuranceEmployee: true, dependents: true },
+                select: { periodId: true, employeeId: true, employeeName: true, grossSalary: true, taxableIncome: true, pitAmount: true, totalInsuranceEmployee: true, dependents: true },
             })
-            // Thu nhập vượt ngưỡng chịu thuế mà pitAmount = 0 → thiếu khấu trừ
-            const NGUONG_GIAM_TRU = 11_000_000
-            const thieuKhauTru = dsEntry.filter((e: any) =>
-                (e.grossSalary || 0) - (e.totalInsuranceEmployee || 0)
-                - NGUONG_GIAM_TRU - (e.dependents || 0) * 4_400_000 > 0
-                && (e.pitAmount || 0) <= 0)
+            /* Thu nhập vượt ngưỡng giảm trừ gia cảnh mà pitAmount = 0 → thiếu khấu trừ. Ngưỡng theo NĂM KỲ
+             * TÍNH THUẾ của kỳ lương (14/11/2026 — bản cũ cứng 11tr / 4,4tr ⇒ năm 2026 tố oan người thu nhập
+             * 11–15,5tr đã tính đúng mức mới). Kỳ tháng 12 lấy mức cao hơn của năm đó và năm sau: lương
+             * T12 trả tháng 1 thuộc kỳ năm sau (khoản 3 Điều 8 Luật 109/2025/QH15). */
+            const kyTheoId = new Map<string, any>(ky.map((p: any) => [p.id, p]))
+            const thieuKhauTru = dsEntry.filter((e: any) => {
+                const p = kyTheoId.get(e.periodId)
+                if (!p) return false
+                const nguong = giamTruThangToiDa({ nam: p.year, thang: p.month }, e.dependents || 0).tong
+                return (e.grossSalary || 0) - (e.totalInsuranceEmployee || 0) - nguong > 0
+                    && (e.pitAmount || 0) <= 0
+            })
             if (thieuKhauTru.length > 0) {
                 const thuNhap = thieuKhauTru.reduce((s: number, e: any) => s + (e.grossSalary || 0), 0)
                 canhBao.push({

@@ -7,11 +7,13 @@
 
 // Tính thuế TNCN cuối năm cho từng nhân viên từ PayrollRecord.
 // Biểu lũy tiến từng phần 5%→35% theo Luật thuế TNCN.
-// Mức giảm trừ: bản thân 11tr/tháng (NĐ44/2023), phụ thuộc 4.4tr/tháng/người.
+// Mức giảm trừ gia cảnh đi theo NĂM QUYẾT TOÁN — lib/giamTruGiaCanh (14/11/2026). Bản cũ viết cứng
+// 11tr/4,4tr cho MỌI năm ⇒ quyết toán 2026 ra thuế cao hơn luật (mức 2026: 15,5tr/6,2tr).
+// Bảng lương gom theo năm của KỲ LƯƠNG (PayrollRecord.year) — xem ⚠ paidAt trong lib/giamTruGiaCanh.
+
+import { mucGiamTruGiaCanh, BANG_MUC_GIAM_TRU } from './giamTruGiaCanh'
 
 export const PIT_FORM_TYPE = '05_QTT_TNCN'
-export const PIT_SELF_DEDUCTION_PER_MONTH = 11_000_000
-export const PIT_DEPENDENT_DEDUCTION_PER_MONTH = 4_400_000
 
 // Biểu thuế lũy tiến từng phần — annual brackets (VND), Vietnamese PIT law
 export const PIT_BRACKETS_ANNUAL: { upTo: number; rate: number }[] = [
@@ -55,7 +57,9 @@ export interface PitEmployeeBreakdown {
     balanceDue: number           // taxAmount - pitWithheld (>0: nộp thêm, <0: hoàn)
 }
 
-export function aggregatePitByEmployee(records: any[]): PitEmployeeBreakdown[] {
+/** `namKyTinhThue` = năm quyết toán: quyết định mức giảm trừ gia cảnh áp cho MỌI tháng trong bảng. */
+export function aggregatePitByEmployee(records: any[], namKyTinhThue: number): PitEmployeeBreakdown[] {
+    const muc = mucGiamTruGiaCanh(namKyTinhThue)
     const byEmp = new Map<string, any[]>()
     for (const r of records) {
         const key = r.employeeId || r.employeeName
@@ -85,8 +89,8 @@ export function aggregatePitByEmployee(records: any[]): PitEmployeeBreakdown[] {
             if (typeof r.month === 'number') monthsSeen.add(r.month)
         }
         const monthsWorked = monthsSeen.size || recs.length
-        const selfDeduction = monthsWorked * PIT_SELF_DEDUCTION_PER_MONTH
-        const dependentDeduction = dependentMonths * PIT_DEPENDENT_DEDUCTION_PER_MONTH
+        const selfDeduction = monthsWorked * muc.banThanThang
+        const dependentDeduction = dependentMonths * muc.nguoiPhuThuocThang
         const deductions = totalInsurance + selfDeduction + dependentDeduction
         const taxableIncome = Math.max(0, totalIncome - deductions)
         const taxAmount = calculatePitProgressive(taxableIncome)
@@ -134,6 +138,45 @@ export function parsePitNotes(notes: string | null | undefined): { userNotes?: s
     } catch { return null }
 }
 
+/** Mức giảm trừ áp cho quyết toán năm `year` — trả kèm để màn hình / AI nói được đang tính theo mức nào. */
+export function giamTruQuyetToan(year: number) {
+    const muc = mucGiamTruGiaCanh(year)
+    return {
+        namKyTinhThue: muc.namKyTinhThue,
+        banThanMoiThang: muc.banThanThang,
+        moiNguoiPhuThuocMoiThang: muc.nguoiPhuThuocThang,
+        canCu: muc.canCu,
+    }
+}
+
+/** TÍNH quyết toán năm từ PayrollRecord (không đọc bản đã lưu) — dùng chung cho
+ *  GET /tax/pit-settlement/calculate và docQuyetToanTncn, để hai đường không bao giờ ra hai số. */
+export async function tinhQuyetToanTuBangLuong(prisma: any, year: number) {
+    const records = await prisma.payrollRecord.findMany({
+        where: { year },
+        orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
+    })
+    const employees = aggregatePitByEmployee(records, year)
+    return { year, summary: pitSummary(employees), employees, giamTru: giamTruQuyetToan(year) }
+}
+
+/** Bản quyết toán ĐÃ LƯU tính theo mức giảm trừ KHÁC mức luật của năm đó (vd lưu năm 2026 khi bộ tính
+ *  còn 11tr) ⇒ trả mô tả để cảnh báo; KHÔNG ghi đè bản đã lưu. Chỉ kêu khi mức/tháng của bản lưu TRÙNG
+ *  ĐÚNG một mức có trong bảng (bằng chứng rõ là dùng mức năm khác) — số lạ (0, tháng lẻ…) thì im. */
+export function giamTruBanDaLuuLech(employees: PitEmployeeBreakdown[] | undefined, year: number) {
+    const dung = mucGiamTruGiaCanh(year).banThanThang
+    const mucDaBiet = new Set(BANG_MUC_GIAM_TRU.map(m => m.banThanThang))
+    const lech = (employees || []).filter(e => {
+        const thang = Number(e?.monthsWorked) || 0
+        if (thang <= 0) return false
+        const moiThang = Math.round((Number(e?.selfDeduction) || 0) / thang)
+        return mucDaBiet.has(moiThang) && moiThang !== dung
+    })
+    if (lech.length === 0) return null
+    const mucDaLuu = Math.round((Number(lech[0].selfDeduction) || 0) / (Number(lech[0].monthsWorked) || 1))
+    return { soNhanVien: lech.length, banThanMoiThangDaLuu: mucDaLuu, banThanMoiThangDung: dung }
+}
+
 /** Bảng quyết toán TNCN của năm y như GET /api/tax/pit-settlement/:year/employees: bản ĐÃ LƯU
  *  (TaxDeclaration period QTT-<năm>) nếu có, không thì TÍNH từ PayrollRecord. */
 export async function docQuyetToanTncn(prisma: any, year: number) {
@@ -147,17 +190,16 @@ export async function docQuyetToanTncn(prisma: any, year: number) {
             status: decl.status as string,
             summary: parsed.summary || pitSummary(parsed.employees),
             employees: parsed.employees,
+            giamTru: giamTruQuyetToan(year),
+            giamTruLech: giamTruBanDaLuuLech(parsed.employees, year),
         }
     }
-    const records = await prisma.payrollRecord.findMany({
-        where: { year },
-        orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
-    })
-    const employees = aggregatePitByEmployee(records)
+    const tinh = await tinhQuyetToanTuBangLuong(prisma, year)
     return {
         year,
         source: 'calculated' as const,
-        summary: pitSummary(employees),
-        employees,
+        summary: tinh.summary,
+        employees: tinh.employees,
+        giamTru: tinh.giamTru,
     }
 }

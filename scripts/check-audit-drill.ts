@@ -230,6 +230,26 @@ async function main() {
     ok('nhắc NQ 198/2025 bỏ thuế khoán', tim(hkd.cauHoi, 'nv-hkd-2026').vaSao.includes('198/2025'))
     ok('nhắc sổ S1-S7 theo TT 88/2021', tim(hkd.cauHoi, 'nv-hkd-2026').chungTu.some(c => c.includes('88/2021')))
 
+    console.log('\n▸ TNCN: ngưỡng giảm trừ bản thân theo NĂM kỳ tính thuế (14/11/2026 — bản cũ cứng 11tr)')
+    const drillLuong = async (nam: number, thang: number, gross: number) => {
+        const k = khoSach()
+        k.payrollPeriods = [{ id: 'pk', month: thang, year: nam }]
+        k.payrollEntries = [{ periodId: 'pk', employeeName: 'A', grossSalary: gross, pitAmount: 0, totalInsuranceEmployee: Math.round(gross * 0.105) }]
+        const mm = String(thang).padStart(2, '0')
+        const cuoi = new Date(Date.UTC(nam, thang, 0)).getUTCDate()
+        const ky = {
+            from: `${nam}-${mm}-01`, to: `${nam}-${mm}-${cuoi}`,
+            start: new Date(Date.UTC(nam, thang - 1, 1)), end: new Date(Date.UTC(nam, thang, 1)),
+            maKy: `${nam}-${mm}`, nhan: `tháng ${thang}/${nam}`,
+        }
+        return tim((await moPhongThanhTra(fakePrisma(k), ky)).cauHoi, 'ld-tncn')
+    }
+    ok('kỳ 8/2026: lương 14tr không khấu trừ, dưới giảm trừ 15,5tr ⇒ KHÔNG nhắc rà (mức cũ 11tr từng nhắc oan)',
+        !(await drillLuong(2026, 8, 14_000_000)).canLam)
+    ok('kỳ 8/2026: lương 16tr không khấu trừ ⇒ nhắc rà giảm trừ', !!(await drillLuong(2026, 8, 16_000_000)).canLam)
+    ok('kỳ 11/2025: lương 14tr không khấu trừ, trên mức 2025 là 11tr ⇒ nhắc rà', !!(await drillLuong(2025, 11, 14_000_000)).canLam)
+    ok('kỳ 12/2025 (có thể trả T1/2026 ⇒ mức mới): lương 14tr ⇒ im', !(await drillLuong(2025, 12, 14_000_000)).canLam)
+
     console.log('\n▸ Nhà cung cấp cần tra cứu')
     ok('có danh sách NCC để tra cứu tình trạng hoạt động', sach.nhaCungCapCanTraCuu.length > 0)
     ok('mỗi NCC đều nêu lý do đáng tra', sach.nhaCungCapCanTraCuu.every(n => n.lyDo.length > 10))

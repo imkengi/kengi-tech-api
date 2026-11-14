@@ -15,7 +15,7 @@ import { Tool, ToolCtx, ToolError, canhBaoCat, canhBaoMau } from '../lib/mcpType
 import { tinhToKhaiGtgt, resolvePeriod, pad2 } from '../lib/toKhaiGtgt'
 import { docLichNghiaVu, soDuThuePhaiNop } from '../lib/lichNghiaVuThue'
 import { suyHoSoThue } from '../lib/taxCalendarStore'
-import { docQuyetToanTncn, PIT_SELF_DEDUCTION_PER_MONTH, PIT_DEPENDENT_DEDUCTION_PER_MONTH } from '../lib/quyetToanTncn'
+import { docQuyetToanTncn } from '../lib/quyetToanTncn'
 import { tonKhoThue, hoaDonCanDieuChinh, demXuatHoaDon, invoiceQueueStats, getActiveConfig, parseConfigExtra } from './einvoice'
 
 const MOT_NGAY = 86_400_000
@@ -368,15 +368,17 @@ export const TAX_TOOLS: Tool[] = [
                 kq = await docQuyetToanTncn(prisma, year)
             } catch (e: any) {
                 if (thieuBang(e)) return { nam: year, ghiChu: 'Chưa có dữ liệu bảng lương để quyết toán TNCN.' }
+                if (e instanceof RangeError) return { nam: year, ghiChu: e.message }   // năm ngoài bảng mức giảm trừ
                 throw e
             }
             const ds = [...kq.employees].sort((x, y) => Math.abs(y.balanceDue) - Math.abs(x.balanceDue))
             const TRAN = 20
             const s: any = kq.summary || {}
-            /* NQ 110/2025/UBTVQH15: từ KỲ TÍNH THUẾ 2026 giảm trừ bản thân 15,5tr/tháng, người phụ thuộc
-             * 6,2tr/tháng (quyết toán 2025 vẫn 11tr / 4,4tr). Bộ tính hiện dùng mức cũ cho mọi năm ⇒ AI phải
-             * nói rõ, không trình bày số năm 2026 như số chuẩn. */
-            const mucCuChoNamMoi = year >= 2026 && PIT_SELF_DEDUCTION_PER_MONTH < 15_500_000
+            /* Mức giảm trừ đi theo năm quyết toán (lib/giamTruGiaCanh, 14/11/2026): 2025 trở về trước
+             * 11tr / 4,4tr; từ kỳ 2026 là 15,5tr / 6,2tr (NQ 110/2025/UBTVQH15). Bản ĐÃ LƯU thì không tính
+             * lại — nếu nó còn mức của năm khác thì AI phải nói rõ, đừng trình bày như số chuẩn. */
+            const lech = 'giamTruLech' in kq ? kq.giamTruLech : null
+            const dong = (v: number) => v.toLocaleString('vi-VN')
             return {
                 nam: year,
                 nguon: kq.source === 'saved' ? 'bản quyết toán đã lưu' : 'tự tính từ bảng lương (chưa lưu quyết toán)',
@@ -391,12 +393,9 @@ export const TAX_TOOLS: Tool[] = [
                     chenhLech: tien(s.totalBalanceDue),
                     ghiChuChenhLech: 'dương = còn phải nộp thêm, âm = nộp thừa / được hoàn',
                 },
-                giamTruDangDung: {
-                    banThanMoiThang: PIT_SELF_DEDUCTION_PER_MONTH,
-                    moiNguoiPhuThuocMoiThang: PIT_DEPENDENT_DEDUCTION_PER_MONTH,
-                },
-                ...(mucCuChoNamMoi ? {
-                    canhBaoMucGiamTru: `Bảng tính đang dùng mức giảm trừ CŨ (${PIT_SELF_DEDUCTION_PER_MONTH.toLocaleString('vi-VN')}đ bản thân, ${PIT_DEPENDENT_DEDUCTION_PER_MONTH.toLocaleString('vi-VN')}đ mỗi người phụ thuộc mỗi tháng). Từ kỳ tính thuế 2026 mức mới là 15.500.000đ và 6.200.000đ (Nghị quyết 110/2025/UBTVQH15) ⇒ thuế TNCN năm ${year} ở đây đang bị tính CAO hơn thực tế. PHẢI nói rõ điều này với chủ shop, đừng trình bày như số chuẩn.`,
+                giamTruTheoLuat: kq.giamTru,
+                ...(lech ? {
+                    canhBaoMucGiamTru: `Bản quyết toán ĐÃ LƯU của năm ${year} tính giảm trừ bản thân ${dong(lech.banThanMoiThangDaLuu)}đ/tháng cho ${lech.soNhanVien} nhân viên, trong khi mức đúng của kỳ tính thuế ${year} là ${dong(kq.giamTru.banThanMoiThang)}đ bản thân và ${dong(kq.giamTru.moiNguoiPhuThuocMoiThang)}đ mỗi người phụ thuộc mỗi tháng (${kq.giamTru.canCu}) ⇒ số thuế trong bản đã lưu SAI. PHẢI nói rõ với chủ shop: xoá bản đã lưu rồi lập lại quyết toán để tính theo mức đúng; đừng trình bày số này như số chuẩn.`,
                 } : {}),
                 ...canhBaoMau(ds.length, TRAN, 'nhân viên'),
                 nhanVien: ds.slice(0, TRAN).map(e => ({
