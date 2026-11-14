@@ -21,7 +21,8 @@ import { chayTheoLich as chayShopeePilotTheoLich } from '../lib/shopeePilot'
 import { chayTheoLichFb, soatBaiHenSapLen, sqlDemBaiHenSapLen, laThieuBang } from '../lib/facebookPilot'
 import { chayTheoLichAds } from '../lib/facebookAdsPilot'
 import { chayTheoLichTikTok } from '../lib/tiktokPilot'
-import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT } from '../lib/tienIchCuaHang'
+import { chayTheoLichLazada } from '../lib/lazadaPilot'
+import { docTienIch, TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT, TIEN_ICH_LAZADA_PILOT } from '../lib/tienIchCuaHang'
 
 const CHU_KY = 5 * 60 * 1000            // quét mỗi 5 phút
 const TRAN_JOB_MOI_LUOT = 5             // tối đa 5 job/store mỗi lượt, tránh nghẽn
@@ -315,6 +316,18 @@ async function quet(): Promise<void> {
                     if (kq === 'da-chay' || kq === 'loi') console.log(`[TikTokPilot] lịch ${store.code}: ${kq}`)
                 } catch (e: any) {
                     console.error(`[TikTokPilot] lịch ${store.code}:`, e?.message || e)
+                } finally {
+                    nha()
+                }
+            }
+            /* LAZADA PILOT theo lịch (14/11/2026) — cùng luật: chỉ cửa hàng được quản trị bật lazada_pilot. */
+            if (docTienIch(store.addOns).includes(TIEN_ICH_LAZADA_PILOT)) {
+                const nha = giuClient(store.schema)
+                try {
+                    const kq = await chayTheoLichLazada(getStorePrisma(store.schema))
+                    if (kq === 'da-chay' || kq === 'loi') console.log(`[LazadaPilot] lịch ${store.code}: ${kq}`)
+                } catch (e: any) {
+                    console.error(`[LazadaPilot] lịch ${store.code}:`, e?.message || e)
                 } finally {
                     nha()
                 }

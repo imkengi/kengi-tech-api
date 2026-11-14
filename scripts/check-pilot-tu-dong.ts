@@ -472,8 +472,10 @@ async function main() {
             && srcTb.split('data: duLieuPush(title, body, extra),').length === 2, JSON.stringify({ dl, dlCu }))
         // bảng tên Pilot ⇒ trang PHẢI khớp chuông web (FE useNotifications DUONG_PILOT) và app (Android NotificationWorker.DUONG_PILOT);
         // hai bảng đó nằm ở repo FE, bộ soát check:thongbao bên FE ghim CÙNG danh sách này.
-        dung('A21. bảng DUONG_PILOT_WEB ghim đúng 4 Pilot ⇒ 4 trang', JSON.stringify(DUONG_PILOT_WEB) === JSON.stringify([['Shopee Pilot', '/pilot-shopee'], ['TikTok Pilot', '/pilot-tiktok'], ['Facebook Pilot', '/pilot-facebook'], ['Ads Pilot', '/pilot-facebook#ads']])
-            && duongPilotCuaTieuDe(null) === undefined && duongPilotCuaTieuDe('Ads Pilot') === '/pilot-facebook#ads')
+        // 14/11/2026: thêm Lazada Pilot (/pilot-lazada) — dưới TikTok, cùng thứ tự với bảng bên FE
+        dung('A21. bảng DUONG_PILOT_WEB ghim đúng 5 Pilot ⇒ 5 trang', JSON.stringify(DUONG_PILOT_WEB) === JSON.stringify([['Shopee Pilot', '/pilot-shopee'], ['TikTok Pilot', '/pilot-tiktok'], ['Lazada Pilot', '/pilot-lazada'], ['Facebook Pilot', '/pilot-facebook'], ['Ads Pilot', '/pilot-facebook#ads']])
+            && duongPilotCuaTieuDe(null) === undefined && duongPilotCuaTieuDe('Ads Pilot') === '/pilot-facebook#ads'
+            && duongPilotCuaTieuDe('Lazada Pilot cần bạn xem 2 việc') === '/pilot-lazada' && duongPilotCuaTieuDe('Lazada Pilots') === undefined)
         // tin KHẨN rút bài hẹn giờ của Facebook Pilot đi đường riêng (không qua baoChuShop) — cũng phải mang nhóm + trang
         const srcFb = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'facebookPilot.ts'), 'utf8')
         dung('A22. tin KHẨN / rút bài hẹn giờ của Facebook Pilot push kèm nhom pilot + trang Facebook Pilot',

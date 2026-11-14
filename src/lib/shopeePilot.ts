@@ -1972,9 +1972,9 @@ async function lamMoiDanhMuc(ctx: NgCanh, ch: any, baoToken: (lyDo: string, e?: 
 
 /** Câu "còn mã bán DƯỚI GIÁ SÀN mà hết trần ghi / ngày nên máy không nâng được" (10/11/2026, SP-13) — dùng chung Shopee / TikTok Pilot.
  *  `ds` = "SKU giá < sàn …" của các mã ĐÃ XÁC NHẬN bằng giá sống. Đường sửa đứng TRƯỚC ví dụ: thông báo cắt 180 ký tự / việc. */
-export function cauConDuoiSan(san: 'Shopee' | 'TikTok', ds: string[]): string {
+export function cauConDuoiSan(san: 'Shopee' | 'TikTok' | 'Lazada', ds: string[]): string {
     return `${ds.length} mã đang bán DƯỚI GIÁ SÀN trên ${san} chưa được nâng — nâng «Thao tác ghi mỗi ngày» ở Tự động hóa → Sửa chính sách`
-        + ` hoặc sửa giá trên ${san === 'TikTok' ? 'TikTok Seller Center' : 'Shopee'}: ${ds.slice(0, 3).join('; ')}${ds.length > 3 ? '; …' : ''}.`
+        + ` hoặc sửa giá trên ${san === 'TikTok' ? 'TikTok Seller Center' : san === 'Lazada' ? 'Lazada Seller Center' : 'Shopee'}: ${ds.slice(0, 3).join('; ')}${ds.length > 3 ? '; …' : ''}.`
 }
 
 /* Cầu dao đẩy tồn (03/11/2026) chuyển về lõi lib/dayTonLenSan (09/11/2026): lõi soát trên TOÀN BỘ listing trước khi gọi sàn,

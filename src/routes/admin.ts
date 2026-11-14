@@ -22,6 +22,7 @@ import { SQL_TAO_BANG_PILOT } from '../lib/shopeePilot'
 import { SQL_TAO_BANG_FB_PILOT } from '../lib/facebookPilot'
 import { SQL_TAO_BANG_ADS_PILOT } from '../lib/facebookAdsPilot'
 import { SQL_TAO_BANG_TIKTOK_PILOT } from '../lib/tiktokPilot'
+import { SQL_TAO_BANG_LAZADA_PILOT } from '../lib/lazadaPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 import { CHON_NHAN_VIEN_AN_TOAN } from '../lib/nhanVienAnToan'
 import { docThongTinPhapLy, luuThongTinPhapLy, chuanHoaThongTin } from '../lib/thongTinPhapLy'
@@ -2985,6 +2986,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 /* TIKTOK PILOT (02/11/2026) — cấu hình / kế hoạch / nhật ký ghi của trang TikTok Pilot.
                  * lib/tiktokPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
                 for (const sql of SQL_TAO_BANG_TIKTOK_PILOT) await (sp as any).$executeRawUnsafe(sql)
+
+                /* LAZADA PILOT (14/11/2026) — cấu hình / kế hoạch / nhật ký ghi của trang Lazada Pilot.
+                 * lib/lazadaPilot.ts cũng tự tạo lười lần đầu dùng; đây là đường chủ động. */
+                for (const sql of SQL_TAO_BANG_LAZADA_PILOT) await (sp as any).$executeRawUnsafe(sql)
 
                 /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
                  * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán

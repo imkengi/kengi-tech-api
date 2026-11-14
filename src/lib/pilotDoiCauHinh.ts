@@ -143,6 +143,17 @@ export const NHAN_TIKTOK: NhanCauHinh = {
     'policy.maxRepricePerCycle': ['Đổi giá tối đa mỗi chu kỳ (sản phẩm)', 'so'],
 }
 
+/** Lazada Pilot (14/11/2026) — cùng bộ nút với TikTok Pilot, đơn vị đổi giá là SKU. */
+export const NHAN_LAZADA: NhanCauHinh = {
+    executionMode: ['Chế độ thực thi', 'cheDo'],
+    channelId: ['Gian Lazada Pilot quản', 'chu'],
+    ...LICH,
+    'policy.automation.reprice': ['Tự điều chỉnh giá bán', 'bat'],
+    'policy.automation.syncStock': ['Tự đẩy tồn kho', 'bat'],
+    ...GIA_CHUNG,
+    'policy.maxRepricePerCycle': ['Đổi giá tối đa mỗi chu kỳ (SKU)', 'so'],
+}
+
 export const NHAN_FACEBOOK: NhanCauHinh = {
     executionMode: ['Chế độ thực thi', 'cheDo'],
     pageId: ['Fanpage Pilot quản', 'chu'],

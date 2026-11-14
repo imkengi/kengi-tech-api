@@ -34,7 +34,8 @@
 //  đơn thật bán đúng special_price) ⇒ SKU CÓ special_price thì ĐỂ YÊN (nhóm 'khuyenMai'): đổi Price không đổi giá khách trả,
 //  có thể bật lại một giá khuyến mãi đang tắt, hoặc bị Lazada chặn (4119); tài liệu UpdatePriceQuantity không nói cách gỡ
 //  giá khuyến mãi ⇒ không đoán. Ghi: UpdatePriceQuantity MỘT SKU một lời gọi, CHỈ thẻ <Price> (không Quantity / SalePrice).
-//  Lazada chưa có Pilot ⇒ chính sách giá MẶC ĐỊNH (không mượn chính sách Pilot sàn khác).
+//  Lazada ⇒ chính sách của Lazada Pilot (14/11/2026; chưa lưu ⇒ MẶC ĐỊNH; đọc hỏng ⇒ dừng như hai sàn kia) — không mượn
+//  chính sách Pilot sàn khác.
 //
 //  Kết quả (data):
 //   - chạy thử: { chayThu, seDay, seBoQua, boQuaDuoiSan, demBoQua, viDuBoQua, viDuDoi, [chuaBietPhi], [canhBaoKhuyenMai], ghiChu }
@@ -50,9 +51,10 @@ import { getPlatformService } from '../services/platforms'
 import { tinhGiaDeXuat, chanGiaDuoiSan, lyDoChuaBietPhi } from './giaShopee'
 import { docMauPhiTheoNganh } from './shopeeTuQuan'
 import { giaVonHangLoat } from './shopeeThaoTac'
-import { docChinhSachPilot, thamSoTinh, chuanHoaChinhSach } from './shopeePilot'
+import { docChinhSachPilot, thamSoTinh } from './shopeePilot'
 import { polCua, khoaListing } from './laiRiengPilot'
 import { docChinhSachTikTok, docKhuyenMaiGianTikTok, lyDoKhuyenMaiChuaRo, type KmSanPham } from './tiktokPilot'
+import { docChinhSachLazada } from './lazadaPilot'
 import type { KetQuaDayTon } from './dayTonLenSan'
 import type { MauPhi, KetQuaGia } from './giaShopee'
 import { LazadaService } from '../services/platforms/lazada'
@@ -103,6 +105,20 @@ interface DongBoQua { id: string; sku: string; gia: number; lyDo: string; nhom: 
 const vnd = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
 /** ≤ 5 ví dụ + "…" cho một câu ghi chú */
 const vaiVd = (ds: string[]) => `${ds.slice(0, 5).join(', ')}${ds.length > 5 ? '…' : ''}`
+
+/** Câu "giá sàn theo chính sách nào" cho kênh Lazada — chính sách Lazada Pilot (Sửa chính sách trên trang Lazada Pilot; chưa lưu
+ *  thì mặc định). Khoản nào còn 0 thì nói "chưa tính" để người bấm biết giá sàn thấp hơn thực tế ở đâu. */
+function cauChinhSachLazada(pol: Parameters<typeof thamSoTinh>[0]): string {
+    const pct = (x: number) => `${Math.round(x * 1000) / 10}%`
+    const co = [
+        pol.packagingCost > 0 && `đóng gói ${vnd(pol.packagingCost)}/đơn`, pol.adsRate > 0 && `quảng cáo ${pct(pol.adsRate)}`,
+        pol.affiliateRate > 0 && `affiliate ${pct(pol.affiliateRate)}`, pol.vatRate > 0 && `thuế GTGT ${pct(pol.vatRate)}`,
+    ].filter(Boolean)
+    const chua = [!(pol.packagingCost > 0) && 'đóng gói', !(pol.adsRate > 0) && 'quảng cáo', !(pol.affiliateRate > 0) && 'affiliate', !(pol.vatRate > 0) && 'thuế GTGT'].filter(Boolean)
+    return `Giá sàn theo chính sách Lazada Pilot (Lazada Pilot → Sửa chính sách; chưa lưu thì mặc định): lãi tối thiểu ${pct(pol.minMarginRate)}`
+        + (co.length ? `, ${co.join(', ')}` : '') + (chua.length ? `; chưa tính ${chua.join(' / ')}` : '')
+        + '. Chỉ đổi GIÁ GỐC từng SKU; SKU đang có giá khuyến mãi để yên.'
+}
 
 /** SKU Lazada có special_price ⇒ để yên — lý do theo đúng tình trạng giá khuyến mãi (đang bật / đang tắt). */
 function lyDoKhuyenMaiLazada(km: number, goc: number): string {
@@ -198,7 +214,8 @@ async function lapKeHoachLazada(prisma: any, service: any, onlineProducts: any[]
 export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDayGia = {}): Promise<KetQuaDayTon> {
     const channel = await prisma.onlineChannel.findUnique({ where: { id: channelId } })
     if (!channel) return { http: 404, ok: false, loi: 'Kênh không tồn tại' }
-    // Lazada từ 14/11/2026 (UpdatePriceQuantity từng SKU, chỉ giá gốc) — chỉ qua nút tay / admin chạy thử; chưa có Pilot Lazada
+    // Lazada từ 14/11/2026 (UpdatePriceQuantity từng SKU, chỉ giá gốc) — nút tay / admin chạy thử; Lazada Pilot có lõi riêng
+    // (lib/lazadaPilot — kế hoạch từng SKU) nhưng dùng chung chính sách giá với nút này
     if (!['shopee', 'tiktok', 'lazada'].includes(channel.platform)) {
         return { http: 400, ok: false, loi: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy giá` }
     }
@@ -219,8 +236,9 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
     let pol: Parameters<typeof thamSoTinh>[0]
     try {
         pol = channel.platform === 'tiktok' ? await docChinhSachTikTok(prisma)
-            // Lazada chưa có Pilot ⇒ mặc định (lãi mục tiêu 15%, tối thiểu 5%) — không mượn chính sách Pilot của sàn khác
-            : laLazada ? chuanHoaChinhSach({})
+            // Lazada (14/11/2026, có Lazada Pilot): chính sách Lazada Pilot đã lưu, chưa lưu ⇒ mặc định (lãi mục tiêu 15%, tối thiểu
+            // 5%) — không mượn chính sách Pilot của sàn khác
+            : laLazada ? await docChinhSachLazada(prisma)
             : await docChinhSachPilot(prisma)
     } catch (e: any) {
         return { http: 503, ok: false, loi: String(e?.message || e) }
@@ -356,10 +374,7 @@ export async function dayGiaLenSan(prisma: any, channelId: string, ts: ThamSoDay
         ...(chuaBietPhi ? { chuaBietPhi } : {}),
         // Lazada: ghi chú đọc sàn + rào giá sàn theo chính sách nào (giao diện hiện thẳng, không giấu trong tooltip)
         ...(docSan.length ? { docSan } : {}),
-        ...(laLazada ? {
-            chinhSach: `Lazada chưa có Pilot — giá sàn tính theo chính sách MẶC ĐỊNH: lãi tối thiểu ${Math.round(pol.minMarginRate * 100)}%, `
-                + 'chưa tính đóng gói / quảng cáo / affiliate / thuế GTGT. Chỉ đổi GIÁ GỐC từng SKU; SKU đang có giá khuyến mãi để yên.',
-        } : {}),
+        ...(laLazada ? { chinhSach: cauChinhSachLazada(pol) } : {}),
     }
 
     if (chayThu) {

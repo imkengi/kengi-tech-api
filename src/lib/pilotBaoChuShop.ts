@@ -37,6 +37,7 @@ export const NHOM_PILOT = 'pilot'
 export const DUONG_PILOT_WEB: ReadonlyArray<readonly [string, string]> = [
     ['Shopee Pilot', '/pilot-shopee'],
     ['TikTok Pilot', '/pilot-tiktok'],
+    ['Lazada Pilot', '/pilot-lazada'],
     ['Facebook Pilot', '/pilot-facebook'],
     ['Ads Pilot', '/pilot-facebook#ads'],
 ]

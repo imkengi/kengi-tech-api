@@ -42,6 +42,9 @@ const DUOC_DUYET: Array<{ duong: string; ai: string }> = [
     // 02/11/2026: mục 'TikTok Pilot' nhóm 'Bán Hàng Online' (layout.tsx, dưới Facebook Pilot) — route Next /pilot-tiktok;
     // menu ẩn khi cửa hàng chưa được quản trị bật tiện ích tiktok_pilot (moduleStore ADD_ON_MODULES, lib/tienIchCuaHang)
     { duong: 'Bán Hàng Online → TikTok Pilot', ai: 'CHỈ cửa hàng được quản trị bật tiện ích TikTok Pilot (permission online_products.view; ghi chỉ quản lý / chủ)' },
+    // 14/11/2026: mục 'Lazada Pilot' nhóm 'Bán Hàng Online' (layout.tsx, dưới TikTok Pilot) — route Next /pilot-lazada;
+    // menu ẩn khi cửa hàng chưa được quản trị bật tiện ích lazada_pilot (moduleStore ADD_ON_MODULES, lib/tienIchCuaHang)
+    { duong: 'Bán Hàng Online → Lazada Pilot', ai: 'CHỈ cửa hàng được quản trị bật tiện ích Lazada Pilot (permission online_products.view; ghi chỉ quản lý / chủ)' },
     // 17/10/2026: nhóm 'Hệ Thống' › mục 'Cài Đặt' (layout.tsx), tab id 'ai' nhãn 'Trợ lý AI' (dashboard-settings/page.tsx) — lưu key chỉ admin
     { duong: 'Hệ Thống → Cài Đặt', ai: 'mọi loại hình (permission settings.view; tab Trợ lý AI: chỉ admin lưu key)' },
 ]

@@ -16,6 +16,7 @@
 //    - routes/admin.ts           duyệt yêu cầu nâng cấp KHÔNG làm rơi tiện ích chỉ-quản-trị
 //  02/11/2026 — Facebook Pilot (`facebook_pilot`) cùng luật: routes/facebookPilot.ts + lượt theo lịch ở aiAgentCron.
 //  02/11/2026 — TikTok Pilot (`tiktok_pilot`) cùng luật: routes/tiktokPilot.ts + lượt theo lịch ở aiAgentCron.
+//  14/11/2026 — Lazada Pilot (`lazada_pilot`) cùng luật: routes/lazadaPilot.ts + lượt theo lịch ở aiAgentCron.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { registryPrisma } from './prisma'
@@ -23,11 +24,12 @@ import { registryPrisma } from './prisma'
 export const TIEN_ICH_SHOPEE_PILOT = 'shopee_pilot'
 export const TIEN_ICH_FACEBOOK_PILOT = 'facebook_pilot'
 export const TIEN_ICH_TIKTOK_PILOT = 'tiktok_pilot'
+export const TIEN_ICH_LAZADA_PILOT = 'lazada_pilot'
 
 /** Tiện ích CHỈ quản trị bật. Duyệt yêu cầu nâng cấp GHI ĐÈ addOns bằng danh sách cửa hàng xin — mà
  *  trang Cài đặt không hiện các tiện ích này nên danh sách xin không bao giờ có ⇒ phải giữ lại khi duyệt,
  *  kẻo duyệt xong Pilot tắt âm thầm. Thêm tiện ích kiểu này thì thêm id vào đây (và adminOnly ở FE moduleStore). */
-export const TIEN_ICH_CHI_QUAN_TRI: readonly string[] = [TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT]
+export const TIEN_ICH_CHI_QUAN_TRI: readonly string[] = [TIEN_ICH_SHOPEE_PILOT, TIEN_ICH_FACEBOOK_PILOT, TIEN_ICH_TIKTOK_PILOT, TIEN_ICH_LAZADA_PILOT]
 
 export const LOI_CHUA_BAT_PILOT =
     'Cửa hàng chưa được bật Shopee Pilot. Đây là tiện ích Kengi bật riêng cho từng cửa hàng — liên hệ Kengi để được bật.'
@@ -37,6 +39,7 @@ export const LOI_KHONG_KIEM_DUOC_PILOT =
 /** Tên hiển thị của tiện ích chỉ-quản-trị — cho câu báo chặn. */
 const TEN_TIEN_ICH: Record<string, string> = {
     [TIEN_ICH_SHOPEE_PILOT]: 'Shopee Pilot', [TIEN_ICH_FACEBOOK_PILOT]: 'Facebook Pilot', [TIEN_ICH_TIKTOK_PILOT]: 'TikTok Pilot',
+    [TIEN_ICH_LAZADA_PILOT]: 'Lazada Pilot',
 }
 
 /** Store.addOns (chuỗi JSON hoặc mảng) → mảng id. Rỗng / hỏng ⇒ []. */

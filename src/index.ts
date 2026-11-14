@@ -55,6 +55,7 @@ import mcpAgentRoutes from './routes/mcpAgent'
 import shopeePilotRoutes from './routes/shopeePilot'
 import facebookPilotRoutes from './routes/facebookPilot'
 import tiktokPilotRoutes from './routes/tiktokPilot'
+import lazadaPilotRoutes from './routes/lazadaPilot'
 import flashSaleRoutes from './routes/flashSales'
 import importDataRoutes from './routes/importData'
 import uploadRoutes from './routes/uploads'
@@ -346,6 +347,7 @@ app.use('/api/mcp-agent', mcpAgentRoutes) // Trợ lý AI dashboard (Gemini + MC
 app.use('/api/shopee-pilot', shopeePilotRoutes) // Shopee Pilot: bảng điều khiển bán hàng Shopee (giao diện ở /shopee-pilot/)
 app.use('/api/facebook-pilot', facebookPilotRoutes) // Facebook Pilot: lên bài sản phẩm + bình luận fanpage (giao diện kengi.vn/pilot-facebook/)
 app.use('/api/tiktok-pilot', tiktokPilotRoutes) // TikTok Pilot: định giá theo phí TikTok đo được + đẩy tồn (giao diện kengi.vn/pilot-tiktok/)
+app.use('/api/lazada-pilot', lazadaPilotRoutes) // Lazada Pilot: định giá TỪNG SKU theo phí Lazada thật + đẩy tồn (giao diện kengi.vn/pilot-lazada/)
 app.use('/api/flash-sales', flashSaleRoutes) // Flash sale hàng loạt Shopee (hàng đợi tuần tự)
 app.use('/api/internal', syncRoutes)
 app.use('/api/announcements', announcementRoutes)

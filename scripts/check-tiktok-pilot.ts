@@ -1583,7 +1583,7 @@ async function main() {
         const rt = doc('routes/tiktokPilot.ts')
         dung('9d. route chặn theo tiện ích tiktok_pilot', /lyDoChanPilot\(req\.user\?\.storeCode, TIEN_ICH_TIKTOK_PILOT\)/.test(rt))
         dung('9e. mọi thao tác ghi đánh dấu ghi: true', ['cycle', 'execute', 'price', 'cancel', 'config'].every(v => new RegExp(`(^|\\s|')${v}'?: \\{\\s*ghi: true`, 'm').test(rt)))
-        dung('9f. tiện ích chỉ-quản-trị có tiktok_pilot', /TIEN_ICH_CHI_QUAN_TRI[^\n]*TIEN_ICH_TIKTOK_PILOT\]/.test(doc('lib/tienIchCuaHang.ts')))
+        dung('9f. tiện ích chỉ-quản-trị có tiktok_pilot', /TIEN_ICH_CHI_QUAN_TRI[^\n]*TIEN_ICH_TIKTOK_PILOT[,\]]/.test(doc('lib/tienIchCuaHang.ts')))
         const oo = doc('routes/onlineOrders.ts')
         dung('9g. nút Đồng bộ (Đơn online) lấy ngành bằng hàm chung boSungNganhTikTok — một mã lỗi không còn dừng cả lượt (09/11/2026)',
             /boSungNganhTikTok\(prisma, channel\.id, tkService/.test(oo) && !/break \/\/ rate-limit\/token lỗi/.test(oo))

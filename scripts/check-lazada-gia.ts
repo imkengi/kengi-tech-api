@@ -5,8 +5,8 @@
  *     SalePrice), số nguyên VND, thoát ký tự; POST đúng API, tham số ký; thiếu mã / giá hỏng ⇒ KHÔNG gọi; lỗi nguyên văn.
  *  B. Lõi đẩy giá (lib/dayGiaLenSan) cho kênh Lazada trên prisma giả + sàn giả (giaLap): kế hoạch THEO SKU từ bản đọc sống,
  *     rào giá sàn từng SKU, SKU có special_price để yên, mã không thấy / SKU chưa nối kho nói ra, đọc hỏng ⇒ không ghi gì,
- *     chạy thử không gọi ghi sàn, chạy thật gọi đúng SkuId + SellerSku, chỉ SKU đại diện cập nhật giá lưu, chính sách mặc
- *     định (không mượn chính sách Shopee Pilot), chưa biết phí ⇒ không ghi.
+ *     chạy thử không gọi ghi sàn, chạy thật gọi đúng SkuId + SellerSku, chỉ SKU đại diện cập nhật giá lưu, chính sách của
+ *     LAZADA PILOT (chưa lưu ⇒ mặc định; đọc hỏng ⇒ dừng; không mượn chính sách Shopee / TikTok Pilot), chưa biết phí ⇒ không ghi.
  *
  * Không gọi mạng, không đụng CSDL. Chạy: npm run check:lazada-gia
  */
@@ -121,7 +121,7 @@ async function main() {
             },
             syncLog: { create: async ({ data }: any) => { ghi.push(`so:${data.details}`); return data } },
             $queryRawUnsafe: async (sql: string, ...v: any[]) => {
-                const bang = /"(ShopeePilotConfig|TikTokPilotConfig)"/.exec(sql)?.[1]
+                const bang = /"(ShopeePilotConfig|TikTokPilotConfig|LazadaPilotConfig)"/.exec(sql)?.[1]
                 if (bang) {
                     ghi.push(`docChinhSach:${bang}`)
                     if (o.docChinhSach === 'hong') throw new Error('Connection terminated unexpectedly')
@@ -193,8 +193,9 @@ async function main() {
             d.seBoQua === 9 && (d.docSan || []).some((x: string) => /^1 mã có trong Kengi nhưng KHÔNG thấy trên Lazada lúc đọc .*DAXOA\.$/.test(x))
             && (d.docSan || []).some((x: string) => /^1 SKU chưa có giá bán lẻ để đẩy .*giữ nguyên: PC\.$/.test(x)), JSON.stringify({ seBoQua: d.seBoQua, docSan: d.docSan }))
         ca('B6 giá kho 199.999,7đ làm tròn = 200.000đ trên sàn ⇒ giữ nguyên (LE không vào kế hoạch)', !(d.viDuDoi || []).some((x: any) => x.sku === 'LE'))
-        ca('B7 Lazada dùng chính sách MẶC ĐỊNH — không đọc bảng Pilot Shopee / TikTok; câu chinhSach nói rõ; ghi chú chạy thử nói "chỉ ĐỌC danh mục Lazada"',
-            !g.ghi.some(x => x.startsWith('docChinhSach:')) && /Lazada chưa có Pilot — giá sàn tính theo chính sách MẶC ĐỊNH: lãi tối thiểu 5%/.test(d.chinhSach || '')
+        ca('B7 Lazada đọc chính sách LAZADA PILOT (chưa lưu ⇒ mặc định) — không đọc bảng Pilot Shopee / TikTok; câu chinhSach nói rõ khoản chưa tính; ghi chú chạy thử nói "chỉ ĐỌC danh mục Lazada"',
+            g.ghi.filter(x => x.startsWith('docChinhSach:')).join() === 'docChinhSach:LazadaPilotConfig'
+            && (d.chinhSach || '').startsWith('Giá sàn theo chính sách Lazada Pilot (Lazada Pilot → Sửa chính sách; chưa lưu thì mặc định): lãi tối thiểu 5%; chưa tính đóng gói / quảng cáo / affiliate / thuế GTGT. Chỉ đổi GIÁ GỐC từng SKU')
             && /chỉ ĐỌC danh mục Lazada/.test(d.ghiChu || '') && d.maKhuyenMai === undefined, JSON.stringify({ chinhSach: d.chinhSach, ghiChu: d.ghiChu, ghi: g.ghi }))
 
         const that = await dayGiaLenSan(g.pz, 'chL', { giaLap: { dichVu: san.dichVu } })
@@ -231,14 +232,23 @@ async function main() {
     }
 
     {
-        // chính sách Shopee Pilot đã lưu chặt hơn nhiều (lãi tối thiểu 40% ⇒ sàn 285.800đ) mà Lazada KHÔNG mượn: MOT 200k vẫn đổi
+        // chính sách Shopee / TikTok Pilot đã lưu chặt hơn nhiều (lãi tối thiểu 40% ⇒ sàn 285.800đ) mà Lazada KHÔNG mượn: MOT 200k vẫn đổi
         const g = taoCuaHang({ chinhSach: { ShopeePilotConfig: { minMarginRate: 0.4 }, TikTokPilotConfig: { minMarginRate: 0.4 } } }), san = sanGia()
         const thu = await dayGiaLenSan(g.pz, 'chL', { dryRun: true, giaLap: { dichVu: san.dichVu } })
-        const g2 = taoCuaHang({ docChinhSach: 'hong' })
-        const thu2 = await dayGiaLenSan(g2.pz, 'chL', { dryRun: true, giaLap: { dichVu: sanGia().dichVu } })
-        ca('B14 không mượn chính sách Pilot sàn khác: Shopee Pilot lưu 40% vẫn ra 3 SKU sẽ đổi; bảng Pilot đọc HỎNG cũng không dừng Lazada (không đọc)',
-            thu.ok && thu.data?.seDay === 3 && thu2.ok && thu2.data?.seDay === 3 && !g.ghi.some(x => x.startsWith('docChinhSach:')),
-            JSON.stringify({ a: thu.data?.seDay, b: thu2.data?.seDay, http2: thu2.http }))
+        ca('B14 không mượn chính sách Pilot sàn khác: Shopee / TikTok Pilot lưu 40% vẫn ra 3 SKU sẽ đổi; chỉ đọc bảng Lazada Pilot',
+            thu.ok && thu.data?.seDay === 3 && g.ghi.filter(x => x.startsWith('docChinhSach:')).join() === 'docChinhSach:LazadaPilotConfig',
+            JSON.stringify({ a: thu.data?.seDay, ghi: g.ghi }))
+        // Lazada Pilot lưu lãi tối thiểu 20% (phí khai 25%) ⇒ sàn ≈ 100k / 0,55 ≈ 181.900đ: HA 160k và RB 180k bị chặn, chỉ MOT 200k đổi
+        const g3 = taoCuaHang({ chinhSach: { LazadaPilotConfig: { targetMarginRate: 0.3, minMarginRate: 0.2 } } })
+        const thu3 = await dayGiaLenSan(g3.pz, 'chL', { dryRun: true, giaLap: { dichVu: sanGia().dichVu } })
+        ca('B14b dùng ĐÚNG chính sách Lazada Pilot đã lưu: lãi tối thiểu 20% ⇒ chỉ MOT còn đổi; câu chinhSach nói 20%',
+            thu3.ok && thu3.data?.seDay === 1 && (thu3.data?.viDuDoi || []).map((x: any) => x.sku).join() === 'MOT'
+            && /lãi tối thiểu 20%/.test(thu3.data?.chinhSach || ''), JSON.stringify({ seDay: thu3.data?.seDay, viDuDoi: thu3.data?.viDuDoi, chinhSach: thu3.data?.chinhSach }))
+        // bảng Lazada Pilot đọc HỎNG ⇒ dừng (503), không đọc sàn, không ghi gì: rơi về mặc định có thể LỎNG hơn biên chủ shop đặt
+        const g2 = taoCuaHang({ docChinhSach: 'hong' }), san2 = sanGia()
+        const thu2 = await dayGiaLenSan(g2.pz, 'chL', { dryRun: true, giaLap: { dichVu: san2.dichVu } })
+        ca('B14c chính sách Lazada Pilot đọc HỎNG ⇒ 503, không đọc / ghi sàn (rào an toàn không mở khi hỏng)',
+            !thu2.ok && thu2.http === 503 && san2.doc.length === 0 && san2.goi.length === 0, JSON.stringify({ http2: thu2.http, loi: thu2.loi, doc: san2.doc }))
     }
 
     {
