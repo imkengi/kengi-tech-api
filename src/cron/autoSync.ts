@@ -43,6 +43,7 @@ const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
 const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
 const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh (Shopee, TikTok từ 10/11/2026)
 const AFF_BU_MS         = 120_000              // giờ RIÊNG cho lượt bù, tính từ lúc bắt đầu bù
+const LAZADA_PHI_NGAY   = 90                   // Lazada: soát lại MỌI đơn tạo trong 90 ngày (một lượt đọc / kênh — xem doiSoatPhiKenhLazada)
 
 let syncTimer:    NodeJS.Timeout | null = null
 let cleanupTimer: NodeJS.Timeout | null = null
@@ -657,7 +658,7 @@ async function runFeeSync() {
                 // được lấy tự động, bật scope seller.finance.info cũng vô ích. Route
                 // /sync-fees bấm tay thì có xử lý TikTok, còn cron thì không.
                 channels = await sp.onlineChannel.findMany({
-                    where: { platform: { in: ['shopee', 'tiktok'] }, status: 'active', accessToken: { not: null } },
+                    where: { platform: { in: ['shopee', 'tiktok', 'lazada'] }, status: 'active', accessToken: { not: null } },
                 })
             } catch { continue }
             for (const ch of channels) {
@@ -667,6 +668,8 @@ async function runFeeSync() {
                     accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
                     shopId: ch.shopId || undefined,
                 }
+                // Lazada đi đường riêng và KHÔNG vào lượt bù affiliate (buHoaHongAffiliate hỏi bằng ShopeeService)
+                if (ch.platform === 'lazada') { tongCapNhat += await doiSoatPhiKenhLazada(sp, store.code, ch, creds); continue }
                 const svc: any = ch.platform === 'tiktok' ? new TTS(creds) : new ShopeeService(creds)
                 kenhBuAff.push({ schema: store.schema, ch })   // TikTok cũng bù (10/11/2026, TT-02)
                 // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
@@ -770,6 +773,39 @@ async function runFeeSync() {
         }
     } catch (err: any) {
         console.error('[FeeSync] Lỗi:', err?.message || err)
+    }
+}
+
+/**
+ * PHÍ THẬT đơn Lazada (14/11/2026) — lib/phiLazada.doiSoatPhiLazada: MỘT lượt đọc giao dịch tài chính cho cả kênh (Lazada không
+ * có API hỏi từng đơn như escrow Shopee), gom theo đơn. Soát lại MỌI đơn tạo trong LAZADA_PHI_NGAY ngày chứ không chỉ đơn phí 0:
+ * đơn trả hàng về sau mới có dòng hoàn (Reversal Item Price, phí trả hàng…) ⇒ số phải được sửa, không thì đơn lỗ hiện thành lãi.
+ * Ghi khi số KHÁC số đang lưu; chưa đọc hết / đơn thiếu dòng ⇒ để nguyên. Cảnh báo lãi thấp CHỈ cho đơn vừa có số lần đầu.
+ * Trả số đơn đã ghi. Lỗi Lazada (token, chặn IP…) ⇒ một dòng log, không làm hỏng lượt của kênh khác.
+ */
+async function doiSoatPhiKenhLazada(sp: any, storeCode: string, ch: any, creds: any): Promise<number> {
+    try {
+        const { LazadaService } = await import('../services/platforms')
+        const { doiSoatPhiLazada } = await import('../lib/phiLazada')
+        const bc = await doiSoatPhiLazada(sp, ch, new LazadaService(creds) as any, {
+            apply: true, tuNgayTao: new Date(Date.now() - LAZADA_PHI_NGAY * 86400_000),
+        })
+        if (bc.vuaCoPhi.length) {
+            try {
+                const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                const cb = await canhBaoLoiNhuanThap(sp, bc.vuaCoPhi)
+                if (cb.thap) console.log(`[FeeSync] ${ch.name}: ${cb.thap} đơn lãi < ngưỡng → push ${cb.push} thiết bị`)
+            } catch (e: any) { console.warn('[FeeSync] cảnh báo lợi nhuận thấp hỏng:', fmtErr(e)) }
+        }
+        if (bc.daGhi > 0 || bc.loi || bc.boQua.length) {
+            console.log(`[FeeSync] ${storeCode}/${ch.name} (lazada): ghi ${bc.daGhi} đơn (quét ${bc.quet}, giống ${bc.giongNhau}, ` +
+                `Lazada chưa có số: ${bc.chuaCo}, bỏ qua: ${bc.boQua.length})` +
+                (bc.boQua.length ? ` — đầu: ${bc.boQua[0].orderNumber}: ${bc.boQua[0].lyDo}` : '') + (bc.loi ? ` — ${bc.loi}` : ''))
+        }
+        return bc.daGhi
+    } catch (e: any) {
+        console.warn(`[FeeSync] ${storeCode}/${ch.name} (lazada): ${fmtErr(e)}`)
+        return 0
     }
 }
 

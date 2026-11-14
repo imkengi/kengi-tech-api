@@ -4,7 +4,7 @@
  * Chủ shop 29/10/2026: "đơn online … khi chỉ đẩy đơn xong thì nó sẽ vẫn còn sai sót, hay thêm chế độ doublecheck" — "đẩy đơn" =
  * ghi nhận, nhận phí, xuất hoá đơn, cập nhật trả hàng, cho tới khi hoàn thành. Lõi lib/kiemLaiDonSan.ts.
  * Luật "thà im còn hơn báo sai": mỗi bước có cả ca PHẢI KÊU lẫn ca PHẢI IM (đơn huỷ, chờ xác nhận, mới giao, cửa hàng không dùng
- * HĐĐT, Lazada không có phí, bảng không đọc được ⇒ "không rõ" chứ không phải lỗi). Prisma giả.
+ * HĐĐT, bảng không đọc được ⇒ "không rõ" chứ không phải lỗi). Lazada có phí thật từ 14/11/2026 ⇒ soát phí như hai sàn kia. Prisma giả.
  */
 process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat(32)
 
@@ -80,7 +80,9 @@ async function main() {
         ok('3b. Đã giao mà net = 0 ⇒ lỗi "chưa lấy được phí thật"', (() => { const r = soat({ don: don({ platformFee: 0, netRevenue: 0 }) }); return r.phi.tt === 'loi' && /Chưa lấy được/.test(r.phi.ghiChu) })())
         ok('3c. Mới SHIPPED, net = 0 ⇒ CHỜ sàn quyết toán, không phải lỗi', soat({ don: don({ status: 'SHIPPED', deliveredAt: null, platformFee: 0, netRevenue: 0 }), hoaDons: [] }).phi.tt === 'cho')
         ok('3d. Quyết toán ÂM (hoàn tiền) vẫn là số thật ⇒ ok, có ghi "quyết toán âm"', (() => { const r = soat({ don: don({ platformFee: 20_000, netRevenue: -20_000 }) }); return r.phi.tt === 'ok' && /âm/.test(r.phi.ghiChu) && r.thucNhan === -20_000 })())
-        ok('3e. Lazada ⇒ "—" (chưa có API phí)', soat({ don: don({ platform: 'lazada', orderNumber: 'LZD-1', platformFee: 0, netRevenue: 0 }), phieu: phieu({ receiptNumber: 'ONLINE-LZD-1' }) }).phi.tt === 'bo_qua')
+        // Lazada có phí thật từ 14/11/2026 (lib/phiLazada) ⇒ soát như Shopee / TikTok: giao rồi mà chưa có số là lỗi, có số là ok
+        ok('3e. Lazada giao rồi, net = 0 ⇒ lỗi "chưa lấy được phí thật" (hết "—")', (() => { const r = soat({ don: don({ platform: 'lazada', orderNumber: 'LZD-1', status: 'delivered', platformFee: 0, netRevenue: 0 }), phieu: phieu({ receiptNumber: 'ONLINE-LZD-1' }) }); return r.phi.tt === 'loi' && /Chưa lấy được/.test(r.phi.ghiChu) })())
+        ok('3e2. Lazada có số thật ⇒ ok, đọc đúng phí / thực nhận', (() => { const r = soat({ don: don({ platform: 'lazada', orderNumber: 'LZD-1', status: 'delivered', platformFee: 133_000, netRevenue: 367_000 }), phieu: phieu({ receiptNumber: 'ONLINE-LZD-1' }) }); return r.phi.tt === 'ok' && r.phiSan === 133_000 && r.thucNhan === 367_000 })())
         ok('3f. Đơn huỷ ⇒ phí "—"', soat({ don: don({ status: 'CANCELLED', platformFee: 0, netRevenue: 0 }), phieu: phieu({ status: 'voided' }), hoaDons: [] }).phi.tt === 'bo_qua')
     }
 

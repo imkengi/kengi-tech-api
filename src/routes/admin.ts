@@ -11971,6 +11971,43 @@ router.get('/lazada-phi-tho', async (req: Request, res: Response) => {
 })
 
 /**
+ * POST /admin/lazada-doi-soat-phi  { storeCode, channelId?, apply?: true } — PHÍ SÀN THẬT cho MỌI đơn Lazada của kênh (14/11/2026).
+ *
+ * Kéo bù đơn cũ (cron runFeeSync chỉ soát 90 ngày): một lượt đọc giao dịch tài chính từ ngày đơn cũ nhất tới hôm nay
+ * (lib/phiLazada.doiSoatPhiLazada), gom theo đơn. Không `apply` ⇒ CHẠY THỬ: đếm sẽ ghi / giống / chưa có / bỏ qua kèm lý do,
+ * không ghi gì. `apply` ⇒ ghi platformFee + netRevenue cho đơn có số KHÁC số đang lưu; phiếu ONLINE-LZD- mất đơn gốc ⇒ PhiSanDon
+ * ('lay-lai', không đè dòng đã có số). KHÔNG gọi cảnh báo lãi thấp — báo "lãi thấp" cho đơn bán từ nhiều tháng trước chỉ là
+ * tiếng ồn (cùng lý do services/layLaiPhiSan). Không sinh bút toán. Nghiệm thu: chạy thử lần hai phải ra seGhi = 0.
+ */
+router.post('/lazada-doi-soat-phi', async (req: Request, res: Response) => {
+    try {
+        const apply = req.body?.apply === true
+        const mo = await moKenhLazada(String(req.body?.storeCode || '').trim(), String(req.body?.channelId || '').trim())
+        if (mo.loi) return res.status(mo.loi.http).json(mo.loi.body)
+        const { sp, ch, kenhAnToan, svc } = mo
+        const { doiSoatPhiLazada } = await import('../lib/phiLazada')
+        const bc = await doiSoatPhiLazada(sp, ch, svc, { apply, phieuMatGoc: true })
+        if (apply) {
+            await sp.syncLog.create({
+                data: {
+                    channelId: ch.id, action: 'sync_fees', status: bc.loi ? 'error' : bc.boQua.length ? 'partial' : 'success',
+                    details: `Lazada đối soát phí (admin): ghi ${bc.daGhi}/${bc.quet} đơn, giống ${bc.giongNhau}, chưa có ${bc.chuaCo}, ` +
+                        `bỏ qua ${bc.boQua.length}${bc.phieuMatGoc ? `, phiếu mất gốc ghi ${bc.phieuMatGoc.daGhi}` : ''}${bc.loi ? ` — ${bc.loi}` : ''}`,
+                    ordersCount: bc.daGhi,
+                },
+            }).catch(() => { })
+        }
+        res.json({
+            success: !bc.loi, kenh: kenhAnToan, kenhDoc: ch.id, ...bc,
+            ...(apply ? {} : { ghiChu: 'CHẠY THỬ — chưa ghi gì. Gửi { apply: true } để ghi.' }),
+        })
+    } catch (err: any) {
+        // lỗi Lazada nguyên văn (giữa chừng thì chưa ghi gì: đọc hết rồi mới ghi)
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
  * POST /admin/lazada-keo-danh-muc  { storeCode, channelId?, apply?: true } — KÉO danh mục Lazada vào bảng sản phẩm sàn (13/11/2026).
  *
  * Cùng đường nút "Đồng bộ" của kênh gọi (fetchProducts → luuDanhMucSan) — chỉ ĐỌC sàn. Không `apply` ⇒ CHẠY THỬ: đếm sẽ tạo / sẽ

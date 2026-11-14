@@ -9,8 +9,9 @@
  *   1. GHI NHẬN  — đơn đã bán phải có phiếu bán ONLINE-<mã đơn> (services/orderSync); dòng hàng sàn chưa nối hàng kho bị bỏ khỏi
  *                  phiếu (orderSync ghi "⚠ N dòng chưa nối được hàng kho" vào notes); tổng phiếu = tổng đơn; phiếu đã vào sổ
  *                  (bút toán SALE-<phiếu>, chỉ soát cửa hàng ghi sổ kép — cùng luật lib/viecCanLam mục 13).
- *   2. PHÍ SÀN   — số phí / thực nhận THẬT từ escrow Shopee hoặc statement TikTok (cron runFeeSync); đơn đã bị cron dọn thì đọc
- *                  bảng PhiSanDon. Không có số thật thì nói "chưa có", KHÔNG ước tính (chủ shop 06/09/2026). Lazada chưa có API phí.
+ *   2. PHÍ SÀN   — số phí / thực nhận THẬT từ escrow Shopee, statement TikTok hoặc giao dịch tài chính Lazada (cron runFeeSync,
+ *                  Lazada từ 14/11/2026 — lib/phiLazada); đơn đã bị cron dọn thì đọc bảng PhiSanDon. Không có số thật thì nói
+ *                  "chưa có", KHÔNG ước tính (chủ shop 06/09/2026).
  *   3. HOÁ ĐƠN   — cửa hàng dùng HĐĐT: đơn đã giao phải có HĐ đang hiệu lực, tiền HĐ = tiền phiếu, khách khai MST trên sàn thì HĐ
  *                  phải mang đúng MST; HĐ lỗi / chưa xuất thì chỉ đường. Mới giao trong 36 giờ thì còn chờ hàng đợi 20:30.
  *   4. TRẢ HÀNG  — có vụ trả: hoàn tiền rồi ⇒ phiếu phải đã đảo (voided, services/onlineOrderReversal), HĐ đã xuất phải có bản
@@ -196,8 +197,7 @@ export function soatMotDon(d: DuLieuMotDon, cfg: CauHinhKiem, bayGio: Date = new
     // ── 2. Phí sàn ────────────────────────────────────────────────────────
     let phiB: Buoc
     let phiSan: number | null = null, thucNhan: number | null = null
-    if (platform === 'lazada') phiB = { tt: 'bo_qua', ghiChu: 'Lazada chưa có API phí' }
-    else if (huy) phiB = { tt: 'bo_qua', ghiChu: 'Đơn huỷ' }
+    if (huy) phiB = { tt: 'bo_qua', ghiChu: 'Đơn huỷ' }
     else if (don) {
         if (phiDaQuyetToan(don)) {
             phiSan = Number(don.platformFee) || 0; thucNhan = Number(don.netRevenue) || 0

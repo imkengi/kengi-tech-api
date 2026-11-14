@@ -6326,12 +6326,54 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
         const prisma = req.storePrisma!
         const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
-        if (!['shopee', 'tiktok'].includes(channel.platform)) {
+        if (!['shopee', 'tiktok', 'lazada'].includes(channel.platform)) {
             res.status(400).json({ success: false, error: `Nền tảng ${channel.platform} chưa hỗ trợ đối soát phí` })
             return
         }
         if (!channel.accessToken) {
             res.status(400).json({ success: false, error: 'Kênh chưa kết nối API (thiếu access token)' })
+            return
+        }
+
+        /* Lazada (14/11/2026): không có API hỏi phí TỪNG đơn — một lượt đọc giao dịch tài chính cho cả kênh rồi gom theo đơn
+         * (lib/phiLazada). Soát lại cả đơn đã có số (đơn trả về sau thêm dòng hoàn). Không refresh token ở đây; lỗi Lazada trả
+         * NGUYÊN VĂN (errMsg che thành "Internal server error" thì chủ shop không biết token hết hạn hay bị chặn). */
+        if (channel.platform === 'lazada') {
+            const days = Math.min(90, Math.max(1, Number(req.body?.days) || 30))
+            let bc: import('../lib/phiLazada').BaoCaoDoiSoatLazada
+            try {
+                const { doiSoatPhiLazada } = await import('../lib/phiLazada')
+                const svcLz: any = new LazadaService({
+                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                    accessToken: channel.accessToken || undefined, refreshToken: channel.refreshToken || undefined,
+                    shopId: channel.shopId || undefined,
+                } as any)
+                bc = await doiSoatPhiLazada(prisma, channel, svcLz, { apply: true, tuNgayTao: new Date(Date.now() - days * 86400_000) })
+            } catch (e: any) {
+                console.error(`[sync-fees] ${channel.name} (lazada):`, e?.message || e)
+                res.status(502).json({ success: false, error: e?.message || String(e) })
+                return
+            }
+            let canhBaoLz: any = null
+            if (bc.vuaCoPhi.length) {
+                try {
+                    const { canhBaoLoiNhuanThap } = await import('../lib/canhBaoLoiNhuanThap')
+                    canhBaoLz = await canhBaoLoiNhuanThap(prisma, bc.vuaCoPhi)
+                } catch (e: any) { console.warn('[sync-fees] cảnh báo lợi nhuận thấp hỏng:', e?.message) }
+            }
+            const errorsLz = [...(bc.loi ? [bc.loi] : []), ...bc.boQua.map(b => `${b.orderNumber}: ${b.lyDo}`)]
+            await prisma.syncLog.create({
+                data: {
+                    channelId: channel.id, action: 'sync_fees', status: errorsLz.length ? 'partial' : 'success',
+                    details: `Fees updated: ${bc.daGhi}, same: ${bc.giongNhau}, unsettled: ${bc.chuaCo}, failed: ${errorsLz.length}` +
+                        `${errorsLz.length ? '\n' + errorsLz.slice(0, 5).join('\n') : ''}`,
+                    ordersCount: bc.daGhi,
+                },
+            }).catch(() => { })
+            res.json({
+                success: true,
+                data: { scanned: bc.quet, updated: bc.daGhi, unsettled: bc.chuaCo, failed: errorsLz.length, errors: errorsLz, canhBaoLoiNhuanThap: canhBaoLz },
+            })
             return
         }
 
