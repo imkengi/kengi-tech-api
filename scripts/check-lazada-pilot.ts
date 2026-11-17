@@ -18,7 +18,9 @@
  *     dòng 'token', dừng ghi; hết lượt ghi ⇒ MỘT dòng (cần người khi còn SKU dưới sàn); trần mỗi chu kỳ; phí khai ⇒ hạ giá chờ
  *     người; dọn nháp (3 ngày, người huỷ 14 ngày, nháp người lập để yên); 'running' quá 1 giờ ⇒ 'uncertain'; đẩy tồn; đồng bộ
  *     danh mục cũ.
- *  7. Lịch.  8. Kiểm kết nối (chỉ đọc), làm mới token.  9. Tiện ích lazada_pilot chỉ-quản-trị + nối dây (soát mã nguồn).
+ *  7. Lịch; cửa hàng bật tiện ích mà CHƯA mở trang (bảng chưa có) ⇒ 'chua-cau-hinh' êm: chỉ câu dò to_regclass, không câu nào
+ *     đụng bảng thiếu (Prisma khỏi in 42P01 mỗi phút), ≤ MỘT dòng info / cửa hàng / tiến trình; bảng có ⇒ y như cũ; lỗi khác ⇒ ném.
+ *  8. Kiểm kết nối (chỉ đọc), làm mới token.  9. Tiện ích lazada_pilot chỉ-quản-trị + nối dây (soát mã nguồn).
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -728,6 +730,101 @@ async function main() {
         bayGio = NOW + 300 * 60_000
         dung('7h. tắt lịch ⇒ không dùng', (await chayTheoLichLazada(prisma, kho, ngoai)) === 'khong-dung')
         bayGio = NOW
+    }
+
+    // ─── 7'. Lịch ở cửa hàng bật tiện ích mà CHƯA ai mở trang (bảng chưa có) — 17/11/2026 ─────────
+    // Prod in "Raw query failed … 42P01 relation "LazadaPilotConfig" does not exist" MỖI PHÚT: mã bắt lỗi êm nhưng Prisma tự in mọi
+    // câu hỏng. Canh: không câu nào đụng bảng thiếu (chỉ câu dò to_regclass — không bao giờ lỗi), tối đa MỘT dòng info / cửa hàng
+    // / tiến trình, không tạo bảng hộ, không đụng lịch; bảng có thì y như cũ; lỗi khác không bị giả làm "chưa cấu hình".
+    {
+        datLai(); datLazada(); goi.length = 0; bayGio = NOW
+        const ngoai = { taoLazada: lzGia, dayTon: dayTonGia, bayGio: () => bayGio }
+        /** prisma giả của đường cron (không kho): `coBang` trả lời câu dò to_regclass, `doc` trả lời câu đọc cấu hình; ghi lại MỌI câu */
+        const pzLich = (o: { schema: string; coBang: () => any; doc?: () => any }) => {
+            const sql: string[] = []
+            return {
+                __schema: o.schema, sql,
+                $queryRawUnsafe: async (s: string) => {
+                    sql.push(s)
+                    if (s.includes('to_regclass')) return o.coBang()
+                    if (s.includes('"LazadaPilotConfig"')) return o.doc ? o.doc() : []
+                    return []
+                },
+                $executeRawUnsafe: async (s: string) => { sql.push(s); return 0 },
+            } as any
+        }
+        const dungBang = (sql: string[]) => sql.filter(s => /FROM "LazadaPilotConfig"/.test(s)).length
+        const ghiGi = (sql: string[]) => sql.some(s => /CREATE|INSERT|UPDATE|DELETE/i.test(s))
+        const soDo = (sql: string[]) => sql.filter(s => s.includes('to_regclass')).length
+        // hình lỗi Prisma THẬT của SQL thô thiếu bảng: P2010 + meta.code 42P01 (dòng log prod đo 17/11 là đúng chuỗi này)
+        const loi42P01 = () => Object.assign(new Error('Invalid `prisma.$queryRawUnsafe()` invocation:\n\nRaw query failed. Code: `42P01`. Message: `relation "LazadaPilotConfig" does not exist`'),
+            { code: 'P2010', meta: { code: '42P01', message: 'relation "LazadaPilotConfig" does not exist' } })
+        /** chạy f, gom mọi dòng console.log / warn / error trong lúc chạy (không in ra) */
+        const batLog = async (f: () => Promise<any>) => {
+            const goc = { log: console.log, warn: console.warn, error: console.error }
+            const dong: { muc: string; text: string }[] = []
+            for (const muc of ['log', 'warn', 'error'] as const) (console as any)[muc] = (...a: any[]) => { dong.push({ muc, text: a.map(x => String(x)).join(' ') }) }
+            try { return { kq: await f(), loi: null as any, dong } } catch (e) { return { kq: undefined, loi: e as any, dong } } finally { Object.assign(console, goc) }
+        }
+
+        const p1 = pzLich({ schema: 'kiem_lz_a', coBang: () => [{ co: false }] })
+        const a1 = await batLog(() => chayTheoLichLazada(p1, undefined, ngoai))
+        dung("7i. bật tiện ích mà CHƯA ai mở trang (bảng chưa có) ⇒ 'chua-cau-hinh', KHÔNG ném; chỉ MỘT câu dò to_regclass, không câu nào đụng bảng thiếu (Prisma không có gì để in 42P01), không tạo bảng, không gọi Lazada",
+            a1.kq === 'chua-cau-hinh' && !a1.loi && p1.sql.length === 1 && /to_regclass\('"LazadaPilotConfig"'\)/.test(p1.sql[0]) && dungBang(p1.sql) === 0 && !ghiGi(p1.sql) && goi.length === 0,
+            json({ kq: a1.kq, loi: a1.loi?.message, sql: p1.sql }))
+        const a2 = await batLog(async () => {
+            await chayTheoLichLazada(p1, undefined, ngoai)                                                             // nhịp kế, cùng client
+            await chayTheoLichLazada(pzLich({ schema: 'kiem_lz_a', coBang: () => [{ co: false }] }), undefined, ngoai) // client bị thải rồi tạo lại
+            return chayTheoLichLazada(pzLich({ schema: 'kiem_lz_b', coBang: () => [{ co: false }] }), undefined, ngoai) // cửa hàng khác
+        })
+        const tatCa = [...a1.dong, ...a2.dong]
+        dung('7j. tối đa MỘT dòng info / cửa hàng / tiến trình (nhịp sau, client tạo lại ⇒ im); cửa hàng khác có dòng riêng; không dòng warn / error nào',
+            a2.kq === 'chua-cau-hinh' && !a2.loi && a1.dong.length === 1 && /chưa cấu hình/.test(a1.dong[0].text) && tatCa.filter(d => /kiem_lz_a/.test(d.text)).length === 1
+            && tatCa.filter(d => /kiem_lz_b/.test(d.text)).length === 1 && tatCa.length === 2 && tatCa.every(d => d.muc === 'log') && dungBang(p1.sql) === 0,
+            json(tatCa))
+
+        const p3 = pzLich({ schema: 'kiem_lz_c', coBang: () => [{ co: true }], doc: () => { throw loi42P01() } })
+        const a3 = await batLog(async () => [await chayTheoLichLazada(p3, undefined, ngoai), await chayTheoLichLazada(p3, undefined, ngoai)])
+        const p3b = pzLich({ schema: 'kiem_lz_c', coBang: () => [{ co: true }], doc: () => { throw Object.assign(new Error('The table `LazadaPilotConfig` does not exist in the current database.'), { code: 'P2021' }) } })
+        const a3b = await batLog(() => chayTheoLichLazada(p3b, undefined, ngoai))
+        dung("7k. dò thấy bảng mà câu đọc ra thiếu bảng (SQL thô P2010/42P01, hay P2021) ⇒ vẫn 'chua-cau-hinh', không ném, không tạo bảng; quên \"có bảng\" ⇒ nhịp sau dò lại",
+            JSON.stringify(a3.kq) === '["chua-cau-hinh","chua-cau-hinh"]' && !a3.loi && soDo(p3.sql) === 2 && a3b.kq === 'chua-cau-hinh' && !a3b.loi && !ghiGi([...p3.sql, ...p3b.sql]),
+            json({ a3: a3.kq, l3: a3.loi?.message, a3b: a3b.kq, l3b: a3b.loi?.message, sql: p3.sql }))
+
+        const p4 = pzLich({ schema: 'kiem_lz_d', coBang: () => [{ co: true }], doc: () => { throw Object.assign(new Error("Can't reach database server at `/cloudsql/x`"), { code: 'P1001' }) } })
+        const a4 = await batLog(() => chayTheoLichLazada(p4, undefined, ngoai))
+        const a5 = await batLog(() => chayTheoLichLazada(pzLich({ schema: 'kiem_lz_e', coBang: () => { throw new Error('Connection terminated unexpectedly') } }), undefined, ngoai))
+        dung('7l. đọc cấu hình / câu dò hỏng vì lý do KHÁC (mất kết nối) ⇒ NÉM để cron ghi kèm mã cửa hàng — không giả làm "chưa cấu hình"',
+            a4.loi?.code === 'P1001' && /Connection terminated/.test(a5.loi?.message || '') && ![...a4.dong, ...a5.dong].some(d => /chưa cấu hình/.test(d.text)),
+            json({ l4: a4.loi?.message, l5: a5.loi?.message }))
+
+        const lichTat = (nextRunAt: number | null) => [{ nextRunAt, schedule: JSON.stringify({ enabled: false, intervalMinutes: 180 }) }]
+        const p6 = pzLich({ schema: 'kiem_lz_f', coBang: () => [{ co: true }], doc: () => lichTat(null) })
+        const p6b = pzLich({ schema: 'kiem_lz_f2', coBang: () => [{ co: true }], doc: () => lichTat(bayGio - 60_000) })
+        goi.length = 0
+        const a6 = await batLog(async () => [await chayTheoLichLazada(p6, undefined, ngoai), await chayTheoLichLazada(p6b, undefined, ngoai)])
+        dung("7m. bảng CÓ, lịch TẮT (KENGISTORE sau khi mở trang: xem trước, lịch tắt) ⇒ 'khong-dung' như cũ — kể cả nextRunAt cũ đã qua: không giành lượt, không ghi gì, không gọi Lazada, không dòng log",
+            JSON.stringify(a6.kq) === '["khong-dung","khong-dung"]' && !a6.loi && a6.dong.length === 0 && !ghiGi([...p6.sql, ...p6b.sql]) && goi.length === 0
+            && dungBang(p6.sql) === 1 && dungBang(p6b.sql) === 1, json({ kq: a6.kq, sql: [...p6.sql, ...p6b.sql], dong: a6.dong }))
+
+        const p7 = pzLich({ schema: 'kiem_lz_g', coBang: () => [{ co: true }], doc: () => [{ nextRunAt: bayGio + 30 * 60_000, schedule: JSON.stringify({ enabled: true, intervalMinutes: 60 }) }] })
+        const k1 = await chayTheoLichLazada(p7, undefined, ngoai), k2 = await chayTheoLichLazada(p7, undefined, ngoai)
+        dung("7n. bảng CÓ, lịch BẬT chưa tới hẹn ⇒ 'chua-toi' như cũ (câu dò không chặn lịch đã bật); \"có bảng\" nhớ theo client ⇒ nhịp sau không dò lại",
+            k1 === 'chua-toi' && k2 === 'chua-toi' && soDo(p7.sql) === 1 && dungBang(p7.sql) === 2, json(p7.sql))
+
+        let daMoTrang = false
+        const p8 = pzLich({ schema: 'kiem_lz_h', coBang: () => [{ co: daMoTrang }], doc: () => [{ nextRunAt: null, schedule: '{}' }] })
+        const a8 = await batLog(async () => {
+            const truoc = await chayTheoLichLazada(p8, undefined, ngoai)
+            daMoTrang = true            // chủ shop mở trang (ở bản máy nào cũng được) ⇒ bảng được tạo
+            return [truoc, await chayTheoLichLazada(p8, undefined, ngoai)]
+        })
+        dung("7o. \"chưa có bảng\" KHÔNG nhớ: vừa mở trang ⇒ nhịp kế đọc cấu hình bình thường (không phải đợi khởi động lại)",
+            JSON.stringify(a8.kq) === '["chua-cau-hinh","khong-dung"]' && dungBang(p8.sql) === 1, json({ kq: a8.kq, sql: p8.sql }))
+
+        const p9 = pzLich({ schema: 'kiem_lz_i', coBang: () => [], doc: () => [{ nextRunAt: bayGio + 60_000, schedule: JSON.stringify({ enabled: true, intervalMinutes: 60 }) }] })
+        dung("7p. câu dò trả kết quả LẠ (không phải true / false) ⇒ cứ đọc như cũ — không bỏ nhầm lịch chủ shop đã bật",
+            (await chayTheoLichLazada(p9, undefined, ngoai)) === 'chua-toi' && dungBang(p9.sql) === 1, json(p9.sql))
     }
 
     // ─── 8. Kiểm kết nối + làm mới token ────────────────────────────────────────

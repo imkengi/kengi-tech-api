@@ -1318,8 +1318,43 @@ export async function luuCauHinhLazada(ctx: NgCanhLazada, b: any): Promise<CauHi
 
 // ─── Chạy theo lịch (gọi từ cron/aiAgentCron) ───────────────────────────────────
 
-/** Chạy MỘT chu kỳ nếu tới hẹn. Chưa từng dùng Pilot ⇒ bảng không có ⇒ 'khong-dung' (KHÔNG tạo bảng hộ). */
-export async function chayTheoLichLazada(prisma: any, kho?: KhoLazadaPilot, ngoai: Partial<NgCanhLazada> = {}): Promise<'khong-dung' | 'chua-toi' | 'bi-gianh' | 'da-chay' | 'loi'> {
+/** Lỗi "bảng chưa có": P2021 (truy vấn model) / 42P01 (Postgres — SQL thô ra P2010 kèm meta.code). Lỗi khác KHÔNG phải "chưa dùng". */
+function laThieuBangLazada(e: any): boolean {
+    const ma = String(e?.meta?.code || e?.code || '')
+    return ma === '42P01' || ma === 'P2021' || /relation "[^"]+" does not exist/i.test(String(e?.meta?.message || e?.message || ''))
+}
+
+/* Cửa hàng được bật tiện ích lazada_pilot nhưng CHƯA ai mở trang ⇒ bảng LazadaPilotConfig chưa có (bảng chỉ tạo khi mở trang
+ * hoặc /admin/migrate). 17/11/2026 đo log prod: KENGISTORE in "Raw query failed … 42P01 relation "LazadaPilotConfig" does not
+ * exist" MỖI PHÚT (~1.440 dòng/ngày) — mã đã bắt lỗi êm, nhưng client Prisma (log 'error') tự in mọi câu hỏng TRƯỚC khi ném.
+ * Nên dò bằng to_regclass (không bao giờ lỗi, phân giải theo cùng search_path với câu SELECT) RỒI mới đọc. "Có bảng" nhớ theo
+ * client (bảng không tự mất); "chưa có" KHÔNG nhớ — mở trang ở bản máy nào thì nhịp kế ở mọi bản thấy ngay. */
+const coBangCauHinh = new WeakSet<object>()
+/** schema đã ghi dòng "chưa cấu hình" — tối đa MỘT dòng / cửa hàng / tiến trình */
+const daBaoChuaCauHinh = new Set<string>()
+
+async function coBangCauHinhLazada(prisma: any): Promise<boolean> {
+    if (daTaoBang.has(prisma) || coBangCauHinh.has(prisma)) return true
+    const [r] = await prisma.$queryRawUnsafe(`SELECT to_regclass('"LazadaPilotConfig"') IS NOT NULL AS co`)
+    // chỉ `false` mới là "chưa có"; kết quả lạ ⇒ cứ đọc như cũ (lỗi thiếu bảng vẫn được nhận ra ở câu đọc) — bỏ nhầm lịch chủ
+    // shop đã bật là hỏng IM LẶNG, còn đọc thừa một lần chỉ tốn một dòng log
+    if (r?.co === false) return false
+    if (r?.co === true) coBangCauHinh.add(prisma)
+    return true
+}
+
+function chuaCauHinhLazada(prisma: any): 'chua-cau-hinh' {
+    const schema = String(prisma?.__schema || '')
+    if (!daBaoChuaCauHinh.has(schema)) {
+        daBaoChuaCauHinh.add(schema)
+        console.log(`[LazadaPilot] lịch ${schema || '(không rõ schema)'}: chưa cấu hình — bảng LazadaPilotConfig chưa có (chưa ai mở trang Lazada Pilot) ⇒ bỏ qua, không tạo bảng hộ`)
+    }
+    return 'chua-cau-hinh'
+}
+
+/** Chạy MỘT chu kỳ nếu tới hẹn. Chưa từng mở trang Pilot ⇒ bảng không có ⇒ 'chua-cau-hinh', êm (KHÔNG tạo bảng hộ, KHÔNG đụng lịch).
+ *  Đọc cấu hình hỏng vì lý do KHÁC ⇒ ném (cron ghi kèm mã cửa hàng) — không giả làm "chưa dùng". */
+export async function chayTheoLichLazada(prisma: any, kho?: KhoLazadaPilot, ngoai: Partial<NgCanhLazada> = {}): Promise<'khong-dung' | 'chua-cau-hinh' | 'chua-toi' | 'bi-gianh' | 'da-chay' | 'loi'> {
     const now = ngoai.bayGio ? ngoai.bayGio() : Date.now()
     let den: number, lich: LichLazada
     if (kho) {
@@ -1327,11 +1362,14 @@ export async function chayTheoLichLazada(prisma: any, kho?: KhoLazadaPilot, ngoa
         if (!c || c.nextRunAt == null) return 'khong-dung'
         den = c.nextRunAt; lich = c.schedule
     } else {
+        if (!(await coBangCauHinhLazada(prisma))) return chuaCauHinhLazada(prisma)
         let r: any
         try {
             [r] = await prisma.$queryRawUnsafe(`SELECT "nextRunAt"::float8 AS "nextRunAt", schedule FROM "LazadaPilotConfig" WHERE id = 'default'`)
-        } catch {
-            return 'khong-dung'
+        } catch (e: any) {
+            // dò thấy bảng mà đọc lại ra thiếu bảng (vừa bị xoá / kết quả dò lạ) ⇒ vẫn là "chưa cấu hình"; quên "có bảng" để dò lại
+            if (laThieuBangLazada(e)) { coBangCauHinh.delete(prisma); return chuaCauHinhLazada(prisma) }
+            throw e
         }
         if (!r || r.nextRunAt == null) return 'khong-dung'
         den = Number(r.nextRunAt); lich = chuanHoaLichLazada(docJson(r.schedule, {}))
