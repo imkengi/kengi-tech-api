@@ -1,5 +1,5 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
-import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
+import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure, goiQuaProxy, docHetPhanHoi } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
 import { guiJsonKemBase64, CHO_BASE64 } from '../../lib/khoiVideo'
 // flashSaleKiemGia không import gì ⇒ không vòng import
@@ -156,31 +156,43 @@ export class ShopeeService extends PlatformService {
         if (proxy && proxyCircuitOpen()) throw proxyCircuitError()
 
         const attempt = async (): Promise<Response> => {
-            const ac = new AbortController()
-            const timer = setTimeout(() => ac.abort(), ShopeeService.FETCH_TIMEOUT_MS)
-            try {
-                if (!proxy) {
+            if (!proxy) {
+                const ac = new AbortController()
+                const timer = setTimeout(() => ac.abort(), ShopeeService.FETCH_TIMEOUT_MS)
+                try {
                     return await fetch(url, {
                         method,
                         headers: { 'Content-Type': 'application/json' },
                         body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
                         signal: ac.signal,
                     })
+                } finally {
+                    clearTimeout(timer)
                 }
-                return await fetch(proxy, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        secret: process.env.SHOPEE_FORWARD_SECRET || '',
-                        url,
-                        method,
-                        body: method === 'POST' ? (body ?? {}) : undefined,
-                    }),
-                    signal: ac.signal,
-                })
-            } finally {
-                clearTimeout(timer)
             }
+            /* Qua proxy Tino: XẾP HÀNG — mỗi bản tối đa PROXY_DONG_THOI_TOI_DA lời gọi cùng lúc (16/11/2026
+             * ~140 push dồn một lúc làm Tino chặn IP bản chính 6 giờ — xem proxyBreaker). Hẹn giờ tính từ lúc
+             * CÓ CHỖ; đọc hết thân trong lúc giữ chỗ (hẹn giờ phủ luôn phần thân). */
+            return goiQuaProxy(async () => {
+                const ac = new AbortController()
+                const timer = setTimeout(() => ac.abort(), ShopeeService.FETCH_TIMEOUT_MS)
+                try {
+                    const res = await fetch(proxy, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            secret: process.env.SHOPEE_FORWARD_SECRET || '',
+                            url,
+                            method,
+                            body: method === 'POST' ? (body ?? {}) : undefined,
+                        }),
+                        signal: ac.signal,
+                    })
+                    return await docHetPhanHoi(res)
+                } finally {
+                    clearTimeout(timer)
+                }
+            })
         }
 
         let lastErr: any
@@ -190,6 +202,9 @@ export class ShopeeService extends PlatformService {
                 if (proxy) noteProxySuccess()
                 return res
             } catch (e: any) {
+                // Ngắt mạch mở trong lúc xếp hàng: lệnh CHƯA gửi — ném nguyên (giữ chuaGui), không thử lại,
+                // không đếm là proxy hỏng thêm lần nữa.
+                if (e?.ngatMachProxy === true) throw e
                 lastErr = e
                 const timedOut = e?.name === 'AbortError'
                 // Đợi tăng dần: proxy nghẽn vì bị bắn dồn thì thử lại ngay chỉ làm nghẽn thêm.

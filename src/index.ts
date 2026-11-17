@@ -106,6 +106,7 @@ import { startAutoSync, stopAutoSync, choAutoSyncXong } from './cron/autoSync'
 import { startHanThanhToanCron } from './cron/hanThanhToanCron'
 import { startNhacBangChungTikTokCron } from './cron/nhacBangChungTikTokCron'
 import { batCoDangTat } from './lib/choXong'
+import { batDauRequest, xongRequest } from './lib/trangThaiCsdl'
 import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startKiotVietNightlyCron, stopKiotVietNightlyCron } from './cron/kiotvietNightly'
@@ -134,6 +135,17 @@ app.set('trust proxy', 1) // Trust first proxy (Cloud Run load balancer)
 const PORT = process.env.PORT || 3001
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
+
+// Đếm request đang phục vụ: = 0 ⇔ Cloud Run đang cắt CPU bản này — lịch nền ngắn dựa vào đó để
+// nghỉ khi vừa mất CSDL (lib/trangThaiCsdl.ts, 17/11/2026). Đặt ĐẦU TIÊN để đếm đủ mọi request.
+app.use((_req, res, next) => {
+    batDauRequest()
+    let daTra = false
+    const tra = () => { if (!daTra) { daTra = true; xongRequest() } }
+    res.once('finish', tra)
+    res.once('close', tra)
+    next()
+})
 
 // Security headers
 app.use(helmet({

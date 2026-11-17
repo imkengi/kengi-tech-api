@@ -16,6 +16,7 @@
  * Redis hắt hơi là hỏng nghiệp vụ nặng hơn việc chạy trùng.
  */
 import Redis from 'ioredis'
+import { nenNghiLichNen } from './trangThaiCsdl'
 
 const REDIS_URL = process.env.REDIS_URL || ''
 let khoa: Redis | null = null
@@ -42,11 +43,36 @@ function client(): Redis | null {
 // Mỗi tiến trình một danh tính — để chỉ xoá khoá do chính mình giữ
 const TOKEN = `${process.env.K_REVISION || 'local'}:${process.pid}:${Math.random().toString(36).slice(2)}`
 
+/* LỊCH NGẮN NGHỈ KHI VỪA MẤT CSDL (17/11/2026) — lý do + số đo ở lib/trangThaiCsdl.ts.
+ * Chỉ các lịch nhịp ≤ 10 phút, bỏ một lượt thì lượt sau làm bù, không mất gì. CỐ Ý KHÔNG gồm:
+ *  - auto-sync (30'), email-reply (15'): nhịp dài, bỏ một lượt là chậm hẳn một nhịp;
+ *  - auto-cleanup, fee-sync: nhịp hàng giờ;
+ *  - hoa-don-xml-email: đặt dấu "đã chạy hôm nay" TRƯỚC khi gọi ⇒ bỏ lượt = mất cả ngày. */
+const LICH_NGHI_KHI_MAT_CSDL = new Set([
+    'hop-thu-webhook', 'flash-sale', 'kiotviet-watchdog', 'ai-agent', 'nhac-bang-chung-tiktok',
+    'han-thanh-toan', 'kiotviet-webhook-canh', 'fanpage-reconcile',
+])
+let lanBaoNghi = 0
+let soLuotNghi = 0
+
+/** Lịch `ten` có bỏ lượt này vì vừa mất CSDL (và đang không có request) không. */
+export function boLuotViMatCsdl(ten: string, bayGio = Date.now()): boolean {
+    if (!LICH_NGHI_KHI_MAT_CSDL.has(ten) || !nenNghiLichNen(bayGio)) return false
+    soLuotNghi++
+    if (bayGio - lanBaoNghi > 10 * 60_000) {
+        lanBaoNghi = bayGio
+        console.warn(`[Lịch nền] bỏ lượt '${ten}' — vừa mất kết nối CSDL và bản này không có request (bị cắt CPU); `
+            + `lượt sau tự thử lại (đã bỏ ${soLuotNghi} lượt từ lúc khởi động)`)
+    }
+    return true
+}
+
 /**
  * Chạy `viec` nếu giành được khoá `ten` trong `ttlMs`. Trả về true nếu đã chạy.
  * Redis không dùng được → chạy luôn (an toàn nghiệp vụ hơn là bỏ).
  */
 export async function chayNeuLanhDao(ten: string, ttlMs: number, viec: () => Promise<void> | void): Promise<boolean> {
+    if (boLuotViMatCsdl(ten)) return false
     const r = client()
     const key = `cron:leader:${ten}`
     if (!r || r.status !== 'ready') {

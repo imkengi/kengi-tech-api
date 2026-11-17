@@ -1,5 +1,5 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
-import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
+import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure, goiQuaProxy, docHetPhanHoi } from '../../lib/proxyBreaker'
 import { moTaLoi } from '../../lib/gomLoi'
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -32,31 +32,41 @@ export class LazadaService extends PlatformService {
         if (proxy && proxyCircuitOpen()) throw proxyCircuitError()
 
         const attempt = async (): Promise<Response> => {
-            const ac = new AbortController()
-            const timer = setTimeout(() => ac.abort(), LazadaService.FETCH_TIMEOUT_MS)
-            try {
-                if (!proxy) {
+            if (!proxy) {
+                const ac = new AbortController()
+                const timer = setTimeout(() => ac.abort(), LazadaService.FETCH_TIMEOUT_MS)
+                try {
                     return await fetch(url, {
                         method,
                         headers: { 'Content-Type': 'application/json' },
                         body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
                         signal: ac.signal,
                     })
+                } finally {
+                    clearTimeout(timer)
                 }
-                return await fetch(proxy, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        secret: process.env.PLATFORM_FORWARD_SECRET || process.env.SHOPEE_FORWARD_SECRET || '',
-                        url,
-                        method,
-                        body: method === 'POST' ? (body ?? {}) : undefined,
-                    }),
-                    signal: ac.signal,
-                })
-            } finally {
-                clearTimeout(timer)
             }
+            // Qua proxy Tino: CHUNG hàng chờ với Shopee (cùng một hosting, cùng tường lửa) — xem proxyBreaker.
+            return goiQuaProxy(async () => {
+                const ac = new AbortController()
+                const timer = setTimeout(() => ac.abort(), LazadaService.FETCH_TIMEOUT_MS)
+                try {
+                    const res = await fetch(proxy, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            secret: process.env.PLATFORM_FORWARD_SECRET || process.env.SHOPEE_FORWARD_SECRET || '',
+                            url,
+                            method,
+                            body: method === 'POST' ? (body ?? {}) : undefined,
+                        }),
+                        signal: ac.signal,
+                    })
+                    return await docHetPhanHoi(res)
+                } finally {
+                    clearTimeout(timer)
+                }
+            })
         }
 
         let lastErr: any
@@ -66,6 +76,8 @@ export class LazadaService extends PlatformService {
                 if (proxy) noteProxySuccess()
                 return res
             } catch (e: any) {
+                // Ngắt mạch mở trong lúc xếp hàng: lệnh CHƯA gửi — ném nguyên, không thử lại, không đếm thêm.
+                if (e?.ngatMachProxy === true) throw e
                 lastErr = e
                 if (i < LazadaService.FETCH_RETRIES - 1) {
                     console.warn(`[Lazada fetch] lần ${i + 1} lỗi (${moTaLoi(e)}) — thử lại`)

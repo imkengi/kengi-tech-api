@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
-import registryPrisma, { getStorePrisma } from '../lib/prisma'
+import registryPrisma, { getStorePrisma, laLoiMatKetNoi } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction, lienKetHangDon } from '../services/orderSync'
@@ -221,6 +221,9 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
             } catch (e: any) {
                 // Store might not have OnlineChannel table
                 if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
+                // Mất kết nối CSDL thì cửa hàng nào cũng hỏng y vậy: dừng dò (khỏi đẻ thêm chục lỗi P1001),
+                // ném loiQuet bên dưới để hộp thư thử lại push này (17/11/2026).
+                if (laLoiMatKetNoi(e)) break
                 continue
             }
         }
@@ -688,6 +691,7 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
                 }
             } catch (e: any) {
                 if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
+                if (laLoiMatKetNoi(e)) break   // như nhánh Shopee
                 continue
             }
         }

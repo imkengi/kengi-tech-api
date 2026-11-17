@@ -32,6 +32,7 @@
 import crypto from 'crypto'
 import registryPrisma, { laLoiMatKetNoi } from '../lib/prisma'
 import { moTaLoi } from '../lib/gomLoi'
+import { laLoiNgatMachProxy, proxyCircuitOpen } from '../lib/proxyBreaker'
 
 /** 'shopee-video' = push của APP Shopee Video (Set Push riêng, khoá riêng — lib/pushShopeeVideo.ts, 11/10/2026) */
 export type NenTangPush = 'shopee' | 'tiktok' | 'shopee-video'
@@ -76,6 +77,24 @@ const GIAN_NHIP_GIAY = [30, 120, 600, 1800, 7200]
 const SO_LAN_TOI_DA = GIAN_NHIP_GIAY.length + 1
 const KET_QUA_PHUT = 15
 const BANG = '"public"."WebhookInbox"'
+
+/* PROXY TINO ĐANG NGẮT MẠCH ≠ MỘT LẦN THỬ (17/11/2026).
+ * Ngắt mạch chặn lệnh TRƯỚC khi gửi (lib/proxyBreaker): chưa tới sàn, chưa làm gì cả. Bản cũ vẫn tính
+ * là một lần hỏng ⇒ 16/11 Tino chặn IP bản chính ~6 giờ, 6 lượt thử chỉ trải ~2,7 giờ ⇒ 804 push
+ * Shopee 'hong' dù không lượt nào thật sự được gửi. Nay: hoãn 2' (đúng thời gian ngắt mạch nghỉ),
+ * trả lại lượt thử; chờ quá 24 giờ mới bỏ cuộc cho người soi (AutoSync vẫn vớt đơn). */
+const HOAN_NGAT_MACH_GIAY = 120
+const TRAN_HOAN_NGAT_MACH_MS = 24 * 3600_000
+
+/** Quyết định cho một tin vừa hỏng vì ngắt mạch proxy (hàm thuần — bộ kiểm chứng gọi thẳng). */
+export function xuLyTinNgatMach(nhanLucMs: number, bayGio = Date.now()): { loai: 'hong' } | { loai: 'cho'; sauGiay: number } {
+    return bayGio - nhanLucMs > TRAN_HOAN_NGAT_MACH_MS
+        ? { loai: 'hong' }
+        : { loai: 'cho', sauGiay: HOAN_NGAT_MACH_GIAY }
+}
+
+/** Push nào phải gọi ngược sàn QUA proxy Tino — ngắt mạch đang mở thì lượt quét để yên, khỏi nhặt ra rồi hoãn. */
+const NEN_TANG_QUA_PROXY = ['shopee', 'shopee-video']
 
 let bangSan: Promise<void> | null = null
 function damBaoBang(): Promise<void> {
@@ -185,6 +204,19 @@ async function chayTin(tin: TinPush): Promise<void> {
         }
     } catch (e) {
         const moTa = moTaLoi(e)
+        if (laLoiNgatMachProxy(e)) {
+            const qd = xuLyTinNgatMach(tin.nhanLuc.getTime())
+            if (qd.loai === 'hong') {
+                await capNhat(`UPDATE ${BANG} SET "trangThai"='hong', "xongLuc"=now(), "ghiChu"=$2 WHERE "id"=$1::bigint`,
+                    tin.id, `proxy ngắt mạch quá 24 giờ — ${moTa}`.slice(0, 2000))
+                console.error(`[Hộp thư webhook] ❌ ${tin.platform} tin ${tin.id} BỎ CUỘC: proxy ngắt mạch quá 24 giờ (cron sync còn vớt): ${moTa}`)
+            } else {
+                // Lượt nhặt (hoặc lúc nhận) đã +1 thì trả lại — y như 'hoan' ở trên.
+                await capNhat(`UPDATE ${BANG} SET "trangThai"='cho', "soLanThu"=GREATEST("soLanThu" - 1, 0), "henLuc"=now() + ($2::int * interval '1 second'), "ghiChu"=$3 WHERE "id"=$1::bigint`,
+                    tin.id, qd.sauGiay, `proxy đang ngắt mạch — hoãn, không tính lượt: ${moTa}`.slice(0, 2000))
+            }
+            return
+        }
         if (tin.soLanThu >= SO_LAN_TOI_DA) {
             await capNhat(`UPDATE ${BANG} SET "trangThai"='hong', "xongLuc"=now(), "ghiChu"=$2 WHERE "id"=$1::bigint`,
                 tin.id, `hỏng đủ ${tin.soLanThu} lần — ${moTa}`.slice(0, 2000))
@@ -299,11 +331,14 @@ export async function quetHopThu(tuyChon: { epDon?: boolean; chiNenTang?: NenTan
                     SELECT "id" FROM ${BANG}
                      WHERE "trangThai" IN ('cho','loi') AND "henLuc" <= now()
                        AND ($1::text IS NULL OR "platform" = $1::text)
+                       AND NOT ($2::boolean AND "platform" IN (${NEN_TANG_QUA_PROXY.map(p => `'${p}'`).join(',')}))
                      ORDER BY "henLuc" ASC
                      LIMIT 1
                      FOR UPDATE SKIP LOCKED)
           RETURNING w."id"::text AS id, w."platform", w."than", w."coThanTho", w."chuKy", w."pushUrl", w."nhanLuc", w."soLanThu"`,
             tuyChon.chiNenTang ?? null,
+            // Xét lại MỖI vòng: hết 2' nghỉ thì proxyCircuitOpen() tự đóng và cho một tin đi thử.
+            proxyCircuitOpen(),
         )
         if (!rows.length) break
         const r = rows[0]

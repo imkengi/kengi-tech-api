@@ -38,13 +38,24 @@ export function proxyCircuitOpen(): boolean {
     return true
 }
 
-/** `chuaGui: true` — ngắt mạch chặn TRƯỚC khi gửi: lệnh ghi chắc chắn chưa tới sàn (khác lỗi mạng giữa chừng = không rõ, X-22). */
+/** Đầu câu lỗi ngắt mạch — bên xử lý hay bọc lỗi lại thành chuỗi mới (mất cờ), nên nhận diện cả theo chữ. */
+const DAU_NGAT_MACH = 'Proxy chuyển tiếp đang mất kết nối'
+
+/** `chuaGui: true` — ngắt mạch chặn TRƯỚC khi gửi: lệnh ghi chắc chắn chưa tới sàn (khác lỗi mạng giữa chừng = không rõ, X-22).
+ *  `ngatMachProxy: true` — để hộp thư webhook biết đây là "chưa gửi được", không phải "gửi rồi hỏng". */
 export function proxyCircuitError(): Error {
     const conLai = Math.max(0, COOLDOWN_MS - (Date.now() - openedAt))
     return Object.assign(new Error(
-        `Proxy chuyển tiếp đang mất kết nối (${consecutiveFailures} lần hỏng liên tiếp) — ` +
+        `${DAU_NGAT_MACH} (${consecutiveFailures} lần hỏng liên tiếp) — ` +
         `tạm dừng gọi ${Math.ceil(conLai / 1000)}s nữa. Kiểm tra firewall/IP whitelist ở hosting Tino.`
-    ), { chuaGui: true })
+    ), { chuaGui: true, ngatMachProxy: true })
+}
+
+/** Lỗi do ngắt mạch chặn (lệnh CHƯA gửi tới proxy) — kể cả khi bị bọc thành chuỗi khác ở tầng trên. */
+export function laLoiNgatMachProxy(e: any): boolean {
+    if (!e) return false
+    if (e.ngatMachProxy === true) return true
+    return String(e.message ?? e).includes(DAU_NGAT_MACH)
 }
 
 export function noteProxySuccess(): void {
@@ -64,4 +75,69 @@ export function noteProxyFailure(): void {
             `nghỉ ${COOLDOWN_MS / 1000}s. Gọi tiếp lúc này chỉ đốt thời gian và có thể kéo dài thời gian bị chặn.`
         )
     }
+}
+
+/* ─── HÀNG CHỜ GỌI PROXY (17/11/2026) ─────────────────────────────────────────
+ *
+ * 16/11/2026 13:43:45 Shopee dồn ~140 push trong 5 giây vào MỘT bản Cloud Run; mỗi push gọi ngược
+ * Shopee qua proxy NGAY ⇒ cả trăm kết nối cùng lúc từ một IP tới hosting dùng chung Tino. Một phút
+ * sau bản đó "fetch failed" liền 770 lần tới 19:42, trong khi bản khác vẫn gọi được (15:18, 15:50)
+ * ⇒ tường lửa Tino chặn RIÊNG IP đó ~6 giờ: 804 push bỏ cuộc, flash sale tự xếp hỏng, đồng bộ đơn
+ * đứng (AutoSync kéo bù lúc 20:16). Ngày 01/08 cũng từng bị chặn ở tầng TCP như vậy.
+ *
+ * Nay mỗi bản chỉ cho tối đa PROXY_DONG_THOI_TOI_DA (mặc định 6) lời gọi proxy cùng lúc; phần còn
+ * lại XẾP HÀNG theo thứ tự tới (chỗ trống trao thẳng cho người đợi lâu nhất). Một đợt 140 push vẫn
+ * được nhận đủ (hộp thư ghi trước khi gọi), chỉ phần gọi ngược Shopee giãn ra vài chục giây.
+ *  - Hẹn giờ của từng lời gọi tính từ lúc CÓ CHỖ — chờ hàng không ăn vào hạn 30s (bên gọi lo).
+ *  - Bên gọi đọc HẾT thân phản hồi trong `viec` — kết nối chỉ rảnh khi thân đã về.
+ *  - Có chỗ rồi mới xét lại ngắt mạch: mạch mở trong lúc chờ ⇒ hỏng NGAY (lệnh chưa gửi), khỏi để
+ *    cả hàng lần lượt đâm vào một proxy đang chết.
+ * Trạng thái trong tiến trình như ngắt mạch: mỗi bản tự giữ hàng của mình. */
+const MAC_DINH_DONG_THOI = 6
+const toiDaDongThoi = () => Math.max(1, parseInt(process.env.PROXY_DONG_THOI_TOI_DA || '', 10) || MAC_DINH_DONG_THOI)
+let dangGoi = 0
+const hangCho: Array<() => void> = []
+let daGoi = 0
+let daPhaiCho = 0
+let choLauNhatMs = 0
+let lanBaoHangCho = 0
+
+/** Chạy một lời gọi proxy khi tới lượt. `viec` phải gồm cả việc đọc hết thân phản hồi. */
+export async function goiQuaProxy<T>(viec: () => Promise<T>): Promise<T> {
+    if (dangGoi < toiDaDongThoi()) {
+        dangGoi++
+    } else {
+        const tu = Date.now()
+        daPhaiCho++
+        await new Promise<void>(r => {
+            hangCho.push(r)
+            if (hangCho.length >= 20 && tu - lanBaoHangCho > 60_000) {
+                lanBaoHangCho = tu
+                console.warn(`[Proxy] hàng chờ ${hangCho.length} lời gọi (đang gọi ${dangGoi}/${toiDaDongThoi()}) — đợt dồn, gọi Tino từ từ cho khỏi bị chặn`)
+            }
+        })
+        choLauNhatMs = Math.max(choLauNhatMs, Date.now() - tu)
+        // Được trao chỗ: người trả chỗ giữ nguyên dangGoi cho mình (xem finally).
+    }
+    try {
+        if (proxyCircuitOpen()) throw proxyCircuitError()
+        daGoi++
+        return await viec()
+    } finally {
+        const keTiep = dangGoi <= toiDaDongThoi() ? hangCho.shift() : undefined
+        if (keTiep) keTiep()
+        else dangGoi--
+    }
+}
+
+/** Đọc HẾT thân rồi dựng lại Response y hệt (byte nguyên vẹn, giữ status/headers) — để kết nối tới Tino
+ *  rảnh ngay trong lúc còn giữ chỗ, và hẹn giờ của lời gọi phủ cả phần thân. */
+export async function docHetPhanHoi(res: Response): Promise<Response> {
+    const than = await res.arrayBuffer()
+    const khongThan = res.status === 204 || res.status === 205 || res.status === 304
+    return new Response(khongThan ? null : than, { status: res.status, statusText: res.statusText, headers: res.headers })
+}
+
+export function thongKeHangChoProxy() {
+    return { toiDa: toiDaDongThoi(), dangGoi, dangCho: hangCho.length, daGoi, daPhaiCho, choLauNhatMs }
 }

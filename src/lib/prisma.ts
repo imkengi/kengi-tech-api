@@ -20,6 +20,7 @@ import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { chonClientDeThai } from './thaiClientNhanRoi'
 import { moTaLoi } from './gomLoi'
+import { ghiMatKetNoiCsdl, ghiCsdlTotLai } from './trangThaiCsdl'
 
 const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
@@ -59,6 +60,14 @@ function laLoiMatKetNoi(e: any): boolean {
     return /Can't reach database server|Server has closed the connection|Connection reset by peer|Timed out trying to acquire a postgres advisory lock/i.test(m)
 }
 
+/** Hết chờ pool (P2024) — không thử lại (pool đang nghẽn, thử nữa chỉ dồn thêm), nhưng là dấu hiệu
+ *  đường nối đang kẹt: báo cho lib/trangThaiCsdl như mất kết nối. */
+function laLoiHetChoPool(e: any): boolean {
+    if (!e) return false
+    if (e.code === 'P2024') return true
+    return /Timed out fetching a new connection from the connection pool/i.test(String(e.message || ''))
+}
+
 function bocThuLai<T extends { $extends: (x: any) => any }>(goc: T): T {
     return goc.$extends({
         name: 'thuLaiKhiMatKetNoi',
@@ -67,9 +76,14 @@ function bocThuLai<T extends { $extends: (x: any) => any }>(goc: T): T {
                 let cuoi: any
                 for (let lan = 0; lan <= CHO_THU_LAI_MS.length; lan++) {
                     try {
-                        return await query(args)
+                        const kq = await query(args)
+                        ghiCsdlTotLai()
+                        return kq
                     } catch (e: any) {
-                        if (!laLoiMatKetNoi(e)) throw e
+                        if (!laLoiMatKetNoi(e)) {
+                            if (laLoiHetChoPool(e)) ghiMatKetNoiCsdl()
+                            throw e
+                        }
                         cuoi = e
                         if (lan === CHO_THU_LAI_MS.length) break
                         soLanThuLai++
@@ -77,6 +91,8 @@ function bocThuLai<T extends { $extends: (x: any) => any }>(goc: T): T {
                     }
                 }
                 soLanThuLaiThatBai++
+                // Thử lại hết vẫn không tới được ⇒ lịch nền ngắn nghỉ một lúc (lib/trangThaiCsdl, 17/11/2026).
+                ghiMatKetNoiCsdl()
                 throw cuoi
             },
         },
@@ -605,6 +621,7 @@ async function mapWithConcurrency<T, R>(
 export {
     registryPrisma,
     laLoiMatKetNoi,
+    bocThuLai,          // bộ kiểm chứng scripts/check-hang-cho-proxy.ts gọi thẳng với client giả
     thongKeClientStore,
     getStorePrisma,
     branchIdToSchema,
