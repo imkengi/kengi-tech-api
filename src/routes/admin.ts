@@ -8938,7 +8938,10 @@ router.get('/do-thiet-bi', async (req: Request, res: Response) => {
         let rows: any[] = []
         let loiThietBi: string | null = null
         try {
-            rows = await sp.$queryRawUnsafe(`SELECT "updatedAt" FROM "DeviceToken" ORDER BY "updatedAt" DESC LIMIT 100`)
+            // bảng tạo lười: dò trước (to_regclass không lỗi) — đọc thẳng cửa hàng chưa có bảng là Prisma in một dòng 42P01 (17/11/2026)
+            const { coBangDeviceToken } = await import('./notifications')
+            if ((await coBangDeviceToken(sp)) === false) loiThietBi = 'chưa có bảng DeviceToken'
+            else rows = await sp.$queryRawUnsafe(`SELECT "updatedAt" FROM "DeviceToken" ORDER BY "updatedAt" DESC LIMIT 100`)
         } catch (e: any) { loiThietBi = String(e?.message || e).slice(0, 120) }
 
         let daBao: number | null = null

@@ -45,6 +45,57 @@ export async function ensureDeviceTokenTable(prisma: any): Promise<void> {
         )`).catch(() => { })
 }
 
+/* BẢNG TẠO LƯỜI ⇒ DÒ TRƯỚC KHI CHẠM (17/11/2026). DeviceToken chỉ có ở cửa hàng đã từng đăng ký máy / bắn push — prod 17/11
+ * chỉ 3/12 cửa hàng có. Vòng gỡ token ở POST /device-token trước đây chạy DELETE vào MỌI cửa hàng khác rồi nuốt lỗi, nhưng client
+ * Prisma (log 'error') tự in "Raw query failed … 42P01 relation "DeviceToken" does not exist" TRƯỚC khi ném: đo log prod đúng 9
+ * dòng mỗi lần một máy đăng ký (33 lần / 14 giờ = 297 dòng), kèm dựng client + mở kết nối cho cửa hàng không hề có bảng. */
+
+/** Client cửa hàng này đã có bảng DeviceToken chưa — to_regclass không bao giờ lỗi, phân giải cùng search_path với câu đọc.
+ *  `null` = kết quả lạ ⇒ người gọi cứ đọc như cũ (đọc thừa chỉ tốn một dòng log, bỏ nhầm thì mất số đo). */
+export async function coBangDeviceToken(prisma: any): Promise<boolean | null> {
+    const [r] = await prisma.$queryRawUnsafe(`SELECT to_regclass('"DeviceToken"') IS NOT NULL AS co`)
+    return r?.co === true ? true : r?.co === false ? false : null
+}
+
+/** Các schema ĐANG CÓ bảng DeviceToken — MỘT câu đọc danh mục hệ thống qua client registry (cùng CSDL với mọi schema cửa hàng),
+ *  không bao giờ lỗi vì thiếu bảng. `null` = không biết (câu dò hỏng / dòng lạ). */
+export async function schemaCoBangDeviceToken(registry: any): Promise<Set<string> | null> {
+    try {
+        const rows: any = await registry.$queryRawUnsafe(
+            `SELECT n.nspname::text AS "schema" FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+             WHERE c.relname = 'DeviceToken' AND c.relkind IN ('r', 'p')`)
+        if (!Array.isArray(rows) || rows.some((r: any) => typeof r?.schema !== 'string' || !r.schema)) return null
+        return new Set(rows.map((r: any) => r.schema as string))
+    } catch { return null }
+}
+
+/** Gỡ `token` khỏi mọi cửa hàng KHÁC `schemaHienTai` (MỘT token = MỘT cửa hàng). Chỉ chạm cửa hàng ĐANG CÓ bảng DeviceToken —
+ *  chưa có bảng thì token không thể nằm ở đó: không dựng client, không câu nào đụng bảng thiếu. Danh mục chỉ được tin khi nó
+ *  thấy bảng ở CHÍNH cửa hàng vừa ghi token; dò hỏng / lạ ⇒ quét như cũ (mọi cửa hàng khác, nuốt lỗi) — sót token là máy nhận
+ *  push của cửa hàng khác, còn quét thừa chỉ tốn vài dòng log. Tuần tự từng schema (pool nhỏ). Trả các schema đã chạy DELETE. */
+export async function goTokenKhoiCuaHangKhac(
+    token: string,
+    schemaHienTai: string | undefined,
+    dep: { registry: any; layClient: (schema: string) => any } = { registry: registryPrisma, layClient: getStorePrisma },
+): Promise<string[]> {
+    // không rõ cửa hàng hiện tại ⇒ không quét: quét mù là gỡ luôn token VỪA ghi (máy mất push); bỏ quét chỉ để sót token ở cửa
+    // hàng cũ — dọn được bằng POST /admin/dedupe-device-tokens
+    if (!token || !schemaHienTai) return []
+    const stores: { schema: string | null }[] = await dep.registry.store.findMany({ select: { schema: true } })
+    const coBang = await schemaCoBangDeviceToken(dep.registry)
+    const loc = coBang && coBang.has(schemaHienTai) ? coBang : null
+    const daCham: string[] = []
+    for (const s of stores) {
+        if (!s.schema || s.schema === schemaHienTai) continue
+        if (loc && !loc.has(s.schema)) continue
+        daCham.push(s.schema)
+        try {
+            await dep.layClient(s.schema).$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, token)
+        } catch { /* lỗi lẻ một cửa hàng không chặn cửa hàng khác */ }
+    }
+    return daCham
+}
+
 /** Thông tin kèm theo push (06/10/2026) — app Android dùng để:
  *  - `id`: id bản ghi Notification ⇒ worker poll 15' KHÔNG vẽ lại lần hai (trước đây
  *    push không mang id nên mỗi sự kiện hiện HAI lần trên khay);
@@ -325,19 +376,11 @@ router.post('/device-token', authMiddleware, async (req: AuthRequest, res: Respo
         // schema, không bắt app chờ (push là phụ, đăng nhập là chính).
         res.json({ success: true })
 
-        const currentSchema = req.user?.storeSchema
-        setImmediate(async () => {
-            try {
-                const stores = await registryPrisma.store.findMany({ select: { schema: true } })
-                for (const s of stores) {
-                    if (!s.schema || s.schema === currentSchema) continue
-                    try {
-                        const other = getStorePrisma(s.schema) as any
-                        // Bảng có thể chưa tồn tại ở store chưa từng đăng ký token → nuốt lỗi
-                        await other.$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, token)
-                    } catch { /* schema thiếu bảng / lỗi lẻ — bỏ qua */ }
-                }
-            } catch { /* quét dọn là best-effort */ }
+        // schema của CHÍNH client vừa ghi token (getStorePrisma gắn __schema). Chỉ đọc storeSchema (bí danh cũ) là hụt với JWT
+        // chỉ mang branchSchema (vd JWT lúc đăng ký cửa hàng) ⇒ vòng quét gỡ luôn token vừa ghi ở cửa hàng hiện tại.
+        const currentSchema = String(prisma.__schema || req.user?.branchSchema || req.user?.storeSchema || '') || undefined
+        setImmediate(() => {
+            goTokenKhoiCuaHangKhac(token, currentSchema).catch(() => { /* quét dọn là best-effort */ })
         })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
