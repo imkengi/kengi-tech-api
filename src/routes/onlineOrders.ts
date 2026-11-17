@@ -20,6 +20,7 @@ import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
 import { anBiMatKenh, anBiMatKenhCuaDon } from '../lib/kenhAnToan'
 import { ketCucVuTra, demTheoKetCuc, trangTheoKetCuc, laKetCucVuTra } from '../lib/ketCucVuTra'
+import { laLoiTikTokGioiHan } from '../lib/congTaiChinhTikTok'
 
 const router = Router()
 
@@ -6428,6 +6429,12 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
         let updated = 0, unsettled = 0, failed = 0
         const errors: string[] = []
         const idVuaDoiSoat: string[] = []
+        /* TikTok (17/11/2026): API tài chính đi qua cổng giãn nhịp của TikTokService (mỗi lần một lời gọi, ~1,4 lời gọi/giây,
+         * lib/congTaiChinhTikTok) — 6 luồng ở đây chỉ xếp hàng. Bị TikTok bóp hạn mức ⇒ dừng, đơn còn lại đếm RIÊNG (trước
+         * đây bị đếm là "chưa quyết toán"); quá HAN_TIKTOK_MS thì thôi hỏi để trả lời kịp, bấm lại làm tiếp. */
+        const batDauLayPhi = Date.now()
+        const HAN_TIKTOK_MS = 100_000
+        let biChan = 0, chuaKip = 0
 
         // Chạy SONG SONG có giới hạn thay vì tuần tự + ngủ 250ms/đơn: bản cũ quét
         // 200 đơn mất ~220s (sát trần 300s Cloud Run → hay treo/timeout ở client).
@@ -6435,6 +6442,10 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
         await mapWithConcurrency(orders, async (order) => {
             const eid = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
             if (!eid) { unsettled++; return }
+            if (channel.platform === 'tiktok') {
+                if (biChan) { biChan++; return }
+                if (Date.now() - batDauLayPhi > HAN_TIKTOK_MS) { chuaKip++; return }
+            }
             try {
                 let platformFee: number | null = null
                 let netRevenue: number | null = null
@@ -6477,11 +6488,21 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 updated++
                 idVuaDoiSoat.push(order.id)
             } catch (e: any) {
+                if (laLoiTikTokGioiHan(e)) { biChan++; return }   // không phải lỗi đơn, không phải "chưa quyết toán"
                 failed++
                 errors.push(`${order.orderNumber}: ${e.message}`)
                 console.error(`[sync-fees] ${channel.name} ${order.orderNumber}:`, e.message)
             }
         }, 6)
+        if (chuaKip) {
+            failed += chuaKip
+            errors.unshift(`${chuaKip} đơn chưa kịp hỏi lượt này — TikTok chỉ cho hỏi phí chậm (~1 đơn/giây). Bấm lại để làm tiếp.`)
+        }
+        if (biChan) {
+            failed += biChan
+            errors.unshift(`TikTok bóp hạn mức API tài chính (36009002): ${biChan} đơn chưa hỏi được — bấm lại sau khoảng 1 phút.`)
+            console.warn(`[sync-fees] ${channel.name}: TikTok bóp hạn mức — ${biChan} đơn để lần sau`)
+        }
 
         /* Cảnh báo lợi nhuận thấp cho đơn vừa có phí thật — cùng luật với cron. */
         let canhBao: any = null
@@ -6502,7 +6523,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
             },
         }).catch(() => { })
 
-        res.json({ success: true, data: { scanned: orders.length, updated, unsettled, failed, errors, canhBaoLoiNhuanThap: canhBao } })
+        res.json({ success: true, data: { scanned: orders.length, updated, unsettled, failed, errors, biChan, chuaKip, canhBaoLoiNhuanThap: canhBao } })
     } catch (err: any) {
         console.error('Sync fees error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })

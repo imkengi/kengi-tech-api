@@ -1,4 +1,5 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse, DanhMucSan } from './base'
+import { congTaiChinhTikTok, laDuongTaiChinhTikTok, laPhanHoiGioiHan, LoiTikTokGioiHan } from '../../lib/congTaiChinhTikTok'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TIKTOK SHOP API v202309
@@ -103,6 +104,21 @@ export function hoaHongAffiliateTikTok(txs: any[] | null | undefined): number | 
 
 export class TikTokService extends PlatformService {
     get platformName() { return 'tiktok' }
+
+    /* ─── Cổng API tài chính (17/11/2026, lib/congTaiChinhTikTok) ─────────────────
+     * TikTok bóp hạn mức CHUNG cả nhóm app cho /finance/* (36009002): 963 lần bị từ chối / 7 ngày khi FeeSync + nút
+     * "Lấy phí" bắn song song. Mọi lời gọi /finance/* trong bản máy đi MỘT hàng: mỗi lần một lời gọi, cách nhau
+     * ≥ 700 ms; bị từ chối ⇒ đóng 60 s và ném LoiTikTokGioiHan (bên gọi dừng lượt, đếm riêng, KHÔNG coi là "chưa có số").
+     * Đường khác (đơn, sản phẩm, chat…) đi thẳng như cũ. */
+    protected async httpGet(url: string, headers: Record<string, string> = {}): Promise<any> {
+        if (!laDuongTaiChinhTikTok(url)) return super.httpGet(url, headers)
+        return congTaiChinhTikTok.qua(() => super.httpGet(url, headers))
+    }
+
+    protected async httpPost(url: string, body: any, headers: Record<string, string> = {}): Promise<any> {
+        if (!laDuongTaiChinhTikTok(url)) return super.httpPost(url, body, headers)
+        return congTaiChinhTikTok.qua(() => super.httpPost(url, body, headers))
+    }
 
     // ─── Auth ────────────────────────────────────────────────────────────────────
 
@@ -949,11 +965,14 @@ export class TikTokService extends PlatformService {
      * Amounts come back as strings; fee = revenue - settlement when no explicit
      * fee field is present. Returns null when the order isn't settled yet.
      * affiliateFee (10/11/2026, TT-02): hoa hồng affiliate ĐÃ NẰM TRONG feeAmount — xem hoaHongAffiliateTikTok; null = chưa đọc được.
+     * NÉM LoiTikTokGioiHan khi TikTok bóp hạn mức (36009002, 17/11/2026) — trước đây trả null như "chưa đối soát" nên lượt
+     * bị chặn hiện thành "sàn chưa có số". Cổng tài chính (httpGet ở trên) đã ném sẵn; dòng kiểm dưới cho chắc khi httpGet bị thay.
      */
     async getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number; affiliateFee: number | null } | null> {
         const path = `/finance/202309/orders/${orderId}/statement_transactions`
         const { url, headers } = this.buildUrl(path, {})
         const data = await this.httpGet(url, headers)
+        if (laPhanHoiGioiHan(data)) throw new LoiTikTokGioiHan(Date.now(), false, String(data?.message || '').slice(0, 120))
         if (data.code !== 0) {
             // Đơn chưa được đối soát/quyết toán — không phải lỗi cứng
             console.warn(`[TikTok Settlement] ${orderId}: [${data.code}] ${data.message}`)

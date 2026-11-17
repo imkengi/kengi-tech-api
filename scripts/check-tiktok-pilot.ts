@@ -46,6 +46,7 @@ import { ToolError } from '../src/lib/mcpTypes'
 import { lyDoChanPilot, datDemTienIch, giuTienIchQuanTri, TIEN_ICH_TIKTOK_PILOT } from '../src/lib/tienIchCuaHang'
 import { buHoaHongAffiliate } from '../src/cron/autoSync'
 import { mapWithConcurrency } from '../src/lib/prisma'
+import { laLoiTikTokGioiHan } from '../src/lib/congTaiChinhTikTok'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { ok ? dat++ : loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -1365,12 +1366,16 @@ async function main() {
         const s1 = await svc.getOrderSettlement('O1')
         phanHoi = { code: 0, data: { statement_transactions: [gd({ fee_amount: '-260000', settlement_amount: '340000', affiliate_commission_amount: '-54000', pit_amount: '-6000', affiliate_commission_before_pit: '-60000' })] } }
         const s2 = await svc.getOrderSettlement('O2')
+        /* 17/11/2026: bị bóp hạn mức (36009002) trước đây trả null — y như "chưa đối soát" ⇒ FeeSync đếm nhầm "sàn chưa có số",
+         * lượt bù hoa hồng nghỉ đơn 24 giờ. Nay NÉM LoiTikTokGioiHan; mã lỗi khác (đơn chưa quyết toán…) vẫn null. */
         phanHoi = { code: 36009002, message: 'Too many requests' }
-        const s3 = await svc.getOrderSettlement('O3')
-        dung('A7. getOrderSettlement: đơn thường affiliateFee 0, phí 200.000 / thực nhận 400.000; đơn affiliate affiliateFee 60.000 (nằm trong phí 260.000); TikTok từ chối ⇒ null (không ghi gì)',
+        const s3 = await nem(() => svc.getOrderSettlement('O3'))
+        phanHoi = { code: 36009004, message: 'order not settled' }
+        const s4 = await svc.getOrderSettlement('O4')
+        dung('A7. getOrderSettlement: đơn thường affiliateFee 0, phí 200.000 / thực nhận 400.000; đơn affiliate affiliateFee 60.000 (nằm trong phí 260.000); TikTok bóp hạn mức ⇒ NÉM LoiTikTokGioiHan (không còn null); mã lỗi khác ⇒ null (không ghi gì)',
             s1?.affiliateFee === 0 && s1?.feeAmount === 200000 && s1?.settlementAmount === 400000
-            && s2?.affiliateFee === 60000 && s2?.feeAmount === 260000 && s3 === null,
-            JSON.stringify({ s1, s2, s3 }))
+            && s2?.affiliateFee === 60000 && s2?.feeAmount === 260000 && laLoiTikTokGioiHan(s3) && s4 === null,
+            JSON.stringify({ s1, s2, s3: s3?.message, s4 }))
 
         // Mô hình phí dùng chung: đủ đơn TikTok biết hoa hồng ⇒ tách affiliate khỏi phí; một đơn affiliate 10% ⇒ giá sàn tính 10%
         const dongThuong = Array.from({ length: 40 }, (_, i) => ({ giaBan: 200000 + i * 1000, phi: Math.round((200000 + i * 1000) * 0.2), aff: 0 }))

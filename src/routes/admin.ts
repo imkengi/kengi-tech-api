@@ -26,6 +26,7 @@ import { SQL_TAO_BANG_LAZADA_PILOT } from '../lib/lazadaPilot'
 import { giuTienIchQuanTri, xoaDemTienIch } from '../lib/tienIchCuaHang'
 import { CHON_NHAN_VIEN_AN_TOAN } from '../lib/nhanVienAnToan'
 import { docThongTinPhapLy, luuThongTinPhapLy, chuanHoaThongTin } from '../lib/thongTinPhapLy'
+import { laLoiTikTokGioiHan } from '../lib/congTaiChinhTikTok'
 
 const router = Router()
 
@@ -9030,8 +9031,12 @@ router.post('/lay-phi-tiktok', async (req: Request, res: Response) => {
                         }
                     }
                 } catch (e: any) {
-                    k.loiKhac++
-                    if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: ${String(e?.message || e).slice(0, 120)}`)
+                    // cổng tài chính TikTok (lib/congTaiChinhTikTok) ném khi bị bóp hạn mức / đang nghỉ — vẫn là "bị chặn tốc độ"
+                    if (laLoiTikTokGioiHan(e)) { k.biChanTocDo++ }
+                    else {
+                        k.loiKhac++
+                        if (k.loiMau.length < 3) k.loiMau.push(`${o.orderNumber}: ${String(e?.message || e).slice(0, 120)}`)
+                    }
                 }
                 await new Promise(r => setTimeout(r, 350))
             }, 2)

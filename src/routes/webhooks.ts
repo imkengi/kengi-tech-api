@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
-import registryPrisma, { getStorePrisma, laLoiMatKetNoi } from '../lib/prisma'
+import registryPrisma, { getStorePrisma } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction, lienKetHangDon } from '../services/orderSync'
@@ -20,15 +20,11 @@ import { giuKhoa, traKhoa } from '../lib/leaderLock'
 import { xuLyPushShopeeVideo } from '../lib/pushShopeeVideo'
 import { kichSomTheoBinhLuan } from '../lib/facebookPilot'
 import { docTienIch, TIEN_ICH_FACEBOOK_PILOT } from '../lib/tienIchCuaHang'
+import { timKenhVaBanGhi } from '../lib/timKenhWebhook'
 
 const router = Router()
 
-// Cache shop_id → store schema for 1h. Avoids scanning every active store schema
-// on every webhook delivery; invalidates naturally when channel credentials rotate.
-const SHOP_SCHEMA_TTL = 3600
-const shopSchemaCacheKey = (shopId: string) => `webhook:shopee:shop:${shopId}:schema`
-const tiktokSchemaCacheKey = (shopId: string) => `webhook:tiktok:shop:${shopId}:schema`
-const fbPageSchemaCacheKey = (pageId: string) => `webhook:facebook:page:${pageId}:schema`
+// shop_id / page_id → cửa hàng: lib/timKenhWebhook (gộp lượt dò, một truy vấn registry, đệm riêng 6 giờ — 17/11/2026).
 
 // Shopee push signature: HMAC-SHA256(partner_key, push_url + "|" + raw_body) hex.
 // Sent in the Authorization header. Returns true when signature matches.
@@ -178,66 +174,19 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
         return boPush('push không có ordersn')
     }
 
-    // ── Find channel by shop_id (cached schema lookup → fall back to scan) ──
-    let channel: any = null
-    let storePrisma: any = null
-    let resolvedSchema: string | null = null
-
-    const cachedSchema = shopId ? await cacheGet<string>(shopSchemaCacheKey(shopId)) : null
-    if (cachedSchema) {
-        try {
-            const prisma = getStorePrisma(cachedSchema)
-            const found = await prisma.onlineChannel.findFirst({
-                where: { platform: 'shopee', shopId },
-            })
-            if (found) {
-                channel = found
-                storePrisma = prisma
-                resolvedSchema = cachedSchema
-            }
-        } catch {
-            // Cached schema went stale (store removed, table missing) — fall through to scan.
-        }
-    }
-
-    /* Quét dở vì lỗi TẠM THỜI (pool đầy, mất kết nối) thì KHÔNG được kết luận "không
-     * có kênh" rồi bỏ push — không đọc được ≠ không có. Chỉ bảng thiếu (P2021/P2022,
-     * cửa hàng chưa có OnlineChannel) mới là "không có" thật. */
-    let loiQuet: any = null
-    if (!channel) {
-        const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-        for (const store of allStores) {
-            try {
-                const prisma = getStorePrisma(store.schema)
-                const found = await prisma.onlineChannel.findFirst({
-                    where: { platform: 'shopee', shopId },
-                })
-                if (found) {
-                    channel = found
-                    storePrisma = prisma
-                    resolvedSchema = store.schema
-                    break
-                }
-            } catch (e: any) {
-                // Store might not have OnlineChannel table
-                if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
-                // Mất kết nối CSDL thì cửa hàng nào cũng hỏng y vậy: dừng dò (khỏi đẻ thêm chục lỗi P1001),
-                // ném loiQuet bên dưới để hộp thư thử lại push này (17/11/2026).
-                if (laLoiMatKetNoi(e)) break
-                continue
-            }
-        }
-    }
-
-    if (!channel || !storePrisma) {
-        if (loiQuet) throw loiQuet
+    /* ── Dò kênh theo shop_id (17/11/2026, lib/timKenhWebhook): GỘP lượt dò — push cùng shop chờ chung một lượt —,
+     * MỘT truy vấn qua client registry thay cho mở client từng cửa hàng, đệm riêng 6 giờ. Trước đây bản máy vừa bật
+     * giữa đợt dồn để ~100 push cùng tự dò 12 cửa hàng ⇒ 689 "Too many database connections" trong 25 giây (16/11 07:03).
+     * Đọc hỏng (pool đầy, mất kết nối) thì NÉM để hộp thư thử lại — không đọc được ≠ không có kênh. */
+    const tim = await timKenhVaBanGhi('shopee', shopId, schema =>
+        getStorePrisma(schema).onlineChannel.findFirst({ where: { platform: 'shopee', shopId } }))
+    if (!tim) {
         console.log(`[Shopee Webhook] No channel found for shop_id=${shopId}`)
         return boPush(`không có kênh Shopee nào mang shop_id=${shopId}`)
     }
-
-    if (resolvedSchema && resolvedSchema !== cachedSchema) {
-        await cacheSet(shopSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
-    }
+    const channel: any = tim.banGhi
+    const storePrisma: any = getStorePrisma(tim.schema)
+    const resolvedSchema: string | null = tim.schema
 
     /* ── KIỂM CHỮ KÝ: THỬ NHIỀU KHOÁ (03/09/2026) ────────────────────────
      *
@@ -645,13 +594,6 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
         return boPush('push không có order_id')
     }
 
-    // ── Find channel by shopId (cached schema lookup → fall back to scan) ──
-    // TikTok's webhook `shop_id` matches the shop_cipher or shopId stored in our
-    // onlineChannel record.
-    let channel: any = null
-    let storePrisma: any = null
-    let resolvedSchema: string | null = null
-
     // TikTok webhooks carry the NUMERIC shop id, while channel.shopId stores the
     // shop_cipher (order APIs require the cipher) — so match on either shopId or
     // platformShopId (populated at connect + self-healed by sync/cron).
@@ -660,52 +602,16 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
         OR: [{ shopId }, { platformShopId: shopId }],
     }
 
-    const cachedSchema = shopId ? await cacheGet<string>(tiktokSchemaCacheKey(shopId)) : null
-    if (cachedSchema) {
-        try {
-            const prisma = getStorePrisma(cachedSchema)
-            const found = await prisma.onlineChannel.findFirst({ where: channelWhere })
-            if (found) {
-                channel = found
-                storePrisma = prisma
-                resolvedSchema = cachedSchema
-            }
-        } catch {
-            // Cached schema went stale — fall through to scan.
-        }
-    }
-
-    // Quét dở vì lỗi tạm thời ≠ không có kênh (xem nhánh Shopee).
-    let loiQuet: any = null
-    if (!channel) {
-        const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-        for (const store of allStores) {
-            try {
-                const prisma = getStorePrisma(store.schema)
-                const found = await prisma.onlineChannel.findFirst({ where: channelWhere })
-                if (found) {
-                    channel = found
-                    storePrisma = prisma
-                    resolvedSchema = store.schema
-                    break
-                }
-            } catch (e: any) {
-                if (e?.code !== 'P2021' && e?.code !== 'P2022') loiQuet = e
-                if (laLoiMatKetNoi(e)) break   // như nhánh Shopee
-                continue
-            }
-        }
-    }
-
-    if (!channel || !storePrisma) {
-        if (loiQuet) throw loiQuet
+    // ── Dò kênh theo shop_id: gộp lượt dò + một truy vấn registry, đọc hỏng thì NÉM (xem nhánh Shopee, lib/timKenhWebhook) ──
+    const tim = await timKenhVaBanGhi('tiktok', shopId, schema =>
+        getStorePrisma(schema).onlineChannel.findFirst({ where: channelWhere }))
+    if (!tim) {
         console.log(`[TikTok Webhook] No channel found for shop_id=${shopId}`)
         return boPush(`không có kênh TikTok nào mang shop_id=${shopId}`)
     }
-
-    if (resolvedSchema && resolvedSchema !== cachedSchema) {
-        await cacheSet(tiktokSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
-    }
+    const channel: any = tim.banGhi
+    const storePrisma: any = getStorePrisma(tim.schema)
+    const resolvedSchema: string | null = tim.schema
 
     // ── Verify HMAC signature ──
     const appSecret = channel.apiSecret || process.env.TIKTOK_APP_SECRET || ''
@@ -937,7 +843,7 @@ dangKyBoXuLyPush('tiktok', xuLyPushTikTok)
 const FB_PAGE_MISS_TTL_MS = 10 * 60 * 1000
 const fbPageMissCache = new Map<string, number>()
 
-// Tìm store schema + FbPage theo pageId (cache 1h → fallback quét).
+// Tìm store schema + FbPage theo pageId: gộp lượt dò + MỘT truy vấn registry, đệm 6 giờ (lib/timKenhWebhook, 17/11/2026).
 async function resolveFbPage(pageId: string): Promise<{ storePrisma: any; page: any; schema: string } | null> {
     // MISS cache: pageId đã biết là không có → khỏi quét lại trong TTL
     const missedAt = fbPageMissCache.get(pageId)
@@ -946,25 +852,11 @@ async function resolveFbPage(pageId: string): Promise<{ storePrisma: any; page: 
         fbPageMissCache.delete(pageId) // hết TTL → cho quét lại
     }
 
-    const cached = await cacheGet<string>(fbPageSchemaCacheKey(pageId))
-    if (cached) {
-        try {
-            const prisma = getStorePrisma(cached)
-            const page = await prisma.fbPage.findUnique({ where: { pageId } })
-            if (page) return { storePrisma: prisma, page, schema: cached }
-        } catch { /* schema stale → quét lại */ }
-    }
-    const stores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-    for (const store of stores) {
-        try {
-            const prisma = getStorePrisma(store.schema)
-            const page = await prisma.fbPage.findUnique({ where: { pageId } })
-            if (page) {
-                await cacheSet(fbPageSchemaCacheKey(pageId), store.schema, SHOP_SCHEMA_TTL)
-                return { storePrisma: prisma, page, schema: store.schema }
-            }
-        } catch { continue }
-    }
+    /* Đọc hỏng (pool đầy, mất kết nối) thì NÉM — handler ghi lỗi, KHÔNG nhớ "không có" 10 phút. Bản cũ nuốt mọi lỗi
+     * từng cửa hàng rồi ghi MISS ⇒ một lần CSDL chập chờn là bỏ bình luận của page đó suốt 10 phút. */
+    const tim = await timKenhVaBanGhi('facebook', pageId, schema =>
+        getStorePrisma(schema).fbPage.findUnique({ where: { pageId } }))
+    if (tim) return { storePrisma: getStorePrisma(tim.schema), page: tim.banGhi, schema: tim.schema }
     // Không tìm thấy → ghi nhớ MISS. Dọn entry hết hạn khi Map phình (bị spam
     // pageId ngẫu nhiên) để không rò bộ nhớ.
     if (fbPageMissCache.size > 1000) {

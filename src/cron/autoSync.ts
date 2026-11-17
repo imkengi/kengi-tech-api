@@ -5,6 +5,7 @@ import { processNewOrders } from '../services/orderSync'
 import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
 import { choXong } from '../lib/choXong'
+import { congTaiChinhTikTok, laLoiTikTokGioiHan } from '../lib/congTaiChinhTikTok'
 
 /**
  * Diễn giải lỗi cho log. `err.message` rỗng là chuyện thường xuyên xảy ra: lỗi
@@ -571,8 +572,10 @@ const buAffBoQua = new Map<string, number>()
  * Hỏi lại escrow và CHỈ ghi affiliateFee — phí / thực nhận đã đối soát giữ nguyên. Hết đơn NULL thì thôi
  * gọi sàn. `han` = mốc giờ (ms) phải dừng. Trả số đơn đã ghi.
  * TikTok (10/11/2026, TT-02): hỏi lại statement (getOrderSettlement().affiliateFee), cửa sổ 90 ngày = cửa sổ mẫu phí
- * (statement TikTok còn số cho đơn ≥ 70 ngày, đo 21/10), 2 luồng + nghỉ 350ms như vòng đối soát chính — API tài chính
- * TikTok bóp hạn mức chung cả nhóm app (36009002).
+ * (statement TikTok còn số cho đơn ≥ 70 ngày, đo 21/10), 2 luồng — API tài chính TikTok bóp hạn mức chung cả nhóm app
+ * (36009002) nên mọi lời gọi đi qua cổng giãn nhịp của TikTokService (lib/congTaiChinhTikTok, 17/11/2026).
+ * Bị TikTok bóp hạn mức (LoiTikTokGioiHan) ⇒ DỪNG kênh lượt này; đơn đó và đơn chưa hỏi KHÔNG bị nghỉ 24 giờ — lượt sau
+ * hỏi lại (trước đây bị coi như "không ra hoa hồng" rồi nghỉ 24 giờ).
  */
 export async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithConcurrency: any, ShopeeService: any, TikTokService: any): Promise<number> {
     const tiktok = ch.platform === 'tiktok'
@@ -598,10 +601,12 @@ export async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithC
         shopId: ch.shopId || undefined,
     }
     const svc: any = tiktok ? new TikTokService(creds) : new ShopeeService(creds)
-    let ok = 0, khongRa = 0, hetGio = 0, dungKenh = 0, hongLienTiep = 0
+    let ok = 0, khongRa = 0, hetGio = 0, dungKenh = 0, hongLienTiep = 0, biChan = 0
     await mapWithConcurrency(orders, async (o: any) => {
         if (Date.now() > han) { hetGio++; return }
-        /* 5 đơn liền không đọc được mà chưa đơn nào được (token chết / sàn bóp hạn mức 36009002) ⇒ thôi kênh này lượt này:
+        // TikTok vừa bóp hạn mức ⇒ thôi kênh lượt này, đơn còn lại để lượt sau (không nghỉ 24 giờ)
+        if (biChan) { biChan++; return }
+        /* 5 đơn liền không đọc được mà chưa đơn nào được (token chết / sàn lỗi) ⇒ thôi kênh này lượt này:
          * hỏi tiếp chỉ đốt hạn mức chung với vòng đối soát chính và rải log. Đơn còn lại KHÔNG bị nghỉ 24 giờ — lượt sau hỏi lại. */
         if (ok === 0 && hongLienTiep >= 5) { dungKenh++; return }
         const sn = String(o.externalOrderId || '').replace(/^(SPE-|TIK-)/i, '')
@@ -614,16 +619,15 @@ export async function buHoaHongAffiliate(sp: any, ch: any, han: number, mapWithC
                 await sp.onlineOrder.update({ where: { id: o.id }, data: { affiliateFee: aff } })
                 ok++; hongLienTiep = 0
             }
-        } catch {
+        } catch (e: any) {
+            if (laLoiTikTokGioiHan(e)) { biChan++; return }   // bị chặn ≠ "không ra hoa hồng": KHÔNG nghỉ 24 giờ
             khongRa++; hongLienTiep++
             buAffBoQua.set(o.id, Date.now())
-        } finally {
-            // nghỉ cả khi hỏng — hỏng vì hạn mức mà bắn tiếp liền tay thì càng bị bóp
-            if (tiktok) await new Promise(r => setTimeout(r, 350))
         }
     }, tiktok ? 2 : 6)
     console.log(`[FeeSync] ${ch.name}: bù hoa hồng affiliate ${ok} đơn (quét ${orders.length}, chưa đọc được ${khongRa}` +
         `${hetGio ? `, hết giờ để lượt sau ${hetGio}` : ''}` +
+        `${biChan ? `, TikTok bóp hạn mức (36009002) — dừng kênh, để lượt sau ${biChan}` : ''}` +
         `${dungKenh ? `, dừng kênh vì ${khongRa} đơn đầu không đọc được — để lượt sau ${dungKenh}` : ''})`)
     return ok
 }
@@ -646,6 +650,12 @@ async function runFeeSync() {
         })
         let tongCapNhat = 0
         const kenhBuAff: { schema: string; ch: any }[] = []
+        /* TikTok bóp hạn mức API tài chính (36009002) trong lượt này — do chính lượt này hay lời gọi khác cùng bản máy
+         * (nút "Lấy phí") — thì THÔI TikTok tới hết lượt: hạn mức tính chung cả nhóm app, hỏi tiếp chỉ bị chặn tiếp.
+         * Đơn chưa hỏi để lượt sau, đếm riêng — KHÔNG lẫn vào "sàn chưa có số" (17/11/2026, lib/congTaiChinhTikTok). */
+        const biChanTruoc = congTaiChinhTikTok.soLanBiChan()
+        const tikTokBiChanLuotNay = () => congTaiChinhTikTok.soLanBiChan() > biChanTruoc || congTaiChinhTikTok.dangDong()
+        let tikTokDeLai = 0, kenhTikTokBoQua = 0
         for (const store of stores) {
             if (Date.now() - batDau > FEE_DEADLINE_MS) break
             // Giữ client suốt lượt cửa hàng này — lý do xem giuClient() ở lib/prisma.ts.
@@ -672,6 +682,7 @@ async function runFeeSync() {
                 if (ch.platform === 'lazada') { tongCapNhat += await doiSoatPhiKenhLazada(sp, store.code, ch, creds); continue }
                 const svc: any = ch.platform === 'tiktok' ? new TTS(creds) : new ShopeeService(creds)
                 kenhBuAff.push({ schema: store.schema, ch })   // TikTok cũng bù (10/11/2026, TT-02)
+                if (ch.platform === 'tiktok' && tikTokBiChanLuotNay()) { kenhTikTokBoQua++; continue }
                 // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
                 // lại chỉ tốn lượt gọi mà không bao giờ ra dữ liệu.
                 const orders = await sp.onlineOrder.findMany({
@@ -686,13 +697,14 @@ async function runFeeSync() {
                     take: FEE_BATCH,
                 }).catch(() => [])
                 if (orders.length === 0) continue
-                let ok = 0, loi = 0, chuaCo = 0
+                let ok = 0, loi = 0, chuaCo = 0, deLai = 0
                 let loiDauTien = ''
                 const idVuaDoiSoat: string[] = []   // để cảnh báo lợi nhuận thấp sau mẻ
                 await mapWithConcurrency(orders, async (o: any) => {
                     if (Date.now() - batDau > FEE_DEADLINE_MS) return
                     const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
                     if (!sn) return
+                    if (ch.platform === 'tiktok' && tikTokBiChanLuotNay()) { deLai++; return }
                     try {
                         let phi: number | null = null, thucNhan: number | null = null, aff: number | null = null
                         if (ch.platform === 'tiktok') {
@@ -714,18 +726,17 @@ async function runFeeSync() {
                         ok++
                         idVuaDoiSoat.push(o.id)
                     } catch (e: any) {
+                        // TikTok bóp hạn mức: không phải lỗi, không phải "chưa có số" — để lượt sau
+                        if (laLoiTikTokGioiHan(e)) { deLai++; return }
                         // `catch {}` trống trước đây giấu sạch lý do: sàn từ chối hay
                         // sai chữ ký đều im như nhau, chỉ thấy con số thấp mà không
                         // biết vì sao. Giữ lỗi ĐẦU TIÊN để báo một dòng, khỏi spam.
                         loi++
                         if (!loiDauTien) loiDauTien = fmtErr(e)
                     }
-                    // API tài chính TikTok bóp rate gắt hơn Shopee escrow: 6 luồng
-                    // bắn liền tay là dính 36009002 "Too many requests" gần cả mẻ
-                    // (đo 04/08 08:11). Nghỉ ngắn giữa các call TikTok.
-                    if (ch.platform === 'tiktok') await new Promise(r => setTimeout(r, 350))
-                // TikTok chạy 2 luồng thay vì 6 — chậm hơn nhưng ăn được cả mẻ;
-                // 36009002 trả về null → đơn được vòng sau quét lại, không mất.
+                /* API tài chính TikTok bóp hạn mức gắt hơn Shopee escrow (36009002 "Too many requests", đo 04/08 08:11 và
+                 * 963 lần / 7 ngày tới 17/11). Nhịp do cổng tài chính trong TikTokService giữ (MỖI LẦN MỘT lời gọi, cách
+                 * ≥ 700 ms, bị chặn ⇒ nghỉ 60 s) — 2 luồng ở đây chỉ để lời gọi kế sẵn sàng trong lúc ghi đơn trước. */
                 }, ch.platform === 'tiktok' ? 2 : 6)
                 /* Đơn vừa có phí THẬT → lợi nhuận vừa tính được → xét ngưỡng, push admin.
                  * Một push cho cả mẻ; mỗi đơn chỉ báo một lần (cột loiNhuanThapBaoLuc). */
@@ -736,10 +747,12 @@ async function runFeeSync() {
                         if (cb.thap) console.log(`[FeeSync] ${ch.name}: ${cb.thap} đơn lãi < ngưỡng → push ${cb.push} thiết bị`)
                     } catch (e: any) { console.warn('[FeeSync] cảnh báo lợi nhuận thấp hỏng:', fmtErr(e)) }
                 }
-                if (ok > 0 || loi > 0) {
+                tikTokDeLai += deLai
+                if (ok > 0 || loi > 0 || deLai > 0) {
                     tongCapNhat += ok
                     console.log(`[FeeSync] ${store.code}/${ch.name} (${ch.platform}): +${ok} đơn có phí thật` +
-                        ` (quét ${orders.length}, sàn chưa có số: ${chuaCo}, lỗi: ${loi})` +
+                        ` (quét ${orders.length}, sàn chưa có số: ${chuaCo}, lỗi: ${loi}` +
+                        `${deLai ? `, TikTok bóp hạn mức — để lượt sau: ${deLai}` : ''})` +
                         `${loiDauTien ? ` — lỗi đầu: ${loiDauTien}` : ''}`)
                 }
             }
@@ -758,6 +771,7 @@ async function runFeeSync() {
         for (let i = 0; i < kenhBuAff.length; i++) {
             if (Date.now() > hanBu) break
             const { schema, ch } = kenhBuAff[(dau + i) % kenhBuAff.length]
+            if (ch.platform === 'tiktok' && tikTokBiChanLuotNay()) { kenhTikTokBoQua++; continue }
             const nhaClient = giuClient(schema)
             try {
                 tongBuAff += await buHoaHongAffiliate(getStorePrisma(schema), ch, hanBu, mapWithConcurrency, ShopeeService, TTS)
@@ -766,6 +780,10 @@ async function runFeeSync() {
             } finally {
                 nhaClient()
             }
+        }
+        if (tikTokBiChanLuotNay()) {
+            console.log(`[FeeSync] TikTok bóp hạn mức API tài chính (36009002) — thôi TikTok lượt này: ${tikTokDeLai} đơn chưa hỏi`
+                + `${kenhTikTokBoQua ? `, ${kenhTikTokBoQua} lượt kênh (đối soát / bù hoa hồng) chưa tới` : ''} — để lượt sau`)
         }
         if (tongCapNhat > 0 || tongBuAff > 0) {
             console.log(`[FeeSync] Xong: ${tongCapNhat} đơn` + (tongBuAff ? ` + bù hoa hồng affiliate ${tongBuAff} đơn` : '') +
