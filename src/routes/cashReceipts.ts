@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { enforcePeriodLock } from '../lib/periodLock'
 import { postDebtCollectionJournal, reverseJournalByReference } from '../lib/autoJournal'
 import { emitEntityEvent } from '../lib/webhookDispatch'
+import { docPhieuThuRiengKV } from '../lib/phieuThuKiotViet'
 
 const router = Router()
 
@@ -61,6 +62,52 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
     } catch (err) {
         console.error('Get cash receipts stats error:', err)
         res.status(500).json({ success: false, error: 'Lỗi khi lấy thống kê phiếu thu' })
+    }
+})
+
+/**
+ * GET /api/cash-receipts/phieu-thu-kv — phiếu thu RIÊNG của KiotViet theo NGÀY THU, cho trang Dòng Tiền
+ * (18/11/2026, lib/phieuThuKiotViet.ts `docPhieuThuRiengKV`). Mỗi mã một dòng, gom đủ các mẩu KiotViet đã
+ * phân bổ vào hoá đơn cũ + phiếu không phân bổ. Chỉ ĐỌC — tiền vẫn ở Payment / DebtEntry.
+ * startDate / endDate dạng YYYY-MM-DD = trọn ngày GIỜ VN (như GET /transactions); `ma` = tìm đúng một mã.
+ */
+router.get('/phieu-thu-kv', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const q: any = req.query
+        const chiNgay = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
+        const tu = q.startDate
+            ? (chiNgay(q.startDate) ? new Date(`${q.startDate}T00:00:00+07:00`) : new Date(String(q.startDate)))
+            : null
+        // Nửa mở: chỉ ngày ⇒ < đầu ngày HÔM SAU (bao trọn ngày cuối); có giờ ⇒ gồm đúng mốc đó
+        const den = q.endDate
+            ? (chiNgay(q.endDate)
+                ? new Date(new Date(`${q.endDate}T00:00:00+07:00`).getTime() + 86400_000)
+                : new Date(new Date(String(q.endDate)).getTime() + 1))
+            : null
+        if ((tu && isNaN(tu.getTime())) || (den && isNaN(den.getTime()))) {
+            return res.status(400).json({ success: false, error: 'Ngày không hợp lệ (cần YYYY-MM-DD)' })
+        }
+        const loc = getBranchFilter(req) as { branchId?: string }
+        const r = await docPhieuThuRiengKV(prisma, {
+            tu, den, branchId: loc.branchId ?? null,
+            ma: q.ma ? String(q.ma) : null,
+            gioiHan: 1000,
+        })
+        res.json({
+            success: true,
+            data: {
+                phieu: r.phieu.map(p => ({
+                    ...p,
+                    ngay: p.ngay.toISOString(),
+                    hoaDon: p.hoaDon.map(h => ({ ...h, ngay: h.ngay.toISOString() })),
+                })),
+                catBot: r.catBot,
+            },
+        })
+    } catch (err) {
+        console.error('Get KiotViet receipts (cash flow) error:', err)
+        res.status(500).json({ success: false, error: 'Lỗi khi lấy phiếu thu KiotViet' })
     }
 })
 

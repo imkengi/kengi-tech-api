@@ -12,6 +12,7 @@ import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock,
 import { chuyenDangMoCuaDon, maChuyenTuHeader, maDichVuTrongDon, traHangLenXe, truSoBanChuyen, type DongLenXe } from '../lib/donBanTrenXe'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
 import { moTaLoi } from '../lib/gomLoi'
+import { docNgayThuPhieuRiengKV } from '../lib/phieuThuKiotViet'
 
 const router = Router()
 
@@ -259,6 +260,24 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             for (const c of custs) custMap.set(c.id, c)
         }
 
+        /* NGÀY THU THẬT của phiếu thu RIÊNG KiotViet (18/11/2026 — trang Dòng Tiền, lib/phieuThuKiotViet.ts).
+         * KiotViet phân bổ một phiếu thu vào nhiều hoá đơn cũ; mỗi phần là một Payment KHÔNG có cột ngày ⇒ trang
+         * Dòng Tiền hiện tiền ở NGÀY HOÁ ĐƠN. Chỉ làm khi được hỏi (kemNgayThu=1) — các màn khác không tốn
+         * thêm truy vấn. `ngayThuKV` cho trang biết đã đọc trọn hay chưa: đọc hỏng thì trang KHÔNG tách
+         * (tách nửa vời là mất tiền hoặc đếm hai lần trên màn). */
+        let ngayThuKV: Map<string, Date> | null = null
+        let ngayThuKVDu: boolean | undefined
+        if (q.kemNgayThu === '1') {
+            try {
+                ngayThuKV = await docNgayThuPhieuRiengKV(prisma as any,
+                    filteredTx.flatMap(t => t.payments.filter(p => p.type !== 'credit').map(p => p.reference)))
+                ngayThuKVDu = true
+            } catch (e) {
+                console.warn('[DongTien] không đọc được ngày phiếu thu KiotViet — trang hiện theo ngày hoá đơn:', moTaLoi(e))
+                ngayThuKVDu = false
+            }
+        }
+
         const data = filteredTx.map(t => {
             // Giá vốn + lợi nhuận TỪNG ĐƠN (02/09/2026 — app bấm "Lợi nhuận" ở báo
             // cáo phải thấy lãi từng đơn, không phải doanh thu). TransactionItem
@@ -297,11 +316,16 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             discount: t.discount,
             tax: t.tax,
             total: t.total,
-            payments: t.payments.map(p => ({
-                type: p.type,
-                amount: p.amount,
-                reference: p.reference,
-            })),
+            payments: t.payments.map(p => {
+                const ngayThu = p.type !== 'credit' ? ngayThuKV?.get(String(p.reference || '').trim()) : undefined
+                return {
+                    type: p.type,
+                    amount: p.amount,
+                    reference: p.reference,
+                    // Chỉ có khi kemNgayThu=1 và mẩu là phiếu thu RIÊNG KiotViet đã biết ngày
+                    ...(ngayThu ? { ngayThu: ngayThu.toISOString() } : {}),
+                }
+            }),
             amountReceived: t.amountReceived,
             change: t.change,
             status: t.status,
@@ -336,6 +360,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
                 page: pageNum,
                 pageSize: size,
                 totalPages: Math.ceil(filteredTotal / size),
+                ...(ngayThuKVDu !== undefined ? { ngayThuKV: ngayThuKVDu } : {}),
             },
         }
         res.json(response)
