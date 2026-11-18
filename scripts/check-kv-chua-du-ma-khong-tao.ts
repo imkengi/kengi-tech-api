@@ -71,7 +71,7 @@ function taoKho(cfg: { hong?: string[]; sp?: any[]; khach?: any[]; ncc?: any[]; 
             update: async ({ where, data }: any) => { kho.map.set(`${where.entity_kvId.entity}:${where.entity_kvId.kvId}`, data.localId); return {} },
             updateMany: async () => ({ count: 0 }),
             deleteMany: async () => ({ count: 0 }),
-            findMany: async () => [],
+            findMany: async ({ where }: any = {}) => { if (typeof where?.entity === 'string') nem(`map:${where.entity}`); return [] },
         },
         product: {
             findUnique: async ({ where }: any) => { nem('product.findUnique'); return tim(kho.sp, where) },
@@ -112,7 +112,7 @@ function taoKho(cfg: { hong?: string[]; sp?: any[]; khach?: any[]; ncc?: any[]; 
         debtEntry: { create: async ({ data }: any) => ({ id: `no-${dem('debtEntry.create')}`, ...data }) },
         cashReceipt: { create: async ({ data }: any) => ({ id: `thu-${dem('cashReceipt.create')}`, ...data }), findFirst: async () => null },
         expense: { create: async ({ data }: any) => ({ id: `chi-${dem('expense.create')}`, ...data }), findFirst: async () => null },
-        payment: { findFirst: async () => null, findMany: async () => [] },
+        payment: { findFirst: async () => null, findMany: async () => { nem('payment.findMany'); return [] } },
     }
     const moHo = () => new Proxy({}, {
         get: (_t, m) => {
@@ -328,10 +328,20 @@ async function main() {
     console.log('— Sổ quỹ: phiếu thu của hoá đơn không được ghi lần hai khi bảng nối lỗi')
     const phieuThu = { id: 7001, code: 'TT7001', status: 0, amount: 500000, cashGroup: 'Khách trả nợ', partnerType: 'C', partnerId: 333, partnerName: 'Anh A' }
     const daNoiKhach = { khach: [{ id: 'kh-1', code: 'KH-KENGI', name: 'Anh A', phone: '0901111111' }], map: { 'customer:333': 'kh-1' } }
-    {
-        const { sp, kho } = taoKho({ ...daNoiKhach, hong: ['map:invoicePayment'] }); const c = newCounters()
+    /* 18/11/2026: khách đã nối ⇒ "đã tính vào hoá đơn bao nhiêu" đọc thẳng Σ Payment theo mã (không còn hỏi bản nối
+     * invoicePayment — một mẩu không có nghĩa là đủ) + dòng trả nợ riêng qua bản nối debtPayment. Đọc nào hỏng cũng
+     * phải NÉM, không được hiểu thành "chưa có gì" rồi ghi cả phiếu. */
+    for (const [ma, hong] of [['C1', 'payment.findMany'], ['C1b', 'map:debtPayment']] as const) {
+        const { sp, kho } = taoKho({ ...daNoiKhach, hong: [hong] }); const c = newCounters()
         await syncCashflow(sp, [phieuThu], { apply: true }, c)
-        ok('C1. tra "phiếu thu đã tính vào hoá đơn" lỗi ⇒ không ghi dòng trả nợ / phiếu thu, lỗi nguyên văn',
+        ok(`${ma}. tra "phiếu thu đã tính vào hoá đơn" lỗi (${hong}) ⇒ không ghi dòng trả nợ / phiếu thu, lỗi nguyên văn`,
+            !kho.dem['debtEntry.create'] && !kho.dem['cashReceipt.create'] && /Sổ quỹ TT7001/.test(loiGom(c)) && /Can't reach/.test(loiGom(c)), { dem: kho.dem, c })
+    }
+    {
+        // khách CHƯA nối ⇒ đường phiếu thu chung: bản nối invoicePayment vẫn là chốt
+        const { sp, kho } = taoKho({ hong: ['map:invoicePayment'] }); const c = newCounters()
+        await syncCashflow(sp, [phieuThu], { apply: true }, c)
+        ok('C1c. khách chưa nối, tra bản nối invoicePayment lỗi ⇒ không ghi phiếu thu chung, lỗi nguyên văn',
             !kho.dem['debtEntry.create'] && !kho.dem['cashReceipt.create'] && /Sổ quỹ TT7001/.test(loiGom(c)) && /Can't reach/.test(loiGom(c)), { dem: kho.dem, c })
     }
     {

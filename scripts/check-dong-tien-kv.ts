@@ -221,6 +221,24 @@ async function main() {
         ok('xếp mới nhất trước', r.phieu[0]!.ma === 'TT900559' && r.phieu[1]!.ma === 'TT900600')
     }
     {
+        // 18/11/2026: phiếu 25tr — KiotViet chia 22tr vào hoá đơn Kengi giữ + 3tr vào hoá đơn "Đang xử lý" Kengi không
+        // nhập ⇒ đồng bộ ghi dòng trả nợ riêng 3tr (services/kiotvietSync.ts). Dòng Tiền phải hiện ĐỦ 25tr, một dòng.
+        const k = caChuShop()
+        k.no = [{ customerId: 'kh1', customerName: 'Khách A', amount: 3_000_000, description: 'Trả nợ — phiếu thu TT900523 (KiotViet)', createdAt: '2026-11-14T10:32:00.000Z' }]
+        const r = await docPhieuThuRiengKV(dbGia(k), ngayVN('2026-11-14'))
+        const p = r.phieu.find(x => x.ma === 'TT900523')
+        ok('mẩu 22tr + phần trả nợ riêng 3tr ⇒ MỘT dòng đủ 25tr = sổ quỹ KiotViet; traNoChung 3tr; vẫn gắn hoá đơn',
+            r.phieu.length === 1 && p?.soTien === 25_000_000 && p?.traNoChung === 3_000_000 && p?.hoaDon.length === 1 && p?.khongGanHoaDon === false, p)
+        k.no = [{ customerId: 'kh1', customerName: 'Khách A', amount: 25_000_000, description: 'Trả nợ — phiếu thu TT900523 (KiotViet)', createdAt: '2026-11-14T10:32:00.000Z' }]
+        const r2 = await docPhieuThuRiengKV(dbGia(k), ngayVN('2026-11-14'))
+        ok('dòng trả nợ cũ ghi CẢ phiếu còn sót ⇒ chỉ cộng tới đủ số sổ quỹ (25tr, không phải 47tr)', r2.phieu[0]?.soTien === 25_000_000 && r2.phieu[0]?.traNoChung === 3_000_000, r2.phieu[0])
+        const k3 = caChuShop()
+        k3.ngay!.find(x => x.ma === 'TT900523')!.soTien = null
+        k3.no = [{ customerId: 'kh1', customerName: 'Khách A', amount: 3_000_000, description: 'Trả nợ — phiếu thu TT900523 (KiotViet)', createdAt: '2026-11-14T10:32:00.000Z' }]
+        const r3 = await docPhieuThuRiengKV(dbGia(k3), ngayVN('2026-11-14'))
+        ok('chưa biết số sổ quỹ ⇒ không cộng dòng trả nợ vào phiếu đã có mẩu (như trước, khỏi đếm đôi)', r3.phieu[0]?.soTien === 22_000_000 && !r3.phieu[0]?.traNoChung, r3.phieu[0])
+    }
+    {
         const k = caChuShop()
         k.phieu!.find(t => t.id === 'h3')!.branchId = 'cn2'
         for (const t of k.phieu!) if (t.id !== 'h3') t.branchId = 'cn1'

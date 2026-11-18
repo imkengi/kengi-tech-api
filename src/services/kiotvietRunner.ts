@@ -246,6 +246,8 @@ export async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<S
         // Chỗ nhớ chung cho cả lượt: hoá đơn ghi vào, sổ quỹ đọc ra để khỏi
         // tạo lại phiếu thu đã tính vào hoá đơn
         invoicePaymentCodes: new Set<string>(),
+        // Chạy thử: phần phiếu thu hoá đơn SẼ mang — sổ quỹ đọc để tính phần dư đúng như chạy thật (18/11/2026)
+        manhTrongLuot: new Map<string, Map<string, number>>(),
         // Khách seed trong lượt này — bước hoá đơn tra để khỏi cộng nợ đếm đôi
         seededCustomerIds: new Set<string>(),
     }

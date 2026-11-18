@@ -50,6 +50,7 @@ function khoGia(goc: {
         transaction: {
             findMany: async ({ where, include, take }: any) => {
                 let ds = s.phieu.filter(t => {
+                    if (where?.id?.in) return where.id.in.includes(t.id)
                     if (where?.OR) return where.OR.some((o: any) => o.customerId !== undefined && o.customerId === t.customerId)
                     return (!where?.customerId || t.customerId === where.customerId) && (!where?.status || t.status === where.status)
                 }).sort((a, b) => a.createdAt - b.createdAt)
@@ -60,17 +61,27 @@ function khoGia(goc: {
             update: async ({ where, data }: any) => { const t = s.phieu.find(x => x.id === where.id); Object.assign(t, data); return t },
         },
         payment: {
-            findMany: async ({ where }: any) => s.tien.filter(p => (where.transactionId === undefined || p.transactionId === where.transactionId)
+            findMany: async ({ where }: any) => s.tien.filter(p => (where.transactionId === undefined
+                    || (where.transactionId?.in ? where.transactionId.in.includes(p.transactionId) : p.transactionId === where.transactionId))
                 && (!where.reference?.in || where.reference.in.includes(p.reference))),
             findFirst: async ({ where }: any) => s.tien.find(p => p.reference === where.reference) ?? null,
             deleteMany: async ({ where }: any) => { const n = s.tien.length; s.tien = s.tien.filter(p => p.transactionId !== where.transactionId); return { count: n - s.tien.length } },
             createMany: async ({ data }: any) => { for (const d of data) s.tien.push({ id: id('pay'), ...d }); return { count: data.length } },
         },
         debtEntry: {
-            findMany: async ({ where }: any) => s.dongNo.filter(e => e.customerId === where.customerId),
+            findMany: async ({ where }: any) => s.dongNo.filter(e => where?.id?.in ? where.id.in.includes(e.id) : e.customerId === where.customerId),
             findUnique: async ({ where }: any) => s.dongNo.find(e => e.id === where.id) ?? null,
             create: async ({ data }: any) => { const e = { id: id('de'), ...data }; s.dongNo.push(e); return e },
             delete: async ({ where }: any) => { s.dongNo = s.dongNo.filter(e => e.id !== where.id) },
+            updateMany: async ({ where, data }: any) => {
+                const ds = s.dongNo.filter(e => e.id === where.id)
+                for (const e of ds) {
+                    if (data.amount?.decrement !== undefined) e.amount -= data.amount.decrement
+                    else if (typeof data.amount === 'number') e.amount = data.amount
+                }
+                return { count: ds.length }
+            },
+            deleteMany: async ({ where }: any) => { const n = s.dongNo.length; s.dongNo = s.dongNo.filter(e => e.id !== where.id); return { count: n - s.dongNo.length } },
         },
         returnOrder: {
             findMany: async ({ where }: any) => s.tra.filter(r => r.reason === where.reason && r.status === where.status
@@ -310,6 +321,128 @@ async function main() {
     ok('49. tổng đã khớp nhưng còn dòng mang mã huỷ ⇒ dựng lại: chỉ còn TT490, đơn vẫn đủ tiền',
         tien12.length === 1 && tien12[0].reference === 'TT490' && k12._s.phieu[0].amountReceived === 1000 && k12._s.phieu[0].status === 'completed' && kq12.hoaDonCapNhat === 1,
         { tien12, kq12 })
+
+    console.log('— D. Phiếu chia NHIỀU hoá đơn mà Kengi mới giữ một phần (18/11/2026) —')
+    const tienMa = (k: any, m: string) => k._s.tien.filter((p: any) => p.reference === m).reduce((a: number, p: any) => a + p.amount, 0)
+    const dongMa = (k: any, m: string) => k._s.dongNo.filter((e: any) => e.description === `Trả nợ — phiếu thu ${m} (KiotViet)`)
+    const kvTra = (ma: string, tong: number, ps: [string, number][]) => ({
+        id: 9000 + Number(ma.slice(2)), code: ma, status: 1, total: tong, customerId: 41,
+        totalPayment: ps.reduce((a, [, x]) => a + x, 0),
+        payments: ps.map(([m, x]) => ({ code: m, amount: x, status: 0, method: 'Cash', transDate: '2026-10-20T09:00:00' })),
+    })
+    const datPhieuThu = (thu: Record<string, number>) => datPhieu().map((x: any) => {
+        const a = thu[x.receiptNumber] || 0
+        return { ...x, amountReceived: a, status: a >= x.total ? 'completed' : 'partial' }
+    })
+
+    // D1 — phần KiotViet chia vào hoá đơn Kengi KHÔNG giữ (hoá đơn "Đang xử lý"): Kengi có 600/1.000 trên HD101
+    {
+        const kv = { HD101: kvTra('HD101', 1000, [['TT950', 600]]), HD102: kvTra('HD102', 500, []), HD103: kvTra('HD103', 400, []) }
+        const k = khoGia({ khach: [{ ...KH, debt: 300 }], phieu: datPhieuThu({ HD101: 600 }), noi: noiGoc(), tien: [{ id: 'q950', transactionId: 'a1', type: 'cash', amount: 600, reference: 'TT950' }] })
+        hoi.length = 0
+        const kq = await keoPhieuThuKhach(k, opts(), [soQuy('TT950', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return (kv as any)[ma] ?? null })
+        const de = dongMa(k, 'TT950')
+        ok('50. phiếu 1.000 mà Kengi mới giữ 600 trên hoá đơn ⇒ coi là CHƯA ĐỦ (bản cũ: có một mẩu là bỏ qua cả phiếu)', kq.phieuLa === 1 && hoi.length === 3, { kq, hoi })
+        ok('51. phần 400 không thấy trên hoá đơn Kengi nào ⇒ MỘT dòng trả nợ riêng 400 (không phải 1.000), mẩu 600 giữ nguyên',
+            de.length === 1 && de[0].amount === 400 && tienMa(k, 'TT950') === 600, { de, tien: tienMa(k, 'TT950') })
+        ok('52. Σ mẩu + dòng riêng = đúng số sổ quỹ KiotViet; báo phanDu 0 → 400 kèm phần trên hoá đơn',
+            tienMa(k, 'TT950') + de[0]?.amount === 1000 && JSON.stringify(kq.phanDu) === JSON.stringify([{ ma: 'TT950', soTienKV: 1000, trenHoaDon: 600, truoc: 0, sau: 400 }]) && kq.conLa.join() === 'TT950', kq)
+        hoi.length = 0
+        const kq2 = await keoPhieuThuKhach(k, opts(), [soQuy('TT950', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return (kv as any)[ma] ?? null })
+        ok('53. chạy lại: đã đủ (mẩu + dòng riêng) ⇒ 0 phiếu lạ, không hỏi KiotViet, không đổi dòng (hội tụ)',
+            kq2.phieuLa === 0 && hoi.length === 0 && dongMa(k, 'TT950').length === 1 && dongMa(k, 'TT950')[0].amount === 400 && (kq2.phanDu || []).length === 0, { kq2, hoi })
+    }
+
+    // D2 — mẩu nằm trên hoá đơn Kengi CÓ giữ mà chưa gắn (dòng trả nợ riêng từng bị xoá cả khi mới một mẩu về)
+    {
+        const kv = { HD101: kvTra('HD101', 1000, [['TT960', 300]]), HD102: kvTra('HD102', 500, [['TT960', 500]]), HD103: kvTra('HD103', 400, [['TT960', 100]]) }
+        const k = khoGia({ khach: [{ ...KH, debt: 300 }], phieu: datPhieuThu({ HD103: 100 }), noi: noiGoc(), tien: [{ id: 'q960', transactionId: 'a3', type: 'cash', amount: 100, reference: 'TT960' }] })
+        hoi.length = 0
+        const kq = await keoPhieuThuKhach(k, opts(), [soQuy('TT960', 900)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return (kv as any)[ma] ?? null })
+        ok('54. phiếu 900, Kengi giữ 100 ⇒ hỏi hoá đơn cũ nhất, dừng khi thấy ĐỦ phần còn thiếu 800 (HD101+HD102, không hỏi HD103)', hoi.join() === 'HD101,HD102' && kq.phieuLa === 1, { hoi, kq })
+        ok('55. gắn đủ 3 mẩu = 900, KHÔNG ghi dòng trả nợ riêng, không còn mã lạ',
+            tienMa(k, 'TT960') === 900 && dongMa(k, 'TT960').length === 0 && kq.conLa.length === 0 && kq.hoaDonCapNhat === 2, { tien: tienMa(k, 'TT960'), kq })
+    }
+
+    // D3 — dòng trả nợ riêng ghi cả phiếu (sổ quỹ tới trước) rồi các mẩu về DẦN qua hoá đơn ⇒ trừ đúng phần, đủ mới xoá
+    {
+        const { syncInvoices } = await import('../src/services/kiotvietSync')
+        const k = khoGia({
+            khach: [{ ...KH, debt: 300 }], phieu: datPhieu(),
+            noi: [...noiGoc(), { id: 'm970', entity: 'debtPayment', kvId: 'TT970', localId: 'de970', syncedAt: new Date() }],
+            dongNo: [{ id: 'de970', customerId: 'k1', type: 'payment', amount: 800, description: 'Trả nợ — phiếu thu TT970 (KiotViet)', createdAt: t('2026-10-20T02:00:00Z') }],
+        })
+        const capNhat = (hd: any) => syncInvoices(k, [hd], { ...opts(), rebuildLines: false, updateOnly: true }, newCounters())
+        await capNhat(kvTra('HD101', 1000, [['TT970', 300]]))
+        ok('56. mẩu 300 về trên HD101 ⇒ dòng trả nợ riêng còn 500 (bản cũ XOÁ CẢ dòng 800 ⇒ mất 500 khỏi sổ)',
+            dongMa(k, 'TT970').length === 1 && dongMa(k, 'TT970')[0].amount === 500 && k._s.noi.some((r: any) => r.entity === 'debtPayment' && r.kvId === 'TT970'), k._s.dongNo)
+        await capNhat(kvTra('HD101', 1000, [['TT970', 300], ['TT971', 100]]))
+        ok('57. hoá đơn dựng lại vì phiếu KHÁC (TT971) mà mẩu TT970 không đổi ⇒ dòng riêng TT970 giữ nguyên 500',
+            dongMa(k, 'TT970')[0]?.amount === 500 && tienMa(k, 'TT971') === 100, k._s.dongNo)
+        await capNhat(kvTra('HD102', 500, [['TT970', 500]]))
+        ok('58. mẩu cuối 500 về trên HD102 ⇒ đủ 800 trên hoá đơn ⇒ xoá dòng riêng + bản nối (không đếm hai lần)',
+            dongMa(k, 'TT970').length === 0 && !k._s.noi.some((r: any) => r.entity === 'debtPayment' && r.kvId === 'TT970') && tienMa(k, 'TT970') === 800, { dongNo: k._s.dongNo, tien: tienMa(k, 'TT970') })
+    }
+
+    // D4 — sổ quỹ dọn dòng riêng cũ ghi CẢ phiếu trong khi mẩu đã nằm trên hoá đơn (đếm đôi)
+    {
+        const k = khoGia({
+            khach: [{ ...KH, debt: 300 }], phieu: datPhieuThu({ HD101: 400, HD102: 500 }), noi: [...noiGoc(),
+                { id: 'm980', entity: 'debtPayment', kvId: 'TT980', localId: 'de980', syncedAt: new Date() },
+                { id: 'm981', entity: 'debtPayment', kvId: 'TT981', localId: 'de981', syncedAt: new Date() }],
+            tien: [{ id: 'q980', transactionId: 'a1', type: 'cash', amount: 400, reference: 'TT980' }, { id: 'q981', transactionId: 'a2', type: 'cash', amount: 500, reference: 'TT981' }],
+            dongNo: [
+                { id: 'de980', customerId: 'k1', type: 'payment', amount: 1000, description: 'Trả nợ — phiếu thu TT980 (KiotViet)', createdAt: t('2026-10-20T02:00:00Z') },
+                { id: 'de981', customerId: 'k1', type: 'payment', amount: 500, description: 'Trả nợ — phiếu thu TT981 (KiotViet)', createdAt: t('2026-10-20T02:00:00Z') }],
+        })
+        hoi.length = 0
+        const kq = await keoPhieuThuKhach(k, opts(), [soQuy('TT980', 1000), soQuy('TT981', 500)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return null })
+        ok('59. dòng riêng 1.000 + mẩu 400 (đếm đôi) ⇒ sửa dòng riêng thành 600; không hỏi KiotViet',
+            dongMa(k, 'TT980')[0]?.amount === 600 && hoi.length === 0, { dongNo: k._s.dongNo, hoi })
+        ok('60. dòng riêng 500 trong khi mẩu đã đủ 500 ⇒ gỡ dòng riêng + bản nối',
+            dongMa(k, 'TT981').length === 0 && !k._s.noi.some((r: any) => r.kvId === 'TT981' && r.entity === 'debtPayment'), k._s.dongNo)
+        ok('61. báo phanDu cho cả hai (1.000 → 600, 500 → 0)',
+            JSON.stringify((kq.phanDu || []).map((d: any) => [d.ma, d.truoc, d.sau])) === JSON.stringify([['TT980', 1000, 600], ['TT981', 500, 0]]), kq.phanDu)
+    }
+
+    // D5 — CHẠY THỬ D1 + D2 cùng lúc: không ghi gì mà báo đúng như chạy thật
+    {
+        const kv = { HD101: kvTra('HD101', 1000, [['TT950', 600], ['TT960', 300]]), HD102: kvTra('HD102', 500, [['TT960', 500]]), HD103: kvTra('HD103', 400, [['TT960', 100]]) }
+        const k = khoGia({
+            khach: [{ ...KH, debt: 300 }], phieu: datPhieuThu({ HD101: 600, HD103: 100 }), noi: noiGoc(),
+            tien: [{ id: 'q950', transactionId: 'a1', type: 'cash', amount: 600, reference: 'TT950' }, { id: 'q960', transactionId: 'a3', type: 'cash', amount: 100, reference: 'TT960' }],
+        })
+        const truoc = JSON.stringify({ t: k._s.tien, d: k._s.dongNo, n: k._s.noi, p: k._s.phieu })
+        const c = newCounters()
+        const kq = await keoPhieuThuKhach(k, opts(false), [soQuy('TT950', 1000), soQuy('TT960', 900)], c, { nghiMs: 0 }, async (ma) => (kv as any)[ma] ?? null)
+        ok('62. chạy thử: không đổi Payment / dòng nợ / bản nối / phiếu', truoc === JSON.stringify({ t: k._s.tien, d: k._s.dongNo, n: k._s.noi, p: k._s.phieu }))
+        ok('63. chạy thử báo đúng: TT950 sẽ có dòng riêng 400; TT960 gắn đủ hoá đơn nên KHÔNG có dòng riêng ảo',
+            c.created === 1 && JSON.stringify((kq.phanDu || []).map((d: any) => [d.ma, d.trenHoaDon, d.sau])) === JSON.stringify([['TT950', 600, 400]]) && kq.conLa.join() === 'TT950',
+            { created: c.created, phanDu: kq.phanDu, conLa: kq.conLa })
+    }
+
+    // D6 — bản nối còn mà dòng trả nợ riêng ĐÃ XOÁ có chủ đích (khoá sổ trước 2026, gộp dư nợ đầu kỳ) ⇒ không đụng
+    {
+        const k = khoGia({ khach: [{ ...KH, debt: 300 }], phieu: datPhieu(), noi: [...noiGoc(), { id: 'm990', entity: 'debtPayment', kvId: 'TT990', localId: 'de-da-xoa', syncedAt: new Date() }] })
+        hoi.length = 0
+        const kq = await keoPhieuThuKhach(k, opts(), [soQuy('TT990', 1000)], newCounters(), { nghiMs: 0 }, async (ma) => { hoi.push(ma); return null })
+        ok('64. dòng đã khoá sổ ⇒ không coi là lạ, không hỏi KiotViet, không ghi lại dòng trả nợ, giữ bản nối',
+            kq.phieuLa === 0 && hoi.length === 0 && k._s.dongNo.length === 0 && k._s.noi.some((r: any) => r.kvId === 'TT990'), { kq, hoi })
+    }
+
+    // D7 — Lịch sử công nợ: phiếu có mẩu trên hoá đơn + phần dòng riêng ⇒ MỘT dòng đủ tiền
+    {
+        const ph = [{ id: 'h1', receiptNumber: 'HD001', customerId: 'k1', status: 'completed', total: 600, createdAt: t('2026-08-01T01:00:00Z') }]
+        const kD = khoGia({
+            khach: [{ ...KH, debt: 0 }], phieu: ph,
+            tien: [{ id: 'p1', transactionId: 'h1', type: 'cash', amount: 600, reference: 'TT955' }],
+            dongNo: [{ id: 'de955', customerId: 'k1', type: 'payment', amount: 400, description: 'Trả nợ — phiếu thu TT955 (KiotViet)', createdAt: t('2026-09-15T03:30:00Z') }],
+            ngay: { TT955: '2026-09-15T03:30:00Z' },
+        })
+        const { history: lsD } = await buildDebtHistory(kD, 'k1')
+        const dong955 = lsD.filter((h: any) => h.code === 'TT955')
+        ok('65. Lịch sử công nợ: TT955 (600 trên hoá đơn + 400 dòng riêng) ⇒ MỘT dòng −1.000 đúng ngày thu', dong955.length === 1 && dong955[0].amount === -1000 && dong955[0].date === '2026-09-15T03:30:00.000Z', dong955)
+    }
 
 
     // ─── Gom webhook khách dồn dập mà không làm rơi phiếu (11/11/2026) ───

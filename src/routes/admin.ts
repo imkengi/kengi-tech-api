@@ -11594,9 +11594,9 @@ router.post('/kiotviet-phieu-thu', async (req: Request, res: Response) => {
         res.json({
             success: true, cheDo, cuaHang: store.name, khoang: { tu, den }, truncated,
             soBanGhiSoQuy: (items || []).length, ...kq,
-            dongTraNoRieng: c.created, boQua: c.skipped, loi: c.failed,
+            dongTraNoRieng: c.created, suaDongTraNoRieng: c.updated, boQua: c.skipped, loi: c.failed,
             nhatKy: c.errors.slice(0, 20), mau: c.samples,
-            ghiChu: 'phieuLa = chưa có mặt ở Kengi; hoaDonCapNhat = hoá đơn được gắn phiếu theo KiotViet; dongTraNoRieng = phiếu không thấy trên hoá đơn nào, ghi thành dòng trả nợ đúng ngày.',
+            ghiChu: 'phieuLa = chưa có mặt ĐỦ ở Kengi (Σ mẩu trên hoá đơn + dòng trả nợ riêng < số KiotViet); hoaDonCapNhat = hoá đơn được gắn phiếu theo KiotViet; dongTraNoRieng = phiếu có phần không thấy trên hoá đơn nào, ghi phần đó thành dòng trả nợ đúng ngày; suaDongTraNoRieng = dòng trả nợ riêng được sửa/gỡ cho khớp phần chưa nằm trên hoá đơn; phanDu = từng phiếu đổi (truoc → sau).',
         })
     } catch (err: any) {
         res.status(500).json({ success: false, error: moTaLoi(err) })

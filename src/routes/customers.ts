@@ -870,7 +870,13 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
             let entryAmount = -e.amount
             // Phiếu thu sổ quỹ KiotViet chưa gắn được hoá đơn: hiện ĐÚNG mã KiotViet thay cho số PT tự đặt
             const maKVTraNo = e.type === 'payment' ? maTuDongTraNoKV(e.description) : null
-            if (maKVTraNo) entryCode = maKVTraNo
+            if (maKVTraNo) {
+                /* Cùng phiếu đã có dòng gom các mẩu trên hoá đơn ⇒ đây là PHẦN KiotViet chia vào hoá đơn Kengi không
+                 * giữ (18/11/2026, services/kiotvietSync.ts) — cộng vào chính dòng đó: một phiếu một dòng như KiotViet. */
+                const gop = history.find((h: any) => h.id === `kv-${maKVTraNo}`)
+                if (gop) { gop.amount -= e.amount; continue }
+                entryCode = maKVTraNo
+            }
 
             if (e.type === 'debt') {
                 entryCode = 'GN'

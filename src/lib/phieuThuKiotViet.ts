@@ -240,6 +240,9 @@ export interface PhieuThuRiengKV {
     hoaDon: { ma: string; ngay: Date; soTien: number }[]
     /** Phiếu không phân bổ vào hoá đơn nào (DebtEntry "Trả nợ — phiếu thu … (KiotViet)"). */
     khongGanHoaDon: boolean
+    /** Phần của phiếu CÓ mẩu trên hoá đơn mà nằm ở dòng trả nợ riêng (KiotViet chia vào hoá đơn Kengi không giữ —
+     *  vd hoá đơn "Đang xử lý"). Đã gồm trong soTien; Σ hoaDon + traNoChung = soTien. */
+    traNoChung?: number
 }
 
 export interface TuyChonDocPhieuRieng {
@@ -335,8 +338,15 @@ export async function docPhieuThuRiengKV(db: DbThuan, o: TuyChonDocPhieuRieng): 
             const tien = Number(d.amount) || 0
             if (!maD || tien <= 0) continue
             const ph = theoMa.get(maD)
-            // Mã đã có mẩu trên hoá đơn ⇒ tiền đã đếm ở mẩu; đồng bộ không ghi cả hai, nhưng lỡ có thì KHÔNG cộng lần hai
-            if (ph && ph.soTien > 0) continue
+            /* Mã đã có mẩu trên hoá đơn: từ 18/11/2026 đồng bộ ghi dòng trả nợ riêng = PHẦN KiotViet chia vào hoá đơn
+             * Kengi không giữ (services/kiotvietSync.ts, tienPhieuTrenHoaDon) ⇒ cộng phần đó, nhưng KHÔNG quá số sổ quỹ
+             * KiotViet còn thiếu — dòng cũ ghi cả phiếu mà lỡ còn sót thì không đếm hai lần. Chưa biết số sổ quỹ ⇒ không
+             * cộng (như trước). */
+            if (ph && ph.soTien > 0) {
+                const them = ph.soTienKV == null ? 0 : Math.min(tien, Math.max(0, ph.soTienKV - ph.soTien))
+                if (them > 0) { ph.soTien += them; ph.traNoChung = (ph.traNoChung || 0) + them }
+                continue
+            }
             theoMa.set(maD, {
                 ma: maD, ngay: ph?.ngay ?? new Date(d.createdAt), soTien: tien, soTienKV: ph?.soTienKV ?? null,
                 khachId: d.customerId ? String(d.customerId) : null, khachTen: d.customerName ? String(d.customerName) : null,
