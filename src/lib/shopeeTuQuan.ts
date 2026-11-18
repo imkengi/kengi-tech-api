@@ -14,7 +14,8 @@
 
 import { ShopeeService } from '../services/platforms/shopee'
 import { ToolError } from './mcpTypes'
-import { uocLuongPhi, SO_DON_TU_GHI, SO_DON_TOI_THIEU, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
+import { uocLuongPhi, SO_DON_TU_GHI, SO_DON_TOI_THIEU, SO_MAU_CONG_THUC_TU_GHI, phiDuTinChoMay, ghiChuAffiliate, type MauPhi, type DongPhiDon, type AffiliateDo } from './giaShopee'
+import { docBieuPhi, bieuPhiDungDuoc, kichDoBieuPhiNen, mauPhiCongThuc, phiNganhTrungBinh, affiliateCongThuc, ngayVN, type BieuPhi } from './bieuPhiShopee'
 import { daQuyetToanSql } from './phiSanGiuLai'
 import { nhanDangAnh } from './anhSanPham'
 import { CHON_NHOM_CAY } from './laiRiengPilot'
@@ -204,6 +205,26 @@ export function phamViPhi(m: MauPhi): PhamViPhi {
  *  tooltip `title`, điện thoại không rê chuột được). FE (PhiNganh.detail / MoHinhPhi.detail) hiện nguyên văn câu này. */
 export function cauNguonPhi(m: MauPhi, bang?: Pick<BangPhiNganh, 'tenNganh' | 'viDuNganh'>): string {
     const n = Math.max(0, Math.round(Number(m.soDon) || 0))
+    if (m.nguon === 'cong-thuc' && m.congThuc) {
+        // 18/11/2026: phí theo biểu phí Shopee đọc thẳng escrow — nói % ngành từ mấy đơn mẫu + các khoản chung
+        const ct = m.congThuc
+        const p = `${(Math.round(ct.phiNganh * 10000) / 100).toLocaleString('vi-VN')}%`
+        const chung = ct.moTa ? ` + ${ct.moTa}` : ''
+        switch (phamViPhi(m)) {
+            case 'nganh': {
+                const ten = bang?.tenNganh.get(m.nganh!) || m.nganh!
+                const viDu = String(bang?.viDuNganh.get(m.nganh!)?.viDu || '').trim()
+                const vd = viDu.length > 50 ? `${viDu.slice(0, 49).trimEnd()}…` : viDu
+                return `Biểu phí Shopee (đọc escrow ${ngayVN(ct.doLuc)}): phí cố định ngành ${ten} ${p} — đọc từ ${ct.soMauNganh} đơn mẫu` +
+                    `${ct.lech ? ', các đơn lệch nhau nên lấy mức cao nhất' : ''}${chung}${vd ? ` — vd: ${vd}` : ''}`
+            }
+            case 'thay-nganh': return m.thayNganh
+                ? `Ngành ${m.thayNganh} chưa có đơn đã hoàn tất để đọc % phí cố định — tạm dùng trung bình các ngành ${p}${chung}`
+                : `Chưa rõ ngành của sản phẩm — tạm dùng % phí cố định trung bình các ngành ${p}${chung}`
+            default: return `Biểu phí Shopee (đọc escrow ${ngayVN(ct.doLuc)}, công thức khớp phí thật ${ct.soKhop}/${ct.soMauGian} đơn mẫu): ` +
+                `phí cố định trung bình các ngành ${p}${chung}`
+        }
+    }
     switch (phamViPhi(m)) {
         case 'nganh': {
             const ten = bang?.tenNganh.get(m.nganh!) || m.nganh!
@@ -232,23 +253,46 @@ export function tomTatMauPhi(m: MauPhi, bang?: Pick<BangPhiNganh, 'tenNganh' | '
         category: m.nganh ? (bang?.tenNganh.get(m.nganh) || m.nganh) : m.thayNganh || null,
         categoryId: m.nganh || null,
         ...(vd ? { example: vd.viDu, products: vd.so } : {}),
-        // phí khai / chưa biết là số cấu hình, không phải số đo ⇒ không bao giờ đủ tin cho máy tự đăng / hạ giá
-        trusted: m.nguon !== 'cau-hinh-kenh' && !m.khai && !m.chuaBiet && m.soDon >= SO_DON_TU_GHI && !m.thayNganh && !m.chuaRoNganh,
+        // phí khai / chưa biết là số cấu hình, không phải số đo ⇒ không bao giờ đủ tin cho máy tự đăng / hạ giá.
+        // Phí công thức (18/11/2026): đủ tin theo biểu phí (ngành có đơn mẫu, không lệch, gian đủ mẫu khớp), không theo 30 đơn.
+        trusted: phiDuTinChoMay(m),
+        ...(phiDuTinChoMay(m) ? {} : { autoLabel: nhanChuaTuHa(m) }),
+        ...(m.nguon === 'cong-thuc' && m.congThuc ? { formula: { categoryRate: m.congThuc.phiNganh, samples: m.congThuc.soMauNganh, readAt: m.congThuc.doLuc } } : {}),
     }
+}
+
+/** Nhãn ngắn "máy chưa tự hạ giá vì sao" cho cột Máy tự hạ giá của bảng phí ngành (FE thiếu trường này thì giữ "dưới 30 đơn"). */
+export function nhanChuaTuHa(m: MauPhi): string {
+    if (m.nguon === 'cong-thuc') {
+        const ct = m.congThuc
+        if (m.thayNganh || m.chuaRoNganh) return 'Chưa — ngành chưa có đơn mẫu'
+        if (ct?.lech) return 'Chưa — đơn mẫu lệch nhau'
+        if (!ct || !(ct.soKhop >= SO_MAU_CONG_THUC_TU_GHI)) return `Chưa — gian dưới ${SO_MAU_CONG_THUC_TU_GHI} đơn mẫu`
+        return 'Chưa'
+    }
+    if (m.chuaBiet) return 'Chưa — chưa biết phí'
+    if (m.khai || m.nguon === 'cau-hinh-kenh') return 'Chưa — phí khai'
+    if (m.thayNganh || m.chuaRoNganh) return 'Chưa — ngành chưa đủ đơn'
+    return `Chưa — dưới ${SO_DON_TU_GHI} đơn`
 }
 
 const TTL_PHI_NGANH = 5 * 60_000
 /** Đệm phần THEO NGÀNH (truy vấn nặng hơn) theo gian. `dau` = dấu số đo cả gian lúc đo: cả gian đổi (có đơn mới đối
  *  soát) thì đo ngành lại ngay — không ghép phí ngành cũ với phí cả gian mới. */
-const demPhiNganh = new Map<string, { het: number; dau: string } & Pick<BangPhiNganh, 'theoNganh' | 'tenNganh' | 'viDuNganh'>>()
+type PhanNganh = Pick<BangPhiNganh, 'theoNganh' | 'tenNganh' | 'viDuNganh'> & {
+    /** số đơn MỘT ngành (90 ngày, đã đối soát) của từng ngành — trọng số % phí cố định trung bình của phí công thức */
+    soDonNganh: Map<string, number>
+}
+const demPhiNganh = new Map<string, { het: number; dau: string } & PhanNganh>()
 /** Bỏ đệm phí theo ngành (bộ kiểm đổi ngành của dữ liệu giữa các ca; prod tự hết hạn sau 5 phút). */
 export function xoaDemPhiTheoNganh(): void { demPhiNganh.clear() }
 
 /** Đo phí từng ngành của gian: ngành đủ SO_DON_TOI_THIEU đơn MỘT ngành ⇒ mô hình riêng. Lỗi đọc ⇒ không ngành nào. */
-async function doPhiTungNganh(prisma: any, ch: any): Promise<Pick<BangPhiNganh, 'theoNganh' | 'tenNganh' | 'viDuNganh'> & { loi: boolean }> {
+async function doPhiTungNganh(prisma: any, ch: any): Promise<PhanNganh & { loi: boolean }> {
     const theoNganh = new Map<string, MauPhi>()
     const tenNganh = new Map<string, string>()
     const viDuNganh = new Map<string, { viDu: string; so: number }>()
+    const soDonNganh = new Map<string, number>()
     let dong: (DongPhiDon & { nganh: string })[] = []
     try {
         dong = await dongPhiTheoNganh(prisma, String(ch.id))
@@ -264,17 +308,68 @@ async function doPhiTungNganh(prisma: any, ch: any): Promise<Pick<BangPhiNganh, 
     } catch (e: any) {
         // không đo được theo ngành ⇒ mọi sản phẩm dùng cả gian và bị gắn "ngành chưa đo" (máy không tự hạ giá) — NÓI RA
         console.error(`[PhiNganh] ${ch.name || ch.id}: không đọc được phí theo ngành —`, e?.message || e)
-        return { theoNganh, tenNganh, viDuNganh, loi: true }
+        return { theoNganh, tenNganh, viDuNganh, soDonNganh, loi: true }
     }
     const nhom = new Map<string, DongPhiDon[]>()
     for (const d of dong) { const a = nhom.get(d.nganh) || []; a.push({ giaBan: d.giaBan, phi: d.phi, aff: d.aff }); nhom.set(d.nganh, a) }
     for (const [ng, ds] of nhom) {
+        soDonNganh.set(ng, ds.length)
         const m = uocLuongPhi(ds, ch.commissionRate)
         if (m.nguon === 'cau-hinh-kenh') continue
         const ten = tenNganh.get(ng)
         theoNganh.set(ng, { ...m, nganh: ng, ghiChu: `Ngành ${ten ? `${ten} (${ng})` : ng}: ${m.ghiChu}` })
     }
-    return { theoNganh, tenNganh, viDuNganh, loi: false }
+    return { theoNganh, tenNganh, viDuNganh, soDonNganh, loi: false }
+}
+
+/** Gian Shopee (phí công thức chỉ áp cho Shopee — biểu phí đọc từ escrow Shopee). */
+const laGianShopee = (ch: any) => String(ch?.platform || '').toLowerCase() === 'shopee'
+
+/**
+ * Biểu phí DÙNG được của gian Shopee (hợp lệ, chưa quá 7 ngày) — null ⇒ dùng phí đo từ sổ như cũ. Cũ quá 24 giờ / chưa có ⇒
+ * kích đo lại nền (chỉ trên máy chủ thật, xem bieuPhiShopee.kichDoBieuPhiNen). Đọc hỏng ⇒ null, không ném.
+ */
+async function bieuPhiCuaGian(prisma: any, ch: any): Promise<BieuPhi | null> {
+    if (!laGianShopee(ch) || !ch?.id) return null
+    const b = await docBieuPhi(prisma, String(ch.id)).catch(() => null)
+    try { kichDoBieuPhiNen(prisma, ch, b, moDichVuShopee) } catch { /* đo nền hỏng không được làm hỏng việc đọc phí */ }
+    return bieuPhiDungDuoc(b) ? b : null
+}
+
+/**
+ * Bảng phí khi gian có biểu phí Shopee (18/11/2026, chủ shop: "ủa phí cố định nó sẽ theo tuỳ mã hàng chứ" → "Ok, đổi đi"):
+ * ngành có đơn mẫu ⇒ phí công thức với % ngành đọc từ escrow (một đơn là đủ); ngành chưa có / chưa rõ ngành ⇒ công thức với
+ * % trung bình các ngành (trọng số số đơn), gắn thayNganh / chuaRoNganh (máy không tự hạ giá). Hoa hồng affiliate tách riêng:
+ * trung bình từ sổ cả gian (đủ đơn biết) hoặc từ đơn mẫu, mức cao nhất = max cả gian, mọi ngành đo từ sổ, đơn mẫu.
+ */
+function bangCongThuc(b: BieuPhi, goc: MauPhi, co: PhanNganh): BangPhiNganh {
+    const { tenNganh, viDuNganh } = co
+    const affMax = Math.max(0, ...[...co.theoNganh.values()].map(m => m.affiliate?.tyLeMax ?? 0))
+    const a0 = affiliateCongThuc(b, goc.affiliate, SO_DON_TU_GHI)
+    const aff: AffiliateDo = { ...a0, tyLeMax: Math.min(0.5, Math.max(a0.tyLeMax, affMax)) }
+    const gan = (m: MauPhi, truoc = ''): MauPhi => ({ ...m, affiliate: aff, ghiChu: `${truoc}${m.ghiChu} ${ghiChuAffiliate(aff)}` })
+    const rTB = phiNganhTrungBinh(b, co.soDonNganh)
+    const toanGian = gan(mauPhiCongThuc(b, rTB, { soMauNganh: 0 }))
+    const theoNganh = new Map<string, MauPhi>()
+    for (const [k, c] of Object.entries(b.nganh)) {
+        const ten = tenNganh.get(k)
+        theoNganh.set(k, { ...gan(mauPhiCongThuc(b, c.tyLe, { soMauNganh: c.soMau, lech: c.lech }), `Ngành ${ten ? `${ten} (${k})` : k}: `), nganh: k })
+    }
+    const veGian = `tạm dùng % phí cố định TRUNG BÌNH các ngành (${(Math.round(rTB * 10000) / 100).toLocaleString('vi-VN')}%)`
+    return {
+        toanGian, theoNganh, tenNganh, viDuNganh,
+        chon(nganh) {
+            const k = nganh == null ? '' : String(nganh).trim()
+            if (!k) return { ...toanGian, chuaRoNganh: true, ghiChu: `Sản phẩm chưa rõ ngành trên sàn — ${veGian}. ${toanGian.ghiChu}` }
+            const m = theoNganh.get(k)
+            if (m) return m
+            const ten = tenNganh.get(k)
+            return {
+                ...toanGian, thayNganh: ten ? `${ten} (${k})` : k,
+                ghiChu: `Ngành ${ten ? `${ten} (${k})` : k} chưa có đơn đã hoàn tất (90 ngày) chỉ có hàng của ngành để đọc % phí cố định — ${veGian}. ${toanGian.ghiChu}`,
+            }
+        },
+    }
 }
 
 export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiNganh> {
@@ -286,11 +381,14 @@ export async function docMauPhiTheoNganh(prisma: any, ch: any): Promise<BangPhiN
     if (!co || co.het <= Date.now() || co.dau !== dau) {
         const r = await doPhiTungNganh(prisma, ch)
         // đọc lỗi thì chỉ đệm 1 phút — lỗi thoáng qua đừng khoá cả gian ở "ngành chưa đo" suốt 5 phút
-        co = { het: Date.now() + (r.loi ? 60_000 : TTL_PHI_NGANH), dau, theoNganh: r.theoNganh, tenNganh: r.tenNganh, viDuNganh: r.viDuNganh }
+        co = { het: Date.now() + (r.loi ? 60_000 : TTL_PHI_NGANH), dau, theoNganh: r.theoNganh, tenNganh: r.tenNganh, viDuNganh: r.viDuNganh, soDonNganh: r.soDonNganh }
         demPhiNganh.delete(khoa)
         demPhiNganh.set(khoa, co)
         if (demPhiNganh.size > 200) { const cu = demPhiNganh.keys().next().value; if (cu !== undefined) demPhiNganh.delete(cu) }
     }
+    // 18/11/2026: gian Shopee có biểu phí đọc từ escrow (hợp lệ, ≤ 7 ngày) ⇒ phí theo CÔNG THỨC thay cho phí đo từ sổ
+    const bieu = await bieuPhiCuaGian(prisma, ch)
+    if (bieu) return bangCongThuc(bieu, goc, co)
     const { tenNganh, viDuNganh } = co
     /* Hoa hồng affiliate Shopee đặt ở cấp SHOP (chiến dịch mở áp mọi sản phẩm) — ngành chưa thấy đơn affiliate nào vẫn có thể
      * ra đơn affiliate bất cứ lúc nào. Giá sàn (tyLeAffiliate = max(mức khai, affiliate.tyLeMax)) của MỌI sản phẩm phải tính

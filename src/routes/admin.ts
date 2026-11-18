@@ -9174,6 +9174,57 @@ router.get('/do-escrow-tho', async (req: Request, res: Response) => {
     }
 })
 
+/* ────────────────────────────────────────────────────────────────────────────
+ *  BIỂU PHÍ SHOPEE (18/11/2026 — lib/bieuPhiShopee: phí sàn tính theo CÔNG THỨC đọc thẳng escrow)
+ *  GET  /admin/shopee-bieu-phi?storeCode=              CHỈ ĐỌC: biểu phí đã lưu của mọi gian Shopee
+ *  POST /admin/shopee-bieu-phi?storeCode=&kenh=<id|tên> đọc escrow vài đơn mẫu mỗi ngành (TUẦN TỰ, ≤ 60 đơn) rồi LƯU biểu phí
+ *       — chỉ ghi dòng 'bieu-phi' của ShopeePilotConfig, KHÔNG ghi gì lên Shopee. Bình thường lượt Pilot theo lịch tự đọc lại
+ *       mỗi ngày; route này để đọc ngay (lần đầu sau deploy, hoặc soát).
+ *  Không trả mã đơn — chỉ số tổng hợp + mã ngành.
+ * ──────────────────────────────────────────────────────────────────────────── */
+router.get('/shopee-bieu-phi', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) { res.status(400).json({ success: false, error: 'thiếu ?storeCode=' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { docBieuPhi, bieuPhiDungDuoc } = await import('../lib/bieuPhiShopee')
+        const kenh: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true } })
+        const data: any[] = []
+        for (const c of kenh) {
+            const b = await docBieuPhi(sp, String(c.id))
+            data.push({ kenh: c.name, id: c.id, dungDuoc: bieuPhiDungDuoc(b), bieuPhi: b })
+        }
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
+router.post('/shopee-bieu-phi', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || '').trim()
+        const kenhHoi = String(req.query.kenh || req.body?.kenh || '').trim()
+        if (!storeCode || !kenhHoi) { res.status(400).json({ success: false, error: 'thiếu ?storeCode= hoặc ?kenh= (id / tên gian)' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const ds: any[] = await sp.onlineChannel.findMany({ where: { platform: 'shopee' }, orderBy: { createdAt: 'asc' } })
+        const thuong = kenhHoi.toLowerCase()
+        const ch = ds.find(c => c.id === kenhHoi) || ds.find(c => String(c.name || '').toLowerCase() === thuong)
+        if (!ch) { res.status(404).json({ success: false, error: `không thấy gian Shopee "${kenhHoi}" — có: ${ds.map(c => c.name).join(', ')}` }); return }
+        if (!ch.accessToken || !ch.shopId) { res.status(400).json({ success: false, error: `gian "${ch.name}" chưa uỷ quyền API` }); return }
+        const { doVaLuuBieuPhi } = await import('../lib/bieuPhiShopee')
+        const { moDichVuShopee } = await import('../lib/shopeeTuQuan')
+        const batDau = Date.now()
+        const kq = await doVaLuuBieuPhi(sp, ch, moDichVuShopee)
+        res.json({ success: !kq.loi, data: { kenh: ch.name, ms: Date.now() - batDau, bieuPhi: kq.bieu, ...(kq.loi ? { loi: kq.loi } : {}) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/do-loi-nhuan-san', async (req: Request, res: Response) => {
     try {
         const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 30))

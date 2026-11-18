@@ -29,7 +29,8 @@
 
 import crypto from 'crypto'
 import { ToolError } from './mcpTypes'
-import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, SO_DON_TU_GHI, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { tinhGiaDeXuat, danhGiaGia, chanGiaDuoiSan, lyDoPhiChuaDuTin, lyDoChuaBietPhi, dongChuKyChuaBietPhi, phiDuTinChoMay, type ThamSoGia, type KetQuaGia, type MauPhi } from './giaShopee'
+import { doBieuPhiGianCuNhat } from './bieuPhiShopee'
 import { moDichVuShopee, docMauPhiSanPham, docMauPhiTheoNganh, tomTatMauPhi, timHangKho, duongNganh, luuDanhMucSan } from './shopeeTuQuan'
 import {
     num, giaVonHangLoat, soBan14Ngay, daBanCuaListing, timUngVien, dangSanPhamShopee, doiGiaShopee, timListing, LoiKhongRo, THIEU_MO_TA,
@@ -761,8 +762,11 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
     ])
     // phí cả gian (số tổng quan); từng sản phẩm tính theo phí NGÀNH của nó (bang.chon) — mỗi ngành Shopee thu một khác
     const mauPhi = bang.toanGian
-    const chuaTuGhi = mauPhi.nguon === 'cau-hinh-kenh' || !!mauPhi.khai || !!mauPhi.chuaBiet || !(mauPhi.soDon >= SO_DON_TU_GHI)
+    // phí công thức (18/11/2026): đủ tin theo biểu phí, không theo 30 đơn — phiDuTinChoMay; phí đo từ sổ: như trước
+    const chuaTuGhi = !phiDuTinChoMay(mauPhi)
     const tomTatGian = tomTatMauPhi(mauPhi, bang)
+    const congThuc = mauPhi.nguon === 'cong-thuc' && mauPhi.congThuc ? mauPhi.congThuc : null
+    const soNganhChuaDo = [...bang.viDuNganh.keys()].filter(k => !bang.theoNganh.has(k)).length
     const aff = mauPhi.affiliate
     const affSan = Math.max(pol.affiliateRate, Math.min(aff?.tyLeMax ?? 0, 0.5))
     status.feeModel = {
@@ -784,7 +788,17 @@ export async function xayTrangThai(ctx: NgCanh, o: { q?: any; offset?: any; lim?
         declared: !!mauPhi.khai, unknown: !!mauPhi.chuaBiet, scope: tomTatGian.scope, detail: tomTatGian.detail,
         byCategory: [...bang.theoNganh.values()].sort((a, b) => b.soDon - a.soDon).slice(0, 30).map(m => tomTatMauPhi(m, bang)),
         // ngành có hàng trên gian mà chưa đủ đơn đo riêng — sản phẩm các ngành này dùng phí cả gian, máy không tự hạ giá
-        unmeasuredCategories: [...bang.viDuNganh.keys()].filter(k => !bang.theoNganh.has(k)).length,
+        unmeasuredCategories: soNganhChuaDo,
+        /* Phí theo CÔNG THỨC (18/11/2026): biểu phí đọc thẳng escrow — lúc đọc, số đơn mẫu, số đơn công thức khớp phí thật; và câu
+         * thay cho chữ "cần ít nhất 8 đơn" dưới bảng phí ngành (ngành chưa có đơn mẫu thì một đơn đã hoàn tất là đủ). */
+        ...(congThuc ? {
+            formula: { readAt: congThuc.doLuc, samples: congThuc.soMauGian, matched: congThuc.soKhop, averageCategoryRate: congThuc.phiNganh },
+            ...(soNganhChuaDo ? {
+                unmeasuredNote: `Còn ${soNganhChuaDo} ngành có hàng trên gian nhưng chưa có đơn đã hoàn tất (90 ngày) chỉ có hàng của ngành đó để đọc ` +
+                    `% phí cố định — sản phẩm các ngành này tạm tính theo % trung bình các ngành, máy không tự hạ giá / đăng mới. ` +
+                    'Ngành có một đơn hoàn tất là đọc được (biểu phí đọc lại mỗi ngày).',
+            } : {}),
+        } : {}),
         // từ giá này trở lên máy mới tự ghi (dưới đó: kế hoạch để nháp chờ người duyệt); null = máy chưa tự ghi giá nào
         autoFromPrice: chuaTuGhi ? null : mauPhi.nguon === 'ty-le-don' ? Math.ceil(mauPhi.giaBanTB || 0) : Math.ceil(mauPhi.giaBanMin || 0),
         ...(mauPhi.chuaBiet ? { warning: lyDoChuaBietPhi(mauPhi.soDon, ch.name) }
@@ -2536,6 +2550,12 @@ export async function chayTheoLich(prisma: any, kho?: KhoPilot): Promise<'khong-
      * (lib/pilotBaoChuShop.ketQuaDeBao — X-09, 09/11/2026). Tự động ⇒ báo mọi việc cần người. */
     const bao = await baoChuShop(prisma, 'Shopee Pilot', ketQuaDeBao(ketQua, ketQua.executionMode !== 'auto'), truoc).catch(() => truoc)
     await k.ghiKetQuaLich(luc, { ...ketQua, ...(bao ? { baoChuShop: bao } : {}) }).catch(() => { })
+    /* Biểu phí Shopee (18/11/2026): đọc lại MỘT gian có biểu phí cũ nhất (> 24 giờ) — SAU chu kỳ, trong chính request nhịp cron
+     * (có CPU; lượt nền ngoài request bị Cloud Run hãm). Chỉ bản vừa giành được lượt chạy mới làm. Hỏng không ảnh hưởng chu kỳ. */
+    try {
+        const kq = await doBieuPhiGianCuNhat(prisma, moDichVuShopee)
+        if (kq !== 'khong-can' && kq !== 'tat') console.log(`[ShopeePilot] biểu phí: ${kq}`)
+    } catch (e: any) { console.warn('[ShopeePilot] đo biểu phí hỏng:', String(e?.message || e).slice(0, 200)) }
     return ketQua.ok ? 'da-chay' : 'loi'
 }
 
@@ -2573,16 +2593,21 @@ Pilot giờ chạy trên máy chủ kengi, dữ liệu lấy thẳng từ kho c�
    - Giá vốn, tồn kho, mô tả, ảnh lấy từ kho kengi. Thiếu giá vốn hoặc ảnh thì không đăng được.
 
 3. Định giá
-   - Phí Shopee đo từ chính các đơn đã đối soát của gian — KHÔNG lấy số đo của gian khác (gian Mall / gian thường, ngành hàng
-     khác nhau thì phí khác nhau). Mỗi chỗ hiện phí đều ghi rõ nguồn: đo từ bao nhiêu đơn, của ngành nào / cả gian, hay số khai.
+   - Phí Shopee tính theo BIỂU PHÍ đọc thẳng từ escrow các đơn đã hoàn tất của gian (từ 18/11/2026): % phí cố định của NGÀNH
+     (mọi mã cùng ngành cùng mức — một đơn là biết) + phí thanh toán + phí dịch vụ (phần % có trần) + phí mỗi đơn + thuế.
+     Biểu phí đọc lại mỗi ngày; công thức phải khớp phí thật từng đơn mẫu mới được dùng, không khớp thì quay về phí đo từ đơn
+     đã đối soát như trước. Ngành chưa có đơn hoàn tất: tạm dùng % trung bình các ngành, máy không tự hạ giá.
+   - KHÔNG lấy số đo của gian khác (gian Mall / gian thường, ngành hàng khác nhau thì phí khác nhau). Mỗi chỗ hiện phí đều ghi
+     rõ nguồn: biểu phí của ngành nào, đo từ bao nhiêu đơn, hay số khai.
    - Gian chưa đủ 8 đơn đã đối soát: dùng phí sàn chủ shop KHAI cho gian ở Kênh bán online (Đơn Hàng Online → nút «Kênh bán
      hàng» → nút «Key» ở dòng của gian → ô «Phí sàn (%)») — người duyệt được, máy không tự đăng mới / hạ giá theo số khai.
      Ô phí còn để mặc định 6% (chưa khai) thì CHƯA BIẾT PHÍ: không tính được giá, không ghi được giá nào cho tới khi khai phí.
    - Giá đề xuất = đạt lãi mục tiêu sau phí sàn, đóng gói, quảng cáo, thuế GTGT (nếu khai). Giá sàn = lãi tối thiểu
      NGAY CẢ KHI đơn đi qua affiliate (cộng trọn "Hoa hồng affiliate"). Máy chủ từ chối mọi giá dưới giá sàn.
    - Doanh nghiệp nộp GTGT khấu trừ: khai "Thuế GTGT trên giá bán" — tiền Shopee chuyển về không trừ thuế đầu ra.
-   - Máy (chu kỳ Tự động, AI) chỉ tự đăng mới / hạ giá khi phí đã đo từ ≥ 30 đơn đối soát và đủ chắc ở mức giá đó. Phí khai,
-     mới đo từ ít đơn, giá thấp hơn mọi đơn đã đo, hay phí các đơn lệch nhau nhiều: kế hoạch để nháp chờ người duyệt.
+   - Máy (chu kỳ Tự động, AI) chỉ tự đăng mới / hạ giá khi phí đủ chắc: theo biểu phí thì ngành đã có đơn mẫu, các đơn mẫu
+     không lệch nhau và công thức đã khớp ≥ 10 đơn của gian; theo phí đo từ sổ thì ≥ 30 đơn đối soát và đủ chắc ở mức giá đó.
+     Phí khai, mới đo từ ít đơn, giá thấp hơn mọi đơn đã đo, hay phí các đơn lệch nhau nhiều: kế hoạch để nháp chờ người duyệt.
      TĂNG giá (vd hàng đang bán dưới giá sàn) thì máy vẫn tự làm — tăng giá không bao giờ làm lỗ thêm.
    - Khuyến mãi soát lại giá sàn lúc thực thi; dòng nào giá vốn / phí đã đổi làm giá KM dưới sàn thì bị bỏ.
    - Giá khuyến mãi tính từ giá GỐC đọc thẳng từ Shopee, cả lúc lập lẫn lúc thực thi (giá gốc vừa sửa trên Seller Center thì

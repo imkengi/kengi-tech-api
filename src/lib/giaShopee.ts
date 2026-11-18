@@ -12,6 +12,12 @@
  *  — không gõ cứng biểu phí, vì biểu phí đổi theo ngành, theo gói Freeship/Voucher
  *  Xtra mà gian có tham gia hay không, và Shopee đổi biểu phí vài lần mỗi năm.
  *
+ *  PHÍ THEO CÔNG THỨC (18/11/2026, nguon 'cong-thuc' — lib/bieuPhiShopee): escrow Shopee khớp TỪNG ĐỒNG với
+ *  % ngành × giá sau voucher + 6% thanh toán + 5,5% dịch vụ (phần % tối đa 50.000đ) + 3.000đ + thuế 1,5% + 2.700đ
+ *  bảo vệ vận chuyển; % ngành giống hệt nhau giữa mọi mã cùng ngành. Biểu phí đọc thẳng escrow vài đơn mỗi ngành
+ *  ⇒ một đơn là biết phí của ngành, khỏi chờ 8 đơn để hồi quy. Phí đo từ sổ (platformFee) còn thiếu: đọc escrow
+ *  sớm rồi không đọc lại (thiếu 2.700đ, khoản điều chỉnh sau). Trần phí dịch vụ ⇒ `tran` (phí gãy ở ~909.000đ).
+ *
  *  Gian chưa đủ SO_DON_TOI_THIEU đơn đối soát để đo (09/11/2026, chủ shop: "xem phí phải ghi rõ ra không thể
  *  mượn được") ⇒ KHÔNG mượn số đo của gian khác (Mall / thường, ngành hàng khác nhau ⇒ phí khác nhau), mà:
  *   - chủ shop đã KHAI phí sàn của gian (OnlineChannel.commissionRate > 0 và khác PHI_KENH_MAC_DINH) ⇒ dùng số
@@ -69,14 +75,40 @@ export interface AffiliateDo {
     soDonCo: number
 }
 
+/** Phần phí có TRẦN (18/11/2026 — phí dịch vụ Shopee: phần % tối đa 50.000đ/đơn): từ giá `tuGia` trở lên, mỗi đồng giá thêm
+ *  chỉ chịu (tyLe − giam) phí ⇒ phí(P) = tyLe·P + coDinh − giam·max(0, P − tuGia). Không có = phí thẳng như cũ. */
+export interface TranPhi { tuGia: number; giam: number }
+
+/** Thông tin mô hình phí TÍNH THEO CÔNG THỨC từ biểu phí đọc thẳng escrow Shopee (lib/bieuPhiShopee, 18/11/2026). */
+export interface CongThucPhi {
+    /** % phí cố định (commission) của ngành, 0..1 — trên giá sau voucher shop */
+    phiNganh: number
+    /** số đơn mẫu của ngành này (0 = ngành chưa có đơn mẫu ⇒ đang dùng % trung bình các ngành) */
+    soMauNganh: number
+    /** số đơn mẫu cả gian đã kiểm công thức, và số đơn khớp phí thật */
+    soMauGian: number
+    soKhop: number
+    /** các đơn mẫu của ngành ra % khác nhau (Shopee có thể vừa đổi biểu phí) ⇒ dùng mức CAO nhất, máy không tự hạ giá */
+    lech?: boolean
+    /** lúc đọc biểu phí (epoch ms) */
+    doLuc: number
+    /** các khoản chung cả gian, một cụm cho người đọc — vd "thanh toán 6% + dịch vụ 5,5% (tối đa 50.000đ) + 3.000đ/đơn + …" */
+    moTa?: string
+}
+
 export interface MauPhi {
     /** tỷ lệ phí theo giá bán, 0..1 */
     tyLe: number
     /** phí cố định mỗi đơn, VND */
     coDinh: number
-    nguon: 'hoi-quy-don' | 'ty-le-don' | 'cau-hinh-kenh'
+    /** 'cong-thuc' (18/11/2026): phí tính theo biểu phí Shopee đọc thẳng escrow — % ngành × giá + phí thanh toán + phí dịch vụ
+     *  (có trần) + thuế + phí cố định/đơn; xem lib/bieuPhiShopee. Đủ tin theo `congThuc`, không theo số đơn. */
+    nguon: 'hoi-quy-don' | 'ty-le-don' | 'cau-hinh-kenh' | 'cong-thuc'
     soDon: number
     ghiChu: string
+    /** trần của phần phí tỷ lệ (phí dịch vụ Shopee) — chỉ có ở nguon 'cong-thuc' */
+    tran?: TranPhi
+    congThuc?: CongThucPhi
     /** khoảng giá bán và giá bán TRUNG BÌNH của các đơn đã đo (không có khi chưa đo) */
     giaBanMin?: number
     giaBanMax?: number
@@ -257,7 +289,7 @@ export interface ThamSoGia {
     giaVon: number
     /** mô hình phí (MauPhi) — có `affiliate` thì dùng hoa hồng đo được, xem tyLeAffiliate / tyLePhiKyVong.
      *  `chuaBiet` (MauPhi.chuaBiet, 09/11/2026) ⇒ không tính giá; `soDon` chỉ để lý do nói gian có bao nhiêu đơn đối soát. */
-    phi: { tyLe: number; coDinh: number; affiliate?: AffiliateDo; chuaBiet?: boolean; soDon?: number }
+    phi: { tyLe: number; coDinh: number; affiliate?: AffiliateDo; chuaBiet?: boolean; soDon?: number; tran?: TranPhi }
     /** biên lãi mục tiêu trên giá bán, % */
     bienLoiNhuanPct: number
     /** biên tối thiểu — dưới mức này là "giá sàn", công cụ ghi từ chối. Mặc định 5, không < 0 */
@@ -325,8 +357,21 @@ const tyLeAffiliateTB = (phi: ThamSoGia['phi']) => (phi.affiliate?.tachRieng ? p
  * trọn hoa hồng) — trường hợp xấu nhất, là thứ giá sàn phải giữ. Không qua affiliate = đơn kỳ vọng
  * (phí đo, gồm hoa hồng trung bình).
  */
+/** Trần hợp lệ của phần phí tỷ lệ (tuGia > 0, 0 < giam ≤ tyLe) — số hỏng thì coi như không có trần (phí cao hơn = thận trọng). */
+function tranHopLe(phi: ThamSoGia['phi']): TranPhi | null {
+    const tr = phi.tran
+    if (!tr || !(tr.tuGia > 0) || !(tr.giam > 0) || !(tr.giam <= phi.tyLe) || !Number.isFinite(tr.tuGia) || !Number.isFinite(tr.giam)) return null
+    return tr
+}
+
+/** Phần phí bớt nhờ trần ở mức giá `gia` (0 khi không có trần / giá chưa tới trần). */
+const phiBotNhoTran = (phi: ThamSoGia['phi'], gia: number) => {
+    const tr = tranHopLe(phi)
+    return tr && gia > tr.tuGia ? tr.giam * (gia - tr.tuGia) : 0
+}
+
 export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct' | 'phiAffiliatePct' | 'thueGtgtPct'>, quaAffiliate = false): DanhGiaGia {
-    const phiSan = (t.phi.tyLe + (quaAffiliate ? 0 : tyLeAffiliateTB(t.phi))) * gia + t.phi.coDinh
+    const phiSan = (t.phi.tyLe + (quaAffiliate ? 0 : tyLeAffiliateTB(t.phi))) * gia + t.phi.coDinh - phiBotNhoTran(t.phi, gia)
     const quangCao = ((t.phiQuangCaoPct || 0) / 100) * gia
     const thue = tyLeThue(t) * gia
     const aff = quaAffiliate ? tyLeAffiliate(t) * gia : 0
@@ -341,11 +386,17 @@ export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'p
     }
 }
 
-/** Giá đạt đúng biên `bienPct` (chưa làm tròn). Infinity nếu mẫu số ≤ 0. */
+/** Giá đạt đúng biên `bienPct` (chưa làm tròn). Infinity nếu mẫu số ≤ 0.
+ *  Phí có trần (MauPhi.tran, 18/11/2026): lãi theo giá là đường gãy đi LÊN (từ tuGia mỗi đồng giá thêm chịu ít phí hơn) ⇒
+ *  nghiệm khúc đầu nằm dưới tuGia thì dùng, không thì nghiệm khúc sau: P = (vốn + coDinh + đóng gói + giam·tuGia) / (mau + giam). */
 function giaDatBien(t: ThamSoGia, bienPct: number, quaAffiliate: boolean): number {
     const mau = 1 - t.phi.tyLe - bienPct / 100 - (t.phiQuangCaoPct || 0) / 100 - tyLeThue(t) - (quaAffiliate ? tyLeAffiliate(t) : tyLeAffiliateTB(t.phi))
     if (mau <= 0.02) return Infinity
-    return (t.giaVon + t.phi.coDinh + (t.phiDongGoi || 0)) / mau
+    const tuSo = t.giaVon + t.phi.coDinh + (t.phiDongGoi || 0)
+    const p1 = tuSo / mau
+    const tr = tranHopLe(t.phi)
+    if (!tr || p1 <= tr.tuGia) return p1
+    return (tuSo + tr.giam * tr.tuGia) / (mau + tr.giam)
 }
 
 export function tinhGiaDeXuat(t: ThamSoGia): KetQuaGia {
@@ -441,6 +492,7 @@ export function chanGiaDuoiSan(gia: number, kq: KetQuaGia): string | null {
  */
 export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5): string | null {
     const d = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
+    if (phi.nguon === 'cong-thuc') return lyDoCongThucChuaDuTin(phi)
     if (phi.nguon === 'cau-hinh-kenh') {
         // 09/11/2026: không còn nhánh "mượn số đo gian khác" — gian chưa đủ đơn chỉ có số KHAI hoặc chưa biết phí
         if (phi.chuaBiet) return `${lyDoChuaBietPhi(phi.soDon)} Máy không tự đăng mới / hạ giá: không biết phí thì không biết lỗ.`
@@ -479,6 +531,46 @@ export function lyDoPhiChuaDuTin(gia: number, phi: MauPhi, bienToiThieuPct = 5):
             `lớn hơn biên tối thiểu ${round2(nguong * 100)}%, cần thêm đơn đối soát. Máy không tự đăng / hạ giá về mức này: người duyệt trên Pilot.`
     }
     return null
+}
+
+/** Gian cần ít nhất chừng này đơn mẫu đã kiểm công thức (khớp phí thật) thì máy mới tự đăng / hạ giá theo phí công thức. */
+export const SO_MAU_CONG_THUC_TU_GHI = 10
+
+/**
+ * Rào đủ tin của phí TÍNH THEO CÔNG THỨC (18/11/2026, chủ shop: "ủa phí cố định nó sẽ theo tuỳ mã hàng chứ" → "Ok, đổi đi").
+ * Không cần 30 đơn mỗi ngành như phí đo: % phí cố định của ngành đọc THẲNG từ escrow (một đơn là đủ, cùng ngành mọi mã cùng
+ * mức), các khoản khác là công thức chung cả gian đã kiểm khớp phí thật từng đơn mẫu. Không đo sai số theo giá (phí cố định
+ * mỗi đơn biết chính xác) ⇒ bỏ cả rào "dưới giá đơn rẻ nhất" lẫn 4σ. Còn chặn khi:
+ *  - ngành chưa có đơn mẫu / chưa rõ ngành (đang dùng % trung bình các ngành);
+ *  - các đơn mẫu của ngành ra % khác nhau (Shopee có thể vừa đổi biểu phí — đang dùng mức cao nhất);
+ *  - gian mới kiểm công thức trên dưới SO_MAU_CONG_THUC_TU_GHI đơn.
+ */
+function lyDoCongThucChuaDuTin(phi: MauPhi): string | null {
+    const ct = phi.congThuc
+    const duoi = 'Máy không tự đăng mới / hạ giá: người duyệt từng kế hoạch trên Pilot.'
+    if (!ct) return `Phí tính theo công thức nhưng thiếu thông tin biểu phí — ${duoi}`
+    if (phi.thayNganh) {
+        return `Ngành của sản phẩm (${phi.thayNganh}) chưa có đơn đã hoàn tất nào để đọc % phí cố định của ngành — đang dùng % trung bình ` +
+            `các ngành (${round2(ct.phiNganh * 100)}%), mà mỗi ngành phí một khác. ${duoi}`
+    }
+    if (phi.chuaRoNganh) {
+        return `Sản phẩm chưa rõ ngành trên sàn — đang dùng % phí cố định trung bình các ngành (${round2(ct.phiNganh * 100)}%), mà mỗi ngành ` +
+            `phí một khác. ${duoi}`
+    }
+    if (ct.lech) {
+        return `Các đơn mẫu của ngành ra % phí cố định khác nhau (Shopee có thể vừa đổi biểu phí) — đang dùng mức cao nhất ` +
+            `${round2(ct.phiNganh * 100)}%. ${duoi}`
+    }
+    if (!(ct.soKhop >= SO_MAU_CONG_THUC_TU_GHI)) {
+        return `Công thức phí mới khớp phí thật ở ${ct.soKhop}/${SO_MAU_CONG_THUC_TU_GHI} đơn mẫu của gian — chưa đủ chắc là không sót loại phí nào. ${duoi}`
+    }
+    return null
+}
+
+/** Mô hình phí đủ tin cho MÁY tự đăng mới / hạ giá (chưa xét rào theo mức giá) — dùng cho nhãn "Máy tự hạ giá" của bảng phí. */
+export function phiDuTinChoMay(m: MauPhi): boolean {
+    if (m.nguon === 'cong-thuc') return lyDoCongThucChuaDuTin(m) == null
+    return m.nguon !== 'cau-hinh-kenh' && !m.khai && !m.chuaBiet && m.soDon >= SO_DON_TU_GHI && !m.thayNganh && !m.chuaRoNganh
 }
 
 /** Sai số chuẩn của TỶ LỆ phí đo được ở mức giá `gia` (0..1). null = không có số đo (phí cấu hình kênh). */
