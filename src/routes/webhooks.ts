@@ -4,6 +4,7 @@ import registryPrisma, { getStorePrisma } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction, lienKetHangDon } from '../services/orderSync'
+import { xetLaiDuKienAnToan, CUA_SO_DON_MOI_MS } from '../lib/laiDuKienDon'
 import { syncChannelReturns } from '../services/returnSync'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { moTaLoi } from '../lib/gomLoi'
@@ -375,6 +376,8 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
     const existing = await storePrisma.onlineOrder.findFirst({
         where: { externalOrderId: orderSn, channelId: channel.id },
     })
+    /** đơn cần xét lãi dự kiến cuối handler — đơn mới, hoặc đơn đã có nhưng còn trong cửa sổ "đơn mới" */
+    let idXetLai: string | null = existing && Date.now() - new Date(existing.createdAt).getTime() < CUA_SO_DON_MOI_MS ? existing.id : null
 
     if (existing) {
         // Update existing order
@@ -481,7 +484,12 @@ async function xuLyPushShopee(tin: TinPush): Promise<KetQuaPush> {
         console.log(`[Shopee Webhook] ✅ Created new order ${orderSn} → ${orderDetail.status}`)
         // Liên kết hàng ↔ kho ngay lúc về (xem chú thích ở nhánh Updated phía trên).
         try { await lienKetHangDon(storePrisma, newOrder.id) } catch { /* không chặn webhook */ }
+        idXetLai = newOrder.id
     }
+
+    /* LÃI DỰ KIẾN + BÁO ĐỘNG LỖ NGAY (18/11/2026) — đặt CUỐI, sau liên kết hàng ↔ kho (giá vốn cần mã hàng). Đơn mới, hoặc push
+     * đổi trạng thái của đơn ≤ 24 giờ mà lần trước chưa xét được (đã xét thì một truy vấn khoá chính). Không bao giờ ném. */
+    if (idXetLai) await xetLaiDuKienAnToan(storePrisma, [idXetLai], 'webhook')
 
     return xongPush()
 }
@@ -717,6 +725,8 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
     const existing = await storePrisma.onlineOrder.findFirst({
         where: { externalOrderId: String(orderId), channelId: channel.id },
     })
+    /** đơn cần xét lãi dự kiến cuối handler — như nhánh Shopee */
+    let idXetLai: string | null = existing && Date.now() - new Date(existing.createdAt).getTime() < CUA_SO_DON_MOI_MS ? existing.id : null
 
     if (existing) {
         await storePrisma.onlineOrder.update({
@@ -824,7 +834,11 @@ async function xuLyPushTikTok(tin: TinPush): Promise<KetQuaPush> {
              * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
             console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
         }
+        idXetLai = newOrder.id
     }
+
+    // LÃI DỰ KIẾN + BÁO ĐỘNG LỖ NGAY (18/11/2026) — cuối handler, như nhánh Shopee. Không bao giờ ném.
+    if (idXetLai) await xetLaiDuKienAnToan(storePrisma, [idXetLai], 'webhook')
 
     return xongPush()
 }

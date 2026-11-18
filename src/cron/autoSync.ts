@@ -2,6 +2,7 @@ import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { chayNeuLanhDao } from '../lib/leaderLock'
 import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
+import { vetLaiDuKienDonMoi } from '../lib/laiDuKienDon'
 import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
 import { choXong } from '../lib/choXong'
@@ -374,6 +375,11 @@ async function runAutoSync() {
                         // (undici gói lỗi mạng thật vào `cause`).
                         console.error(`[AutoSync] Error syncing ${store.name}/${channel.name}:`, fmtErr(err))
                     }
+
+                    /* LÃI DỰ KIẾN + BÁO ĐỘNG LỖ (18/11/2026) — LƯỚI VÉT: đơn ≤ 24 giờ của kênh chưa xét (vừa kéo ở lượt này,
+                     * webhook lỡ, Lazada chưa có webhook). Đặt NGOÀI khối đồng bộ: kênh kéo đơn hỏng (token / IP) mà webhook
+                     * vẫn chạy thì đơn webhook xét hỏng vẫn được vét. Không ném; lượt không có đơn mới chỉ tốn một truy vấn. */
+                    await vetLaiDuKienDonMoi(storePrisma, channel, 'dong-bo')
 
                     // ── VÁ DẦN NGÀY NHẬN HÀNG (Shopee) ──────────────────────
                     // Shopee không trả ngày giao trong chi tiết đơn → phải hỏi VẬN

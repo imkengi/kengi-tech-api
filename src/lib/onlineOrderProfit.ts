@@ -24,7 +24,7 @@ export interface OrderProfit {
 }
 
 // Đơn hủy/hoàn không tính lợi nhuận (giữ đúng danh sách đang dùng ở /stats)
-const CANCELLED_STATUSES = [
+export const CANCELLED_STATUSES = [
     'CANCELLED', 'IN_CANCEL', 'TO_RETURN',
     'cancelled', 'cancelling', 'returned',
 ]

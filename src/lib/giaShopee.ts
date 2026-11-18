@@ -370,8 +370,29 @@ const phiBotNhoTran = (phi: ThamSoGia['phi'], gia: number) => {
     return tr && gia > tr.tuGia ? tr.giam * (gia - tr.tuGia) : 0
 }
 
+/** Phí sàn (VND, chưa làm tròn) của MỘT đơn giá `gia` theo mô hình `phi` — đúng phần phiSan của danhGiaGia. `kemAffTB` = cộng
+ *  hoa hồng affiliate TRUNG BÌNH (phí kỳ vọng; chỉ khi mô hình đo tách affiliate, không thì đã gộp sẵn trong tyLe). */
+export function phiSanCuaGia(phi: ThamSoGia['phi'], gia: number, kemAffTB = true): number {
+    return (phi.tyLe + (kemAffTB ? tyLeAffiliateTB(phi) : 0)) * gia + phi.coDinh - phiBotNhoTran(phi, gia)
+}
+
+/**
+ * Phí sàn KỲ VỌNG (VND, chưa làm tròn) của MỘT ĐƠN nhiều dòng, mỗi dòng một mô hình phí theo ngành của nó (18/11/2026 — lãi dự
+ * kiến đơn mới, lib/laiDuKienDon): phần tỷ lệ (+ affiliate trung bình) theo mô hình TỪNG dòng trên giá dòng; phần cố định mỗi
+ * đơn + trần theo mô hình của dòng giá cao nhất, trên TỔNG đơn. Phí công thức Shopee: mọi ngành chung phần cố định / trần (phí
+ * dịch vụ có trần theo ĐƠN, phí bảo vệ mỗi đơn) ⇒ đúng công thức escrow của cả đơn. Một dòng / cùng một mô hình ⇒ đúng bằng
+ * phiSanCuaGia(mô hình, tổng).
+ */
+export function phiSanCuaDon(dong: { gia: number; phi: ThamSoGia['phi'] }[]): number {
+    const co = dong.filter(d => d.gia > 0)
+    if (!co.length) return 0
+    const chinh = co.reduce((a, b) => (b.gia > a.gia ? b : a))
+    const tong = co.reduce((s, d) => s + d.gia, 0)
+    return co.reduce((s, d) => s + (d.phi.tyLe + tyLeAffiliateTB(d.phi)) * d.gia, 0) + chinh.phi.coDinh - phiBotNhoTran(chinh.phi, tong)
+}
+
 export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct' | 'phiAffiliatePct' | 'thueGtgtPct'>, quaAffiliate = false): DanhGiaGia {
-    const phiSan = (t.phi.tyLe + (quaAffiliate ? 0 : tyLeAffiliateTB(t.phi))) * gia + t.phi.coDinh - phiBotNhoTran(t.phi, gia)
+    const phiSan = phiSanCuaGia(t.phi, gia, !quaAffiliate)
     const quangCao = ((t.phiQuangCaoPct || 0) / 100) * gia
     const thue = tyLeThue(t) * gia
     const aff = quaAffiliate ? tyLeAffiliate(t) * gia : 0

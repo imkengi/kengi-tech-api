@@ -15,6 +15,7 @@ import { adjustSellableStock, updateWarehouseStock, khoHuHong } from '../lib/war
 import { moKhoMeHu, nhapKhoHuMe, type KhoMeHu } from '../lib/khoMeHu'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
+import { docLaiDuKien, vetLaiDuKienDonMoi } from '../lib/laiDuKienDon'
 import { moTaLoi } from '../lib/gomLoi'
 import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
@@ -1190,9 +1191,13 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
                 console.error('Compute order profits error:', err)
                 return new Map()
             })
+            /* LÃI DỰ KIẾN lúc đơn về (18/11/2026, lib/laiDuKienDon): con số đã tính + nguồn phí — ô Lợi nhuận hiện nó (ghi rõ
+             * "dự kiến") cho đơn CHƯA quyết toán thay cho "chưa quyết toán" trơn. Bảng chưa có / đọc hỏng ⇒ không có. */
+            const duKien = await docLaiDuKien(prisma, orders.map((o: any) => String(o.id))).catch(() => new Map())
             items = orders.map(o => {
                 const p = profits.get(o.id)
                 const oa = ganAnh(o)
+                const laiDuKien = duKien.get(String(o.id)) ?? null
                 return p ? {
                     ...oa,
                     estimatedCost: p.cost,
@@ -1202,7 +1207,8 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
                     // Đơn khách trả: sàn quyết toán ÂM. Giao diện phải nói rõ là HOÀN,
                     // không thì con số âm trông như lỗ do bán rẻ.
                     donHoanTra: p.hoanTra === true,
-                } : oa
+                    laiDuKien,
+                } : { ...oa, laiDuKien }
             })
         }
 
@@ -3594,6 +3600,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                 if (hd?.loi.length) errors.push(`Thông tin HĐ khách Shopee: ${hd.loi[0]}`)
             } catch (e: any) { console.warn('[Sync] lấy thông tin HĐ khách Shopee:', e?.message || e) }
         }
+
+        // LÃI DỰ KIẾN + BÁO ĐỘNG LỖ (18/11/2026): đơn ≤ 24 giờ của kênh chưa xét (vừa kéo về ở lượt này / lỡ webhook). Không ném.
+        await vetLaiDuKienDonMoi(prisma, channel, 'dong-bo-tay')
 
         // ── Batch refresh status của đơn cũ chưa kết thúc ──────────────────────
         // Shopee chỉ sync đơn mới theo create_time → đơn SHIPPED từ tháng trước không được cập nhật
