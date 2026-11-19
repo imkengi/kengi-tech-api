@@ -12,7 +12,7 @@ process.env.MARKETING_VAULT_KEY = process.env.MARKETING_VAULT_KEY || 'ab'.repeat
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { tuTraLoiShopee, KhoTuTraLoi, PhuThuocTuTraLoi, CAU_CHO, CheDoTuTraLoi } from '../src/lib/tuTraLoiShopee'
-import { guiNhapDaDuyet, daCoNguoiTraLoiSau, phutConLai, KhoChoDuyet, BanNhap, NhapMoi, HAN_PHAN_HOI_PHUT } from '../src/lib/choDuyetChat'
+import { guiNhapDaDuyet, daCoNguoiTraLoiSau, phutConLai, docTrongHan, HAN_DOC_TIN_MS, KhoChoDuyet, BanNhap, NhapMoi, HAN_PHAN_HOI_PHUT } from '../src/lib/choDuyetChat'
 import type { TinShopeeGoiY } from '../src/services/platforms/shopee'
 
 let dat = 0, hong = 0
@@ -214,6 +214,45 @@ async function main() {
         /docCheDo = \(x: unknown\): CheDoTuTraLoi => \(x === 'tu_gui' \? 'tu_gui' : 'cho_duyet'\)/.test(lib) && /SELECT \* FROM "TuTraLoiCaiDat" WHERE "kenhId" = \$1/.test(lib))
     ok('E7. app Android ghi null TƯỜNG MINH cho trường bỏ trống ⇒ máy chủ coi null là không đổi (kẻo bật gian bị 400)',
         /const bat = req\.body\?\.bat \?\? undefined/.test(route) && /const cheDo = req\.body\?\.cheDo \?\? undefined/.test(route))
+
+    // F — 19/11/2026 20:19: hàng chờ proxy Tino kẹt ⇒ GET /cho-duyet treo 900 giây (504), app (chờ 15 giây) báo không vào được.
+    {
+        const treo = () => new Promise<string>(() => { }) // lời gọi Shopee không bao giờ trả
+        const goi: number[] = []
+        const t0 = Date.now()
+        // 3 luồng, hạn 150ms: món 2 treo, món 3 lỗi, món 4+ mất 100ms ⇒ 4,5 kịp (xong ~100), 6,7 dở dang lúc hết hạn, 8–10 chưa tới lượt.
+        let kq: string[] = []
+        let loi = ''
+        let chot: ReturnType<typeof setTimeout> | undefined
+        try {
+            // chốt 3 giây: bản hỏng (chờ lời gọi treo) phải làm ca này ĐỎ. Đồng hồ chốt KHÔNG được unref — lời hứa treo không giữ
+            // tiến trình sống, unref thì Node thoát im lặng mã 0 giữa chừng ⇒ check:all đếm là đạt (đo bằng đột biến 19/11).
+            kq = await Promise.race([
+                docTrongHan([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3, 150, async (x) => {
+                    goi.push(x)
+                    if (x === 2) return treo()
+                    if (x === 3) throw new Error('Shopee 500')
+                    if (x >= 4) await new Promise(r => setTimeout(r, 100))
+                    return `doc-${x}`
+                }, (x) => `cham-${x}`),
+                new Promise<never>((_, tuChoi) => { chot = setTimeout(() => tuChoi(new Error('treo quá 3 giây')), 3000) }),
+            ])
+        } catch (e: any) { loi = String(e?.message || e) } finally { clearTimeout(chot) }
+        const ms = Date.now() - t0
+        ok('F1. một hội thoại TREO / lỗi ⇒ cả lượt vẫn xong ngay sau hạn, không chờ lời gọi treo, không ném lỗi', !loi && ms < 600, { ms, loi })
+        ok('F2. kết quả giữ đúng thứ tự; món đọc kịp ra kết quả đọc, món treo / lỗi / dở dang ra «chậm»',
+            JSON.stringify(kq) === JSON.stringify(['doc-1', 'cham-2', 'cham-3', 'doc-4', 'doc-5', 'cham-6', 'cham-7', 'cham-8', 'cham-9', 'cham-10']), kq)
+        ok('F3. hết hạn thì KHÔNG gọi Shopee thêm cho các món chưa tới lượt (đỡ nặng hàng chờ proxy đang kẹt)',
+            !goi.includes(8) && !goi.includes(9) && !goi.includes(10), goi)
+    }
+    {
+        const kq = await docTrongHan([1, 2, 3], 3, 5_000, async (x) => x * 10, () => -1)
+        ok('F4. Shopee nhanh ⇒ đủ kết quả, không món nào bị coi là chậm', JSON.stringify(kq) === '[10,20,30]', kq)
+        const rong = await docTrongHan([] as number[], 3, 50, async (x) => x, () => -1)
+        ok('F5. không có nháp nào ⇒ trả rỗng, không treo', Array.isArray(rong) && rong.length === 0)
+    }
+    ok(`F6. hạn đọc tin (${HAN_DOC_TIN_MS}ms) ngắn hơn hẳn 15 giây app chờ; route GET đọc tin qua docTrongHan với hạn đó`,
+        HAN_DOC_TIN_MS <= 10_000 && /await docTrongHan\(ds, 3, HAN_DOC_TIN_MS,/.test(route) && !/chayGioiHan\(/.test(route))
 
     console.log(`\n${dat} đạt, ${hong} hỏng`)
     process.exit(hong ? 1 : 0)

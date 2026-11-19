@@ -215,3 +215,43 @@ export function phutConLai(tinKhachLucMs: number | null, taoLucMs: number, bayGi
     const moc = tinKhachLucMs && Number.isFinite(tinKhachLucMs) ? tinKhachLucMs : taoLucMs
     return Math.floor(HAN_PHAN_HOI_PHUT - (bayGioMs - moc) / 60000)
 }
+
+/**
+ * Hạn đọc tin khách SỐNG từ Shopee cho cả lượt GET màn duyệt. App Android chỉ chờ 15 giây (ApiClient readTimeout) — 19/11/2026
+ * 20:19 hàng chờ proxy Tino kẹt ⇒ GET /cho-duyet treo tới hạn 900 giây của Cloud Run (504), app báo không vào được màn duyệt.
+ * Hết hạn thì trả bản nháp KHÔNG kèm tin khách: an toàn vì POST /:id/gui luôn đọc lại hội thoại trước khi gửi.
+ */
+export const HAN_DOC_TIN_MS = 8_000
+
+const HET_HAN = Symbol('het_han')
+
+/**
+ * Chạy `doc` cho từng phần tử, tối đa `luong` việc cùng lúc, trong hạn `hanMs` cho CẢ lượt; kết quả giữ đúng thứ tự `ds`.
+ * Phần tử đọc quá hạn, chưa kịp đọc, hoặc `doc` ném lỗi ⇒ `khongKip(x)`. Không chờ lời gọi đang treo: nó chạy nốt ở nền,
+ * kết quả về muộn bị bỏ (không vào danh sách trả về, không ném lỗi lạc).
+ */
+export async function docTrongHan<T, R>(
+    ds: T[], luong: number, hanMs: number, doc: (x: T) => Promise<R>, khongKip: (x: T) => R,
+): Promise<R[]> {
+    const kq: R[] = new Array(ds.length)
+    let het = false
+    let hen: ReturnType<typeof setTimeout> | undefined
+    const henGio = new Promise<typeof HET_HAN>(r => { hen = setTimeout(() => { het = true; r(HET_HAN) }, hanMs) })
+    let i = 0
+    const tho = async () => {
+        while (i < ds.length) {
+            const j = i++
+            const x = ds[j]!
+            if (het) { kq[j] = khongKip(x); continue }
+            const viec: Promise<{ v: R } | typeof HET_HAN> = Promise.resolve().then(() => doc(x)).then(v => ({ v }), () => HET_HAN)
+            const r = await Promise.race([viec, henGio])
+            kq[j] = r === HET_HAN ? khongKip(x) : r.v
+        }
+    }
+    try {
+        await Promise.all(Array.from({ length: Math.min(luong, ds.length) }, tho))
+    } finally {
+        if (hen) clearTimeout(hen)
+    }
+    return kq
+}

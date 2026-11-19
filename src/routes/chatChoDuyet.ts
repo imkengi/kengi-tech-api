@@ -16,7 +16,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { moTaLoi } from '../lib/gomLoi'
-import { khoChoDuyetSql, guiNhapDaDuyet, daCoNguoiTraLoiSau, phutConLai, BanNhap } from '../lib/choDuyetChat'
+import { khoChoDuyetSql, guiNhapDaDuyet, daCoNguoiTraLoiSau, phutConLai, docTrongHan, HAN_DOC_TIN_MS, BanNhap } from '../lib/choDuyetChat'
 import { khoTuTraLoiSql, tinhTrangTuTraLoi, datTuTraLoi, datCheDoTuTraLoi, CheDoTuTraLoi, TrangThaiNhatKy } from '../lib/tuTraLoiShopee'
 import { chuTinShopee, laTinCuaGian, ShopeeService, TinShopeeGoiY } from '../services/platforms/shopee'
 import { getShopeeServiceForChannel, withTokenRefresh } from './chat'
@@ -56,12 +56,8 @@ function lucTin(ts: unknown): { iso: string | null; ms: number | null } {
     return { iso: new Date(ms).toISOString(), ms }
 }
 
-/** Chạy fn cho từng phần tử, tối đa `luong` việc cùng lúc (đọc Shopee từng hội thoại) */
-async function chayGioiHan<T>(ds: T[], luong: number, fn: (x: T) => Promise<void>): Promise<void> {
-    let i = 0
-    const tho = async () => { while (i < ds.length) { const x = ds[i++]!; await fn(x) } }
-    await Promise.all(Array.from({ length: Math.min(luong, ds.length) }, tho))
-}
+/** Câu hiện trên thẻ nháp khi hết HAN_DOC_TIN_MS mà chưa đọc được tin khách */
+const DOC_TIN_CHAM = 'Shopee đang chậm — chưa đọc được tin khách, tải lại sau ít phút'
 
 router.get('/', xacThuc, quyenChat, async (req: AuthRequest, res: Response) => {
     try {
@@ -79,11 +75,24 @@ router.get('/', xacThuc, quyenChat, async (req: AuthRequest, res: Response) => {
             return dichVu.get(kenhId)!
         }
         const bayGio = Date.now()
-        const items: any[] = []
-        await chayGioiHan(ds, 3, async (n: BanNhap) => {
-            let tinKhach: { id: string; noiDung: string; luc: string | null }[] = []
-            let docTinLoi: string | null = null
-            let tinDauMs: number | null = null
+        const mon = (n: BanNhap, tinKhach: { id: string; noiDung: string; luc: string | null }[], docTinLoi: string | null, tinDauMs: number | null) => ({
+            id: n.id,
+            kenhId: n.kenhId,
+            tenGian: tenGian.get(n.kenhId) || '',
+            hoiThoaiId: n.hoiThoaiId,
+            tenKhach: n.tenKhach,
+            traLoi: n.traLoi,
+            canNhanVien: n.canNhanVien,
+            ghiChu: n.ghiChu,
+            loiLanTruoc: n.loi,
+            taoLuc: n.taoLuc,
+            conLaiPhut: phutConLai(tinDauMs, Date.parse(n.taoLuc), bayGio),
+            tinKhach,
+            docTinLoi,
+        })
+        // Tin khách đọc SỐNG trong HAN_DOC_TIN_MS cho cả lượt: Shopee / proxy Tino chậm hay kẹt thì màn duyệt vẫn mở (app chờ 15 giây);
+        // bản nháp chưa kịp đọc vẫn hiện, gửi thì POST /:id/gui đọc lại hội thoại trước.
+        const docDuoc = await docTrongHan(ds, 3, HAN_DOC_TIN_MS, async (n: BanNhap) => {
             try {
                 const { shopee, channel } = await layDichVu(n.kenhId)
                 const r = await withTokenRefresh(prisma, channel, shopee, () => shopee.getMessages(n.hoiThoaiId, { pageSize: 15 }))
@@ -91,37 +100,25 @@ router.get('/', xacThuc, quyenChat, async (req: AuthRequest, res: Response) => {
                 if (daCoNguoiTraLoiSau(dsTin, n.tinKhachId, channel.shopId)) {
                     // Đã có người của gian trả lời ở Seller Centre / web — nháp thừa, cất khỏi hàng chờ (đường soát thì chỉ ẩn)
                     if (!viaAdminKey) await kho.bo(n.id, null, 'người của gian đã trả lời ở chỗ khác').catch(() => { })
-                    return
+                    return null
                 }
                 let cuoiGian = -1
                 dsTin.forEach((m, i) => { if (laTinCuaGian(m, channel.shopId) && m.source !== 'server') cuoiGian = i })
                 const cho = dsTin.slice(cuoiGian + 1).filter(m => !laTinCuaGian(m, channel.shopId))
-                tinDauMs = lucTin((cho[0] as any)?.createdTimestamp).ms
-                tinKhach = cho.slice(-5).map(m => ({
+                const tinKhach = cho.slice(-5).map(m => ({
                     id: String(m.messageId),
                     noiDung: chuTinShopee(m, new Map()).trim().slice(0, 500),
                     luc: lucTin((m as any).createdTimestamp).iso,
                 }))
+                return mon(n, tinKhach, null, lucTin((cho[0] as any)?.createdTimestamp).ms)
             } catch (e) {
-                docTinLoi = 'Không đọc được tin từ Shopee lúc này'
                 console.warn(`[chat cho-duyet] đọc hội thoại lỗi: ${moTaLoi(e).slice(0, 160)}`)
+                return mon(n, [], 'Không đọc được tin từ Shopee lúc này', null)
             }
-            items.push({
-                id: n.id,
-                kenhId: n.kenhId,
-                tenGian: tenGian.get(n.kenhId) || '',
-                hoiThoaiId: n.hoiThoaiId,
-                tenKhach: n.tenKhach,
-                traLoi: n.traLoi,
-                canNhanVien: n.canNhanVien,
-                ghiChu: n.ghiChu,
-                loiLanTruoc: n.loi,
-                taoLuc: n.taoLuc,
-                conLaiPhut: phutConLai(tinDauMs, Date.parse(n.taoLuc), bayGio),
-                tinKhach,
-                docTinLoi,
-            })
-        })
+        }, (n: BanNhap) => mon(n, [], DOC_TIN_CHAM, null))
+        const items = docDuoc.filter((x): x is ReturnType<typeof mon> => x !== null)
+        const cham = items.filter(x => x.docTinLoi === DOC_TIN_CHAM).length
+        if (cham) console.warn(`[chat cho-duyet] quá hạn ${HAN_DOC_TIN_MS}ms: ${cham}/${ds.length} nháp chưa đọc được tin khách`)
         items.sort((a, b) => a.conLaiPhut - b.conLaiPhut)
 
         const tt = await tinhTrangTuTraLoi(prisma, kenh.map(k => String(k.id)))
