@@ -51,11 +51,16 @@ export function proxyCircuitError(): Error {
     ), { chuaGui: true, ngatMachProxy: true })
 }
 
-/** Lỗi do ngắt mạch chặn (lệnh CHƯA gửi tới proxy) — kể cả khi bị bọc thành chuỗi khác ở tầng trên. */
+/** Đầu câu lỗi hàng chờ QUÁ TẢI (19/11/2026) — lệnh bị từ chối TRƯỚC khi gửi, như ngắt mạch. */
+const DAU_QUA_TAI = 'Hàng chờ gọi proxy đang quá tải'
+
+/** Lỗi do ngắt mạch / hàng chờ quá tải chặn (lệnh CHƯA gửi tới proxy) — kể cả khi bị bọc thành chuỗi khác ở tầng trên.
+ *  Bên nhận xử lý như nhau: không thử lại ngay, không tính là proxy hỏng, hộp thư webhook hoãn không ăn lượt thử. */
 export function laLoiNgatMachProxy(e: any): boolean {
     if (!e) return false
     if (e.ngatMachProxy === true) return true
-    return String(e.message ?? e).includes(DAU_NGAT_MACH)
+    const s = String(e.message ?? e)
+    return s.includes(DAU_NGAT_MACH) || s.includes(DAU_QUA_TAI)
 }
 
 export function noteProxySuccess(): void {
@@ -92,41 +97,118 @@ export function noteProxyFailure(): void {
  *  - Bên gọi đọc HẾT thân phản hồi trong `viec` — kết nối chỉ rảnh khi thân đã về.
  *  - Có chỗ rồi mới xét lại ngắt mạch: mạch mở trong lúc chờ ⇒ hỏng NGAY (lệnh chưa gửi), khỏi để
  *    cả hàng lần lượt đâm vào một proxy đang chết.
- * Trạng thái trong tiến trình như ngắt mạch: mỗi bản tự giữ hàng của mình. */
+ * Trạng thái trong tiến trình như ngắt mạch: mỗi bản tự giữ hàng của mình.
+ *
+ * ─── HÀNG CHỜ CÓ ĐÁY (19/11/2026) ───
+ * 19/11 07:11 VN một đợt vài trăm push Shopee (chủ shop xếp đơn giao hàng loạt) dồn vào bản chính; hàng chờ của bản đó
+ * KHÔNG BAO GIỜ VƠI: 441 lúc 08 giờ ⇒ 2.976 lúc 20 giờ, "đang gọi 6/6" suốt 13 giờ, 12–13 giờ đêm vẫn tăng đúng bằng số
+ * push mới về (ra = 0) ⇒ cả 6 chỗ bị giữ bởi lời gọi KHÔNG BAO GIỜ XONG dù có hẹn giờ hủy 30 s (bản bị bóp CPU ngoài
+ * request — không rõ chỗ treo). Hệ quả: 2.784 push Shopee kẹt "dang" rồi "loi" (lượt quét 15' đẩy lại ⇒ thêm lời gọi vào
+ * cùng hàng chết), AutoSync treo từ 05:57 VN, token Shopee hết hạn 17:31 VN không ai làm mới ⇒ đơn Shopee không về cả ngày.
+ * Nay hàng chờ có đáy, không bao giờ kẹt vĩnh viễn:
+ *  - Hàng dài ≥ PROXY_HANG_CHO_TOI_DA (mặc định 120) ⇒ từ chối NGAY; chờ quá PROXY_CHO_TOI_DA_MS (mặc định 60 s) ⇒ rời
+ *    hàng. Cả hai là lỗi "CHƯA GỬI" (cờ chuaGui + ngatMachProxy): bên gọi không thử lại ngay, không tính proxy hỏng, hộp
+ *    thư hoãn 2' không ăn lượt thử, lượt quét hộp thư thôi nhặt push qua proxy khi hàng đang đầy (proxyDangQuaTai).
+ *  - Lời gọi giữ chỗ quá PROXY_TREO_TOI_DA_MS (mặc định 45 s = hẹn giờ 30 s của lời gọi + dư) ⇒ coi là TREO: trả chỗ cho
+ *    người sau, bên gọi nhận lỗi "không rõ đã tới sàn chưa" (KHÔNG có cờ chưa gửi — lệnh có thể đã đi) — lời gọi treo
+ *    về sau có xong cũng bị bỏ qua. Treo bao nhiêu cũng chỉ mất một chỗ trong 45 s, không mất cả bản máy cả ngày. */
 const MAC_DINH_DONG_THOI = 6
-const toiDaDongThoi = () => Math.max(1, parseInt(process.env.PROXY_DONG_THOI_TOI_DA || '', 10) || MAC_DINH_DONG_THOI)
+const soEnv = (ten: string, macDinh: number, toiThieu: number) => Math.max(toiThieu, parseInt(process.env[ten] || '', 10) || macDinh)
+const toiDaDongThoi = () => soEnv('PROXY_DONG_THOI_TOI_DA', MAC_DINH_DONG_THOI, 1)
+const hangChoToiDa = () => soEnv('PROXY_HANG_CHO_TOI_DA', 120, 1)
+const choToiDaMs = () => soEnv('PROXY_CHO_TOI_DA_MS', 60_000, 10)
+const treoToiDaMs = () => soEnv('PROXY_TREO_TOI_DA_MS', 45_000, 10)
+
+interface NguoiCho { giai: () => void; tuChoi: (e: Error) => void; tu: number; hen?: ReturnType<typeof setTimeout> }
 let dangGoi = 0
-const hangCho: Array<() => void> = []
+const hangCho: NguoiCho[] = []
 let daGoi = 0
 let daPhaiCho = 0
 let choLauNhatMs = 0
 let lanBaoHangCho = 0
+let tuChoiDay = 0
+let tuChoiLau = 0
+let soLanTreo = 0
+let lanQuaTaiCuoi = 0
+let lanBaoQuaTai = 0
+
+function loiQuaTai(lyDo: string): Error {
+    lanQuaTaiCuoi = Date.now()
+    if (lanQuaTaiCuoi - lanBaoQuaTai > 60_000) {
+        lanBaoQuaTai = lanQuaTaiCuoi
+        console.warn(`[Proxy] QUÁ TẢI — ${lyDo}; đã từ chối ${tuChoiDay} (hàng đầy) + ${tuChoiLau} (chờ lâu), treo ${soLanTreo} — lệnh chưa gửi, bên gọi thử lại sau`)
+    }
+    return Object.assign(new Error(`${DAU_QUA_TAI} (${lyDo}) — lệnh chưa gửi, thử lại sau.`), { chuaGui: true, ngatMachProxy: true, quaTaiProxy: true })
+}
+
+/** Hàng chờ của bản này đang (hoặc vừa ≤ 60 s) quá tải ⇒ việc nền KHÔNG gấp (lượt quét hộp thư) đừng đẩy thêm lời gọi. */
+export function proxyDangQuaTai(bayGio = Date.now()): boolean {
+    return hangCho.length >= Math.max(1, Math.floor(hangChoToiDa() / 2)) || (lanQuaTaiCuoi > 0 && bayGio - lanQuaTaiCuoi < 60_000)
+}
+
+/** Trả một chỗ: trao thẳng cho người chờ còn hạn; người đã chờ quá hạn (hẹn giờ chưa kịp chạy vì CPU bị bóp) ⇒ từ chối. */
+function traCho(): void {
+    if (dangGoi > toiDaDongThoi()) { dangGoi--; return }   // trần vừa bị hạ ⇒ thu chỗ lại
+    while (hangCho.length) {
+        const nguoi = hangCho.shift()!
+        if (nguoi.hen) clearTimeout(nguoi.hen)
+        if (Date.now() - nguoi.tu > choToiDaMs()) {
+            tuChoiLau++
+            nguoi.tuChoi(loiQuaTai(`chờ quá ${Math.round(choToiDaMs() / 1000)}s`))
+            continue
+        }
+        nguoi.giai()   // giữ nguyên dangGoi cho người được trao
+        return
+    }
+    dangGoi--
+}
 
 /** Chạy một lời gọi proxy khi tới lượt. `viec` phải gồm cả việc đọc hết thân phản hồi. */
 export async function goiQuaProxy<T>(viec: () => Promise<T>): Promise<T> {
     if (dangGoi < toiDaDongThoi()) {
         dangGoi++
     } else {
+        if (hangCho.length >= hangChoToiDa()) {
+            tuChoiDay++
+            throw loiQuaTai(`hàng chờ đã ${hangCho.length} lời gọi, đang gọi ${dangGoi}/${toiDaDongThoi()}`)
+        }
         const tu = Date.now()
         daPhaiCho++
-        await new Promise<void>(r => {
-            hangCho.push(r)
+        await new Promise<void>((giai, tuChoi) => {
+            const nguoi: NguoiCho = { giai, tuChoi, tu }
+            nguoi.hen = setTimeout(() => {
+                const i = hangCho.indexOf(nguoi)
+                if (i < 0) return
+                hangCho.splice(i, 1)
+                tuChoiLau++
+                tuChoi(loiQuaTai(`chờ quá ${Math.round(choToiDaMs() / 1000)}s`))
+            }, choToiDaMs())
+            hangCho.push(nguoi)
             if (hangCho.length >= 20 && tu - lanBaoHangCho > 60_000) {
                 lanBaoHangCho = tu
                 console.warn(`[Proxy] hàng chờ ${hangCho.length} lời gọi (đang gọi ${dangGoi}/${toiDaDongThoi()}) — đợt dồn, gọi Tino từ từ cho khỏi bị chặn`)
             }
         })
         choLauNhatMs = Math.max(choLauNhatMs, Date.now() - tu)
-        // Được trao chỗ: người trả chỗ giữ nguyên dangGoi cho mình (xem finally).
+        // Được trao chỗ: người trả chỗ giữ nguyên dangGoi cho mình (xem traCho).
     }
+    let henTreo: ReturnType<typeof setTimeout> | undefined
     try {
         if (proxyCircuitOpen()) throw proxyCircuitError()
         daGoi++
-        return await viec()
+        return await Promise.race([
+            viec(),
+            new Promise<never>((_, tuChoi) => {
+                henTreo = setTimeout(() => {
+                    soLanTreo++
+                    console.warn(`[Proxy] lời gọi giữ chỗ quá ${Math.round(treoToiDaMs() / 1000)}s — coi là TREO, trả chỗ (lần thứ ${soLanTreo})`)
+                    tuChoi(new Error(`Lời gọi proxy treo quá ${Math.round(treoToiDaMs() / 1000)}s — bỏ, không rõ đã tới sàn chưa`))
+                }, treoToiDaMs())
+            }),
+        ])
     } finally {
-        const keTiep = dangGoi <= toiDaDongThoi() ? hangCho.shift() : undefined
-        if (keTiep) keTiep()
-        else dangGoi--
+        if (henTreo) clearTimeout(henTreo)
+        traCho()
     }
 }
 
@@ -139,5 +221,8 @@ export async function docHetPhanHoi(res: Response): Promise<Response> {
 }
 
 export function thongKeHangChoProxy() {
-    return { toiDa: toiDaDongThoi(), dangGoi, dangCho: hangCho.length, daGoi, daPhaiCho, choLauNhatMs }
+    return {
+        toiDa: toiDaDongThoi(), dangGoi, dangCho: hangCho.length, daGoi, daPhaiCho, choLauNhatMs,
+        hangChoToiDa: hangChoToiDa(), choToiDaMs: choToiDaMs(), treoToiDaMs: treoToiDaMs(), tuChoiDay, tuChoiLau, soLanTreo,
+    }
 }

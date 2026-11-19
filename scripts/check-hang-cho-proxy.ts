@@ -290,6 +290,92 @@ async function main() {
         ca('I3 quá 24 giờ ⇒ bỏ cuộc cho người soi', qua.loai === 'hong', JSON.stringify(qua))
     }
 
+    // ─── J. Hàng chờ CÓ ĐÁY (19/11/2026: hàng của bản chính kẹt 13 giờ, 2.976 lời gọi, "đang gọi 6/6" không nhúc nhích) ───
+    {
+        const datEnv = (o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) process.env[k] = v }
+        const xoaEnv = () => { for (const k of ['PROXY_DONG_THOI_TOI_DA', 'PROXY_HANG_CHO_TOI_DA', 'PROXY_CHO_TOI_DA_MS', 'PROXY_TREO_TOI_DA_MS']) delete process.env[k] }
+        const banBan = (ms: number) => { const t = Date.now(); while (Date.now() - t < ms) { /* chặn vòng sự kiện: hẹn giờ không chạy được, như CPU bị bóp */ } }
+        imLog()
+
+        // J1. Hàng đầy ⇒ từ chối NGAY, lỗi "chưa gửi", việc không chạy
+        datEnv({ PROXY_DONG_THOI_TOI_DA: '1', PROXY_HANG_CHO_TOI_DA: '2', PROXY_CHO_TOI_DA_MS: '5000', PROXY_TREO_TOI_DA_MS: '5000' })
+        const giu = hoaDon()
+        const pGiu = pb.goiQuaProxy(() => giu.p)
+        const pCho1 = pb.goiQuaProxy(async () => 'cho1')
+        const pCho2 = pb.goiQuaProxy(async () => 'cho2')
+        let chayThu3 = false
+        const t3 = Date.now()
+        const loiDay: any = await pb.goiQuaProxy(async () => { chayThu3 = true }).then(() => null, e => e)
+        ca('J1 hàng chờ đủ PROXY_HANG_CHO_TOI_DA ⇒ lời gọi mới bị từ chối NGAY, cờ chuaGui + ngatMachProxy, việc KHÔNG chạy',
+            !!loiDay && loiDay.chuaGui === true && loiDay.ngatMachProxy === true && !chayThu3 && Date.now() - t3 < 200, String(loiDay?.message))
+        ca('J2 lỗi quá tải bị bọc thành chuỗi khác vẫn nhận là "chưa gửi" (hộp thư hoãn, không ăn lượt)',
+            pb.laLoiNgatMachProxy(new Error(`Không lấy được chi tiết đơn X — ${loiDay?.message}`)))
+        ca('J3 vừa từ chối ⇒ proxyDangQuaTai (lượt quét hộp thư thôi nhặt push qua proxy)', pb.proxyDangQuaTai())
+        ca('J4 …61 giây sau, hàng trống ⇒ hết quá tải (ca phải im)', !pb.proxyDangQuaTai(Date.now() + 61_000) || pb.thongKeHangChoProxy().dangCho > 0)
+        giu.giai(); await pGiu
+        const kq12 = await Promise.all([pCho1, pCho2])
+        ca('J5 người đang chờ (trong hạn) vẫn chạy đủ, đúng kết quả', JSON.stringify(kq12) === '["cho1","cho2"]', JSON.stringify(kq12))
+        ca('J6 không rò chỗ sau J1–J5', pb.thongKeHangChoProxy().dangGoi === 0 && pb.thongKeHangChoProxy().dangCho === 0, JSON.stringify(pb.thongKeHangChoProxy()))
+
+        // J7. Chờ quá PROXY_CHO_TOI_DA_MS ⇒ rời hàng (hẹn giờ), việc không chạy, chỗ không rò
+        datEnv({ PROXY_DONG_THOI_TOI_DA: '1', PROXY_HANG_CHO_TOI_DA: '50', PROXY_CHO_TOI_DA_MS: '40', PROXY_TREO_TOI_DA_MS: '5000' })
+        const giu2 = hoaDon()
+        const pGiu2 = pb.goiQuaProxy(() => giu2.p)
+        let chayLau = false
+        const loiLau: any = await pb.goiQuaProxy(async () => { chayLau = true }).then(() => null, e => e)
+        ca('J7 chờ quá PROXY_CHO_TOI_DA_MS ⇒ rời hàng, lỗi "chưa gửi", việc KHÔNG chạy',
+            !!loiLau && loiLau.chuaGui === true && !chayLau && pb.thongKeHangChoProxy().dangCho === 0, String(loiLau?.message))
+        let chaySau = false
+        const pSau = pb.goiQuaProxy(async () => { chaySau = true; return 'sau' })
+        giu2.giai(); await pGiu2
+        ca('J8 người rời hàng không giữ chỗ: lời gọi kế vẫn chạy khi có chỗ', (await pSau) === 'sau' && chaySau)
+
+        // J9. Quá hạn mà hẹn giờ CHƯA kịp chạy (vòng sự kiện bị chặn — CPU bị bóp) ⇒ lúc trao chỗ phải từ chối, không cho chạy
+        const giu3 = hoaDon()
+        const pGiu3 = pb.goiQuaProxy(() => giu3.p)
+        let chayTre = false
+        const pTre = pb.goiQuaProxy(async () => { chayTre = true }).then(() => null, e => e)
+        let chayKe = false
+        const pKe = pb.goiQuaProxy(async () => { chayKe = true; return 'ke' }).then(v => v, e => e)
+        banBan(60)          // cả hai người chờ đã quá 40 ms mà hẹn giờ chưa chạy được
+        giu3.giai()         // trả chỗ ngay trong lúc này ⇒ traCho phải tự soát tuổi
+        await pGiu3
+        const loiTre: any = await pTre
+        const kqKe: any = await pKe
+        ca('J9 trao chỗ cho người đã quá hạn ⇒ từ chối "chưa gửi", việc KHÔNG chạy', !!loiTre && loiTre.chuaGui === true && !chayTre, String(loiTre?.message))
+        ca('J10 …người quá hạn kế tiếp cũng bị từ chối, không ai bị bỏ treo', !chayKe && kqKe?.chuaGui === true, String(kqKe?.message ?? kqKe))
+        await choYen()
+        ca('J11 không rò chỗ, hàng trống sau J7–J10', pb.thongKeHangChoProxy().dangGoi === 0 && pb.thongKeHangChoProxy().dangCho === 0, JSON.stringify(pb.thongKeHangChoProxy()))
+
+        // J12. Lời gọi TREO (không bao giờ xong) ⇒ sau PROXY_TREO_TOI_DA_MS: bên gọi nhận lỗi (KHÔNG cờ chưa gửi), chỗ trả cho người sau
+        datEnv({ PROXY_DONG_THOI_TOI_DA: '1', PROXY_HANG_CHO_TOI_DA: '50', PROXY_CHO_TOI_DA_MS: '5000', PROXY_TREO_TOI_DA_MS: '40' })
+        const treoMai = new Promise<never>(() => { /* không bao giờ xong */ })
+        const tTreo = Date.now()
+        const pTreo = pb.goiQuaProxy(() => treoMai).then(() => null, e => e)
+        const pNguoiSau = pb.goiQuaProxy(async () => 'nguoi-sau')
+        const loiTreo: any = await pTreo
+        ca('J12 lời gọi treo ⇒ bên gọi nhận lỗi sau ~PROXY_TREO_TOI_DA_MS, KHÔNG mang cờ chưa gửi (có thể đã tới sàn)',
+            !!loiTreo && !loiTreo.chuaGui && !pb.laLoiNgatMachProxy(loiTreo) && Date.now() - tTreo < 1000, `${String(loiTreo?.message)} — ${Date.now() - tTreo}ms`)
+        ca('J13 …và người chờ sau vẫn được chạy (6 lời gọi treo không còn khoá được cả bản máy)', (await pNguoiSau) === 'nguoi-sau')
+        ca('J14 không rò chỗ sau lời gọi treo', pb.thongKeHangChoProxy().dangGoi === 0 && pb.thongKeHangChoProxy().soLanTreo >= 1, JSON.stringify(pb.thongKeHangChoProxy()))
+
+        // J15. Ca phải im: lời gọi nhanh bình thường không bị coi là treo / quá tải
+        datEnv({ PROXY_DONG_THOI_TOI_DA: '2', PROXY_HANG_CHO_TOI_DA: '50', PROXY_CHO_TOI_DA_MS: '5000', PROXY_TREO_TOI_DA_MS: '5000' })
+        const truocTK = pb.thongKeHangChoProxy()
+        const nhanh = await Promise.all(Array.from({ length: 8 }, (_, i) => pb.goiQuaProxy(async () => { await ngu(3); return i })))
+        const sauTK = pb.thongKeHangChoProxy()
+        ca('J15 8 lời gọi nhanh: đủ kết quả, không từ chối, không treo (ca phải im)',
+            JSON.stringify(nhanh) === '[0,1,2,3,4,5,6,7]' && sauTK.tuChoiDay === truocTK.tuChoiDay && sauTK.tuChoiLau === truocTK.tuChoiLau && sauTK.soLanTreo === truocTK.soLanTreo,
+            JSON.stringify({ truocTK, sauTK }))
+
+        // J16. Lượt quét hộp thư đọc proxyDangQuaTai (soát nguồn)
+        const nguon = require('fs').readFileSync(require('path').join(__dirname, '../src/services/hopThuWebhook.ts'), 'utf8')
+        ca('J16 quetHopThu để yên push qua proxy khi hàng chờ quá tải (proxyCircuitOpen() || proxyDangQuaTai())', /proxyCircuitOpen\(\)\s*\|\|\s*proxyDangQuaTai\(\)/.test(nguon))
+
+        xoaEnv()
+        moLog()
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exitCode = 1
 }

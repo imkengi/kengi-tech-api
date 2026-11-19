@@ -32,7 +32,7 @@
 import crypto from 'crypto'
 import registryPrisma, { laLoiMatKetNoi } from '../lib/prisma'
 import { moTaLoi } from '../lib/gomLoi'
-import { laLoiNgatMachProxy, proxyCircuitOpen } from '../lib/proxyBreaker'
+import { laLoiNgatMachProxy, proxyCircuitOpen, proxyDangQuaTai } from '../lib/proxyBreaker'
 
 /** 'shopee-video' = push của APP Shopee Video (Set Push riêng, khoá riêng — lib/pushShopeeVideo.ts, 11/10/2026) */
 export type NenTangPush = 'shopee' | 'tiktok' | 'shopee-video'
@@ -337,8 +337,10 @@ export async function quetHopThu(tuyChon: { epDon?: boolean; chiNenTang?: NenTan
                      FOR UPDATE SKIP LOCKED)
           RETURNING w."id"::text AS id, w."platform", w."than", w."coThanTho", w."chuKy", w."pushUrl", w."nhanLuc", w."soLanThu"`,
             tuyChon.chiNenTang ?? null,
-            // Xét lại MỖI vòng: hết 2' nghỉ thì proxyCircuitOpen() tự đóng và cho một tin đi thử.
-            proxyCircuitOpen(),
+            // Xét lại MỖI vòng: hết 2' nghỉ thì proxyCircuitOpen() tự đóng và cho một tin đi thử. Hàng chờ proxy của bản
+            // này đang đầy / vừa từ chối (19/11/2026) ⇒ cũng để yên push qua proxy: nhặt ra chỉ để bị từ chối rồi hoãn,
+            // mỗi vòng hai câu ghi CSDL mà không tiến được gì.
+            proxyCircuitOpen() || proxyDangQuaTai(),
         )
         if (!rows.length) break
         const r = rows[0]
