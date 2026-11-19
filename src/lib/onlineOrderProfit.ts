@@ -21,6 +21,18 @@ export interface OrderProfit {
     /** Đơn khách trả hàng: sàn quyết toán ÂM (hoàn hết tiền + trừ phí ship hoàn).
      *  `profit` là số LỖ thật, giá vốn để 0 vì hàng đã về kho. */
     hoanTra?: boolean
+    /** Giá vốn TỪNG dòng hàng (19/11/2026 — lãi dự kiến theo SKU), đúng thứ tự `order.items`. `cost` CHƯA làm tròn; Σ làm tròn
+     *  = `cost` của đơn. Chỉ dùng nội bộ (lib/laiDuKienDon) — route KHÔNG trả nguyên đối tượng này ra ngoài. */
+    dong?: GiaVonDong[]
+}
+
+export interface GiaVonDong {
+    /** OnlineOrderItem.id (null khi bên gọi không chọn id) */
+    id: string | null
+    /** giá vốn đã biết của dòng (VND, chưa làm tròn) */
+    cost: number
+    /** dòng không xác định được giá vốn (không khớp mã kho / chưa khai giá vốn / combo thiếu thành phần) */
+    missingCost: boolean
 }
 
 // Đơn hủy/hoàn không tính lợi nhuận (giữ đúng danh sách đang dùng ở /stats)
@@ -161,62 +173,58 @@ export async function computeOrderProfits(
     }
 
     // ── 5. Tính từng đơn ────────────────────────────────────────────────────
-    for (const order of orders) {
-        let cost = 0
-        let missingCost = false
+    /** Giá vốn MỘT dòng hàng — đúng chuỗi quy đổi của orderSync. */
+    const giaVonMotDong = (order: any, it: any): { cost: number; missingCost: boolean } => {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) return { cost: 0, missingCost: false }
 
-        for (const it of order.items || []) {
-            const qty = Number(it.quantity) || 0
-            if (qty <= 0) continue
+        const skuKey = it.sku ? String(it.sku).toLowerCase() : ''
+        // Ánh xạ ưu tiên đúng sàn của đơn, sau đó tới ánh xạ dùng chung
+        const candidates = mapBySku.get(skuKey) || []
+        const map = candidates.find(m => m.platform && m.platform === order.platform)
+            ?? candidates.find(m => !m.platform)
+            ?? null
 
-            const skuKey = it.sku ? String(it.sku).toLowerCase() : ''
-            // Ánh xạ ưu tiên đúng sàn của đơn, sau đó tới ánh xạ dùng chung
-            const candidates = mapBySku.get(skuKey) || []
-            const map = candidates.find(m => m.platform && m.platform === order.platform)
-                ?? candidates.find(m => !m.platform)
-                ?? null
-
-            // Combo khai báo ngay ở ánh xạ SKU → bung luôn, không quy đổi
-            if (map?.bundleId) {
-                const unit = bundleUnitCost.get(String(map.bundleId))
-                if (unit == null) { missingCost = true; continue }
-                cost += unit * qty
-                continue
-            }
-
-            // Hệ số quy đổi CHỈ áp khi ánh xạ này chính là đường ra sản phẩm.
-            // Dòng hàng đã link thẳng sang mã khác (khớp SKU kho) thì orderSync trừ
-            // kho với hệ số 1 — áp nhầm hệ số ở đây là giá vốn lệch cả chục lần.
-            const linkedId = it.productId
-                ? String(it.productId)
-                : (map?.productId ? String(map.productId) : '')
-            const mapApplies = !!map?.productId && String(map.productId) === linkedId
-            let rate = mapApplies ? (Number(map.conversionRate) || 1) : 1
-            let product = linkedId ? productById.get(linkedId) : undefined
-
-            if (product?.mergedIntoId) {
-                rate *= product.mergedRate || 1
-                product = productById.get(product.mergedIntoId)
-            }
-
-            if (product?.bundleId) {
-                const unit = bundleUnitCost.get(product.bundleId)
-                if (unit == null) { missingCost = true; continue }
-                cost += unit * qty
-                continue
-            }
-
-            // Không khớp được sản phẩm, hoặc sản phẩm chưa khai giá vốn → không
-            // được âm thầm tính 0, vì như vậy lợi nhuận bị thổi phồng.
-            if (!product || product.costPrice <= 0) { missingCost = true; continue }
-
-            cost += product.costPrice * Math.round(qty * rate)
+        // Combo khai báo ngay ở ánh xạ SKU → bung luôn, không quy đổi
+        if (map?.bundleId) {
+            const unit = bundleUnitCost.get(String(map.bundleId))
+            return unit == null ? { cost: 0, missingCost: true } : { cost: unit * qty, missingCost: false }
         }
 
-        cost = Math.round(cost)
+        // Hệ số quy đổi CHỈ áp khi ánh xạ này chính là đường ra sản phẩm.
+        // Dòng hàng đã link thẳng sang mã khác (khớp SKU kho) thì orderSync trừ
+        // kho với hệ số 1 — áp nhầm hệ số ở đây là giá vốn lệch cả chục lần.
+        const linkedId = it.productId
+            ? String(it.productId)
+            : (map?.productId ? String(map.productId) : '')
+        const mapApplies = !!map?.productId && String(map.productId) === linkedId
+        let rate = mapApplies ? (Number(map.conversionRate) || 1) : 1
+        let product = linkedId ? productById.get(linkedId) : undefined
+
+        if (product?.mergedIntoId) {
+            rate *= product.mergedRate || 1
+            product = productById.get(product.mergedIntoId)
+        }
+
+        if (product?.bundleId) {
+            const unit = bundleUnitCost.get(product.bundleId)
+            return unit == null ? { cost: 0, missingCost: true } : { cost: unit * qty, missingCost: false }
+        }
+
+        // Không khớp được sản phẩm, hoặc sản phẩm chưa khai giá vốn → không
+        // được âm thầm tính 0, vì như vậy lợi nhuận bị thổi phồng.
+        if (!product || product.costPrice <= 0) return { cost: 0, missingCost: true }
+
+        return { cost: product.costPrice * Math.round(qty * rate), missingCost: false }
+    }
+
+    for (const order of orders) {
+        const dong: GiaVonDong[] = (order.items || []).map((it: any) => ({ id: it?.id != null ? String(it.id) : null, ...giaVonMotDong(order, it) }))
+        const cost = Math.round(dong.reduce((s, d) => s + d.cost, 0))
+        const missingCost = dong.some(d => d.missingCost)
 
         if (CANCELLED_STATUSES.includes(order.status)) {
-            out.set(order.id, { cost, profit: null, estimated: true, missingCost })
+            out.set(order.id, { cost, profit: null, estimated: true, missingCost, dong })
             continue
         }
 
@@ -238,7 +246,7 @@ export async function computeOrderProfits(
          * Giấu lỗ nguy hiểm hơn thiếu số, vì nhìn như chưa có dữ liệu. */
         const netRevenue = Number(order.netRevenue) || 0
         if (netRevenue === 0) {
-            out.set(order.id, { cost, profit: null, estimated: true, missingCost })
+            out.set(order.id, { cost, profit: null, estimated: true, missingCost, dong })
             continue
         }
 
@@ -255,6 +263,7 @@ export async function computeOrderProfits(
             profit: Math.round(netRevenue - cost),
             estimated: missingCost,
             missingCost,
+            dong,
         })
     }
 

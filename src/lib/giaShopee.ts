@@ -384,11 +384,41 @@ export function phiSanCuaGia(phi: ThamSoGia['phi'], gia: number, kemAffTB = true
  * phiSanCuaGia(mô hình, tổng).
  */
 export function phiSanCuaDon(dong: { gia: number; phi: ThamSoGia['phi'] }[]): number {
+    return phiSanTungDong(dong).reduce((s, x) => s + x.phi, 0)
+}
+
+/** Phí sàn của MỘT dòng trong đơn — xem phiSanTungDong. */
+export interface PhiMotDong {
+    /** % phí theo mô hình phí của CHÍNH dòng này (tyLe + affiliate trung bình), 0..1 */
+    tyLe: number
+    /** phần tỷ lệ: tyLe × giá dòng */
+    phiTyLe: number
+    /** phần chia của khoản chung cả đơn (phí cố định mỗi đơn − phần bớt nhờ trần), theo tỷ trọng giá dòng; có thể âm khi trần bớt nhiều */
+    phiChung: number
+    /** phiTyLe + phiChung (VND, chưa làm tròn) */
+    phi: number
+}
+
+/**
+ * Phí sàn KỲ VỌNG của một đơn CHIA THEO TỪNG DÒNG (SKU) — 19/11/2026, chủ shop: "lãi dự kiến thì phải tính theo SKU và phí của
+ * SKU đó chứ". Mỗi dòng chịu phần tỷ lệ theo mô hình phí của CHÍNH nó (ngành của SKU) × giá dòng; khoản chung của cả đơn (phí
+ * cố định mỗi đơn − phần bớt nhờ trần dịch vụ, theo mô hình dòng giá cao nhất trên TỔNG đơn — đúng phiSanCuaDon) chia cho các
+ * dòng theo tỷ trọng giá. Σ phi = phiSanCuaDon. Trả đúng thứ tự `dong`; dòng giá ≤ 0 (quà tặng) ⇒ toàn 0.
+ */
+export function phiSanTungDong(dong: { gia: number; phi: ThamSoGia['phi'] }[]): PhiMotDong[] {
+    const KHONG: PhiMotDong = { tyLe: 0, phiTyLe: 0, phiChung: 0, phi: 0 }
     const co = dong.filter(d => d.gia > 0)
-    if (!co.length) return 0
+    if (!co.length) return dong.map(() => ({ ...KHONG }))
     const chinh = co.reduce((a, b) => (b.gia > a.gia ? b : a))
     const tong = co.reduce((s, d) => s + d.gia, 0)
-    return co.reduce((s, d) => s + (d.phi.tyLe + tyLeAffiliateTB(d.phi)) * d.gia, 0) + chinh.phi.coDinh - phiBotNhoTran(chinh.phi, tong)
+    const chung = chinh.phi.coDinh - phiBotNhoTran(chinh.phi, tong)
+    return dong.map(d => {
+        if (!(d.gia > 0)) return { ...KHONG }
+        const tyLe = d.phi.tyLe + tyLeAffiliateTB(d.phi)
+        const phiTyLe = tyLe * d.gia
+        const phiChung = chung * (d.gia / tong)
+        return { tyLe, phiTyLe, phiChung, phi: phiTyLe + phiChung }
+    })
 }
 
 export function danhGiaGia(gia: number, t: Pick<ThamSoGia, 'giaVon' | 'phi' | 'phiDongGoi' | 'phiQuangCaoPct' | 'phiAffiliatePct' | 'thueGtgtPct'>, quaAffiliate = false): DanhGiaGia {

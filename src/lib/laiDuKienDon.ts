@@ -24,12 +24,19 @@
  *  đơn ≤ 24 giờ chưa xét được), lượt đồng bộ cron (autoSync) và đồng bộ tay (/online-orders/sync) qua LƯỚI VÉT
  *  vetLaiDuKienDonMoi (đơn ≤ 24 giờ của kênh chưa có dòng — gồm Lazada chưa có webhook, đơn webhook lỡ). KHÔNG gọi từ kéo bù
  *  đơn cũ (keoBuDonSan) — bộ kiểm F quét nguồn.
+ *
+ *  THEO TỪNG SKU (19/11/2026, chủ shop: "trong phần tính lãi dự kiến thì phải tính theo SKU và phí của SKU đó chứ"):
+ *  mỗi dòng hàng một phép tính riêng — bán (giá dòng) − phí của CHÍNH SKU (% theo ngành của SKU × giá dòng + phần chia phí chung
+ *  của đơn theo tỷ trọng giá, lib/giaShopee.phiSanTungDong) − giá vốn của CHÍNH dòng (quy đổi đơn vị sàn → kho). Σ các dòng = số
+ *  cả đơn. Lưu trong chiTiet.dong; trang Đơn hàng online hiện từng SKU. BÁO ĐỘNG khi cả đơn lỗ HOẶC một SKU có giá bị bán lỗ dù
+ *  cả đơn vẫn lãi (mặt hàng khác gánh — không tách thì không ai thấy). Dòng quà tặng 0đ không báo riêng (giá vốn của nó đã nằm
+ *  trong số cả đơn). Dòng tính trước 19/11 (chưa có chiTiet.dong) được lưới vét TÍNH LẠI theo SKU trong 3 ngày — không báo lại.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
-import { computeOrderProfits, CANCELLED_STATUSES } from './onlineOrderProfit'
+import { computeOrderProfits, CANCELLED_STATUSES, type GiaVonDong } from './onlineOrderProfit'
 import { laDonKeoBu } from './dauKeoBu'
-import { phiSanCuaDon } from './giaShopee'
-import { docMauPhiTheoNganh, type BangPhiNganh } from './shopeeTuQuan'
+import { phiSanCuaDon, phiSanTungDong, type MauPhi } from './giaShopee'
+import { docMauPhiTheoNganh, phamViPhi, type BangPhiNganh } from './shopeeTuQuan'
 
 /** Chỉ xét đơn đặt trên sàn trong ngần này — "đơn MỚI". Kênh mới nối kéo lịch sử / lượt đầu sau khi bật KHÔNG được dội báo
  *  động cho đơn cũ. 24 giờ đủ để lượt đồng bộ 30' vớt đơn lỡ webhook. */
@@ -90,6 +97,109 @@ export function phiDuKienCuaDon(dong: DongGia[], bang: Pick<BangPhiNganh, 'chon'
     }
 }
 
+// ─── Theo từng SKU (19/11/2026) ───────────────────────────────────────────────────
+
+/** Bảng phí đủ dùng cho tính theo SKU: `chon` bắt buộc; tên / ví dụ ngành (bảng thật có) để mô tả phí từng dòng. */
+export type BangChonPhi = Pick<BangPhiNganh, 'chon'> & Partial<Pick<BangPhiNganh, 'tenNganh'>>
+
+/** Một dòng hàng đưa vào tính lãi theo SKU. */
+export interface DongVaoLai extends DongGia {
+    /** OnlineOrderItem.id */
+    id: string
+    sku: string | null
+    ten: string
+    sl: number
+}
+
+/** Lãi dự kiến của MỘT dòng hàng (SKU). */
+export interface LaiDong {
+    id: string
+    sku: string | null
+    ten: string
+    sl: number
+    /** giá dòng sau giảm giá shop */
+    doanhThu: number
+    /** phí sàn dự kiến của dòng = % phí của CHÍNH SKU × giá dòng + phần chia phí chung của đơn; null = gian chưa biết phí */
+    phi: number | null
+    /** trong `phi`: phần chia phí chung của cả đơn (phí cố định mỗi đơn − phần bớt nhờ trần), theo tỷ trọng giá */
+    phiChung: number
+    /** % phí theo mô hình phí của CHÍNH SKU (ngành của nó, gồm affiliate trung bình), 0..1; null = chưa biết phí */
+    tyLePhi: number | null
+    giaVon: number
+    thieuGiaVon: boolean
+    /** doanhThu − (phi ?? 0) − giaVon */
+    lai: number
+    /** dòng CÓ GIÁ mà phần đã biết đã âm ⇒ SKU này bán LỖ (dòng quà tặng 0đ không tính) */
+    lo: boolean
+    nganh: string | null
+    /** phí của SKU là số tạm (ngành chưa có đơn mẫu / chưa rõ ngành ⇒ trung bình / cả gian) */
+    tamPhi: boolean
+    /** một cụm ngắn: phí của SKU lấy từ đâu */
+    moTaPhi: string
+}
+
+/** Câu ngắn "phí của SKU này lấy từ đâu" (hàm thuần) — cụm đứng sau % phí trên giao diện / tin báo. */
+export function moTaPhiDong(m: MauPhi, bang?: Partial<Pick<BangPhiNganh, 'tenNganh'>>): string {
+    const ten = m.nganh ? bang?.tenNganh?.get(m.nganh) : undefined
+    const nganh = ten ? ` ${ten.length > 40 ? `${ten.slice(0, 39).trimEnd()}…` : ten}` : ''
+    if (m.chuaBiet) return 'gian chưa biết phí'
+    if (m.nguon === 'cong-thuc' && m.congThuc) {
+        if (m.thayNganh || m.chuaRoNganh) return `chưa rõ % ngành — tạm % trung bình ${pct(m.congThuc.phiNganh)} + phí chung Shopee`
+        return `biểu phí Shopee: ngành${nganh} ${pct(m.congThuc.phiNganh)} + phí chung`
+    }
+    switch (phamViPhi(m)) {
+        case 'nganh': return `đo từ ${m.soDon} đơn của ngành${nganh}`
+        case 'khai': return 'phí KHAI của gian'
+        case 'thay-nganh': return `${m.chuaRoNganh ? 'chưa rõ ngành' : 'ngành chưa đủ đơn'} — tạm phí cả gian (${m.soDon} đơn)`
+        default: return `đo từ ${m.soDon} đơn của cả gian`
+    }
+}
+
+/** Làm tròn từng phần rồi dồn phần lẻ vào phần lớn nhất (theo |trọng số|) ⇒ Σ = đúng `tong` (hàm thuần). */
+function chiaLamTron(tho: number[], tong: number, trongSo: number[]): number[] {
+    const ra = tho.map(x => Math.round(x))
+    if (!ra.length) return ra
+    const du = Math.round(tong) - ra.reduce((s, x) => s + x, 0)
+    if (du) {
+        let i = 0
+        for (let j = 1; j < trongSo.length; j++) if (Math.abs(trongSo[j]!) > Math.abs(trongSo[i]!)) i = j
+        ra[i] = ra[i]! + du
+    }
+    return ra
+}
+
+/**
+ * Lãi dự kiến TỪNG DÒNG (SKU) của một đơn (hàm thuần). Phí: theo mô hình phí của CHÍNH SKU (bang.chon(ngành của dòng)) qua
+ * phiSanTungDong — Σ = phí cả đơn `p.phi`. Giá vốn: của CHÍNH dòng (von.dong, đúng thứ tự `dong`) — Σ = `von.cost`. Làm tròn từng
+ * dòng, phần lẻ dồn vào dòng lớn nhất ⇒ cộng các dòng ra ĐÚNG số cả đơn. `von.dong` thiếu / lệch số dòng ⇒ mọi dòng "thiếu giá vốn"
+ * (không đoán chia giá vốn theo giá bán).
+ */
+export function laiTungDong(dong: DongVaoLai[], bang: BangChonPhi, p: PhiDuKien, von: { cost: number; missingCost: boolean; dong?: GiaVonDong[] }): LaiDong[] {
+    const ds = dong || []
+    if (!ds.length) return []
+    const gia = ds.map(d => Math.max(0, Number(d.gia) || 0))
+    const mau = ds.map(d => bang.chon(d.nganh))
+    const tung = phiSanTungDong(gia.map((g, i) => ({ gia: g, phi: mau[i]! })))
+    const phi = p.phi == null ? null : chiaLamTron(tung.map(t => t.phi), p.phi, gia)
+    const chung = tung.map(t => Math.round(t.phiChung))
+    const vonDong = von?.dong && von.dong.length === ds.length ? von.dong : null
+    const gv = vonDong ? chiaLamTron(vonDong.map(v => Number(v.cost) || 0), Math.round(Number(von.cost) || 0), vonDong.map(v => Number(v.cost) || 0)) : ds.map(() => 0)
+    return ds.map((d, i) => {
+        const dt = Math.round(gia[i]!)
+        const ph = phi ? phi[i]! : null
+        const lai = dt - (ph ?? 0) - gv[i]!
+        const m = mau[i]!
+        return {
+            id: String(d.id), sku: d.sku ? String(d.sku) : null, ten: String(d.ten || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+            sl: Number(d.sl) || 0, doanhThu: dt, phi: ph, phiChung: ph == null || !(dt > 0) ? 0 : chung[i]!,
+            tyLePhi: ph == null || !(dt > 0) ? null : Math.round(tung[i]!.tyLe * 10000) / 10000,
+            giaVon: gv[i]!, thieuGiaVon: vonDong ? !!vonDong[i]!.missingCost : true,
+            lai, lo: dt > 0 && lai < 0, nganh: d.nganh ?? null,
+            tamPhi: !!(m.thayNganh || m.chuaRoNganh), moTaPhi: p.phi == null ? 'gian chưa biết phí' : moTaPhiDong(m, bang),
+        }
+    })
+}
+
 export interface LaiDuKien {
     doanhThu: number
     phi: number | null
@@ -134,13 +244,42 @@ export function tenHangChinh(items: { productName?: string | null; quantity?: nu
     return `${ngan}${sl > 1 ? ` ×${sl}` : ''}${khac > 0 ? ` (+${khac} mặt hàng)` : ''}`
 }
 
-/** Tin báo động cho MỘT đơn lỗ (hàm thuần). */
-export function tinBaoLo(don: { ma: string; san: string; kenh?: string | null; hang?: string | null }, k: LaiDuKien): { tieuDe: string; noiDung: string } {
+/** Tên SKU ngắn cho tin báo: tên hàng (bỏ nhãn quảng cáo đầu tên) + [mã SKU] (hàm thuần). */
+function tenSkuNgan(x: Pick<LaiDong, 'ten' | 'sku' | 'sl'>, toiDa = 45): string {
+    const goc = String(x.ten || '').trim()
+    const ten = goc.replace(/^(?:\s*[[【][^\]】]{1,40}[\]】]\s*){1,3}/, '').trim() || goc || 'mặt hàng'
+    const ngan = ten.length > toiDa ? `${ten.slice(0, toiDa - 1).trimEnd()}…` : ten
+    return `${ngan}${x.sku ? ` [${x.sku}]` : ''}${x.sl > 1 ? ` ×${x.sl}` : ''}`
+}
+
+/** Phép tính của MỘT SKU lỗ cho tin báo (hàm thuần): "Tên [SKU]: bán X − phí Y (Z% — nguồn) − vốn W = −V". */
+export function phepTinhSku(x: LaiDong): string {
+    const phi = x.phi != null
+        ? `phí ${vnd(x.phi)}${x.tyLePhi != null ? ` (${pct(x.tyLePhi)} của SKU${x.phiChung ? ` + ${vnd(x.phiChung)} phí chung đơn` : ''} — ${x.moTaPhi})` : ''}`
+        : 'phí chưa biết'
+    return `${tenSkuNgan(x)}: bán ${vnd(x.doanhThu)} − ${phi} − vốn ${vnd(x.giaVon)}${x.thieuGiaVon ? ' (thiếu giá vốn)' : ''} = ${vnd(x.lai)}`
+}
+
+/** Số tiền LỖ đem báo của một đơn: cả đơn lỗ ⇒ lãi cả đơn; cả đơn còn lãi ⇒ Σ lãi các SKU lỗ (hàm thuần, ≤ 0). */
+export const soLoBao = (k: Pick<LaiDuKien, 'lai' | 'lo'>, skuLo: Pick<LaiDong, 'lai'>[] = []): number =>
+    k.lo ? k.lai : skuLo.reduce((s, x) => s + Math.min(0, x.lai), 0)
+
+/** Tin báo động cho MỘT đơn (hàm thuần): cả đơn lỗ, hoặc cả đơn lãi mà có SKU bán lỗ (`skuLo` — các dòng `lo`). */
+export function tinBaoLo(don: { ma: string; san: string; kenh?: string | null; hang?: string | null }, k: LaiDuKien, skuLo: LaiDong[] = []): { tieuDe: string; noiDung: string } {
+    const noi = `${String(don.san || '').toUpperCase()}${don.kenh ? ` · ${don.kenh}` : ''}`
+    const chiSku = skuLo.length
+        ? ` Lỗ ở SKU: ${skuLo.slice(0, 3).map(phepTinhSku).join(' · ')}${skuLo.length > 3 ? ` (+${skuLo.length - 3} SKU lỗ nữa)` : ''}.`
+        : ''
+    const duoi = `${k.thieuGiaVon ? ' Còn mặt hàng chưa có giá vốn — lỗ thật còn lớn hơn.' : ''} Xem lại giá bán trên sàn / giá vốn để đơn sau không lỗ tiếp.`
+    if (!k.lo && skuLo.length) {
+        // Cả đơn vẫn lãi nhờ mặt hàng khác — báo SKU bán lỗ (không tách theo SKU thì không ai thấy)
+        const tieuDe = `🚨 Đơn ${don.ma}: ${skuLo.length === 1 ? 'một SKU' : `${skuLo.length} SKU`} dự kiến LỖ ${vnd(-soLoBao(k, skuLo))}`
+        const noiDung = `${noi}:${chiSku.replace(/^ Lỗ ở SKU:/, '')} Cả đơn vẫn lãi ${vnd(k.lai)} nhờ mặt hàng khác.${duoi}`
+        return { tieuDe, noiDung }
+    }
     const tieuDe = `🚨 Đơn ${don.ma} dự kiến LỖ ${vnd(-k.lai)}`
     const phep = [`bán ${vnd(k.doanhThu)}`, k.phi != null ? `phí sàn dự kiến ${vnd(k.phi)}` : 'phí sàn chưa biết', `giá vốn ${vnd(k.giaVon)}`]
-    const noiDung = `${don.hang ? `${don.hang} — ` : ''}${String(don.san || '').toUpperCase()}${don.kenh ? ` · ${don.kenh}` : ''}: ` +
-        `${phep.join(' − ')} = ${vnd(k.lai)} (${k.moTaPhi}).` +
-        `${k.thieuGiaVon ? ' Còn mặt hàng chưa có giá vốn — lỗ thật còn lớn hơn.' : ''} Xem lại giá bán trên sàn / giá vốn để đơn sau không lỗ tiếp.`
+    const noiDung = `${don.hang ? `${don.hang} — ` : ''}${noi}: ${phep.join(' − ')} = ${vnd(k.lai)} (${k.moTaPhi}).${chiSku}${duoi}`
     return { tieuDe, noiDung }
 }
 
@@ -201,7 +340,14 @@ export interface LaiDuKienDaLuu {
     lo: boolean
     /** đã báo động (ISO) */
     baoLuc: string | null
+    /** lãi dự kiến TỪNG SKU (19/11/2026); null = dòng tính trước khi có theo SKU (lưới vét tính lại trong 3 ngày) */
+    dong: LaiDongDaLuu[] | null
+    /** số SKU có giá bị bán lỗ (cả khi cả đơn vẫn lãi) */
+    soSkuLo: number
 }
+
+/** Một SKU đã lưu — đúng các trường của LaiDong (trừ ngành). */
+export type LaiDongDaLuu = Omit<LaiDong, 'nganh'>
 
 /** Đọc lãi dự kiến đã lưu của các đơn — bảng chưa có / đọc hỏng ⇒ Map rỗng (không ném). */
 export async function docLaiDuKien(prisma: any, orderIds: string[]): Promise<Map<string, LaiDuKienDaLuu>> {
@@ -214,15 +360,29 @@ export async function docLaiDuKien(prisma: any, orderIds: string[]): Promise<Map
     for (const r of rows || []) {
         const ct = typeof r.chiTiet === 'string' ? (() => { try { return JSON.parse(r.chiTiet) } catch { return {} } })() : (r.chiTiet || {})
         const lai = Math.round(Number(r.lai) || 0)
+        const dong = docDongDaLuu(ct?.dong)
         out.set(String(r.orderId), {
             lai, phi: r.phiDuKien == null ? null : Math.round(Number(r.phiDuKien)),
             giaVon: Math.round(Number(r.giaVon) || 0), doanhThu: Math.round(Number(r.doanhThu) || 0),
             thieuGiaVon: !!r.thieuGiaVon, nguonPhi: String(r.nguonPhi || ''), moTaPhi: String(ct?.moTaPhi || ''),
             luc: r.xetLuc ? new Date(r.xetLuc).toISOString() : '', lo: lai < 0,
             baoLuc: r.baoLuc ? new Date(r.baoLuc).toISOString() : null,
+            dong, soSkuLo: dong ? dong.filter(x => x.lo).length : 0,
         })
     }
     return out
+}
+
+/** chiTiet.dong (JSONB) ⇒ danh sách SKU đã lưu; không phải mảng ⇒ null (dòng tính trước 19/11). Số hỏng ⇒ 0 / null, không ném. */
+function docDongDaLuu(v: any): LaiDongDaLuu[] | null {
+    if (!Array.isArray(v)) return null
+    const so = (x: any) => Math.round(Number(x) || 0)
+    return v.filter(x => x && typeof x === 'object').map((x: any) => ({
+        id: String(x.id ?? ''), sku: x.sku == null || x.sku === '' ? null : String(x.sku), ten: String(x.ten ?? ''), sl: Number(x.sl) || 0,
+        doanhThu: so(x.doanhThu), phi: x.phi == null ? null : so(x.phi), phiChung: so(x.phiChung),
+        tyLePhi: x.tyLePhi == null || !Number.isFinite(Number(x.tyLePhi)) ? null : Number(x.tyLePhi),
+        giaVon: so(x.giaVon), thieuGiaVon: !!x.thieuGiaVon, lai: so(x.lai), lo: !!x.lo, tamPhi: !!x.tamPhi, moTaPhi: String(x.moTaPhi ?? ''),
+    }))
 }
 
 /** Ngành của từng dòng hàng — CÙNG cách nối dòng → listing của shopeeTuQuan.dongPhiTheoNganh (Shopee externalItemId = item_id;
@@ -254,8 +414,12 @@ export interface KetQuaXetLai {
     xet: number
     /** đơn ghi được dòng lãi dự kiến (giành được) */
     daLuu: number
-    /** đơn lỗ dự kiến trong số đã lưu */
+    /** đơn lỗ dự kiến (CẢ ĐƠN) trong số đã lưu */
     lo: number
+    /** đơn cả đơn còn lãi nhưng có SKU bán lỗ (19/11/2026) — cũng được báo */
+    loSku: number
+    /** dòng cũ (tính trước 19/11, chưa có chiTiet.dong) vừa được tính lại theo SKU — không báo lại */
+    nangCap?: number
     /** đơn lỗ đã có tin báo trong app */
     daBao: number
     /** số thiết bị nhận push */
@@ -290,12 +454,38 @@ export const donXetDuoc = (d: any): boolean =>
     SAN_XET.includes(String(d?.platform || '').toLowerCase()) && !!d?.channelId
     && !CANCELLED_STATUSES.includes(d.status) && !laDonKeoBu(d.note) && (d.items || []).length > 0
 
-export interface LaiMotDon { k: LaiDuKien; p: PhiDuKien; dong: DongGia[] }
+export interface LaiMotDon {
+    k: LaiDuKien
+    p: PhiDuKien
+    dong: DongVaoLai[]
+    /** lãi dự kiến TỪNG SKU (19/11/2026), đúng thứ tự `dong`; Σ = số cả đơn */
+    laiDong: LaiDong[]
+    /** các SKU CÓ GIÁ bán lỗ — chỉ khi đơn có ≥ 2 dòng có giá (đơn một dòng: SKU lỗ = cả đơn lỗ, khỏi nói hai lần) */
+    skuLo: LaiDong[]
+}
 
 /** Đệm bảng phí theo gian (5 phút, như đệm phí ngành của shopeeTuQuan): giờ livestream đơn về dồn dập, mỗi đơn đọc lại phí cả
  *  gian (truy vấn sổ 90 ngày) trên pool MỘT kết nối là giành chỗ của việc nhận đơn. Chỉ đệm lần đọc ĐƯỢC. */
 const TTL_BANG_PHI = 5 * 60_000
-const DEM_BANG_PHI = new WeakMap<object, Map<string, { het: number; bang: Pick<BangPhiNganh, 'chon'> }>>()
+const DEM_BANG_PHI = new WeakMap<object, Map<string, { het: number; bang: BangChonPhi }>>()
+
+/** Dòng lãi theo SKU gọn để lưu vào chiTiet.dong (JSONB) — tối đa 40 dòng một đơn. */
+const TRAN_DONG_LUU = 40
+const gonDong = (x: LaiDong) => ({
+    id: x.id, sku: x.sku, ten: x.ten.slice(0, 120), sl: x.sl, doanhThu: x.doanhThu, phi: x.phi, phiChung: x.phiChung, tyLePhi: x.tyLePhi,
+    giaVon: x.giaVon, thieuGiaVon: x.thieuGiaVon, lai: x.lai, lo: x.lo, nganh: x.nganh, tamPhi: x.tamPhi, moTaPhi: x.moTaPhi.slice(0, 160),
+})
+
+/** chiTiet lưu kèm dòng LaiDuKienDon (đúng một chỗ dựng — đường xét đơn mới và đường tính lại theo SKU dùng chung). */
+function dungChiTiet(kq: LaiMotDon, nguon: string | null) {
+    return {
+        moTaPhi: kq.p.moTa, tamPhi: kq.p.tam, nguon,
+        nganh: [...new Set(kq.dong.map(x => x.nganh).filter(Boolean))].slice(0, 20),
+        dong: kq.laiDong.slice(0, TRAN_DONG_LUU).map(gonDong),
+        ...(kq.laiDong.length > TRAN_DONG_LUU ? { dongBiCat: kq.laiDong.length - TRAN_DONG_LUU } : {}),
+        soSkuLo: kq.laiDong.filter(x => x.lo).length,
+    }
+}
 
 /**
  * TÍNH lãi dự kiến cho các đơn (đã chọn theo CHON_DON_LAI_DU_KIEN, đã lọc donXetDuoc) — CHỈ ĐỌC: ngành từng dòng, bảng phí
@@ -312,7 +502,7 @@ export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXet
     let dem = DEM_BANG_PHI.get(prisma)
     if (!dem) { dem = new Map(); DEM_BANG_PHI.set(prisma, dem) }
     const kenhIds = [...new Set(dons.map(d => String(d.channelId)))]
-    const bangTheoKenh = new Map<string, Pick<BangPhiNganh, 'chon'>>()
+    const bangTheoKenh = new Map<string, BangChonPhi>()
     for (const id of kenhIds) {
         const c = dem.get(id)
         if (c && c.het > bay) bangTheoKenh.set(id, c.bang)
@@ -336,10 +526,18 @@ export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXet
     for (const d of dons) {
         const bang = bangTheoKenh.get(String(d.channelId))
         if (!bang) continue
-        const dong: DongGia[] = (d.items || []).map((i: any) => ({ gia: Number(i.lineTotal) || 0, nganh: nganhDong.get(String(i.id)) ?? null }))
+        const dong: DongVaoLai[] = (d.items || []).map((i: any) => ({
+            id: String(i.id), sku: i.sku ? String(i.sku) : null, ten: String(i.productName || ''), sl: Number(i.quantity) || 0,
+            gia: Number(i.lineTotal) || 0, nganh: nganhDong.get(String(i.id)) ?? null,
+        }))
         const p = phiDuKienCuaDon(dong, bang)
         const v = von.get(d.id) || { cost: 0, missingCost: true }
-        ketQua.set(String(d.id), { k: ketLuanLaiDuKien(dong.reduce((s, x) => s + Math.max(0, x.gia), 0), p, v), p, dong })
+        const laiDong = laiTungDong(dong, bang, p, v)
+        const coGia = laiDong.filter(x => x.doanhThu > 0)
+        ketQua.set(String(d.id), {
+            k: ketLuanLaiDuKien(dong.reduce((s, x) => s + Math.max(0, x.gia), 0), p, v), p, dong, laiDong,
+            skuLo: coGia.length > 1 ? coGia.filter(x => x.lo) : [],
+        })
     }
     return { ketQua, ...(loi ? { loi } : {}) }
 }
@@ -350,7 +548,7 @@ export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXet
  * sau xét lại). Bên gọi vẫn PHẢI bọc try/catch: hàm này không được làm hỏng việc nhận đơn.
  */
 export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: TuyChonXetLai = {}): Promise<KetQuaXetLai> {
-    const ra: KetQuaXetLai = { xet: 0, daLuu: 0, lo: 0, daBao: 0, push: 0, boQua: 0, chuaCoGia: 0 }
+    const ra: KetQuaXetLai = { xet: 0, daLuu: 0, lo: 0, loSku: 0, daBao: 0, push: 0, boQua: 0, chuaCoGia: 0 }
     const ids = [...new Set((orderIds || []).filter(Boolean).map(String))]
     if (!ids.length) return ra
     const bay = o.bayGio ?? Date.now()
@@ -373,17 +571,14 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
     const tinh = await tinhLaiDuKien(prisma, dons, o)
     if (tinh.loi) ra.loi = tinh.loi
 
-    const lo: { id: string; ma: string; san: string; kenh: string | null; hang: string; k: LaiDuKien }[] = []
+    const lo: { id: string; ma: string; san: string; kenh: string | null; hang: string; k: LaiDuKien; skuLo: LaiDong[]; soLo: number }[] = []
     for (const d of dons) {
         const kq = tinh.ketQua.get(String(d.id))
         if (!kq) continue
-        const { k, p, dong } = kq
+        const { k, skuLo } = kq
         // dòng hàng chưa mang giá (sàn trả giá sau) ⇒ chưa lưu: lần webhook / lượt vét sau tính lại khi đã có giá
         if (k.doanhThu <= 0) { ra.chuaCoGia++; continue }
-        const chiTiet = {
-            moTaPhi: p.moTa, tamPhi: p.tam, nguon: o.nguon || null,
-            nganh: [...new Set(dong.map(x => x.nganh).filter(Boolean))].slice(0, 20),
-        }
+        const chiTiet = dungChiTiet(kq, o.nguon || null)
         let gianh: any[] = []
         try {
             gianh = await prisma.$queryRawUnsafe(
@@ -397,26 +592,43 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
         }
         if (!gianh?.length) continue      // bản khác vừa xét đơn này
         ra.daLuu++
-        if (k.lo) lo.push({ id: String(d.id), ma: String(d.orderNumber || d.id), san: String(d.platform || ''), kenh: d.channelName || null, hang: tenHangChinh(d.items), k })
+        if (k.lo) ra.lo++
+        else if (skuLo.length) ra.loSku++
+        // báo: cả đơn lỗ, HOẶC cả đơn lãi mà có SKU bán lỗ (19/11/2026 — mặt hàng khác gánh thì không ai thấy)
+        if (k.lo || skuLo.length) {
+            lo.push({
+                id: String(d.id), ma: String(d.orderNumber || d.id), san: String(d.platform || ''), kenh: d.channelName || null,
+                hang: tenHangChinh(d.items), k, skuLo, soLo: soLoBao(k, skuLo),
+            })
+        }
     }
-    ra.lo = lo.length
-    if (lo.length) console.log(`[LaiDuKien] ${lo.length} đơn mới dự kiến LỖ (${o.nguon || '?'}): ` +
-        lo.slice(0, 5).map(x => `${x.ma} ${x.k.lai}`).join(' · '))
+    if (lo.length) console.log(`[LaiDuKien] ${lo.length} đơn mới dự kiến LỖ (${ra.lo} cả đơn, ${ra.loSku} chỉ SKU — ${o.nguon || '?'}): ` +
+        lo.slice(0, 5).map(x => `${x.ma} ${x.soLo}`).join(' · '))
     if (!lo.length || process.env.BAO_DONG_LO_DU_KIEN === '0') return ra
 
-    lo.sort((a, b) => a.k.lai - b.k.lai)   // lỗ nặng nhất lên đầu
+    lo.sort((a, b) => a.soLo - b.soLo)   // lỗ nặng nhất lên đầu
     const bayGio = new Date(bay)
     const idTin: string[] = []
     const daBao: typeof lo = []
     /* Mỗi đơn một tin (bấm vào thấy đúng đơn); mẻ lớn (lượt đồng bộ vớt nhiều đơn) gộp một tin. Ghi tin hỏng ⇒ GỠ dòng giành
      * của đơn đó: dấu "đã xét" mà không có tin nào thì đơn lỗ biến mất im lặng — để lần sau xét lại còn hơn. */
-    const ganTen = (x: (typeof lo)[number]) => `${x.ma} ${vnd(x.k.lai)}${x.hang ? ` (${x.hang.length > 40 ? `${x.hang.slice(0, 39).trimEnd()}…` : x.hang})` : ''}`
+    const ganTen = (x: (typeof lo)[number]) => {
+        // cả đơn lỗ ⇒ tên hàng chính; chỉ SKU lỗ ⇒ tên SKU lỗ (đúng mặt hàng cần xem lại giá)
+        const hang = x.k.lo ? x.hang : (x.skuLo[0] ? tenSkuNgan(x.skuLo[0], 40) + (x.skuLo.length > 1 ? ` +${x.skuLo.length - 1} SKU` : '') : x.hang)
+        return `${x.ma} ${vnd(x.soLo)}${x.k.lo ? '' : ' ở SKU'}${hang ? ` (${hang.length > 40 ? `${hang.slice(0, 39).trimEnd()}…` : hang})` : ''}`
+    }
+    /** tiêu đề tin gộp: nói rõ đơn nào chỉ lỗ ở SKU (cả đơn vẫn lãi) */
+    const tieuDeGop = (ds: typeof lo) => {
+        const chiSku = ds.filter(x => !x.k.lo).length
+        return chiSku === ds.length ? `🚨 ${ds.length} đơn mới có SKU dự kiến LỖ`
+            : `🚨 ${ds.length} đơn mới dự kiến LỖ${chiSku ? ` (${chiSku} đơn chỉ lỗ ở SKU)` : ''}`
+    }
     if (lo.length > NGUONG_GOP) {
         const ds = lo.slice(0, NGUONG_GOP).map(ganTen).join(' · ')
         try {
             const tin = await prisma.notification.create({
                 data: {
-                    title: `🚨 ${lo.length} đơn mới dự kiến LỖ`,
+                    title: tieuDeGop(lo),
                     message: `Lỗ nặng nhất: ${ds} (+${lo.length - NGUONG_GOP} đơn nữa). Vào Đơn hàng online xem cột Lợi nhuận (dự kiến) — xem lại giá bán trên sàn / giá vốn để đơn sau không lỗ tiếp.`,
                     type: 'loi_nhuan_thap',
                 },
@@ -428,7 +640,7 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
         }
     } else {
         for (const x of lo) {
-            const t = tinBaoLo({ ma: x.ma, san: x.san, kenh: x.kenh, hang: x.hang }, x.k)
+            const t = tinBaoLo({ ma: x.ma, san: x.san, kenh: x.kenh, hang: x.hang }, x.k, x.skuLo)
             try {
                 const tin = await prisma.notification.create({ data: { title: t.tieuDe, message: t.noiDung, type: 'loi_nhuan_thap' } })
                 if (tin?.id) idTin.push(String(tin.id))
@@ -451,9 +663,9 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
     /* MỘT push cho cả mẻ, nói về ĐÚNG những đơn đã có tin. */
     const dau = daBao[0]!
     const { tieuDe, noiDung } = daBao.length === 1
-        ? tinBaoLo({ ma: dau.ma, san: dau.san, kenh: dau.kenh, hang: dau.hang }, dau.k)
+        ? tinBaoLo({ ma: dau.ma, san: dau.san, kenh: dau.kenh, hang: dau.hang }, dau.k, dau.skuLo)
         : {
-            tieuDe: `🚨 ${daBao.length} đơn mới dự kiến LỖ`,
+            tieuDe: tieuDeGop(daBao),
             noiDung: `${daBao.slice(0, 3).map(ganTen).join(' · ')}${daBao.length > 3 ? ` (+${daBao.length - 3} đơn nữa)` : ''}. ` +
                 'Xem lại giá bán trên sàn / giá vốn để đơn sau không lỗ tiếp.',
         }
@@ -486,19 +698,67 @@ export async function vetLaiDuKienDonMoi(prisma: any, kenh: { id: string; platfo
         if (kenh && !SAN_XET.includes(String(kenh.platform || '').toLowerCase())) return null
         await damBaoBang(prisma)
         const bay = o.bayGio ?? Date.now()
-        const thamSo: any[] = [new Date(bay - CUA_SO_DON_MOI_MS), SAN_XET, CANCELLED_STATUSES]
+        const thamSo: any[] = [new Date(bay - CUA_SO_DON_MOI_MS), SAN_XET, CANCELLED_STATUSES, new Date(bay - CUA_SO_NANG_CAP_MS)]
         if (kenh) thamSo.push(String(kenh.id))
+        /* MỘT truy vấn cho cả hai việc: đơn ≤ 24 giờ CHƯA có dòng (xét + báo) và dòng ≤ 3 ngày tính trước khi có theo SKU
+         * (chiTiet.dong chưa có ⇒ tính lại theo SKU, KHÔNG báo lại). Lượt không có gì mới vẫn chỉ tốn một truy vấn. */
         const rows: any[] = await prisma.$queryRawUnsafe(
-            `SELECT o.id FROM "OnlineOrder" o
-              WHERE o."createdAt" >= $1 AND LOWER(o.platform) = ANY($2::text[]) AND NOT (o.status = ANY($3::text[]))
-                ${kenh ? 'AND o."channelId" = $4' : ''}
-                AND NOT EXISTS (SELECT 1 FROM "LaiDuKienDon" l WHERE l."orderId" = o.id)
-              ORDER BY o."createdAt" DESC LIMIT 500`, ...thamSo)
-        const ids = (rows || []).map(r => String(r.id))
-        if (!ids.length) return null
-        return await xetLaiDuKienAnToan(prisma, ids, nguon, o)
+            `SELECT o.id, (l."orderId" IS NOT NULL) AS "daCo"
+               FROM "OnlineOrder" o LEFT JOIN "LaiDuKienDon" l ON l."orderId" = o.id
+              WHERE o."createdAt" >= $4 AND LOWER(o.platform) = ANY($2::text[]) AND NOT (o.status = ANY($3::text[]))
+                ${kenh ? 'AND o."channelId" = $5' : ''}
+                AND ((l."orderId" IS NULL AND o."createdAt" >= $1) OR (l."orderId" IS NOT NULL AND (l."chiTiet" -> 'dong') IS NULL))
+              ORDER BY (l."orderId" IS NULL) DESC, o."createdAt" DESC LIMIT 500`, ...thamSo)
+        const moi = (rows || []).filter(r => !r.daCo).map(r => String(r.id))
+        const cu = (rows || []).filter(r => r.daCo).map(r => String(r.id)).slice(0, TRAN_NANG_CAP_MOI_LUOT)
+        const ra = moi.length ? await xetLaiDuKienAnToan(prisma, moi, nguon, o) : null
+        if (!cu.length) return ra
+        const n = await nangCapTheoSku(prisma, cu, o).catch((e: any) => {
+            console.warn(`[LaiDuKien] tính lại theo SKU (${nguon}):`, String(e?.message || e).slice(0, 200))
+            return 0
+        })
+        return ra ? { ...ra, nangCap: n } : { xet: 0, daLuu: 0, lo: 0, loSku: 0, daBao: 0, push: 0, boQua: 0, chuaCoGia: 0, nangCap: n }
     } catch (e: any) {
         console.warn(`[LaiDuKien] vét (${nguon}): chưa tính được lãi dự kiến —`, String(e?.message || e).slice(0, 200))
         return null
     }
+}
+
+/** Dòng tính trước khi có theo SKU (19/11/2026) được tính lại trong ngần này kể từ lúc khách đặt — đơn cũ hơn đa phần đã quyết toán. */
+export const CUA_SO_NANG_CAP_MS = 3 * 24 * 3600_000
+const TRAN_NANG_CAP_MOI_LUOT = 200
+
+/**
+ * TÍNH LẠI THEO SKU các dòng LaiDuKienDon cũ (chiTiet.dong chưa có): ghi đè số cả đơn + chiTiet bằng phép tính mới (Σ SKU = cả
+ * đơn), GIỮ baoLuc + nguồn cũ, KHÔNG báo (đơn đã qua lúc "mới về"). Đơn không còn tính được (huỷ / hết dòng / chưa có giá) ⇒ ghi
+ * chiTiet.dong = [] để lưới vét thôi nhặt lại; gian đọc phí hỏng ⇒ để nguyên, lượt sau thử lại. Trả số dòng đã tính lại.
+ */
+async function nangCapTheoSku(prisma: any, orderIds: string[], o: TuyChonXetLai): Promise<number> {
+    if (!orderIds.length) return 0
+    const tatCa: any[] = await prisma.onlineOrder.findMany({ where: { id: { in: orderIds } }, select: CHON_DON_LAI_DU_KIEN })
+    const dons = (tatCa || []).filter(donXetDuoc)
+    const tinh = dons.length ? await tinhLaiDuKien(prisma, dons, o) : { ketQua: new Map<string, LaiMotDon>() }
+    let n = 0
+    const boCuoc: string[] = []
+    for (const id of orderIds) {
+        const d = dons.find(x => String(x.id) === id)
+        const kq = d ? tinh.ketQua.get(id) : undefined
+        if (d && !kq) continue                                    // đọc phí gian hỏng ⇒ lượt sau
+        if (!kq || kq.k.doanhThu <= 0) { boCuoc.push(id); continue }
+        const { k } = kq
+        const chiTiet = { ...dungChiTiet(kq, null), tinhLaiTheoSku: new Date(o.bayGio ?? Date.now()).toISOString() }
+        delete (chiTiet as any).nguon                             // giữ nguồn cũ (webhook / đồng bộ) của lần xét đầu
+        const so = await prisma.$executeRawUnsafe(
+            `UPDATE "LaiDuKienDon" SET "doanhThu" = $2, "phiDuKien" = $3, "giaVon" = $4, "lai" = $5, "thieuGiaVon" = $6, "nguonPhi" = $7,
+                    "chiTiet" = COALESCE("chiTiet", '{}'::jsonb) || $8::jsonb
+              WHERE "orderId" = $1 AND ("chiTiet" -> 'dong') IS NULL`,
+            id, k.doanhThu, k.phi, k.giaVon, k.lai, k.thieuGiaVon, k.nguonPhi, JSON.stringify(chiTiet))
+        n += Number(so) || 0
+    }
+    if (boCuoc.length) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "LaiDuKienDon" SET "chiTiet" = COALESCE("chiTiet", '{}'::jsonb) || '{"dong": []}'::jsonb
+              WHERE "orderId" = ANY($1::text[]) AND ("chiTiet" -> 'dong') IS NULL`, boCuoc)
+    }
+    return n
 }

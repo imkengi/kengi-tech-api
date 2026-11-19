@@ -13,15 +13,20 @@
  *  E. docLaiDuKien: đọc lại dòng đã lưu; bảng chưa có ⇒ rỗng, không đọc bảng.
  *  F. Soát nguồn: MỌI đường tạo đơn sàn gọi (webhook: xetLaiDuKienAnToan cuối handler; đồng bộ: lưới vét) — trừ kéo bù / dữ liệu
  *     mẫu / đơn tay; route trả laiDuKien.
+ *  H. THEO TỪNG SKU (19/11/2026 — "phải tính theo SKU và phí của SKU đó chứ"): phiSanTungDong Σ = phiSanCuaDon, mỗi SKU chịu % của
+ *     CHÍNH ngành nó; laiTungDong Σ dòng = ĐÚNG số cả đơn (phí, vốn, lãi — kể cả làm tròn); giá vốn từng dòng theo quy đổi; SKU lỗ
+ *     trong đơn lãi ⇒ BÁO (tin nêu tên + [SKU] + phép tính); quà tặng 0đ không báo oan; đơn một dòng không nói hai lần; dòng cũ
+ *     chưa có theo SKU được lưới vét tính lại (giữ baoLuc, không báo lại), ngoài 3 ngày / không tính được thì thôi.
  */
 import fs from 'fs'
 import path from 'path'
-import { danhGiaGia, phiSanCuaGia, phiSanCuaDon, type MauPhi, type AffiliateDo } from '../src/lib/giaShopee'
+import { danhGiaGia, phiSanCuaGia, phiSanCuaDon, phiSanTungDong, type MauPhi, type AffiliateDo } from '../src/lib/giaShopee'
 import { mauPhiCongThuc, phiDichVu, type BieuPhi } from '../src/lib/bieuPhiShopee'
 import {
     phiDuKienCuaDon, ketLuanLaiDuKien, tinBaoLo, tenHangChinh, xetLaiDuKienDonMoi, xetLaiDuKienAnToan, vetLaiDuKienDonMoi, docLaiDuKien,
-    CUA_SO_DON_MOI_MS, type DongGia,
+    laiTungDong, moTaPhiDong, phepTinhSku, CUA_SO_DON_MOI_MS, CUA_SO_NANG_CAP_MS, type DongGia, type DongVaoLai,
 } from '../src/lib/laiDuKienDon'
+import { computeOrderProfits } from '../src/lib/onlineOrderProfit'
 
 let loi = 0, dat = 0
 const dung = (ten: string, ok: boolean, chiTiet = '') => { if (ok) dat++; else loi++; console.log(`${ok ? '✓' : '✗'} ${ten}${chiTiet && !ok ? ' — ' + chiTiet : ''}`) }
@@ -76,6 +81,18 @@ function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?
             if (/CREATE TABLE IF NOT EXISTS "LaiDuKienDon"/.test(sql)) { if (tc.hongTaoBang) throw new Error('mất kết nối'); coBang = true; return 0 }
             if (/DELETE FROM "LaiDuKienDon"/.test(sql)) { let n = 0; for (const id of a[0]) if (bang.has(id) && !bang.get(id).baoLuc) { bang.delete(id); n++ } return n }
             if (/UPDATE "LaiDuKienDon" SET "baoLuc"/.test(sql)) { for (const id of a[0]) if (bang.has(id)) bang.get(id).baoLuc = a[1]; return a[0].length }
+            if (/UPDATE "LaiDuKienDon" SET "doanhThu"/.test(sql)) {
+                // tính lại theo SKU: chỉ dòng CÒN thiếu chiTiet.dong; chiTiet = cũ || mới (jsonb ||)
+                const r = bang.get(a[0])
+                if (!r || r.chiTiet?.dong !== undefined) return 0
+                Object.assign(r, { doanhThu: a[1], phiDuKien: a[2], giaVon: a[3], lai: a[4], thieuGiaVon: a[5], nguonPhi: a[6], chiTiet: { ...(r.chiTiet || {}), ...JSON.parse(a[7]) } })
+                return 1
+            }
+            if (/UPDATE "LaiDuKienDon" SET "chiTiet" = COALESCE\("chiTiet", '\{\}'::jsonb\) \|\| '\{"dong": \[\]\}'::jsonb/.test(sql)) {
+                let n = 0
+                for (const id of a[0]) { const r = bang.get(id); if (r && r.chiTiet?.dong === undefined) { r.chiTiet = { ...(r.chiTiet || {}), dong: [] }; n++ } }
+                return n
+            }
             throw new Error('execute lạ: ' + sql.slice(0, 80))
         },
         async $queryRawUnsafe(sql: string, ...a: any[]) {
@@ -87,11 +104,15 @@ function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?
                 bang.set(a[0], { orderId: a[0], doanhThu: a[1], phiDuKien: a[2], giaVon: a[3], lai: a[4], thieuGiaVon: a[5], nguonPhi: a[6], chiTiet: JSON.parse(a[7]), xetLuc: new Date(BAY), baoLuc: null })
                 return [{ orderId: a[0] }]
             }
-            if (/SELECT o\.id FROM "OnlineOrder" o/.test(sql)) {
-                // lưới vét: đơn ≥ mốc, đúng sàn, không huỷ, (đúng kênh), chưa có dòng
+            if (/SELECT o\.id, \(l\."orderId" IS NOT NULL\) AS "daCo"\s+FROM "OnlineOrder" o LEFT JOIN "LaiDuKienDon" l/.test(sql)) {
+                // lưới vét: $1 mốc 24 giờ, $2 sàn, $3 trạng thái huỷ, $4 mốc 3 ngày, $5 kênh — đơn CHƯA có dòng ≤ 24 giờ, hoặc dòng
+                // CHƯA có chiTiet.dong ≤ 3 ngày; đơn chưa có dòng lên trước
                 if (tc.hongVet) throw new Error('mất kết nối')
-                return du.don.filter(d => d.createdAt >= a[0] && a[1].includes(String(d.platform).toLowerCase()) && !a[2].includes(d.status)
-                    && (a[3] == null || d.channelId === a[3]) && !bang.has(d.id)).map(d => ({ id: d.id }))
+                return du.don.filter(d => d.createdAt >= a[3] && a[1].includes(String(d.platform).toLowerCase()) && !a[2].includes(d.status)
+                    && (a[4] == null || d.channelId === a[4])
+                    && ((!bang.has(d.id) && d.createdAt >= a[0]) || (bang.has(d.id) && bang.get(d.id).chiTiet?.dong === undefined)))
+                    .sort((x, y) => Number(bang.has(x.id)) - Number(bang.has(y.id)) || y.createdAt - x.createdAt)
+                    .map(d => ({ id: d.id, daCo: bang.has(d.id) }))
             }
             if (/SELECT "orderId" FROM "LaiDuKienDon"/.test(sql)) return [...bang.values()].filter(r => a[0].includes(r.orderId)).map(r => ({ orderId: r.orderId }))
             if (/FROM "LaiDuKienDon" WHERE/.test(sql)) return [...bang.values()].filter(r => a[0].includes(r.orderId))
@@ -134,7 +155,8 @@ const don = (id: string, o: Partial<{ platform: string; status: string; note: st
 const dong = (id: string, gia: number, productId: string | null, sku: string | null = null, quantity = 1, productName = `Hàng ${id}`) =>
     ({ id, productId, sku, quantity, lineTotal: gia, externalItemId: null, productName })
 const KENH = [{ id: 'k1', name: 'Kengi Store', platform: 'shopee' }, { id: 'k2', name: 'TikTok Store', platform: 'tiktok' }]
-const SP = [{ id: 'p1', sku: 'A1', costPrice: 85_000 }, { id: 'p2', sku: 'A2', costPrice: 100_000 }, { id: 'p3', sku: 'A3', costPrice: 0 }, { id: 'p4', sku: 'VI', costPrice: 9_000 }]
+const SP = [{ id: 'p1', sku: 'A1', costPrice: 85_000 }, { id: 'p2', sku: 'A2', costPrice: 100_000 }, { id: 'p3', sku: 'A3', costPrice: 0 }, { id: 'p4', sku: 'VI', costPrice: 9_000 },
+    { id: 'p5', sku: 'B48', costPrice: 48_000 }, { id: 'p6', sku: 'QUA', costPrice: 20_000 }]
 const pushGia = () => { const goi: any[] = []; const f = async (_p: any, title: string, body: string, extra: any) => { goi.push({ title, body, extra }); return 2 }; return { goi, f } }
 const docBangGia = (theoKenh: Record<string, any>) => async (_p: any, ch: any) => {
     const b = theoKenh[ch.id]
@@ -375,6 +397,169 @@ async function main() {
         const p0 = taoPrisma(du)
         const m0 = await docLaiDuKien(p0, ['e1'])
         dung('E2 bảng chưa có ⇒ Map rỗng, KHÔNG đọc bảng (chỉ dò to_regclass)', m0.size === 0 && p0.cau.every((c: string) => /to_regclass/.test(c)))
+    }
+
+    /* ── H. Theo từng SKU (19/11/2026) ─────────────────────────────────────────────────────────────────────────────────── */
+    {
+        // H1. phiSanTungDong: Σ = phiSanCuaDon; mỗi SKU chịu % CHÍNH ngành nó; phần chung chia theo tỷ trọng giá; quà 0đ ⇒ 0
+        const vao = [{ gia: 100_000, phi: M100 }, { gia: 150_000, phi: M200 }, { gia: 0, phi: M100 }]
+        const t = phiSanTungDong(vao)
+        const chung = t[0]!.phiChung + t[1]!.phiChung
+        dung('H1 phí từng SKU: Σ = phí cả đơn; % riêng của ngành từng SKU (13% / 16% + phần chung); phần chung theo tỷ trọng giá; quà 0đ = 0',
+            gan(t.reduce((s, x) => s + x.phi, 0), phiSanCuaDon(vao), 1e-6)
+            && gan(t[0]!.phiTyLe, (M100.tyLe + 0.008) * 100_000, 1e-6) && gan(t[1]!.phiTyLe, (M200.tyLe + 0.008) * 150_000, 1e-6)
+            && t[1]!.tyLe - t[0]!.tyLe > 0.029 && gan(t[0]!.phiChung / chung, 0.4, 1e-9) && t[2]!.phi === 0 && t[2]!.tyLe === 0,
+            JSON.stringify(t))
+
+        // H2. laiTungDong: Σ dòng = ĐÚNG số cả đơn (phí, vốn, lãi), kể cả phần lẻ làm tròn
+        const dv: DongVaoLai[] = [
+            { id: 'a', sku: 'A2', ten: 'Máy sấy', sl: 1, gia: 100_001, nganh: '100' },
+            { id: 'b', sku: 'B48', ten: 'Bàn là', sl: 2, gia: 70_003, nganh: '200' },
+            { id: 'c', sku: 'C1', ten: 'Ốc', sl: 3, gia: 9_999, nganh: null },
+        ]
+        const p = phiDuKienCuaDon(dv, BANG_CONG_THUC)
+        const von = { cost: Math.round(10_000.4 + 20_000.4 + 30_000.4), missingCost: false, dong: [
+            { id: 'a', cost: 10_000.4, missingCost: false }, { id: 'b', cost: 20_000.4, missingCost: false }, { id: 'c', cost: 30_000.4, missingCost: false }] }
+        const k = ketLuanLaiDuKien(dv.reduce((s, x) => s + x.gia, 0), p, von)
+        const ld = laiTungDong(dv, BANG_CONG_THUC, p, von)
+        const tong = (f: (x: any) => number) => ld.reduce((s, x) => s + f(x), 0)
+        dung('H2 Σ SKU = ĐÚNG cả đơn: phí, giá vốn (phần lẻ dồn vào dòng lớn), lãi; % phí của từng SKU theo ngành CHÍNH nó',
+            tong(x => x.phi) === p.phi && tong(x => x.giaVon) === von.cost && tong(x => x.lai) === k.lai && ld[2]!.giaVon === 30_001
+            && gan(ld[0]!.tyLePhi!, M100.tyLe + 0.008, 1e-4) && gan(ld[1]!.tyLePhi!, M200.tyLe + 0.008, 1e-4) && ld[2]!.tamPhi && !ld[0]!.tamPhi
+            && ld[1]!.sl === 2 && ld[1]!.sku === 'B48', JSON.stringify({ p: p.phi, k: k.lai, ld }))
+
+        // H3. SKU lỗ trong đơn lãi
+        const dv3: DongVaoLai[] = [{ id: 'a', sku: 'A2', ten: 'Máy sấy', sl: 1, gia: 300_000, nganh: '100' }, { id: 'b', sku: 'B48', ten: 'Bàn là', sl: 1, gia: 50_000, nganh: '200' }]
+        const p3 = phiDuKienCuaDon(dv3, BANG_CONG_THUC)
+        const v3 = { cost: 148_000, missingCost: false, dong: [{ id: 'a', cost: 100_000, missingCost: false }, { id: 'b', cost: 48_000, missingCost: false }] }
+        const k3 = ketLuanLaiDuKien(350_000, p3, v3)
+        const l3 = laiTungDong(dv3, BANG_CONG_THUC, p3, v3)
+        dung('H3 cả đơn LÃI mà một SKU bán LỖ ⇒ SKU đó lo, SKU kia không, cả đơn không lo', !k3.lo && k3.lai > 0 && l3[1]!.lo && l3[1]!.lai < 0 && !l3[0]!.lo,
+            JSON.stringify({ k3, l3 }))
+        // H4. thiếu giá vốn từng dòng ⇒ không đoán chia theo giá bán
+        const l4 = laiTungDong(dv3, BANG_CONG_THUC, p3, { cost: 148_000, missingCost: false })
+        dung('H4 thiếu giá vốn từng dòng (von.dong) ⇒ mọi SKU "thiếu giá vốn", vốn 0 — không chia bừa theo giá bán', l4.every(x => x.thieuGiaVon && x.giaVon === 0))
+        // H5. chưa biết phí
+        const pcb = phiDuKienCuaDon(dv3, bangMot(MAU_CHUA_BIET))
+        const l5 = laiTungDong(dv3, bangMot(MAU_CHUA_BIET), pcb, { cost: 360_000, missingCost: false, dong: [{ id: 'a', cost: 310_000, missingCost: false }, { id: 'b', cost: 50_000, missingCost: false }] })
+        dung('H5 gian CHƯA BIẾT phí ⇒ phí từng SKU null, không % (không bịa); bán < vốn vẫn là LỖ CHẮC, bán = vốn thì không',
+            l5.every(x => x.phi === null && x.tyLePhi === null && x.moTaPhi === 'gian chưa biết phí') && l5[0]!.lo && !l5[1]!.lo, JSON.stringify(l5))
+        // H6. quà tặng 0đ
+        const dv6: DongVaoLai[] = [{ id: 'a', sku: 'A2', ten: 'Máy sấy', sl: 1, gia: 300_000, nganh: '100' }, { id: 'q', sku: 'QUA', ten: 'Quà tặng', sl: 1, gia: 0, nganh: '100' }]
+        const p6 = phiDuKienCuaDon(dv6, BANG_CONG_THUC)
+        const l6 = laiTungDong(dv6, BANG_CONG_THUC, p6, { cost: 120_000, missingCost: false, dong: [{ id: 'a', cost: 100_000, missingCost: false }, { id: 'q', cost: 20_000, missingCost: false }] })
+        dung('H6 quà tặng 0đ: phí 0, lãi = −giá vốn nhưng KHÔNG gắn lỗ (khuyến mãi, đã nằm trong số cả đơn); phí cả đơn dồn hết vào SKU có giá',
+            l6[1]!.phi === 0 && l6[1]!.lai === -20_000 && !l6[1]!.lo && l6[1]!.tyLePhi === null && l6[0]!.phi === p6.phi, JSON.stringify(l6))
+        // H7. câu nguồn phí từng SKU
+        const ten = { tenNganh: new Map([['300', 'Điện gia dụng']]) }
+        dung('H7 câu nguồn phí của SKU: biểu phí Shopee + % ngành / tạm % trung bình / đo từ đơn của ngành (có tên) / cả gian / khai / chưa biết',
+            /biểu phí Shopee: ngành 13% \+ phí chung/.test(moTaPhiDong(M100)) && /tạm % trung bình/.test(moTaPhiDong({ ...MTB, thayNganh: '999' }))
+            && moTaPhiDong({ ...MAU_SO, nganh: '300' }, ten) === 'đo từ 120 đơn của ngành Điện gia dụng' && moTaPhiDong(MAU_SO) === 'đo từ 120 đơn của cả gian'
+            && moTaPhiDong(MAU_KHAI) === 'phí KHAI của gian' && moTaPhiDong(MAU_CHUA_BIET) === 'gian chưa biết phí'
+            && /ngành chưa đủ đơn — tạm phí cả gian \(120 đơn\)/.test(moTaPhiDong({ ...MAU_SO, thayNganh: '400' })),
+            [moTaPhiDong(M100), moTaPhiDong({ ...MAU_SO, thayNganh: '400' })].join(' | '))
+        // H8. tin báo SKU lỗ trong đơn lãi + phép tính một SKU
+        const t8 = tinBaoLo({ ma: 'SPE-SKU', san: 'shopee', kenh: 'Kengi Store', hang: 'Máy sấy (+1 mặt hàng)' }, k3, [l3[1]!])
+        const pt = phepTinhSku(l3[1]!)
+        dung('H8 tin báo SKU lỗ (cả đơn lãi): tiêu đề "một SKU dự kiến LỖ" + số lỗ của SKU; thân nêu tên + [mã SKU] + phép tính có % phí của SKU + "Cả đơn vẫn lãi"',
+            t8.tieuDe === `🚨 Đơn SPE-SKU: một SKU dự kiến LỖ ${Math.round(-l3[1]!.lai).toLocaleString('vi-VN')}đ` && t8.noiDung.startsWith('SHOPEE · Kengi Store: Bàn là [B48]: bán 50.000đ − phí ')
+            && /của SKU/.test(t8.noiDung) && /Cả đơn vẫn lãi/.test(t8.noiDung) && pt.endsWith(`= ${Math.round(l3[1]!.lai).toLocaleString('vi-VN')}đ`),
+            `${t8.tieuDe} | ${t8.noiDung}`)
+    }
+    {
+        // H9. computeOrderProfits: giá vốn TỪNG dòng (quy đổi vỉ 10, dòng thiếu giá vốn, SL 2), Σ = giá vốn đơn
+        const du = {
+            don: [don('c1', { items: [{ ...dong('c1a', 100_000, 'p4', 'VI10'), productId: 'p4' }, dong('c1b', 20_000, 'p3'), dong('c1c', 200_000, 'p1', null, 2)] })],
+            kenh: KENH, sp: SP, map: [{ platformSku: 'VI10', platform: 'shopee', productId: 'p4', conversionRate: 10, bundleId: null }],
+        }
+        const m = await computeOrderProfits(taoPrisma(du), du.don)
+        const r = m.get('c1')!
+        dung('H9 giá vốn TỪNG dòng: vỉ 10 = 90.000, dòng chưa khai giá vốn = thiếu, ×2 = 170.000; Σ = giá vốn đơn; đúng id dòng',
+            JSON.stringify(r.dong?.map(x => [x.id, x.cost, x.missingCost])) === JSON.stringify([['c1a', 90_000, false], ['c1b', 0, true], ['c1c', 170_000, false]])
+            && r.cost === 260_000 && r.missingCost, JSON.stringify(r))
+    }
+    {
+        // D15–D18 trên prisma giả: SKU lỗ trong đơn lãi ⇒ báo; đơn một dòng không nói hai lần; quà 0đ không báo
+        const du = {
+            don: [
+                don('k1', { items: [dong('k1a', 300_000, 'p2', 'A2', 1, 'Máy sấy tóc SHD2306'), dong('k1b', 50_000, 'p5', 'B48', 1, 'Bàn là khô SHD2017')] }),
+                don('k2', { items: [dong('k2a', 100_000, 'p1', 'A1', 1, 'Quạt mini')] }),
+                don('k3', { items: [dong('k3a', 100_000, 'p1', 'A1', 1, 'Quạt mini'), dong('k3b', 50_000, 'p5', 'B48', 1, 'Bàn là khô SHD2017')] }),
+                don('k4', { items: [dong('k4a', 300_000, 'p2', 'A2', 1, 'Máy sấy tóc SHD2306'), dong('k4b', 0, 'p6', 'QUA', 1, 'Quà tặng túi vải')] }),
+            ],
+            kenh: KENH, sp: SP, nganh: { k1a: '100', k1b: '200', k2a: '100', k3a: '100', k3b: '200', k4a: '100', k4b: '100' },
+        }
+        const p = taoPrisma(du), push = pushGia()
+        const r = await xetLaiDuKienDonMoi(p, ['k1'], { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f, nguon: 'webhook' })
+        const row = p.bang.get('k1')
+        const dongLuu = row?.chiTiet?.dong || []
+        dung('D15 cả đơn LÃI mà SKU B48 bán LỖ ⇒ BÁO (tin + push nêu tên + [B48] + "Cả đơn vẫn lãi"); lưu từng SKU, Σ lãi SKU = lãi đơn',
+            r.lo === 0 && r.loSku === 1 && r.daBao === 1 && row?.lai > 0 && dongLuu.length === 2 && row?.chiTiet?.soSkuLo === 1
+            && dongLuu.reduce((s: number, x: any) => s + x.lai, 0) === row?.lai && dongLuu[1].lo === true && dongLuu[0].lo === false
+            && /một SKU dự kiến LỖ/.test(p.tin[0]?.title || '') && /Bàn là khô SHD2017 \[B48\]/.test(p.tin[0]?.message || '')
+            && /Cả đơn vẫn lãi/.test(p.tin[0]?.message || '') && push.goi.length === 1 && /\[B48\]/.test(push.goi[0]?.body || '') && !!row?.baoLuc,
+            JSON.stringify({ r, row, tin: p.tin }))
+        await xetLaiDuKienDonMoi(p, ['k2'], { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f })
+        dung('D16 đơn MỘT dòng lỗ ⇒ tin cả đơn như cũ, KHÔNG nhắc lại "Lỗ ở SKU" (một SKU = cả đơn)',
+            p.tin.length === 2 && /SPE-K2 dự kiến LỖ/.test(p.tin[1]?.title || '') && !/Lỗ ở SKU/.test(p.tin[1]?.message || ''), JSON.stringify(p.tin[1]))
+        await xetLaiDuKienDonMoi(p, ['k3'], { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f })
+        dung('D17 đơn nhiều dòng LỖ cả đơn ⇒ tin cả đơn + "Lỗ ở SKU:" nêu từng SKU lỗ',
+            p.tin.length === 3 && /SPE-K3 dự kiến LỖ/.test(p.tin[2]?.title || '') && /Lỗ ở SKU: .*Quạt mini \[A1\].*Bàn là khô SHD2017 \[B48\]/.test(p.tin[2]?.message || ''),
+            JSON.stringify(p.tin[2]))
+        const r4 = await xetLaiDuKienDonMoi(p, ['k4'], { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f })
+        const d4 = p.bang.get('k4')?.chiTiet?.dong || []
+        dung('D18 quà tặng 0đ trong đơn lãi ⇒ KHÔNG báo; giá vốn quà vẫn trừ vào cả đơn; dòng quà lưu lo=false',
+            r4.lo === 0 && r4.loSku === 0 && p.tin.length === 3 && d4.length === 2 && d4[1].lo === false && d4[1].lai === -20_000
+            && p.bang.get('k4')?.giaVon === 120_000, JSON.stringify({ r4, d4 }))
+        // E3. đọc lại theo SKU
+        p.bang.set('cu', { orderId: 'cu', doanhThu: 1, phiDuKien: 0, giaVon: 0, lai: 1, thieuGiaVon: false, nguonPhi: 'cong-thuc', chiTiet: { moTaPhi: 'x' }, xetLuc: new Date(BAY), baoLuc: null })
+        const m = await docLaiDuKien(p, ['k1', 'cu'])
+        dung('E3 docLaiDuKien trả từng SKU + số SKU lỗ; dòng tính trước 19/11 (chưa có theo SKU) ⇒ dong null, 0 SKU lỗ',
+            m.get('k1')?.dong?.length === 2 && m.get('k1')?.soSkuLo === 1 && m.get('k1')?.dong?.[1]?.sku === 'B48' && m.get('k1')?.dong?.[1]?.tyLePhi! > 0.1
+            && m.get('cu')?.dong === null && m.get('cu')?.soSkuLo === 0, JSON.stringify([...m]))
+    }
+    {
+        // D19. mẻ gộp có đơn chỉ lỗ ở SKU ⇒ tiêu đề nói rõ
+        const ds = Array.from({ length: 8 }, (_, i) => don(`g${i}`, { items: [dong(`g${i}i`, 100_000, 'p1')] }))
+        ds.push(don('gs', { items: [dong('gsa', 300_000, 'p2', 'A2'), dong('gsb', 50_000, 'p5', 'B48')] }))
+        const du = { don: ds, kenh: KENH, sp: SP, nganh: { ...Object.fromEntries(ds.map((_, i) => [`g${i}i`, '100'])), gsa: '100', gsb: '200' } }
+        const p = taoPrisma(du), push = pushGia()
+        const r = await xetLaiDuKienDonMoi(p, ds.map(d => d.id), { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f, nguon: 'dong-bo' })
+        dung('D19 mẻ 9 đơn (8 lỗ cả đơn + 1 chỉ lỗ ở SKU) ⇒ MỘT tin gộp "9 đơn mới dự kiến LỖ (1 đơn chỉ lỗ ở SKU)" + MỘT push',
+            r.lo === 8 && r.loSku === 1 && r.daBao === 9 && p.tin.length === 1 && p.tin[0].title === '🚨 9 đơn mới dự kiến LỖ (1 đơn chỉ lỗ ở SKU)'
+            && push.goi.length === 1 && push.goi[0].title === p.tin[0].title, JSON.stringify({ r, tin: p.tin.map((t: any) => t.title) }))
+    }
+    {
+        // G5–G8. Lưới vét TÍNH LẠI theo SKU dòng cũ (≤ 3 ngày), giữ baoLuc + nguồn, KHÔNG báo lại
+        const du = {
+            don: [
+                don('u1', { tuoiGio: 30, items: [dong('u1a', 300_000, 'p2', 'A2'), dong('u1b', 50_000, 'p5', 'B48')] }), // 30 giờ — quá 24 giờ, trong 3 ngày
+                don('u2', { tuoiGio: 80, items: [dong('u2a', 100_000, 'p1')] }),                                        // 80 giờ — quá 3 ngày
+                don('u3', { tuoiGio: 5, items: [] }),                                                                   // hết dòng hàng
+            ],
+            kenh: KENH, sp: SP, nganh: { u1a: '100', u1b: '200', u2a: '100' },
+        }
+        const p = taoPrisma(du, { bangCo: true }), push = pushGia()
+        const cu = (id: string) => ({ orderId: id, doanhThu: 1, phiDuKien: 0, giaVon: 0, lai: 1, thieuGiaVon: false, nguonPhi: 'cong-thuc',
+            chiTiet: { moTaPhi: 'cũ', nguon: 'webhook' }, xetLuc: new Date(BAY - 3600_000), baoLuc: new Date(BAY - 3600_000) })
+        for (const id of ['u1', 'u2', 'u3']) p.bang.set(id, cu(id))
+        const r = await vetLaiDuKienDonMoi(p, KENH[0]!, 'dong-bo', { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f })
+        const u1 = p.bang.get('u1')
+        dung('G5 dòng cũ ≤ 3 ngày chưa có theo SKU ⇒ TÍNH LẠI (Σ SKU = cả đơn), giữ baoLuc + nguồn cũ, KHÔNG tin, KHÔNG push (dù có SKU lỗ)',
+            r?.nangCap === 1 && u1.chiTiet.dong?.length === 2 && u1.chiTiet.dong.reduce((s: number, x: any) => s + x.lai, 0) === u1.lai && u1.lai > 1
+            && u1.chiTiet.nguon === 'webhook' && !!u1.chiTiet.tinhLaiTheoSku && +u1.baoLuc === BAY - 3600_000 && !p.tin.length && !push.goi.length,
+            JSON.stringify({ r, u1 }))
+        dung('G6 dòng cũ quá 3 ngày ⇒ để nguyên; đơn hết dòng hàng ⇒ đánh dấu dong=[] để thôi nhặt lại',
+            p.bang.get('u2').chiTiet.dong === undefined && Array.isArray(p.bang.get('u3').chiTiet.dong) && p.bang.get('u3').chiTiet.dong.length === 0
+            && CUA_SO_NANG_CAP_MS === 3 * 24 * 3600_000, JSON.stringify([p.bang.get('u2'), p.bang.get('u3')]))
+        const soCau = p.cau.length
+        const r2 = await vetLaiDuKienDonMoi(p, KENH[0]!, 'dong-bo', { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f })
+        dung('G7 vét lại sau khi đã tính lại ⇒ MỘT truy vấn, không gì để làm', r2 === null && p.cau.length - soCau === 1, `${p.cau.length - soCau} câu`)
+        const p2 = taoPrisma(du, { bangCo: true })
+        p2.bang.set('u1', cu('u1'))
+        const r3 = await vetLaiDuKienDonMoi(p2, KENH[0]!, 'dong-bo', { bayGio: BAY, docBang: docBangGia({ k1: new Error('mất kết nối'), k2: bangMot(MAU_SO) }) })
+        dung('G8 đọc phí gian hỏng lúc tính lại ⇒ để nguyên dòng cũ (lượt sau thử lại), không ném', r3?.nangCap === 0 && p2.bang.get('u1').chiTiet.dong === undefined,
+            JSON.stringify(r3))
     }
 
     /* ── F. Soát nguồn ─────────────────────────────────────────────────────────────────────────────────────────────────── */
