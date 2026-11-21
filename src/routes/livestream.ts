@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
 import registryPrisma from '../lib/prisma'
 import { lyDoChanJwtKhoa, lyDoChanDucPhien } from '../lib/phamViKhoaApi'
+import { thoatSsml } from '../lib/thoatSsml'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Livestream Studio API — backend cho app Kengi Stream (kengi.vn/ai-livestream)
@@ -438,7 +439,7 @@ function sanitizePercent(p: string): string {
 async function synthEdgeOnce(voice: string, text: string, rate: string, pitch: string): Promise<Buffer | null> {
     try {
         const tts = await getOrCreateTts(voice)
-        const { audioStream } = tts.toStream(text, { rate, pitch })
+        const { audioStream } = tts.toStream(thoatSsml(text), { rate, pitch }) // "&" thô làm Edge không trả giọng
         const chunks: Buffer[] = []
         for await (const c of audioStream as AsyncIterable<Buffer>) chunks.push(c)
         const out = Buffer.concat(chunks)
