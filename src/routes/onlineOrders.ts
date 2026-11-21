@@ -16,6 +16,7 @@ import { moKhoMeHu, nhapKhoHuMe, type KhoMeHu } from '../lib/khoMeHu'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { docLaiDuKien, vetLaiDuKienDonMoi } from '../lib/laiDuKienDon'
+import { daDocLaiPhiCuoi } from '../lib/phiShopeeHoanTat'
 import { moTaLoi } from '../lib/gomLoi'
 import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 import { lyDoSanXacDinhLai } from '../lib/lyDoTraHang'
@@ -1194,10 +1195,19 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
             /* LÃI DỰ KIẾN lúc đơn về (18/11/2026, lib/laiDuKienDon): con số đã tính + nguồn phí — ô Lợi nhuận hiện nó (ghi rõ
              * "dự kiến") cho đơn CHƯA quyết toán thay cho "chưa quyết toán" trơn. Bảng chưa có / đọc hỏng ⇒ không có. */
             const duKien = await docLaiDuKien(prisma, orders.map((o: any) => String(o.id))).catch(() => new Map())
+            /* ƯU TIÊN LÃI DỰ KIẾN (21/11/2026 — chủ shop: "bấm chi tiết hiện đúng mà bên ngoài hiện sai"): đơn Shopee có lãi dự kiến
+             * theo escrow (giá + phí thật, đã trừ phí bảo vệ vận chuyển, không tính ship khách trả) mà CHƯA có số cuối thì ô Lợi
+             * nhuận hiện lãi dự kiến — số phí đọc sớm lúc đơn đang giao còn cộng ship khách trả, chưa trừ phí bảo vệ ⇒ cao hơn
+             * thật, lệch với chi tiết đơn. Số cuối = đơn hoàn tất ĐÃ được đọc lại phí (lib/phiShopeeHoanTat). Đơn huỷ / trả: như cũ. */
+            const laShopeeDuKien = (o: any) => String(o.platform || '').toLowerCase() === 'shopee'
+                && duKien.get(String(o.id))?.nguonPhi === 'escrow' && !CANCEL_LIKE_STATUSES.includes(o.status)
+            const hoanTatCanSoat = orders.filter((o: any) => laShopeeDuKien(o) && o.status === 'COMPLETED').map((o: any) => String(o.id))
+            const daChot = hoanTatCanSoat.length ? await daDocLaiPhiCuoi(prisma, hoanTatCanSoat) : new Set<string>()
             items = orders.map(o => {
                 const p = profits.get(o.id)
                 const oa = ganAnh(o)
                 const laiDuKien = duKien.get(String(o.id)) ?? null
+                const uuTienDuKien = laShopeeDuKien(o) && !daChot.has(String(o.id))
                 return p ? {
                     ...oa,
                     estimatedCost: p.cost,
@@ -1207,8 +1217,8 @@ router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders
                     // Đơn khách trả: sàn quyết toán ÂM. Giao diện phải nói rõ là HOÀN,
                     // không thì con số âm trông như lỗ do bán rẻ.
                     donHoanTra: p.hoanTra === true,
-                    laiDuKien,
-                } : { ...oa, laiDuKien }
+                    laiDuKien, uuTienDuKien,
+                } : { ...oa, laiDuKien, uuTienDuKien }
             })
         }
 

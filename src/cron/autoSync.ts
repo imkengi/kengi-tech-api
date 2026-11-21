@@ -3,6 +3,7 @@ import { chayNeuLanhDao } from '../lib/leaderLock'
 import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
 import { vetLaiDuKienDonMoi } from '../lib/laiDuKienDon'
+import { docLaiPhiHoanTat } from '../lib/phiShopeeHoanTat'
 import { layHoaDonKhachPhieuMoi } from '../lib/hoaDonKhachShopee'
 import { syncChannelReturns } from '../services/returnSync'
 import { choXong } from '../lib/choXong'
@@ -45,6 +46,7 @@ const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
 const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
 const AFF_BU_BATCH      = 400                  // đơn bù hoa hồng affiliate mỗi vòng, mỗi kênh (Shopee, TikTok từ 10/11/2026)
 const AFF_BU_MS         = 120_000              // giờ RIÊNG cho lượt bù, tính từ lúc bắt đầu bù
+const DOC_LAI_PHI_MS    = 60_000               // giờ RIÊNG cho lượt đọc lại phí đơn Shopee hoàn tất (lib/phiShopeeHoanTat)
 const LAZADA_PHI_NGAY   = 90                   // Lazada: soát lại MỌI đơn tạo trong 90 ngày (một lượt đọc / kênh — xem doiSoatPhiKenhLazada)
 
 let syncTimer:    NodeJS.Timeout | null = null
@@ -787,13 +789,45 @@ async function runFeeSync() {
                 nhaClient()
             }
         }
+        /* ĐỌC LẠI PHÍ đơn Shopee vừa HOÀN TẤT (21/11/2026, lib/phiShopeeHoanTat): lượt đối soát ở trên đọc escrow lúc đơn còn
+         * đang giao — số lúc đó còn cộng ship khách trả, chưa trừ phí bảo vệ vận chuyển ⇒ thực nhận / lợi nhuận cao hơn thật.
+         * Chạy SAU đối soát + bù hoa hồng (đơn mới có phí quan trọng hơn), giờ RIÊNG, bắt đầu từ gian ngẫu nhiên như lượt bù. */
+        let tongDocLai = 0
+        const kenhShopee = kenhBuAff.filter(k => k.ch.platform === 'shopee')
+        const hanDocLai = Date.now() + DOC_LAI_PHI_MS
+        const dauDocLai = Math.floor(Math.random() * Math.max(1, kenhShopee.length))
+        for (let i = 0; i < kenhShopee.length && process.env.DOC_LAI_PHI_HOAN_TAT !== '0'; i++) {
+            if (Date.now() > hanDocLai) break
+            const { schema, ch } = kenhShopee[(dauDocLai + i) % kenhShopee.length]
+            const nhaClient = giuClient(schema)
+            try {
+                const sp = getStorePrisma(schema) as any
+                const svc: any = new ShopeeService({
+                    apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                    accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined, shopId: ch.shopId || undefined,
+                })
+                /* KHÔNG gọi canhBaoLoiNhuanThap ở đây: số đổi thường chỉ bằng ship khách trả + phí bảo vệ, cảnh báo lãi thấp đã
+                 * xét lúc phí về lần đầu, lỗ đã báo lúc đơn về (lãi dự kiến theo escrow) — lần đầu chạy phải đọc lại cả đơn hoàn tất
+                 * ~18 ngày, gọi cảnh báo ở đây là dội push cho đơn đã giao từ tuần trước. */
+                const kq = await docLaiPhiHoanTat(sp, ch, (sn: string) => svc.getEscrowDetail(sn), { han: hanDocLai, chayDongThoi: mapWithConcurrency })
+                tongDocLai += kq.doi
+                if (kq.doi || kq.loi || kq.chuaCo) {
+                    console.log(`[FeeSync] ${ch.name}: đọc lại phí đơn hoàn tất — đổi ${kq.doi}, như cũ ${kq.giong}, Shopee chưa có số ${kq.chuaCo}, ` +
+                        `lỗi ${kq.loi}${kq.deLai ? `, để lượt sau ${kq.deLai}` : ''} (nhặt ${kq.quet})${kq.loiDau ? ` — lỗi đầu: ${kq.loiDau}` : ''}`)
+                }
+            } catch (e: any) {
+                console.warn(`[FeeSync] đọc lại phí đơn hoàn tất ${ch.name} hỏng:`, fmtErr(e))
+            } finally {
+                nhaClient()
+            }
+        }
         if (tikTokBiChanLuotNay()) {
             console.log(`[FeeSync] TikTok bóp hạn mức API tài chính (36009002) — thôi TikTok lượt này: ${tikTokDeLai} đơn chưa hỏi`
                 + `${kenhTikTokBoQua ? `, ${kenhTikTokBoQua} lượt kênh (đối soát / bù hoa hồng) chưa tới` : ''} — để lượt sau`)
         }
-        if (tongCapNhat > 0 || tongBuAff > 0) {
+        if (tongCapNhat > 0 || tongBuAff > 0 || tongDocLai > 0) {
             console.log(`[FeeSync] Xong: ${tongCapNhat} đơn` + (tongBuAff ? ` + bù hoa hồng affiliate ${tongBuAff} đơn` : '') +
-                `, ${Math.round((Date.now() - batDau) / 1000)}s`)
+                (tongDocLai ? ` + đọc lại phí ${tongDocLai} đơn hoàn tất` : '') + `, ${Math.round((Date.now() - batDau) / 1000)}s`)
         }
     } catch (err: any) {
         console.error('[FeeSync] Lỗi:', err?.message || err)

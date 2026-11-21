@@ -4,15 +4,19 @@
  *  Chủ shop: "ủa phí cố định nó sẽ theo tuỳ mã hàng chứ" → "Ok, đổi đi rồi deploy".
  *
  *  Đo prod 18/11/2026 (chỉ đọc; 49 đơn một mã của 7 ngành / 28 mã + 16 đơn ngẫu nhiên — KHỚP TỪNG ĐỒNG):
- *    osp − escrow_amount = (osp − Q)                       voucher shop (Q = order_discounted_price)
+ *    osp − escrow_amount = (osp − Q)                       voucher shop / giảm combo (Q = order_discounted_price)
  *                        + commission_fee                  = % NGÀNH × Q — số nguyên %, MỌI mã cùng ngành cùng mức
  *                        + seller_transaction_fee          = 6% × (Q + buyer_paid_shipping_fee)
- *                        + service_fee                     = min(5,5% × Q, 50.000) + 3.000
- *                        + withholding_vat_tax + withholding_pit_tax   = 1,5% × osp
- *                        + shipping_seller_protection_fee_amount       = 2.700đ/đơn
+ *                        + service_fee                     = Σ min(5,5% × giá 1 CÁI, 50.000) × SL + 3.000
+ *                        + withholding_vat_tax + withholding_pit_tax   = 1,5% × Q
+ *                        + shipping_seller_protection_fee_amount       = 2.700đ/đơn — CHỈ khi đơn ĐÃ GỬI (đơn chưa gửi = 0)
  *                        + ads_escrow_top_up_fee_or_technical_support_fee (chỉ Kengi Tools: 1,08% × osp)
  *                        + order_ams_commission_fee        affiliate
  *  (credit_card_transaction_fee là CÙNG khoản với seller_transaction_fee — cộng là đếm đôi.)
+ *  Đo lại 21/11/2026 (chỉ đọc, 11 đơn có combo / nhiều cái): trần 50.000đ của phí dịch vụ là theo TỪNG CÁI (3 đơn 2 cái giá
+ *  > 909.000đ ra 2 × 50.000 + 3.000 — theo đơn thì sai); thuế 1,5% tính trên Q (đơn combo: osp ≠ Q mới phân biệt được). Ship
+ *  khách trả (buyer_paid_shipping_fee): đơn chưa hoàn tất escrow CỘNG cả khoản này (final_shipping_fee = 0), hoàn tất thì
+ *  final_shipping_fee = −ship ⇒ ròng 0 — tiền ship đi cho đơn vị vận chuyển, không phải của shop.
  *
  *  Vì sao không đo từ sổ (OnlineOrder.platformFee như lib/giaShopee.uocLuongPhi): đồng bộ phí đọc escrow SỚM rồi không đọc
  *  lại — 16 đơn ngẫu nhiên: 6 thiếu đúng 2.700đ, 8 thiếu 1.884–20.358đ, 1 đã hoàn tiền mà sổ vẫn ghi phí ⇒ hồi quy trên số đó
@@ -52,6 +56,23 @@ export interface MauEscrow {
     phi: number
     /** tổng số cái trong đơn */
     sl: number
+    /** từng dòng hàng: giá CẢ dòng sau giảm (items[].discounted_price, co giãn cho Σ = Q) + số cái — phí dịch vụ có trần theo
+     *  TỪNG CÁI cần giá một cái. Rỗng ⇒ phiDichVu coi cả đơn là một cái. */
+    dong: DongEscrow[]
+}
+
+/** Một dòng hàng của escrow: giá CẢ dòng (sau giảm) và số cái. */
+export interface DongEscrow { gia: number; sl: number }
+
+/** items[] của order_income ⇒ giá cả dòng sau giảm (discounted_price — sau combo / giảm giá shop) co giãn cho Σ = Q, kèm số
+ *  cái. Thiếu giá ⇒ [] (bên dùng coi cả đơn là một cái). */
+export function dongEscrow(inc: any, Q: number): DongEscrow[] {
+    const items: any[] = Array.isArray(inc?.items) ? inc.items : []
+    const tho = items.map(i => ({ gia: Math.max(0, so(i?.discounted_price)), sl: Math.max(1, Math.round(so(i?.quantity_purchased)) || 1) }))
+    const tong = tho.reduce((s, d) => s + d.gia, 0)
+    if (!(tong > 0) || !(Q > 0)) return []
+    const k = Q / tong
+    return tho.map(d => ({ gia: d.gia * k, sl: d.sl }))
 }
 
 export interface BieuPhiNganh {
@@ -141,19 +162,25 @@ export function docMauEscrow(inc: any): MauEscrow | null {
         aff: Math.max(0, so(inc.order_ams_commission_fee)),
         phi: osp - escrow,
         sl: Math.max(1, items.reduce((s, i) => s + Math.max(0, so(i?.quantity_purchased)), 0)),
+        dong: dongEscrow(inc, Q),
     }
 }
 
-/** Phí dịch vụ của một đơn theo biểu: phần % (có trần) + phí mỗi đơn. */
-export function phiDichVu(dv: PhiDichVu, Q: number): number {
-    const phan = dv.tyLe * Q
-    return (dv.tran > 0 ? Math.min(phan, dv.tran) : phan) + dv.moiDon
+/** Phí dịch vụ của một đơn theo biểu: phần % — trần áp cho TỪNG CÁI (đo 21/11/2026) — + phí mỗi đơn. `dong` = giá cả dòng sau
+ *  giảm + số cái (Σ giá = Q); thiếu ⇒ coi cả đơn là một cái. */
+export function phiDichVu(dv: PhiDichVu, Q: number, dong?: DongEscrow[]): number {
+    const ds = dong && dong.length ? dong : [{ gia: Q, sl: 1 }]
+    const phan = ds.reduce((s, d) => {
+        const sl = Math.max(1, Math.round(d.sl) || 1), mot = dv.tyLe * (d.gia / sl)
+        return s + (dv.tran > 0 ? Math.min(mot, dv.tran) : mot) * sl
+    }, 0)
+    return phan + dv.moiDon
 }
 
 /** Phí dịch vụ: thử biểu mặc định trước; không khớp ≥ 90% mẫu thì dò lại %, phí/đơn (và trần nếu thấy) từ chính mẫu. */
 function doPhiDichVu(mau: MauEscrow[]): PhiDichVu | null {
     // làm tròn từng dòng hàng ⇒ cho lệch vài đồng theo số cái
-    const khop = (dv: PhiDichVu) => mau.filter(m => Math.abs(m.dichVu - phiDichVu(dv, m.Q)) <= 2 + m.sl).length
+    const khop = (dv: PhiDichVu) => mau.filter(m => Math.abs(m.dichVu - phiDichVu(dv, m.Q, m.dong)) <= 2 + m.sl).length
     const du = Math.ceil(0.9 * mau.length)
     if (khop(PHI_DICH_VU_MAC_DINH) >= du) return PHI_DICH_VU_MAC_DINH
     const duoi = mau.filter(m => m.Q <= 600_000)
@@ -166,15 +193,17 @@ function doPhiDichVu(mau: MauEscrow[]): PhiDichVu | null {
     const a = Math.round((cov / varQ) / 0.0005) * 0.0005
     const b = Math.round((tbP - (cov / varQ) * tbQ) / 100) * 100
     if (!(a > 0 && a < 0.2) || !(b >= 0 && b <= 20_000)) return null
-    // đơn ra phí thấp hơn đường thẳng ⇒ đã chạm trần: trần = phí − phí/đơn (lấy lớn nhất); không đơn nào chạm ⇒ chưa biết trần
-    const cham = mau.filter(m => m.dichVu < a * m.Q + b - (2 + m.sl))
+    /* đơn ra phí thấp hơn đường thẳng ⇒ đã chạm trần: trần = phí − phí/đơn (lấy lớn nhất). CHỈ đơn MỘT cái — trần theo từng cái,
+     * đơn 2 cái chạm trần ra 2 × trần (21/11/2026). Không đơn một cái nào chạm ⇒ chưa biết trần (phí cao hơn = thận trọng). */
+    const cham = mau.filter(m => m.sl === 1 && m.dichVu < a * m.Q + b - (2 + m.sl))
     const dv: PhiDichVu = { tyLe: a, moiDon: b, tran: cham.length ? Math.round(Math.max(...cham.map(m => m.dichVu - b))) : 0 }
     return khop(dv) >= du ? dv : null
 }
 
-/** Phí công thức của MỘT đơn mẫu (dùng Q, ship, voucher, bảo vệ, phí khác, affiliate THẬT của đơn) — để kiểm biểu phí. */
+/** Phí công thức của MỘT đơn mẫu (dùng Q, ship, voucher, bảo vệ, phí khác, affiliate THẬT của đơn) — để kiểm biểu phí. Thuế trên
+ *  Q (đo 21/11/2026 ở đơn combo — osp ≠ Q). */
 export function phiCongThucCuaDon(b: Pick<BieuPhi, 'thanhToan' | 'dichVu' | 'thue'>, phiNganh: number, m: MauEscrow): number {
-    return (m.osp - m.Q) + phiNganh * m.Q + b.thanhToan * (m.Q + m.S) + phiDichVu(b.dichVu, m.Q) + b.thue * m.osp + m.baoVe + m.khac + m.aff
+    return (m.osp - m.Q) + phiNganh * m.Q + b.thanhToan * (m.Q + m.S) + phiDichVu(b.dichVu, m.Q, m.dong) + b.thue * m.Q + m.baoVe + m.khac + m.aff
 }
 
 /** Dung sai kiểm: max(1.000đ; 0,5% giá). */
@@ -208,7 +237,7 @@ export function uocLuongBieuPhi(mauVao: (MauEscrow & { nganh: string })[], luc =
         c.min = tron(c.min, 1e4); c.max = tron(c.max, 1e4); c.tyLe = c.max
     }
     const thanhToan = tron(trungVi(mau.map(m => m.thanhToan / (m.Q + m.S))), 1e4)
-    const thue = tron(trungVi(mau.map(m => m.thue / m.osp)), 1e4)
+    const thue = tron(trungVi(mau.map(m => m.thue / m.Q)), 1e4)   // thuế trên Q (21/11/2026)
     const dichVu = doPhiDichVu(mau)
     if (!dichVu) {
         return rong('Phí dịch vụ của các đơn mẫu không ra công thức "% × giá (có trần) + phí mỗi đơn" — Shopee có thể đã đổi cách tính; dùng phí đo từ sổ như cũ.', { nganh })
@@ -273,7 +302,7 @@ export function moTaKhoanChung(b: BieuPhi): string {
     const v = Math.min(Math.max(b.voucher, 0), 0.5)
     return [
         `thanh toán ${pct(b.thanhToan)}`,
-        `dịch vụ ${pct(b.dichVu.tyLe)}${b.dichVu.tran > 0 ? ` (tối đa ${vnd(b.dichVu.tran)})` : ''} + ${vnd(b.dichVu.moiDon)}/đơn`,
+        `dịch vụ ${pct(b.dichVu.tyLe)}${b.dichVu.tran > 0 ? ` (tối đa ${vnd(b.dichVu.tran)}/cái)` : ''} + ${vnd(b.dichVu.moiDon)}/đơn`,
         `thuế ${pct(b.thue)}`,
         ...(b.baoVe ? [`bảo vệ vận chuyển ${vnd(b.baoVe)}/đơn`] : []),
         ...(b.khac ? [`nạp quảng cáo / hỗ trợ kỹ thuật ${pct(b.khac)}`] : []),
@@ -282,16 +311,16 @@ export function moTaKhoanChung(b: BieuPhi): string {
 }
 
 /**
- * Mô hình phí (MauPhi nguon 'cong-thuc') cho một sản phẩm có % phí cố định `phiNganh` — phí(P) theo giá đăng P của đơn 1 cái:
- *   v·P + (1 − v)·P·(phiNganh + thanhToan + dịch vụ%) + thuế·P + khác·P + phí dịch vụ/đơn + bảo vệ + thanhToan·ship
- *   (v = voucher shop trung bình) — phần dịch vụ% tối đa `tran` ⇒ MauPhi.tran. Affiliate tính riêng (affiliate.tachRieng):
- *   bên gọi gắn `affiliate` (trung bình vào giá mục tiêu, mức cao nhất vào giá sàn).
+ * Mô hình phí (MauPhi nguon 'cong-thuc') cho một sản phẩm có % phí cố định `phiNganh` — phí(P) theo giá đăng P của MỘT cái:
+ *   v·P + (1 − v)·P·(phiNganh + thanhToan + dịch vụ% + thuế) + khác·P + phí dịch vụ/đơn + bảo vệ + thanhToan·ship
+ *   (v = voucher shop trung bình; thuế trên Q = (1 − v)·P, đo 21/11/2026) — phần dịch vụ% tối đa `tran` MỖI CÁI ⇒ MauPhi.tran.
+ *   Affiliate tính riêng (affiliate.tachRieng): bên gọi gắn `affiliate` (trung bình vào giá mục tiêu, mức cao nhất vào giá sàn).
  * soMauNganh = 0 ⇒ phiNganh là % TRUNG BÌNH các ngành (ngành chưa có đơn mẫu / phí cả gian) — bên gọi gắn thayNganh /
  * chuaRoNganh khi đó là phí của một sản phẩm.
  */
 export function mauPhiCongThuc(b: BieuPhi, phiNganh: number, o: { soMauNganh: number; lech?: boolean }): MauPhi {
     const v = Math.min(Math.max(b.voucher, 0), 0.5), q = 1 - v
-    const tyLe = v + q * (phiNganh + b.thanhToan + b.dichVu.tyLe) + b.thue + b.khac
+    const tyLe = v + q * (phiNganh + b.thanhToan + b.dichVu.tyLe + b.thue) + b.khac
     const coDinh = Math.round(b.dichVu.moiDon + b.baoVe + b.thanhToan * b.ship)
     const giam = b.dichVu.tran > 0 ? b.dichVu.tyLe * q : 0
     const moTa = moTaKhoanChung(b)

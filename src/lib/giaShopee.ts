@@ -75,8 +75,9 @@ export interface AffiliateDo {
     soDonCo: number
 }
 
-/** Phần phí có TRẦN (18/11/2026 — phí dịch vụ Shopee: phần % tối đa 50.000đ/đơn): từ giá `tuGia` trở lên, mỗi đồng giá thêm
- *  chỉ chịu (tyLe − giam) phí ⇒ phí(P) = tyLe·P + coDinh − giam·max(0, P − tuGia). Không có = phí thẳng như cũ. */
+/** Phần phí có TRẦN (18/11/2026 — phí dịch vụ Shopee: phần % tối đa 50.000đ mỗi CÁI, đo lại 21/11/2026): từ giá `tuGia` (giá
+ *  MỘT cái) trở lên, mỗi đồng giá thêm chỉ chịu (tyLe − giam) phí ⇒ phí(P) = tyLe·P + coDinh − giam·max(0, P − tuGia). Đơn nhiều
+ *  cái: trần áp cho từng cái (phiSanTungDong). Không có = phí thẳng như cũ. */
 export interface TranPhi { tuGia: number; giam: number }
 
 /** Thông tin mô hình phí TÍNH THEO CÔNG THỨC từ biểu phí đọc thẳng escrow Shopee (lib/bieuPhiShopee, 18/11/2026). */
@@ -378,44 +379,49 @@ export function phiSanCuaGia(phi: ThamSoGia['phi'], gia: number, kemAffTB = true
 
 /**
  * Phí sàn KỲ VỌNG (VND, chưa làm tròn) của MỘT ĐƠN nhiều dòng, mỗi dòng một mô hình phí theo ngành của nó (18/11/2026 — lãi dự
- * kiến đơn mới, lib/laiDuKienDon): phần tỷ lệ (+ affiliate trung bình) theo mô hình TỪNG dòng trên giá dòng; phần cố định mỗi
- * đơn + trần theo mô hình của dòng giá cao nhất, trên TỔNG đơn. Phí công thức Shopee: mọi ngành chung phần cố định / trần (phí
- * dịch vụ có trần theo ĐƠN, phí bảo vệ mỗi đơn) ⇒ đúng công thức escrow của cả đơn. Một dòng / cùng một mô hình ⇒ đúng bằng
- * phiSanCuaGia(mô hình, tổng).
+ * kiến đơn mới, lib/laiDuKienDon): phần tỷ lệ (+ affiliate trung bình) theo mô hình TỪNG dòng trên giá dòng, trần (phí dịch vụ
+ * Shopee) theo TỪNG CÁI của dòng; phần cố định mỗi đơn theo mô hình của dòng giá cao nhất, MỘT lần cho cả đơn. Một dòng một cái
+ * ⇒ đúng bằng phiSanCuaGia(mô hình, giá).
+ * 21/11/2026 (đo escrow prod, chỉ đọc): trần 50.000đ của phí dịch vụ Shopee tính theo TỪNG CÁI — Σ min(5,5% × giá 1 cái, 50.000)
+ * × SL — không theo đơn: đơn 2 cái giá 1,2 triệu chịu 2 × 50.000đ chứ không phải 50.000đ. `sl` thiếu ⇒ coi dòng là 1 cái.
  */
-export function phiSanCuaDon(dong: { gia: number; phi: ThamSoGia['phi'] }[]): number {
+export function phiSanCuaDon(dong: { gia: number; sl?: number; phi: ThamSoGia['phi'] }[]): number {
     return phiSanTungDong(dong).reduce((s, x) => s + x.phi, 0)
 }
 
 /** Phí sàn của MỘT dòng trong đơn — xem phiSanTungDong. */
 export interface PhiMotDong {
-    /** % phí theo mô hình phí của CHÍNH dòng này (tyLe + affiliate trung bình), 0..1 */
+    /** % phí theo mô hình phí của CHÍNH dòng này (tyLe + affiliate trung bình), 0..1 — CHƯA trừ phần bớt nhờ trần */
     tyLe: number
-    /** phần tỷ lệ: tyLe × giá dòng */
+    /** phần theo giá: tyLe × giá dòng − phần bớt nhờ trần (tính trên TỪNG CÁI của dòng) */
     phiTyLe: number
-    /** phần chia của khoản chung cả đơn (phí cố định mỗi đơn − phần bớt nhờ trần), theo tỷ trọng giá dòng; có thể âm khi trần bớt nhiều */
+    /** phần chia phí cố định mỗi đơn (mô hình dòng giá cao nhất), theo tỷ trọng giá dòng */
     phiChung: number
     /** phiTyLe + phiChung (VND, chưa làm tròn) */
     phi: number
 }
 
+/** Số cái của dòng — thiếu / hỏng ⇒ 1. */
+const soCai = (sl: any) => { const n = Math.floor(Number(sl)); return n >= 1 ? n : 1 }
+
 /**
  * Phí sàn KỲ VỌNG của một đơn CHIA THEO TỪNG DÒNG (SKU) — 19/11/2026, chủ shop: "lãi dự kiến thì phải tính theo SKU và phí của
- * SKU đó chứ". Mỗi dòng chịu phần tỷ lệ theo mô hình phí của CHÍNH nó (ngành của SKU) × giá dòng; khoản chung của cả đơn (phí
- * cố định mỗi đơn − phần bớt nhờ trần dịch vụ, theo mô hình dòng giá cao nhất trên TỔNG đơn — đúng phiSanCuaDon) chia cho các
- * dòng theo tỷ trọng giá. Σ phi = phiSanCuaDon. Trả đúng thứ tự `dong`; dòng giá ≤ 0 (quà tặng) ⇒ toàn 0.
+ * SKU đó chứ". Mỗi dòng chịu phần theo giá theo mô hình phí của CHÍNH nó (ngành của SKU): tyLe × giá dòng − phần bớt nhờ trần
+ * tính trên TỪNG CÁI (21/11/2026); phí cố định mỗi đơn (mô hình dòng giá cao nhất) chia cho các dòng theo tỷ trọng giá. Σ phi =
+ * phiSanCuaDon. Trả đúng thứ tự `dong`; dòng giá ≤ 0 (quà tặng) ⇒ toàn 0.
  */
-export function phiSanTungDong(dong: { gia: number; phi: ThamSoGia['phi'] }[]): PhiMotDong[] {
+export function phiSanTungDong(dong: { gia: number; sl?: number; phi: ThamSoGia['phi'] }[]): PhiMotDong[] {
     const KHONG: PhiMotDong = { tyLe: 0, phiTyLe: 0, phiChung: 0, phi: 0 }
     const co = dong.filter(d => d.gia > 0)
     if (!co.length) return dong.map(() => ({ ...KHONG }))
     const chinh = co.reduce((a, b) => (b.gia > a.gia ? b : a))
     const tong = co.reduce((s, d) => s + d.gia, 0)
-    const chung = chinh.phi.coDinh - phiBotNhoTran(chinh.phi, tong)
+    const chung = chinh.phi.coDinh
     return dong.map(d => {
         if (!(d.gia > 0)) return { ...KHONG }
         const tyLe = d.phi.tyLe + tyLeAffiliateTB(d.phi)
-        const phiTyLe = tyLe * d.gia
+        const sl = soCai(d.sl)
+        const phiTyLe = tyLe * d.gia - sl * phiBotNhoTran(d.phi, d.gia / sl)
         const phiChung = chung * (d.gia / tong)
         return { tyLe, phiTyLe, phiChung, phi: phiTyLe + phiChung }
     })

@@ -17,6 +17,12 @@
  *     CHÍNH ngành nó; laiTungDong Σ dòng = ĐÚNG số cả đơn (phí, vốn, lãi — kể cả làm tròn); giá vốn từng dòng theo quy đổi; SKU lỗ
  *     trong đơn lãi ⇒ BÁO (tin nêu tên + [SKU] + phép tính); quà tặng 0đ không báo oan; đơn một dòng không nói hai lần; dòng cũ
  *     chưa có theo SKU được lưới vét tính lại (giữ baoLuc, không báo lại), ngoài 3 ngày / không tính được thì thôi.
+ *  I. SHOPEE THEO ESCROW (21/11/2026 — đơn combo: đơn ghi giá GỐC, Kengi lãi gấp ~3 lần số Shopee báo): giá + phí THẬT của chính
+ *     đơn (ship khách trả không tính, bảo vệ vận chuyển chưa trừ thì cộng — PROCESSED = COMPLETED); nối dòng đơn ↔ escrow; chia phí
+ *     theo SKU từng khoản (trần dịch vụ TỪNG CÁI); chưa đọc được ⇒ hoãn < 2 giờ / tạm biểu phí kèm lý do; ném ⇒ thôi đọc cả lượt,
+ *     lỗi đã che token; chưa uỷ quyền / công tắc tắt / proxy quá tải; trần lời đọc mỗi lượt; lưới vét tính lại dòng cũ ≤ 7 ngày
+ *     không báo, Shopee không có số ⇒ đánh dấu thôi thử, lỗi tạm ⇒ thử lại. Số liệu GIẢ (repo công khai).
+ *  Biểu phí từ 21/11/2026: trần phí dịch vụ theo TỪNG CÁI, thuế trên Q (sau giảm) — A2 / A6.
  */
 import fs from 'fs'
 import path from 'path'
@@ -24,8 +30,11 @@ import { danhGiaGia, phiSanCuaGia, phiSanCuaDon, phiSanTungDong, type MauPhi, ty
 import { mauPhiCongThuc, phiDichVu, type BieuPhi } from '../src/lib/bieuPhiShopee'
 import {
     phiDuKienCuaDon, ketLuanLaiDuKien, tinBaoLo, tenHangChinh, xetLaiDuKienDonMoi, xetLaiDuKienAnToan, vetLaiDuKienDonMoi, docLaiDuKien,
-    laiTungDong, moTaPhiDong, phepTinhSku, CUA_SO_DON_MOI_MS, CUA_SO_NANG_CAP_MS, type DongGia, type DongVaoLai,
+    laiTungDong, moTaPhiDong, phepTinhSku, CUA_SO_DON_MOI_MS, CUA_SO_NANG_CAP_MS, type DongGia, type DongVaoLai, type LaiDong,
+    docEscrowDuKien, ganGiaEscrow, escrowTheoSku, CHO_ESCROW_MS, CUA_SO_ESCROW_MS, TRAN_ESCROW_MOI_LUOT,
 } from '../src/lib/laiDuKienDon'
+import { noteProxyFailure, noteProxySuccess, proxyCircuitOpen } from '../src/lib/proxyBreaker'
+import { docLaiPhiHoanTat, daDocLaiPhiCuoi } from '../src/lib/phiShopeeHoanTat'
 import { computeOrderProfits } from '../src/lib/onlineOrderProfit'
 
 let loi = 0, dat = 0
@@ -56,11 +65,12 @@ const BANG_CONG_THUC = {
         return k ? { ...MTB, thayNganh: k } : { ...MTB, chuaRoNganh: true }
     },
 }
-/** Phí Shopee của CẢ đơn theo công thức escrow (tính tay — đối chứng A3 / D1). */
-function phiShopeeTay(dong: { gia: number; r: number }[]): number {
+/** Phí Shopee của CẢ đơn theo công thức escrow (tính tay — đối chứng A3 / D1). Trần phí dịch vụ theo TỪNG CÁI, thuế trên Q
+ *  (đo 21/11/2026). */
+function phiShopeeTay(dong: { gia: number; r: number; sl?: number }[]): number {
     const osp = dong.reduce((s, d) => s + d.gia, 0), v = B.voucher, q = 1 - v, Q = q * osp
-    return v * osp + dong.reduce((s, d) => s + d.r * q * d.gia, 0) + B.thanhToan * (Q + B.ship) + phiDichVu(B.dichVu, Q)
-        + B.thue * osp + B.baoVe + B.khac * osp + AFF.tyLeTB * osp
+    return v * osp + dong.reduce((s, d) => s + d.r * q * d.gia, 0) + B.thanhToan * (Q + B.ship) + phiDichVu(B.dichVu, Q, dong.map(d => ({ gia: q * d.gia, sl: d.sl ?? 1 })))
+        + B.thue * Q + B.baoVe + B.khac * osp + AFF.tyLeTB * osp
 }
 const MAU_SO: MauPhi = { tyLe: 0.22, coDinh: 4000, nguon: 'hoi-quy-don', soDon: 120, ghiChu: 'đo từ sổ' }
 const MAU_KHAI: MauPhi = { tyLe: 0.25, coDinh: 0, nguon: 'cau-hinh-kenh', soDon: 3, ghiChu: 'khai', khai: true }
@@ -68,6 +78,18 @@ const MAU_CHUA_BIET: MauPhi = { tyLe: 0.06, coDinh: 0, nguon: 'cau-hinh-kenh', s
 const bangMot = (m: MauPhi) => ({ chon: () => m })
 
 /* ── prisma giả ────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/** Chọn trường như Prisma `select` (lồng `{ select }` cho quan hệ). Không có select ⇒ nguyên bản ghi. */
+function theoChon(o: any, chon: any): any {
+    if (!chon || o == null) return o
+    const ra: any = {}
+    for (const [k, v] of Object.entries(chon)) {
+        if (v === true) ra[k] = o[k]
+        else if (v && typeof v === 'object' && (v as any).select) {
+            ra[k] = Array.isArray(o[k]) ? o[k].map((x: any) => theoChon(x, (v as any).select)) : theoChon(o[k], (v as any).select)
+        }
+    }
+    return ra
+}
 interface TuyChonGia { bangCo?: boolean; hongTin?: boolean; thuaGianh?: boolean; hongTaoBang?: boolean; hongVet?: boolean }
 function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?: Record<string, string> }, tc: TuyChonGia = {}) {
     const bang = new Map<string, any>()
@@ -82,10 +104,19 @@ function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?
             if (/DELETE FROM "LaiDuKienDon"/.test(sql)) { let n = 0; for (const id of a[0]) if (bang.has(id) && !bang.get(id).baoLuc) { bang.delete(id); n++ } return n }
             if (/UPDATE "LaiDuKienDon" SET "baoLuc"/.test(sql)) { for (const id of a[0]) if (bang.has(id)) bang.get(id).baoLuc = a[1]; return a[0].length }
             if (/UPDATE "LaiDuKienDon" SET "doanhThu"/.test(sql)) {
-                // tính lại theo SKU: chỉ dòng CÒN thiếu chiTiet.dong; chiTiet = cũ || mới (jsonb ||)
+                // tính lại: dòng CÒN thiếu chiTiet.dong, HOẶC chưa theo escrow (dòng đã theo escrow không bị phép tính khác đè);
+                // chiTiet = cũ || mới (jsonb ||)
+                if (!/\("chiTiet" -> 'dong'\) IS NULL OR "nguonPhi" <> 'escrow'/.test(sql)) throw new Error('UPDATE tính lại thiếu điều kiện giữ dòng escrow')
                 const r = bang.get(a[0])
-                if (!r || r.chiTiet?.dong !== undefined) return 0
+                if (!r || !(r.chiTiet?.dong === undefined || r.nguonPhi !== 'escrow')) return 0
                 Object.assign(r, { doanhThu: a[1], phiDuKien: a[2], giaVon: a[3], lai: a[4], thieuGiaVon: a[5], nguonPhi: a[6], chiTiet: { ...(r.chiTiet || {}), ...JSON.parse(a[7]) } })
+                return 1
+            }
+            if (/UPDATE "LaiDuKienDon" SET "chiTiet" = COALESCE\("chiTiet", '\{\}'::jsonb\) \|\| \$2::jsonb\s+WHERE "orderId" = \$1 AND "nguonPhi" <> 'escrow'/.test(sql)) {
+                // đánh dấu thôi thử escrow (chiTiet.escrowThu) — dòng đã theo escrow không đụng
+                const r = bang.get(a[0])
+                if (!r || r.nguonPhi === 'escrow') return 0
+                r.chiTiet = { ...(r.chiTiet || {}), ...JSON.parse(a[1]) }
                 return 1
             }
             if (/UPDATE "LaiDuKienDon" SET "chiTiet" = COALESCE\("chiTiet", '\{\}'::jsonb\) \|\| '\{"dong": \[\]\}'::jsonb/.test(sql)) {
@@ -104,15 +135,23 @@ function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?
                 bang.set(a[0], { orderId: a[0], doanhThu: a[1], phiDuKien: a[2], giaVon: a[3], lai: a[4], thieuGiaVon: a[5], nguonPhi: a[6], chiTiet: JSON.parse(a[7]), xetLuc: new Date(BAY), baoLuc: null })
                 return [{ orderId: a[0] }]
             }
-            if (/SELECT o\.id, \(l\."orderId" IS NOT NULL\) AS "daCo"\s+FROM "OnlineOrder" o LEFT JOIN "LaiDuKienDon" l/.test(sql)) {
-                // lưới vét: $1 mốc 24 giờ, $2 sàn, $3 trạng thái huỷ, $4 mốc 3 ngày, $5 kênh — đơn CHƯA có dòng ≤ 24 giờ, hoặc dòng
-                // CHƯA có chiTiet.dong ≤ 3 ngày; đơn chưa có dòng lên trước
+            if (/SELECT o\.id, \(l\."orderId" IS NOT NULL\) AS "daCo", \(\(l\."chiTiet" -> 'dong'\) IS NULL\) AS "thieuDong"\s+FROM "OnlineOrder" o LEFT JOIN "LaiDuKienDon" l/.test(sql)) {
+                // lưới vét: $1 mốc 24 giờ, $2 sàn, $3 trạng thái huỷ, $4 mốc 3 ngày, $5 mốc 7 ngày, $6 kênh — đơn CHƯA có dòng ≤ 24 giờ;
+                // dòng CHƯA có chiTiet.dong ≤ 3 ngày; (nhánh escrow) dòng Shopee ≤ 7 ngày đã theo SKU (dong là mảng khác rỗng), chưa theo
+                // escrow, chưa thử (chưa có khoá escrowThu — JSON null KHÁC SQL NULL); đơn chưa có dòng lên trước
                 if (tc.hongVet) throw new Error('mất kết nối')
-                return du.don.filter(d => d.createdAt >= a[3] && a[1].includes(String(d.platform).toLowerCase()) && !a[2].includes(d.status)
-                    && (a[4] == null || d.channelId === a[4])
-                    && ((!bang.has(d.id) && d.createdAt >= a[0]) || (bang.has(d.id) && bang.get(d.id).chiTiet?.dong === undefined)))
+                const coE = /l\."nguonPhi" <> 'escrow'/.test(sql)
+                const khop = (d: any) => {
+                    const r = bang.get(d.id)
+                    if (!r) return d.createdAt >= a[0]
+                    if (r.chiTiet?.dong === undefined) return d.createdAt >= a[3]
+                    return coE && String(d.platform).toLowerCase() === 'shopee' && r.nguonPhi !== 'escrow' && d.createdAt >= a[4]
+                        && Array.isArray(r.chiTiet?.dong) && r.chiTiet.dong.length > 0 && r.chiTiet?.escrowThu === undefined
+                }
+                return du.don.filter(d => +d.createdAt >= Math.min(+a[3], +a[4]) && a[1].includes(String(d.platform).toLowerCase()) && !a[2].includes(d.status)
+                    && (a[5] == null || d.channelId === a[5]) && khop(d))
                     .sort((x, y) => Number(bang.has(x.id)) - Number(bang.has(y.id)) || y.createdAt - x.createdAt)
-                    .map(d => ({ id: d.id, daCo: bang.has(d.id) }))
+                    .map(d => ({ id: d.id, daCo: bang.has(d.id), thieuDong: !bang.has(d.id) || bang.get(d.id).chiTiet?.dong === undefined }))
             }
             if (/SELECT "orderId" FROM "LaiDuKienDon"/.test(sql)) return [...bang.values()].filter(r => a[0].includes(r.orderId)).map(r => ({ orderId: r.orderId }))
             if (/FROM "LaiDuKienDon" WHERE/.test(sql)) return [...bang.values()].filter(r => a[0].includes(r.orderId))
@@ -124,8 +163,9 @@ function taoPrisma(du: { don: any[]; kenh: any[]; sp: any[]; map?: any[]; nganh?
             throw new Error('query lạ: ' + sql.slice(0, 80))
         },
         onlineOrder: {
-            async findMany({ where }: any) {
-                return du.don.filter(d => where.id.in.includes(d.id) && (!where.createdAt?.gte || d.createdAt >= where.createdAt.gte))
+            // THEO select như Prisma thật (trường không chọn ⇒ không có) — đọc trường quên chọn thì bộ kiểm phải thấy
+            async findMany({ where, select }: any) {
+                return du.don.filter(d => where.id.in.includes(d.id) && (!where.createdAt?.gte || d.createdAt >= where.createdAt.gte)).map(d => theoChon(d, select))
             },
         },
         onlineChannel: { async findMany({ where }: any) { return du.kenh.filter(k => where.id.in.includes(k.id)) } },
@@ -164,6 +204,41 @@ const docBangGia = (theoKenh: Record<string, any>) => async (_p: any, ch: any) =
     return b
 }
 
+/* ── Escrow Shopee giả (order_income đúng dạng đo prod 21/11/2026 — SỐ GIẢ) ──────────────────────────────────────────────
+ * Mặc định: combo 2 cái × 480.000đ giảm 5.000đ ⇒ Q = 955.000đ, ship khách trả 7.000đ. Phí theo công thức đo: hoa hồng 13% × Q,
+ * dịch vụ 5,5% × giá MỘT cái (trần 50.000đ/cái) × SL + 3.000đ/đơn, thanh toán 6% × (Q + ship), thuế 1% + 0,5% × Q ⇒ escrow
+ * 710.280đ. Đơn chưa gửi: final_shipping_fee 0, bảo vệ vận chuyển 0; hoàn tất: final_shipping_fee = −ship, bảo vệ vận chuyển trừ. */
+interface TuyChonThuNhap { Q: number; S: number; fsf: number; baoVe: number; tra: number; hh: number; items: any[] }
+function thuNhapGia(o: Partial<TuyChonThuNhap> = {}) {
+    const Q = o.Q ?? 955_000, S = o.S ?? 7_000, fsf = o.fsf ?? 0, baoVe = o.baoVe ?? 0
+    const items = o.items ?? [{ item_id: 9001, item_sku: 'CB', model_sku: 'CB2', model_id: 1, quantity_purchased: 2, original_price: 960_000, discounted_price: Q, ams_commission_fee: 0 }]
+    const aff = items.reduce((s: number, i: any) => s + (Number(i.ams_commission_fee) || 0), 0)
+    const hh = o.hh ?? Math.round(0.13 * Q), tt = Math.round(0.06 * (Q + S)), vat = Math.round(0.01 * Q), pit = Math.round(0.005 * Q)
+    const dv = Math.round(items.reduce((s: number, i: any) => s + Math.min(0.055 * i.discounted_price / i.quantity_purchased, 50_000) * i.quantity_purchased, 0)) + 3000
+    return {
+        order_discounted_price: Q, buyer_paid_shipping_fee: S, final_shipping_fee: fsf, shipping_seller_protection_fee_amount: baoVe,
+        commission_fee: hh, service_fee: dv, seller_transaction_fee: tt, withholding_vat_tax: vat, withholding_pit_tax: pit,
+        order_ams_commission_fee: aff, seller_return_refund: o.tra ?? 0, items,
+        escrow_amount: Q + S + fsf - hh - dv - tt - vat - pit - baoVe - aff,
+    }
+}
+/** đọc escrow giả theo mã đơn Shopee: order_income | Error (ném) | không có ⇒ null; ghi lại từng lời gọi */
+const docEscrowGia = (theoSn: Record<string, any>) => {
+    const goi: { sn: string; token: boolean }[] = []
+    const f = async (ch: any, sn: string) => {
+        goi.push({ sn, token: !!ch?.accessToken })
+        const v = theoSn[sn]
+        if (v instanceof Error) throw v
+        return v ?? null
+    }
+    return { goi, f }
+}
+const PHI_CHUNG = async () => ({ dichVu: B.dichVu, baoVe: 2700 })
+/** gian Shopee ĐÃ uỷ quyền API (token giả) — KENH thì chưa ⇒ mọi ca cũ đi đường biểu phí như trước */
+const KENH_E = [{ ...KENH[0]!, accessToken: 'tok-gia', shopId: '1' }, KENH[1]!]
+const SP_E = [...SP, { id: 'p7', sku: 'CB2', costPrice: 300_000 }, { id: 'p8', sku: 'CB3', costPrice: 360_000 }]
+const donE = (id: string, sn: string, o: Parameters<typeof don>[1] = {}) => ({ ...don(id, o), externalOrderId: sn })
+
 async function main() {
     /* ── A. phiSanCuaDon ───────────────────────────────────────────────────────────────────────────────────────────────── */
     {
@@ -172,8 +247,16 @@ async function main() {
             dung(`A1b ${gia.toLocaleString('vi-VN')}đ: phí công thức = công thức escrow tính tay`, gan(phiSanCuaGia(M100, gia), phiShopeeTay([{ gia, r: 0.13 }]), 0.5),
                 `${phiSanCuaGia(M100, gia)} vs ${phiShopeeTay([{ gia, r: 0.13 }])}`)
         }
-        dung('A2 hai dòng cùng ngành = phiSanCuaGia(tổng) (trần dịch vụ theo ĐƠN, phí mỗi đơn một lần)',
-            gan(phiSanCuaDon([{ gia: 600_000, phi: M100 }, { gia: 700_000, phi: M100 }]), phiSanCuaGia(M100, 1_300_000), 1e-6))
+        dung('A2 hai dòng cùng ngành = Σ phiSanCuaGia từng dòng − phí cố định thừa (trần dịch vụ theo CÁI, phí mỗi đơn MỘT lần)',
+            gan(phiSanCuaDon([{ gia: 600_000, phi: M100 }, { gia: 700_000, phi: M100 }]), phiSanCuaGia(M100, 600_000) + phiSanCuaGia(M100, 700_000) - M100.coDinh, 1e-6)
+            && gan(phiSanCuaDon([{ gia: 1_300_000, phi: M100 }, { gia: 1_200_000, phi: M100 }]), phiSanCuaGia(M100, 1_300_000) + phiSanCuaGia(M100, 1_200_000) - M100.coDinh, 1e-6)
+            && gan(phiSanCuaDon([{ gia: 1_300_000, phi: M100 }, { gia: 1_200_000, phi: M100 }]), phiShopeeTay([{ gia: 1_300_000, r: 0.13 }, { gia: 1_200_000, r: 0.13 }]), 0.5))
+        // 21/11/2026: một dòng 2 cái × 1.250.000đ ⇒ trần 50.000đ cho TỪNG cái (theo đơn thì chỉ một lần 50.000đ — thấp hơn thật)
+        const haiCai = phiSanCuaDon([{ gia: 2_500_000, sl: 2, phi: M100 }])
+        dung('A6 một dòng 2 cái giá 1.250.000đ: phí dịch vụ trần theo CÁI = công thức escrow tính tay; cao hơn cách tính trần theo đơn ~50.000đ',
+            gan(haiCai, phiShopeeTay([{ gia: 2_500_000, r: 0.13, sl: 2 }]), 0.5) && haiCai - phiSanCuaGia(M100, 2_500_000) > 45_000
+            && phiSanTungDong([{ gia: 2_500_000, sl: 2, phi: M100 }])[0]!.phiChung === M100.coDinh,
+            `${haiCai} vs ${phiShopeeTay([{ gia: 2_500_000, r: 0.13, sl: 2 }])} / theo đơn ${phiSanCuaGia(M100, 2_500_000)}`)
         for (const [a, b2] of [[100_000, 150_000], [900_000, 800_000]]) {
             const tay = phiShopeeTay([{ gia: a!, r: 0.13 }, { gia: b2!, r: 0.16 }])
             const may = phiSanCuaDon([{ gia: a!, phi: M100 }, { gia: b2!, phi: M200 }])
@@ -562,6 +645,315 @@ async function main() {
             JSON.stringify(r3))
     }
 
+    /* ── I. Shopee: giá + phí THẬT từ escrow (21/11/2026 — chủ shop: đơn combo Kengi lãi gấp ~3 lần Shopee báo) ──────────── */
+    {
+        const e = docEscrowDuKien(thuNhapGia(), 2700)!
+        const xong = docEscrowDuKien(thuNhapGia({ fsf: -7000, baoVe: 2700 }), 2700)!
+        const shopChiuShip = docEscrowDuKien(thuNhapGia({ fsf: -17_000, baoVe: 2700 }), 2700)!
+        dung('I1 escrow ⇒ tiền về dự kiến: đơn CHƯA gửi trừ ship khách trả (Shopee còn cộng) + trừ bảo vệ vận chuyển chưa trừ = đúng số khi ĐÃ hoàn tất; shop chịu thêm ship ⇒ đã nằm trong escrow',
+            e.Q === 955_000 && e.ship === 7_000 && e.baoVeChuaTru === 2_700 && e.thucNhan === 700_580 && e.phi === 254_420 && e.khoan.thue === 14_325
+            && xong.ship === 0 && xong.baoVeChuaTru === 0 && xong.thucNhan === 700_580 && xong.phi === 254_420
+            && shopChiuShip.ship === 0 && shopChiuShip.thucNhan === 690_580
+            && e.dong.length === 1 && e.dong[0]!.itemId === '9001' && e.dong[0]!.sku === 'CB2' && e.dong[0]!.gia === 955_000 && e.dong[0]!.sl === 2,
+            JSON.stringify({ e, xong, shopChiuShip }))
+        const coGian = docEscrowDuKien(thuNhapGia({ items: [
+            { item_id: 1, model_sku: 'A', quantity_purchased: 1, discounted_price: 500_000 }, { item_id: 2, item_sku: 'B', quantity_purchased: 1, discounted_price: 460_000 }] }))!
+        dung('I2 escrow thiếu số / đơn đã trả hàng ⇒ null (không đoán); giá từng dòng co giãn cho Σ = Q; gian chưa có mức bảo vệ dự kiến ⇒ không cộng',
+            docEscrowDuKien(null) === null && docEscrowDuKien({ ...thuNhapGia(), escrow_amount: undefined }) === null
+            && docEscrowDuKien(thuNhapGia({ tra: 50_000 })) === null && docEscrowDuKien(thuNhapGia({ Q: 0 })) === null
+            && gan(coGian.dong.reduce((s, d) => s + d.gia, 0), 955_000, 1e-6) && coGian.dong[1]!.sku === 'B' && coGian.baoVeChuaTru === 0,
+            JSON.stringify(coGian))
+    }
+    {
+        const g = ganGiaEscrow([
+            { itemId: '9001', sku: 'CB2', gia: 960_000, sl: 2 }, { itemId: '9002', sku: 'X1', gia: 100_000, sl: 1 },
+            { itemId: '9003', sku: null, gia: 50_000, sl: 1 }, { itemId: null, sku: 'QUA', gia: 0, sl: 1 },
+        ], { Q: 1_045_000, khoan: { aff: 10_000 } as any, dong: [
+            { itemId: '9001', sku: 'cb2', gia: 900_000, sl: 2, aff: 10_000 }, { itemId: '9002', sku: 'X1-DO', gia: 95_000, sl: 1, aff: 0 },
+            { itemId: '7777', sku: 'ZZ', gia: 50_000, sl: 1, aff: 0 }] })
+        const g2 = ganGiaEscrow([{ itemId: '9001', sku: 'CB2', gia: 960_000, sl: 2 }], { Q: 955_000, khoan: { aff: 0 } as any, dong: [
+            { itemId: '9001', sku: 'CB2', gia: 900_000, sl: 2, aff: 0 }, { itemId: '9005', sku: 'GIFT', gia: 55_000, sl: 1, aff: 0 }] })
+        dung('I3 nối dòng đơn ↔ escrow: item_id + SKU (không phân biệt hoa thường), rồi item_id một-một; phần còn lại chia dòng chưa nối theo giá ghi; hết dòng chưa nối ⇒ dồn vào dòng đã nối; Σ = Q',
+            g[0]!.noi && g[0]!.gia === 900_000 && g[0]!.aff === 10_000 && g[1]!.noi && g[1]!.gia === 95_000 && !g[2]!.noi && gan(g[2]!.gia, 50_000, 1e-6)
+            && g[3]!.gia === 0 && gan(g.reduce((s, x) => s + x.gia, 0), 1_045_000, 1e-6) && g2.length === 1 && gan(g2[0]!.gia, 955_000, 1e-6),
+            JSON.stringify({ g, g2 }))
+    }
+    {
+        const dv2: DongVaoLai[] = [
+            { id: 'a', sku: 'CB2', ten: 'Combo chảo', sl: 2, gia: 960_000, nganh: '100', itemId: '9001' },
+            { id: 'b', sku: 'X1', ten: 'Nồi', sl: 1, gia: 300_000, nganh: '200', itemId: '9002' },
+        ]
+        const e = docEscrowDuKien(thuNhapGia({ Q: 1_245_000, hh: 124_150 + 46_400, items: [
+            { item_id: 9001, model_sku: 'CB2', quantity_purchased: 2, discounted_price: 955_000, ams_commission_fee: 0 },
+            { item_id: 9002, model_sku: 'X1', quantity_purchased: 1, discounted_price: 290_000, ams_commission_fee: 0 }] }), 2700)!
+        const von = { cost: 800_000, missingCost: false, dong: [{ id: 'a', cost: 600_000, missingCost: false }, { id: 'b', cost: 200_000, missingCost: false }] }
+        const t = escrowTheoSku(dv2, e, BANG_CONG_THUC, von, B.dichVu)
+        const ld = t.laiDong, tong = (f: (x: LaiDong) => number) => ld.reduce((s, x) => s + f(x), 0)
+        dung('I4 escrow theo SKU: bán = giá THẬT từng dòng (Σ = Q), Σ phí = đúng phí Shopee của đơn, Σ lãi = Q − phí − vốn; SKU ngành 16% chịu % cao hơn SKU 13%; phí chung ≥ 0; giữ giá ghi trên đơn để so',
+            t.doanhThu === 1_245_000 && tong(x => x.doanhThu) === 1_245_000 && tong(x => x.phi!) === Math.round(e.phi) && tong(x => x.lai) === 1_245_000 - Math.round(e.phi) - 800_000
+            && ld[1]!.tyLePhi! - ld[0]!.tyLePhi! > 0.025 && ld.every(x => x.phiChung >= 0) && gan(tong(x => x.phiChung), 5_700, 1)
+            && ld[0]!.giaDon === 960_000 && ld[0]!.doanhThu === 955_000 && ld[1]!.giaDon === 300_000 && t.p.nguon === 'escrow' && !t.p.tam
+            && /ship khách trả 7\.000đ không tính/.test(t.p.moTa) && /bảo vệ vận chuyển 2\.700đ \(trừ khi gửi hàng\)/.test(t.p.moTa)
+            && /giá Shopee tính 1\.245\.000đ, đơn ghi 1\.260\.000đ \(combo \/ khuyến mãi\)/.test(t.p.moTa) && /phí thật Shopee/.test(ld[0]!.moTaPhi),
+            JSON.stringify({ p: t.p, ld }))
+        // chỉ phí dịch vụ: dòng 2 cái × 1.250.000đ chạm trần 50.000đ TỪNG cái; dòng 300.000đ chịu 5,5%
+        const dv3: DongVaoLai[] = [
+            { id: 'a', sku: 'MAY', ten: 'Máy', sl: 2, gia: 2_500_000, nganh: '100', itemId: '1' },
+            { id: 'b', sku: 'X1', ten: 'Nồi', sl: 1, gia: 300_000, nganh: '100', itemId: '2' },
+        ]
+        const e3 = docEscrowDuKien({ order_discounted_price: 2_800_000, escrow_amount: 2_800_000 - 119_500, service_fee: 119_500, items: [
+            { item_id: 1, model_sku: 'MAY', quantity_purchased: 2, discounted_price: 2_500_000 }, { item_id: 2, model_sku: 'X1', quantity_purchased: 1, discounted_price: 300_000 }] })!
+        const t3 = escrowTheoSku(dv3, e3, BANG_CONG_THUC, { cost: 0, missingCost: true }, B.dichVu)
+        dung('I5 phí dịch vụ chia theo trần TỪNG CÁI: dòng 2 cái × 1.250.000đ chịu 2 × 50.000đ (không phải 5,5% × 2.500.000đ), dòng 300.000đ chịu 16.500đ; phí mỗi đơn chia theo giá',
+            gan(t3.laiDong[0]!.phi!, 100_000 + 3_000 * 2_500_000 / 2_800_000, 1) && gan(t3.laiDong[1]!.phi!, 16_500 + 3_000 * 300_000 / 2_800_000, 1)
+            && t3.laiDong[0]!.phi! + t3.laiDong[1]!.phi! === 119_500, JSON.stringify(t3.laiDong))
+    }
+    {
+        const du = {
+            don: [
+                donE('e1', 'SNE1', { items: [{ ...dong('e1a', 960_000, 'p7', 'CB2', 2, 'Combo chảo 2 cái'), externalItemId: '9001' }] }),
+                donE('e2', 'SNE2', { items: [{ ...dong('e2a', 960_000, 'p8', 'CB3', 2, 'Combo nồi 2 cái'), externalItemId: '9001' }] }),
+            ], kenh: KENH_E, sp: SP_E, nganh: { e1a: '100', e2a: '100' },
+        }
+        const thuNhapE2 = thuNhapGia({ items: [{ item_id: 9001, model_sku: 'CB3', quantity_purchased: 2, discounted_price: 955_000, ams_commission_fee: 0 }] })
+        const p = taoPrisma(du), push = pushGia(), es = docEscrowGia({ SNE1: thuNhapGia(), SNE2: thuNhapE2 })
+        const r = await xetLaiDuKienDonMoi(p, ['e1', 'e2'], { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f, nguon: 'webhook', docEscrow: es.f, docPhiChung: PHI_CHUNG })
+        const e1 = p.bang.get('e1'), e2 = p.bang.get('e2')
+        dung('I6 đơn combo Shopee: lãi theo giá + phí THẬT — bán 955.000 (không phải 960.000 giá gốc đơn ghi), phí 254.420 (gồm bảo vệ vận chuyển chưa trừ, KHÔNG gồm ship khách trả), lãi = 955.000 − 254.420 − vốn',
+            e1?.nguonPhi === 'escrow' && e1?.doanhThu === 955_000 && e1?.phiDuKien === 254_420 && e1?.giaVon === 600_000 && e1?.lai === 100_580
+            && e1?.chiTiet?.escrow?.thucNhan === 700_580 && e1?.chiTiet?.escrow?.ship === 7_000 && e1?.chiTiet?.dong?.[0]?.giaDon === 960_000
+            && e1?.chiTiet?.dong?.[0]?.doanhThu === 955_000 && e1?.chiTiet?.lyDoKhongEscrow === undefined
+            && es.goi.length === 2 && es.goi[0]!.sn === 'SNE1' && es.goi.every(x => x.token), JSON.stringify({ r, e1, goi: es.goi }))
+        dung('I7 đơn combo LỖ theo số thật (vốn 720.000) ⇒ BÁO một lần, tin nêu phép tính với phí thật Shopee',
+            e2?.lai === 955_000 - 254_420 - 720_000 && r.lo === 1 && r.daBao === 1 && p.tin.length === 1 && /SPE-E2 dự kiến LỖ 19\.420đ/.test(p.tin[0]?.title || '')
+            && /phí thật Shopee/.test(p.tin[0]?.message || '') && push.goi.length === 1, JSON.stringify({ r, e2, tin: p.tin }))
+        const m = await docLaiDuKien(p, ['e1'])
+        dung('I8 đọc lại (trang Đơn online): nguồn escrow + tiền về dự kiến + giá ghi trên đơn của SKU',
+            m.get('e1')?.nguonPhi === 'escrow' && m.get('e1')?.escrow?.thucNhan === 700_580 && m.get('e1')?.escrow?.baoVeChuaTru === 2_700
+            && m.get('e1')?.dong?.[0]?.giaDon === 960_000 && m.get('e1')?.lai === 100_580, JSON.stringify([...m]))
+    }
+    {
+        const du = {
+            don: [
+                donE('f1', 'SNF1', { tuoiGio: 1, items: [{ ...dong('f1a', 300_000, 'p2', 'A2'), externalItemId: '1' }] }),
+                donE('f2', 'SNF2', { tuoiGio: 3, items: [{ ...dong('f2a', 300_000, 'p2', 'A2'), externalItemId: '1' }] }),
+            ], kenh: KENH_E, sp: SP_E, nganh: { f1a: '100', f2a: '100' },
+        }
+        const p = taoPrisma(du), push = pushGia(), es = docEscrowGia({})
+        const o = { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f, docEscrow: es.f, docPhiChung: PHI_CHUNG }
+        const r = await xetLaiDuKienDonMoi(p, ['f1', 'f2'], o)
+        const f2 = p.bang.get('f2')
+        dung(`I9 Shopee CHƯA có số của đơn: đơn < ${CHO_ESCROW_MS / 3600_000} giờ ⇒ HOÃN (không lưu, lần sau đọc lại); đơn cũ hơn ⇒ tạm theo biểu phí, nói rõ vì sao`,
+            r.choEscrow === 1 && !p.bang.has('f1') && f2?.nguonPhi === 'cong-thuc' && f2?.chiTiet?.lyDoKhongEscrow === 'chua-co'
+            && /chưa đọc được phí thật Shopee của đơn \(Shopee chưa có số của đơn\), tạm theo biểu phí/.test(f2?.chiTiet?.moTaPhi || '')
+            && f2?.chiTiet?.escrowThu === new Date(BAY).toISOString() && es.goi.length === 2, JSON.stringify({ r, f2 }))
+        const es2 = docEscrowGia({ SNF1: thuNhapGia({ Q: 297_000, items: [{ item_id: 1, model_sku: 'A2', quantity_purchased: 1, discounted_price: 297_000 }] }) })
+        const r2 = await xetLaiDuKienDonMoi(p, ['f1', 'f2'], { ...o, docEscrow: es2.f })
+        dung('I10 lần sau (push đổi trạng thái / lượt vét) Shopee đã có số ⇒ đơn hoãn được tính theo escrow; đơn đã lưu không đọc lại',
+            r2.daLuu === 1 && p.bang.get('f1')?.nguonPhi === 'escrow' && p.bang.get('f1')?.doanhThu === 297_000 && es2.goi.length === 1 && es2.goi[0]!.sn === 'SNF1',
+            JSON.stringify({ r2, f1: p.bang.get('f1') }))
+    }
+    {
+        const du = {
+            don: [donE('h1', 'SNH1', { items: [dong('h1a', 300_000, 'p2', 'A2')] }), donE('h2', 'SNH2', { items: [dong('h2a', 300_000, 'p2', 'A2')] })],
+            kenh: KENH_E, sp: SP_E, nganh: { h1a: '100', h2a: '100' },
+        }
+        const p = taoPrisma(du)
+        const es = docEscrowGia({ SNH1: new Error('HTTP 403 https://proxy.example/api/v2/payment/get_escrow_detail?access_token=tok123&sign=abc456&order_sn=SNH1') })
+        const r = await xetLaiDuKienDonMoi(p, ['h1', 'h2'], { bayGio: BAY, docBang: docBangGia(nen), docEscrow: es.f, docPhiChung: PHI_CHUNG })
+        dung('I11 đọc escrow NÉM (token / hạn mức / mạng) ⇒ thôi đọc cả lượt (1 lời gọi), đơn mới HOÃN; lỗi ghi lại đã che token / chữ ký / mã đơn',
+            es.goi.length === 1 && r.choEscrow === 2 && p.bang.size === 0 && /đọc escrow/.test(r.loi || '') && /access_token=…/.test(r.loi || '')
+            && !/tok123|abc456|SNH1/.test(r.loi || ''), JSON.stringify({ r, goi: es.goi }))
+    }
+    {
+        const mk = () => ({
+            don: [donE('q1', 'SNQ1', { items: [dong('q1a', 300_000, 'p2', 'A2')] }), donE('q2', 'SNQ2', { tuoiGio: 3, items: [dong('q2a', 300_000, 'p2', 'A2')] })],
+            kenh: KENH_E, sp: SP_E, nganh: { q1a: '100', q2a: '100' },
+        })
+        // gian chưa uỷ quyền API (không token) ⇒ không chờ, tính ngay theo biểu phí
+        const p1 = taoPrisma({ ...mk(), kenh: KENH }), es1 = docEscrowGia({})
+        const r1 = await xetLaiDuKienDonMoi(p1, ['q1'], { bayGio: BAY, docBang: docBangGia(nen), docEscrow: es1.f, docPhiChung: PHI_CHUNG })
+        // công tắc LAI_DU_KIEN_ESCROW=0 / docEscrow: null ⇒ như trước 21/11 (không đọc, không ghi lý do)
+        const p2 = taoPrisma(mk()), es2 = docEscrowGia({ SNQ1: thuNhapGia() })
+        process.env.LAI_DU_KIEN_ESCROW = '0'
+        const r2 = await xetLaiDuKienDonMoi(p2, ['q1'], { bayGio: BAY, docBang: docBangGia(nen), docEscrow: es2.f, docPhiChung: PHI_CHUNG })
+        delete process.env.LAI_DU_KIEN_ESCROW
+        const p3 = taoPrisma(mk())
+        const r3 = await xetLaiDuKienDonMoi(p3, ['q1'], { bayGio: BAY, docBang: docBangGia(nen), docEscrow: null })
+        dung('I12 gian chưa uỷ quyền API ⇒ tính NGAY theo biểu phí (chờ cũng vô ích), ghi lý do; công tắc LAI_DU_KIEN_ESCROW=0 / docEscrow null ⇒ không đọc escrow, như trước',
+            r1.daLuu === 1 && !r1.choEscrow && es1.goi.length === 0 && p1.bang.get('q1')?.chiTiet?.lyDoKhongEscrow === 'khong-uy-quyen'
+            && !/chưa đọc được/.test(p1.bang.get('q1')?.chiTiet?.moTaPhi || '') && !!p1.bang.get('q1')?.chiTiet?.escrowThu
+            && r2.daLuu === 1 && es2.goi.length === 0 && p2.bang.get('q1')?.nguonPhi === 'cong-thuc' && p2.bang.get('q1')?.chiTiet?.lyDoKhongEscrow === undefined
+            && r3.daLuu === 1 && p3.bang.get('q1')?.nguonPhi === 'cong-thuc' && p3.bang.get('q1')?.chiTiet?.lyDoKhongEscrow === undefined,
+            JSON.stringify({ r1, r2, r3 }))
+        // đường gọi Shopee ngắt mạch ⇒ nhường: không gọi; đơn mới hoãn, đơn quá hạn chờ tạm theo biểu phí
+        for (let i = 0; i < 5; i++) noteProxyFailure()
+        const p4 = taoPrisma(mk()), es4 = docEscrowGia({ SNQ1: thuNhapGia(), SNQ2: thuNhapGia() })
+        const r4 = await xetLaiDuKienDonMoi(p4, ['q1', 'q2'], { bayGio: BAY, docBang: docBangGia(nen), docEscrow: es4.f, docPhiChung: PHI_CHUNG })
+        const moMach = proxyCircuitOpen()
+        noteProxySuccess()
+        dung(`I13 proxy Shopee ngắt mạch / quá tải ⇒ KHÔNG gọi thêm (việc nhận đơn ưu tiên); đơn mới hoãn, đơn quá ${CHO_ESCROW_MS / 3600_000} giờ tạm theo biểu phí ghi "đường gọi Shopee đang bận"`,
+            moMach && es4.goi.length === 0 && r4.choEscrow === 1 && !p4.bang.has('q1') && p4.bang.get('q2')?.chiTiet?.lyDoKhongEscrow === 'qua-tai'
+            && /đường gọi Shopee đang bận/.test(p4.bang.get('q2')?.chiTiet?.moTaPhi || '') && p4.bang.get('q2')?.chiTiet?.escrowThu === undefined
+            && !proxyCircuitOpen(), JSON.stringify({ r4, q2: p4.bang.get('q2') }))
+    }
+    {
+        const ds = Array.from({ length: TRAN_ESCROW_MOI_LUOT + 2 }, (_, i) => donE(`b${i}`, `SNB${i}`, { items: [dong(`b${i}a`, 300_000, 'p2', 'A2')] }))
+        const p = taoPrisma({ don: ds, kenh: KENH_E, sp: SP_E, nganh: Object.fromEntries(ds.map((_, i) => [`b${i}a`, '100'])) }), es = docEscrowGia({})
+        const r = await xetLaiDuKienDonMoi(p, ds.map(d => d.id), { bayGio: BAY, docBang: docBangGia(nen), docEscrow: es.f, docPhiChung: PHI_CHUNG })
+        dung(`I14 trần ${TRAN_ESCROW_MOI_LUOT} lời đọc escrow mỗi lượt (giờ livestream không dồn lời gọi Shopee); phần vượt hoãn sang lượt sau`,
+            es.goi.length === TRAN_ESCROW_MOI_LUOT && r.choEscrow === TRAN_ESCROW_MOI_LUOT + 2 && p.bang.size === 0, JSON.stringify({ r, goi: es.goi.length }))
+    }
+    {
+        // Lưới vét TÍNH LẠI theo escrow dòng Shopee đã lưu theo biểu phí (≤ 7 ngày) — không báo lại, giữ baoLuc + nguồn
+        const du = {
+            don: [
+                donE('v1', 'SNV1', { tuoiGio: 30, items: [{ ...dong('v1a', 960_000, 'p8', 'CB3', 2, 'Combo nồi 2 cái'), externalItemId: '9001' }] }), // Shopee đã có số
+                donE('v2', 'SNV2', { tuoiGio: 30, items: [dong('v2a', 300_000, 'p2', 'A2')] }),                                                  // Shopee không có số
+                donE('v3', 'SNV3', { tuoiGio: 8 * 24, items: [dong('v3a', 300_000, 'p2', 'A2')] }),                                             // quá 7 ngày
+                donE('v4', 'SNV4', { tuoiGio: 30, kenh: 'k2', platform: 'tiktok', items: [dong('v4a', 300_000, 'p2', 'A2')] }),                 // TikTok
+            ],
+            kenh: KENH_E, sp: SP_E, nganh: { v1a: '100', v2a: '100', v3a: '100', v4a: '100' },
+        }
+        const cuCongThuc = (id: string, nguonPhi = 'cong-thuc') => ({ orderId: id, doanhThu: 960_000, phiDuKien: 250_000, giaVon: 720_000, lai: -10_000, thieuGiaVon: false, nguonPhi,
+            chiTiet: { moTaPhi: 'biểu phí', nguon: 'webhook', dong: [{ id: `${id}a`, lai: -10_000, lo: true }] },
+            xetLuc: new Date(BAY - 30 * 3600_000), baoLuc: new Date(BAY - 30 * 3600_000) })
+        const p = taoPrisma(du, { bangCo: true }), push = pushGia()
+        for (const id of ['v1', 'v2', 'v3']) p.bang.set(id, cuCongThuc(id))
+        p.bang.set('v4', cuCongThuc('v4', 'do-so'))
+        const es = docEscrowGia({ SNV1: thuNhapGia({ items: [{ item_id: 9001, model_sku: 'CB3', quantity_purchased: 2, discounted_price: 955_000 }] }) })
+        const o = { bayGio: BAY, docBang: docBangGia(nen), guiPush: push.f, docEscrow: es.f, docPhiChung: PHI_CHUNG }
+        const r = await vetLaiDuKienDonMoi(p, null, 'dong-bo', o)
+        const v1 = p.bang.get('v1'), v2 = p.bang.get('v2')
+        dung(`I15 lưới vét: dòng Shopee ≤ ${CUA_SO_ESCROW_MS / 86_400_000} ngày lưu theo biểu phí ⇒ TÍNH LẠI theo escrow (giá + phí thật), giữ baoLuc + nguồn cũ, KHÔNG tin, KHÔNG push (dù vẫn lỗ)`,
+            r?.nangCap === 1 && v1.nguonPhi === 'escrow' && v1.doanhThu === 955_000 && v1.phiDuKien === 254_420 && v1.lai === 955_000 - 254_420 - 720_000
+            && +v1.baoLuc === BAY - 30 * 3600_000 && v1.chiTiet.nguon === 'webhook' && v1.chiTiet.tinhLaiTheoEscrow === new Date(BAY).toISOString()
+            && v1.chiTiet.lyDoKhongEscrow === null && v1.chiTiet.escrow?.thucNhan === 700_580 && !p.tin.length && !push.goi.length,
+            JSON.stringify({ r, v1 }))
+        dung('I16 lưới vét: Shopee không có số của đơn ⇒ đánh dấu thôi thử (escrowThu), GIỮ số cũ; quá 7 ngày / TikTok ⇒ không đọc',
+            v2.nguonPhi === 'cong-thuc' && v2.lai === -10_000 && v2.chiTiet.escrowThu === new Date(BAY).toISOString() && v2.chiTiet.lyDoKhongEscrow === 'chua-co'
+            && JSON.stringify(es.goi.map(x => x.sn).sort()) === JSON.stringify(['SNV1', 'SNV2']) && p.bang.get('v3').nguonPhi === 'cong-thuc'
+            && p.bang.get('v4').nguonPhi === 'do-so', JSON.stringify({ v2, goi: es.goi }))
+        const soCau = p.cau.length
+        const r2 = await vetLaiDuKienDonMoi(p, null, 'dong-bo', o)
+        dung('I17 vét lại sau khi đã tính lại / đánh dấu ⇒ MỘT truy vấn, không đọc Shopee nữa', r2 === null && p.cau.length - soCau === 1 && es.goi.length === 2,
+            `${p.cau.length - soCau} câu, ${es.goi.length} lời gọi`)
+        const p2 = taoPrisma(du, { bangCo: true })
+        p2.bang.set('v1', cuCongThuc('v1'))
+        const es2 = docEscrowGia({ SNV1: new Error('mất mạng') })
+        const r3 = await vetLaiDuKienDonMoi(p2, KENH_E[0]!, 'dong-bo', { ...o, docEscrow: es2.f })
+        dung('I18 lưới vét: lỗi tạm (mạng / proxy bận / hết lượt) ⇒ để nguyên dòng, KHÔNG đánh dấu — lượt sau thử lại',
+            r3?.nangCap === 0 && es2.goi.length === 1 && p2.bang.get('v1').nguonPhi === 'cong-thuc' && p2.bang.get('v1').chiTiet.escrowThu === undefined,
+            JSON.stringify({ r3, v1: p2.bang.get('v1') }))
+    }
+
+    /* ── J. Đọc lại phí Shopee khi đơn HOÀN TẤT (21/11/2026, lib/phiShopeeHoanTat) ───────────────────────────────────── */
+    {
+        const NGAY = 86_400_000
+        const donHT = (id: string, o: Partial<{ status: string; phi: number; tn: number; aff: number | null; tuoiNgay: number }> = {}) => ({
+            id, externalOrderId: `SN${id.toUpperCase()}`, channelId: 'k1', status: o.status ?? 'COMPLETED', platformFee: o.phi ?? 41_300,
+            netRevenue: o.tn ?? 88_700, affiliateFee: o.aff === undefined ? 0 : o.aff, createdAt: new Date(BAY - (o.tuoiNgay ?? 5) * NGAY),
+        })
+        const taoSp = (ds: any[], tc: { coBang?: boolean; doiTrangThai?: string } = {}) => {
+            const dau = new Map<string, any>(), cau: string[] = []
+            let coBang = tc.coBang ?? false
+            const sp: any = {
+                dau, cau, don: ds,
+                async $executeRawUnsafe(sql: string, ...a: any[]) {
+                    cau.push(sql)
+                    if (/CREATE TABLE IF NOT EXISTS "PhiSanDocLai"/.test(sql)) { coBang = true; return 0 }
+                    if (/INSERT INTO "PhiSanDocLai"/.test(sql) && /ON CONFLICT \("orderId"\) DO UPDATE/.test(sql)) {
+                        dau.set(a[0], { orderId: a[0], docLuc: a[1], ketQua: a[2], phiCu: a[3], thucNhanCu: a[4], phiMoi: a[5], thucNhanMoi: a[6] })
+                        return 1
+                    }
+                    throw new Error('execute lạ: ' + sql.slice(0, 80))
+                },
+                async $queryRawUnsafe(sql: string, ...a: any[]) {
+                    cau.push(sql)
+                    if (/to_regclass\('"PhiSanDocLai"'\)/.test(sql)) return [{ co: coBang }]
+                    if (!coBang && /"PhiSanDocLai"/.test(sql)) throw new Error('relation "PhiSanDocLai" does not exist (42P01)')
+                    if (/FROM "OnlineOrder" o LEFT JOIN "PhiSanDocLai" d ON d\."orderId" = o\.id/.test(sql)) {
+                        // $1 kênh, $2 mốc 45 ngày, $3 mốc thử lại 24 giờ, $4 trần
+                        return ds.filter(d => d.channelId === a[0] && d.status === 'COMPLETED' && d.platformFee > 0 && d.externalOrderId != null
+                            && d.createdAt >= a[1] && (!dau.has(d.id) || (dau.get(d.id).ketQua === 'chua-co' && dau.get(d.id).docLuc < a[2])))
+                            .sort((x, y) => y.createdAt - x.createdAt).slice(0, a[3])
+                            .map(d => ({ id: d.id, externalOrderId: d.externalOrderId, platformFee: d.platformFee, netRevenue: d.netRevenue, affiliateFee: d.affiliateFee }))
+                    }
+                    if (/SELECT "orderId" FROM "PhiSanDocLai" WHERE "orderId" = ANY\(\$1::text\[\]\) AND "ketQua" IN \('doi', 'giong'\)/.test(sql)) {
+                        return [...dau.values()].filter(r => a[0].includes(r.orderId) && ['doi', 'giong'].includes(r.ketQua)).map(r => ({ orderId: r.orderId }))
+                    }
+                    throw new Error('query lạ: ' + sql.slice(0, 80))
+                },
+                onlineOrder: {
+                    async updateMany({ where, data }: any) {
+                        const d = ds.find(x => x.id === where.id)
+                        if (tc.doiTrangThai === where.id && d) d.status = 'TO_RETURN'
+                        if (!d || d.status !== where.status) return { count: 0 }
+                        Object.assign(d, data)
+                        return { count: 1 }
+                    },
+                },
+            }
+            return sp
+        }
+        const escrowHT = (theoSn: Record<string, any>) => {
+            const goi: string[] = []
+            return { goi, f: async (sn: string) => { goi.push(sn); const v = theoSn[sn]; if (v instanceof Error) throw v; return v ?? null } }
+        }
+        const ds = [
+            donHT('c1'),                                                    // đọc sớm lúc PROCESSED: còn ship 0, chưa trừ bảo vệ 2.700
+            donHT('c2', { phi: 44_000, tn: 86_000 }),                       // đọc lần đầu lúc đã hoàn tất ⇒ số như cũ
+            donHT('c3', { status: 'PROCESSED' }),                           // chưa hoàn tất ⇒ không đọc
+            donHT('c4', { phi: 0, tn: 0 }),                                 // chưa có phí ⇒ việc của lượt đối soát chính
+            donHT('c5', { tuoiNgay: 50 }),                                  // quá 45 ngày
+            donHT('c6'),                                                    // Shopee chưa có số
+            donHT('c7'),                                                    // lỗi khi hỏi
+        ]
+        const sp = taoSp(ds)
+        const es = escrowHT({
+            SNC1: { escrowAmount: 86_000, totalFees: 44_000, affiliateFee: 0 }, SNC2: { escrowAmount: 86_000, totalFees: 44_000, affiliateFee: 0 },
+            SNC7: new Error('HTTP 500 https://proxy.example/x?access_token=tok999&sign=s1'),
+        })
+        const kq = await docLaiPhiHoanTat(sp, { id: 'k1', name: 'Kengi Store' }, es.f, { han: Date.now() + 60_000, bayGio: BAY })
+        const c1 = ds[0]!, c2 = ds[1]!
+        dung('J1 đơn hoàn tất đọc phí SỚM (lúc đang giao) ⇒ đọc lại, ghi số CUỐI (thực nhận 88.700 → 86.000, phí 41.300 → 44.000) + dấu "doi"; đơn số như cũ ⇒ dấu "giong", không ghi',
+            kq.quet === 4 && kq.doi === 1 && kq.giong === 1 && kq.chuaCo === 1 && kq.loi === 1 && c1.netRevenue === 86_000 && c1.platformFee === 44_000
+            && sp.dau.get('c1')?.ketQua === 'doi' && sp.dau.get('c1')?.thucNhanCu === 88_700 && sp.dau.get('c2')?.ketQua === 'giong' && c2.netRevenue === 86_000
+            && JSON.stringify(kq.idDoi) === '["c1"]', JSON.stringify({ kq, dau: [...sp.dau.values()] }))
+        dung('J2 không đọc: đơn chưa hoàn tất / chưa có phí / quá 45 ngày; Shopee chưa có số ⇒ dấu "chua-co"; lỗi ⇒ KHÔNG dấu, lỗi ghi lại đã che token',
+            !es.goi.includes('SNC3') && !es.goi.includes('SNC4') && !es.goi.includes('SNC5') && sp.dau.get('c6')?.ketQua === 'chua-co' && !sp.dau.has('c7')
+            && /access_token=…/.test(kq.loiDau || '') && !/tok999/.test(kq.loiDau || ''), JSON.stringify({ goi: es.goi, kq }))
+        const es2 = escrowHT({ SNC7: { escrowAmount: 86_000, totalFees: 44_000, affiliateFee: 0 } })
+        const kq2 = await docLaiPhiHoanTat(sp, { id: 'k1' }, es2.f, { han: Date.now() + 60_000, bayGio: BAY + 3600_000 })
+        const es3 = escrowHT({ SNC6: { escrowAmount: 86_000, totalFees: 44_000, affiliateFee: 0 } })
+        const kq3 = await docLaiPhiHoanTat(sp, { id: 'k1' }, es3.f, { han: Date.now() + 60_000, bayGio: BAY + 25 * 3600_000 })
+        dung('J3 lượt sau: đơn lỗi được hỏi lại; "chưa có số" chờ 24 giờ mới hỏi lại; đơn đã có dấu số cuối không hỏi nữa',
+            JSON.stringify(es2.goi) === '["SNC7"]' && kq2.doi === 1 && JSON.stringify(es3.goi) === '["SNC6"]' && kq3.doi === 1 && sp.dau.get('c6')?.ketQua === 'doi',
+            JSON.stringify({ g2: es2.goi, g3: es3.goi, kq2, kq3 }))
+        const chot = await daDocLaiPhiCuoi(sp, ['c1', 'c2', 'c3', 'x'])
+        dung('J4 dấu số cuối cho trang đơn: đơn đã đọc lại (đổi / như cũ) ⇒ có; đơn chưa ⇒ không', chot.has('c1') && chot.has('c2') && !chot.has('c3') && chot.size === 2,
+            JSON.stringify([...chot]))
+        const spMoi = taoSp([donHT('m1')])
+        const chot0 = await daDocLaiPhiCuoi(spMoi, ['m1'])
+        dung('J5 bảng dấu chưa có ⇒ trang đơn KHÔNG đọc bảng (chỉ dò to_regclass), không ném', chot0.size === 0 && spMoi.cau.every((c: string) => /to_regclass/.test(c)),
+            spMoi.cau.join(' | '))
+        const loiHet = Array.from({ length: 7 }, (_, i) => donHT(`l${i}`))
+        const sp5 = taoSp(loiHet)
+        const es5 = escrowHT(Object.fromEntries(loiHet.map(d => [d.externalOrderId, new Error('token hết hạn')])))
+        const kq5 = await docLaiPhiHoanTat(sp5, { id: 'k1' }, es5.f, { han: Date.now() + 60_000, bayGio: BAY })
+        dung('J6 5 đơn liền hỏng mà chưa đơn nào được (token chết / sàn lỗi) ⇒ thôi gian lượt này (khỏi đốt lượt gọi), không dấu',
+            es5.goi.length === 5 && kq5.loi === 5 && kq5.deLai === 2 && sp5.dau.size === 0, JSON.stringify(kq5))
+        const sp6 = taoSp([donHT('r1')], { doiTrangThai: 'r1' })
+        const kq6 = await docLaiPhiHoanTat(sp6, { id: 'k1' }, escrowHT({ SNR1: { escrowAmount: 86_000, totalFees: 44_000, affiliateFee: 0 } }).f, { han: Date.now() + 60_000, bayGio: BAY })
+        dung('J7 đơn vừa chuyển trả hàng giữa lúc đọc ⇒ không ghi số, không dấu (lượt sau / luồng trả hàng lo)', kq6.doi === 0 && kq6.deLai === 1 && sp6.dau.size === 0
+            && sp6.don[0].netRevenue === 88_700, JSON.stringify(kq6))
+        const sp7 = taoSp([donHT('t1')])
+        process.env.DOC_LAI_PHI_HOAN_TAT = '0'
+        const kq7 = await docLaiPhiHoanTat(sp7, { id: 'k1' }, escrowHT({}).f, { han: Date.now() + 60_000, bayGio: BAY })
+        delete process.env.DOC_LAI_PHI_HOAN_TAT
+        dung('J8 công tắc DOC_LAI_PHI_HOAN_TAT=0 ⇒ không đụng gì', kq7.quet === 0 && sp7.cau.length === 0)
+    }
+
     /* ── F. Soát nguồn ─────────────────────────────────────────────────────────────────────────────────────────────────── */
     {
         const GOC = path.resolve(__dirname, '..')
@@ -597,8 +989,18 @@ async function main() {
         duyet('src')
         dung('F4 mọi tệp TẠO OnlineOrder đều gọi xetLaiDuKienDonMoi hoặc được miễn có lý do', !lac.length, lac.join(', '))
         const oo = doc('src/routes/onlineOrders.ts')
-        dung('F5 GET /online-orders trả laiDuKien (docLaiDuKien) cho owner/admin — cả đơn có lẫn không có số lợi nhuận',
-            /docLaiDuKien\(prisma, orders/.test(oo) && /donHoanTra: p\.hoanTra === true,\s*laiDuKien,/.test(oo) && /\.\.\.oa, laiDuKien \}/.test(oo))
+        dung('F5 GET /online-orders trả laiDuKien (docLaiDuKien) + cờ uuTienDuKien cho owner/admin — cả đơn có lẫn không có số lợi nhuận',
+            /docLaiDuKien\(prisma, orders/.test(oo) && /donHoanTra: p\.hoanTra === true,\s*laiDuKien, uuTienDuKien,/.test(oo)
+            && /\.\.\.oa, laiDuKien, uuTienDuKien \}/.test(oo))
+        // 21/11/2026: ô Lợi nhuận của danh sách = lãi dự kiến (escrow) khi đơn Shopee CHƯA có số cuối — khớp chi tiết đơn
+        dung('F7 danh sách ưu tiên lãi dự kiến theo escrow cho đơn Shopee chưa có số cuối (đơn hoàn tất đã đọc lại phí ⇒ số thật); đơn huỷ / trả như cũ',
+            /nguonPhi === 'escrow' && !CANCEL_LIKE_STATUSES\.includes\(o\.status\)/.test(oo) && /laShopeeDuKien\(o\) && o\.status === 'COMPLETED'/.test(oo)
+            && /await daDocLaiPhiCuoi\(prisma, hoanTatCanSoat\)/.test(oo) && /const uuTienDuKien = laShopeeDuKien\(o\) && !daChot\.has\(String\(o\.id\)\)/.test(oo))
+        const au = doc('src/cron/autoSync.ts')
+        const viTriDocLai = au.indexOf('await docLaiPhiHoanTat(sp, ch, ')
+        dung('F8 lượt phí sàn hằng giờ đọc lại phí đơn Shopee HOÀN TẤT — SAU đối soát + bù hoa hồng, giờ riêng, không dội cảnh báo lãi thấp',
+            viTriDocLai > au.indexOf('await buHoaHongAffiliate(') && au.indexOf('await buHoaHongAffiliate(') > 0
+            && !/canhBaoLoiNhuanThap\(sp, kq\.idDoi\)/.test(au) && /const DOC_LAI_PHI_MS\s+= 60_000/.test(au))
         const lib = doc('src/lib/laiDuKienDon.ts')
         dung('F6 báo bằng type loi_nhuan_thap (đã khai đủ 3 chỗ BE / Android / web) — không type mới',
             /type: 'loi_nhuan_thap'/.test(lib) && !/type: '(?!loi_nhuan_thap)[a-z_]+'/.test(lib))

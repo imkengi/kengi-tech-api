@@ -1,8 +1,8 @@
 /* Kiểm chứng PHÍ SHOPEE THEO CÔNG THỨC (18/11/2026) — npx tsx scripts/check-bieu-phi-shopee.ts
  *
  * Chủ shop: "ủa phí cố định nó sẽ theo tuỳ mã hàng chứ" → "Ok, đổi đi rồi deploy". Đo prod cùng ngày: escrow Shopee khớp TỪNG
- * ĐỒNG với % ngành × Q + 6% × (Q + ship khách trả) + min(5,5% × Q, 50.000) + 3.000 + 1,5% thuế + 2.700đ (+ voucher shop, phí
- * nạp quảng cáo, affiliate). Canh:
+ * ĐỒNG với % ngành × Q + 6% × (Q + ship khách trả) + Σ min(5,5% × giá 1 cái, 50.000) × SL + 3.000 + 1,5% × Q thuế + 2.700đ
+ * (+ voucher shop, phí nạp quảng cáo, affiliate) — trần theo CÁI và thuế trên Q đo lại 21/11/2026 ở đơn combo / nhiều cái. Canh:
  *  A. lib/giaShopee: phí có TRẦN (MauPhi.tran) — đánh giá lãi và giá đạt biên đúng hai bên trần; trần hỏng ⇒ bỏ qua (thận trọng).
  *  B. lib/bieuPhiShopee.uocLuongBieuPhi: dựng lại đúng biểu phí từ đơn mẫu giả lập; cờ lệch; thiếu loại phí ⇒ KHÔNG hợp lệ; phí
  *     dịch vụ khác mặc định ⇒ dò lại được; ít mẫu ⇒ không hợp lệ; đơn trả hàng bị bỏ; đẳng thức escrow khớp từng đồng.
@@ -16,7 +16,7 @@ import fs from 'fs'
 import path from 'path'
 import { tinhGiaDeXuat, danhGiaGia, lyDoPhiChuaDuTin, phiDuTinChoMay, SO_DON_TU_GHI, type MauPhi } from '../src/lib/giaShopee'
 import {
-    uocLuongBieuPhi, docMauEscrow, mauPhiCongThuc, phiCongThucCuaDon, phiNganhTrungBinh, chonDonMau, doBieuPhi, luuBieuPhi, docBieuPhi,
+    uocLuongBieuPhi, docMauEscrow, mauPhiCongThuc, phiCongThucCuaDon, phiNganhTrungBinh, chonDonMau, doBieuPhi, luuBieuPhi, docBieuPhi, phiDichVu,
     doVaLuuBieuPhi, kichDoBieuPhiNen, doBieuPhiGianCuNhat, xoaTrangThaiDoBieuPhi, bieuPhiDungDuoc, chuanHoaBieuPhi, PHI_DICH_VU_MAC_DINH,
     TUOI_BO, TUOI_DO_LAI, type BieuPhi,
 } from '../src/lib/bieuPhiShopee'
@@ -29,13 +29,15 @@ const gan = (a: number, b: number, sai: number) => Math.abs(a - b) <= sai
 /* ── Đơn giả lập đúng biểu phí Shopee đo 18/11/2026 ─────────────────────────────────────────────────────────────────────── */
 interface TuyChonDon { voucher?: number; S?: number; aff?: number; khac?: number; sl?: number; them?: number; dv?: { tyLe: number; moiDon: number; tran: number }; hoan?: number }
 function escrowGia(r: number, osp: number, o: TuyChonDon = {}): any {
-    const Q = osp - (o.voucher || 0), S = o.S || 0
+    const Q = osp - (o.voucher || 0), S = o.S || 0, sl = o.sl || 1
     const dv = o.dv || PHI_DICH_VU_MAC_DINH
     const commission = Math.round(r * Q)
     const tt = Math.round(0.06 * (Q + S))
-    const phan = Math.round(dv.tyLe * Q)
-    const service = (dv.tran > 0 ? Math.min(phan, dv.tran) : phan) + dv.moiDon
-    const vat = Math.round(0.01 * osp), pit = Math.round(0.005 * osp)
+    // phí dịch vụ: trần theo TỪNG CÁI (đo 21/11/2026)
+    const mot = dv.tyLe * (Q / sl)
+    const service = Math.round((dv.tran > 0 ? Math.min(mot, dv.tran) : mot) * sl) + dv.moiDon
+    // thuế 1,5% trên Q (đo 21/11/2026 ở đơn combo — osp ≠ Q)
+    const vat = Math.round(0.01 * Q), pit = Math.round(0.005 * Q)
     const ads = Math.round((o.khac || 0) * osp)
     const ams = o.aff || 0
     const tong = (osp - Q) + commission + tt + service + vat + pit + 2700 + ads + ams + (o.them || 0)
@@ -44,7 +46,7 @@ function escrowGia(r: number, osp: number, o: TuyChonDon = {}): any {
         commission_fee: commission, seller_transaction_fee: tt, credit_card_transaction_fee: tt, service_fee: service,
         withholding_vat_tax: vat, withholding_pit_tax: pit, shipping_seller_protection_fee_amount: 2700,
         ads_escrow_top_up_fee_or_technical_support_fee: ads, order_ams_commission_fee: ams,
-        escrow_amount: osp - tong, seller_return_refund: o.hoan || 0, items: [{ quantity_purchased: o.sl || 1 }],
+        escrow_amount: osp - tong, seller_return_refund: o.hoan || 0, items: [{ quantity_purchased: sl, discounted_price: Q }],
     }
 }
 const GIA = [32_000, 89_000, 150_000, 248_700, 497_999, 767_000, 1_090_000, 2_200_000]
@@ -58,7 +60,7 @@ function mauChuan(o: TuyChonDon = {}, nganh = NGANH) {
 /** Phí Shopee chính xác (chưa làm tròn) của đơn 1 cái giá P — để so với MauPhi. */
 const phiShopee = (r: number, P: number, o: { v?: number; S?: number; khac?: number } = {}) => {
     const v = o.v || 0, Q = P * (1 - v), S = o.S || 0
-    return v * P + r * Q + 0.06 * (Q + S) + Math.min(0.055 * Q, 50_000) + 3000 + 0.015 * P + 2700 + (o.khac || 0) * P
+    return v * P + r * Q + 0.06 * (Q + S) + Math.min(0.055 * Q, 50_000) + 3000 + 0.015 * Q + 2700 + (o.khac || 0) * P
 }
 const bieuTay = (them: Partial<BieuPhi> = {}): BieuPhi => ({
     phienBan: 1, doLuc: Date.now(), hopLe: true, soMau: 24, soKhop: 24, soBo: 0,
@@ -161,6 +163,22 @@ async function main() {
         dung('B11 lưu JSON rồi đọc lại ra cùng biểu phí; JSON hỏng ⇒ null', !!chuan && chuan.hopLe && chuan.nganh['202']!.tyLe === 0.16 && chuanHoaBieuPhi({ phienBan: 2 }) === null && chuanHoaBieuPhi('x') === null)
         const voLy = chuanHoaBieuPhi({ ...JSON.parse(JSON.stringify(b)), thanhToan: 0.9 })
         dung('B12 số vô lý trong JSON (thanh toán 90%) ⇒ không hợp lệ', !!voLy && !voLy.hopLe)
+
+        // 21/11/2026 — đo escrow prod: trần phí dịch vụ theo TỪNG CÁI; thuế 1,5% trên Q (số giả, không phải đơn thật)
+        const hai = docMauEscrow(escrowGia(0.11, 2_500_000, { sl: 2 }))!
+        const ctHai = phiCongThucCuaDon({ thanhToan: 0.06, dichVu: PHI_DICH_VU_MAC_DINH, thue: 0.015 }, 0.11, hai)
+        dung('B13 đơn 2 cái × 1.250.000đ: phí dịch vụ = 2 × 50.000 + 3.000 (trần theo CÁI, không theo đơn); công thức khớp escrow',
+            hai.dichVu === 103_000 && phiDichVu(PHI_DICH_VU_MAC_DINH, hai.Q, hai.dong) === 103_000 && phiDichVu(PHI_DICH_VU_MAC_DINH, hai.Q) === 53_000
+            && gan(ctHai, hai.phi, 2) && hai.dong.length === 1 && hai.dong[0]!.sl === 2, `${hai.dichVu} ${ctHai} vs ${hai.phi}`)
+        const combo = docMauEscrow(escrowGia(0.13, 960_000, { voucher: 5_000, sl: 2 }))!
+        const ctCombo = phiCongThucCuaDon({ thanhToan: 0.06, dichVu: PHI_DICH_VU_MAC_DINH, thue: 0.015 }, 0.13, combo)
+        dung('B14 đơn combo (osp 960.000, Q 955.000): thuế 1,5% × Q = 14.325 — công thức khớp từng đồng; tính trên osp thì lệch 75đ',
+            combo.thue === 14_325 && gan(ctCombo, combo.phi, 2) && Math.abs(ctCombo + 0.015 * (combo.osp - combo.Q) - combo.phi) >= 70,
+            `${combo.thue} ${ctCombo} vs ${combo.phi}`)
+        const dv6b = { tyLe: 0.06, moiDon: 2000, tran: 40_000 }
+        const coHaiCai = uocLuongBieuPhi([...mauChuan({ dv: dv6b }), { ...docMauEscrow(escrowGia(0.11, 1_800_000, { dv: dv6b, sl: 2 }))!, nganh: '101' }])
+        dung('B15 dò lại phí dịch vụ có đơn 2 cái chạm trần ⇒ trần vẫn 40.000đ/cái (không lấy 2 × trần), biểu phí vẫn hợp lệ',
+            coHaiCai.hopLe && coHaiCai.dichVu.tran === 40_000 && coHaiCai.soKhop === coHaiCai.soMau, JSON.stringify(coHaiCai.dichVu) + ' ' + (coHaiCai.lyDo || ''))
     }
 
     // ─── C. MauPhi theo công thức + rào đủ tin ─────────────────────────────────────────────────────────────────────────

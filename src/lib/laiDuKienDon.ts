@@ -31,12 +31,28 @@
  *  cả đơn. Lưu trong chiTiet.dong; trang Đơn hàng online hiện từng SKU. BÁO ĐỘNG khi cả đơn lỗ HOẶC một SKU có giá bị bán lỗ dù
  *  cả đơn vẫn lãi (mặt hàng khác gánh — không tách thì không ai thấy). Dòng quà tặng 0đ không báo riêng (giá vốn của nó đã nằm
  *  trong số cả đơn). Dòng tính trước 19/11 (chưa có chiTiet.dong) được lưới vét TÍNH LẠI theo SKU trong 3 ngày — không báo lại.
+ *
+ *  SHOPEE: GIÁ THẬT + PHÍ THẬT TỪ ESCROW (21/11/2026 — chủ shop gửi ảnh một đơn combo "mua 2 giảm …": lãi dự kiến Kengi gấp
+ *  ~3 lần số Shopee ước tính; và "bấm chi tiết hiện đúng mà bên ngoài hiện sai"). Đo prod chỉ đọc:
+ *  - Món trong COMBO (bundle deal): get_order_detail trả model_discounted_price = 0 ⇒ đơn ghi giá GỐC (trước cả giảm giá món)
+ *    ⇒ "bán" phình to. Giá ghi sổ / hoá đơn GIỮ NGUYÊN (chủ shop 06/09: "xuất hoá đơn là đúng rồi, xuất hàng bán") — chỉ phần
+ *    LÃI dùng giá thật: escrow items[].discounted_price (sau combo), Σ = order_discounted_price (Q).
+ *  - Phí = phí thật Shopee báo cho đơn (escrow): Q − tiền về dự kiến; tiền về dự kiến = escrow − ship khách trả còn cộng trong
+ *    escrow (đơn chưa hoàn tất; hoàn tất thì final_shipping_fee = −ship, ròng 0) − phí bảo vệ vận chuyển CHƯA trừ (Shopee chỉ
+ *    trừ khi đã gửi hàng; dự kiến = mức trung bình của biểu phí gian). Chia theo SKU từng khoản (escrowTheoSku).
+ *  - Đọc escrow lúc đơn về (webhook / lưới vét), TUẦN TỰ, có trần lượt + hạn giờ, nhường khi proxy quá tải. Chưa đọc được (Shopee
+ *    chưa có, lỗi, proxy bận) mà đơn < CHO_ESCROW_MS ⇒ HOÃN (không lưu — push sau / lượt vét sau xét lại); quá hạn ⇒ công thức như
+ *    cũ, ghi lý do. Dòng Shopee đã lưu theo công thức (≤ CUA_SO_ESCROW_MS) được lưới vét TÍNH LẠI theo escrow — không báo lại.
+ *    Tắt: LAI_DU_KIEN_ESCROW=0.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 import { computeOrderProfits, CANCELLED_STATUSES, type GiaVonDong } from './onlineOrderProfit'
 import { laDonKeoBu } from './dauKeoBu'
 import { phiSanCuaDon, phiSanTungDong, type MauPhi } from './giaShopee'
 import { docMauPhiTheoNganh, phamViPhi, type BangPhiNganh } from './shopeeTuQuan'
+import { docEscrowQuaDichVu, docBieuPhi, bieuPhiDungDuoc, PHI_DICH_VU_MAC_DINH, type PhiDichVu } from './bieuPhiShopee'
+import { proxyCircuitOpen, proxyDangQuaTai } from './proxyBreaker'
+import { ShopeeService } from '../services/platforms/shopee'
 
 /** Chỉ xét đơn đặt trên sàn trong ngần này — "đơn MỚI". Kênh mới nối kéo lịch sử / lượt đầu sau khi bật KHÔNG được dội báo
  *  động cho đơn cũ. 24 giờ đủ để lượt đồng bộ 30' vớt đơn lỡ webhook. */
@@ -50,9 +66,12 @@ export interface DongGia {
     gia: number
     /** mã ngành của listing trên sàn; null = chưa rõ ngành */
     nganh: string | null
+    /** số cái — phí dịch vụ Shopee có trần theo TỪNG CÁI (21/11/2026); thiếu ⇒ 1 */
+    sl?: number
 }
 
-export type NguonPhiDuKien = 'cong-thuc' | 'do-so' | 'khai' | 'chua-biet'
+/** 'escrow' (21/11/2026): giá + phí thật Shopee báo cho CHÍNH đơn (get_escrow_detail) — xem escrowTheoSku. */
+export type NguonPhiDuKien = 'escrow' | 'cong-thuc' | 'do-so' | 'khai' | 'chua-biet'
 
 export interface PhiDuKien {
     /** VND; null = CHƯA BIẾT phí sàn của gian (không bịa) */
@@ -69,7 +88,7 @@ const vnd = (n: number) => `${Math.round(n).toLocaleString('vi-VN')}đ`
 
 /** Phí sàn dự kiến của MỘT đơn từ các dòng hàng và bảng phí của gian (hàm thuần). */
 export function phiDuKienCuaDon(dong: DongGia[], bang: Pick<BangPhiNganh, 'chon'>): PhiDuKien {
-    const mau = (dong || []).filter(d => Number(d.gia) > 0).map(d => ({ gia: Number(d.gia), phi: bang.chon(d.nganh) }))
+    const mau = (dong || []).filter(d => Number(d.gia) > 0).map(d => ({ gia: Number(d.gia), sl: d.sl, phi: bang.chon(d.nganh) }))
     if (!mau.length) return { phi: null, nguon: 'chua-biet', tam: false, moTa: 'đơn không có dòng hàng nào có giá' }
     if (mau.some(m => m.phi.chuaBiet)) {
         return {
@@ -109,6 +128,8 @@ export interface DongVaoLai extends DongGia {
     sku: string | null
     ten: string
     sl: number
+    /** mã sản phẩm trên sàn (OnlineOrderItem.externalItemId — Shopee: item_id) — nối dòng đơn ↔ dòng escrow */
+    itemId?: string | null
 }
 
 /** Lãi dự kiến của MỘT dòng hàng (SKU). */
@@ -117,13 +138,15 @@ export interface LaiDong {
     sku: string | null
     ten: string
     sl: number
-    /** giá dòng sau giảm giá shop */
+    /** giá dòng sau giảm giá shop — nguồn escrow: giá THẬT Shopee tính (sau combo / khuyến mãi) */
     doanhThu: number
+    /** giá dòng GHI TRÊN ĐƠN (OnlineOrderItem.lineTotal) khi khác giá thật Shopee (combo: đơn ghi giá gốc) — chỉ nguồn escrow */
+    giaDon?: number
     /** phí sàn dự kiến của dòng = % phí của CHÍNH SKU × giá dòng + phần chia phí chung của đơn; null = gian chưa biết phí */
     phi: number | null
-    /** trong `phi`: phần chia phí chung của cả đơn (phí cố định mỗi đơn − phần bớt nhờ trần), theo tỷ trọng giá */
+    /** trong `phi`: phần chia phí cố định mỗi ĐƠN (phí dịch vụ/đơn, bảo vệ vận chuyển…), theo tỷ trọng giá */
     phiChung: number
-    /** % phí theo mô hình phí của CHÍNH SKU (ngành của nó, gồm affiliate trung bình), 0..1; null = chưa biết phí */
+    /** % phí theo giá của CHÍNH SKU = (phi − phiChung) / doanhThu, 0..1 (đã trừ phần bớt nhờ trần); null = chưa biết phí */
     tyLePhi: number | null
     giaVon: number
     thieuGiaVon: boolean
@@ -179,7 +202,7 @@ export function laiTungDong(dong: DongVaoLai[], bang: BangChonPhi, p: PhiDuKien,
     if (!ds.length) return []
     const gia = ds.map(d => Math.max(0, Number(d.gia) || 0))
     const mau = ds.map(d => bang.chon(d.nganh))
-    const tung = phiSanTungDong(gia.map((g, i) => ({ gia: g, phi: mau[i]! })))
+    const tung = phiSanTungDong(gia.map((g, i) => ({ gia: g, sl: ds[i]!.sl, phi: mau[i]! })))
     const phi = p.phi == null ? null : chiaLamTron(tung.map(t => t.phi), p.phi, gia)
     const chung = tung.map(t => Math.round(t.phiChung))
     const vonDong = von?.dong && von.dong.length === ds.length ? von.dong : null
@@ -192,12 +215,181 @@ export function laiTungDong(dong: DongVaoLai[], bang: BangChonPhi, p: PhiDuKien,
         return {
             id: String(d.id), sku: d.sku ? String(d.sku) : null, ten: String(d.ten || '').trim().replace(/\s+/g, ' ').slice(0, 120),
             sl: Number(d.sl) || 0, doanhThu: dt, phi: ph, phiChung: ph == null || !(dt > 0) ? 0 : chung[i]!,
-            tyLePhi: ph == null || !(dt > 0) ? null : Math.round(tung[i]!.tyLe * 10000) / 10000,
+            tyLePhi: ph == null || !(dt > 0) ? null : Math.round((tung[i]!.phiTyLe / gia[i]!) * 10000) / 10000,
             giaVon: gv[i]!, thieuGiaVon: vonDong ? !!vonDong[i]!.missingCost : true,
             lai, lo: dt > 0 && lai < 0, nganh: d.nganh ?? null,
             tamPhi: !!(m.thayNganh || m.chuaRoNganh), moTaPhi: p.phi == null ? 'gian chưa biết phí' : moTaPhiDong(m, bang),
         }
     })
+}
+
+// ─── Shopee: giá + phí THẬT từ escrow (21/11/2026) ────────────────────────────────
+
+/** Một dòng hàng của escrow (order_income.items[]): khoá nối + giá CẢ dòng sau giảm (co giãn cho Σ = Q) + số cái + affiliate. */
+export interface DongEscrowDon { itemId: string; sku: string; gia: number; sl: number; aff: number }
+
+/** Escrow của một đơn quy về TIỀN VỀ DỰ KIẾN (docEscrowDuKien). */
+export interface EscrowDuKien {
+    /** order_discounted_price — giá thật cả đơn sau giảm (combo, giảm giá shop, voucher shop) */
+    Q: number
+    /** escrow_amount Shopee báo lúc đọc */
+    escrow: number
+    /** ship khách trả còn CỘNG trong escrow (đơn chưa hoàn tất) — tiền của đơn vị vận chuyển, trừ ra */
+    ship: number
+    /** phí bảo vệ vận chuyển Shopee CHƯA trừ (đơn chưa gửi) — cộng vào phí theo mức dự kiến của gian */
+    baoVeChuaTru: number
+    /** tiền về dự kiến = escrow − ship − baoVeChuaTru */
+    thucNhan: number
+    /** phí dự kiến cả đơn = Q − thucNhan */
+    phi: number
+    /** các khoản Shopee báo (VND) */
+    khoan: { hoaHong: number; dichVu: number; thanhToan: number; thue: number; baoVe: number; aff: number; khac: number }
+    dong: DongEscrowDon[]
+}
+
+const soE = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+/**
+ * order_income (get_escrow_detail) ⇒ tiền về dự kiến (hàm thuần). null = không dùng được: thiếu Q / escrow, đơn đã trả hàng /
+ * hoàn tiền (seller_return_refund ≠ 0). Đo prod 21/11/2026 (chỉ đọc):
+ *  - ship khách trả: đơn chưa hoàn tất escrow CỘNG nó (final_shipping_fee = 0); hoàn tất thì final_shipping_fee = −ship ⇒ ròng 0.
+ *    final_shipping_fee < −ship = shop chịu thêm ship — đã nằm trong escrow, giữ nguyên.
+ *  - phí bảo vệ vận chuyển: đơn chưa gửi = 0, đã gửi / hoàn tất = mức của gian ⇒ chưa trừ thì cộng `baoVeDuKien` (mức trung bình
+ *    của biểu phí gian; gian chưa có biểu phí ⇒ 0, câu nguồn không nhắc).
+ */
+export function docEscrowDuKien(inc: any, baoVeDuKien = 0): EscrowDuKien | null {
+    if (!inc || typeof inc !== 'object') return null
+    const Q = soE(inc.order_discounted_price), escrow = Number(inc.escrow_amount)
+    if (!(Q > 0) || inc.escrow_amount == null || !Number.isFinite(escrow)) return null
+    if (soE(inc.seller_return_refund) !== 0) return null
+    const S = Math.max(0, soE(inc.buyer_paid_shipping_fee)), fsf = soE(inc.final_shipping_fee)
+    const ship = S > 0 ? Math.max(0, Math.min(S, S + fsf)) : 0
+    const baoVe = Math.max(0, soE(inc.shipping_seller_protection_fee_amount))
+    const baoVeChuaTru = baoVe > 0 ? 0 : Math.max(0, Math.round(soE(baoVeDuKien)))
+    const thucNhan = escrow - ship - baoVeChuaTru
+    const items: any[] = Array.isArray(inc.items) ? inc.items : []
+    const tho = items.map(i => ({
+        itemId: i?.item_id == null ? '' : String(i.item_id).trim(),
+        sku: String(i?.model_sku || i?.item_sku || '').trim(),
+        gia: Math.max(0, soE(i?.discounted_price)), sl: Math.max(1, Math.round(soE(i?.quantity_purchased)) || 1),
+        aff: Math.max(0, soE(i?.ams_commission_fee)),
+    }))
+    const tong = tho.reduce((s, d) => s + d.gia, 0)
+    const k = tong > 0 ? Q / tong : 0
+    return {
+        Q, escrow, ship, baoVeChuaTru, thucNhan, phi: Q - thucNhan,
+        khoan: {
+            hoaHong: soE(inc.commission_fee), dichVu: soE(inc.service_fee), thanhToan: soE(inc.seller_transaction_fee),
+            thue: soE(inc.withholding_vat_tax) + soE(inc.withholding_pit_tax), baoVe,
+            aff: Math.max(0, soE(inc.order_ams_commission_fee)), khac: soE(inc.ads_escrow_top_up_fee_or_technical_support_fee),
+        },
+        dong: k > 0 ? tho.map(d => ({ ...d, gia: d.gia * k })) : [],
+    }
+}
+
+/**
+ * Giá thật / số cái / affiliate của TỪNG dòng đơn theo escrow (hàm thuần, đúng thứ tự `dong`): nối item_id + SKU, rồi item_id khi
+ * một-một; phần escrow còn lại chia cho các dòng chưa nối theo giá ghi trên đơn (hết dòng chưa nối ⇒ dồn vào dòng đã nối theo
+ * giá). Σ gia = Q. Dòng đơn không có trong escrow mà escrow đã hết giá ⇒ 0đ (như quà tặng).
+ */
+export function ganGiaEscrow(dong: Pick<DongVaoLai, 'gia' | 'sl' | 'sku' | 'itemId'>[], e: Pick<EscrowDuKien, 'Q' | 'dong' | 'khoan'>):
+    { gia: number; sl: number; aff: number; noi: boolean }[] {
+    const ds = dong || []
+    const ra = ds.map(d => ({ gia: 0, sl: Math.max(1, Math.round(Number(d.sl)) || 1), aff: 0, noi: false }))
+    const con = (e.dong || []).map(x => ({ ...x, dung: false }))
+    const khoa = (id: any, sku: any) => `${String(id ?? '').trim()}|${String(sku ?? '').trim().toLowerCase()}`
+    const ma = (d: Pick<DongVaoLai, 'itemId'>) => String(d.itemId ?? '').trim()
+    for (let i = 0; i < ds.length; i++) {
+        const d = ds[i]!
+        if (!ma(d)) continue
+        const x = con.find(c => !c.dung && khoa(c.itemId, c.sku) === khoa(d.itemId, d.sku))
+        if (x) { x.dung = true; ra[i] = { gia: x.gia, sl: x.sl, aff: x.aff, noi: true } }
+    }
+    for (let i = 0; i < ds.length; i++) {
+        const d = ds[i]!
+        if (ra[i]!.noi || !ma(d)) continue
+        const xs = con.filter(c => !c.dung && c.itemId === ma(d))
+        const cung = ds.filter((y, k) => !ra[k]!.noi && ma(y) === ma(d))
+        if (xs.length === 1 && cung.length === 1) { xs[0]!.dung = true; ra[i] = { gia: xs[0]!.gia, sl: xs[0]!.sl, aff: xs[0]!.aff, noi: true } }
+    }
+    const daNoi = ra.filter(r => r.noi)
+    const giaCon = Math.max(0, e.Q - daNoi.reduce((s, r) => s + r.gia, 0))
+    const affCon = Math.max(0, (e.khoan?.aff || 0) - daNoi.reduce((s, r) => s + r.aff, 0))
+    const chua = ra.map((r, i) => (r.noi ? -1 : i)).filter(i => i >= 0)
+    if (chua.length) {
+        const tg = chua.reduce((s, i) => s + Math.max(0, Number(ds[i]!.gia) || 0), 0)
+        for (const i of chua) {
+            const w = tg > 0 ? Math.max(0, Number(ds[i]!.gia) || 0) / tg : 1 / chua.length
+            ra[i] = { ...ra[i]!, gia: giaCon * w, aff: affCon * w }
+        }
+    } else if (giaCon > 0.5 || affCon > 0.5) {
+        const tg = ra.reduce((s, r) => s + r.gia, 0)
+        for (const r of ra) { const w = tg > 0 ? r.gia / tg : 1 / ra.length; r.gia += giaCon * w; r.aff += affCon * w }
+    }
+    return ra
+}
+
+/** Câu nguồn phí của một SKU tính theo escrow. */
+function moTaPhiEscrow(m: MauPhi, bang?: Partial<Pick<BangPhiNganh, 'tenNganh'>>): string {
+    if (m.congThuc && !m.thayNganh && !m.chuaRoNganh) {
+        const ten = m.nganh ? bang?.tenNganh?.get(m.nganh) : undefined
+        const nganh = ten ? ` ${ten.length > 40 ? `${ten.slice(0, 39).trimEnd()}…` : ten}` : ''
+        return `phí thật Shopee báo cho đơn — hoa hồng ngành${nganh} ${pct(m.congThuc.phiNganh)} + thanh toán, dịch vụ, thuế`
+    }
+    return 'phí thật Shopee báo cho đơn, chia theo SKU'
+}
+
+/**
+ * Lãi dự kiến TỪNG SKU theo escrow Shopee (hàm thuần). Bán = giá thật của dòng (ganGiaEscrow, Σ = Q). Phí cả đơn = e.phi, chia
+ * theo TỪNG KHOẢN Shopee báo: hoa hồng theo % ngành của SKU × giá dòng; phần % của phí dịch vụ theo công thức có trần từng cái;
+ * thanh toán, thuế, khoản khác theo giá dòng; affiliate đúng dòng Shopee báo; phí dịch vụ mỗi đơn + bảo vệ vận chuyển (phí cố
+ * định của ĐƠN) chia theo giá ⇒ phiChung. Làm tròn dồn lẻ ⇒ Σ SKU = đúng số cả đơn.
+ */
+export function escrowTheoSku(dong: DongVaoLai[], e: EscrowDuKien, bang: BangChonPhi, von: { cost: number; missingCost: boolean; dong?: GiaVonDong[] },
+    dv: PhiDichVu = PHI_DICH_VU_MAC_DINH): { p: PhiDuKien; laiDong: LaiDong[]; doanhThu: number } {
+    const ds = dong || []
+    const Q = Math.round(e.Q), F = Math.round(e.phi)
+    const g = ganGiaEscrow(ds, e)
+    const gia = chiaLamTron(g.map(x => x.gia), Q, g.map(x => x.gia))
+    const tg = gia.reduce((s, x) => s + x, 0)
+    const wQ = gia.map(x => (tg > 0 ? x / tg : 1 / Math.max(1, ds.length)))
+    const chuan = (w: number[]) => { const t = w.reduce((s, x) => s + x, 0); return t > 0 ? w.map(x => x / t) : wQ }
+    const mau = ds.map(d => bang.chon(d.nganh))
+    const wHH = chuan(gia.map((x, i) => x * Math.max(0, mau[i]!.congThuc ? mau[i]!.congThuc!.phiNganh : mau[i]!.tyLe)))
+    const wDV = chuan(gia.map((x, i) => { const sl = g[i]!.sl, mot = dv.tyLe * (x / sl); return (dv.tran > 0 ? Math.min(mot, dv.tran) : mot) * sl }))
+    const k = e.khoan
+    const dvMoiDon = Math.min(Math.max(0, k.dichVu), dv.moiDon)
+    const coDinh = dvMoiDon + k.baoVe + e.baoVeChuaTru
+    const phanDV = k.dichVu - dvMoiDon
+    const aff = g.map(x => x.aff)
+    const conLai = F - (k.hoaHong + phanDV + k.thanhToan + k.thue + aff.reduce((s, x) => s + x, 0) + coDinh)
+    const tho = ds.map((_, i) => k.hoaHong * wHH[i]! + phanDV * wDV[i]! + (k.thanhToan + k.thue + conLai + coDinh) * wQ[i]! + aff[i]!)
+    const phi = chiaLamTron(tho, F, gia)
+    const vonDong = von?.dong && von.dong.length === ds.length ? von.dong : null
+    const gv = vonDong ? chiaLamTron(vonDong.map(v => Number(v.cost) || 0), Math.round(Number(von.cost) || 0), vonDong.map(v => Number(v.cost) || 0)) : ds.map(() => 0)
+    const laiDong: LaiDong[] = ds.map((d, i) => {
+        const dt = gia[i]!, ph = phi[i]!
+        const chung = dt > 0 ? Math.round(coDinh * wQ[i]!) : 0
+        const giaDon = Math.round(Math.max(0, Number(d.gia) || 0))
+        const lai = dt - ph - gv[i]!
+        return {
+            id: String(d.id), sku: d.sku ? String(d.sku) : null, ten: String(d.ten || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+            sl: Number(d.sl) || 0, doanhThu: dt, ...(Math.abs(giaDon - dt) >= 1 ? { giaDon } : {}),
+            phi: ph, phiChung: chung, tyLePhi: dt > 0 ? Math.round(((ph - chung) / dt) * 10000) / 10000 : null,
+            giaVon: gv[i]!, thieuGiaVon: vonDong ? !!vonDong[i]!.missingCost : true,
+            lai, lo: dt > 0 && lai < 0, nganh: d.nganh ?? null, tamPhi: false,
+            moTaPhi: dt > 0 ? moTaPhiEscrow(mau[i]!, bang) : 'không có giá trong escrow',
+        }
+    })
+    const phan = [`hoa hồng ${vnd(k.hoaHong)}`, `dịch vụ ${vnd(k.dichVu)}`, `thanh toán ${vnd(k.thanhToan)}`, `thuế ${vnd(k.thue)}`]
+    if (k.baoVe || e.baoVeChuaTru) phan.push(`bảo vệ vận chuyển ${vnd(k.baoVe || e.baoVeChuaTru)}${e.baoVeChuaTru ? ' (trừ khi gửi hàng)' : ''}`)
+    if (k.aff) phan.push(`affiliate ${vnd(k.aff)}`)
+    if (Math.abs(conLai) >= 1) phan.push(`khác ${vnd(conLai)}`)
+    const giaDonTong = ds.reduce((s, d) => s + Math.round(Math.max(0, Number(d.gia) || 0)), 0)
+    const moTa = `phí thật Shopee báo cho đơn: ${phan.join(' + ')}`
+        + (e.ship ? `; ship khách trả ${vnd(e.ship)} không tính (chuyển cho đơn vị vận chuyển)` : '')
+        + (Math.abs(giaDonTong - Q) >= 1 ? `; giá Shopee tính ${vnd(Q)}, đơn ghi ${vnd(giaDonTong)} (combo / khuyến mãi)` : '')
+    return { p: { phi: F, nguon: 'escrow', tam: false, moTa }, laiDong, doanhThu: Q }
 }
 
 export interface LaiDuKien {
@@ -344,6 +536,8 @@ export interface LaiDuKienDaLuu {
     dong: LaiDongDaLuu[] | null
     /** số SKU có giá bị bán lỗ (cả khi cả đơn vẫn lãi) */
     soSkuLo: number
+    /** nguồn escrow (21/11/2026): tiền về dự kiến + hai khoản đã chỉnh so với escrow lúc đọc; null = không theo escrow */
+    escrow: { luc: string; thucNhan: number; ship: number; baoVeChuaTru: number } | null
 }
 
 /** Một SKU đã lưu — đúng các trường của LaiDong (trừ ngành). */
@@ -368,6 +562,9 @@ export async function docLaiDuKien(prisma: any, orderIds: string[]): Promise<Map
             luc: r.xetLuc ? new Date(r.xetLuc).toISOString() : '', lo: lai < 0,
             baoLuc: r.baoLuc ? new Date(r.baoLuc).toISOString() : null,
             dong, soSkuLo: dong ? dong.filter(x => x.lo).length : 0,
+            escrow: String(r.nguonPhi) === 'escrow' && ct?.escrow && typeof ct.escrow === 'object'
+                ? { luc: String(ct.escrow.luc || ''), thucNhan: Math.round(Number(ct.escrow.thucNhan) || 0), ship: Math.round(Number(ct.escrow.ship) || 0), baoVeChuaTru: Math.round(Number(ct.escrow.baoVeChuaTru) || 0) }
+                : null,
         })
     }
     return out
@@ -379,7 +576,8 @@ function docDongDaLuu(v: any): LaiDongDaLuu[] | null {
     const so = (x: any) => Math.round(Number(x) || 0)
     return v.filter(x => x && typeof x === 'object').map((x: any) => ({
         id: String(x.id ?? ''), sku: x.sku == null || x.sku === '' ? null : String(x.sku), ten: String(x.ten ?? ''), sl: Number(x.sl) || 0,
-        doanhThu: so(x.doanhThu), phi: x.phi == null ? null : so(x.phi), phiChung: so(x.phiChung),
+        doanhThu: so(x.doanhThu), ...(x.giaDon != null && Number.isFinite(Number(x.giaDon)) ? { giaDon: so(x.giaDon) } : {}),
+        phi: x.phi == null ? null : so(x.phi), phiChung: so(x.phiChung),
         tyLePhi: x.tyLePhi == null || !Number.isFinite(Number(x.tyLePhi)) ? null : Number(x.tyLePhi),
         giaVon: so(x.giaVon), thieuGiaVon: !!x.thieuGiaVon, lai: so(x.lai), lo: !!x.lo, tamPhi: !!x.tamPhi, moTaPhi: String(x.moTaPhi ?? ''),
     }))
@@ -428,9 +626,17 @@ export interface KetQuaXetLai {
     boQua: number
     /** đơn dòng hàng chưa mang giá — chưa lưu, xét lại lần sau */
     chuaCoGia: number
+    /** đơn Shopee chưa đọc được escrow (Shopee chưa có / lỗi / proxy bận) mà còn mới — HOÃN, xét lại lần sau (21/11/2026) */
+    choEscrow?: number
     loi?: string
     loiPush?: string
 }
+
+/** Đọc escrow của MỘT đơn Shopee: order_income | null (Shopee chưa có / không thấy đơn); NÉM khi token / hạn mức / mạng hỏng. */
+export type DocEscrowDon = (ch: any, sn: string) => Promise<any | null>
+
+/** Phí chung của gian cho đường escrow: biểu phí dịch vụ (trần, phí mỗi đơn) + phí bảo vệ vận chuyển dự kiến. null = chưa biết. */
+export type PhiChungGian = { dichVu: PhiDichVu; baoVe: number } | null
 
 export interface TuyChonXetLai {
     /** đường gọi — chỉ để ghi vào chiTiet / log */
@@ -440,11 +646,62 @@ export interface TuyChonXetLai {
     docBang?: (prisma: any, ch: any) => Promise<Pick<BangPhiNganh, 'chon'>>
     /** bộ kiểm: push giả */
     guiPush?: (prisma: any, title: string, body: string, extra: { id?: string; type?: string; route?: string }) => Promise<number>
+    /** đọc escrow Shopee (mặc định docEscrowShopee); null = không đọc — tính theo công thức như trước 21/11/2026 */
+    docEscrow?: DocEscrowDon | null
+    /** bộ kiểm: phí chung gian giả (mặc định: biểu phí Shopee đã lưu của gian) */
+    docPhiChung?: (prisma: any, channelId: string) => Promise<PhiChungGian>
 }
+
+/** Đơn Shopee chưa đọc được escrow mà mới hơn ngần này ⇒ HOÃN (không lưu, push sau / lượt vét sau xét lại); cũ hơn ⇒ công thức. */
+export const CHO_ESCROW_MS = 2 * 3600_000
+/** Dòng Shopee đã lưu theo công thức, đơn đặt trong ngần này ⇒ lưới vét TÍNH LẠI theo escrow (Shopee chưa có ⇒ thôi, đánh dấu). */
+export const CUA_SO_ESCROW_MS = 7 * 24 * 3600_000
+/** Mỗi lượt tính: tối đa ngần này lời đọc escrow, trong ngần này thời gian; một lời đọc quá HAN_MOT_ESCROW_MS ⇒ thôi đọc lượt đó. */
+export const TRAN_ESCROW_MOI_LUOT = 25
+const HAN_ESCROW_MOI_LUOT_MS = 45_000
+const HAN_MOT_ESCROW_MS = 12_000
+
+/** Vì sao đơn Shopee KHÔNG tính theo escrow. Tạm (lượt sau thử lại): loi / qua-tai / het-luot. */
+export type LyDoKhongEscrow = 'chua-co' | 'khong-uy-quyen' | 'loi' | 'qua-tai' | 'het-luot'
+const LY_DO_TAM: LyDoKhongEscrow[] = ['loi', 'qua-tai', 'het-luot']
+const CAU_LY_DO: Record<LyDoKhongEscrow, string> = {
+    'chua-co': 'Shopee chưa có số của đơn', 'khong-uy-quyen': 'gian chưa uỷ quyền API', loi: 'lỗi khi hỏi Shopee',
+    'qua-tai': 'đường gọi Shopee đang bận', 'het-luot': 'lượt này đã đọc đủ số đơn',
+}
+
+const escrowBat = () => process.env.LAI_DU_KIEN_ESCROW !== '0'
+
+/** Đường thật: ShopeeService của gian — KHÔNG tự làm mới token ở đây (đồng bộ tự động làm; hai bên cùng làm mới là đá nhau). */
+export const docEscrowShopee: DocEscrowDon = async (ch, sn) => {
+    if (ch?.tokenExpiresAt && new Date(ch.tokenExpiresAt).getTime() < Date.now() + 5 * 60_000) {
+        throw new Error('token gian sắp hết hạn — chờ đồng bộ làm mới')
+    }
+    const svc = new ShopeeService({
+        apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+        accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined, shopId: ch.shopId || undefined,
+    })
+    return docEscrowQuaDichVu(svc)(sn)
+}
+
+/** Phí chung gian mặc định: biểu phí Shopee đã lưu (còn dùng được); chưa có ⇒ null (phí dịch vụ mặc định, không cộng bảo vệ). */
+async function docPhiChungMacDinh(prisma: any, channelId: string): Promise<PhiChungGian> {
+    const b = await docBieuPhi(prisma, channelId)
+    return bieuPhiDungDuoc(b) ? { dichVu: b.dichVu, baoVe: Math.max(0, Math.round(b.baoVe) || 0) } : null
+}
+
+/** Chờ `p` tối đa `ms` — quá hạn thì NÉM (lời gọi vẫn chạy nốt ở tầng proxy, kết quả bỏ). */
+function henGio<T>(p: Promise<T>, ms: number): Promise<T> {
+    let h: any
+    return Promise.race([p, new Promise<T>((_, rej) => { h = setTimeout(() => rej(new Error(`quá ${Math.round(ms / 1000)} giây`)), ms) })])
+        .finally(() => clearTimeout(h))
+}
+
+/** Lỗi gọi sàn có thể kèm nguyên URL đã ký ⇒ che token / chữ ký / mã đơn trước khi ghi log (như bieuPhiShopee). */
+const cheLoi = (e: any) => String(e?.message || e).replace(/\b(access_token|sign|order_sn|partner_key)=[^&\s"']+/gi, '$1=…').slice(0, 200)
 
 /** Chọn trường đơn cần để tính — dùng chung cho đường báo động và các lệnh đo. */
 export const CHON_DON_LAI_DU_KIEN = {
-    id: true, orderNumber: true, platform: true, status: true, note: true, subtotal: true, netRevenue: true,
+    id: true, orderNumber: true, externalOrderId: true, platform: true, status: true, note: true, subtotal: true, netRevenue: true,
     channelId: true, channelName: true, createdAt: true,
     items: { select: { id: true, productId: true, sku: true, quantity: true, lineTotal: true, externalItemId: true, productName: true } },
 } as const
@@ -462,6 +719,10 @@ export interface LaiMotDon {
     laiDong: LaiDong[]
     /** các SKU CÓ GIÁ bán lỗ — chỉ khi đơn có ≥ 2 dòng có giá (đơn một dòng: SKU lỗ = cả đơn lỗ, khỏi nói hai lần) */
     skuLo: LaiDong[]
+    /** nguồn escrow (21/11/2026): số Shopee báo lúc đọc — lưu vào chiTiet.escrow để soát lại */
+    escrow?: EscrowDuKien
+    /** đơn Shopee mà KHÔNG tính theo escrow: vì sao (tính theo công thức) */
+    lyDoKhongEscrow?: LyDoKhongEscrow
 }
 
 /** Đệm bảng phí theo gian (5 phút, như đệm phí ngành của shopeeTuQuan): giờ livestream đơn về dồn dập, mỗi đơn đọc lại phí cả
@@ -472,33 +733,50 @@ const DEM_BANG_PHI = new WeakMap<object, Map<string, { het: number; bang: BangCh
 /** Dòng lãi theo SKU gọn để lưu vào chiTiet.dong (JSONB) — tối đa 40 dòng một đơn. */
 const TRAN_DONG_LUU = 40
 const gonDong = (x: LaiDong) => ({
-    id: x.id, sku: x.sku, ten: x.ten.slice(0, 120), sl: x.sl, doanhThu: x.doanhThu, phi: x.phi, phiChung: x.phiChung, tyLePhi: x.tyLePhi,
+    id: x.id, sku: x.sku, ten: x.ten.slice(0, 120), sl: x.sl, doanhThu: x.doanhThu, ...(x.giaDon != null ? { giaDon: x.giaDon } : {}),
+    phi: x.phi, phiChung: x.phiChung, tyLePhi: x.tyLePhi,
     giaVon: x.giaVon, thieuGiaVon: x.thieuGiaVon, lai: x.lai, lo: x.lo, nganh: x.nganh, tamPhi: x.tamPhi, moTaPhi: x.moTaPhi.slice(0, 160),
 })
 
 /** chiTiet lưu kèm dòng LaiDuKienDon (đúng một chỗ dựng — đường xét đơn mới và đường tính lại theo SKU dùng chung). */
-function dungChiTiet(kq: LaiMotDon, nguon: string | null) {
+function dungChiTiet(kq: LaiMotDon, nguon: string | null, bay = Date.now()) {
+    const e = kq.escrow
     return {
         moTaPhi: kq.p.moTa, tamPhi: kq.p.tam, nguon,
         nganh: [...new Set(kq.dong.map(x => x.nganh).filter(Boolean))].slice(0, 20),
         dong: kq.laiDong.slice(0, TRAN_DONG_LUU).map(gonDong),
         ...(kq.laiDong.length > TRAN_DONG_LUU ? { dongBiCat: kq.laiDong.length - TRAN_DONG_LUU } : {}),
         soSkuLo: kq.laiDong.filter(x => x.lo).length,
+        // số Shopee báo lúc đọc (chỉ tiền, không thông tin khách) — để soát lại / so với số quyết toán
+        ...(e ? { escrow: { luc: new Date(bay).toISOString(), Q: e.Q, escrow: e.escrow, ship: e.ship, baoVeChuaTru: e.baoVeChuaTru, thucNhan: e.thucNhan, khoan: e.khoan } } : {}),
+        // không theo escrow: lý do KHÔNG tạm (chưa uỷ quyền, Shopee không có số sau hạn chờ) ⇒ escrowThu luôn, kẻo lưới vét nhặt
+        // lại dòng này mỗi lượt; lý do tạm (lỗi, proxy bận, hết lượt) ⇒ để lưới vét thử lại
+        ...(kq.lyDoKhongEscrow ? {
+            lyDoKhongEscrow: kq.lyDoKhongEscrow,
+            ...(LY_DO_TAM.includes(kq.lyDoKhongEscrow) ? {} : { escrowThu: new Date(bay).toISOString() }),
+        } : {}),
     }
 }
 
 /**
  * TÍNH lãi dự kiến cho các đơn (đã chọn theo CHON_DON_LAI_DU_KIEN, đã lọc donXetDuoc) — CHỈ ĐỌC: ngành từng dòng, bảng phí
- * từng gian, giá vốn. Gian đọc phí hỏng ⇒ đơn của gian đó không có trong kết quả (bên gọi xét lại sau), `loi` nói vì sao.
+ * từng gian, giá vốn; đơn Shopee đọc thêm escrow (giá + phí thật, 21/11/2026 — xem đầu tệp). Gian đọc phí hỏng ⇒ đơn của gian đó
+ * không có trong kết quả (bên gọi xét lại sau), `loi` nói vì sao. Đơn Shopee chưa đọc được escrow mà còn mới (< CHO_ESCROW_MS,
+ * trừ gian chưa uỷ quyền) ⇒ nằm trong `hoan`, không có trong kết quả.
  */
-export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXetLai, 'docBang' | 'bayGio'> = {}): Promise<{ ketQua: Map<string, LaiMotDon>; loi?: string }> {
+export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXetLai, 'docBang' | 'bayGio' | 'docEscrow' | 'docPhiChung'> = {}):
+    Promise<{ ketQua: Map<string, LaiMotDon>; hoan: Set<string>; loi?: string }> {
     const ketQua = new Map<string, LaiMotDon>()
+    const hoan = new Set<string>()
     let loi: string | undefined
-    if (!dons?.length) return { ketQua }
+    if (!dons?.length) return { ketQua, hoan }
     const nganhDong = await docNganhDong(prisma, dons.map(d => String(d.id)))
 
     const docBang = o.docBang || docMauPhiTheoNganh
     const bay = o.bayGio ?? Date.now()
+    const docEscrow = o.docEscrow === undefined ? docEscrowShopee : o.docEscrow
+    const coEscrow = !!docEscrow && escrowBat()
+    const laShopee = (d: any) => String(d?.platform || '').toLowerCase() === 'shopee'
     let dem = DEM_BANG_PHI.get(prisma)
     if (!dem) { dem = new Map(); DEM_BANG_PHI.set(prisma, dem) }
     const kenhIds = [...new Set(dons.map(d => String(d.channelId)))]
@@ -507,9 +785,12 @@ export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXet
         const c = dem.get(id)
         if (c && c.het > bay) bangTheoKenh.set(id, c.bang)
     }
-    const canDoc = kenhIds.filter(id => !bangTheoKenh.has(id))
-    const kenhs: any[] = canDoc.length ? await prisma.onlineChannel.findMany({ where: { id: { in: canDoc } } }) : []
+    // đọc dòng kênh: gian chưa có bảng phí trong đệm, và gian Shopee có đơn cần đọc escrow (token của gian)
+    const canKenh = kenhIds.filter(id => !bangTheoKenh.has(id) || (coEscrow && dons.some(d => laShopee(d) && String(d.channelId) === id)))
+    const kenhs: any[] = canKenh.length ? await prisma.onlineChannel.findMany({ where: { id: { in: canKenh } } }) : []
+    const kenhTheoId = new Map<string, any>((kenhs || []).map((c: any) => [String(c.id), c]))
     for (const ch of kenhs || []) {
+        if (bangTheoKenh.has(String(ch.id))) continue
         try {
             const bang = await docBang(prisma, ch)
             bangTheoKenh.set(String(ch.id), bang)
@@ -523,23 +804,73 @@ export async function tinhLaiDuKien(prisma: any, dons: any[], o: Pick<TuyChonXet
     }
 
     const von = await computeOrderProfits(prisma, dons)
+    const docPhiChung = o.docPhiChung || docPhiChungMacDinh
+    const phiChungTheoKenh = new Map<string, PhiChungGian>()
+    const batDau = Date.now()
+    let soDoc = 0, thoiDoc = false
     for (const d of dons) {
         const bang = bangTheoKenh.get(String(d.channelId))
         if (!bang) continue
         const dong: DongVaoLai[] = (d.items || []).map((i: any) => ({
             id: String(i.id), sku: i.sku ? String(i.sku) : null, ten: String(i.productName || ''), sl: Number(i.quantity) || 0,
             gia: Number(i.lineTotal) || 0, nganh: nganhDong.get(String(i.id)) ?? null,
+            itemId: i.externalItemId == null || i.externalItemId === '' ? null : String(i.externalItemId),
         }))
-        const p = phiDuKienCuaDon(dong, bang)
         const v = von.get(d.id) || { cost: 0, missingCost: true }
+
+        /* Shopee: giá + phí THẬT từ escrow. Đọc TUẦN TỰ, trần lượt + hạn giờ; proxy quá tải ⇒ nhường (việc nhận đơn quan trọng
+         * hơn). Một lời đọc NÉM (token / hạn mức / mạng / quá giờ) ⇒ thôi đọc cả lượt — đọc tiếp chỉ tốn lượt gọi. */
+        let lyDo: LyDoKhongEscrow | undefined
+        if (coEscrow && laShopee(d)) {
+            const ch = kenhTheoId.get(String(d.channelId))
+            const sn = String(d.externalOrderId || '').trim() || String(d.orderNumber || '').replace(/^SPE-/i, '').trim()
+            if (!ch?.accessToken || !ch?.shopId || !sn) lyDo = 'khong-uy-quyen'
+            else if (thoiDoc || soDoc >= TRAN_ESCROW_MOI_LUOT || Date.now() - batDau > HAN_ESCROW_MOI_LUOT_MS) lyDo = 'het-luot'
+            else if (proxyCircuitOpen() || proxyDangQuaTai()) lyDo = 'qua-tai'
+            else {
+                soDoc++
+                try {
+                    const inc = await henGio(docEscrow!(ch, sn), HAN_MOT_ESCROW_MS)
+                    let pc = phiChungTheoKenh.get(String(ch.id))
+                    if (pc === undefined) {
+                        pc = await docPhiChung(prisma, String(ch.id)).catch(() => null)
+                        phiChungTheoKenh.set(String(ch.id), pc)
+                    }
+                    const e = docEscrowDuKien(inc, pc?.baoVe ?? 0)
+                    if (e) {
+                        const t = escrowTheoSku(dong, e, bang, v, pc?.dichVu)
+                        const coGia = t.laiDong.filter(x => x.doanhThu > 0)
+                        ketQua.set(String(d.id), {
+                            k: ketLuanLaiDuKien(t.doanhThu, t.p, v), p: t.p, dong, laiDong: t.laiDong,
+                            skuLo: coGia.length > 1 ? coGia.filter(x => x.lo) : [], escrow: e,
+                        })
+                        continue
+                    }
+                    lyDo = 'chua-co'
+                } catch (err: any) {
+                    lyDo = 'loi'
+                    thoiDoc = true
+                    const moTa = cheLoi(err)
+                    console.warn(`[LaiDuKien] ${ch.name || ch.id}: chưa đọc được escrow — ${moTa}`)
+                    if (!loi) loi = `đọc escrow ${ch.name || ch.id}: ${moTa}`
+                }
+            }
+            // chưa đọc được mà đơn còn mới ⇒ hoãn (push sau / lượt vét sau đọc lại); gian chưa uỷ quyền thì chờ cũng vô ích
+            if (lyDo !== 'khong-uy-quyen' && bay - new Date(d.createdAt).getTime() < CHO_ESCROW_MS) { hoan.add(String(d.id)); continue }
+        }
+
+        const p0 = phiDuKienCuaDon(dong, bang)
+        const p = lyDo && lyDo !== 'khong-uy-quyen' && p0.phi != null
+            ? { ...p0, moTa: `${p0.moTa} — chưa đọc được phí thật Shopee của đơn (${CAU_LY_DO[lyDo]}), tạm theo biểu phí` } : p0
         const laiDong = laiTungDong(dong, bang, p, v)
         const coGia = laiDong.filter(x => x.doanhThu > 0)
         ketQua.set(String(d.id), {
             k: ketLuanLaiDuKien(dong.reduce((s, x) => s + Math.max(0, x.gia), 0), p, v), p, dong, laiDong,
             skuLo: coGia.length > 1 ? coGia.filter(x => x.lo) : [],
+            ...(lyDo ? { lyDoKhongEscrow: lyDo } : {}),
         })
     }
-    return { ketQua, ...(loi ? { loi } : {}) }
+    return { ketQua, hoan, ...(loi ? { loi } : {}) }
 }
 
 /**
@@ -570,6 +901,8 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
 
     const tinh = await tinhLaiDuKien(prisma, dons, o)
     if (tinh.loi) ra.loi = tinh.loi
+    // Shopee chưa đọc được escrow mà đơn còn mới ⇒ chưa lưu (push đổi trạng thái / lượt vét sau đọc lại)
+    if (tinh.hoan.size) ra.choEscrow = tinh.hoan.size
 
     const lo: { id: string; ma: string; san: string; kenh: string | null; hang: string; k: LaiDuKien; skuLo: LaiDong[]; soLo: number }[] = []
     for (const d of dons) {
@@ -578,7 +911,7 @@ export async function xetLaiDuKienDonMoi(prisma: any, orderIds: string[], o: Tuy
         const { k, skuLo } = kq
         // dòng hàng chưa mang giá (sàn trả giá sau) ⇒ chưa lưu: lần webhook / lượt vét sau tính lại khi đã có giá
         if (k.doanhThu <= 0) { ra.chuaCoGia++; continue }
-        const chiTiet = dungChiTiet(kq, o.nguon || null)
+        const chiTiet = dungChiTiet(kq, o.nguon || null, bay)
         let gianh: any[] = []
         try {
             gianh = await prisma.$queryRawUnsafe(
@@ -690,31 +1023,37 @@ export async function xetLaiDuKienAnToan(prisma: any, orderIds: string[], nguon:
 
 /**
  * LƯỚI VÉT — lượt đồng bộ (cron 30' / bấm tay) gọi cho TỪNG kênh: đơn ≤ 24 giờ chưa có dòng lãi dự kiến (vừa kéo về ở lượt
- * này; webhook lỡ vì máy tắt giữa chừng / đọc phí hỏng; Lazada chưa có webhook) ⇒ xét. Đơn đã xét bị loại ngay trong SQL nên
- * lượt không có đơn mới chỉ tốn MỘT truy vấn. Không ném.
+ * này; webhook lỡ vì máy tắt giữa chừng / đọc phí hỏng / escrow hoãn; Lazada chưa có webhook) ⇒ xét. Đơn đã xét bị loại ngay
+ * trong SQL nên lượt không có đơn mới chỉ tốn MỘT truy vấn. Không ném.
  */
 export async function vetLaiDuKienDonMoi(prisma: any, kenh: { id: string; platform?: string | null } | null, nguon: NonNullable<TuyChonXetLai['nguon']>, o: TuyChonXetLai = {}): Promise<KetQuaXetLai | null> {
     try {
         if (kenh && !SAN_XET.includes(String(kenh.platform || '').toLowerCase())) return null
         await damBaoBang(prisma)
         const bay = o.bayGio ?? Date.now()
-        const thamSo: any[] = [new Date(bay - CUA_SO_DON_MOI_MS), SAN_XET, CANCELLED_STATUSES, new Date(bay - CUA_SO_NANG_CAP_MS)]
+        const coEscrow = o.docEscrow !== null && escrowBat()
+        const thamSo: any[] = [new Date(bay - CUA_SO_DON_MOI_MS), SAN_XET, CANCELLED_STATUSES, new Date(bay - CUA_SO_NANG_CAP_MS), new Date(bay - CUA_SO_ESCROW_MS)]
         if (kenh) thamSo.push(String(kenh.id))
-        /* MỘT truy vấn cho cả hai việc: đơn ≤ 24 giờ CHƯA có dòng (xét + báo) và dòng ≤ 3 ngày tính trước khi có theo SKU
-         * (chiTiet.dong chưa có ⇒ tính lại theo SKU, KHÔNG báo lại). Lượt không có gì mới vẫn chỉ tốn một truy vấn. */
+        /* MỘT truy vấn cho cả ba việc: đơn ≤ 24 giờ CHƯA có dòng (xét + báo); dòng ≤ 3 ngày tính trước khi có theo SKU (chiTiet.dong
+         * chưa có ⇒ tính lại theo SKU); dòng Shopee ≤ 7 ngày đã theo SKU mà CHƯA theo escrow, chưa thử (chiTiet.escrowThu) ⇒ tính
+         * lại theo escrow. Tính lại KHÔNG báo lại. Lượt không có gì mới vẫn chỉ tốn một truy vấn. */
         const rows: any[] = await prisma.$queryRawUnsafe(
-            `SELECT o.id, (l."orderId" IS NOT NULL) AS "daCo"
+            `SELECT o.id, (l."orderId" IS NOT NULL) AS "daCo", ((l."chiTiet" -> 'dong') IS NULL) AS "thieuDong"
                FROM "OnlineOrder" o LEFT JOIN "LaiDuKienDon" l ON l."orderId" = o.id
-              WHERE o."createdAt" >= $4 AND LOWER(o.platform) = ANY($2::text[]) AND NOT (o.status = ANY($3::text[]))
-                ${kenh ? 'AND o."channelId" = $5' : ''}
-                AND ((l."orderId" IS NULL AND o."createdAt" >= $1) OR (l."orderId" IS NOT NULL AND (l."chiTiet" -> 'dong') IS NULL))
+              WHERE o."createdAt" >= LEAST($4, $5) AND LOWER(o.platform) = ANY($2::text[]) AND NOT (o.status = ANY($3::text[]))
+                ${kenh ? 'AND o."channelId" = $6' : ''}
+                AND ((l."orderId" IS NULL AND o."createdAt" >= $1)
+                     OR (l."orderId" IS NOT NULL AND (l."chiTiet" -> 'dong') IS NULL AND o."createdAt" >= $4)${coEscrow ? `
+                     OR (l."orderId" IS NOT NULL AND LOWER(o.platform) = 'shopee' AND l."nguonPhi" <> 'escrow' AND o."createdAt" >= $5
+                         AND (l."chiTiet" -> 'dong') IS NOT NULL AND (l."chiTiet" -> 'dong') <> '[]'::jsonb AND (l."chiTiet" -> 'escrowThu') IS NULL)` : ''})
               ORDER BY (l."orderId" IS NULL) DESC, o."createdAt" DESC LIMIT 500`, ...thamSo)
         const moi = (rows || []).filter(r => !r.daCo).map(r => String(r.id))
-        const cu = (rows || []).filter(r => r.daCo).map(r => String(r.id)).slice(0, TRAN_NANG_CAP_MOI_LUOT)
+        const cuSku = (rows || []).filter(r => r.daCo && r.thieuDong).map(r => String(r.id)).slice(0, TRAN_NANG_CAP_MOI_LUOT)
+        const cuEscrow = (rows || []).filter(r => r.daCo && !r.thieuDong).map(r => String(r.id)).slice(0, TRAN_ESCROW_MOI_LUOT)
         const ra = moi.length ? await xetLaiDuKienAnToan(prisma, moi, nguon, o) : null
-        if (!cu.length) return ra
-        const n = await nangCapTheoSku(prisma, cu, o).catch((e: any) => {
-            console.warn(`[LaiDuKien] tính lại theo SKU (${nguon}):`, String(e?.message || e).slice(0, 200))
+        if (!cuSku.length && !cuEscrow.length) return ra
+        const n = await tinhLaiDongCu(prisma, cuSku, cuEscrow, o).catch((e: any) => {
+            console.warn(`[LaiDuKien] tính lại dòng cũ (${nguon}):`, String(e?.message || e).slice(0, 200))
             return 0
         })
         return ra ? { ...ra, nangCap: n } : { xet: 0, daLuu: 0, lo: 0, loSku: 0, daBao: 0, push: 0, boQua: 0, chuaCoGia: 0, nangCap: n }
@@ -728,30 +1067,51 @@ export async function vetLaiDuKienDonMoi(prisma: any, kenh: { id: string; platfo
 export const CUA_SO_NANG_CAP_MS = 3 * 24 * 3600_000
 const TRAN_NANG_CAP_MOI_LUOT = 200
 
+/** Dòng Shopee thôi thử escrow (Shopee chưa có / gian chưa uỷ quyền / đơn không còn tính được) — lưới vét không nhặt lại. */
+const danhDauEscrow = (prisma: any, id: string, luc: string, lyDo: string) => prisma.$executeRawUnsafe(
+    `UPDATE "LaiDuKienDon" SET "chiTiet" = COALESCE("chiTiet", '{}'::jsonb) || $2::jsonb WHERE "orderId" = $1 AND "nguonPhi" <> 'escrow'`,
+    id, JSON.stringify({ escrowThu: luc, lyDoKhongEscrow: lyDo })).catch(() => 0)
+
 /**
- * TÍNH LẠI THEO SKU các dòng LaiDuKienDon cũ (chiTiet.dong chưa có): ghi đè số cả đơn + chiTiet bằng phép tính mới (Σ SKU = cả
- * đơn), GIỮ baoLuc + nguồn cũ, KHÔNG báo (đơn đã qua lúc "mới về"). Đơn không còn tính được (huỷ / hết dòng / chưa có giá) ⇒ ghi
- * chiTiet.dong = [] để lưới vét thôi nhặt lại; gian đọc phí hỏng ⇒ để nguyên, lượt sau thử lại. Trả số dòng đã tính lại.
+ * TÍNH LẠI các dòng LaiDuKienDon cũ — `sku`: chưa có theo SKU (chiTiet.dong); `escrow`: đơn Shopee đã theo SKU mà chưa theo escrow.
+ * Ghi đè số cả đơn + chiTiet bằng phép tính mới (Σ SKU = cả đơn; Shopee đọc được escrow ⇒ giá + phí thật), GIỮ baoLuc + nguồn
+ * cũ, KHÔNG báo (đơn đã qua lúc "mới về"). Đơn không còn tính được (huỷ / hết dòng / chưa có giá) ⇒ dòng chưa theo SKU ghi
+ * chiTiet.dong = [], dòng chờ escrow ghi chiTiet.escrowThu — lưới vét thôi nhặt lại. Gian đọc phí hỏng / escrow hoãn / lý do tạm
+ * (lỗi, proxy bận, hết lượt) ⇒ để nguyên, lượt sau thử lại. Trả số dòng đã tính lại.
  */
-async function nangCapTheoSku(prisma: any, orderIds: string[], o: TuyChonXetLai): Promise<number> {
+async function tinhLaiDongCu(prisma: any, sku: string[], escrow: string[], o: TuyChonXetLai): Promise<number> {
+    const orderIds = [...new Set([...sku, ...escrow])]
     if (!orderIds.length) return 0
+    const thieuDong = new Set(sku)
+    const luc = new Date(o.bayGio ?? Date.now()).toISOString()
     const tatCa: any[] = await prisma.onlineOrder.findMany({ where: { id: { in: orderIds } }, select: CHON_DON_LAI_DU_KIEN })
     const dons = (tatCa || []).filter(donXetDuoc)
-    const tinh = dons.length ? await tinhLaiDuKien(prisma, dons, o) : { ketQua: new Map<string, LaiMotDon>() }
+    const tinh = dons.length ? await tinhLaiDuKien(prisma, dons, o) : { ketQua: new Map<string, LaiMotDon>(), hoan: new Set<string>() }
     let n = 0
     const boCuoc: string[] = []
     for (const id of orderIds) {
         const d = dons.find(x => String(x.id) === id)
         const kq = d ? tinh.ketQua.get(id) : undefined
-        if (d && !kq) continue                                    // đọc phí gian hỏng ⇒ lượt sau
-        if (!kq || kq.k.doanhThu <= 0) { boCuoc.push(id); continue }
+        if (d && !kq) continue                                    // đọc phí gian hỏng / escrow hoãn ⇒ lượt sau
+        if (!kq || kq.k.doanhThu <= 0) {
+            if (thieuDong.has(id)) boCuoc.push(id)
+            else await danhDauEscrow(prisma, id, luc, 'khong-tinh-duoc')
+            continue
+        }
+        const tam = !!kq.lyDoKhongEscrow && LY_DO_TAM.includes(kq.lyDoKhongEscrow)
+        if (!kq.escrow && !thieuDong.has(id)) {
+            // đã theo SKU, escrow vẫn chưa đọc được: lý do tạm ⇒ lượt sau; không thì thôi thử
+            if (!tam) await danhDauEscrow(prisma, id, luc, kq.lyDoKhongEscrow || 'khong-doc')
+            continue
+        }
         const { k } = kq
-        const chiTiet = { ...dungChiTiet(kq, null), tinhLaiTheoSku: new Date(o.bayGio ?? Date.now()).toISOString() }
-        delete (chiTiet as any).nguon                             // giữ nguồn cũ (webhook / đồng bộ) của lần xét đầu
+        const chiTiet: any = { ...dungChiTiet(kq, null, o.bayGio ?? Date.now()), [kq.escrow ? 'tinhLaiTheoEscrow' : 'tinhLaiTheoSku']: luc }
+        delete chiTiet.nguon                                      // giữ nguồn cũ (webhook / đồng bộ) của lần xét đầu
+        if (kq.escrow) chiTiet.lyDoKhongEscrow = null              // (escrowThu: dungChiTiet đã ghi khi lý do không tạm)
         const so = await prisma.$executeRawUnsafe(
             `UPDATE "LaiDuKienDon" SET "doanhThu" = $2, "phiDuKien" = $3, "giaVon" = $4, "lai" = $5, "thieuGiaVon" = $6, "nguonPhi" = $7,
                     "chiTiet" = COALESCE("chiTiet", '{}'::jsonb) || $8::jsonb
-              WHERE "orderId" = $1 AND ("chiTiet" -> 'dong') IS NULL`,
+              WHERE "orderId" = $1 AND (("chiTiet" -> 'dong') IS NULL OR "nguonPhi" <> 'escrow')`,
             id, k.doanhThu, k.phi, k.giaVon, k.lai, k.thieuGiaVon, k.nguonPhi, JSON.stringify(chiTiet))
         n += Number(so) || 0
     }
